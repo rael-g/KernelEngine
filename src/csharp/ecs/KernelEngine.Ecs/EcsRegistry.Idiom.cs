@@ -21,7 +21,7 @@ public unsafe partial class EcsRegistry : IEcsRegistry
 
     /// <inheritdoc/>
     public uint RegisterComponent<T>(string name) where T : unmanaged =>
-        ComponentRegister(name, (nuint)sizeof(T));
+        ComponentRegister(name, (nuint)sizeof(T), null, 0);
 
     /// <inheritdoc/>
     public bool TryLookupComponent(string name, out uint componentId)

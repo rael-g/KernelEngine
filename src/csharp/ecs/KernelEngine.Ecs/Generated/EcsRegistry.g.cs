@@ -57,17 +57,19 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         Handle->entity_destroy(Handle, entity);
     }
 
-    /// <summary>Registers a component type by name, or returns the existing id if already registered. Registering an existing name with a different element_size is an error: the name would otherwise silently alias two unrelated layouts under one cid.</summary>
+    /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same layout as its first registration. With `fields` the two are compared field by field; without it, only `element_size` is compared, which a same-size field swap or a reordering satisfies.</summary>
     /// <param name="name">Unique component name.</param>
     /// <param name="elementSize">Bytes per entity; 0 registers a tag (no storage).</param>
+    /// <param name="fields">The type's field layout, normally its generated field table. Must outlive the ecs. NULL registers the size alone.</param>
+    /// <param name="fieldCount">Entries in `fields`; 0 when `fields` is NULL.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public uint ComponentRegister(string name, nuint elementSize)
+    public uint ComponentRegister(string name, nuint elementSize, ke_component_field* fields, uint fieldCount)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
             ke_error* err = null;
-            var result = Handle->component_register(Handle, (sbyte*)namePtr, elementSize, &err);
+            var result = Handle->component_register(Handle, (sbyte*)namePtr, elementSize, fields, fieldCount, &err);
             if (err != null) throw KernelError.FromNative(err, "component_register");
             return result;
         }

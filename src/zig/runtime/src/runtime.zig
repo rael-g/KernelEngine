@@ -1316,7 +1316,7 @@ test "the render extract carries this tick's sim write" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    const cid = f.ecs().component_register.?(f.ecs(), "Extract.Value", @sizeOf(i32), null);
+    const cid = f.ecs().component_register.?(f.ecs(), "Extract.Value", @sizeOf(i32), null, 0, null);
     const e = f.ecs().entity_create.?(f.ecs());
     const v = f.ecs().component_add.?(f.ecs(), e, cid);
     try testing.expect(v != null);
@@ -1384,8 +1384,8 @@ test "the render extract keeps multi term columns aligned" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    const pos = f.ecs().component_register.?(f.ecs(), "ExtractPos", @sizeOf(Vec3), null);
-    const vel = f.ecs().component_register.?(f.ecs(), "ExtractVel", @sizeOf(Vec3), null);
+    const pos = f.ecs().component_register.?(f.ecs(), "ExtractPos", @sizeOf(Vec3), null, 0, null);
+    const vel = f.ecs().component_register.?(f.ecs(), "ExtractVel", @sizeOf(Vec3), null, 0, null);
 
     var expect: f64 = 0.0;
     for (0..64) |i| {
@@ -1595,7 +1595,7 @@ test "spawn hands the system body an id it can actually use" {
     try testing.expect(f.tick(1.0 / 60.0));
 
     const e = f.ecs();
-    const cid = e.component_register.?(e, "spawned_probe", 4, null);
+    const cid = e.component_register.?(e, "spawned_probe", 4, null, 0, null);
     for (probe.ids, 0..) |id, i| {
         try testing.expect(id != c.KE_ENTITY_INVALID);
         for (probe.ids[i + 1 ..]) |other| try testing.expect(id != other);
@@ -1615,7 +1615,7 @@ test "an entity spawned with no components still exists after the barrier" {
     try testing.expect(f.tick(1.0 / 60.0));
 
     const e = f.ecs();
-    const cid = e.component_register.?(e, "exists_probe", 4, null);
+    const cid = e.component_register.?(e, "exists_probe", 4, null, 0, null);
     e.entity_destroy.?(e, probe.ids[0]);
     try testing.expect(e.component_add.?(e, probe.ids[0], cid) == null);
 }
@@ -1676,7 +1676,7 @@ test "a zero size component registers as a usable tag" {
 
     const ecs: *c.ke_ecs = @ptrCast(h.ref);
 
-    var tag = ecs.component_register.?(ecs, "ZeroSizeTag", 0, null);
+    var tag = ecs.component_register.?(ecs, "ZeroSizeTag", 0, null, 0, null);
     try testing.expect(tag != 0);
 
     const e = ecs.entity_create.?(ecs);
@@ -1711,7 +1711,7 @@ test "two readers sharing a wave read the same storage without conflicting" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    const pos = f.ecs().component_register.?(f.ecs(), "pos", @sizeOf(Vec3), null);
+    const pos = f.ecs().component_register.?(f.ecs(), "pos", @sizeOf(Vec3), null, 0, null);
     try testing.expect(pos != 0);
 
     for (0..512) |i| {
@@ -1763,8 +1763,8 @@ test "a multi term query hands back aligned columns" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    const pos = f.ecs().component_register.?(f.ecs(), "pos2", @sizeOf(Vec3), null);
-    const vel = f.ecs().component_register.?(f.ecs(), "vel2", @sizeOf(Vec3), null);
+    const pos = f.ecs().component_register.?(f.ecs(), "pos2", @sizeOf(Vec3), null, 0, null);
+    const vel = f.ecs().component_register.?(f.ecs(), "vel2", @sizeOf(Vec3), null, 0, null);
     try testing.expect(pos != 0);
     try testing.expect(vel != 0);
 

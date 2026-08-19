@@ -136,7 +136,7 @@
           "name": "component_register",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Registers a component type by name, or returns the existing id if already registered. Registering an existing name with a different element_size is an error: the name would otherwise silently alias two unrelated layouts under one cid.",
+          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same layout as its first registration. With \u0060fields\u0060 the two are compared field by field; without it, only \u0060element_size\u0060 is compared, which a same-size field swap or a reordering satisfies.",
           "return_doc": "The component\u0027s id, or 0 on error.",
           "params": [
             {
@@ -155,13 +155,28 @@
               "doc": "Bytes per entity; 0 registers a tag (no storage)."
             },
             {
+              "name": "fields",
+              "type": "const ke_component_field *",
+              "tags": [
+                "borrowed",
+                "optional"
+              ],
+              "doc": "The type\u0027s field layout, normally its generated field table. Must outlive the ecs. NULL registers the size alone."
+            },
+            {
+              "name": "field_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": "Entries in \u0060fields\u0060; 0 when \u0060fields\u0060 is NULL."
+            },
+            {
               "name": "out_error",
               "type": "ke_error **",
               "tags": [
                 "out",
                 "optional"
               ],
-              "doc": "Set when element_size conflicts with the name\u0027s prior registration."
+              "doc": "Set when the layout conflicts with the name\u0027s prior registration, naming the field that disagrees."
             }
           ]
         },

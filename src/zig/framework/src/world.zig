@@ -178,8 +178,9 @@ fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     heap.gpa.destroy(@as(*Block, @fieldParentPtr("state", s)));
 }
 
-/// Registers a built-in component with the ecs (reusing an existing
-/// registration when the name is already known) and wires up its apply callback.
+/// Registers a built-in component with the ecs and wires up its apply callback.
+/// Registers unconditionally, so a name already known is checked against the
+/// layout registered for it. False when the ecs refuses the registration.
 fn registerBuiltin(
     world: *c.ke_world,
     e: *c.ke_ecs,
@@ -188,14 +189,13 @@ fn registerBuiltin(
     apply_fn: c.ke_component_apply_fn,
     fields: ?[*]const c.ke_component_field,
     field_count: u32,
-) void {
-    var meta: c.ke_component_meta = undefined;
-    const cid = if (e.component_lookup.?(e, name, &meta, null))
-        meta.cid
-    else
-        e.component_register.?(e, name, size, null);
+    out_error: [*c][*c]c.ke_error,
+) bool {
+    const cid = e.component_register.?(e, name, size, fields orelse null, field_count, out_error);
+    if (cid == 0) return false;
     if (fields) |f| _ = world.register_component_fields.?(world, cid, f, field_count, null);
     if (apply_fn != null) _ = world.register_component_apply.?(world, cid, apply_fn, null);
+    return true;
 }
 
 export fn ke_world_create(
@@ -240,9 +240,14 @@ export fn ke_world_create(
     world.get_component_apply = worldGetComponentApply;
 
     const e = params.ecs.?;
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), apply.ke_framework_apply_transform, &c.ke_transform_component_fields, c.ke_transform_component_fields.len);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM_2D, @sizeOf(c.ke_transform2d_component), apply.ke_framework_apply_transform2d, &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len);
-    registerBuiltin(world, e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component), null, null, 0);
+    const registered =
+        registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), apply.ke_framework_apply_transform, &c.ke_transform_component_fields, c.ke_transform_component_fields.len, out_error) and
+        registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM_2D, @sizeOf(c.ke_transform2d_component), apply.ke_framework_apply_transform2d, &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len, out_error) and
+        registerBuiltin(world, e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component), null, null, 0, out_error);
+    if (!registered) {
+        worldDestroy(world);
+        return null_handle;
+    }
 
     return .{ .ref = world, .destroy = worldDestroy };
 }
@@ -276,8 +281,12 @@ fn stubComponentRegister(
     self: ?*c.ke_ecs,
     name: [*c]const u8,
     element_size: usize,
+    fields: [*c]const c.ke_component_field,
+    field_count: u32,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_component_id {
+    _ = fields;
+    _ = field_count;
     _ = name;
     _ = element_size;
     _ = out_error;

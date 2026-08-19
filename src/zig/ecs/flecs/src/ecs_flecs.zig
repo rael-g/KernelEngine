@@ -54,6 +54,14 @@ const QueryCacheEntry = struct {
     query: ?*c.ecs_query_t,
 };
 
+/// The field table a component was first registered with. Borrowed: it must
+/// outlive the ecs.
+const LayoutEntry = struct {
+    cid: c.ke_component_id,
+    fields: [*]const c.ke_component_field,
+    field_count: u32,
+};
+
 /// A multi-term query registered via query_register — the parallel-safe read path.
 /// query_resolve walks it single-threaded into ke_ecs_segment lists; the wave
 /// bodies then read those segments as plain memory (no flecs call).
@@ -89,6 +97,10 @@ const State = struct {
     rqueries: ?[*]RegisteredQuery,
     rquery_count: usize,
     rquery_capacity: usize,
+
+    layouts: ?[*]LayoutEntry,
+    layout_count: usize,
+    layout_capacity: usize,
 };
 
 fn stateOf(self: *c.ke_ecs) *State {
@@ -121,6 +133,70 @@ fn findOrCreateQuery(s: *State, cid: c.ke_component_id) ?*QueryCacheEntry {
     s.query_count += 1;
     entry.* = .{ .cid = cid, .query = q };
     return entry;
+}
+
+fn nameEquals(a: [*c]const u8, b: [*c]const u8) bool {
+    if (a == null or b == null) return a == b;
+    return std.mem.orderZ(u8, @ptrCast(a), @ptrCast(b)) == .eq;
+}
+
+/// The index of the first field the two tables describe differently, or null when
+/// they agree. Name, type, offset and size all count. Differing lengths disagree
+/// at the first index the shorter one lacks.
+fn firstLayoutDiff(a: []const c.ke_component_field, b: []const c.ke_component_field) ?usize {
+    const common = @min(a.len, b.len);
+    for (0..common) |i| {
+        if (a[i].type != b[i].type or a[i].offset != b[i].offset or a[i].size != b[i].size) return i;
+        if (!nameEquals(a[i].name, b[i].name)) return i;
+    }
+    return if (a.len != b.len) common else null;
+}
+
+/// Whether every field the table describes lands inside `element_size`.
+fn layoutFitsSize(fields: []const c.ke_component_field, element_size: usize) bool {
+    for (fields) |f| {
+        if (@as(usize, f.offset) + @as(usize, f.size) > element_size) return false;
+    }
+    return true;
+}
+
+fn layoutOf(s: *State, cid: c.ke_component_id) ?[]const c.ke_component_field {
+    const ls = s.layouts orelse return null;
+    for (0..s.layout_count) |i| {
+        if (ls[i].cid == cid) return ls[i].fields[0..ls[i].field_count];
+    }
+    return null;
+}
+
+fn rememberLayout(
+    s: *State,
+    cid: c.ke_component_id,
+    fields: [*]const c.ke_component_field,
+    field_count: u32,
+) bool {
+    if (s.layout_count == s.layout_capacity) {
+        const new_cap: usize = if (s.layout_capacity != 0) s.layout_capacity * 2 else 8;
+        const new_buf = heap.gpa.alloc(LayoutEntry, new_cap) catch return false;
+        if (s.layouts) |old| {
+            @memcpy(new_buf[0..s.layout_count], old[0..s.layout_count]);
+            heap.gpa.free(old[0..s.layout_capacity]);
+        }
+        s.layouts = new_buf.ptr;
+        s.layout_capacity = new_cap;
+    }
+    s.layouts.?[s.layout_count] = .{ .cid = cid, .fields = fields, .field_count = field_count };
+    s.layout_count += 1;
+    return true;
+}
+
+threadlocal var layout_msg_buf: [256]u8 = undefined;
+
+/// Formats into a thread-local buffer, which the returned pointer borrows.
+fn layoutMessage(comptime fmt: []const u8, args: anytype) [*c]const u8 {
+    const dst = layout_msg_buf[0 .. layout_msg_buf.len - 1];
+    const written = std.fmt.bufPrint(dst, fmt, args) catch dst;
+    layout_msg_buf[written.len] = 0;
+    return @ptrCast(&layout_msg_buf);
 }
 
 fn entityCreate(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
@@ -186,6 +262,8 @@ fn componentRegister(
     self_in: ?*c.ke_ecs,
     name: [*c]const u8,
     size: usize,
+    fields: [*c]const c.ke_component_field,
+    field_count: u32,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_component_id {
     const self = self_in orelse {
@@ -198,16 +276,47 @@ fn componentRegister(
     }
     const s = stateOf(self);
 
+    const incoming: ?[]const c.ke_component_field =
+        if (fields != null and field_count > 0) fields[0..field_count] else null;
+
+    if (incoming) |inc| {
+        if (!layoutFitsSize(inc, size)) {
+            E.fail(out_error, .invalid_argument, layoutMessage(
+                "component '{s}': field table describes bytes past its {d}-byte size",
+                .{ name, size },
+            ), @src());
+            return 0;
+        }
+    }
+
     const existing = c.ecs_lookup(s.world, name);
     if (existing != 0) {
+        const cid: c.ke_component_id = @truncate(existing);
         const ti = c.ecs_get_type_info(s.world, @intCast(existing));
         const existing_size: usize = if (ti != null) @intCast(ti.*.size) else 0;
         if (existing_size != size) {
-            E.fail(out_error, .invalid_argument, "component already registered with a different size", @src());
+            E.fail(out_error, .invalid_argument, layoutMessage(
+                "component '{s}' already registered as {d} bytes, now {d}",
+                .{ name, existing_size, size },
+            ), @src());
             return 0;
         }
-        _ = findOrCreateQuery(s, @truncate(existing));
-        return @truncate(existing);
+        if (incoming) |inc| {
+            if (layoutOf(s, cid)) |prev| {
+                if (firstLayoutDiff(prev, inc)) |i| {
+                    E.fail(out_error, .invalid_argument, layoutMessage(
+                        "component '{s}': field {d} differs from the registered layout",
+                        .{ name, i },
+                    ), @src());
+                    return 0;
+                }
+            } else if (!rememberLayout(s, cid, inc.ptr, field_count)) {
+                E.fail(out_error, .out_of_memory, "component layout registry allocation failed", @src());
+                return 0;
+            }
+        }
+        _ = findOrCreateQuery(s, cid);
+        return cid;
     }
 
     var edesc: c.ecs_entity_desc_t = std.mem.zeroes(c.ecs_entity_desc_t);
@@ -224,6 +333,13 @@ fn componentRegister(
     cdesc.type.size = @intCast(size);
     cdesc.type.alignment = @intCast(@alignOf(c.max_align_t));
     const cid: c.ke_component_id = @truncate(c.ecs_component_init(s.world, &cdesc));
+
+    if (incoming) |inc| {
+        if (!rememberLayout(s, cid, inc.ptr, field_count)) {
+            E.fail(out_error, .out_of_memory, "component layout registry allocation failed", @src());
+            return 0;
+        }
+    }
 
     _ = findOrCreateQuery(s, cid);
     return cid;
@@ -258,10 +374,16 @@ fn componentLookup(
     }
 
     if (out_meta != null) {
-        out_meta.*.cid = @truncate(e);
+        const cid: c.ke_component_id = @truncate(e);
+        out_meta.*.cid = cid;
         out_meta.*.size = @intCast(ti.*.size);
-        out_meta.*.fields = null;
-        out_meta.*.field_count = 0;
+        if (layoutOf(s, cid)) |f| {
+            out_meta.*.fields = f.ptr;
+            out_meta.*.field_count = @intCast(f.len);
+        } else {
+            out_meta.*.fields = null;
+            out_meta.*.field_count = 0;
+        }
     }
     return true;
 }
@@ -394,6 +516,7 @@ fn destroy(self_in: ?*c.ke_ecs) callconv(.c) void {
         }
         heap.gpa.free(rqs[0..s.rquery_capacity]);
     }
+    if (s.layouts) |ls| heap.gpa.free(ls[0..s.layout_capacity]);
     if (s.materialized) |m| heap.gpa.free(m);
     if (s.world) |w| _ = c.ecs_fini(w);
 
@@ -430,6 +553,9 @@ export fn ke_ecs_flecs_create(
         .rqueries = null,
         .rquery_count = 0,
         .rquery_capacity = 0,
+        .layouts = null,
+        .layout_count = 0,
+        .layout_capacity = 0,
     };
 
     s.world = c.ecs_init();
@@ -501,12 +627,116 @@ test "componentRegister rejects re-registering a name with a different size" {
     defer handle.destroy.?(handle.ref);
 
     var out_error: ?*c.ke_error = null;
-    const first = handle.ref.*.component_register.?(handle.ref, "dup_name", 8, &out_error);
+    const first = handle.ref.*.component_register.?(handle.ref, "dup_name", 8, null, 0, &out_error);
     try testing.expect(first != 0);
     try testing.expect(out_error == null);
 
-    const second = handle.ref.*.component_register.?(handle.ref, "dup_name", 16, &out_error);
+    const second = handle.ref.*.component_register.?(handle.ref, "dup_name", 16, null, 0, &out_error);
     try testing.expectEqual(@as(c.ke_component_id, 0), second);
+    try testing.expect(out_error != null);
+}
+
+fn field(name: [*c]const u8, t: c.ke_variant_type, offset: u32, size: u32) c.ke_component_field {
+    return .{
+        .name = name,
+        .type = t,
+        .offset = offset,
+        .size = size,
+        .default_value = std.mem.zeroes(c.ke_variant),
+    };
+}
+
+/// A pair the size check alone cannot separate: same total, same field sizes,
+/// only the meaning of each half swapped.
+const swapped_a = [_]c.ke_component_field{
+    field("layers", c.KE_VARIANT_INT, 0, 4),
+    field("ior", c.KE_VARIANT_FLOAT, 4, 4),
+};
+const swapped_b = [_]c.ke_component_field{
+    field("ior", c.KE_VARIANT_FLOAT, 0, 4),
+    field("layers", c.KE_VARIANT_INT, 4, 4),
+};
+
+test "two layouts of the same size disagree at the first field that moved" {
+    try testing.expectEqual(@as(?usize, 0), firstLayoutDiff(&swapped_a, &swapped_b));
+    try testing.expectEqual(@as(?usize, null), firstLayoutDiff(&swapped_a, &swapped_a));
+}
+
+test "a field that kept its place but changed meaning still counts as a difference" {
+    const as_float = [_]c.ke_component_field{field("value", c.KE_VARIANT_FLOAT, 0, 4)};
+    const as_int = [_]c.ke_component_field{field("value", c.KE_VARIANT_INT, 0, 4)};
+    try testing.expectEqual(@as(?usize, 0), firstLayoutDiff(&as_float, &as_int));
+}
+
+test "a layout that ran out of fields disagrees at the first one the other still has" {
+    const shorter = [_]c.ke_component_field{field("ior", c.KE_VARIANT_FLOAT, 0, 4)};
+    try testing.expectEqual(@as(?usize, 1), firstLayoutDiff(&shorter, &swapped_b));
+    try testing.expectEqual(@as(?usize, 1), firstLayoutDiff(&swapped_b, &shorter));
+}
+
+test "a table reaching past the component's size belongs to another type" {
+    try testing.expect(layoutFitsSize(&swapped_a, 8));
+    try testing.expect(!layoutFitsSize(&swapped_a, 7));
+    try testing.expect(layoutFitsSize(&swapped_a, 16));
+}
+
+test "componentRegister rejects a second layout the size check cannot tell apart" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    var out_error: ?*c.ke_error = null;
+    const first = handle.ref.*.component_register.?(handle.ref, "swapped", 8, &swapped_a, swapped_a.len, &out_error);
+    try testing.expect(first != 0);
+    try testing.expect(out_error == null);
+
+    const second = handle.ref.*.component_register.?(handle.ref, "swapped", 8, &swapped_b, swapped_b.len, &out_error);
+    try testing.expectEqual(@as(c.ke_component_id, 0), second);
+    try testing.expect(out_error != null);
+}
+
+test "componentRegister accepts a second registration describing the same layout" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    var out_error: ?*c.ke_error = null;
+    const first = handle.ref.*.component_register.?(handle.ref, "agreed", 8, &swapped_a, swapped_a.len, &out_error);
+    const second = handle.ref.*.component_register.?(handle.ref, "agreed", 8, &swapped_a, swapped_a.len, &out_error);
+    try testing.expectEqual(first, second);
+    try testing.expect(out_error == null);
+}
+
+test "a registrant with no table still joins one that has one, on size alone" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    var out_error: ?*c.ke_error = null;
+    const described = handle.ref.*.component_register.?(handle.ref, "partial", 8, &swapped_a, swapped_a.len, &out_error);
+    const tableless = handle.ref.*.component_register.?(handle.ref, "partial", 8, null, 0, &out_error);
+    try testing.expectEqual(described, tableless);
+    try testing.expect(out_error == null);
+}
+
+test "the table of the first registrant to carry one describes the component afterwards" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    const tableless = handle.ref.*.component_register.?(handle.ref, "late_table", 8, null, 0, null);
+    _ = handle.ref.*.component_register.?(handle.ref, "late_table", 8, &swapped_a, swapped_a.len, null);
+
+    var meta: c.ke_component_meta = undefined;
+    try testing.expect(handle.ref.*.component_lookup.?(handle.ref, "late_table", &meta, null));
+    try testing.expectEqual(tableless, meta.cid);
+    try testing.expectEqual(@as(u32, swapped_a.len), meta.field_count);
+    try testing.expect(meta.fields != null);
+}
+
+test "componentRegister refuses a table describing bytes the component does not have" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    var out_error: ?*c.ke_error = null;
+    const cid = handle.ref.*.component_register.?(handle.ref, "too_small", 4, &swapped_a, swapped_a.len, &out_error);
+    try testing.expectEqual(@as(c.ke_component_id, 0), cid);
     try testing.expect(out_error != null);
 }
 
@@ -515,8 +745,8 @@ test "componentRegister is idempotent for a repeated identical size" {
     defer handle.destroy.?(handle.ref);
 
     var out_error: ?*c.ke_error = null;
-    const first = handle.ref.*.component_register.?(handle.ref, "same_name", 12, &out_error);
-    const second = handle.ref.*.component_register.?(handle.ref, "same_name", 12, &out_error);
+    const first = handle.ref.*.component_register.?(handle.ref, "same_name", 12, null, 0, &out_error);
+    const second = handle.ref.*.component_register.?(handle.ref, "same_name", 12, null, 0, &out_error);
     try testing.expectEqual(first, second);
     try testing.expect(out_error == null);
 }
@@ -620,7 +850,7 @@ test "a reserved id is not in the world until something materializes it" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "reserve_probe", 4, null);
+    const cid = e.component_register.?(handle.ref, "reserve_probe", 4, null, 0, null);
     const reserved = e.entity_reserve.?(handle.ref);
     try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
 
@@ -633,7 +863,7 @@ test "attaching to a reserved id materializes it without a separate call" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "attach_probe", 4, null);
+    const cid = e.component_register.?(handle.ref, "attach_probe", 4, null, 0, null);
     const reserved = e.entity_reserve.?(handle.ref);
 
     const slot = e.component_add.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
@@ -647,7 +877,7 @@ test "materializing an id twice is a no-op rather than a second entity" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "twice_probe", 4, null);
+    const cid = e.component_register.?(handle.ref, "twice_probe", 4, null, 0, null);
     const reserved = e.entity_reserve.?(handle.ref);
     e.entity_materialize.?(handle.ref, reserved);
     const slot = e.component_add.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
@@ -663,7 +893,7 @@ test "materializing an id the world already owns leaves it alone" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "owned_probe", 4, null);
+    const cid = e.component_register.?(handle.ref, "owned_probe", 4, null, 0, null);
     const created = e.entity_create.?(handle.ref);
     const slot = e.component_add.?(handle.ref, created, cid) orelse return error.TestUnexpectedResult;
     @as(*u32, @ptrCast(@alignCast(slot))).* = 99;
@@ -696,7 +926,7 @@ test "a reserved entity that was destroyed does not come back on the next attach
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "revive_probe", 4, null);
+    const cid = e.component_register.?(handle.ref, "revive_probe", 4, null, 0, null);
     const reserved = e.entity_reserve.?(handle.ref);
     try testing.expect(e.component_add.?(handle.ref, reserved, cid) != null);
 

@@ -829,8 +829,12 @@ fn fakeComponentRegister(
     self: ?*c.ke_ecs,
     name: [*c]const u8,
     element_size: usize,
+    fields: [*c]const c.ke_component_field,
+    field_count: u32,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_component_id {
+    _ = fields;
+    _ = field_count;
     _ = out_error;
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(name);
@@ -1054,7 +1058,7 @@ const Fixture = struct {
         field_count: usize,
     ) void {
         const e = &self.ecs.vtable;
-        const cid = e.component_register.?(e, name, size, null);
+        const cid = e.component_register.?(e, name, size, null, 0, null);
         const w = self.world_h.ref.?;
         _ = w.*.register_component_fields.?(w, cid, fields, @intCast(field_count), null);
     }
@@ -1858,7 +1862,7 @@ test "a user component is applied through the callback its owner registered" {
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    const demo_cid = e.component_register.?(e, "demo", @sizeOf(DemoComponent), null);
+    const demo_cid = e.component_register.?(e, "demo", @sizeOf(DemoComponent), null, 0, null);
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
     try testing.expect(w.*.register_component_apply.?(w, demo_cid, demoApply, null));

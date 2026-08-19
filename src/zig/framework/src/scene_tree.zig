@@ -51,7 +51,7 @@ fn getWorldTransform(s: *State, e: c.ke_entity) ?*c.ke_world_transform_component
 fn ensureComponent(ecs: *c.ke_ecs, name: [*c]const u8, size: usize) c.ke_component_id {
     var meta: c.ke_component_meta = undefined;
     if (ecs.component_lookup.?(ecs, name, &meta, null)) return meta.cid;
-    return ecs.component_register.?(ecs, name, size, null);
+    return ecs.component_register.?(ecs, name, size, null, 0, null);
 }
 
 /// Writes `src` into a fixed-size component name field, truncating to fit.
@@ -508,8 +508,12 @@ fn fakeComponentRegister(
     self: ?*c.ke_ecs,
     name: [*c]const u8,
     element_size: usize,
+    fields: [*c]const c.ke_component_field,
+    field_count: u32,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_component_id {
+    _ = fields;
+    _ = field_count;
     _ = out_error;
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(name);

@@ -41,17 +41,28 @@ extern "C"
 
         /**
          * Registers a component type by name, or returns the existing id if already registered.
-         * Registering an existing name with a different element_size is an error: the
-         * name would otherwise silently alias two unrelated layouts under one cid.
+         *
+         * A repeated name must describe the same layout as its first registration.
+         * With `fields` the two are compared field by field; without it, only
+         * `element_size` is compared, which a same-size field swap or a reordering
+         * satisfies.
+         *
          * @param name [borrowed,utf8] Unique component name.
          * @param element_size Bytes per entity; 0 registers a tag (no storage).
-         * @param out_error [out,optional] Set when element_size conflicts with the name's prior registration.
+         * @param fields [borrowed,optional] The type's field layout, normally its
+         *        generated field table. Must outlive the ecs. NULL registers the
+         *        size alone.
+         * @param field_count Entries in `fields`; 0 when `fields` is NULL.
+         * @param out_error [out,optional] Set when the layout conflicts with the name's
+         *        prior registration, naming the field that disagrees.
          * @return The component's id, or 0 on error.
          */
-        ke_component_id (*component_register)(struct ke_ecs *self,
-                                               const char    *name,
-                                               size_t         element_size,
-                                               ke_error     **out_error);
+        ke_component_id (*component_register)(struct ke_ecs            *self,
+                                               const char               *name,
+                                               size_t                    element_size,
+                                               const ke_component_field *fields,
+                                               uint32_t                  field_count,
+                                               ke_error                **out_error);
 
         /**
          * [try] Looks up a previously registered component by name.
