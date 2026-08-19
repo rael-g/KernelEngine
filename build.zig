@@ -398,7 +398,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/gbuffer/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step }, .no_tests);
+    }, &.{ &common.step, &runtime.step }, .has_tests);
     for (gbuffer_material_shaders) |s| gbuffer.step.dependOn(&s.step);
 
     const forward_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };

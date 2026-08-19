@@ -18,6 +18,36 @@ const PerObject = extern struct {
     model: [16]f32,
 };
 
+const Draw = struct {
+    mesh: *const c.ke_mesh_component,
+    world: *const c.ke_world_transform_component,
+};
+
+/// The meshes this camera owes the opaque pass: those whose layers the cull_mask
+/// names and whose material does not blend. Returns how many of `out` were filled.
+fn collectDraws(
+    core: *c.ke_render_service,
+    cam: *const c.ke_camera_component,
+    segs: [*]const c.ke_ecs_segment,
+    seg_count: usize,
+    out: []Draw,
+) u32 {
+    var count: u32 = 0;
+    var s: usize = 0;
+    while (s < seg_count and count < out.len) : (s += 1) {
+        const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        var i: usize = 0;
+        while (i < segs[s].count and count < out.len) : (i += 1) {
+            if (meshes[i].layers & cam.cull_mask == 0) continue;
+            if (core.material_alpha_mode.?(core, meshes[i].material) == c.KE_ALPHA_MODE_BLEND) continue;
+            out[count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]) };
+            count += 1;
+        }
+    }
+    return count;
+}
+
 const GBufferModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -125,42 +155,39 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0);
 
-    var draw_idx: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 1, &segc);
-    var s: usize = 0;
-    while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
-        const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
-        var i: usize = 0;
-        while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
-            if (meshes[i].layers & cam.cull_mask == 0) continue;
-            if (core.*.material_alpha_mode.?(core, meshes[i].material) == c.KE_ALPHA_MODE_BLEND) continue;
+    var selected: [MAX_DRAWS]Draw = undefined;
+    const selected_count = collectDraws(core, cam, segs, segc, selected[0..]);
 
-            var vbo: c.ke_gpu_buffer = 0;
-            var ibo: c.ke_gpu_buffer = 0;
-            var idx_count: u32 = 0;
-            if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
+    var draw_idx: u32 = 0;
+    var d: u32 = 0;
+    while (d < selected_count) : (d += 1) {
+        const draw = selected[d];
 
-            const model = zm.loadMat(wts[i].matrix.m[0..]);
-            const mvp = zm.mul(model, view_proj);
-            var u: PerObject = undefined;
-            zm.storeMat(u.mvp[0..], mvp);
-            zm.storeMat(u.model[0..], model);
-            const offset: u32 = draw_idx * UNIFORM_STRIDE;
-            core.*.upload.?(core, gb.obj_uniform, offset, &u, @sizeOf(PerObject));
+        var vbo: c.ke_gpu_buffer = 0;
+        var ibo: c.ke_gpu_buffer = 0;
+        var idx_count: u32 = 0;
+        if (core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count) == 0) continue;
 
-            if (!gb.resolvePipeline(core.*.material_shader.?(core, meshes[i].material))) continue;
-            rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_template));
+        const model = zm.loadMat(draw.world.matrix.m[0..]);
+        const mvp = zm.mul(model, view_proj);
+        var u: PerObject = undefined;
+        zm.storeMat(u.mvp[0..], mvp);
+        zm.storeMat(u.model[0..], model);
+        const offset: u32 = draw_idx * UNIFORM_STRIDE;
+        core.*.upload.?(core, gb.obj_uniform, offset, &u, @sizeOf(PerObject));
 
-            const mat_bg = core.*.material_bind_group.?(core, meshes[i].material);
-            rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
-            rp.*.set_bind_group.?(rp, 2, gb.obj_bind_group, &offset, 1);
-            rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
-            rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
-            rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
-            draw_idx += 1;
-        }
+        if (!gb.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
+        rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_template));
+
+        const mat_bg = core.*.material_bind_group.?(core, draw.mesh.material);
+        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
+        rp.*.set_bind_group.?(rp, 2, gb.obj_bind_group, &offset, 1);
+        rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
+        rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
+        rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
+        draw_idx += 1;
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
@@ -359,4 +386,103 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(gb), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+/// Reports every material as opaque except handle 0.
+fn opaqueUnlessZero(_: [*c]c.ke_render_service, m: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
+    return if (m.bits == 0) c.KE_ALPHA_MODE_BLEND else c.KE_ALPHA_MODE_OPAQUE;
+}
+
+fn opaqueService() c.ke_render_service {
+    var svc = std.mem.zeroes(c.ke_render_service);
+    svc.material_alpha_mode = opaqueUnlessZero;
+    return svc;
+}
+
+fn cameraSeeing(mask: u32) c.ke_camera_component {
+    var cam = std.mem.zeroes(c.ke_camera_component);
+    cam.cull_mask = mask;
+    return cam;
+}
+
+fn meshOn(layers: u32) c.ke_mesh_component {
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    m.layers = layers;
+    m.material = .{ .bits = 7 };
+    return m;
+}
+
+fn oneSegment(meshes: []const c.ke_mesh_component, wts: []const c.ke_world_transform_component) c.ke_ecs_segment {
+    var seg = std.mem.zeroes(c.ke_ecs_segment);
+    seg.columns[0] = @constCast(@ptrCast(meshes.ptr));
+    seg.columns[1] = @constCast(@ptrCast(wts.ptr));
+    seg.count = meshes.len;
+    return seg;
+}
+
+test "a mesh on a layer the camera's cull_mask omits is not drawn" {
+    var svc = opaqueService();
+    const cam = cameraSeeing(0b010);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 3;
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 1), n);
+    try testing.expectEqual(@as(u32, 0b010), out[0].mesh.layers);
+}
+
+test "a camera that names no layer draws nothing into the gbuffer" {
+    var svc = opaqueService();
+    const cam = cameraSeeing(0);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010) };
+    const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 2;
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    try testing.expectEqual(@as(u32, 0), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
+}
+
+test "a blending mesh the camera can see is left to the forward pass" {
+    var svc = opaqueService();
+    const cam = cameraSeeing(0b001);
+    var blended = meshOn(0b001);
+    blended.material = .{ .bits = 0 };
+    const meshes = [_]c.ke_mesh_component{ blended, meshOn(0b001) };
+    const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 2;
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 1), n);
+    try testing.expectEqual(@as(u32, 7), out[0].mesh.material.bits);
+}
+
+test "collection stops at the caller's capacity instead of writing past it" {
+    var svc = opaqueService();
+    const cam = cameraSeeing(0b001);
+    const meshes = [_]c.ke_mesh_component{meshOn(0b001)} ** 3;
+    const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 3;
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [2]Draw = undefined;
+    try testing.expectEqual(@as(u32, 2), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
+}
+
+test "meshes are gathered across every segment the query returned" {
+    var svc = opaqueService();
+    const cam = cameraSeeing(0b001);
+    const a_meshes = [_]c.ke_mesh_component{meshOn(0b001)};
+    const a_wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)};
+    const b_meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010) };
+    const b_wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 2;
+    const segs = [_]c.ke_ecs_segment{ oneSegment(&a_meshes, &a_wts), oneSegment(&b_meshes, &b_wts) };
+
+    var out: [8]Draw = undefined;
+    try testing.expectEqual(@as(u32, 2), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
 }
