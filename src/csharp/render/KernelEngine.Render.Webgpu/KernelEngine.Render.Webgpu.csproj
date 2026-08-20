@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\view\KernelEngine.View\KernelEngine.View.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Render\KernelEngine.Render.csproj" /> <!-- INativeRenderResources -->
 

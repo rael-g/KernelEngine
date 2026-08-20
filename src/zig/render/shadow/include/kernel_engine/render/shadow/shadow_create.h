@@ -20,12 +20,33 @@
     #define KE_RENDER_SHADOW_API __attribute__((visibility("default")))
 #endif
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
     typedef struct ke_render_shadow ke_render_shadow;
+
+    /**
+     * Shape of the directional shadow map. Every field is a workload choice, not
+     * a property of the algorithm: a scene larger than `extent` loses shadows
+     * outside it, and a caster farther than `light_distance` stops casting.
+     */
+    typedef struct ke_render_shadow_params
+    {
+        /// Edge of the square shadow map, in texels. 0 takes the default.
+        uint32_t resolution;
+        /// How far back along the light the shadow camera sits. 0 takes the default.
+        float    light_distance;
+        /// Width and height of the shadowed area, in world units. 0 takes the default.
+        float    extent;
+        /// Near plane of the shadow camera. 0 takes the default.
+        float    near_plane;
+        /// Far plane of the shadow camera. 0 takes the default.
+        float    far_plane;
+    } ke_render_shadow_params;
 
     typedef struct ke_render_shadow_handle
     {
@@ -38,6 +59,7 @@ extern "C"
         ke_ndc_convention ndc, ke_view_space *view_space, ke_bool enabled,
         ke_component_id mesh_cid, ke_component_id world_transform_cid,
         ke_component_id light_cid, ke_component_id frame_cid,
+        const ke_render_shadow_params *params,
         ke_error **out_error);
 
 #ifdef __cplusplus

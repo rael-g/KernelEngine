@@ -20,10 +20,10 @@ public class NdcConventionTests
     }
 
     [Fact]
-    public void Default_LeftHanded_IsFalse()
+    public void Default_ClipLeftHanded_IsFalse()
     {
         var conv = NdcConvention.Default;
-        Assert.False(conv.LeftHanded);
+        Assert.False(conv.ClipLeftHanded);
     }
 
     [Fact]
@@ -41,9 +41,9 @@ public class NdcConventionTests
     }
 
     [Fact]
-    public void Constructor_SetsLeftHanded()
+    public void Constructor_SetsClipLeftHanded()
     {
         var conv = new NdcConvention(false, true, true);
-        Assert.True(conv.LeftHanded);
+        Assert.True(conv.ClipLeftHanded);
     }
 }

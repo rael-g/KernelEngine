@@ -707,7 +707,7 @@ fn shaderLanguage(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_shader_languag
 }
 
 fn getNdcConvention(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_ndc_convention {
-    return .{ .z_zero_to_one = 1, .y_flip = 0, .left_handed = 1 };
+    return .{ .z_zero_to_one = 1, .y_flip = 0, .clip_left_handed = 1 };
 }
 
 const SPIRV_MAGIC: u32 = 0x07230203;

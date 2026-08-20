@@ -2,6 +2,7 @@
 
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/render/service/render_service_create.h>
+#include <kernel_engine/render/shadow/shadow_create.h>
 #include <kernel_engine/render/ui/ui_create.h>
 #include <kernel_engine/text/font.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -16,7 +17,6 @@ extern "C"
 
 struct ke_logger;
 
-typedef struct ke_view_space ke_view_space;
 
 typedef struct ke_render_module ke_render_module;
 
@@ -46,6 +46,7 @@ ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_asset_resolver *asset_resolver,
                         const ke_render_cluster_params *cluster_params,
                         const ke_render_feature_params *feature_params,
+                        const ke_render_shadow_params *shadow_params,
                         ke_view_space *view_space,
                         const char *shader_dir, ke_error **out_error);
 

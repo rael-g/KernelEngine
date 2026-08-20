@@ -210,7 +210,7 @@ export fn ke_view_space_lh_create(
 
 const testing = std.testing;
 
-const webgpu_clip: c.ke_ndc_convention = .{ .z_zero_to_one = 1, .y_flip = 0, .left_handed = 1 };
+const webgpu_clip: c.ke_ndc_convention = .{ .z_zero_to_one = 1, .y_flip = 0, .clip_left_handed = 1 };
 
 fn viewDepthOf(h: c.ke_view_space_handle, world: c.ke_vec3, eye: c.ke_vec3) f32 {
     const target = c.ke_vec3{ .x = 0, .y = 0, .z = 0 };

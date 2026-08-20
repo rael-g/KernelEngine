@@ -121,18 +121,6 @@ const PASS_NAME = "forward";
 const DEFAULT_MATERIAL_SHADER = "standard";
 const MAX_SHADER_QUALIFIED = 128;
 
-fn makeProjection(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, aspect: f32) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    if (cam.orthographic != 0) {
-        const h = cam.orthographic_size * 2.0;
-        vs.orthographic.?(vs, h * aspect, h, cam.near_plane, cam.far_plane, &ndc, &out);
-    } else {
-        const fovy = cam.fov * @as(f32, std.math.pi / 180.0);
-        vs.perspective.?(vs, fovy, aspect, cam.near_plane, cam.far_plane, &ndc, &out);
-    }
-    return zm.loadMat(&out.m);
-}
-
 fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
     var out: c.ke_mat4 = undefined;
     vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
@@ -212,7 +200,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
     const view = cameraView(fwd.view_space, cam_wt);
-    const proj = makeProjection(fwd.view_space, fwd.ndc, cam, aspect);
+    var proj_m: c.ke_mat4 = undefined;
+    c.ke_camera_projection(cam, aspect, fwd.view_space, &fwd.ndc, &proj_m);
+    const proj = zm.loadMat(&proj_m.m);
     const view_proj = zm.mul(view, proj);
 
     var sky_segc: usize = 0;

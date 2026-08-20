@@ -3,6 +3,7 @@
 
 #include <kernel_engine/render/gpu/gpu_enums.h>
 #include <kernel_engine/common/error.h>
+#include <kernel_engine/render/gpu/ndc_convention.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -39,12 +40,7 @@ extern const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION;
 /// decides how to react (retry smaller, surface to the user, etc).
 extern const ke_error_type KE_ERROR_GPU_RESOURCE_CREATION;
 
-typedef struct ke_ndc_convention
-{
-    ke_bool z_zero_to_one; ///< 1 = clip z in [0,1] (Vulkan/D3D/WebGPU), 0 = [-1,1] (GL)
-    ke_bool y_flip;        ///< 1 = framebuffer origin top-left needs Y flip in projection
-    ke_bool left_handed;   ///< 1 = left-handed clip space, 0 = right-handed
-} ke_ndc_convention;
+
 
 typedef struct ke_gpu_buffer_params
 {

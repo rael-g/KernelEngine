@@ -56,18 +56,6 @@ fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_componen
     return zm.loadMat(&out.m);
 }
 
-fn makeProjection(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, aspect: f32) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    if (cam.orthographic != 0) {
-        const h = cam.orthographic_size * 2.0;
-        vs.orthographic.?(vs, h * aspect, h, cam.near_plane, cam.far_plane, &ndc, &out);
-    } else {
-        const fovy = cam.fov * @as(f32, std.math.pi / 180.0);
-        vs.perspective.?(vs, fovy, aspect, cam.near_plane, cam.far_plane, &ndc, &out);
-    }
-    return zm.loadMat(&out.m);
-}
-
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
     const lg = logger orelse return;
     const e = err orelse return;
@@ -137,7 +125,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
     const view = cameraView(dl.view_space, cam_wt);
-    const proj = makeProjection(dl.view_space, dl.ndc, cam, aspect);
+    var proj_m: c.ke_mat4 = undefined;
+    c.ke_camera_projection(cam, aspect, dl.view_space, &dl.ndc, &proj_m);
+    const proj = zm.loadMat(&proj_m.m);
     const view_proj = zm.mul(view, proj);
     const inv_vp = zm.inverse(view_proj);
 

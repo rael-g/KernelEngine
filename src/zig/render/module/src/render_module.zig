@@ -173,6 +173,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
                                   asset_resolver: ?*c.ke_asset_resolver,
                                   cluster_params: ?*const c.ke_render_cluster_params,
                                   feature_params: ?*const c.ke_render_feature_params,
+                                  shadow_params: ?*const c.ke_render_shadow_params,
                                   view_space: ?*c.ke_view_space,
                                   shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
     const rt = runtime orelse return empty;
@@ -250,8 +251,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         };
-        if (ndc.left_handed == 0) {
-            c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: right-handed clip-space backend not supported", @src().file, @intCast(@src().line), null);
+        if (ndc.clip_left_handed == 0) {
+            c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: no projection builds a right-handed clip space", @src().file, @intCast(@src().line), null);
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
@@ -302,7 +303,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
 
         st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, @intFromBool(shadow_enabled),
-                                              mesh_cid, world_transform_cid, light_cid, st.frame_cid, out_error);
+                                              mesh_cid, world_transform_cid, light_cid, st.frame_cid, shadow_params, out_error);
         if (st.shadow.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);

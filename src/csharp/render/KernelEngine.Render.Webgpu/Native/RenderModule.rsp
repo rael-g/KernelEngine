@@ -15,6 +15,10 @@ ke_render_module
 --include-directory
 ../../../../zig/render/service/include
 --include-directory
+../../../../zig/render/shadow/include
+--include-directory
+../../../../c/view
+--include-directory
 ../../../../zig/render/module/include
 --include-directory
 ../../../../c/spatial
@@ -30,6 +34,7 @@ ke_render_module
 ../../../../zig/render/module/include/kernel_engine/render/module/render_module_create.h
 --traverse
 ../../../../c/render/kernel_engine/render/handles.h
+../../../../zig/render/shadow/include/kernel_engine/render/shadow/shadow_create.h
 ../../../../c/render/kernel_engine/render/service/render_service.h
 ../../../../zig/render/module/include/kernel_engine/render/module/render_module_create.h
 ../../../../zig/render/ui/include/kernel_engine/render/ui/ui_create.h
@@ -47,11 +52,16 @@ ke_gpu_device=ke_gpu_device
 ke_logger=KernelEngine.Logger.Native.ke_logger
 ke_world=KernelEngine.Framework.Native.ke_world
 ke_asset_resolver=KernelEngine.Asset.Native.ke_asset_resolver
+ke_view_space=KernelEngine.View.Native.ke_view_space
 ke_result=ke_result
 ke_ui_font_handle=KernelEngine.Render.Native.ke_ui_font_handle
 ke_label_glyph_quad=KernelEngine.Render.Native.ke_label_glyph_quad
 ke_label_component=KernelEngine.Render.Native.ke_label_component
 --exclude
+ke_view_space
+ke_view_space_params
+ke_view_space_handle
+ke_ndc_convention
 ke_ui_font_handle
 ke_label_glyph_quad
 ke_label_component
@@ -63,6 +73,8 @@ ke_logger
 ke_world
 ke_asset_resolver
 ke_render_ui_create
+ke_render_shadow_create
+ke_render_shadow_handle
 ke_font_loader
 ke_font_loader_handle
 ke_font_data

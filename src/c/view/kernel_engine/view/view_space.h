@@ -3,7 +3,7 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/common/math.h>
-#include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/render/gpu/ndc_convention.h>
 
 #ifdef __cplusplus
 extern "C"
