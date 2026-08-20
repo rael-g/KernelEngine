@@ -34,6 +34,7 @@ const SpotLightComp = extern struct {
 const ClusterGridUniform = extern struct {
     cluster_grid: [4]f32,
     cluster_viewport: [4]f32,
+    view_space: [4]f32,
 };
 
 const ClusterParams = extern struct {
@@ -188,9 +189,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
+    const depth_from_view_z = cm.view_space.params.?(cm.view_space).depth_from_view_z;
     var params: ClusterParams = .{
         .grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
-        .counts = .{ @floatFromInt(pn), @floatFromInt(sn), 0.0, 0.0 },
+        .counts = .{ @floatFromInt(pn), @floatFromInt(sn), depth_from_view_z, 0.0 },
         .proj = .{ std.math.tan(cam.fov * deg2rad * 0.5), aspect, cam.near_plane, cam.far_plane },
         .view = undefined,
     };
@@ -212,6 +214,7 @@ fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) v
     const grid_data = ClusterGridUniform{
         .cluster_grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
         .cluster_viewport = .{ @floatFromInt(bw), @floatFromInt(bh), near, far },
+        .view_space = .{ cm.view_space.params.?(cm.view_space).depth_from_view_z, 0.0, 0.0, 0.0 },
     };
     core.*.upload.?(core, cm.cluster_grid_uniform, 0, &grid_data, @sizeOf(ClusterGridUniform));
 }
