@@ -12,6 +12,8 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/service/render_service.h");
     @cInclude("kernel_engine/render/service/pass_context.h");
     @cInclude("kernel_engine/render/service/render_service_create.h");
+    @cInclude("kernel_engine/view/view_space.h");
+    @cInclude("kernel_engine/view/space/view_space_rh_create.h");
     @cInclude("kernel_engine/render/module/render_module_create.h");
     @cInclude("kernel_engine/render/tonemap/tonemap_create.h");
     @cInclude("kernel_engine/render/skybox/skybox_create.h");

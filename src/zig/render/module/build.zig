@@ -15,6 +15,8 @@ pub fn build(b: *std.Build) void {
     const ke_asset = b.option([]const u8, "ke-asset-include", "kernel_engine/asset include dir") orelse @panic("-Dke-asset-include required");
     const ke_service = b.option([]const u8, "ke-service-include", "ke_render_service plugin include dir") orelse @panic("-Dke-service-include required");
     const ke_self = b.option([]const u8, "ke-self-include", "this plugin's include dir") orelse @panic("-Dke-self-include required");
+    const ke_view = b.option([]const u8, "ke-view-include", "kernel_engine/view include dir") orelse @panic("-Dke-view-include required");
+    const ke_view_space = b.option([]const u8, "ke-view-space-include", "ke_view_space plugin include dir") orelse @panic("-Dke-view-space-include required");
     const ke_tonemap = b.option([]const u8, "ke-tonemap-include", "ke_render_tonemap plugin include dir") orelse @panic("-Dke-tonemap-include required");
     const ke_skybox = b.option([]const u8, "ke-skybox-include", "ke_render_skybox plugin include dir") orelse @panic("-Dke-skybox-include required");
     const ke_ui = b.option([]const u8, "ke-ui-include", "ke_render_ui plugin include dir") orelse @panic("-Dke-ui-include required");
@@ -33,7 +35,7 @@ pub fn build(b: *std.Build) void {
     });
     inline for (.{
         ke_common,  ke_ecs,  ke_runtime, ke_spatial, ke_render, ke_framework, ke_text,   ke_logger,  ke_asset,
-        ke_service, ke_self, ke_tonemap, ke_skybox,  ke_ui,     ke_gbuffer,   ke_shadow, ke_cluster, ke_deferred_lighting,
+        ke_service, ke_self, ke_view, ke_view_space, ke_tonemap, ke_skybox,  ke_ui,     ke_gbuffer,   ke_shadow, ke_cluster, ke_deferred_lighting,
         ke_forward,
     }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
@@ -41,6 +43,7 @@ pub fn build(b: *std.Build) void {
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
     mod.linkSystemLibrary("ke_runtime", .{});
+    mod.linkSystemLibrary("ke_view_space", .{});
     mod.linkSystemLibrary("ke_render_service", .{});
     mod.linkSystemLibrary("ke_render_tonemap", .{});
     mod.linkSystemLibrary("ke_render_skybox", .{});
@@ -71,7 +74,7 @@ pub fn build(b: *std.Build) void {
     });
     inline for (.{
         ke_common,  ke_ecs,  ke_runtime, ke_spatial, ke_render, ke_framework, ke_text,   ke_logger,  ke_asset,
-        ke_service, ke_self, ke_tonemap, ke_skybox,  ke_ui,     ke_gbuffer,   ke_shadow, ke_cluster, ke_deferred_lighting,
+        ke_service, ke_self, ke_view, ke_view_space, ke_tonemap, ke_skybox,  ke_ui,     ke_gbuffer,   ke_shadow, ke_cluster, ke_deferred_lighting,
         ke_forward,
     }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
@@ -80,6 +83,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addRPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.linkSystemLibrary("ke_runtime", .{});
+    test_mod.linkSystemLibrary("ke_view_space", .{});
     test_mod.linkSystemLibrary("ke_render_service", .{});
     test_mod.linkSystemLibrary("ke_render_tonemap", .{});
     test_mod.linkSystemLibrary("ke_render_skybox", .{});

@@ -12,6 +12,11 @@ const SHADOW_RES = 1024;
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256;
 
+const shadow_light_distance: f32 = 25.0;
+const shadow_extent: f32 = 20.0;
+const shadow_near: f32 = 0.1;
+const shadow_far: f32 = 50.0;
+
 const ShadowObj = extern struct { model: [16]f32 };
 
 const ShadowModule = struct {
@@ -19,6 +24,7 @@ const ShadowModule = struct {
 
     core: *c.ke_render_service = undefined,
     ndc: c.ke_ndc_convention = undefined,
+    view_space: *c.ke_view_space = undefined,
     mesh_cid: c.ke_component_id = undefined,
     world_transform_cid: c.ke_component_id = undefined,
     light_cid: c.ke_component_id = undefined,
@@ -37,23 +43,21 @@ const ShadowModule = struct {
     queries: [2]c.ke_query_decl = undefined,
 };
 
-fn lightViewProj(ndc: c.ke_ndc_convention, ldir_in: zm.Vec) zm.Mat {
+fn lightViewProj(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, ldir_in: zm.Vec) zm.Mat {
     const ldir = zm.normalize3(ldir_in);
-    const eye3 = ldir * zm.f32x4s(-25.0);
-    const eye = zm.f32x4(eye3[0], eye3[1], eye3[2], 1.0);
-    const up = if (@abs(ldir[1]) > 0.99) zm.f32x4(0, 0, 1, 0) else zm.f32x4(0, 1, 0, 0);
-    const lview = zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), up);
-    const lproj = makeOrtho(ndc, 20.0, 20.0, 0.1, 50.0);
-    return zm.mul(lview, lproj);
-}
-
-fn makeOrtho(ndc: c.ke_ndc_convention, w: f32, h: f32, near: f32, far: f32) zm.Mat {
-    var p = if (ndc.z_zero_to_one != 0)
-        zm.orthographicRh(w, h, near, far)
+    const eye3 = ldir * zm.f32x4s(-shadow_light_distance);
+    const eye = c.ke_vec3{ .x = eye3[0], .y = eye3[1], .z = eye3[2] };
+    const origin = c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
+    const up = if (@abs(ldir[1]) > 0.99)
+        c.ke_vec3{ .x = 0, .y = 0, .z = 1 }
     else
-        zm.orthographicRhGl(w, h, near, far);
-    if (ndc.y_flip != 0) p[1][1] = -p[1][1];
-    return p;
+        c.ke_vec3{ .x = 0, .y = 1, .z = 0 };
+
+    var view: c.ke_mat4 = undefined;
+    vs.look_at.?(vs, &eye, &origin, &up, &view);
+    var proj: c.ke_mat4 = undefined;
+    vs.orthographic.?(vs, shadow_extent, shadow_extent, shadow_near, shadow_far, &ndc, &proj);
+    return zm.mul(zm.loadMat(&view.m), zm.loadMat(&proj.m));
 }
 
 fn lightDirOf(ctx: ?*c.ke_system_ctx) ?zm.Vec {
@@ -74,7 +78,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     const light_dir = lightDirOf(ctx) orelse return;
 
-    const lvp = lightViewProj(sh.ndc, light_dir);
+    const lvp = lightViewProj(sh.view_space, sh.ndc, light_dir);
     var lvp_arr: [16]f32 = undefined;
     zm.storeMat(lvp_arr[0..], lvp);
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);
@@ -117,12 +121,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 }
 
 fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, enabled: bool, mesh_cid: c.ke_component_id,
+         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, enabled: bool, mesh_cid: c.ke_component_id,
          world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
          frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     sh.enabled = enabled;
     sh.core = core;
     sh.ndc = ndc;
+    sh.view_space = view_space;
     sh.mesh_cid = mesh_cid;
     sh.world_transform_cid = world_transform_cid;
     sh.light_cid = light_cid;
@@ -234,7 +239,7 @@ fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
 }
 
 export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                   device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
+                                   device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
                                    enabled: c.ke_bool, mesh_cid: c.ke_component_id,
                                    world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
                                    frame_cid: c.ke_component_id,
@@ -243,10 +248,11 @@ export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
+    const vs = view_space orelse return empty;
 
     const sh = gpa.create(ShadowModule) catch return empty;
     sh.* = .{};
-    if (!setup(sh, dev, core_ref, ndc, enabled != 0, mesh_cid, world_transform_cid, light_cid, frame_cid, out_error)) {
+    if (!setup(sh, dev, core_ref, ndc, vs, enabled != 0, mesh_cid, world_transform_cid, light_cid, frame_cid, out_error)) {
         gpa.destroy(sh);
         return empty;
     }

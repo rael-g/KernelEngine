@@ -52,6 +52,7 @@ const GBufferModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
+    view_space: *c.ke_view_space = undefined,
 
     mesh_cid: c.ke_component_id = undefined,
     world_transform_cid: c.ke_component_id = undefined,
@@ -86,37 +87,22 @@ const GBufferModule = struct {
 
 const rc_MAX_SHADER_QUALIFIED = 128;
 
-/// View matrix from where the camera ended up in world space. A camera whose
-/// basis carries no rotation at all is aimed at the origin instead: an authored
-/// camera that only set a position would otherwise stare down -Z at nothing.
-fn cameraView(cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    const m = cam_wt.matrix.m;
-    const eye = zm.f32x4(m[12], m[13], m[14], 1.0);
-    const unrotated = @abs(m[1]) < 1e-6 and @abs(m[2]) < 1e-6 and @abs(m[4]) < 1e-6 and
-        @abs(m[6]) < 1e-6 and @abs(m[8]) < 1e-6 and @abs(m[9]) < 1e-6;
-    if (unrotated) return zm.lookAtRh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0));
-    const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-    const up = zm.f32x4(m[4], m[5], m[6], 0);
-    return zm.lookToRh(eye, fwd, up);
+fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
+    var out: c.ke_mat4 = undefined;
+    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
+    return zm.loadMat(&out.m);
 }
 
-fn makeProjection(ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, aspect: f32) zm.Mat {
-    var p = if (cam.orthographic != 0) ortho: {
+fn makeProjection(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, aspect: f32) zm.Mat {
+    var out: c.ke_mat4 = undefined;
+    if (cam.orthographic != 0) {
         const h = cam.orthographic_size * 2.0;
-        const w = h * aspect;
-        break :ortho if (ndc.z_zero_to_one != 0)
-            zm.orthographicRh(w, h, cam.near_plane, cam.far_plane)
-        else
-            zm.orthographicRhGl(w, h, cam.near_plane, cam.far_plane);
-    } else persp: {
+        vs.orthographic.?(vs, h * aspect, h, cam.near_plane, cam.far_plane, &ndc, &out);
+    } else {
         const fovy = cam.fov * @as(f32, std.math.pi / 180.0);
-        break :persp if (ndc.z_zero_to_one != 0)
-            zm.perspectiveFovRh(fovy, aspect, cam.near_plane, cam.far_plane)
-        else
-            zm.perspectiveFovRhGl(fovy, aspect, cam.near_plane, cam.far_plane);
-    };
-    if (ndc.y_flip != 0) p[1][1] = -p[1][1];
-    return p;
+        vs.perspective.?(vs, fovy, aspect, cam.near_plane, cam.far_plane, &ndc, &out);
+    }
+    return zm.loadMat(&out.m);
 }
 
 inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
@@ -148,8 +134,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const view = cameraView(cam_wt);
-    const proj = makeProjection(gb.ndc, cam, aspect);
+    const view = cameraView(gb.view_space, cam_wt);
+    const proj = makeProjection(gb.view_space, gb.ndc, cam, aspect);
     const view_proj = zm.mul(view, proj);
 
     const rp = pc.*.begin_render.?(pc);
@@ -194,11 +180,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 }
 
 fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
+         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          camera_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     gb.core = core;
     gb.device = dev;
     gb.ndc = ndc;
+    gb.view_space = view_space;
     gb.mesh_cid = mesh_cid;
     gb.world_transform_cid = world_transform_cid;
     gb.camera_cid = camera_cid;
@@ -357,7 +344,7 @@ fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
 }
 
 export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
+                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
                                     mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_gbuffer_handle {
@@ -365,10 +352,11 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
+    const vs = view_space orelse return empty;
 
     const gb = gpa.create(GBufferModule) catch return empty;
     gb.* = .{};
-    if (!setup(gb, dev, core_ref, ndc, mesh_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
+    if (!setup(gb, dev, core_ref, ndc, vs, mesh_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
         gpa.destroy(gb);
         return empty;
     }

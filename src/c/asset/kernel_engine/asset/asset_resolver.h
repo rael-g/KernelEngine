@@ -99,8 +99,8 @@ extern "C"
 
         /**
          * Resolves and uploads a mesh, deduped by `path`. Today only the
-         * "res://primitives/*" shapes resolve_mesh understands; a broader
-         * path is a future-loader concern. KE_MESH_NONE on failure.
+         * shapes under "res://primitives/" that resolve_mesh understands; a
+         * broader path is a future-loader concern. KE_MESH_NONE on failure.
          * @param core [opaque]
          * @param path [utf8]
          */

@@ -59,7 +59,7 @@ int main(void)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rp, &err);
     if (!rt.ref) die("runtime", err);
 
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, NULL, 1, NULL, NULL, NULL, NULL, "shaders", &err);
+    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, NULL, 1, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
     if (!render.ref) die("render module", err);
 
     printf("Clearing the screen through the runtime each tick. Close to exit.\n");

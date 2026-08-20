@@ -42,6 +42,9 @@ const ModuleState = struct {
     forward: c.ke_render_forward_handle,
     tonemap: c.ke_render_tonemap_handle,
     ui: c.ke_render_ui_handle,
+
+    view_space: c.ke_view_space_handle,
+    owns_view_space: bool,
 };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
@@ -120,6 +123,9 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.shadow.destroy) |d| d(st.shadow.ref);
     if (st.cluster.destroy) |d| d(st.cluster.ref);
     if (st.core.destroy) |d| d(st.core.ref);
+    if (st.owns_view_space) {
+        if (st.view_space.destroy) |d| d(st.view_space.ref);
+    }
     gpa.destroy(st);
 }
 
@@ -167,6 +173,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
                                   asset_resolver: ?*c.ke_asset_resolver,
                                   cluster_params: ?*const c.ke_render_cluster_params,
                                   feature_params: ?*const c.ke_render_feature_params,
+                                  view_space: ?*c.ke_view_space,
                                   shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
     const rt = runtime orelse return empty;
     const e = ecs orelse return empty;
@@ -204,6 +211,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.forward = .{ .ref = null, .destroy = null };
     st.tonemap = .{ .ref = null, .destroy = null };
     st.ui = .{ .ref = null, .destroy = null };
+    st.view_space = .{ .ref = null, .destroy = null };
+    st.owns_view_space = false;
     const shadow_enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     const ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.logger = logger;
@@ -230,6 +239,17 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
     if (default_passes != 0) {
         const ndc = dev.get_ndc_convention.?(dev);
+        if (view_space) |supplied| {
+            st.view_space = .{ .ref = supplied, .destroy = null };
+        } else {
+            st.view_space = c.ke_view_space_rh_create(out_error);
+            st.owns_view_space = true;
+        }
+        const vs = st.view_space.ref orelse {
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        };
         if (ndc.left_handed == 0) {
             c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: right-handed clip-space backend not supported", @src().file, @intCast(@src().line), null);
             if (core_h.destroy) |d| d(core_h.ref);
@@ -281,7 +301,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
         registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
 
-        st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, @intFromBool(shadow_enabled),
+        st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, @intFromBool(shadow_enabled),
                                               mesh_cid, world_transform_cid, light_cid, st.frame_cid, out_error);
         if (st.shadow.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
@@ -290,34 +310,34 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         }
 
         st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-                                                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
+                                                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, vs, out_error);
         if (st.cluster.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
         }
 
-        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, ndc, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
+        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, ndc, vs, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.gbuffer.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
         }
 
-        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
+        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, ndc, vs, logger, @intFromBool(ibl_enabled),
                                                             camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
         }
-        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, ndc, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
+        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, ndc, vs, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.skybox.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
         }
-        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, ndc, logger, @intFromBool(ibl_enabled),
+        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, ndc, vs, logger, @intFromBool(ibl_enabled),
                                                 mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);

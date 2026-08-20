@@ -125,7 +125,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             : null;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
         fixed (byte* sd = shaderDirBytes)
-            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, wd, 1, lg, ar, &cp, &fp, (sbyte*)sd, &err);
+            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, wd, 1, lg, ar, &cp, &fp, null, (sbyte*)sd, &err);
         if (_module.@ref == null)
             throw Fail("render module create failed", err);
 

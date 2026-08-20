@@ -5,6 +5,7 @@
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/view/view_space.h>
 #include <kernel_engine/runtime/runtime.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -34,7 +35,7 @@ extern "C"
 
     KE_RENDER_SHADOW_API ke_render_shadow_handle ke_render_shadow_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_ndc_convention ndc, ke_bool enabled,
+        ke_ndc_convention ndc, ke_view_space *view_space, ke_bool enabled,
         ke_component_id mesh_cid, ke_component_id world_transform_cid,
         ke_component_id light_cid, ke_component_id frame_cid,
         ke_error **out_error);
