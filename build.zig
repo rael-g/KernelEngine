@@ -276,6 +276,16 @@ pub fn build(b: *std.Build) void {
     wgpu_copy.step.dependOn(&gpu_device_webgpu.step);
 
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
+
+    _ = ctx.plugin("ke_view_space", "src/zig/view/space", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "view/space/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+        argF(b, "kerror-src", kerror_src),
+    }, &.{&common.step}, .has_tests);
+
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
 
