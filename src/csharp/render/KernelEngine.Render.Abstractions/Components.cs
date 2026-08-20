@@ -75,31 +75,3 @@ public struct MeshComponent
         Layers             = 1,
     };
 }
-
-/// <summary>
-/// Scene-wide ambient light color. First entity wins. Kept as a managed mirror
-/// (unlike Camera/DirectionalLight/PointLight/SpotLight, which kabic generates
-/// straight onto <c>ke_ambient_light_component</c>) because the scene loader's
-/// <c>[entity.components.AmbientLight]</c> property-apply path needs an
-/// unmanaged struct type to key <see cref="IComponentRegistry.CidOf{T}"/> on;
-/// ambient light has no native apply function (components_apply.zig), so this
-/// is the only producer that still needs it.
-/// </summary>
-[StructLayout(LayoutKind.Sequential)]
-public struct AmbientLightComponent
-{
-    /// <summary>The engine-wide component name this struct is registered under.</summary>
-    public const string Name = "ambient_light";
-
-    public Vector3 Color;
-}
-
-/// <summary>Environment cubemap driving both the skybox and image-based lighting.</summary>
-[StructLayout(LayoutKind.Sequential)]
-public struct SkyboxComponent
-{
-    /// <summary>The engine-wide component name this struct is registered under.</summary>
-    public const string Name = "skybox";
-
-    public TextureHandle CubemapHandle;
-}

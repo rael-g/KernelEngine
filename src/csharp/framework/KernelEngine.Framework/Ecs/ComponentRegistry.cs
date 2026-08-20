@@ -19,8 +19,6 @@ public sealed class ComponentRegistry : IComponentRegistry
     {
         Register<TransformComponent>(ecs, "transform");
         Register<MeshComponent>(ecs, MeshComponent.Name);
-        Register<AmbientLightComponent>(ecs, AmbientLightComponent.Name);
-        Register<SkyboxComponent>(ecs, SkyboxComponent.Name);
     }
 
     /// <summary>Returns the cid registered for the given component struct type.</summary>
