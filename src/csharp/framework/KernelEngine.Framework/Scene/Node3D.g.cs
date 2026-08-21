@@ -7,15 +7,22 @@ using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 
-/// <summary>An entity's authored 3D pose, read and written as one unit.</summary>
+/// <summary>An entity's authored 3D pose.</summary>
 [GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
 public partial class Node3D : Node
 {
     public Node3D()
     {
-        _generatedState0 = global::System.Runtime.CompilerServices.Unsafe.BitCast<KernelEngine.Ecs.TransformComponent, ke_transform_component>(KernelEngine.Ecs.TransformComponent.Identity);
+        _generatedState0.rotation = new ke_quat { x = 0f, y = 0f, z = 0f, w = 1f };
+        _generatedState0.scale = new ke_vec3 { x = 1f, y = 1f, z = 1f };
     }
 
-    [NativeWhole(Component = typeof(ke_transform_component))]
-    public partial KernelEngine.Ecs.TransformComponent LocalTransform { get; set; }
+    [NativeField("position", Component = typeof(ke_transform_component))]
+    public partial Vector3 Position { get; set; }
+
+    [NativeField("rotation", Component = typeof(ke_transform_component))]
+    public partial Quaternion Rotation { get; set; }
+
+    [NativeField("scale", Component = typeof(ke_transform_component))]
+    public partial Vector3 Scale { get; set; }
 }

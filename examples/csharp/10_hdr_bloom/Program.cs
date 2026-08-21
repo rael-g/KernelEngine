@@ -29,7 +29,7 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Features: hdr_intermediate, aces_tonemapping");
 
         var cam = tree.AddNode(new Camera { Fov = 55f, NearPlane = 0.1f, FarPlane = 200f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 4f, 12f) };
+        cam.Position = new Vector3(0f, 4f, 12f);
 
         var sphere = KernelEngine.Render.MeshPrimitives.UvSphere(resources, radius: 1f, rings: 32, segments: 48);
         var floor  = KernelEngine.Render.MeshPrimitives.Plane(resources);
@@ -40,18 +40,15 @@ var services = new ServiceCollection()
         var matFloor  = resources.CreateMaterial("floor", new Vector4(0.3f, 0.3f, 0.3f, 1f), metallic: 0.0f, roughness: 0.9f);
 
         var floorNode = tree.AddNode(new MeshRenderer { MeshHandle = floor, MaterialHandle = matFloor }, "Floor");
-        floorNode.LocalTransform = floorNode.LocalTransform with
-        {
-            Position = new Vector3(0f, -1f, 0f),
-            Scale    = new Vector3(20f, 1f, 20f),
-        };
+        floorNode.Position = new Vector3(0f, -1f, 0f);
+        floorNode.Scale    = new Vector3(20f, 1f, 20f);
 
         var s0 = tree.AddNode(new MeshRenderer { MeshHandle = sphere, MaterialHandle = matGray   }, "SphereNear");
         var s1 = tree.AddNode(new MeshRenderer { MeshHandle = sphere, MaterialHandle = matCopper }, "SphereMid");
         var s2 = tree.AddNode(new MeshRenderer { MeshHandle = sphere, MaterialHandle = matBlue   }, "SphereFar");
-        s0.LocalTransform = s0.LocalTransform with { Position = new Vector3(-3f, 0f, 0f) };
-        s1.LocalTransform = s1.LocalTransform with { Position = new Vector3( 0f, 0f, 0f) };
-        s2.LocalTransform = s2.LocalTransform with { Position = new Vector3( 3f, 0f, 0f) };
+        s0.Position = new Vector3(-3f, 0f, 0f);
+        s1.Position = new Vector3( 0f, 0f, 0f);
+        s2.Position = new Vector3( 3f, 0f, 0f);
 
         tree.AddNode(new AmbientLight { Color = new Vector3(0.01f, 0.01f, 0.015f) }, "Ambient");
 
@@ -61,7 +58,7 @@ var services = new ServiceCollection()
             Intensity = 5f,
             Radius    = 20f,
         }, "Lamp");
-        light.LocalTransform = light.LocalTransform with { Position = new Vector3(-3f, 2f, 1.5f) };
+        light.Position = new Vector3(-3f, 2f, 1.5f);
     }));
 
 using var sp = services.BuildServiceProvider();

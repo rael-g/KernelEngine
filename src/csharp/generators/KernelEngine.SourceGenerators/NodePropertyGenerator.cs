@@ -197,31 +197,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         foreach (var p in properties)
         {
-            var wholeAttr = p.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NativeWholeAttribute");
             var fieldAttr = p.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NativeFieldAttribute");
             var declaredFieldName = fieldAttr is not null ? (string)fieldAttr.ConstructorArguments[0].Value! : p.Name;
-            var pinned = NamedComponentOf(wholeAttr) ?? NamedComponentOf(fieldAttr);
+            var pinned = NamedComponentOf(fieldAttr);
 
-            var slot = ResolveSlot(spc, p, slots, isNative, declaredFieldName, wholeAttr is not null, pinned);
+            var slot = ResolveSlot(spc, p, slots, isNative, declaredFieldName, pinned);
             if (slot is null) continue;
 
-            var backingType = slot.TypeName;
             var backingTypeSymbol = slot.Symbol;
-
-            if (wholeAttr is not null)
-            {
-                var propType = p.Type.ToDisplayString();
-                sb.AppendLine($"    public partial {propType} {p.Name}");
-                sb.AppendLine("    {");
-                sb.AppendLine($"        get => global::System.Runtime.CompilerServices.Unsafe.BitCast<{backingType}, {propType}>({slot.Current}());");
-                sb.AppendLine("        set");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            var s = global::System.Runtime.CompilerServices.Unsafe.BitCast<{propType}, {backingType}>(value);");
-                sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
-                sb.AppendLine("        }");
-                sb.AppendLine("    }");
-                continue;
-            }
 
             var fieldName = isNative ? declaredFieldName : p.Name;
             var fieldSymbol = backingTypeSymbol?.GetMembers(fieldName).OfType<IFieldSymbol>().FirstOrDefault();
@@ -495,7 +478,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         attr?.NamedArguments.FirstOrDefault(kv => kv.Key == "Component").Value.Value as INamedTypeSymbol;
 
     static Slot? ResolveSlot(SourceProductionContext spc, IPropertySymbol property, ImmutableArray<Slot> slots,
-        bool isNative, string fieldName, bool isWhole, INamedTypeSymbol? pinned)
+        bool isNative, string fieldName, INamedTypeSymbol? pinned)
     {
         if (slots.Length == 1) return slots[0];
 
@@ -505,12 +488,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             if (named is not null) return named;
             spc.ReportDiagnostic(Diagnostic.Create(UnknownComponentRule, property.Locations.FirstOrDefault(),
                 property.Name, pinned.ToDisplayString()));
-            return null;
-        }
-
-        if (isWhole)
-        {
-            spc.ReportDiagnostic(Diagnostic.Create(UnnamedWholeRule, property.Locations.FirstOrDefault(), property.Name));
             return null;
         }
 
@@ -582,14 +559,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         id: "KESG002",
         title: "Node property does not resolve to exactly one of the node's components",
         messageFormat: "Property '{0}' matches {1} of this node's components on field '{2}'; name the intended one with [NativeField(..., Component = typeof(...))]",
-        category: "KernelEngine.SourceGenerators",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    static readonly DiagnosticDescriptor UnnamedWholeRule = new(
-        id: "KESG004",
-        title: "Whole-struct node property does not say which component it is",
-        messageFormat: "Property '{0}' is [NativeWhole] on a node declaring several components, and a whole-struct property names no field to resolve it by; add Component = typeof(...)",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

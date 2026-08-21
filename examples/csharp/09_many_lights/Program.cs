@@ -39,7 +39,7 @@ var services = new ServiceCollection()
         tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
 
         var cam = tree.AddNode(new Camera { Fov = 70f, NearPlane = 0.1f, FarPlane = CorridorLength + 50f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, -3f) };
+        cam.Position = new Vector3(0f, 0f, -3f);
 
         var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
         var wallMat = resources.CreateMaterial("wall", new Vector4(0.6f, 0.6f, 0.65f, 1f), metallic: 0.1f, roughness: 0.7f);
@@ -49,16 +49,20 @@ var services = new ServiceCollection()
         float halfL = CorridorLength / 2f;
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with { Position = new Vector3(0f, -halfH, halfL), Scale = new Vector3(CorridorWidth, 1f, CorridorLength) };
+        floor.Position = new Vector3(0f, -halfH, halfL);
+        floor.Scale = new Vector3(CorridorWidth, 1f, CorridorLength);
 
         var ceiling = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "Ceiling");
-        ceiling.LocalTransform = ceiling.LocalTransform with { Position = new Vector3(0f, halfH, halfL), Scale = new Vector3(CorridorWidth, 1f, CorridorLength) };
+        ceiling.Position = new Vector3(0f, halfH, halfL);
+        ceiling.Scale = new Vector3(CorridorWidth, 1f, CorridorLength);
 
         var wallLeft = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "WallLeft");
-        wallLeft.LocalTransform = wallLeft.LocalTransform with { Position = new Vector3(-halfW, 0f, halfL), Scale = new Vector3(1f, CorridorHeight, CorridorLength) };
+        wallLeft.Position = new Vector3(-halfW, 0f, halfL);
+        wallLeft.Scale = new Vector3(1f, CorridorHeight, CorridorLength);
 
         var wallRight = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "WallRight");
-        wallRight.LocalTransform = wallRight.LocalTransform with { Position = new Vector3(halfW, 0f, halfL), Scale = new Vector3(1f, CorridorHeight, CorridorLength) };
+        wallRight.Position = new Vector3(halfW, 0f, halfL);
+        wallRight.Scale = new Vector3(1f, CorridorHeight, CorridorLength);
 
         var rand = new Random(42);
         for (int i = 0; i < LightCount; i++)
@@ -137,6 +141,6 @@ sealed class CorridorLight : PointLight
         float dx = MathF.Sin(_time + _seed.X) * 0.8f;
         float dy = MathF.Cos(_time + _seed.Y) * 0.8f;
         float dz = MathF.Sin(_time * 0.7f + _seed.Z) * 0.5f;
-        LocalTransform = LocalTransform with { Position = _anchor + new Vector3(dx, dy, dz) };
+        Position = _anchor + new Vector3(dx, dy, dz);
     }
 }

@@ -42,24 +42,3 @@ public sealed class NativeFieldAttribute(string name) : Attribute
     /// </summary>
     public Type? Component { get; init; }
 }
-
-/// <summary>
-/// Marks a <see cref="GeneratedNodeComponentAttribute"/> node's partial property as backed
-/// by the ENTIRE native struct, bit-cast, rather than one field of it — the property type
-/// must be layout-identical to the backing struct (a hand-written managed mirror, the same
-/// relationship <c>TransformComponent</c> already has to <c>ke_transform_component</c>).
-/// Mutually exclusive with <see cref="NativeFieldAttribute"/> for the same component: that
-/// component is exposed by one <c>[NativeWhole]</c> property and no per-field ones, since the
-/// whole struct is a single atomic read/write (e.g. setting position/rotation/scale together
-/// in one native call, not three), the same guarantee a hand-written whole-struct property
-/// already gave callers.
-/// </summary>
-[AttributeUsage(AttributeTargets.Property)]
-public sealed class NativeWholeAttribute : Attribute
-{
-    /// <summary>
-    /// Which of the node's components this property is the whole of, when the node composes
-    /// more than one. Left null, the node's single component is used.
-    /// </summary>
-    public Type? Component { get; init; }
-}

@@ -42,13 +42,13 @@ var services = new ServiceCollection()
         }, "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 10f) };
+        cam.Position = new Vector3(0f, 5f, 10f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(20f, 1f, 20f) };
+        floor.Scale = new Vector3(20f, 1f, 20f);
 
         var caster = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = redMat }, "Caster");
-        caster.LocalTransform = caster.LocalTransform with { Position = new Vector3(0f, 1f, 0f) };
+        caster.Position = new Vector3(0f, 1f, 0f);
     }));
 
 using var sp = services.BuildServiceProvider();

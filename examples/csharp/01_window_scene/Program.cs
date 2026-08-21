@@ -36,7 +36,7 @@ var services = new ServiceCollection()
         }, "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
+        cam.Position = new Vector3(0f, 0f, 5f);
 
         var quad   = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var orange = resources.CreateMaterial("orange", new Vector4(1f, 0.5f, 0f, 1f));
@@ -87,9 +87,6 @@ sealed class SpinningQuad : MeshRenderer
         _angle += 90f * view.DeltaTime;
         if (_angle >= 360f) _angle -= 360f;
 
-        LocalTransform = LocalTransform with
-        {
-            Rotation = Quaternion.CreateFromYawPitchRoll(_angle * MathF.PI / 180f, 0f, 0f),
-        };
+        Rotation = Quaternion.CreateFromYawPitchRoll(_angle * MathF.PI / 180f, 0f, 0f);
     }
 }

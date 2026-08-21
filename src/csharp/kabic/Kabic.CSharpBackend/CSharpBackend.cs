@@ -182,17 +182,6 @@ public static class CSharpBackend
     /// <summary>The <c>[default:]</c> seeding for one component, targeting its own backing slot.</summary>
     static IEnumerable<string> ComponentInit(ApiModel model, ApiStruct c, int index)
     {
-        var whole = c.TagValue("whole");
-        if (whole is not null)
-        {
-            var defaultExpr = c.TagValue("default");
-            if (defaultExpr is null) yield break;
-            var (_, propType) = SplitWhole(whole);
-            yield return $"_generatedState{index} = global::System.Runtime.CompilerServices.Unsafe."
-                + $"BitCast<{propType}, {c.Name}>({defaultExpr});";
-            yield break;
-        }
-
         foreach (var f in c.Fields)
             foreach (var line in FieldInit(model, f, index)) yield return line;
     }
@@ -204,16 +193,6 @@ public static class CSharpBackend
     /// </summary>
     static IEnumerable<string> ComponentSurface(ApiModel model, ApiStruct c, Convention convention)
     {
-        var whole = c.TagValue("whole");
-        if (whole is not null)
-        {
-            var (propName, propType) = SplitWhole(whole);
-            yield return "";
-            yield return $"    [NativeWhole(Component = typeof({c.Name}))]";
-            yield return $"    public partial {propType} {propName} {{ get; set; }}";
-            yield break;
-        }
-
         foreach (var f in c.Fields)
         {
             if (f.Has("idiom")) continue;
@@ -225,13 +204,6 @@ public static class CSharpBackend
             yield return $"    [NativeField(\"{f.Name}\", Component = typeof({c.Name}))]";
             yield return $"    public partial {propType} {propName} {{ get; set; }}";
         }
-    }
-
-    static (string Name, string Type) SplitWhole(string whole)
-    {
-        var i = whole.IndexOf('=');
-        if (i < 0) throw new InvalidOperationException($"[whole:{whole}] must be [whole:PropertyName=FullyQualifiedType]");
-        return (whole[..i], whole[(i + 1)..]);
     }
 
     static int? VectorArity(string cType)

@@ -54,15 +54,15 @@ var services = new ServiceCollection()
             "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 3f) };
+        cam.Position = new Vector3(0f, 0f, 3f);
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
 
         var left = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = matPlain }, "PlainQuad");
-        left.LocalTransform = left.LocalTransform with { Position = new Vector3(-1.2f, 0f, 0f) };
+        left.Position = new Vector3(-1.2f, 0f, 0f);
 
         var right = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = matNormal }, "NormalQuad");
-        right.LocalTransform = right.LocalTransform with { Position = new Vector3(1.2f, 0f, 0f) };
+        right.Position = new Vector3(1.2f, 0f, 0f);
     }));
 
 using var sp = services.BuildServiceProvider();

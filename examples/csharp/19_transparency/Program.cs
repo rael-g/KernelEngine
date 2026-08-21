@@ -61,27 +61,31 @@ var services = new ServiceCollection()
         }, "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 6f) };
+        cam.Position = new Vector3(0f, 0f, 6f);
 
         var cube  = KernelEngine.Render.MeshPrimitives.Cube(resources);
         var gray  = resources.CreateMaterial("gray", new Vector4(0.6f, 0.6f, 0.6f, 1f));
         var back  = tree.AddNode(new MeshRenderer { MeshHandle = cube, MaterialHandle = gray }, "OpaqueCube");
-        back.LocalTransform = back.LocalTransform with { Position = new Vector3(0f, 0f, -2f), Scale = new Vector3(1.5f) };
+        back.Position = new Vector3(0f, 0f, -2f);
+        back.Scale = new Vector3(1.5f);
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var red  = resources.CreateMaterial("red", new Vector4(1f, 0.15f, 0.15f, 0.5f), alphaMode: AlphaMode.Blend);
         var blue = resources.CreateMaterial("blue", new Vector4(0.15f, 0.35f, 1f, 0.5f), alphaMode: AlphaMode.Blend);
 
         var far  = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = red }, "FarQuad");
-        far.LocalTransform = far.LocalTransform with { Position = new Vector3(-0.4f, 0f, 0f), Scale = new Vector3(2f) };
+        far.Position = new Vector3(-0.4f, 0f, 0f);
+        far.Scale = new Vector3(2f);
 
         var near = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = blue }, "NearQuad");
-        near.LocalTransform = near.LocalTransform with { Position = new Vector3(0.4f, 0f, 1f), Scale = new Vector3(2f) };
+        near.Position = new Vector3(0.4f, 0f, 1f);
+        near.Scale = new Vector3(2f);
 
         var glass = resources.CreateMaterial("glass", new Vector4(1f, 1f, 1f, 0.15f), alphaMode: AlphaMode.Blend,
             ior: 1.5f, distortionStrength: 0.25f);
         var glassNode = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = glass }, "GlassQuad");
-        glassNode.LocalTransform = glassNode.LocalTransform with { Position = new Vector3(2.5f, 0f, 2f), Scale = new Vector3(2f) };
+        glassNode.Position = new Vector3(2.5f, 0f, 2f);
+        glassNode.Scale = new Vector3(2f);
     }));
 
 using var sp = services.BuildServiceProvider();

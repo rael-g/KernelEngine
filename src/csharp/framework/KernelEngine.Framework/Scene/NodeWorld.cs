@@ -177,7 +177,7 @@ public sealed class NodeWorld : ISignalDeclarer
         _components = components;
         _logger     = logger;
         _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
-        _nativeTransformCid = ecs.RegisterComponent<TransformComponent>("transform");
+        _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
         _hierarchyCid       = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
     }
 

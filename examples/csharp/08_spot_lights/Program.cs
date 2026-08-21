@@ -31,7 +31,7 @@ var services = new ServiceCollection()
         tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
+        cam.Position = new Vector3(0f, 5f, 15f);
 
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
         var cubeMesh  = KernelEngine.Render.MeshPrimitives.Cube(resources);
@@ -40,13 +40,13 @@ var services = new ServiceCollection()
         var cubeMat  = resources.CreateMaterial("cube", new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(30f, 1f, 30f) };
+        floor.Scale = new Vector3(30f, 1f, 30f);
 
         for (int x = -4; x <= 4; x += 4)
         for (int z = -4; z <= 4; z += 4)
         {
             var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
-            n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, 1f, z) };
+            n.Position = new Vector3(x, 1f, z);
         }
 
         (Vector3 color, float offset)[] spots =
@@ -103,7 +103,7 @@ sealed class OrbitingSpot : SpotLight
         _time += view.DeltaTime;
         float x = MathF.Cos(_time + Offset) * 8f;
         float z = MathF.Sin(_time + Offset) * 8f;
-        LocalTransform = LocalTransform with { Position = new Vector3(x, 10f, z) };
-        Direction = Vector3.Normalize(-LocalTransform.Position);
+        Position = new Vector3(x, 10f, z);
+        Direction = Vector3.Normalize(-Position);
     }
 }

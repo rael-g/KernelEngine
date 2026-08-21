@@ -8,13 +8,13 @@ extern "C"
 {
 #endif
 
-    /// [node:Node3D,whole:LocalTransform=KernelEngine.Ecs.TransformComponent,default:KernelEngine.Ecs.TransformComponent.Identity]
-    /// An entity's authored 3D pose, read and written as one unit.
+    /// [node:Node3D]
+    /// An entity's authored 3D pose.
     typedef struct ke_transform_component
     {
         ke_vec3 position;
-        ke_quat rotation;
-        ke_vec3 scale;
+        ke_quat rotation; ///< [default:0 0 0 1]
+        ke_vec3 scale; ///< [default:1 1 1]
     } ke_transform_component;
 
 #define KE_COMPONENT_NAME_TRANSFORM "transform"

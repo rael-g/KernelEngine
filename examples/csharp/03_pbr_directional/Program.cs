@@ -36,7 +36,7 @@ var services = new ServiceCollection()
         tree.AddNode(new OrbitingLight { Color = Vector3.One, Intensity = 3.0f }, "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 1.0f, 5.0f) };
+        cam.Position = new Vector3(0f, 1.0f, 5.0f);
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var mat0 = resources.CreateMaterial("mat0", Vector4.One, metal0, rough0);
@@ -45,16 +45,16 @@ var services = new ServiceCollection()
         var mat3 = resources.CreateMaterial("mat3", Vector4.One, metal3, rough3, shader: "checker");
 
         var n0 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat0 }, "QuadDielectric");
-        n0.LocalTransform = n0.LocalTransform with { Position = new Vector3(-3f, 0f, 0f) };
+        n0.Position = new Vector3(-3f, 0f, 0f);
 
         var n1 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat1 }, "QuadMetal");
-        n1.LocalTransform = n1.LocalTransform with { Position = new Vector3(-1f, 0f, 0f) };
+        n1.Position = new Vector3(-1f, 0f, 0f);
 
         var n2 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat2 }, "QuadStripes");
-        n2.LocalTransform = n2.LocalTransform with { Position = new Vector3(1f, 0f, 0f) };
+        n2.Position = new Vector3(1f, 0f, 0f);
 
         var n3 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat3 }, "QuadChecker");
-        n3.LocalTransform = n3.LocalTransform with { Position = new Vector3(3f, 0f, 0f) };
+        n3.Position = new Vector3(3f, 0f, 0f);
     }));
 
 using var sp = services.BuildServiceProvider();

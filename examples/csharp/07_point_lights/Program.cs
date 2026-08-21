@@ -31,7 +31,7 @@ var services = new ServiceCollection()
         tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 15f) };
+        cam.Position = new Vector3(0f, 2f, 15f);
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var mat  = resources.CreateMaterial("grid_quad", Vector4.One, metallic: 0.1f, roughness: 0.5f);
@@ -40,7 +40,7 @@ var services = new ServiceCollection()
         for (int y = -5; y <= 5; y += 2)
         {
             var n = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat }, $"Quad_{x}_{y}");
-            n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, y, 0f) };
+            n.Position = new Vector3(x, y, 0f);
         }
 
         var colors = new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ, new Vector3(1f, 1f, 0f) };
@@ -91,6 +91,6 @@ sealed class MovingPointLight : PointLight
         float x = MathF.Cos(_time + Phase) * 5f;
         float y = MathF.Sin(_time + Phase) * 5f;
         float z = MathF.Sin(_time * 0.5f) * 2f + 2f;
-        LocalTransform = LocalTransform with { Position = new Vector3(x, y, z) };
+        Position = new Vector3(x, y, z);
     }
 }

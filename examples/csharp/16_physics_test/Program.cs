@@ -39,7 +39,7 @@ var services = new ServiceCollection()
         var physics = sp.GetRequiredService<IPhysics2D>();
 
         var cam = tree.AddNode(new Camera { Fov = 50f, NearPlane = 0.1f, FarPlane = 100f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 14f) };
+        cam.Position = new Vector3(0f, 0f, 14f);
 
         tree.AddNode(new DirectionalLight
         {
@@ -53,11 +53,8 @@ var services = new ServiceCollection()
         var ballMat  = resources.CreateMaterial("ball", new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with
-        {
-            Position = new Vector3(0f, FloorY, 0f),
-            Scale    = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f),
-        };
+        floor.Position = new Vector3(0f, FloorY, 0f);
+        floor.Scale    = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f);
         var floorBody = physics.CreateBody(BodyType2D.Static, new Vector2(0f, FloorY));
         physics.AddBoxFixture(floorBody, new Vector2(FloorHalfW, FloorHalfH), friction: 0.5f);
 
@@ -125,11 +122,8 @@ sealed class PhysicsScene : Node
         {
             var (node, body) = _balls[i];
             var s            = _physics.GetBodyState(body);
-            node.LocalTransform = node.LocalTransform with
-            {
-                Position = new Vector3(s.Position.X, s.Position.Y, 0f),
-                Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, s.Angle),
-            };
+            node.Position = new Vector3(s.Position.X, s.Position.Y, 0f);
+            node.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, s.Angle);
         }
 
         bool space = view.IsKeyDown(KeySpace);
@@ -162,7 +156,7 @@ sealed class PhysicsScene : Node
         var node = AddChild(
             new MeshRenderer { MeshHandle = _ballMesh, MaterialHandle = _ballMat },
             $"Ball_{_balls.Count}");
-        node.LocalTransform = node.LocalTransform with { Position = new Vector3(at.X, at.Y, 0f) };
+        node.Position = new Vector3(at.X, at.Y, 0f);
 
         var body = _physics.CreateBody(BodyType2D.Dynamic, at);
         _physics.AddBoxFixture(body, new Vector2(0.5f, 0.5f), density: 1f, friction: 0.3f, restitution: 0.5f);

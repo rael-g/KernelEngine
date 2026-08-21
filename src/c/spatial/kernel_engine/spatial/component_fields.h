@@ -8,8 +8,8 @@
 
 static const ke_component_field ke_transform_component_fields[] = {
     { "position", KE_VARIANT_VEC3, offsetof(ke_transform_component, position), sizeof(((ke_transform_component *)0)->position), { KE_VARIANT_NULL, { 0 } } },
-    { "rotation", KE_VARIANT_QUAT, offsetof(ke_transform_component, rotation), sizeof(((ke_transform_component *)0)->rotation), { KE_VARIANT_NULL, { 0 } } },
-    { "scale", KE_VARIANT_VEC3, offsetof(ke_transform_component, scale), sizeof(((ke_transform_component *)0)->scale), { KE_VARIANT_NULL, { 0 } } },
+    { "rotation", KE_VARIANT_QUAT, offsetof(ke_transform_component, rotation), sizeof(((ke_transform_component *)0)->rotation), { KE_VARIANT_QUAT, { .q = { 0.0f, 0.0f, 0.0f, 1.0f } } } },
+    { "scale", KE_VARIANT_VEC3, offsetof(ke_transform_component, scale), sizeof(((ke_transform_component *)0)->scale), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } } },
 };
 
 static const ke_component_field ke_transform2d_component_fields[] = {

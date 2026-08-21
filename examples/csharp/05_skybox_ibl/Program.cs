@@ -67,7 +67,7 @@ var services = new ServiceCollection()
         }, "Sun");
 
         var cam = tree.AddNode(new FreeLook { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
+        cam.Position = new Vector3(0f, 0f, 4f);
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -124,10 +124,7 @@ sealed class FreeLook : Camera
         if (view.IsKeyDown(341)) move -= Vector3.UnitY;
         if (move != Vector3.Zero) move = Vector3.Normalize(move);
 
-        LocalTransform = LocalTransform with
-        {
-            Position = LocalTransform.Position + move * MoveSpeed * dt,
-            Rotation = rot,
-        };
+        Position += move * MoveSpeed * dt;
+        Rotation = rot;
     }
 }

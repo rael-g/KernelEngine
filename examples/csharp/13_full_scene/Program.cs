@@ -41,7 +41,8 @@ var services = new ServiceCollection()
         var target = new Vector3(0f, 2f, 0f);
         var lookRot = Quaternion.CreateFromRotationMatrix(
             Matrix4x4.CreateWorld(eye, Vector3.Normalize(target - eye), Vector3.UnitY));
-        cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
+        cam.Position = eye;
+        cam.Rotation = lookRot;
 
         tree.AddNode(new DirectionalLight
         {
@@ -53,7 +54,7 @@ var services = new ServiceCollection()
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
         var floorMat  = resources.CreateMaterial("floor", new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
         var floor     = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 1f, 50f) };
+        floor.Scale = new Vector3(50f, 1f, 50f);
 
         try
         {
@@ -64,11 +65,8 @@ var services = new ServiceCollection()
             var meshNodes = tree.AddModel(model, resources, rootName: "CenterBox");
             for (int i = 0; i < meshNodes.Count; i++)
             {
-                meshNodes[i].LocalTransform = meshNodes[i].LocalTransform with
-                {
-                    Position = new Vector3(0f, 2f, 0f),
-                    Scale    = new Vector3(2f),
-                };
+                meshNodes[i].Position = new Vector3(0f, 2f, 0f);
+                meshNodes[i].Scale    = new Vector3(2f);
             }
         }
         catch (Exception ex)
@@ -138,6 +136,6 @@ sealed class OrbitingLight : PointLight
         _time += view.DeltaTime * Speed;
         float x = MathF.Cos(_time + Phase) * OrbitRadius;
         float z = MathF.Sin(_time + Phase) * OrbitRadius;
-        LocalTransform = LocalTransform with { Position = new Vector3(x, 3f, z) };
+        Position = new Vector3(x, 3f, z);
     }
 }
