@@ -17,6 +17,10 @@ extern "C"
 
 #ifndef CLANGSHARP
 #define KE_UI_FONT_NONE ((ke_ui_font_handle){ KE_HANDLE_NONE })
+/// A font the label asked for and the engine could not produce. Distinct from
+/// KE_UI_FONT_NONE so the resolve is attempted once and reported once, rather
+/// than retried every tick or mistaken for a label that never named a font.
+#define KE_UI_FONT_FAILED ((ke_ui_font_handle){ UINT32_MAX })
 #endif
 
     typedef struct ke_label_glyph_quad
