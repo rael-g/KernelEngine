@@ -395,12 +395,18 @@ fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_compon
     materializeReserved(s, entity);
     if (!c.ecs_is_alive(s.world, @intCast(entity))) return null;
 
+    const already_had = c.ecs_has_id(s.world, @intCast(entity), @intCast(component));
     c.ecs_add_id(s.world, @intCast(entity), @intCast(component));
     const ti = c.ecs_get_type_info(s.world, @intCast(component));
-    return if (ti != null and ti.*.size > 0)
-        c.ecs_get_mut_id(s.world, @intCast(entity), @intCast(component))
-    else
-        null;
+    if (ti == null or ti.*.size <= 0) return null;
+
+    const slot = c.ecs_get_mut_id(s.world, @intCast(entity), @intCast(component));
+    if (!already_had) {
+        if (layoutOf(s, component)) |fields| {
+            c.ke_component_fields_seed_defaults(slot, fields.ptr, @intCast(fields.len));
+        }
+    }
+    return slot;
 }
 
 fn componentRemove(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_component_id) callconv(.c) void {
@@ -933,4 +939,75 @@ test "a reserved entity that was destroyed does not come back on the next attach
     e.entity_destroy.?(handle.ref, reserved);
     try testing.expect(e.component_add.?(handle.ref, reserved, cid) == null);
     try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
+}
+
+const Layered = extern struct {
+    layers: u32,
+    ior: f32,
+};
+
+fn defaulted(name: [*c]const u8, t: c.ke_variant_type, offset: u32, size: u32, v: c.ke_variant) c.ke_component_field {
+    return .{ .name = name, .type = t, .offset = offset, .size = size, .default_value = v };
+}
+
+fn intVariant(i: i64) c.ke_variant {
+    var v = std.mem.zeroes(c.ke_variant);
+    v.type = c.KE_VARIANT_INT;
+    v.unnamed_0.i = i;
+    return v;
+}
+
+fn floatVariant(f: f64) c.ke_variant {
+    var v = std.mem.zeroes(c.ke_variant);
+    v.type = c.KE_VARIANT_FLOAT;
+    v.unnamed_0.f = f;
+    return v;
+}
+
+const layered_fields = [_]c.ke_component_field{
+    defaulted("layers", c.KE_VARIANT_INT, 0, 4, intVariant(1)),
+    defaulted("ior", c.KE_VARIANT_FLOAT, 4, 4, floatVariant(1.5)),
+};
+
+test "attaching a component seeds the defaults its field table declares" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "layered", @sizeOf(Layered), &layered_fields, layered_fields.len, null);
+    try testing.expect(cid != 0);
+
+    const entity = e.entity_create.?(handle.ref);
+    const slot = e.component_add.?(handle.ref, entity, cid) orelse return error.MissingComponent;
+    const v: *const Layered = @ptrCast(@alignCast(slot));
+
+    try testing.expectEqual(@as(u32, 1), v.layers);
+    try testing.expectEqual(@as(f32, 1.5), v.ior);
+}
+
+test "attaching a component that is already there keeps the value it holds" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "layered_twice", @sizeOf(Layered), &layered_fields, layered_fields.len, null);
+    const entity = e.entity_create.?(handle.ref);
+
+    const first: *Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
+    first.layers = 0b1010;
+
+    const second: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
+    try testing.expectEqual(@as(u32, 0b1010), second.layers);
+}
+
+test "a component registered without a field table still attaches zeroed" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "untabled", @sizeOf(Layered), null, 0, null);
+    const entity = e.entity_create.?(handle.ref);
+    const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
+
+    try testing.expectEqual(@as(u32, 0), v.layers);
 }

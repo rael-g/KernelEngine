@@ -3,114 +3,8 @@ const std = @import("std");
 
 const c = @import("c.zig").c;
 
-fn asFloat(v: *const c.ke_variant) ?f32 {
-    return switch (v.type) {
-        c.KE_VARIANT_FLOAT => @floatCast(v.unnamed_0.f),
-        c.KE_VARIANT_INT => @floatFromInt(v.unnamed_0.i),
-        else => null,
-    };
-}
-
-fn asInt(v: *const c.ke_variant) ?i64 {
-    return switch (v.type) {
-        c.KE_VARIANT_INT => v.unnamed_0.i,
-        c.KE_VARIANT_BOOL => @intFromBool(v.unnamed_0.b),
-        c.KE_VARIANT_FLOAT => @intFromFloat(v.unnamed_0.f),
-        else => null,
-    };
-}
-
-fn asBool(v: *const c.ke_variant) ?bool {
-    return switch (v.type) {
-        c.KE_VARIANT_BOOL => v.unnamed_0.b,
-        c.KE_VARIANT_INT => v.unnamed_0.i != 0,
-        else => null,
-    };
-}
-
-/// A vec4 out of anything narrower, filling w with 1.
-fn asVec4(v: *const c.ke_variant) ?c.ke_vec4 {
-    return switch (v.type) {
-        c.KE_VARIANT_VEC4 => v.unnamed_0.v4,
-        c.KE_VARIANT_QUAT => .{ .x = v.unnamed_0.q.x, .y = v.unnamed_0.q.y, .z = v.unnamed_0.q.z, .w = v.unnamed_0.q.w },
-        c.KE_VARIANT_VEC3 => .{ .x = v.unnamed_0.v3.x, .y = v.unnamed_0.v3.y, .z = v.unnamed_0.v3.z, .w = 1 },
-        else => null,
-    };
-}
-
-/// A vec3 out of anything narrower, filling z with 0.
-fn asVec3(v: *const c.ke_variant) ?c.ke_vec3 {
-    return switch (v.type) {
-        c.KE_VARIANT_VEC3 => v.unnamed_0.v3,
-        c.KE_VARIANT_VEC4 => .{ .x = v.unnamed_0.v4.x, .y = v.unnamed_0.v4.y, .z = v.unnamed_0.v4.z },
-        c.KE_VARIANT_VEC2 => .{ .x = v.unnamed_0.v2.x, .y = v.unnamed_0.v2.y, .z = 0 },
-        else => null,
-    };
-}
-
-fn asVec2(v: *const c.ke_variant) ?c.ke_vec2 {
-    return switch (v.type) {
-        c.KE_VARIANT_VEC2 => v.unnamed_0.v2,
-        c.KE_VARIANT_VEC3 => .{ .x = v.unnamed_0.v3.x, .y = v.unnamed_0.v3.y },
-        c.KE_VARIANT_VEC4 => .{ .x = v.unnamed_0.v4.x, .y = v.unnamed_0.v4.y },
-        else => null,
-    };
-}
-
-/// Writes `value` at `base + offset`. The field's own size decides the integer
-/// width written, so the table describes a uint8_t flag and a uint32_t enum
-/// through one path.
-fn writeInt(base: [*]u8, field: *const c.ke_component_field, value: i64) void {
-    const p = base + field.offset;
-    switch (field.size) {
-        1 => p[0] = @truncate(@as(u64, @bitCast(value))),
-        2 => std.mem.writeInt(u16, p[0..2], @truncate(@as(u64, @bitCast(value))), .little),
-        4 => std.mem.writeInt(u32, p[0..4], @truncate(@as(u64, @bitCast(value))), .little),
-        8 => std.mem.writeInt(u64, p[0..8], @bitCast(value), .little),
-        else => {},
-    }
-}
-
-fn writeBytes(base: [*]u8, field: *const c.ke_component_field, bytes: []const u8) void {
-    if (bytes.len != field.size) return;
-    @memcpy((base + field.offset)[0..bytes.len], bytes);
-}
-
 fn writeField(base: [*]u8, field: *const c.ke_component_field, v: *const c.ke_variant) void {
-    switch (field.type) {
-        c.KE_VARIANT_FLOAT => {
-            const f = asFloat(v) orelse return;
-            if (field.size == 4) writeBytes(base, field, std.mem.asBytes(&f));
-            if (field.size == 8) {
-                const d: f64 = f;
-                writeBytes(base, field, std.mem.asBytes(&d));
-            }
-        },
-        c.KE_VARIANT_INT => writeInt(base, field, asInt(v) orelse return),
-        c.KE_VARIANT_BOOL => writeInt(base, field, @intFromBool(asBool(v) orelse return)),
-        c.KE_VARIANT_VEC2 => {
-            const val = asVec2(v) orelse return;
-            writeBytes(base, field, std.mem.asBytes(&val));
-        },
-        c.KE_VARIANT_VEC3 => {
-            const val = asVec3(v) orelse return;
-            writeBytes(base, field, std.mem.asBytes(&val));
-        },
-        c.KE_VARIANT_VEC4, c.KE_VARIANT_QUAT => {
-            const val = asVec4(v) orelse return;
-            writeBytes(base, field, std.mem.asBytes(&val));
-        },
-        c.KE_VARIANT_STRING => {
-            if (v.type != c.KE_VARIANT_STRING) return;
-            const s = v.unnamed_0.s orelse return;
-            const src = std.mem.span(s);
-            const dst = (base + field.offset)[0..field.size];
-            const n = @min(src.len, dst.len - 1);
-            @memcpy(dst[0..n], src[0..n]);
-            dst[n] = 0;
-        },
-        else => {},
-    }
+    c.ke_component_field_write(base, field, v);
 }
 
 fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
@@ -146,11 +40,7 @@ pub fn seedDefaults(
     fields: [*]const c.ke_component_field,
     field_count: u32,
 ) void {
-    const base: [*]u8 = @ptrCast(component orelse return);
-    for (fields[0..field_count]) |*field| {
-        if (field.default_value.type == c.KE_VARIANT_NULL) continue;
-        writeField(base, field, &field.default_value);
-    }
+    c.ke_component_fields_seed_defaults(component, fields, field_count);
 }
 
 const testing = std.testing;
