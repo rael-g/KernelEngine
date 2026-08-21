@@ -410,3 +410,63 @@ test "an unrotated camera basis aims at the world origin rather than at nothing"
         try testing.expectApproxEqAbs(@as(f32, 8.0), origin_depth, 1e-3);
     }
 }
+
+fn cameraAt(z: f32) c.ke_mat4 {
+    var world: c.ke_mat4 = std.mem.zeroes(c.ke_mat4);
+    world.m[0] = 1.0;
+    world.m[5] = 1.0;
+    world.m[10] = 1.0;
+    world.m[14] = z;
+    world.m[15] = 1.0;
+    return world;
+}
+
+fn ndcOf(h: c.ke_view_space_handle, world: c.ke_mat4, half_height: f32, aspect: f32, p: zm.Vec) zm.Vec {
+    var view: c.ke_mat4 = undefined;
+    var proj: c.ke_mat4 = undefined;
+    h.ref.*.view_from_transform.?(h.ref, &world, &view);
+    const height = half_height * 2.0;
+    h.ref.*.orthographic.?(h.ref, height * aspect, height, 0.1, 100.0, &webgpu_clip, &proj);
+    const clip = zm.mul(zm.mul(p, zm.loadMat(&view.m)), zm.loadMat(&proj.m));
+    return clip / zm.f32x4s(clip[3]);
+}
+
+test "an orthographic camera keeps every corner of its authored half-extent on screen" {
+    const h = ke_view_space_rh_create(null);
+    defer h.destroy.?(h.ref);
+
+    const world = cameraAt(10.0);
+    const half_height: f32 = 5.0;
+    const aspect: f32 = 16.0 / 9.0;
+
+    const corners = [_]zm.Vec{
+        zm.f32x4(0, 4.5, 0, 1),
+        zm.f32x4(0, -4.5, 0, 1),
+        zm.f32x4(-7.5, 0, 0, 1),
+        zm.f32x4(7.5, 0, 0, 1),
+        zm.f32x4(0, 0, 0, 1),
+    };
+
+    for (corners) |p| {
+        const n = ndcOf(h, world, half_height, aspect, p);
+        try testing.expect(n[0] >= -1.0 and n[0] <= 1.0);
+        try testing.expect(n[1] >= -1.0 and n[1] <= 1.0);
+        try testing.expect(n[2] >= 0.0 and n[2] <= 1.0);
+    }
+}
+
+test "an orthographic camera separates a point above its centre from one below" {
+    const h = ke_view_space_rh_create(null);
+    defer h.destroy.?(h.ref);
+
+    const world = cameraAt(10.0);
+    const above = ndcOf(h, world, 5.0, 16.0 / 9.0, zm.f32x4(0, 4.5, 0, 1));
+    const below = ndcOf(h, world, 5.0, 16.0 / 9.0, zm.f32x4(0, -4.5, 0, 1));
+    const left = ndcOf(h, world, 5.0, 16.0 / 9.0, zm.f32x4(-7.5, 0, 0, 1));
+    const right = ndcOf(h, world, 5.0, 16.0 / 9.0, zm.f32x4(7.5, 0, 0, 1));
+
+    try testing.expectApproxEqAbs(above[1], -below[1], 1e-4);
+    try testing.expectApproxEqAbs(left[0], -right[0], 1e-4);
+    try testing.expect(above[1] > 0.0);
+    try testing.expect(right[0] > 0.0);
+}
