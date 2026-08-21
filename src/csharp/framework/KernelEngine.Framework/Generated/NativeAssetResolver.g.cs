@@ -137,7 +137,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         }
     }
 
-    /// <summary>Resolves and uploads a mesh, deduped by `path`. Today only the "res://primitives/*" shapes resolve_mesh understands; a broader path is a future-loader concern. KE_MESH_NONE on failure.</summary>
+    /// <summary>Resolves and uploads a mesh, deduped by `path`. Today only the shapes under "res://primitives/" that resolve_mesh understands; a broader path is a future-loader concern. KE_MESH_NONE on failure.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_mesh_handle ResolveMeshInto(void* core, string path)
     {
