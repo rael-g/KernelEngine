@@ -12,7 +12,6 @@ public sealed class NodeWorld : ISignalDeclarer
 {
     private readonly World              _world;
     private readonly IEcsRegistry       _ecs;
-    private readonly IComponentRegistry _components;
     private readonly uint               _nameCid;
 
     private readonly Dictionary<Type, List<Node>> _behaviorsByType = new();
@@ -167,14 +166,13 @@ public sealed class NodeWorld : ISignalDeclarer
     internal Emit<T> EmitFor<T>(ulong source) where T : unmanaged =>
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
-    internal NodeWorld(World world, IEcsRegistry ecs, IComponentRegistry components,
+    internal NodeWorld(World world, IEcsRegistry ecs,
                        KernelEngine.Logger.ILogger? logger = null,
                        SignalBus? signals = null)
     {
         _signals    = signals;
         _world      = world;
         _ecs        = ecs;
-        _components = components;
         _logger     = logger;
         _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
         _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
@@ -334,9 +332,8 @@ public sealed class NodeWorld : ISignalDeclarer
     }
 
     /// <summary>
-    /// Reads a component by its ECS registration name. Intended for game-specific
-    /// components that are not registered in the framework <see cref="IComponentRegistry"/>.
-    /// Returns false if the component type is unknown or the entity lacks it.
+    /// Reads a component by its ECS registration name. Returns false if the name is
+    /// unknown or the entity lacks it.
     /// </summary>
     public bool TryGetComponent<T>(ulong entity, string componentName, out T value) where T : unmanaged
     {
@@ -350,15 +347,6 @@ public sealed class NodeWorld : ISignalDeclarer
         value = sp[0];
         return true;
     }
-
-    /// <summary>
-    /// Writes <paramref name="value"/> into the component the framework's
-    /// <see cref="IComponentRegistry"/> has registered for <typeparamref name="T"/>,
-    /// attaching it when the entity does not carry it yet. Any domain's node type
-    /// (not just Framework's own) calls this from its own assembly's <c>OnBind</c>.
-    /// </summary>
-    public void Set<T>(ulong entity, in T value) where T : unmanaged
-        => SetByCid(entity, _components.CidOf<T>(), in value);
 
     /// <summary>
     /// Writes <paramref name="value"/> into the component registered under
@@ -411,14 +399,6 @@ public sealed class NodeWorld : ISignalDeclarer
     public bool TryGetByCid<T>(ulong entity, uint cid, out T value) where T : unmanaged
     {
         var sp = _ecs.GetComponent<T>(entity, cid);
-        if (sp.IsEmpty) { value = default; return false; }
-        value = sp[0];
-        return true;
-    }
-
-    internal bool TryGet<T>(ulong entity, out T value) where T : unmanaged
-    {
-        var sp = _ecs.GetComponent<T>(entity, _components.CidOf<T>());
         if (sp.IsEmpty) { value = default; return false; }
         value = sp[0];
         return true;

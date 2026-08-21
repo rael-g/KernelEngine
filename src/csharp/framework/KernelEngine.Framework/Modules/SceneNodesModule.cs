@@ -45,7 +45,6 @@ public sealed class SceneNodesModule : IRuntimeModule
             new NodeWorld(
                 sp.GetRequiredService<World>(),
                 sp.GetRequiredService<IEcsRegistry>(),
-                sp.GetRequiredService<IComponentRegistry>(),
                 sp.GetService<KernelEngine.Logger.ILogger>(),
                 sp.GetRequiredService<SignalBus>()));
     }

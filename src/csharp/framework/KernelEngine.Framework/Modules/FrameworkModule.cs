@@ -6,15 +6,11 @@ using KernelEngine.Runtime;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Creates the native <c>ke_world</c> aggregator and registers the ECS registry +
-/// component registry as <see cref="IEcsRegistry"/> and <see cref="IComponentRegistry"/>
-/// so Toolkit's scene modules can resolve them without a direct
-/// dependency on this assembly.
+/// Creates the native <c>ke_world</c> aggregator and registers the ECS registry as
+/// <see cref="IEcsRegistry"/> so the scene modules can resolve it without a direct
+/// dependency on this assembly. Add it before any scene module, which needs the
+/// interface to already be in DI.
 /// </summary>
-/// <remarks>
-/// Add this module before any scene module. It must run first so the
-/// interfaces are in DI before the scene infrastructure tries to resolve them.
-/// </remarks>
 public sealed class FrameworkModule : IRuntimeModule
 {
     public string Name => "Framework";
@@ -61,18 +57,10 @@ public sealed class FrameworkModule : IRuntimeModule
             }
         });
 
-        services.AddSingleton<ComponentRegistry>(sp =>
-        {
-            _ = sp.GetRequiredService<World>();
-            return new ComponentRegistry(sp.GetRequiredService<IEcsRegistry>());
-        });
-
-        services.AddSingleton<IComponentRegistry>(sp => sp.GetRequiredService<ComponentRegistry>());
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         _ = services.GetRequiredService<World>();
-        _ = services.GetRequiredService<ComponentRegistry>();
     }
 }
