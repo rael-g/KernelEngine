@@ -24,7 +24,7 @@ public sealed unsafe class AudioModule : IRuntimeModule
         var world = services.GetService<KernelEngine.Framework.World>();
         if (world is null) return;
 
-        var ecs = services.GetRequiredService<IEcs>();
+        var ecs = services.GetRequiredService<INativeEcs>();
         KernelEngine.Audio.Native.NativeMethods.audio_register_scene_apply(
             ((INativeEcs)ecs).Native,
             ((KernelEngine.Framework.INativeWorld)world).Native);

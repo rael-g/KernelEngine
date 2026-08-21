@@ -31,7 +31,7 @@ public sealed unsafe class Body2DModule : IRuntimeModule
     /// <inheritdoc />
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var ecs     = services.GetRequiredService<IEcs>();
+        var ecs     = services.GetRequiredService<INativeEcs>();
         var physics = services.GetRequiredService<IPhysics2D>();
 
         var logger = services.GetService<KernelEngine.Logger.INativeLogger>();

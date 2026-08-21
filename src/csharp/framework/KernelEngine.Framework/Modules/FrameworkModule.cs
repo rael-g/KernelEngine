@@ -19,8 +19,8 @@ public sealed class FrameworkModule : IRuntimeModule
     {
         services.AddSingleton<IEcsRegistry>(sp =>
         {
-            var flecsEcs = (FlecsEcs)sp.GetRequiredService<IEcs>();
-            unsafe { return EcsRegistry.Borrow(((INativeEcs)flecsEcs).Native); }
+            var flecsEcs = sp.GetRequiredService<INativeEcs>();
+            unsafe { return EcsRegistry.Borrow(flecsEcs.Native); }
         });
 
         services.AddSingleton<SignalBus>(_ =>
@@ -35,18 +35,18 @@ public sealed class FrameworkModule : IRuntimeModule
 
         services.AddSingleton<World>(sp =>
         {
-            var flecsEcs  = (FlecsEcs)sp.GetRequiredService<IEcs>();
+            var flecsEcs  = sp.GetRequiredService<INativeEcs>();
             var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
             var ecs       = sp.GetRequiredService<IEcsRegistry>();
             var runtime   = sp.GetRequiredService<IRuntime>();
             unsafe
             {
                 var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
-                    ((INativeEcs)flecsEcs).Native, ((INativeRuntime)rtRuntime).Native, null);
+                    flecsEcs.Native, ((INativeRuntime)rtRuntime).Native, null);
                 if (tree.@ref == null) throw new InvalidOperationException("scene_tree_create failed");
 
                 ke_world_params p = default;
-                p.ecs        = ((INativeEcs)flecsEcs).Native;
+                p.ecs        = flecsEcs.Native;
                 p.runtime    = ((INativeRuntime)rtRuntime).Native;
                 p.scene_tree = tree.@ref;
                 p.signal_bus = ((INativeSignalBus)sp.GetRequiredService<SignalBus>()).Native;

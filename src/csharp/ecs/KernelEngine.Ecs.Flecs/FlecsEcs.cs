@@ -7,7 +7,7 @@ namespace KernelEngine.Ecs.Flecs;
 /// flecs-backed <see cref="ke_ecs"/> storage. Owns an internal flecs world; satisfies
 /// the C ABI ECS contract via the ke_ecs vtable.
 /// </summary>
-public sealed unsafe class FlecsEcs : IEcs, INativeEcs
+public sealed unsafe class FlecsEcs : IDisposable, INativeEcs
 {
     private ke_ecs* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;

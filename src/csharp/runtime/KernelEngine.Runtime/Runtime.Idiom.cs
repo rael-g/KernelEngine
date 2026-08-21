@@ -76,19 +76,15 @@ public sealed unsafe partial class Runtime : IRuntime
     /// Only the pointers are taken: keeping the managed wrappers reachable is the
     /// caller's business, exactly as it is for whoever else borrows them.
     /// </summary>
-    public Runtime(IEcs ecs, IScheduler taskScheduler)
+    public Runtime(INativeEcs ecs, IScheduler taskScheduler)
         : this(NativeEcsOf(ecs), NativeSchedulerOf(taskScheduler), null)
     {
     }
 
-    private static ke_ecs* NativeEcsOf(IEcs ecs)
+    private static ke_ecs* NativeEcsOf(INativeEcs ecs)
     {
         ArgumentNullException.ThrowIfNull(ecs);
-        if (ecs is not FlecsEcs flecsEcs)
-            throw new ArgumentException(
-                $"Runtime currently requires {nameof(FlecsEcs)} as the {nameof(IEcs)} impl; got {ecs.GetType().Name}.",
-                nameof(ecs));
-        return ((INativeEcs)flecsEcs).Native;
+        return ecs.Native;
     }
 
     private static ke_scheduler* NativeSchedulerOf(IScheduler taskScheduler)

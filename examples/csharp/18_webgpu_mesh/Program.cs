@@ -16,7 +16,7 @@ var render = new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir);
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1024, 640, "KernelEngine — 18 Webgpu Mesh (v2)"))
@@ -25,7 +25,7 @@ var services = new ServiceCollection()
 using var sp = services.BuildServiceProvider();
 var window  = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
-var ecs     = sp.GetRequiredService<IEcs>();
+var ecs     = sp.GetRequiredService<INativeEcs>();
 
 runtime.LoadModules(sp);
 
