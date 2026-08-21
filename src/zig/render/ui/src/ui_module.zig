@@ -472,11 +472,11 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
         return empty;
     }
 
-    ui.quad_cid = e.component_register.?(e, "ui_quad", @sizeOf(UiQuadComponent), null, 0, null);
+    ui.quad_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_UI_QUAD, @sizeOf(UiQuadComponent), &c.ke_ui_quad_component_fields, c.ke_ui_quad_component_fields.len, null);
     ui.queries[0].terms[0] = .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ };
     ui.queries[0].term_count = 1;
 
-    ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), null, 0, null);
+    ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), &c.ke_label_component_fields, c.ke_label_component_fields.len, null);
     ui.queries[1].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ };
     ui.queries[1].term_count = 1;
 

@@ -8,5 +8,6 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/service/render_service.h");
     @cInclude("kernel_engine/render/service/pass_context.h");
     @cInclude("kernel_engine/render/ui/components.h");
+    @cInclude("kernel_engine/render/ui/component_fields.h");
     @cInclude("kernel_engine/render/ui/ui_create.h");
 });
