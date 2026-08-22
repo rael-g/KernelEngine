@@ -6,7 +6,8 @@ public partial struct ke_collider2d_component
 {
     public ke_shape_kind_2d kind;
 
-    public ke_vec2 half_extents;
+    [NativeTypeName("ke_vec2")]
+    public KernelEngine.Common.Native.ke_vec2 half_extents;
 
     public float radius;
 

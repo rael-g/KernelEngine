@@ -1,0 +1,18 @@
+using KernelEngine.Common.Native;
+
+namespace KernelEngine.Render.Native;
+
+[NativeTypeName("unsigned int")]
+public enum ke_gpu_blend_factor : uint
+{
+    KE_GPU_BLEND_FACTOR_ZERO,
+    KE_GPU_BLEND_FACTOR_ONE,
+    KE_GPU_BLEND_FACTOR_SRC_ALPHA,
+    KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+    KE_GPU_BLEND_FACTOR_DST_ALPHA,
+    KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+    KE_GPU_BLEND_FACTOR_SRC_COLOR,
+    KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+    KE_GPU_BLEND_FACTOR_DST_COLOR,
+    KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+}

@@ -13,5 +13,5 @@ public unsafe partial struct ke_logger
     public delegate* unmanaged[Cdecl]<ke_logger*, void> flush;
 
     [NativeTypeName("bool (*)(struct ke_logger *, ke_logger_sink, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_logger*, ke_logger_sink, ke_error**, bool> add_sink;
+    public delegate* unmanaged[Cdecl]<ke_logger*, ke_logger_sink, KernelEngine.Common.Native.ke_error**, bool> add_sink;
 }

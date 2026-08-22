@@ -219,9 +219,9 @@
               "name": "core",
               "type": "ke_render_service *",
               "tags": [
-                "opaque"
+                "borrowed"
               ],
-              "doc": "The render core to upload into \u2014 this consumer (the framework plugin, backend-agnostic) never names a concrete render backend\u0027s own struct."
+              "doc": "The render service to upload into."
             },
             {
               "name": "path",
@@ -250,9 +250,9 @@
               "name": "core",
               "type": "ke_render_service *",
               "tags": [
-                "opaque"
+                "borrowed"
               ],
-              "doc": null
+              "doc": "The render service to upload into."
             },
             {
               "name": "path",
@@ -281,9 +281,9 @@
               "name": "core",
               "type": "ke_render_service *",
               "tags": [
-                "opaque"
+                "borrowed"
               ],
-              "doc": null
+              "doc": "The render service to upload into."
             },
             {
               "name": "path",

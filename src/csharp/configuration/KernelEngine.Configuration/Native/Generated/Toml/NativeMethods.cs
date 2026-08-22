@@ -6,5 +6,5 @@ namespace KernelEngine.Configuration.Native;
 public static unsafe partial class NativeMethods
 {
     [DllImport("ke_configuration_toml", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_configuration_toml_load", ExactSpelling = true)]
-    public static extern bool configuration_toml_load([NativeTypeName("ke_configuration *")] KernelEngine.Configuration.Native.ke_configuration* cfg, [NativeTypeName("const char *")] sbyte* path, ke_error** out_error);
+    public static extern bool configuration_toml_load(ke_configuration* cfg, [NativeTypeName("const char *")] sbyte* path, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
 }

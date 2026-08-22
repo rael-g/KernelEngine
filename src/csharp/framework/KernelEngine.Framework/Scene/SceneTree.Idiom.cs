@@ -26,7 +26,7 @@ public unsafe partial class SceneTree
     /// deferred to the wave barrier; pass <c>default</c> for immediate creation.
     /// </summary>
     public ulong CreateNode(string name, ulong parent = 0, nint systemCtx = default)
-        => CreateNode(name, parent, (ke_system_ctx*)systemCtx);
+        => CreateNode(name, parent, (KernelEngine.Runtime.Native.ke_system_ctx*)systemCtx);
 
     /// <summary>
     /// Destroys a node and all its descendants. Fires on_destroy hooks in
@@ -35,5 +35,5 @@ public unsafe partial class SceneTree
     /// teardown is deferred to the wave barrier; pass <c>default</c> for immediate.
     /// </summary>
     public void DestroyNode(ulong entity, nint systemCtx = default)
-        => DestroyNode(entity, (ke_system_ctx*)systemCtx);
+        => DestroyNode(entity, (KernelEngine.Runtime.Native.ke_system_ctx*)systemCtx);
 }

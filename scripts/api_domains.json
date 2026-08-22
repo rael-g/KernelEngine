@@ -239,9 +239,9 @@
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/render/ke_api.json",
-      "namespace": "KernelEngine.Render.Webgpu",
-      "nativeNamespace": "KernelEngine.Render.Webgpu.Native",
-      "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Generated",
+      "namespace": "KernelEngine.Render",
+      "nativeNamespace": "KernelEngine.Render.Native",
+      "outDir": "src/csharp/render/KernelEngine.Render/Generated",
       "usings": []
     },
     {
@@ -374,7 +374,9 @@
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
-      "usings": []
+      "usings": [
+        "KernelEngine.Runtime.Native"
+      ]
     },
     {
       "name": "scene_loader",
@@ -486,6 +488,342 @@
       "usings": [
         "KernelEngine.Input.Native"
       ]
+    }
+  ],
+  "bindings": [
+    {
+      "name": "Assimp",
+      "project": "src/csharp/asset/KernelEngine.Asset.Assimp",
+      "namespace": "KernelEngine.Asset.Assimp.Native",
+      "headers": [
+        "src/zig/asset/assimp/include/kernel_engine/asset/assimp/assimp_loader.h"
+      ],
+      "library": "ke_asset_assimp",
+      "output": "Generated/"
+    },
+    {
+      "name": "StbImage",
+      "project": "src/csharp/asset/KernelEngine.Asset.StbImage",
+      "namespace": "KernelEngine.Asset.StbImage.Native",
+      "headers": [
+        "src/zig/asset/stb_image/include/kernel_engine/asset/stb_image/stb_image_loader.h"
+      ],
+      "library": "ke_asset_stb_image",
+      "output": "Generated/"
+    },
+    {
+      "name": "Asset",
+      "project": "src/csharp/asset/KernelEngine.Asset",
+      "namespace": "KernelEngine.Asset.Native",
+      "headers": [
+        "src/c/asset/kernel_engine/asset/mesh_data.h",
+        "src/c/asset/kernel_engine/asset/mesh_shape.h",
+        "src/c/asset/kernel_engine/asset/image_loader.h",
+        "src/c/asset/kernel_engine/asset/asset_loader.h",
+        "src/c/asset/kernel_engine/asset/asset_resolver.h"
+      ],
+      "library": "ke_asset_assimp",
+      "output": "Generated/Asset/"
+    },
+    {
+      "name": "MiniAudio",
+      "project": "src/csharp/audio/KernelEngine.Audio.MiniAudio",
+      "namespace": "KernelEngine.Audio.MiniAudio.Native",
+      "headers": [
+        "src/zig/audio/miniaudio/include/kernel_engine/audio/miniaudio/miniaudio_audio.h"
+      ],
+      "library": "ke_audio_miniaudio",
+      "output": "Generated/"
+    },
+    {
+      "name": "Audio",
+      "project": "src/csharp/audio/KernelEngine.Audio",
+      "namespace": "KernelEngine.Audio.Native",
+      "headers": [
+        "src/c/audio/kernel_engine/audio/audio.h",
+        "src/c/audio/kernel_engine/audio/components.h"
+      ],
+      "library": "ke_audio_miniaudio",
+      "output": "Generated/Audio/"
+    },
+    {
+      "name": "AudioModule",
+      "project": "src/csharp/audio/KernelEngine.Audio",
+      "namespace": "KernelEngine.Audio.Native",
+      "headers": [
+        "src/zig/audio/module/include/kernel_engine/audio/module/audio_module.h"
+      ],
+      "library": "ke_audio_module",
+      "output": "Generated/AudioModule/"
+    },
+    {
+      "name": "Common",
+      "project": "src/csharp/common/KernelEngine.Common",
+      "namespace": "KernelEngine.Common.Native",
+      "headers": [
+        "src/zig/common/include/kernel_engine/common/types.h",
+        "src/zig/common/include/kernel_engine/common/error.h",
+        "src/zig/common/include/kernel_engine/common/math.h",
+        "src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h",
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ],
+      "library": "ke_common",
+      "macroBindings": true,
+      "output": "Generated/"
+    },
+    {
+      "name": "Store",
+      "project": "src/csharp/configuration/KernelEngine.Configuration",
+      "namespace": "KernelEngine.Configuration.Native",
+      "headers": [
+        "src/c/configuration/kernel_engine/configuration/configuration.h",
+        "src/zig/configuration/include/kernel_engine/configuration/configuration_create.h"
+      ],
+      "library": "ke_configuration",
+      "output": "Generated/Store/"
+    },
+    {
+      "name": "Toml",
+      "project": "src/csharp/configuration/KernelEngine.Configuration",
+      "namespace": "KernelEngine.Configuration.Native",
+      "headers": [
+        "src/zig/configuration/toml/include/kernel_engine/configuration/toml/configuration_toml.h"
+      ],
+      "library": "ke_configuration_toml",
+      "output": "Generated/Toml/"
+    },
+    {
+      "name": "EcsFlecs",
+      "project": "src/csharp/ecs/KernelEngine.Ecs.Flecs",
+      "namespace": "KernelEngine.Ecs.Flecs.Native",
+      "headers": [
+        "src/zig/ecs/flecs/include/kernel_engine/ecs/ke_ecs_flecs.h"
+      ],
+      "library": "ke_ecs_flecs",
+      "additional": [
+        "-DKE_ECS_FLECS_STATIC"
+      ],
+      "macroBindings": true,
+      "output": "Generated/EcsFlecs/"
+    },
+    {
+      "name": "Ecs",
+      "project": "src/csharp/ecs/KernelEngine.Ecs",
+      "namespace": "KernelEngine.Ecs.Native",
+      "headers": [
+        "src/c/ecs/kernel_engine/ecs/variant.h",
+        "src/c/ecs/kernel_engine/ecs/component_field.h",
+        "src/c/ecs/kernel_engine/ecs/ecs.h",
+        "src/c/ecs/kernel_engine/ecs/ke_ecs.h"
+      ],
+      "library": "ke_ecs_flecs",
+      "output": "Generated/Ecs/"
+    },
+    {
+      "name": "Framework",
+      "project": "src/csharp/framework/KernelEngine.Framework",
+      "namespace": "KernelEngine.Framework.Native",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/components.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_tree.h",
+        "src/zig/framework/include/kernel_engine/framework/world.h",
+        "src/zig/framework/include/kernel_engine/framework/input_actions.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_loader.h",
+        "src/zig/framework/include/kernel_engine/framework/world_create.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h",
+        "src/zig/framework/include/kernel_engine/framework/input_actions_create.h",
+        "src/zig/framework/include/kernel_engine/framework/signal_bus.h",
+        "src/zig/framework/include/kernel_engine/framework/signal_bus_create.h",
+        "src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h"
+      ],
+      "library": "ke_framework",
+      "additional": [
+        "-DKE_FRAMEWORK_STATIC"
+      ],
+      "output": "Generated/Framework/"
+    },
+    {
+      "name": "Input",
+      "project": "src/csharp/input/KernelEngine.Input",
+      "namespace": "KernelEngine.Input.Native",
+      "headers": [
+        "src/c/input/kernel_engine/input/key.h",
+        "src/c/input/kernel_engine/input/snapshot.h",
+        "src/c/input/kernel_engine/input/event.h",
+        "src/c/input/kernel_engine/input/input.h"
+      ],
+      "library": "ke_input_default",
+      "output": "Generated/Input/"
+    },
+    {
+      "name": "Logger",
+      "project": "src/csharp/logger/KernelEngine.Logger",
+      "namespace": "KernelEngine.Logger.Native",
+      "headers": [
+        "src/c/logger/kernel_engine/logger/log_level.h",
+        "src/c/logger/kernel_engine/logger/logger.h"
+      ],
+      "library": "ke_logger_simple",
+      "output": "Generated/Logger/"
+    },
+    {
+      "name": "Box2D",
+      "project": "src/csharp/physics/KernelEngine.Physics.Box2D",
+      "namespace": "KernelEngine.Physics.Box2D.Native",
+      "headers": [
+        "src/zig/physics/box2d/include/kernel_engine/physics/box2d/box2d_physics.h"
+      ],
+      "library": "ke_physics_2d_box2d",
+      "output": "Generated/"
+    },
+    {
+      "name": "Body2DModule",
+      "project": "src/csharp/physics/KernelEngine.Physics",
+      "namespace": "KernelEngine.Physics.Native",
+      "headers": [
+        "src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h"
+      ],
+      "library": "ke_physics_body2d",
+      "output": "Generated/Body2DModule/"
+    },
+    {
+      "name": "Physics",
+      "project": "src/csharp/physics/KernelEngine.Physics",
+      "namespace": "KernelEngine.Physics.Native",
+      "headers": [
+        "src/c/physics/kernel_engine/physics/physics_2d.h",
+        "src/c/physics/kernel_engine/physics/components.h"
+      ],
+      "library": "ke_physics_box2d",
+      "output": "Generated/Physics/"
+    },
+    {
+      "name": "GpuDevice",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_create.h"
+      ],
+      "library": "ke_gpu_device_webgpu",
+      "output": "Generated/GpuDevice/"
+    },
+    {
+      "name": "RenderModule",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/shadow/include/kernel_engine/render/shadow/shadow_create.h",
+        "src/zig/render/module/include/kernel_engine/render/module/render_module_create.h",
+        "src/zig/render/ui/include/kernel_engine/render/ui/ui_create.h"
+      ],
+      "library": "ke_render_module",
+      "output": "Generated/RenderModule/"
+    },
+    {
+      "name": "Render",
+      "project": "src/csharp/render/KernelEngine.Render",
+      "namespace": "KernelEngine.Render.Native",
+      "headers": [
+        "src/c/render/kernel_engine/render/handles.h",
+        "src/c/render/kernel_engine/render/mesh.h",
+        "src/c/render/kernel_engine/render/material_file.h",
+        "src/c/render/kernel_engine/render/components.h",
+        "src/c/render/kernel_engine/render/ui/components.h",
+        "src/c/render/kernel_engine/render/service/render_service.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_device.h"
+      ],
+      "library": "ke_render_bgfx",
+      "output": "Generated/Render/"
+    },
+    {
+      "name": "Runtime",
+      "project": "src/csharp/runtime/KernelEngine.Runtime",
+      "namespace": "KernelEngine.Runtime.Native",
+      "headers": [
+        "src/c/runtime/kernel_engine/runtime/runtime.h",
+        "src/c/runtime/kernel_engine/runtime/system_ctx.h",
+        "src/c/runtime/kernel_engine/runtime/runtime_create.h"
+      ],
+      "library": "ke_runtime",
+      "additional": [
+        "-DKE_RUNTIME_STATIC"
+      ],
+      "output": "Generated/Runtime/"
+    },
+    {
+      "name": "Enki",
+      "project": "src/csharp/scheduler/KernelEngine.Scheduler.Enki",
+      "namespace": "KernelEngine.Scheduler.Enki.Native",
+      "headers": [
+        "src/zig/scheduler/enki/include/kernel_engine/scheduler/enki/enki_scheduler.h"
+      ],
+      "library": "ke_scheduler_enki",
+      "output": "Generated/"
+    },
+    {
+      "name": "Scheduler",
+      "project": "src/csharp/scheduler/KernelEngine.Scheduler",
+      "namespace": "KernelEngine.Scheduler.Native",
+      "headers": [
+        "src/c/scheduler/kernel_engine/scheduler/scheduler.h"
+      ],
+      "library": "ke_scheduler_enki",
+      "output": "Generated/Scheduler/"
+    },
+    {
+      "name": "StbTrueType",
+      "project": "src/csharp/text/KernelEngine.Text.StbTrueType",
+      "namespace": "KernelEngine.Text.StbTrueType.Native",
+      "headers": [
+        "src/zig/text/stb_truetype/include/kernel_engine/text/stb_truetype/stb_font.h"
+      ],
+      "library": "ke_text_stb_truetype",
+      "output": "Generated/"
+    },
+    {
+      "name": "Text",
+      "project": "src/csharp/text/KernelEngine.Text",
+      "namespace": "KernelEngine.Text.Native",
+      "headers": [
+        "src/c/text/kernel_engine/text/font.h"
+      ],
+      "library": "ke_text_stbtruetype",
+      "output": "Generated/Text/"
+    },
+    {
+      "name": "ViewSpace",
+      "project": "src/csharp/view/KernelEngine.View",
+      "namespace": "KernelEngine.View.Native",
+      "headers": [
+        "src/c/render/kernel_engine/render/gpu/ndc_convention.h",
+        "src/c/view/kernel_engine/view/view_space.h",
+        "src/zig/view/space/include/kernel_engine/view/space/view_space_rh_create.h",
+        "src/zig/view/space/include/kernel_engine/view/space/view_space_lh_create.h"
+      ],
+      "library": "ke_view_space",
+      "output": "Generated/ViewSpace/"
+    },
+    {
+      "name": "Glfw",
+      "project": "src/csharp/window/KernelEngine.Window.Glfw",
+      "namespace": "KernelEngine.Window.Glfw.Native",
+      "headers": [
+        "src/zig/window/glfw/include/kernel_engine/window/glfw/glfw_window.h"
+      ],
+      "library": "ke_window_glfw",
+      "output": "Generated/"
+    },
+    {
+      "name": "Window",
+      "project": "src/csharp/window/KernelEngine.Window",
+      "namespace": "KernelEngine.Window.Native",
+      "headers": [
+        "src/c/window/kernel_engine/window/window.h"
+      ],
+      "library": "ke_window_glfw",
+      "output": "Generated/Window/"
     }
   ]
 }

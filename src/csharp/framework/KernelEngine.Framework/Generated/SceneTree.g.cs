@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Framework.Native;
+using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Framework;
 

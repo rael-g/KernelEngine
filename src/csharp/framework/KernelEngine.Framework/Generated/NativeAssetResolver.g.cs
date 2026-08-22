@@ -123,9 +123,9 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     }
 
     /// <summary>Resolves and uploads a texture, deduped by `path`. On a cache hit, nothing is decoded. KE_TEXTURE_NONE on failure (see resolve_texture's error cases; upload failure also reports via out_error).</summary>
-    /// <param name="core">The render core to upload into — this consumer (the framework plugin, backend-agnostic) never names a concrete render backend's own struct.</param>
+    /// <param name="core">The render service to upload into.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ke_texture_handle ResolveTextureInto(void* core, string path)
+    public ke_texture_handle ResolveTextureInto(ke_render_service* core, string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
@@ -138,8 +138,9 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     }
 
     /// <summary>Resolves and uploads a mesh, deduped by `path`. Today only the shapes under "res://primitives/" that resolve_mesh understands; a broader path is a future-loader concern. KE_MESH_NONE on failure.</summary>
+    /// <param name="core">The render service to upload into.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ke_mesh_handle ResolveMeshInto(void* core, string path)
+    public ke_mesh_handle ResolveMeshInto(ke_render_service* core, string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
@@ -152,8 +153,9 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     }
 
     /// <summary>Resolves a `.material` file, resolving/uploading its albedo and normal textures (each deduped by their own path) and creating the material, deduped by `path`. KE_MATERIAL_NONE on failure.</summary>
+    /// <param name="core">The render service to upload into.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ke_material_handle ResolveMaterialInto(void* core, string path)
+    public ke_material_handle ResolveMaterialInto(ke_render_service* core, string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)

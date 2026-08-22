@@ -10,7 +10,7 @@ public unsafe partial struct ke_runtime_module_params
     public void* user_data;
 
     [NativeTypeName("bool (*)(ke_runtime *, void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_runtime*, void*, ke_error**, bool> on_load;
+    public delegate* unmanaged[Cdecl]<ke_runtime*, void*, KernelEngine.Common.Native.ke_error**, bool> on_load;
 
     [NativeTypeName("void (*)(ke_runtime *, void *)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, void*, void> on_unload;

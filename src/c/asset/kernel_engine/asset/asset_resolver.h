@@ -88,9 +88,7 @@ extern "C"
          * Resolves and uploads a texture, deduped by `path`. On a cache hit,
          * nothing is decoded. KE_TEXTURE_NONE on failure (see resolve_texture's
          * error cases; upload failure also reports via out_error).
-         * @param core [opaque] The render core to upload into — this consumer
-         *             (the framework plugin, backend-agnostic) never names a
-         *             concrete render backend's own struct.
+         * @param core [borrowed] The render service to upload into.
          * @param path [utf8]
          */
         ke_texture_handle (*resolve_texture_into)(struct ke_asset_resolver *self,
@@ -101,7 +99,7 @@ extern "C"
          * Resolves and uploads a mesh, deduped by `path`. Today only the
          * shapes under "res://primitives/" that resolve_mesh understands; a
          * broader path is a future-loader concern. KE_MESH_NONE on failure.
-         * @param core [opaque]
+         * @param core [borrowed] The render service to upload into.
          * @param path [utf8]
          */
         ke_mesh_handle (*resolve_mesh_into)(struct ke_asset_resolver *self,
@@ -112,7 +110,7 @@ extern "C"
          * Resolves a `.material` file, resolving/uploading its albedo and normal
          * textures (each deduped by their own path) and creating the material,
          * deduped by `path`. KE_MATERIAL_NONE on failure.
-         * @param core [opaque]
+         * @param core [borrowed] The render service to upload into.
          * @param path [utf8]
          */
         ke_material_handle (*resolve_material_into)(struct ke_asset_resolver *self,

@@ -48,7 +48,7 @@ public unsafe partial struct ke_variant
     }
 
     [UnscopedRef]
-    public ref ke_vec2 v2
+    public ref KernelEngine.Common.Native.ke_vec2 v2
     {
         get
         {
@@ -57,7 +57,7 @@ public unsafe partial struct ke_variant
     }
 
     [UnscopedRef]
-    public ref ke_vec3 v3
+    public ref KernelEngine.Common.Native.ke_vec3 v3
     {
         get
         {
@@ -66,7 +66,7 @@ public unsafe partial struct ke_variant
     }
 
     [UnscopedRef]
-    public ref ke_vec4 v4
+    public ref KernelEngine.Common.Native.ke_vec4 v4
     {
         get
         {
@@ -75,7 +75,7 @@ public unsafe partial struct ke_variant
     }
 
     [UnscopedRef]
-    public ref ke_quat q
+    public ref KernelEngine.Common.Native.ke_quat q
     {
         get
         {
@@ -110,16 +110,20 @@ public unsafe partial struct ke_variant
         public sbyte* s;
 
         [FieldOffset(0)]
-        public ke_vec2 v2;
+        [NativeTypeName("ke_vec2")]
+        public KernelEngine.Common.Native.ke_vec2 v2;
 
         [FieldOffset(0)]
-        public ke_vec3 v3;
+        [NativeTypeName("ke_vec3")]
+        public KernelEngine.Common.Native.ke_vec3 v3;
 
         [FieldOffset(0)]
-        public ke_vec4 v4;
+        [NativeTypeName("ke_vec4")]
+        public KernelEngine.Common.Native.ke_vec4 v4;
 
         [FieldOffset(0)]
-        public ke_quat q;
+        [NativeTypeName("ke_quat")]
+        public KernelEngine.Common.Native.ke_quat q;
 
         [FieldOffset(0)]
         [NativeTypeName("const struct ke_variant_table *")]
