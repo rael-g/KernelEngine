@@ -78,6 +78,8 @@ const CtxState = struct {
     seg_storage: ?[*]const c.ke_ecs_segment,
     seg_counts: ?[*]const usize,
     view_query_count: u32,
+    slice_index: u32,
+    slice_count: u32,
 };
 
 fn ctxOf(ptr: ?*c.ke_system_ctx) ?*CtxState {
@@ -94,6 +96,7 @@ fn bindCtx(ctx: *c.ke_system_ctx, state: *CtxState) void {
     ctx.attach = &ke_system_ctx_attach;
     ctx.detach = &ke_system_ctx_detach;
     ctx.despawn = &ke_system_ctx_despawn;
+    ctx.slice = &ke_system_ctx_slice;
 }
 
 fn termWrites(a: c.ke_component_access) bool {
@@ -322,6 +325,12 @@ export fn ke_system_ctx_despawn(ctx: ?*c.ke_system_ctx, entity: c.ke_entity) cal
     cmd.kind = .despawn;
     cmd.entity = entity;
     return true;
+}
+
+export fn ke_system_ctx_slice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
+    const s = ctxOf(ctx);
+    if (out_index != null) out_index.* = if (s) |st| st.slice_index else 0;
+    if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
 }
 
 var s_defer_applied_total: u32 = 0;
@@ -625,14 +634,6 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
             if (wave_assignments[k] != w) continue;
             const rs = h.state.systems.?[phase_indices[k]].?;
 
-            const pkg = &pkgs[wave_size];
-            bindCtx(&pkg.ctx, &pkg.state);
-            pkg.state.ecs = h.state.ecs;
-            pkg.state.access_list = rs.params.access_list;
-            pkg.state.access_count = rs.params.access_count;
-            pkg.state.system_name = rs.params.name;
-            pkg.state.defer_q = null;
-
             if (rs.query_count > 0 and rs.seg_storage != null) {
                 if (phase != c.KE_PHASE_RENDER and h.state.ecs.query_resolve != null) {
                     for (0..rs.query_count) |q| {
@@ -642,21 +643,38 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
                         rs.seg_counts[q] = cnt;
                     }
                 }
-                pkg.state.seg_storage = rs.seg_storage;
-                pkg.state.seg_counts = &rs.seg_counts;
-                pkg.state.view_query_count = rs.query_count;
-            } else {
-                pkg.state.seg_storage = null;
-                pkg.state.seg_counts = null;
-                pkg.state.view_query_count = 0;
             }
-            pkg.execute = rs.params.execute;
-            pkg.user_data = rs.params.user_data;
-            pkg.dt = dt;
-            pkg.defer_q = .{};
-            pkg.allow_defer = phase != c.KE_PHASE_RENDER;
-            pinned[wave_size] = rs.params.pinned_thread;
-            wave_size += 1;
+
+            const slices = sliceCountFor(h, &rs.params, h.state.max_systems_per_phase - wave_size);
+            var slice: u32 = 0;
+            while (slice < slices) : (slice += 1) {
+                const pkg = &pkgs[wave_size];
+                bindCtx(&pkg.ctx, &pkg.state);
+                pkg.state.ecs = h.state.ecs;
+                pkg.state.access_list = rs.params.access_list;
+                pkg.state.access_count = rs.params.access_count;
+                pkg.state.system_name = rs.params.name;
+                pkg.state.defer_q = null;
+                pkg.state.slice_index = slice;
+                pkg.state.slice_count = slices;
+
+                if (rs.query_count > 0 and rs.seg_storage != null) {
+                    pkg.state.seg_storage = rs.seg_storage;
+                    pkg.state.seg_counts = &rs.seg_counts;
+                    pkg.state.view_query_count = rs.query_count;
+                } else {
+                    pkg.state.seg_storage = null;
+                    pkg.state.seg_counts = null;
+                    pkg.state.view_query_count = 0;
+                }
+                pkg.execute = rs.params.execute;
+                pkg.user_data = rs.params.user_data;
+                pkg.dt = dt;
+                pkg.defer_q = .{};
+                pkg.allow_defer = phase != c.KE_PHASE_RENDER;
+                pinned[wave_size] = rs.params.pinned_thread;
+                wave_size += 1;
+            }
         }
 
         var wc = WaveRunCtx{ .h = h, .pkgs = pkgs, .tasks = tasks, .pinned = pinned, .wave_size = wave_size };
@@ -669,6 +687,19 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
             if (pkgs[t].defer_q.arena) |arena| cFree(u8, arena, pkgs[t].defer_q.arena_capacity);
         }
     }
+}
+
+/// How many concurrent slices one system's body is run as. A system that did not
+/// promise per-entity independence, or that is pinned to a named thread, is always
+/// one call; otherwise the entity set is split across the pool, never past the room
+/// left in the phase's package storage.
+fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: u32) u32 {
+    if (room == 0) return 0;
+    if (!p.per_entity or p.pinned_thread != 0) return 1;
+    const sched = h.state.scheduler;
+    const workers: u32 = if (sched.get_num_workers) |f| f(sched) else 0;
+    if (workers <= 1) return 1;
+    return @min(workers, room);
 }
 
 fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) void {
@@ -990,6 +1021,82 @@ fn testModuleOnLoad(runtime: ?*c.ke_runtime, ud: ?*anyopaque, _: [*c][*c]c.ke_er
     const rtp = runtime orelse return false;
     return rtp.register_system.?(rtp, &sys, null) != 0;
 }
+
+const SliceProbe = struct {
+    calls: Counter = Counter.init(0),
+    seen: [64]Counter = [_]Counter{Counter.init(0)} ** 64,
+    reported_count: Counter = Counter.init(0),
+};
+
+fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+    const probe: *SliceProbe = @ptrCast(@alignCast(ud.?));
+    var index: u32 = 99;
+    var count: u32 = 99;
+    ke_system_ctx_slice(ctx, &index, &count);
+    _ = probe.calls.fetchAdd(1, .acq_rel);
+    probe.reported_count.store(count, .release);
+    if (index < probe.seen.len) _ = probe.seen[index].fetchAdd(1, .acq_rel);
+}
+
+test "a system that does not promise per-entity work runs as one slice" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = SliceProbe{};
+    var sys = systemParams("Serial", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &sliceProbeSystem;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+
+    try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), probe.reported_count.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), probe.seen[0].load(.acquire));
+}
+
+test "a per-entity system runs every slice of its set exactly once" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = SliceProbe{};
+    var sys = systemParams("Sliced", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &sliceProbeSystem;
+    sys.per_entity = true;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+
+    const slices = probe.reported_count.load(.acquire);
+    try testing.expect(slices >= 1);
+    try testing.expectEqual(slices, probe.calls.load(.acquire));
+
+    var i: u32 = 0;
+    while (i < slices) : (i += 1)
+        try testing.expectEqual(@as(u32, 1), probe.seen[i].load(.acquire));
+}
+
+test "a per-entity system pinned to a thread stays one slice" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = SliceProbe{};
+    var sys = systemParams("PinnedSliced", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &sliceProbeSystem;
+    sys.per_entity = true;
+    sys.pinned_thread = 1;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+
+    try testing.expectEqual(@as(u32, 1), probe.reported_count.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
+}
+
+
+
 
 test "a runtime with no systems ticks and tears down" {
     var f = try Fixture.init();

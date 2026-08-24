@@ -38,6 +38,7 @@ struct ke_system_ctx {
     bool (*attach)(ke_system_ctx *self, ke_entity entity, ke_component_id cid, const void *data, size_t size);
     bool (*detach)(ke_system_ctx *self, ke_entity entity, ke_component_id cid);
     bool (*despawn)(ke_system_ctx *self, ke_entity entity);
+    void (*slice)(ke_system_ctx *self, uint32_t *out_index, uint32_t *out_count);
 };
 
 KE_RUNTIME_API uint32_t ke_system_ctx_defer_applied_count(void);
@@ -59,6 +60,12 @@ KE_RUNTIME_API void ke_runtime_debug_compute_waves(const ke_runtime_system_param
 KE_RUNTIME_API const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx,
                                                           uint32_t query_index,
                                                           size_t *out_count);
+
+/// Reports which share of its entity set this body call owns: *out_index in
+/// [0, *out_count). A system that did not declare per_entity always gets index 0
+/// of count 1, so a body written against this reads the whole set without asking
+/// whether it was sliced.
+KE_RUNTIME_API void ke_system_ctx_slice(ke_system_ctx *ctx, uint32_t *out_index, uint32_t *out_count);
 
 /// Reserves an entity id usable immediately, callable during a parallel wave.
 /// The id may be referenced at once; components given via attach land at the

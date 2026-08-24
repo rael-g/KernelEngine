@@ -19,6 +19,9 @@ public static unsafe partial class NativeMethods
     [return: NativeTypeName("const ke_ecs_segment *")]
     public static extern KernelEngine.Ecs.Native.ke_ecs_segment* system_ctx_view(ke_system_ctx* ctx, [NativeTypeName("uint32_t")] uint query_index, [NativeTypeName("size_t *")] nuint* out_count);
 
+    [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_slice", ExactSpelling = true)]
+    public static extern void system_ctx_slice(ke_system_ctx* ctx, [NativeTypeName("uint32_t *")] uint* out_index, [NativeTypeName("uint32_t *")] uint* out_count);
+
     [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_reserve", ExactSpelling = true)]
     [return: NativeTypeName("ke_entity")]
     public static extern ulong system_ctx_reserve(ke_system_ctx* ctx);

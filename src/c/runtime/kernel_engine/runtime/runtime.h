@@ -72,6 +72,16 @@ typedef struct ke_runtime_system_params {
 
     uint32_t pinned_thread;
 
+    /// The body's work on one entity is independent of every other entity it
+    /// visits. The runtime may then run it as several concurrent slices of the
+    /// same entity set, each body call handling the share ke_system_ctx_slice
+    /// reports. False keeps the body one call over the whole set.
+    ///
+    /// Two entities are two rows, so per-entity work cannot overlap; what breaks
+    /// the promise is a body reaching an entity other than the one it is
+    /// visiting, or touching state shared across the set.
+    bool per_entity;
+
     void *user_data;
     void (*execute)(ke_system_ctx *ctx, void *user_data, float dt);
 } ke_runtime_system_params;

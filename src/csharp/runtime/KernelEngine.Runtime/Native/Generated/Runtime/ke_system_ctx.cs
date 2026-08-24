@@ -26,4 +26,7 @@ public unsafe partial struct ke_system_ctx
 
     [NativeTypeName("bool (*)(ke_system_ctx *, ke_entity)")]
     public delegate* unmanaged[Cdecl]<ke_system_ctx*, ulong, bool> despawn;
+
+    [NativeTypeName("void (*)(ke_system_ctx *, uint32_t *, uint32_t *)")]
+    public delegate* unmanaged[Cdecl]<ke_system_ctx*, uint*, uint*, void> slice;
 }

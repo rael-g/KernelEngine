@@ -229,6 +229,12 @@
           "doc": null
         },
         {
+          "name": "per_entity",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "The body\u0027s work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set."
+        },
+        {
           "name": "user_data",
           "type": "void *",
           "tags": [],
@@ -515,6 +521,27 @@
               "doc": null
             }
           ]
+        },
+        {
+          "name": "slice",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_index",
+              "type": "uint32_t *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [],
+              "doc": null
+            }
+          ]
         }
       ]
     }
@@ -587,6 +614,32 @@
         {
           "name": "out_count",
           "type": "size_t *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx_slice",
+      "returns": "void",
+      "doc": "Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1, so a body written against this reads the whole set without asking whether it was sliced.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "out_index",
+          "type": "uint32_t *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "out_count",
+          "type": "uint32_t *",
           "tags": [],
           "doc": null
         }

@@ -128,31 +128,31 @@ public sealed unsafe partial class Runtime : IRuntime
     public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
                                  IReadOnlyList<QueryDecl>? queries = null,
                                  IReadOnlyList<ComponentAccess>? accessList = null,
-                                 uint pinnedThread = 0)
+                                 uint pinnedThread = 0,
+                                 bool perEntity = false)
     {
         ArgumentNullException.ThrowIfNull(execute);
         return RegisterSystemEntry(name, phase, new SystemEntry { Owner = this, Execute = execute },
-                                    queries, accessList, pinnedThread);
+                                    queries, accessList, pinnedThread, perEntity);
     }
 
     /// <inheritdoc />
     public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
                                  IReadOnlyList<QueryDecl>? queries = null,
                                  IReadOnlyList<ComponentAccess>? accessList = null,
-                                 uint pinnedThread = 0)
+                                 uint pinnedThread = 0,
+                                 bool perEntity = false)
     {
         ArgumentNullException.ThrowIfNull(execute);
         return RegisterSystemEntry(name, phase, new SystemEntry { Owner = this, ExecuteCtx = execute },
-                                    queries, accessList, pinnedThread);
+                                    queries, accessList, pinnedThread, perEntity);
     }
-
-    /// <summary>Term ceiling of <c>ke_query_decl</c>; a query exceeding it would silently truncate.</summary>
-    private const int QueryMaxTerms = 8;
 
     private ulong RegisterSystemEntry(string name, RuntimePhase phase, SystemEntry entry,
                                        IReadOnlyList<QueryDecl>? queries,
                                        IReadOnlyList<ComponentAccess>? accessList,
-                                       uint pinnedThread)
+                                       uint pinnedThread,
+                                       bool perEntity)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
@@ -166,9 +166,9 @@ public sealed unsafe partial class Runtime : IRuntime
         for (var q = 0; q < queryCount; q++)
         {
             var terms = queries![q].Terms ?? [];
-            if (terms.Length > QueryMaxTerms)
+            if (terms.Length > QueryDecl.MaxTerms)
                 throw new ArgumentException(
-                    $"Query {q} of system '{name}' declares {terms.Length} terms; the ABI allows {QueryMaxTerms}.",
+                    $"Query {q} of system '{name}' declares {terms.Length} terms; the ABI allows {QueryDecl.MaxTerms}.",
                     nameof(queries));
             for (var t = 0; t < terms.Length; t++)
             {
@@ -194,6 +194,7 @@ public sealed unsafe partial class Runtime : IRuntime
             p.name           = (sbyte*)namePtr;
             p.phase          = (ke_phase)phase;
             p.pinned_thread  = pinnedThread;
+            p.per_entity     = perEntity;
             p.user_data      = (void*)GCHandle.ToIntPtr(handle);
             p.execute        = &SystemExecuteTrampoline;
             p.queries        = queryCount > 0 ? queryPtr : null;

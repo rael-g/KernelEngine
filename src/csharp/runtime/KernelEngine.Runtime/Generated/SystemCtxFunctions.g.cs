@@ -19,6 +19,13 @@ public unsafe partial class SystemCtx
             return Native.ke_system_ctx_view(p, queryIndex, outCount);
     }
 
+    /// <summary>Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1, so a body written against this reads the whole set without asking whether it was sliced.</summary>
+    public static void Slice(in ke_system_ctx ctx, uint* outIndex, uint* outCount)
+    {
+        fixed (ke_system_ctx* p = &ctx)
+            Native.ke_system_ctx_slice(p, outIndex, outCount);
+    }
+
     /// <summary>Reserves an entity id usable immediately, callable during a parallel wave. The id may be referenced at once; components given via attach land at the wave barrier.</summary>
     public static ulong Reserve(in ke_system_ctx ctx)
     {
@@ -66,6 +73,10 @@ public unsafe partial class SystemCtx
         [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl,
                    EntryPoint = "ke_system_ctx_view", ExactSpelling = true)]
         public static extern ke_ecs_segment* ke_system_ctx_view(ke_system_ctx* ctx, uint queryIndex, nuint* outCount);
+
+        [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ke_system_ctx_slice", ExactSpelling = true)]
+        public static extern void ke_system_ctx_slice(ke_system_ctx* ctx, uint* outIndex, uint* outCount);
 
         [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl,
                    EntryPoint = "ke_system_ctx_reserve", ExactSpelling = true)]

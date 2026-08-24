@@ -24,6 +24,8 @@ public unsafe partial struct ke_runtime_system_params
     [NativeTypeName("uint32_t")]
     public uint pinned_thread;
 
+    public bool per_entity;
+
     public void* user_data;
 
     [NativeTypeName("void (*)(ke_system_ctx *, void *, float)")]

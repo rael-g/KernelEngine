@@ -21,7 +21,15 @@ public readonly record struct ComponentAccess(uint Cid, RuntimeAccess Access)
 /// the system's wave runs. The system body reads the result positionally, by the
 /// index this query was declared at.
 /// </summary>
-public readonly record struct QueryDecl(params ComponentAccess[] Terms);
+public readonly record struct QueryDecl(params ComponentAccess[] Terms)
+{
+    /// <summary>
+    /// Terms one query may carry, fixed by <c>KE_QUERY_MAX_TERMS</c>. A caller
+    /// composing a query from a set it does not control checks this first —
+    /// exceeding it is refused at registration, not silently truncated.
+    /// </summary>
+    public const int MaxTerms = 8;
+}
 
 /// <summary>
 /// Scheduler-centric runtime that owns the simulation world, dispatches systems
@@ -59,10 +67,18 @@ public interface IRuntime : IDisposable
     /// conflicts with nobody, so it may run concurrently with every other system in
     /// its phase. Anything touching component storage should say so.
     /// </remarks>
+    /// <param name="perEntity">
+    /// The body's work on one entity is independent of every other entity it visits,
+    /// letting the runtime run it as concurrent slices of the same set. Each call then
+    /// handles the share <c>SystemCtx.Slice</c> reports. A body that reaches an entity
+    /// other than the one it is visiting, or touches state shared across the set, must
+    /// leave this false.
+    /// </param>
     ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
                           IReadOnlyList<QueryDecl>? queries = null,
                           IReadOnlyList<ComponentAccess>? accessList = null,
-                          uint pinnedThread = 0);
+                          uint pinnedThread = 0,
+                          bool perEntity = false);
 
     /// <summary>
     /// Registers a system whose callback also receives the native system-context
@@ -71,10 +87,18 @@ public interface IRuntime : IDisposable
     /// inside a running system — it defers the change to the wave barrier. The
     /// pointer is opaque to managed code; forward it to APIs that accept one.
     /// </summary>
+    /// <param name="perEntity">
+    /// The body's work on one entity is independent of every other entity it visits,
+    /// letting the runtime run it as concurrent slices of the same set. Each call then
+    /// handles the share <c>SystemCtx.Slice</c> reports. A body that reaches an entity
+    /// other than the one it is visiting, or touches state shared across the set, must
+    /// leave this false.
+    /// </param>
     ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
                           IReadOnlyList<QueryDecl>? queries = null,
                           IReadOnlyList<ComponentAccess>? accessList = null,
-                          uint pinnedThread = 0);
+                          uint pinnedThread = 0,
+                          bool perEntity = false);
 
     /// <summary>Drives one frame: PreUpdate → FixedUpdate×N → Update → PostUpdate, then dispatches Render.</summary>
     void Tick(float dt);
