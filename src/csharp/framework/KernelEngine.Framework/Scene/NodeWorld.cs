@@ -35,26 +35,30 @@ public sealed class NodeWorld : ISignalDeclarer
     /// </summary>
     public IReadOnlyList<Node> AllNodes => _allNodes;
 
-    private nint _systemCtx;
+    [ThreadStatic] private static nint _systemCtx;
 
     /// <summary>
     /// Scopes <see cref="AddNode{T}"/>/<see cref="DestroyNode"/> to a running
     /// system's context for the duration of the returned handle, so structural
     /// changes defer to the wave barrier. Restores the prior value on dispose.
+    /// <para>
+    /// The context belongs to the thread running the system, not to the world: the
+    /// scheduler runs the systems of one wave concurrently, and a world-wide field
+    /// would hand one system the context of another. A world reached from two threads
+    /// at once is the normal case, not the exceptional one.
+    /// </para>
     /// </summary>
-    internal SystemCtxScope EnterSystem(nint ctx) => new(this, ctx);
+    internal SystemCtxScope EnterSystem(nint ctx) => new(ctx);
 
     internal readonly ref struct SystemCtxScope
     {
-        private readonly NodeWorld _world;
-        private readonly nint      _previous;
-        public SystemCtxScope(NodeWorld world, nint ctx)
+        private readonly nint _previous;
+        public SystemCtxScope(nint ctx)
         {
-            _world      = world;
-            _previous   = world._systemCtx;
-            world._systemCtx = ctx;
+            _previous  = _systemCtx;
+            _systemCtx = ctx;
         }
-        public void Dispose() => _world._systemCtx = _previous;
+        public void Dispose() => _systemCtx = _previous;
     }
 
     internal void RegisterBehavior(Node node)
@@ -91,6 +95,22 @@ public sealed class NodeWorld : ISignalDeclarer
         if (!_reportedBorrows.Add($"{owner.Entity}/{kind}/{typeName}/{name}")) return;
         _logger.Log(KernelEngine.Logger.LogLevel.Warning, "scene.node",
             $"'{owner.Name}' borrows {kind}<{typeName}> named '{name}', which resolves to no node");
+    }
+
+    /// <summary>
+    /// Reports a node type whose behavior ran on fewer instances than are bound,
+    /// once per type. Reaching instances through a query means a query that matches
+    /// nothing stops the behavior with no symptom other than the node quietly doing
+    /// nothing — the failure a scheduler cannot distinguish from a node with nothing
+    /// to do, which is why it has to be said out loud.
+    /// </summary>
+    internal void ReportUnmatchedBehavior(Type type, int ran, int bound)
+    {
+        if (_logger is null || ran >= bound) return;
+        if (!_reportedBorrows.Add($"unmatched/{type.FullName}")) return;
+        _logger.Log(KernelEngine.Logger.LogLevel.Error, "scene.node",
+            $"'{type.Name}' has {bound} bound instance(s) but its query reached {ran}; "
+            + "the components it declares do not describe the entities it is bound to");
     }
 
     /// <summary>
@@ -218,6 +238,14 @@ public sealed class NodeWorld : ISignalDeclarer
     }
 
     internal void CompleteAddNode(Node node) => node.CompleteBind();
+
+    /// <summary>
+    /// The node bound to <paramref name="entity"/>, or null when none is. Null is the
+    /// normal answer, not a failure: an entity the scene loader made without a script,
+    /// or one another language's runtime owns, carries the same components and matches
+    /// the same query without any node here standing behind it.
+    /// </summary>
+    internal Node? NodeOf(ulong entity) => _byEntity.TryGetValue(entity, out var n) ? n : null;
 
     /// <summary>Finds a node by its exact name or path, resolved through the native scene tree.</summary>
     public Node? Find(string name)
@@ -403,6 +431,16 @@ public sealed class NodeWorld : ISignalDeclarer
         value = sp[0];
         return true;
     }
+
+    /// <summary>
+    /// Hands out the component's live storage rather than a copy of it, so a caller
+    /// touching one field pays neither the read-back nor the write-back of the whole
+    /// struct. Empty when the entity does not carry the component — including while an
+    /// attach is still queued behind a wave barrier, when the value exists but its
+    /// storage does not yet.
+    /// </summary>
+    internal Span<T> StorageByCid<T>(ulong entity, uint cid) where T : unmanaged =>
+        _ecs.GetComponent<T>(entity, cid);
 
     /// <summary>
     /// Calls <see cref="Node.OnReady"/> on every node in reverse insertion order

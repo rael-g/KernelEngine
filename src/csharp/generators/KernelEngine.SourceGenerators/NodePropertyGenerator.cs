@@ -155,6 +155,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         {
             sb.AppendLine($"    {overrideModifier} override bool HasBehavior => true;");
             sb.AppendLine();
+            var reachesOnlySelf = !hasOnUpdate && borrows.Length == 0;
+            sb.AppendLine($"    {overrideModifier} override bool ReachesOnlyItself => {(reachesOnlySelf ? "true" : "false")};");
+            sb.AppendLine();
         }
 
         if (updateMethod is not null && !hasOnUpdate)
@@ -177,19 +180,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        sb.AppendLine($"    {overrideModifier} override void CollectBehaviorComponents(global::System.Collections.Generic.List<string> into)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        base.CollectBehaviorComponents(into);");
-        foreach (var slot in slots)
-            sb.AppendLine($"        into.Add(\"{slot.ComponentName}\");");
-        foreach (var b in borrows)
-        {
-            if (BorrowKindOf(b.Type) == "Emit") continue;
-            foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
-                sb.AppendLine($"        into.Add(\"{cn}\");");
-        }
-        sb.AppendLine("    }");
-        sb.AppendLine();
+        var writtenSlots = new HashSet<string>();
 
         EmitSignalTypeCollection(sb, classSymbol, borrows, overrideModifier);
 
@@ -204,6 +195,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             var slot = ResolveSlot(spc, p, slots, isNative, declaredFieldName, pinned);
             if (slot is null) continue;
 
+            var writes = p.SetMethod is not null;
+            if (writes) writtenSlots.Add(slot.ComponentName);
+
             var backingTypeSymbol = slot.Symbol;
 
             var fieldName = isNative ? declaredFieldName : p.Name;
@@ -217,15 +211,18 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine("    {");
                 sb.AppendLine("        get");
                 sb.AppendLine("        {");
-                sb.AppendLine($"            var s = {slot.Current}();");
+                sb.AppendLine($"            ref var s = ref {slot.Current}(out _);");
                 sb.AppendLine($"            return GeneratedUtf8Get(ref s.{p.Name});");
                 sb.AppendLine("        }");
-                sb.AppendLine("        set");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            var s = {slot.Current}();");
-                sb.AppendLine($"            GeneratedUtf8Set(ref s.{p.Name}, value, \"{p.Name}\");");
-                sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
-                sb.AppendLine("        }");
+                if (writes)
+                {
+                    sb.AppendLine("        set");
+                    sb.AppendLine("        {");
+                    sb.AppendLine($"            ref var s = ref {slot.Current}(out var live);");
+                    sb.AppendLine($"            GeneratedUtf8Set(ref s.{p.Name}, value, \"{p.Name}\");");
+                    sb.AppendLine($"            if (!live && IsBound) GeneratedSet({slot.Cid}, s);");
+                    sb.AppendLine("        }");
+                }
                 sb.AppendLine("    }");
                 continue;
             }
@@ -237,15 +234,18 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine("    {");
                 sb.AppendLine("        get");
                 sb.AppendLine("        {");
-                sb.AppendLine($"            var s = {slot.Current}();");
+                sb.AppendLine($"            ref var s = ref {slot.Current}(out _);");
                 sb.AppendLine($"            return GeneratedUtf8Get(ref s.{fieldName});");
                 sb.AppendLine("        }");
-                sb.AppendLine("        set");
-                sb.AppendLine("        {");
-                sb.AppendLine($"            var s = {slot.Current}();");
-                sb.AppendLine($"            GeneratedUtf8Set(ref s.{fieldName}, value, \"{p.Name}\");");
-                sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
-                sb.AppendLine("        }");
+                if (writes)
+                {
+                    sb.AppendLine("        set");
+                    sb.AppendLine("        {");
+                    sb.AppendLine($"            ref var s = ref {slot.Current}(out var live);");
+                    sb.AppendLine($"            GeneratedUtf8Set(ref s.{fieldName}, value, \"{p.Name}\");");
+                    sb.AppendLine($"            if (!live && IsBound) GeneratedSet({slot.Cid}, s);");
+                    sb.AppendLine("        }");
+                }
                 sb.AppendLine("    }");
                 continue;
             }
@@ -265,27 +265,45 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine("    {");
             sb.AppendLine("        get");
             sb.AppendLine("        {");
-            sb.AppendLine($"            var s = {slot.Current}();");
+            sb.AppendLine($"            ref var s = ref {slot.Current}(out _);");
             sb.AppendLine(arity is int rn
                 ? $"            return new(" + string.Join(", ", Enumerable.Range(0, rn).Select(i => $"s.{fieldName}[{i}]")) + ");"
                 : coercion is not null
                     ? $"            return {coercion.Value.read("s." + fieldName)};"
                     : $"            return s.{fieldName};");
             sb.AppendLine("        }");
-            sb.AppendLine("        set");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            var s = {slot.Current}();");
-            if (arity is int wn)
-                foreach (var i in Enumerable.Range(0, wn))
-                    sb.AppendLine($"            s.{fieldName}[{i}] = value.{VectorLanes[i]};");
-            else if (coercion is not null)
-                sb.AppendLine($"            s.{fieldName} = {coercion.Value.write("value")};");
-            else
-                sb.AppendLine($"            s.{fieldName} = value;");
-            sb.AppendLine($"            if (IsBound) GeneratedSet({slot.Cid}, s); else {slot.State} = s;");
-            sb.AppendLine("        }");
+            if (writes)
+            {
+                sb.AppendLine("        set");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            ref var s = ref {slot.Current}(out var live);");
+                if (arity is int wn)
+                    foreach (var i in Enumerable.Range(0, wn))
+                        sb.AppendLine($"            s.{fieldName}[{i}] = value.{VectorLanes[i]};");
+                else if (coercion is not null)
+                    sb.AppendLine($"            s.{fieldName} = {coercion.Value.write("value")};");
+                else
+                    sb.AppendLine($"            s.{fieldName} = value;");
+                sb.AppendLine($"            if (!live && IsBound) GeneratedSet({slot.Cid}, s);");
+                sb.AppendLine("        }");
+            }
             sb.AppendLine("    }");
         }
+
+        sb.AppendLine();
+        sb.AppendLine($"    {overrideModifier} override void CollectBehaviorComponents(global::System.Collections.Generic.List<global::KernelEngine.Framework.NodeComponentUse> into)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        base.CollectBehaviorComponents(into);");
+        foreach (var slot in slots)
+            sb.AppendLine($"        into.Add(new(\"{slot.ComponentName}\", {(writtenSlots.Contains(slot.ComponentName) ? "true" : "false")}, true));");
+        foreach (var b in borrows)
+        {
+            if (BorrowKindOf(b.Type) == "Emit") continue;
+            foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
+                sb.AppendLine($"        into.Add(new(\"{cn}\", true, false));");
+        }
+        sb.AppendLine("    }");
+        sb.AppendLine();
 
         if (needsUtf8Helpers)
         {
@@ -315,8 +333,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine();
         foreach (var slot in slots)
         {
-            sb.AppendLine($"    private {slot.TypeName} {slot.Current}() =>");
-            sb.AppendLine($"        IsBound && GeneratedTryGet<{slot.TypeName}>({slot.Cid}, out var s) ? s : {slot.State};");
+            sb.AppendLine($"    private ref {slot.TypeName} {slot.Current}(out bool live) =>");
+            sb.AppendLine($"        ref GeneratedStorage<{slot.TypeName}>({slot.Cid}, ref {slot.State}, out live);");
         }
         sb.AppendLine();
 

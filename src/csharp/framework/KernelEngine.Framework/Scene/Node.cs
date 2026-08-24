@@ -99,12 +99,22 @@ public abstract class Node
     protected internal virtual bool HasBehavior => false;
 
     /// <summary>
-    /// Appends the ECS component names this node type reaches, so the scheduler can
-    /// order its behavior against every other writer of those components instead of
-    /// trusting phase placement. An override calls the base first and then adds its
-    /// own, which is what makes an inherited component set accumulate down the chain.
+    /// Whether this node type's behavior touches nothing beyond its own entity, which is
+    /// what lets the host run its instances concurrently: two instances are two entities,
+    /// so their work cannot overlap. False for a node that borrows another node, and for
+    /// a hand-written <see cref="OnUpdate"/>, whose reach the generator cannot see.
+    /// Base is false so anything unproven runs serially.
     /// </summary>
-    protected internal virtual void CollectBehaviorComponents(List<string> into) { }
+    protected internal virtual bool ReachesOnlyItself => false;
+
+    /// <summary>
+    /// Appends the ECS components this node type reaches and how it reaches them, so
+    /// the scheduler can order its behavior against the other writers of those
+    /// components instead of trusting phase placement. An override calls the base
+    /// first and then adds its own, which is what makes an inherited component set
+    /// accumulate down the chain.
+    /// </summary>
+    protected internal virtual void CollectBehaviorComponents(List<NodeComponentUse> into) { }
 
     /// <summary>
     /// Declares every payload type this node type emits or handles, so a signal a
@@ -276,6 +286,30 @@ public abstract class Node
     /// <summary>Reads one of this node's component values. Counterpart to <see cref="GeneratedSet{T}"/>.</summary>
     protected internal bool GeneratedTryGet<T>(uint cid, out T state) where T : unmanaged =>
         NodeWorld!.TryGetByCid(Entity, cid, out state);
+
+    /// <summary>
+    /// Reaches one of this node's components in place, so a generated property touches
+    /// the one field it names instead of copying the whole struct in and back out.
+    /// <paramref name="live"/> reports whether the returned reference is the component's
+    /// own storage; when false it is <paramref name="authored"/>, the node's pre-bind
+    /// value, and a writer must still publish through <see cref="GeneratedSet{T}"/> —
+    /// which is the case both before binding and while an attach is queued behind a
+    /// wave barrier.
+    /// </summary>
+    protected internal ref T GeneratedStorage<T>(uint cid, ref T authored, out bool live) where T : unmanaged
+    {
+        if (NodeWorld is not null)
+        {
+            var storage = NodeWorld.StorageByCid<T>(Entity, cid);
+            if (!storage.IsEmpty)
+            {
+                live = true;
+                return ref storage[0];
+            }
+        }
+        live = false;
+        return ref authored;
+    }
 
     /// <summary>
     /// Hands this node one signal delivered to it, dispatching to the <c>On</c>

@@ -16,6 +16,44 @@ public sealed partial class TextProbe : Node
     public partial string Title { get; set; }
 }
 
+/// <summary>
+/// A node whose behavior only reads one of its properties and writes the other, so
+/// what it declares to the scheduler can be told apart from what it merely carries.
+/// </summary>
+public sealed partial class AccessProbe : Node
+{
+    public partial float ReadOnlyValue { get; }
+
+    public partial float WrittenValue { get; set; }
+
+    void Update(in View view) { }
+
+    public List<NodeComponentUse> Uses()
+    {
+        var into = new List<NodeComponentUse>();
+        CollectBehaviorComponents(into);
+        return into;
+    }
+}
+
+/// <summary>
+/// A node whose behavior only reads what it carries, which is what the scheduler
+/// needs told apart from writing: two readers of one component may share a wave.
+/// </summary>
+public sealed partial class ReadOnlyProbe : Node
+{
+    public partial float Observed { get; }
+
+    void Update(in View view) { }
+
+    public List<NodeComponentUse> Uses()
+    {
+        var into = new List<NodeComponentUse>();
+        CollectBehaviorComponents(into);
+        return into;
+    }
+}
+
 public class NodeTests
 {
     [Fact]
@@ -38,9 +76,9 @@ public class NodeTests
     {
         public List<string> Components()
         {
-            var into = new List<string>();
+            var into = new List<KernelEngine.Framework.NodeComponentUse>();
             CollectBehaviorComponents(into);
-            return into;
+            return into.ConvertAll(u => u.Name);
         }
     }
 
@@ -48,9 +86,9 @@ public class NodeTests
     {
         public List<string> Components()
         {
-            var into = new List<string>();
+            var into = new List<KernelEngine.Framework.NodeComponentUse>();
             CollectBehaviorComponents(into);
-            return into;
+            return into.ConvertAll(u => u.Name);
         }
     }
 
@@ -74,9 +112,9 @@ public class NodeTests
     {
         public List<string> Components()
         {
-            var into = new List<string>();
+            var into = new List<KernelEngine.Framework.NodeComponentUse>();
             CollectBehaviorComponents(into);
-            return into;
+            return into.ConvertAll(u => u.Name);
         }
     }
 
@@ -99,5 +137,22 @@ public class NodeTests
     public void SpatialAndPlanarNodesCarryDifferentPoses()
     {
         Assert.Equal(["transform"], new SpatialProbe().Components());
+    }
+
+    [Fact]
+    public void ComponentWithASettableProperty_IsDeclaredAsWritten()
+    {
+        var uses = new AccessProbe().Uses();
+
+        Assert.Contains(uses, u => u.Writes);
+    }
+
+    [Fact]
+    public void ComponentWhoseEveryPropertyIsReadOnly_IsNotDeclaredAsWritten()
+    {
+        var uses = new ReadOnlyProbe().Uses();
+
+        Assert.NotEmpty(uses);
+        Assert.All(uses, u => Assert.False(u.Writes));
     }
 }

@@ -38,6 +38,21 @@ public sealed class SceneNodesModule : IRuntimeModule
     /// <summary>Setup callback that also wants to resolve DI services.</summary>
     public SceneNodesModule(Action<NodeWorld, IServiceProvider> setup) => _setup = setup;
 
+    /// <summary>
+    /// The half-open range of <paramref name="count"/> items this body call owns. A
+    /// system the runtime chose not to slice reports one slice, so the range is the
+    /// whole set and the caller needs no second code path.
+    /// </summary>
+    private static (int First, int Last) SliceOf(nint ctx, int count)
+    {
+        KernelEngine.Runtime.SystemContext.Slice(ctx, out var index, out var slices);
+        if (slices <= 1) return (0, count);
+
+        var per   = count / (int)slices;
+        var first = (int)index * per;
+        return (first, index == slices - 1 ? count : first + per);
+    }
+
     public void Configure(IServiceCollection services)
     {
         services.AddSpatialNodeTypes();
@@ -93,32 +108,67 @@ public sealed class SceneNodesModule : IRuntimeModule
         nodeWorld.BehaviorTypeAdded += type =>
         {
             var probe = (Node)nodeWorld.BehaviorsOf(type)[0];
-            var names = new List<string>();
-            probe.CollectBehaviorComponents(names);
+            var uses = new List<NodeComponentUse>();
+            probe.CollectBehaviorComponents(uses);
+
+            var owned  = new Dictionary<uint, bool>();
+            var reached = new Dictionary<uint, bool>();
+            foreach (var use in uses)
+            {
+                var cid = nodeWorld.CidOfName(use.Name);
+                if (cid == hierarchyCid || cid == nameCid) continue;
+                var into = use.Owned ? owned : reached;
+                into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
+            }
+
+            var terms = owned
+                .Select(e => e.Value ? ComponentAccess.Write(e.Key) : ComponentAccess.Read(e.Key))
+                .ToArray();
 
             var access = new List<ComponentAccess>
             {
                 ComponentAccess.Read(hierarchyCid),
                 ComponentAccess.Read(nameCid),
             };
-            foreach (var n in names)
-            {
-                var cid = nodeWorld.CidOfName(n);
-                if (cid == hierarchyCid || cid == nameCid) continue;
-                if (access.Any(a => a.Cid == cid)) continue;
-                access.Add(ComponentAccess.Write(cid));
-            }
+            foreach (var (cid, isWrite) in reached)
+                if (!owned.ContainsKey(cid))
+                    access.Add(isWrite ? ComponentAccess.Write(cid) : ComponentAccess.Read(cid));
+
+            var queries = terms.Length is > 0 and <= QueryDecl.MaxTerms ? new[] { new QueryDecl(terms) } : null;
+            if (queries is null)
+                foreach (var (cid, isWrite) in owned)
+                    access.Add(isWrite ? ComponentAccess.Write(cid) : ComponentAccess.Read(cid));
 
             runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (_, ctx, dt) =>
             {
-                var view      = new View(nodeWorld, dt, _inputSnapshot, ctx);
-                var behaviors = nodeWorld.BehaviorsOf(type);
+                var view = new View(nodeWorld, dt, _inputSnapshot, ctx);
                 using (nodeWorld.EnterSystem(ctx))
                 {
-                    for (int i = 0; i < behaviors.Count; i++)
-                        behaviors[i].OnUpdate(in view);
+                    if (queries is null)
+                    {
+                        var behaviors = nodeWorld.BehaviorsOf(type);
+                        var (first, last) = SliceOf(ctx, behaviors.Count);
+                        for (int i = first; i < last; i++)
+                            behaviors[i].OnUpdate(in view);
+                        return;
+                    }
+
+                    var segments = KernelEngine.Runtime.SystemContext.SegmentCount(ctx);
+                    var (firstSeg, lastSeg) = SliceOf(ctx, segments);
+                    var ran = 0;
+                    for (int s = firstSeg; s < lastSeg; s++)
+                        foreach (var entity in KernelEngine.Runtime.SystemContext.EntitiesOf(ctx, 0, s))
+                            if (nodeWorld.NodeOf(entity) is { } node && node.GetType() == type)
+                            {
+                                node.OnUpdate(in view);
+                                ran++;
+                            }
+
+                    KernelEngine.Runtime.SystemContext.Slice(ctx, out uint _, out uint slices);
+                    if (slices == 1)
+                        nodeWorld.ReportUnmatchedBehavior(type, ran, nodeWorld.BehaviorsOf(type).Count);
                 }
-            }, accessList: access.ToArray());
+            }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };
 
         var done = new System.Threading.ManualResetEventSlim(false);
