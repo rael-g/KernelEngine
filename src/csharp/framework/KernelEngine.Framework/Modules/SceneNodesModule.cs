@@ -43,6 +43,11 @@ public sealed class SceneNodesModule : IRuntimeModule
     /// system the runtime chose not to slice reports one slice, so the range is the
     /// whole set and the caller needs no second code path.
     /// </summary>
+    /// <remarks>
+    /// Counted in entities rather than in archetype segments: instances of one node
+    /// type share an archetype, so a whole type is usually one segment, and splitting
+    /// by segment would hand every entity to a single slice and leave the rest idle.
+    /// </remarks>
     private static (int First, int Last) SliceOf(nint ctx, int count)
     {
         KernelEngine.Runtime.SystemContext.Slice(ctx, out var index, out var slices);
@@ -147,22 +152,34 @@ public sealed class SceneNodesModule : IRuntimeModule
                     if (queries is null)
                     {
                         var behaviors = nodeWorld.BehaviorsOf(type);
-                        var (first, last) = SliceOf(ctx, behaviors.Count);
-                        for (int i = first; i < last; i++)
+                        var (from, upto) = SliceOf(ctx, behaviors.Count);
+                        for (int i = from; i < upto; i++)
                             behaviors[i].OnUpdate(in view);
                         return;
                     }
 
                     var segments = KernelEngine.Runtime.SystemContext.SegmentCount(ctx);
-                    var (firstSeg, lastSeg) = SliceOf(ctx, segments);
+                    var total = 0;
+                    for (int s = 0; s < segments; s++)
+                        total += KernelEngine.Runtime.SystemContext.EntitiesOf(ctx, 0, s).Length;
+
+                    var (first, last) = SliceOf(ctx, total);
                     var ran = 0;
-                    for (int s = firstSeg; s < lastSeg; s++)
-                        foreach (var entity in KernelEngine.Runtime.SystemContext.EntitiesOf(ctx, 0, s))
-                            if (nodeWorld.NodeOf(entity) is { } node && node.GetType() == type)
+                    var seen = 0;
+                    for (int s = 0; s < segments && seen < last; s++)
+                    {
+                        var entities = KernelEngine.Runtime.SystemContext.EntitiesOf(ctx, 0, s);
+                        for (int e = 0; e < entities.Length; e++, seen++)
+                        {
+                            if (seen < first) continue;
+                            if (seen >= last) break;
+                            if (nodeWorld.NodeOf(entities[e]) is { } node && node.GetType() == type)
                             {
                                 node.OnUpdate(in view);
                                 ran++;
                             }
+                        }
+                    }
 
                     KernelEngine.Runtime.SystemContext.Slice(ctx, out uint _, out uint slices);
                     if (slices == 1)
