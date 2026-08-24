@@ -11,3 +11,5 @@
 #include <kernel_engine/framework/signal_bus.h>
 #include <kernel_engine/framework/signal_bus_create.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
+#include <kernel_engine/framework/script_host.h>
+#include <kernel_engine/framework/script_host_create.h>

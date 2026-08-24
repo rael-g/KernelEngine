@@ -31,6 +31,8 @@ Framework.umbrella.h
 ../../../../zig/framework/include/kernel_engine/framework/scene_loader_create.h
 ../../../../zig/framework/include/kernel_engine/framework/scene_tree.h
 ../../../../zig/framework/include/kernel_engine/framework/scene_tree_create.h
+../../../../zig/framework/include/kernel_engine/framework/script_host.h
+../../../../zig/framework/include/kernel_engine/framework/script_host_create.h
 ../../../../zig/framework/include/kernel_engine/framework/signal_bus.h
 ../../../../zig/framework/include/kernel_engine/framework/signal_bus_create.h
 ../../../../zig/framework/include/kernel_engine/framework/world.h

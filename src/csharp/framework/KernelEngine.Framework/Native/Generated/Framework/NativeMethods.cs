@@ -23,4 +23,7 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_resolver_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_asset_resolver_handle")]
     public static extern KernelEngine.Asset.Native.ke_asset_resolver_handle asset_resolver_create([NativeTypeName("ke_image_loader *")] KernelEngine.Asset.Native.ke_image_loader* image_loader, [NativeTypeName("ke_font_loader *")] KernelEngine.Text.Native.ke_font_loader* font_loader, [NativeTypeName("const char *")] sbyte* project_root, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_script_host_create", ExactSpelling = true)]
+    public static extern ke_script_host_handle script_host_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("const ke_script_host_params *")] ke_script_host_params* @params, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
 }
