@@ -462,7 +462,10 @@ const FakeComponent = struct {
     size: usize,
 };
 
-const FakeEcs = struct {
+/// Exposed so a sibling implementation defined over the scene graph — the script
+/// host resolving a node's relatives — can be tested against a real tree instead
+/// of a second stand-in that would drift from this one.
+pub const FakeEcs = struct {
     vtable: c.ke_ecs,
     arena: std.heap.ArenaAllocator,
     components: [fake_max_components]FakeComponent,
@@ -591,11 +594,11 @@ fn fakeComponentSize(self: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usiz
     return f.components[cid - 1].size;
 }
 
-const Fixture = struct {
+pub const Fixture = struct {
     ecs: FakeEcs,
     handle: c.ke_scene_tree_handle,
 
-    fn init(self: *Fixture) !void {
+    pub fn init(self: *Fixture) !void {
         self.ecs.arena = std.heap.ArenaAllocator.init(testing.allocator);
         self.ecs.component_count = 0;
         self.ecs.next_entity = 0;
@@ -617,16 +620,16 @@ const Fixture = struct {
         try testing.expect(self.handle.ref != null);
     }
 
-    fn deinit(self: *Fixture) void {
+    pub fn deinit(self: *Fixture) void {
         if (self.handle.destroy) |d| d(self.handle.ref);
         self.ecs.arena.deinit();
     }
 
-    fn tree(self: *Fixture) [*c]c.ke_scene_tree {
+    pub fn tree(self: *Fixture) [*c]c.ke_scene_tree {
         return self.handle.ref;
     }
 
-    fn create(self: *Fixture, name: [*c]const u8, parent: c.ke_entity) c.ke_entity {
+    pub fn create(self: *Fixture, name: [*c]const u8, parent: c.ke_entity) c.ke_entity {
         const t = self.tree();
         return t.*.create_node.?(t, name, parent, null, null);
     }

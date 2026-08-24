@@ -15,4 +15,5 @@ comptime {
     _ = @import("input_actions.zig");
     _ = @import("scene_loader.zig");
     _ = @import("signal_bus.zig");
+    _ = @import("script_host.zig");
 }

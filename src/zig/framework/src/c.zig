@@ -15,6 +15,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/framework/scene_hierarchy_create.h");
     @cInclude("kernel_engine/framework/scene_loader_create.h");
     @cInclude("kernel_engine/framework/signal_bus_create.h");
+    @cInclude("kernel_engine/framework/script_host_create.h");
     @cInclude("kernel_engine/framework/world_create.h");
     @cInclude("kernel_engine/framework/input_actions_create.h");
     @cInclude("kernel_engine/logger/logger.h");
