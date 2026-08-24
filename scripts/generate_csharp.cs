@@ -46,7 +46,10 @@ if (model.Enums.Any(e => !e.External))
 {
     var enumsDir = enumsOutDir ?? outDir;
     Directory.CreateDirectory(enumsDir);
-    File.WriteAllText(Path.Combine(enumsDir, "Enums.g.cs"), CSharpBackend.RenderEnums(model, ns, convention));
+    var enumsFile = domain is null
+        ? "Enums.g.cs"
+        : $"{Idioms.TypeName(domain, convention)}.Enums.g.cs";
+    File.WriteAllText(Path.Combine(enumsDir, enumsFile), CSharpBackend.RenderEnums(model, ns, convention));
 }
 
 foreach (var provider in classified.Providers)

@@ -637,7 +637,26 @@ public static class CSharpBackend
             : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"
+            : UntypedPointer(p.Type) is string cast ? $"({cast}){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!);
+    }
+
+    /// <summary>
+    /// The native spelling an untyped pointer parameter has to be cast back to at the
+    /// call. The public surface takes <c>nint</c>, which is the idiomatic way for a
+    /// caller to hold a pointer the engine never dereferences, but the vtable slot is
+    /// still declared in the ABI's own terms — a return value already makes this trip
+    /// in the other direction.
+    /// </summary>
+    static string? UntypedPointer(string type)
+    {
+        var t = type.Replace(" ", "");
+        return t switch
+        {
+            "void*" => "void*",
+            "void**" => "void**",
+            _ => null,
+        };
     }
 
     static void RenderCallbackMethod(List<string> o, ApiStruct vtable, ClassifiedSlot cs,
