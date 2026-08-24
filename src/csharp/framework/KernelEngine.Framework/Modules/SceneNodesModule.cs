@@ -61,10 +61,22 @@ public sealed class SceneNodesModule : IRuntimeModule
     public void Configure(IServiceCollection services)
     {
         services.AddSpatialNodeTypes();
+        services.AddSingleton<ScriptHost>(sp =>
+        {
+            unsafe
+            {
+                var ecs = sp.GetRequiredService<INativeEcs>();
+                KernelEngine.Common.Native.ke_error* err = null;
+                var handle = Native.NativeMethods.script_host_create(ecs.Native, null, &err);
+                if (handle.@ref == null) throw KernelError.FromNative(err, "script_host_create");
+                return new ScriptHost(handle);
+            }
+        });
         services.AddSingleton<NodeWorld>(sp =>
             new NodeWorld(
                 sp.GetRequiredService<World>(),
                 sp.GetRequiredService<IEcsRegistry>(),
+                sp.GetRequiredService<ScriptHost>(),
                 sp.GetService<KernelEngine.Logger.ILogger>(),
                 sp.GetRequiredService<SignalBus>()));
     }

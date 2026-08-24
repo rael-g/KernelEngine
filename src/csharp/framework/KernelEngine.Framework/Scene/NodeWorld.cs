@@ -16,7 +16,21 @@ public sealed class NodeWorld : ISignalDeclarer
 
     private readonly Dictionary<Type, List<Node>> _behaviorsByType = new();
     private readonly List<Node>                  _allNodes  = new();
-    private readonly Dictionary<ulong, Node>     _byEntity  = new();
+
+    /// <summary>
+    /// Which entity carries which node, held natively so a runtime in another
+    /// language sees the same bindings instead of keeping a second map of its own.
+    /// </summary>
+    private readonly ScriptHost _scripts;
+
+    private readonly Dictionary<Type, uint> _scriptTypes = new();
+
+    /// <summary>
+    /// Roots each bound node for the native side, which stores the pointer and never
+    /// dereferences it. A managed object moves, so what crosses the boundary is the
+    /// handle rather than the reference.
+    /// </summary>
+    private readonly Dictionary<ulong, System.Runtime.InteropServices.GCHandle> _roots = new();
 
     /// <summary>
     /// Raised the first time a node of a given type registers behavior. The host
@@ -163,7 +177,7 @@ public sealed class NodeWorld : ISignalDeclarer
     internal unsafe void Deliver(in KernelEngine.Framework.Native.ke_signal_delivery delivery)
     {
         if (!_signalTypes.TryGetValue(delivery.signal_id, out var type)) return;
-        if (!_byEntity.TryGetValue(delivery.target, out var node)) return;
+        if (NodeOf(delivery.target) is not { } node) return;
         node.GeneratedDeliverSignal(type,
             new ReadOnlySpan<byte>((void*)delivery.payload, (int)delivery.payload_size));
     }
@@ -187,9 +201,11 @@ public sealed class NodeWorld : ISignalDeclarer
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
     internal NodeWorld(World world, IEcsRegistry ecs,
+                       ScriptHost scripts,
                        KernelEngine.Logger.ILogger? logger = null,
                        SignalBus? signals = null)
     {
+        _scripts    = scripts;
         _signals    = signals;
         _world      = world;
         _ecs        = ecs;
@@ -214,7 +230,7 @@ public sealed class NodeWorld : ISignalDeclarer
         var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
         node.BindToNodeWorld(this, entity);
         _allNodes.Add(node);
-        _byEntity[entity] = node;
+        BindScript(node);
         return node;
     }
 
@@ -234,10 +250,54 @@ public sealed class NodeWorld : ISignalDeclarer
         var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
         node.PreBind(this, entity);
         _allNodes.Add(node);
-        _byEntity[entity] = node;
+        BindScript(node);
     }
 
     internal void CompleteAddNode(Node node) => node.CompleteBind();
+
+    /// <summary>
+    /// Resolves the native script type for a node's CLR type, registering it on first
+    /// use from what the node itself declares: the components it carries and whether
+    /// its behaviour reaches past its own entity.
+    /// </summary>
+    private uint ScriptTypeOf(Node node)
+    {
+        var clr = node.GetType();
+        if (_scriptTypes.TryGetValue(clr, out var existing)) return existing;
+
+        var uses = new List<NodeComponentUse>();
+        node.CollectBehaviorComponents(uses);
+
+        var cids = new List<uint>();
+        foreach (var use in uses)
+            if (use.Owned && _ecs.TryLookupComponent(use.Name, out var cid) && !cids.Contains(cid))
+                cids.Add(cid);
+
+        var reach = node.ReachesOnlyItself ? ScriptReach.Self : ScriptReach.Any;
+        uint id = 0;
+        unsafe
+        {
+            var owned = cids.ToArray();
+            fixed (uint* p = owned)
+                _scripts.RegisterType(clr.FullName ?? clr.Name, p, (uint)owned.Length, reach, &id);
+        }
+        _scriptTypes[clr] = id;
+        return id;
+    }
+
+    private void BindScript(Node node)
+    {
+        var root = System.Runtime.InteropServices.GCHandle.Alloc(node);
+        _roots[node.Entity] = root;
+        _scripts.Bind(node.Entity, ScriptTypeOf(node), System.Runtime.InteropServices.GCHandle.ToIntPtr(root));
+    }
+
+    private void UnbindScript(ulong entity)
+    {
+        _scripts.Unbind(entity);
+        if (!_roots.Remove(entity, out var root)) return;
+        root.Free();
+    }
 
     /// <summary>
     /// The node bound to <paramref name="entity"/>, or null when none is. Null is the
@@ -245,13 +305,18 @@ public sealed class NodeWorld : ISignalDeclarer
     /// or one another language's runtime owns, carries the same components and matches
     /// the same query without any node here standing behind it.
     /// </summary>
-    internal Node? NodeOf(ulong entity) => _byEntity.TryGetValue(entity, out var n) ? n : null;
+    internal unsafe Node? NodeOf(ulong entity)
+    {
+        nint instance = 0;
+        if (!_scripts.TryInstanceOf(entity, null, &instance) || instance == 0) return null;
+        return System.Runtime.InteropServices.GCHandle.FromIntPtr(instance).Target as Node;
+    }
 
     /// <summary>Finds a node by its exact name or path, resolved through the native scene tree.</summary>
     public Node? Find(string name)
     {
         var entity = _world.SceneTree.FindNode(name);
-        return entity != 0 && _byEntity.TryGetValue(entity, out var n) ? n : null;
+        return entity != 0 ? NodeOf(entity) : null;
     }
 
     /// <summary>Finds a node by name and casts it to <typeparamref name="T"/>.</summary>
@@ -279,7 +344,7 @@ public sealed class NodeWorld : ISignalDeclarer
 
         if (node.HasBehavior && _behaviorsByType.TryGetValue(node.GetType(), out var behaviors)) behaviors.Remove(node);
         _allNodes.Remove(node);
-        _byEntity.Remove(node.Entity);
+        UnbindScript(node.Entity);
         _signals?.ForgetEntity(node.Entity);
         _world.SceneTree.DestroyNode(node.Entity, _systemCtx);
         node.UnbindFromNodeWorld();
@@ -304,7 +369,7 @@ public sealed class NodeWorld : ISignalDeclarer
     {
         node.BindToNodeWorld(this, entity);
         _allNodes.Add(node);
-        _byEntity[entity] = node;
+        BindScript(node);
     }
 
     /// <summary>
@@ -333,7 +398,7 @@ public sealed class NodeWorld : ISignalDeclarer
         if (hsp.IsEmpty) return null;
         var parent = hsp[0].parent;
         if (parent == 0) return null;
-        return _byEntity.TryGetValue(parent, out var p) ? p : null;
+        return NodeOf(parent);
     }
 
     /// <summary>
@@ -351,7 +416,7 @@ public sealed class NodeWorld : ISignalDeclarer
         var child = hsp[0].first_child;
         while (child != 0)
         {
-            if (_byEntity.TryGetValue(child, out var node)) result.Add(node);
+            if (NodeOf(child) is { } node) result.Add(node);
             var chsp = _ecs.GetComponent<Native.ke_hierarchy_component>(child, _hierarchyCid);
             if (chsp.IsEmpty) break;
             child = chsp[0].next_sibling;
