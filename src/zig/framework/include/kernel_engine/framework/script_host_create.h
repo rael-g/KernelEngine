@@ -24,13 +24,12 @@ extern "C"
 #endif
 #endif
 
-    /// Sizing for one script host. Both are workload shapes — how many node types
-    /// a game declares and how many of them it spawns — so a default is a
-    /// convenience, never a ceiling the engine imposes on a game.
+    /// Sizing for one script host. How many node types a game declares is a workload
+    /// shape, so the default is a convenience rather than a ceiling. Instances need no
+    /// sizing: a binding lives on its own entity, so the ECS already bounds them.
     typedef struct ke_script_host_params
     {
-        uint32_t max_types;     ///< Distinct script types; 0 uses the default.
-        uint32_t max_instances; ///< Live bindings; 0 uses the default.
+        uint32_t max_types; ///< Distinct script types; 0 uses the default.
     } ke_script_host_params;
 
     /// Allocates a script host reading the scene graph out of @c ecs, which is what

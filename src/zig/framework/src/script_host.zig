@@ -14,7 +14,6 @@ const name_max = 96;
 const components_max = 16;
 
 const default_max_types = 64;
-const default_max_instances = 4096;
 
 const ScriptType = struct {
     name: [name_max]u8,
@@ -25,11 +24,15 @@ const ScriptType = struct {
     instance_count: u32,
 };
 
-const Binding = struct {
-    entity: c.ke_entity,
+/// What an entity carries once a runtime binds an object to it. Living in the ECS
+/// rather than in a table beside it is what makes the lookup O(1) and what lets a
+/// query see which entities are scripted at all.
+const Binding = extern struct {
     type_id: c.ke_script_type_id,
     instance: ?*anyopaque,
 };
+
+const binding_component = "script_instance";
 
 const State = struct {
     api: c.ke_script_host,
@@ -37,11 +40,10 @@ const State = struct {
     hierarchy_cid: c.ke_component_id,
     name_cid: c.ke_component_id,
 
+    binding_cid: c.ke_component_id,
+
     types: []ScriptType,
     type_count: u32,
-
-    bindings: []Binding,
-    binding_count: u32,
 };
 
 fn stateOf(self: *c.ke_script_host) *State {
@@ -58,9 +60,9 @@ fn typeAt(s: *State, id: c.ke_script_type_id) ?*ScriptType {
 }
 
 fn bindingOf(s: *State, entity: c.ke_entity) ?*Binding {
-    for (s.bindings[0..s.binding_count]) |*b|
-        if (b.entity == entity) return b;
-    return null;
+    const raw = s.ecs.component_get.?(s.ecs, entity, s.binding_cid) orelse return null;
+    const b: *Binding = @ptrCast(@alignCast(raw));
+    return if (b.type_id == c.KE_SCRIPT_TYPE_NONE) null else b;
 }
 
 fn getHierarchy(s: *State, e: c.ke_entity) ?*c.ke_hierarchy_component {
@@ -212,13 +214,14 @@ fn bind(
         E.fail(out_error, .already_exists, "entity already carries a script instance", @src());
         return false;
     }
-    if (s.binding_count == s.bindings.len) {
-        E.fail(out_error, .out_of_memory, "script instance table is full", @src());
-        return false;
-    }
 
-    s.bindings[s.binding_count] = .{ .entity = entity, .type_id = type_id, .instance = instance };
-    s.binding_count += 1;
+    const raw = s.ecs.component_add.?(s.ecs, entity, s.binding_cid) orelse {
+        E.fail(out_error, .out_of_memory, "could not attach the script instance component", @src());
+        return false;
+    };
+    const b: *Binding = @ptrCast(@alignCast(raw));
+    b.type_id = type_id;
+    b.instance = instance;
     t.instance_count += 1;
     return true;
 }
@@ -226,13 +229,11 @@ fn bind(
 fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
-    for (s.bindings[0..s.binding_count], 0..) |*b, i| {
-        if (b.entity != entity) continue;
-        if (typeAt(s, b.type_id)) |t| t.instance_count -= 1;
-        s.bindings[i] = s.bindings[s.binding_count - 1];
-        s.binding_count -= 1;
-        return;
-    }
+    const b = bindingOf(s, entity) orelse return;
+    if (typeAt(s, b.type_id)) |t| t.instance_count -= 1;
+    b.type_id = c.KE_SCRIPT_TYPE_NONE;
+    b.instance = null;
+    _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
 }
 
 fn instanceOf(
@@ -306,7 +307,6 @@ fn resolveAncestor(
 fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
-    heap.gpa.free(s.bindings);
     heap.gpa.free(s.types);
     heap.gpa.destroy(s);
 }
@@ -337,7 +337,6 @@ pub export fn ke_script_host_create(
     }
 
     const n_types = if (params != null) orDefault(params.*.max_types, default_max_types) else default_max_types;
-    const n_instances = if (params != null) orDefault(params.*.max_instances, default_max_instances) else default_max_instances;
 
     const s = heap.gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "script host allocation failed", @src());
@@ -349,18 +348,18 @@ pub export fn ke_script_host_create(
         heap.gpa.destroy(s);
         return null_handle;
     };
-    s.bindings = heap.gpa.alloc(Binding, n_instances) catch {
-        E.fail(out_error, .out_of_memory, "script instance table allocation failed", @src());
-        heap.gpa.free(s.types);
-        heap.gpa.destroy(s);
-        return null_handle;
-    };
 
     s.ecs = ecs;
     s.hierarchy_cid = hierarchy_meta.cid;
     s.name_cid = name_meta.cid;
+    s.binding_cid = ecs.component_register.?(ecs, binding_component, @sizeOf(Binding), null, 0, null);
+    if (s.binding_cid == 0) {
+        E.fail(out_error, .invalid_argument, "could not register the script instance component", @src());
+        heap.gpa.free(s.types);
+        heap.gpa.destroy(s);
+        return null_handle;
+    }
     s.type_count = 0;
-    s.binding_count = 0;
 
     s.api = .{
         .handle = s,
