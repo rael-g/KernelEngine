@@ -5,6 +5,7 @@ const gpa = rc.gpa;
 pub fn beginPass(self: [*c]c.ke_render_service, sys: ?*c.ke_system_ctx, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
     _ = sys;
     const st = rc.coreOf(self);
+    if (!st.frame_live) return null;
     const ps = gpa.create(rc.PassState) catch return null;
     const slot = io.*.cmd_slot;
     const enc = if (slot < rc.NUM_PRECREATED_ENCODERS) st.cmd_encoders[slot] else st.device.create_command_encoder.?(st.device);

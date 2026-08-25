@@ -461,7 +461,7 @@ pub fn build(b: *std.Build) void {
     }, &.{
         &common.step,     &resource_cache_default.step, &runtime.step,
         &magenta_vs.step, &magenta_fs.step,
-    }, .no_tests);
+    }, .has_tests);
 
     const render_module = ctx.plugin("ke_render_module", "src/zig/render/module", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),

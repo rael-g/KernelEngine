@@ -100,6 +100,13 @@ pub const CoreState = struct {
     backbuffer_w: u32,
     backbuffer_h: u32,
 
+    /// Whether this frame has a surface to draw into. A window being closed takes
+    /// its surface with it, and acquiring the next texture starts failing while the
+    /// tick that asked for it is still running — so the answer has to gate every
+    /// pass rather than each pass asking on its own, which is how one unchecked
+    /// caller turns a handled failure into a null dereference inside the driver.
+    frame_live: bool,
+
     cmd_encoders: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_encoder,
     cmd_valid: [MAX_CMD_BUFFERS]bool,
 
@@ -239,6 +246,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
         .resource_count = 0,
         .backbuffer_w = bb_w,
         .backbuffer_h = bb_h,
+        .frame_live = false,
         .cmd_encoders = undefined,
         .cmd_valid = std.mem.zeroes([MAX_CMD_BUFFERS]bool),
         .compute_records = undefined,
@@ -397,4 +405,31 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
     st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, null);
 
     return .{ .ref = core, .destroy = destroyCore };
+}
+
+const testing = std.testing;
+
+/// A core with nothing set but the one field these tests are about. Every path
+/// under test refuses before it reaches the device, and that is the property being
+/// checked: a frame with no surface must not travel far enough to need one.
+fn deadFrame(state: *CoreState) c.ke_render_service {
+    state.frame_live = false;
+    var core = std.mem.zeroes(c.ke_render_service);
+    core.handle = state;
+    return core;
+}
+
+test "a pass cannot be opened once the frame has no surface to draw into" {
+    var state: CoreState = undefined;
+    var core = deadFrame(&state);
+
+    var io = std.mem.zeroes(c.ke_render_pass_io);
+    try testing.expect(pass_recording.beginPass(&core, null, &io) == null);
+}
+
+test "a frame with no surface ends without submitting or presenting anything" {
+    var state: CoreState = undefined;
+    var core = deadFrame(&state);
+
+    try testing.expectEqual(@as(c.ke_bool, 0), frame_lifecycle.endFrame(&core, null));
 }

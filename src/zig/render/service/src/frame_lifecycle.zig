@@ -4,6 +4,7 @@ const c = rc.c;
 pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     _ = out_error;
     const st = rc.coreOf(self);
+    st.frame_live = false;
     @memset(st.cmd_valid[0..], false);
     for (&st.compute_records) |*r| {
         r.valid = false;
@@ -21,12 +22,14 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
         if (view == c.KE_GPU_INVALID_HANDLE) return 0;
         if (st.find("backbuffer")) |bb| bb.view = view;
     }
+    st.frame_live = true;
     return 1;
 }
 
 pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     _ = out_error;
     const st = rc.coreOf(self);
+    if (!st.frame_live) return 0;
 
     const ucount = @min(st.upload_count.load(.monotonic), rc.MAX_UPLOADS);
     var u: u32 = 0;
