@@ -119,7 +119,14 @@ public static class Classifier
         if (countParam is not null) ps = ps.Where(p => p != countParam).ToList();
 
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
-        var outParam = allOut.Count == 1 ? allOut[0] : null;
+
+        // An out parameter only becomes the method's return when the slot has no
+        // answer of its own. A slot that already returns something meaningful is
+        // reporting two things at once, and promoting the out parameter over the
+        // return drops the very thing the caller asked for.
+        var carriesReturn = slot.Returns.Trim() is not "void"
+            && !convention.SignalsFailureByReturn(slot.Returns);
+        var outParam = allOut.Count == 1 && !carriesReturn ? allOut[0] : null;
 
         var tupleOut = allOut.Count >= 2 ? allOut : null;
 

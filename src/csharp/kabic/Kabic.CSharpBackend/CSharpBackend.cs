@@ -78,7 +78,11 @@ public static class CSharpBackend
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
     {
         var tagEnum = p.TagValue("enum");
-        if (tagEnum is not null) return Idioms.TypeName(tagEnum, convention);
+        if (tagEnum is not null)
+        {
+            var named = Idioms.TypeName(tagEnum, convention);
+            return CTypes.IsPointer(p.Type) ? named + "*" : named;
+        }
         if (p.Has("utf8")) return "string";
         if (p.Has("rooted")) return "object";
         if (p.Has("opaque")) return "void*";
@@ -725,6 +729,7 @@ public static class CSharpBackend
             : p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
             : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
+            : p.Has("enum") && CTypes.IsPointer(p.Type) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"
             : UntypedPointer(p.Type) is string cast ? $"({cast}){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!);
