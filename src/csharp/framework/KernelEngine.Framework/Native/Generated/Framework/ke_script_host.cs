@@ -30,6 +30,9 @@ public unsafe partial struct ke_script_host
     [NativeTypeName("uint32_t (*)(struct ke_script_host *, ke_script_type_id)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, uint, uint> instance_count;
 
+    [NativeTypeName("const ke_entity *(*)(struct ke_script_host *, ke_script_type_id, uint32_t *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, uint, uint*, ulong*> instances;
+
     [NativeTypeName("ke_entity (*)(struct ke_script_host *, ke_entity, ke_script_type_id, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, sbyte*, ulong> resolve_descendant;
 

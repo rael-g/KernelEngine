@@ -107,6 +107,12 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         return Handle->instance_count(Handle, type);
     }
 
+    /// <summary>The entities bound as instances of `type`, in binding order. What lets a binding runtime drive a type's instances without keeping a parallel list of its own — the list that only its own language can see, and that drifts from the bindings the moment anything else unbinds one. The slice belongs to the host and is invalidated by the next bind or unbind of that type, which is the same tick's structural change a caller already defers to the wave barrier.</summary>
+    public ulong* Instances(uint type, uint* outCount)
+    {
+        return Handle->instances(Handle, type, outCount);
+    }
+
     /// <summary>The entity below `entity` bound as an instance of `type`, searched depth-first. `name` narrows it to a node of that name; empty matches on type alone, and is ambiguous exactly when two candidates answer to it, which returns KE_ENTITY_INVALID rather than picking one.</summary>
     public ulong ResolveDescendant(ulong entity, uint type, string name)
     {

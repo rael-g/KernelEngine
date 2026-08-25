@@ -233,6 +233,27 @@
           ]
         },
         {
+          "name": "instances",
+          "returns": "const ke_entity *",
+          "tags": [],
+          "doc": "The entities bound as instances of \u0060type\u0060, in binding order. What lets a binding runtime drive a type\u0027s instances without keeping a parallel list of its own \u2014 the list that only its own language can see, and that drifts from the bindings the moment anything else unbinds one. The slice belongs to the host and is invalidated by the next bind or unbind of that type, which is the same tick\u0027s structural change a caller already defers to the wave barrier.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
           "name": "resolve_descendant",
           "returns": "ke_entity",
           "tags": [],

@@ -21,7 +21,12 @@ const ScriptType = struct {
     components: [components_max]c.ke_component_id,
     component_count: u32,
     reach: c.ke_script_reach,
-    instance_count: u32,
+
+    /// The entities bound as this type, in binding order. Kept beside the bindings
+    /// rather than derived by sweeping the world: a host that must ask "which
+    /// entities are yours" every tick would pay a scan for an answer the bind call
+    /// already knew.
+    entities: std.ArrayList(c.ke_entity),
 };
 
 /// What an entity carries once a runtime binds an object to it. Living in the ECS
@@ -30,6 +35,10 @@ const ScriptType = struct {
 const Binding = extern struct {
     type_id: c.ke_script_type_id,
     instance: ?*anyopaque,
+
+    /// Where this entity sits in its type's entity list, so unbinding costs the same
+    /// whether a type has three instances or thirty thousand.
+    slot: u32,
 };
 
 const binding_component = "script_instance";
@@ -140,7 +149,7 @@ fn registerType(
         .components = undefined,
         .component_count = component_count,
         .reach = reach,
-        .instance_count = 0,
+        .entities = .empty,
     };
     @memcpy(t.name[0..name.len], name);
     for (0..component_count) |k| t.components[k] = components_in[k];
@@ -219,10 +228,16 @@ fn bind(
         E.fail(out_error, .out_of_memory, "could not attach the script instance component", @src());
         return false;
     };
+    t.entities.append(heap.gpa, entity) catch {
+        _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
+        E.fail(out_error, .out_of_memory, "could not record the instance in its type", @src());
+        return false;
+    };
+
     const b: *Binding = @ptrCast(@alignCast(raw));
     b.type_id = type_id;
     b.instance = instance;
-    t.instance_count += 1;
+    b.slot = @intCast(t.entities.items.len - 1);
     return true;
 }
 
@@ -230,7 +245,16 @@ fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
     const b = bindingOf(s, entity) orelse return;
-    if (typeAt(s, b.type_id)) |t| t.instance_count -= 1;
+    if (typeAt(s, b.type_id)) |t| {
+        if (b.slot < t.entities.items.len) {
+            const moved = t.entities.swapRemove(b.slot);
+            _ = moved;
+            if (b.slot < t.entities.items.len)
+                if (bindingOf(s, t.entities.items[b.slot])) |other| {
+                    other.slot = b.slot;
+                };
+        }
+    }
     b.type_id = c.KE_SCRIPT_TYPE_NONE;
     b.instance = null;
     _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
@@ -254,7 +278,22 @@ fn instanceCount(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) call
     const self = self_in orelse return 0;
     const s = stateOf(self);
     const t = typeAt(s, type_id) orelse return 0;
-    return t.instance_count;
+    return @intCast(t.entities.items.len);
+}
+
+fn instances(
+    self_in: ?*c.ke_script_host,
+    type_id: c.ke_script_type_id,
+    out_count: [*c]u32,
+) callconv(.c) [*c]const c.ke_entity {
+    const self = self_in orelse return null;
+    const s = stateOf(self);
+    const t = typeAt(s, type_id) orelse {
+        if (out_count != null) out_count.* = 0;
+        return null;
+    };
+    if (out_count != null) out_count.* = @intCast(t.entities.items.len);
+    return t.entities.items.ptr;
 }
 
 fn descendantOf(s: *State, parent: c.ke_entity, type_id: c.ke_script_type_id, wanted: []const u8, found: *c.ke_entity) bool {
@@ -307,6 +346,7 @@ fn resolveAncestor(
 fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
+    for (s.types[0..s.type_count]) |*t| t.entities.deinit(heap.gpa);
     heap.gpa.free(s.types);
     heap.gpa.destroy(s);
 }
@@ -371,6 +411,7 @@ pub export fn ke_script_host_create(
         .unbind = &unbind,
         .instance_of = &instanceOf,
         .instance_count = &instanceCount,
+        .instances = &instances,
         .resolve_descendant = &resolveDescendant,
         .resolve_ancestor = &resolveAncestor,
     };
@@ -527,6 +568,69 @@ test "instance count follows bind and unbind" {
     h.host().unbind.?(h.host(), a);
     try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
     try testing.expect(!h.host().instance_of.?(h.host(), a, null, null));
+}
+
+test "a type lists the entities bound to it" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const a = h.tree.create("Left", 0);
+    const b = h.tree.create("Right", 0);
+    var ma: u32 = 1;
+    var mb: u32 = 2;
+    try testing.expect(h.host().bind.?(h.host(), a, id, &ma, null));
+    try testing.expect(h.host().bind.?(h.host(), b, id, &mb, null));
+
+    var count: u32 = 0;
+    const listed = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqual(@as(u32, 2), count);
+    try testing.expectEqual(a, listed[0]);
+    try testing.expectEqual(b, listed[1]);
+}
+
+test "unbinding one instance leaves every other one reachable" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    var entities: [4]c.ke_entity = undefined;
+    var marks = [_]u32{ 1, 2, 3, 4 };
+    for (&entities, 0..) |*e, i| {
+        e.* = h.tree.create("Node", 0);
+        try testing.expect(h.host().bind.?(h.host(), e.*, id, &marks[i], null));
+    }
+
+    h.host().unbind.?(h.host(), entities[0]);
+    h.host().unbind.?(h.host(), entities[2]);
+
+    var count: u32 = 0;
+    const listed = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqual(@as(u32, 2), count);
+
+    for (listed[0..count]) |e| {
+        try testing.expect(e != entities[0] and e != entities[2]);
+        try testing.expect(h.host().instance_of.?(h.host(), e, null, null));
+    }
+}
+
+test "the last instance unbound empties its type" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const only = h.tree.create("Only", 0);
+    var mark: u32 = 1;
+    try testing.expect(h.host().bind.?(h.host(), only, id, &mark, null));
+    h.host().unbind.?(h.host(), only);
+
+    var count: u32 = 1;
+    _ = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqual(@as(u32, 0), count);
+    try testing.expectEqual(@as(u32, 0), h.host().instance_count.?(h.host(), id));
 }
 
 test "a descendant of the wanted type is found through intermediate nodes" {

@@ -111,6 +111,18 @@ extern "C"
         /// stopped matching", which are indistinguishable from inside the body.
         uint32_t (*instance_count)(struct ke_script_host *self, ke_script_type_id type);
 
+        /// The entities bound as instances of `type`, in binding order. What lets a
+        /// binding runtime drive a type's instances without keeping a parallel list
+        /// of its own — the list that only its own language can see, and that drifts
+        /// from the bindings the moment anything else unbinds one.
+        ///
+        /// The slice belongs to the host and is invalidated by the next bind or
+        /// unbind of that type, which is the same tick's structural change a caller
+        /// already defers to the wave barrier.
+        const ke_entity *(*instances)(struct ke_script_host *self,
+                                      ke_script_type_id      type,
+                                      uint32_t              *out_count);
+
         /// The entity below `entity` bound as an instance of `type`, searched
         /// depth-first. `name` narrows it to a node of that name; empty matches on
         /// type alone, and is ambiguous exactly when two candidates answer to it,
