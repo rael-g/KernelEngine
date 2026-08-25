@@ -119,6 +119,51 @@
           ]
         },
         {
+          "name": "parent",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The entity \u0060entity\u0060 hangs from, or KE_ENTITY_INVALID when it is a root.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "first_child",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The first of \u0060entity\u0060\u0027s children, or KE_ENTITY_INVALID when it has none. Paired with next_sibling this walks the child list a step at a time, which is the shape parenthood already has: it is an intrusive list, so answering with an array would mean building one on every call, and a caller after just the first child would pay for all of them.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
+          "name": "next_sibling",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The next child of \u0060entity\u0060\u0027s parent, or KE_ENTITY_INVALID at the end of the list. Children come back in the order they were added.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ]
+        },
+        {
           "name": "propagate_transforms",
           "returns": "void",
           "tags": [],

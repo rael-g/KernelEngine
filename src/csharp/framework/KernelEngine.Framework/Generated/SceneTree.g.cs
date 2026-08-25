@@ -85,6 +85,24 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         }
     }
 
+    /// <summary>The entity `entity` hangs from, or KE_ENTITY_INVALID when it is a root.</summary>
+    public ulong Parent(ulong entity)
+    {
+        return Handle->parent(Handle, entity);
+    }
+
+    /// <summary>The first of `entity`'s children, or KE_ENTITY_INVALID when it has none. Paired with next_sibling this walks the child list a step at a time, which is the shape parenthood already has: it is an intrusive list, so answering with an array would mean building one on every call, and a caller after just the first child would pay for all of them.</summary>
+    public ulong FirstChild(ulong entity)
+    {
+        return Handle->first_child(Handle, entity);
+    }
+
+    /// <summary>The next child of `entity`'s parent, or KE_ENTITY_INVALID at the end of the list. Children come back in the order they were added.</summary>
+    public ulong NextSibling(ulong entity)
+    {
+        return Handle->next_sibling(Handle, entity);
+    }
+
 
     public void PropagateTransforms()
     {

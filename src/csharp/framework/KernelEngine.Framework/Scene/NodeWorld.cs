@@ -112,7 +112,6 @@ public sealed class NodeWorld : ISignalDeclarer
     }
 
     private readonly uint _nativeTransformCid;
-    private readonly uint _hierarchyCid;
 
     private readonly KernelEngine.Logger.ILogger? _logger;
     private readonly HashSet<string> _reportedBorrows = new();
@@ -303,7 +302,7 @@ public sealed class NodeWorld : ISignalDeclarer
         _logger     = logger;
         _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
         _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
-        _hierarchyCid       = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
+        _ = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
     }
 
     /// <summary>
@@ -474,33 +473,23 @@ public sealed class NodeWorld : ISignalDeclarer
     /// </summary>
     internal Node? GetParent(ulong entity)
     {
-        var hsp = _ecs.GetComponent<Native.ke_hierarchy_component>(entity, _hierarchyCid);
-        if (hsp.IsEmpty) return null;
-        var parent = hsp[0].parent;
-        if (parent == 0) return null;
-        return NodeOf(parent);
+        var parent = _world.SceneTree.Parent(entity);
+        return parent == 0 ? null : NodeOf(parent);
     }
 
     /// <summary>
-    /// Walks <paramref name="entity"/>'s child chain straight from
-    /// <c>ke_hierarchy_component</c> (insertion order — see the scene tree's
-    /// append-based linking). Skips any child with no managed <see cref="Node"/>
-    /// bound to it, same as the old AttachChild-built list only ever held nodes.
+    /// Walks <paramref name="entity"/>'s children in the order they were added,
+    /// asking the scene tree for each step rather than reading the hierarchy
+    /// component here. How parenthood is stored is the tree's business; a second
+    /// walker over the same bytes is a second thing to fix when that changes.
+    /// Skips any child with no managed <see cref="Node"/> bound to it.
     /// </summary>
     internal IReadOnlyList<Node> GetChildren(ulong entity)
     {
         var result = new List<Node>();
-        var hsp = _ecs.GetComponent<Native.ke_hierarchy_component>(entity, _hierarchyCid);
-        if (hsp.IsEmpty) return result;
-
-        var child = hsp[0].first_child;
-        while (child != 0)
-        {
+        var tree = _world.SceneTree;
+        for (var child = tree.FirstChild(entity); child != 0; child = tree.NextSibling(child))
             if (NodeOf(child) is { } node) result.Add(node);
-            var chsp = _ecs.GetComponent<Native.ke_hierarchy_component>(child, _hierarchyCid);
-            if (chsp.IsEmpty) break;
-            child = chsp[0].next_sibling;
-        }
         return result;
     }
 

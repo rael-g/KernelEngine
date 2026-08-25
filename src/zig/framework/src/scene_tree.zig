@@ -78,6 +78,27 @@ fn vtRoot(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_entity {
     return stateOf(self).root;
 }
 
+fn vtParent(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
+    const self = self_in orelse return c.KE_ENTITY_INVALID;
+    if (self.handle == null) return c.KE_ENTITY_INVALID;
+    const h = getHierarchy(stateOf(self), entity) orelse return c.KE_ENTITY_INVALID;
+    return h.parent;
+}
+
+fn vtFirstChild(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
+    const self = self_in orelse return c.KE_ENTITY_INVALID;
+    if (self.handle == null) return c.KE_ENTITY_INVALID;
+    const h = getHierarchy(stateOf(self), entity) orelse return c.KE_ENTITY_INVALID;
+    return h.first_child;
+}
+
+fn vtNextSibling(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
+    const self = self_in orelse return c.KE_ENTITY_INVALID;
+    if (self.handle == null) return c.KE_ENTITY_INVALID;
+    const h = getHierarchy(stateOf(self), entity) orelse return c.KE_ENTITY_INVALID;
+    return h.next_sibling;
+}
+
 /// Attaches the scene-graph components to an entity and prepends it into its
 /// parent's child list. Valid only where structural changes are legal.
 fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) bool {
@@ -436,6 +457,9 @@ export fn ke_scene_tree_create(
     s.api.destroy_node = vtDestroyNode;
     s.api.destroy_all = vtDestroyAll;
     s.api.find_node = vtFindNode;
+    s.api.parent = vtParent;
+    s.api.first_child = vtFirstChild;
+    s.api.next_sibling = vtNextSibling;
     s.api.propagate_transforms = vtPropagateTransforms;
 
     if (runtime) |rt| {
@@ -751,6 +775,59 @@ test "siblings link in the order they were created" {
     try testing.expectEqual(b, order[1]);
     try testing.expectEqual(d, order[2]);
     try testing.expectEqual(d, ph.last_child);
+}
+
+test "the tree walks a child list without anyone reading the hierarchy component" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const tree: *c.ke_scene_tree = @ptrCast(f.handle.ref);
+    const parent = f.create("P", c.KE_ENTITY_INVALID);
+    const a = f.create("A", parent);
+    const b = f.create("B", parent);
+    const d = f.create("C", parent);
+
+    var order: [3]c.ke_entity = .{ 0, 0, 0 };
+    var walked: usize = 0;
+    var cur = tree.first_child.?(tree, parent);
+    while (cur != c.KE_ENTITY_INVALID and walked < order.len) : (walked += 1) {
+        order[walked] = cur;
+        cur = tree.next_sibling.?(tree, cur);
+    }
+
+    try testing.expectEqual(@as(usize, 3), walked);
+    try testing.expectEqual(a, order[0]);
+    try testing.expectEqual(b, order[1]);
+    try testing.expectEqual(d, order[2]);
+    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.next_sibling.?(tree, d));
+}
+
+test "a child points back at its parent and a root points at nothing" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const tree: *c.ke_scene_tree = @ptrCast(f.handle.ref);
+    const parent = f.create("P", c.KE_ENTITY_INVALID);
+    const child = f.create("A", parent);
+
+    try testing.expectEqual(parent, tree.parent.?(tree, child));
+    try testing.expectEqual(tree.root.?(tree), tree.parent.?(tree, parent));
+    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.first_child.?(tree, child));
+}
+
+test "walking an entity the tree never made answers nothing rather than guessing" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const tree: *c.ke_scene_tree = @ptrCast(f.handle.ref);
+    const stranger = f.ecs.vtable.entity_create.?(&f.ecs.vtable);
+
+    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.parent.?(tree, stranger));
+    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.first_child.?(tree, stranger));
+    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.next_sibling.?(tree, stranger));
 }
 
 test "an empty or absent path finds nothing" {

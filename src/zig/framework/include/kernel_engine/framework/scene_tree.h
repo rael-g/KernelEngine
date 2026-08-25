@@ -29,6 +29,24 @@ extern "C"
         /** @param name_or_path [utf8] */
         ke_entity (*find_node)(struct ke_scene_tree *self, const char *name_or_path, ke_error **out_error);
 
+        /** The entity `entity` hangs from, or KE_ENTITY_INVALID when it is a root. */
+        ke_entity (*parent)(struct ke_scene_tree *self, ke_entity entity);
+
+        /**
+         * The first of `entity`'s children, or KE_ENTITY_INVALID when it has none.
+         * Paired with next_sibling this walks the child list a step at a time, which
+         * is the shape parenthood already has: it is an intrusive list, so answering
+         * with an array would mean building one on every call, and a caller after
+         * just the first child would pay for all of them.
+         */
+        ke_entity (*first_child)(struct ke_scene_tree *self, ke_entity entity);
+
+        /**
+         * The next child of `entity`'s parent, or KE_ENTITY_INVALID at the end of the
+         * list. Children come back in the order they were added.
+         */
+        ke_entity (*next_sibling)(struct ke_scene_tree *self, ke_entity entity);
+
         void (*propagate_transforms)(struct ke_scene_tree *self);
 
     } ke_scene_tree;
