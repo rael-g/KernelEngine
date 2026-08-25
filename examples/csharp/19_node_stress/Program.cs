@@ -9,7 +9,10 @@ using NodeStress;
 
 int instances = ArgValue("--instances", 2000);
 int ticks = ArgValue("--ticks", 300);
+int churn = ArgValue("--churn", 0);
 string kind = ArgText("--type", "both");
+
+NodeWorld? churnWorld = null;
 
 var services = new ServiceCollection()
     .Add<INativeEcs, FlecsEcs>()
@@ -18,6 +21,8 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule(world =>
     {
+        churnWorld = world;
+        if (churn > 0) return;
         if (kind is "mover" or "both")
             for (int i = 0; i < instances; i++)
                 world.AddNode(new Mover { Rate = 1f + i * 0.001f }, $"Mover{i}");
@@ -31,6 +36,32 @@ var runtime = sp.GetRequiredService<IRuntime>();
 var scheduler = sp.GetRequiredService<IScheduler>();
 
 runtime.LoadModules(sp);
+
+if (churn > 0)
+{
+    var world = churnWorld!;
+    RunChurn(world, instances);
+
+    var settled = GC.GetTotalMemory(forceFullCollection: true);
+    for (int round = 0; round < churn; round++) RunChurn(world, instances);
+    var after = GC.GetTotalMemory(forceFullCollection: true);
+
+    var perNode = (double)(after - settled) / (churn * instances);
+    Console.WriteLine($"[19_node_stress] churn: {churn} rounds x {instances} nodes bound then destroyed");
+    Console.WriteLine($"[19_node_stress] managed heap {settled / 1024} KiB -> {after / 1024} KiB "
+        + $"({perNode:F1} bytes retained per node created)");
+    Console.WriteLine("[19_node_stress] a node whose handle is never freed cannot be collected, "
+        + "so a real leak grows with rounds instead of settling");
+    runtime.UnloadModules(sp);
+    return;
+}
+
+static void RunChurn(NodeWorld world, int count)
+{
+    var made = new List<Mover>(count);
+    for (int i = 0; i < count; i++) made.Add(world.AddNode(new Mover { Rate = 1f }, $"Churn{i}"));
+    for (int i = 0; i < made.Count; i++) made[i].Destroy();
+}
 
 var spawned = instances * (kind == "both" ? 2 : 1);
 Console.WriteLine($"[19_node_stress] type={kind}, {spawned} instances, {ticks} ticks, {scheduler.NumWorkers} workers");
