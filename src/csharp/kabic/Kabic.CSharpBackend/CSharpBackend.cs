@@ -287,6 +287,46 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
+    /// <summary>
+    /// Emits the type-to-id cache for a slot that interns a type under its name and
+    /// payload size. The engine identifies the thing by those two values precisely so
+    /// that two languages agree on it; what a language then needs is the trip back to
+    /// its own type system, and every binding runtime would otherwise write the same
+    /// pair of dictionaries by hand.
+    /// </summary>
+    static void RenderInterning(List<string> o, ApiSlot slot, ApiModel model, Convention convention)
+    {
+        var name = Idioms.Pascal(slot.Name);
+        var nameParam = slot.Params.FirstOrDefault(p => p.Has("type_name"));
+        var sizeParam = slot.Params.FirstOrDefault(p => p.Has("type_size"));
+        if (nameParam is null || sizeParam is null) return;
+
+        var ids = $"_{Idioms.Ident(slot.Name)}Ids";
+        var types = $"_{Idioms.Ident(slot.Name)}Types";
+
+        o.Add($"    private readonly Dictionary<Type, uint> {ids} = new();");
+        o.Add($"    private readonly Dictionary<uint, Type> {types} = new();");
+        o.Add("");
+        o.Add($"    /// <summary>The id <typeparamref name=\"T\"/> interns to, registering it on first use.</summary>");
+        o.Add($"    public uint {name}Of<T>() where T : unmanaged");
+        o.Add("    {");
+        o.Add($"        if ({ids}.TryGetValue(typeof(T), out var cached)) return cached;");
+        o.Add("        uint resolved = 0;");
+        o.Add($"        {name}(typeof(T).Name, (uint)sizeof(T), &resolved);");
+        o.Add($"        {ids}[typeof(T)] = resolved;");
+        o.Add($"        {types}[resolved] = typeof(T);");
+        o.Add("        return resolved;");
+        o.Add("    }");
+        o.Add("");
+        o.Add("    /// <summary>");
+        o.Add($"    /// The type <paramref name=\"id\"/> was interned for, or null when this runtime never");
+        o.Add("    /// interned one. Null is a normal answer rather than a failure: an id another");
+        o.Add("    /// language registered is real, and simply has no type here to name it.");
+        o.Add("    /// </summary>");
+        o.Add($"    public Type? {name}TypeOf(uint id) => {types}.TryGetValue(id, out var t) ? t : null;");
+        o.Add("");
+    }
+
     public static string RenderProvider(ApiModel model, ApiStruct vtable, ClassifiedModel classified,
         string ns, string nativeNs, IReadOnlyList<string> extraUsings, Convention convention)
     {
@@ -409,6 +449,9 @@ public static class CSharpBackend
             }
             RenderSlotMethod(model, o, cs, convention);
         }
+
+        foreach (var slot in vtable.Slots.Where(s => s.Has("interns")))
+            RenderInterning(o, slot, model, convention);
 
         o.Add($"    /// <summary>Releases the native {typeName.ToLowerInvariant()}.</summary>");
         o.Add("    public void Dispose()");

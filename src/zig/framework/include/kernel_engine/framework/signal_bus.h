@@ -50,13 +50,14 @@ extern "C"
     {
         void *handle;
 
-        /// Resolves a signal by name, registering it on first use.
+        /// [interns] Resolves a signal by name, registering it on first use.
         ///
         /// The payload size is part of the identity, not metadata: two languages
         /// naming the same signal with different payload layouts would otherwise
         /// alias one id and read each other's bytes at the wrong stride. A second
         /// registration under a different size fails instead.
-        /// @param name [utf8]
+        /// @param name [utf8, type_name]
+        /// @param payload_size [type_size]
         bool (*signal_id)(struct ke_signal_bus *self,
                           const char           *name,
                           uint32_t              payload_size,

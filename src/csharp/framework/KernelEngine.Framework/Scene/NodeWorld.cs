@@ -243,8 +243,6 @@ public sealed class NodeWorld : ISignalDeclarer
     }
 
     private readonly SignalBus? _signals;
-    private readonly Dictionary<Type, uint> _signalIds = new();
-
     /// <summary>The signal bus this world raises through, or null when none is registered.</summary>
     public SignalBus? Signals => _signals;
 
@@ -253,17 +251,7 @@ public sealed class NodeWorld : ISignalDeclarer
     /// it on first use. The type's name and size are the identity, so a node in
     /// another language naming the same signal lands on the same id.
     /// </summary>
-    internal unsafe uint SignalIdOf<T>() where T : unmanaged
-    {
-        if (_signalIds.TryGetValue(typeof(T), out var id)) return id;
-        uint resolved = 0;
-        _signals!.SignalId(typeof(T).Name, (uint)sizeof(T), &resolved);
-        _signalIds[typeof(T)]     = resolved;
-        _signalTypes[resolved]    = typeof(T);
-        return resolved;
-    }
-
-    private readonly Dictionary<uint, Type> _signalTypes = new();
+    internal unsafe uint SignalIdOf<T>() where T : unmanaged => _signals!.SignalIdOf<T>();
 
     /// <summary>
     /// Declares a payload type's signal up front, so a scene naming it resolves and a
@@ -279,7 +267,7 @@ public sealed class NodeWorld : ISignalDeclarer
     /// </summary>
     internal unsafe void Deliver(in KernelEngine.Framework.Native.ke_signal_delivery delivery)
     {
-        if (!_signalTypes.TryGetValue(delivery.signal_id, out var type)) return;
+        if (_signals!.SignalIdTypeOf(delivery.signal_id) is not { } type) return;
         if (NodeOf(delivery.target) is not { } node) return;
         node.GeneratedDeliverSignal(type,
             new ReadOnlySpan<byte>((void*)delivery.payload, (int)delivery.payload_size));

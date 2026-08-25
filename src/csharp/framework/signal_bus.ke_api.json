@@ -62,7 +62,9 @@
         {
           "name": "signal_id",
           "returns": "_Bool",
-          "tags": [],
+          "tags": [
+            "interns"
+          ],
           "doc": "Resolves a signal by name, registering it on first use. The payload size is part of the identity, not metadata: two languages naming the same signal with different payload layouts would otherwise alias one id and read each other\u0027s bytes at the wrong stride. A second registration under a different size fails instead.",
           "return_doc": null,
           "params": [
@@ -70,14 +72,17 @@
               "name": "name",
               "type": "const char *",
               "tags": [
-                "utf8"
+                "utf8",
+                "type_name"
               ],
               "doc": null
             },
             {
               "name": "payload_size",
               "type": "uint32_t",
-              "tags": [],
+              "tags": [
+                "type_size"
+              ],
               "doc": null
             },
             {

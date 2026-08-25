@@ -108,6 +108,27 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
         Handle->clear_frame(Handle);
     }
 
+    private readonly Dictionary<Type, uint> _signalIdIds = new();
+    private readonly Dictionary<uint, Type> _signalIdTypes = new();
+
+    /// <summary>The id <typeparamref name="T"/> interns to, registering it on first use.</summary>
+    public uint SignalIdOf<T>() where T : unmanaged
+    {
+        if (_signalIdIds.TryGetValue(typeof(T), out var cached)) return cached;
+        uint resolved = 0;
+        SignalId(typeof(T).Name, (uint)sizeof(T), &resolved);
+        _signalIdIds[typeof(T)] = resolved;
+        _signalIdTypes[resolved] = typeof(T);
+        return resolved;
+    }
+
+    /// <summary>
+    /// The type <paramref name="id"/> was interned for, or null when this runtime never
+    /// interned one. Null is a normal answer rather than a failure: an id another
+    /// language registered is real, and simply has no type here to name it.
+    /// </summary>
+    public Type? SignalIdTypeOf(uint id) => _signalIdTypes.TryGetValue(id, out var t) ? t : null;
+
     /// <summary>Releases the native signalbus.</summary>
     public void Dispose()
     {
