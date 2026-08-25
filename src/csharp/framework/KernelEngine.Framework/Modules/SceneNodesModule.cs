@@ -195,7 +195,7 @@ public sealed class SceneNodesModule : IRuntimeModule
 
                     KernelEngine.Runtime.SystemContext.Slice(ctx, out uint _, out uint slices);
                     if (slices == 1)
-                        nodeWorld.ReportUnmatchedBehavior(type, ran, nodeWorld.BehaviorsOf(type).Count);
+                        nodeWorld.ReportUnmatchedBehavior(type, ran, nodeWorld.BoundCountOf(type));
                 }
             }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };

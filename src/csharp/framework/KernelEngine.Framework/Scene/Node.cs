@@ -176,21 +176,14 @@ public abstract class Node
     /// Resolves a <see cref="Child{T}"/> borrow. Called by generated dispatch each
     /// tick rather than cached, so a borrow can never outlive the node it points at.
     /// </summary>
-    /// <remarks>An empty <paramref name="name"/> resolves by type.</remarks>
+    /// <remarks>
+    /// An empty <paramref name="name"/> resolves by type. Resolution reaches the whole
+    /// subtree rather than the direct children alone, so a node reaches a grandchild it
+    /// names without every level in between having to forward it.
+    /// </remarks>
     protected internal Child<T> BorrowChild<T>(string name) where T : Node
     {
-        T? found = null;
-        foreach (var child in Children)
-        {
-            if (child is not T typed || (name.Length != 0 && child.Name != name)) continue;
-            if (found is not null)
-            {
-                NodeWorld?.ReportAmbiguousBorrow(this, "Child", typeof(T).Name, found.Name, child.Name);
-                return default;
-            }
-            found = typed;
-        }
-        if (found is not null) return new Child<T>(found);
+        if (NodeWorld?.ResolveDescendant(this, typeof(T), name) is T typed) return new Child<T>(typed);
         NodeWorld?.ReportUnresolvedBorrow(this, "Child", typeof(T).Name, name);
         return default;
     }
@@ -234,8 +227,7 @@ public abstract class Node
     /// <summary>Resolves a <see cref="Parent{T}"/> borrow to the nearest matching ancestor.</summary>
     protected internal Parent<T> BorrowParent<T>(string name) where T : Node
     {
-        for (var p = Parent; p is not null; p = p.Parent)
-            if (p is T typed && (name.Length == 0 || p.Name == name)) return new Parent<T>(typed);
+        if (NodeWorld?.ResolveAncestor(this, typeof(T), name) is T typed) return new Parent<T>(typed);
         NodeWorld?.ReportUnresolvedBorrow(this, "Parent", typeof(T).Name, name);
         return default;
     }
@@ -328,6 +320,5 @@ public abstract class Node
     {
         GeneratedBind(NodeWorld!);
         OnBind(NodeWorld!);
-        if (HasBehavior) NodeWorld!.RegisterBehavior(this);
     }
 }

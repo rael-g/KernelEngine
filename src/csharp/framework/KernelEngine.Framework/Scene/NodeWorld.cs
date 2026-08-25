@@ -14,8 +14,7 @@ public sealed class NodeWorld : ISignalDeclarer
     private readonly IEcsRegistry       _ecs;
     private readonly uint               _nameCid;
 
-    private readonly Dictionary<Type, List<Node>> _behaviorsByType = new();
-    private readonly List<Node>                  _allNodes  = new();
+    private readonly HashSet<Type> _announcedBehaviors = new();
 
     /// <summary>
     /// Which entity carries which node, held natively so a runtime in another
@@ -40,14 +39,44 @@ public sealed class NodeWorld : ISignalDeclarer
     /// </summary>
     internal event Action<Type>? BehaviorTypeAdded;
 
-    internal IReadOnlyList<Node> BehaviorsOf(Type type) =>
-        _behaviorsByType.TryGetValue(type, out var list) ? list : Array.Empty<Node>();
+    /// <summary>
+    /// How many entities are bound as <paramref name="type"/>. Asked instead of counting
+    /// <see cref="BehaviorsOf"/>, which would build a list of every instance to learn its
+    /// length — on the tick path that is a per-frame allocation the size of the scene.
+    /// </summary>
+    internal int BoundCountOf(Type type) =>
+        _scriptTypes.TryGetValue(type, out var id) ? (int)_scripts.InstanceCount(id) : 0;
+
+    /// <summary>
+    /// The bound nodes of one type, read from the script host rather than from a list
+    /// kept here. A second list would be a copy of the bindings that only this language
+    /// can see, and that goes stale the moment anything else unbinds one of them.
+    /// </summary>
+    internal unsafe List<Node> BehaviorsOf(Type type)
+    {
+        var nodes = new List<Node>();
+        if (!_scriptTypes.TryGetValue(type, out var id)) return nodes;
+
+        uint count = 0;
+        var entities = _scripts.Instances(id, &count);
+        for (uint i = 0; i < count; i++)
+            if (NodeOf(entities[i]) is { } node) nodes.Add(node);
+        return nodes;
+    }
 
     /// <summary>
     /// Every currently-bound node. A caller needing its own node type filters
     /// this with <c>OfType&lt;T&gt;()</c> — NodeWorld has no per-domain knowledge.
     /// </summary>
-    public IReadOnlyList<Node> AllNodes => _allNodes;
+    public IReadOnlyList<Node> AllNodes
+    {
+        get
+        {
+            var all = new List<Node>();
+            foreach (var type in _scriptTypes.Keys) all.AddRange(BehaviorsOf(type));
+            return all;
+        }
+    }
 
     [ThreadStatic] private static nint _systemCtx;
 
@@ -75,18 +104,18 @@ public sealed class NodeWorld : ISignalDeclarer
         public void Dispose() => _systemCtx = _previous;
     }
 
-    internal void RegisterBehavior(Node node)
+    /// <remarks>
+    /// Announced after the binding reaches the host, never before: what the announcement
+    /// carries is a type, and the first thing a listener does with a type is ask for an
+    /// instance of it. A node the host has not been told about yet is a type with no
+    /// instances, and the listener would be reading an empty answer about a node that
+    /// exists.
+    /// </remarks>
+    private void AnnounceBehavior(Node node)
     {
+        if (!node.HasBehavior) return;
         var type = node.GetType();
-        if (!_behaviorsByType.TryGetValue(type, out var list))
-        {
-            list = new List<Node>();
-            _behaviorsByType[type] = list;
-            list.Add(node);
-            BehaviorTypeAdded?.Invoke(type);
-            return;
-        }
-        list.Add(node);
+        if (_announcedBehaviors.Add(type)) BehaviorTypeAdded?.Invoke(type);
     }
 
     private readonly uint _nativeTransformCid;
@@ -137,6 +166,76 @@ public sealed class NodeWorld : ISignalDeclarer
         _logger.Log(KernelEngine.Logger.LogLevel.Warning, "scene.node",
             $"'{owner.Name}' borrows {kind}<{typeName}> with no name, and both '{first}' and '{second}' answer to it; "
             + "give the borrow a NodeName");
+    }
+
+    private readonly Dictionary<Type, (int Stamp, uint[] Ids)> _assignableTypes = new();
+
+    /// <summary>
+    /// The script type ids whose node type is <paramref name="wanted"/> or derives from
+    /// it. The native host matches one exact id, and that is deliberate: a base type
+    /// standing in for its subtypes is this projection's own idea, so the set of ids a
+    /// borrow accepts is widened here instead of every language sharing a contract that
+    /// has to model inheritance.
+    /// </summary>
+    private uint[] ScriptTypesAssignableTo(Type wanted)
+    {
+        if (_assignableTypes.TryGetValue(wanted, out var cached) && cached.Stamp == _scriptTypes.Count)
+            return cached.Ids;
+
+        var ids = new List<uint>();
+        foreach (var (clr, id) in _scriptTypes)
+            if (wanted.IsAssignableFrom(clr)) ids.Add(id);
+
+        var built = ids.ToArray();
+        _assignableTypes[wanted] = (_scriptTypes.Count, built);
+        return built;
+    }
+
+    /// <summary>
+    /// The node below <paramref name="owner"/> bound as <paramref name="wanted"/>, or
+    /// null when none is or more than one answers. Two ids answering is ambiguity the
+    /// same way two nodes of one id are, so it is reported rather than resolved by
+    /// picking whichever type registered first.
+    /// </summary>
+    internal Node? ResolveDescendant(Node owner, Type wanted, string name)
+    {
+        Node? found = null;
+        foreach (var id in ScriptTypesAssignableTo(wanted))
+        {
+            var entity = _scripts.ResolveDescendant(owner.Entity, id, name);
+            if (entity == 0 || NodeOf(entity) is not { } node) continue;
+            if (found is not null)
+            {
+                ReportAmbiguousBorrow(owner, "Child", wanted.Name, found.Name, node.Name);
+                return null;
+            }
+            found = node;
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// The nearest node above <paramref name="owner"/> bound as <paramref name="wanted"/>.
+    /// </summary>
+    /// <remarks>
+    /// Only the single-id case goes native: the slot answers with an entity and not with
+    /// its depth, so which of several candidates is nearest cannot be decided from the
+    /// answers alone. Widening the slot to say so would be modelling inheritance in a
+    /// contract that has none.
+    /// </remarks>
+    internal Node? ResolveAncestor(Node owner, Type wanted, string name)
+    {
+        var ids = ScriptTypesAssignableTo(wanted);
+        if (ids.Length == 1)
+        {
+            var entity = _scripts.ResolveAncestor(owner.Entity, ids[0], name);
+            return entity == 0 ? null : NodeOf(entity);
+        }
+
+        for (var ancestor = owner.Parent; ancestor is not null; ancestor = ancestor.Parent)
+            if (wanted.IsInstanceOfType(ancestor) && (name.Length == 0 || ancestor.Name == name))
+                return ancestor;
+        return null;
     }
 
     private readonly SignalBus? _signals;
@@ -229,7 +328,6 @@ public sealed class NodeWorld : ISignalDeclarer
 
         var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
         node.BindToNodeWorld(this, entity);
-        _allNodes.Add(node);
         BindScript(node);
         return node;
     }
@@ -249,7 +347,6 @@ public sealed class NodeWorld : ISignalDeclarer
 
         var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
         node.PreBind(this, entity);
-        _allNodes.Add(node);
         BindScript(node);
     }
 
@@ -290,6 +387,7 @@ public sealed class NodeWorld : ISignalDeclarer
         var root = System.Runtime.InteropServices.GCHandle.Alloc(node);
         _roots[node.Entity] = root;
         _scripts.Bind(node.Entity, ScriptTypeOf(node), System.Runtime.InteropServices.GCHandle.ToIntPtr(root));
+        AnnounceBehavior(node);
     }
 
     private void UnbindScript(ulong entity)
@@ -342,8 +440,6 @@ public sealed class NodeWorld : ISignalDeclarer
 
         node.OnUnbind();
 
-        if (node.HasBehavior && _behaviorsByType.TryGetValue(node.GetType(), out var behaviors)) behaviors.Remove(node);
-        _allNodes.Remove(node);
         UnbindScript(node.Entity);
         _signals?.ForgetEntity(node.Entity);
         _world.SceneTree.DestroyNode(node.Entity, _systemCtx);
@@ -356,7 +452,7 @@ public sealed class NodeWorld : ISignalDeclarer
     /// </summary>
     public void Clear()
     {
-        var roots = _allNodes.Where(n => n.Parent is null).ToArray();
+        var roots = AllNodes.Where(n => n.Parent is null).ToArray();
         for (int i = 0; i < roots.Length; i++) DestroyNode(roots[i]);
     }
 
@@ -368,7 +464,6 @@ public sealed class NodeWorld : ISignalDeclarer
     internal void BindNativeEntity(Node node, ulong entity)
     {
         node.BindToNodeWorld(this, entity);
-        _allNodes.Add(node);
         BindScript(node);
     }
 
@@ -508,14 +603,22 @@ public sealed class NodeWorld : ISignalDeclarer
         _ecs.GetComponent<T>(entity, cid);
 
     /// <summary>
-    /// Calls <see cref="Node.OnReady"/> on every node in reverse insertion order
-    /// (children come after parents in a DFS scene load, so reversing gives
-    /// children-before-parents ordering). Called by <see cref="SceneRouter"/> after
-    /// the scene file is fully loaded.
+    /// Calls <see cref="Node.OnReady"/> on every node, deepest first, walking the
+    /// scene tree rather than the order the nodes happened to be created in. A node's
+    /// children are ready before it is, so a parent that inspects what is under it
+    /// finds it already set up. Called by <see cref="SceneRouter"/> after the scene
+    /// file is fully loaded.
     /// </summary>
     internal void TriggerReady()
     {
-        for (int i = _allNodes.Count - 1; i >= 0; i--)
-            _allNodes[i].OnReady();
+        foreach (var root in AllNodes)
+            if (root.Parent is null) ReadyDepthFirst(root);
+    }
+
+    private static void ReadyDepthFirst(Node node)
+    {
+        var children = node.Children;
+        for (int i = 0; i < children.Count; i++) ReadyDepthFirst(children[i]);
+        node.OnReady();
     }
 }
