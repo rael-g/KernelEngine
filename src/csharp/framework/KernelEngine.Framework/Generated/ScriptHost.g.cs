@@ -22,6 +22,14 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     private readonly delegate* unmanaged[Cdecl]<ke_script_host*, void> _destroy;
     private readonly bool _borrowed;
 
+    /// <summary>
+    /// Keeps alive every managed object handed to the native side as an opaque
+    /// pointer. The engine stores the pointer and never dereferences it, so nothing
+    /// over there stops the collector from moving or reclaiming the object; the
+    /// handle is what makes the pointer mean anything by the time it comes back.
+    /// </summary>
+    private readonly Dictionary<ulong, GCHandle> _rooted = new();
+
     private ke_script_host* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(ScriptHost));
 
@@ -82,16 +90,23 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
 
     /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it silently, since the previous binding's owner would then never learn its object was dropped.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void Bind(ulong entity, uint type, nint instance)
+    public void Bind(ulong entity, uint type, object instance)
     {
+        var instanceHandle = System.Runtime.InteropServices.GCHandle.Alloc(instance);
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->bind(Handle, entity, type, (void*)instance, &err), err, "bind");
+        if (!Handle->bind(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(instanceHandle), &err))
+        {
+            instanceHandle.Free();
+            throw KernelError.FromNative(err, "bind");
+        }
+        _rooted[entity] = instanceHandle;
     }
 
     /// <summary>Drops the binding for `entity`, if any. The instance itself is the binding runtime's to release.</summary>
     public void Unbind(ulong entity)
     {
         Handle->unbind(Handle, entity);
+        if (_rooted.Remove(entity, out var freed)) freed.Free();
     }
 
     /// <summary>The instance bound to `entity`. False when none is, which is the normal answer rather than a failure: an entity a scene made without a script, or one another runtime owns, matches the same queries.</summary>
@@ -138,6 +153,8 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     {
         OnDispose();
         if (_native == null) return;
+        foreach (var rooted in _rooted.Values) rooted.Free();
+        _rooted.Clear();
         if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;

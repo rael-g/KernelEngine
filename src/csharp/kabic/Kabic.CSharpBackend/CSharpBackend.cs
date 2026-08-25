@@ -80,6 +80,7 @@ public static class CSharpBackend
         var tagEnum = p.TagValue("enum");
         if (tagEnum is not null) return Idioms.TypeName(tagEnum, convention);
         if (p.Has("utf8")) return "string";
+        if (p.Has("rooted")) return "object";
         if (p.Has("opaque")) return "void*";
         if (model.Enums.Any(e => e.Name == p.Type.Trim()))
             return Idioms.TypeName(p.Type.Trim(), convention);
@@ -321,6 +322,23 @@ public static class CSharpBackend
         o.Add($"    private {vtable.Name}* _native;");
         o.Add($"    private readonly delegate* unmanaged[Cdecl]<{vtable.Name}*, void> _destroy;");
         o.Add("    private readonly bool _borrowed;");
+
+        var rootedKey = vtable.Slots
+            .SelectMany(s => s.Params.Where(p => p.Has("rooted")).Select(p => (Slot: s, Param: p)))
+            .Select(x => x.Slot.Params.FirstOrDefault(k => k.Name == x.Param.TagValue("rooted")))
+            .FirstOrDefault(k => k is not null);
+
+        if (rootedKey is not null)
+        {
+            o.Add("");
+            o.Add("    /// <summary>");
+            o.Add("    /// Keeps alive every managed object handed to the native side as an opaque");
+            o.Add("    /// pointer. The engine stores the pointer and never dereferences it, so nothing");
+            o.Add("    /// over there stops the collector from moving or reclaiming the object; the");
+            o.Add("    /// handle is what makes the pointer mean anything by the time it comes back.");
+            o.Add("    /// </summary>");
+            o.Add($"    private readonly Dictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
+        }
         o.Add("");
         o.Add($"    private {vtable.Name}* Handle => _native != null ? _native");
         o.Add($"        : throw new ObjectDisposedException(nameof({typeName}));");
@@ -397,6 +415,11 @@ public static class CSharpBackend
         o.Add("    {");
         o.Add("        OnDispose();");
         o.Add("        if (_native == null) return;");
+        if (rootedKey is not null)
+        {
+            o.Add("        foreach (var rooted in _rooted.Values) rooted.Free();");
+            o.Add("        _rooted.Clear();");
+        }
         o.Add("        if (_borrowed) { _native = null; return; }");
         if (shutdownSlot is not null)
             o.Add($"        _native->{shutdownSlot}(_native, null);");
@@ -583,8 +606,24 @@ public static class CSharpBackend
                 var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
                 o.AddRange(fPro);
                 var fInd = new string(' ', 8 + fDepth * 4);
+                var rooted = args.Where(p => p.Has("rooted")).ToList();
+                foreach (var rp in rooted)
+                    o.Add($"{fInd}var {Idioms.Ident(rp.Name!)}Handle = System.Runtime.InteropServices.GCHandle.Alloc({Idioms.Ident(rp.Name!)});");
                 o.Add($"{fInd}ke_error* err = null;");
-                if (byReturn)
+                if (byReturn && rooted.Count > 0)
+                {
+                    var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
+                        + (slot.Returns == "ke_bool" ? " != 0" : "");
+                    o.Add($"{fInd}if (!{boolCall})");
+                    o.Add($"{fInd}{{");
+                    foreach (var rp in rooted)
+                        o.Add($"{fInd}    {Idioms.Ident(rp.Name!)}Handle.Free();");
+                    o.Add($"{fInd}    throw KernelError.FromNative(err, \"{slot.Name}\");");
+                    o.Add($"{fInd}}}");
+                    foreach (var rp in rooted)
+                        o.Add($"{fInd}_rooted[{Idioms.Ident(rp.TagValue("rooted")!)}] = {Idioms.Ident(rp.Name!)}Handle;");
+                }
+                else if (byReturn)
                 {
                     var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
                         + (slot.Returns == "ke_bool" ? " != 0" : "");
@@ -620,7 +659,13 @@ public static class CSharpBackend
                 if (slot.Returns == "ke_bool")
                     o.Add($"{pInd}return Handle->{slot.Name}(Handle{call}) != 0;");
                 else if (retType == "void")
+                {
                     o.Add($"{pInd}Handle->{slot.Name}(Handle{call});");
+                    if (slot.TagValue("unroots") is string freedKey)
+                    {
+                        o.Add($"{pInd}if (_rooted.Remove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
+                    }
+                }
                 else if (needsCast)
                     o.Add($"{pInd}return (nint)Handle->{slot.Name}(Handle{call});");
                 else
@@ -633,7 +678,8 @@ public static class CSharpBackend
         }
 
         string CallArg(ApiParam p) =>
-            p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
+            p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
+            : p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
             : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"

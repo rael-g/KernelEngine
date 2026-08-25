@@ -88,14 +88,15 @@ extern "C"
         /// stored and never dereferenced. Binding an entity that already carries an
         /// instance fails rather than replacing it silently, since the previous
         /// binding's owner would then never learn its object was dropped.
+        /// @param instance [rooted:entity]
         bool (*bind)(struct ke_script_host *self,
                      ke_entity              entity,
                      ke_script_type_id      type,
                      void                  *instance,
                      ke_error             **out_error);
 
-        /// Drops the binding for `entity`, if any. The instance itself is the
-        /// binding runtime's to release.
+        /// [unroots:entity] Drops the binding for `entity`, if any. The instance
+        /// itself is the binding runtime's to release.
         void (*unbind)(struct ke_script_host *self, ke_entity entity);
 
         /// [try] The instance bound to `entity`. False when none is, which is the

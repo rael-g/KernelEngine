@@ -162,7 +162,9 @@
             {
               "name": "instance",
               "type": "void *",
-              "tags": [],
+              "tags": [
+                "rooted:entity"
+              ],
               "doc": null
             },
             {
@@ -176,7 +178,9 @@
         {
           "name": "unbind",
           "returns": "void",
-          "tags": [],
+          "tags": [
+            "unroots:entity"
+          ],
           "doc": "Drops the binding for \u0060entity\u0060, if any. The instance itself is the binding runtime\u0027s to release.",
           "return_doc": null,
           "params": [

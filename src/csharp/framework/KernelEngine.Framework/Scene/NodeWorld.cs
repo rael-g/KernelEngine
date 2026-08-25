@@ -25,13 +25,6 @@ public sealed class NodeWorld : ISignalDeclarer
     private readonly Dictionary<Type, uint> _scriptTypes = new();
 
     /// <summary>
-    /// Roots each bound node for the native side, which stores the pointer and never
-    /// dereferences it. A managed object moves, so what crosses the boundary is the
-    /// handle rather than the reference.
-    /// </summary>
-    private readonly Dictionary<ulong, System.Runtime.InteropServices.GCHandle> _roots = new();
-
-    /// <summary>
     /// Raised the first time a node of a given type registers behavior. The host
     /// listens so it can give that type its own runtime system: behavior access is a
     /// property of the node type, so one system per type is what lets the scheduler
@@ -395,18 +388,11 @@ public sealed class NodeWorld : ISignalDeclarer
 
     private void BindScript(Node node)
     {
-        var root = System.Runtime.InteropServices.GCHandle.Alloc(node);
-        _roots[node.Entity] = root;
-        _scripts.Bind(node.Entity, ScriptTypeOf(node), System.Runtime.InteropServices.GCHandle.ToIntPtr(root));
+        _scripts.Bind(node.Entity, ScriptTypeOf(node), node);
         AnnounceBehavior(node);
     }
 
-    private void UnbindScript(ulong entity)
-    {
-        _scripts.Unbind(entity);
-        if (!_roots.Remove(entity, out var root)) return;
-        root.Free();
-    }
+    private void UnbindScript(ulong entity) => _scripts.Unbind(entity);
 
     /// <summary>
     /// The node bound to <paramref name="entity"/>, or null when none is. Null is the
