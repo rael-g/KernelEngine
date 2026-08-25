@@ -8,6 +8,7 @@ static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryN
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
 
 string? zigOverride = null;
+string? shadowRoot = null;
 var only = new List<string>();
 for (var i = 0; i < args.Length; i++)
 {
@@ -15,6 +16,7 @@ for (var i = 0; i < args.Length; i++)
     {
         case "--zig": zigOverride = args[++i]; break;
         case "--domain": only.Add(args[++i]); break;
+        case "--into": shadowRoot = Path.GetFullPath(args[++i]); break;
     }
 }
 
@@ -27,10 +29,23 @@ foreach (var dRaw in domains)
     var name = d["name"]!.GetValue<string>();
     if (only.Count > 0 && !only.Contains(name)) continue;
 
-    var apiJson = Path.Combine(rootDir, d["apiJson"]!.GetValue<string>());
-    var outDir = Path.Combine(rootDir, d["outDir"]!.GetValue<string>());
+    // With --into, every path the run would write to is rebased under one root, so a
+    // full regeneration can be produced beside the committed one and compared. The
+    // manifest keeps saying where each domain belongs; only the root moves.
+    string Rebase(string relative) => shadowRoot is null
+        ? Path.Combine(rootDir, relative)
+        : Path.Combine(shadowRoot, relative);
+
+    var apiJson = Rebase(d["apiJson"]!.GetValue<string>());
+    var outDir = Rebase(d["outDir"]!.GetValue<string>());
     var enumsDir = d["abstractionsOutDir"] is not null
-        ? Path.Combine(rootDir, d["abstractionsOutDir"]!.GetValue<string>()) : outDir;
+        ? Rebase(d["abstractionsOutDir"]!.GetValue<string>()) : outDir;
+    if (shadowRoot is not null)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(apiJson)!);
+        Directory.CreateDirectory(outDir);
+        Directory.CreateDirectory(enumsDir);
+    }
 
     var extractArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "extract_api.cs"), "--",
         "--out", apiJson };
