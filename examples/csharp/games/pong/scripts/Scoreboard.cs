@@ -38,7 +38,7 @@ public sealed partial class Scoreboard : Node
         FontSize    = 48f;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld)
+    protected override void OnBind(ScriptHost scriptHost)
     {
         var path = string.IsNullOrEmpty(FontPath) ? ExamplePaths.SystemFont : FontPath;
         _font = Font.Load(_resources, _fontLoader, path, pixelSize: FontSize);

@@ -24,7 +24,7 @@ public readonly ref struct View
     /// <see cref="Node"/> keeps its own private: a behavior reaching the whole
     /// world through its view is the same unrestricted access by another door.
     /// </summary>
-    internal NodeWorld NodeWorld { get; }
+    internal ScriptHost ScriptHost { get; }
 
     private readonly IInputReader? _input;
 
@@ -48,9 +48,9 @@ public readonly ref struct View
     /// </summary>
     public bool IsKeyJustPressed(int key) => _input?.IsKeyPressed((Key)key) ?? false;
 
-    internal View(NodeWorld nodeWorld, float deltaTime, IInputReader? input, nint systemCtx = default)
+    internal View(ScriptHost scriptHost, float deltaTime, IInputReader? input, nint systemCtx = default)
     {
-        NodeWorld     = nodeWorld;
+        ScriptHost     = scriptHost;
         DeltaTime     = deltaTime;
         _input        = input;
         SystemContext = systemCtx;

@@ -4,23 +4,22 @@ using KernelEngine.Ecs;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Node-aware facade over <see cref="World"/>. Game code calls <see cref="AddNode{T}"/>
-/// to spawn entities and attach components; every entity is created through the
-/// native <see cref="SceneTree"/> so hierarchy and name are wired at the C level.
+/// The node-shaped face of the script host: spawning, destroying and reaching nodes,
+/// in the object vocabulary this language speaks.
 /// </summary>
-public sealed class NodeWorld : ISignalDeclarer
+/// <remarks>
+/// It lives on the host rather than beside it because the host already owns what the
+/// questions are about — which entity carries which instance, which entities a type
+/// has, what a borrow resolves to. A separate class over the same facts is a second
+/// place to keep them in step, which is what this one used to be.
+/// </remarks>
+public unsafe partial class ScriptHost : ISignalDeclarer
 {
-    private readonly World              _world;
-    private readonly IEcsRegistry       _ecs;
-    private readonly uint               _nameCid;
+    private World              _world = null!;
+    private IEcsRegistry       _ecs = null!;
+    private uint                       _nameCid;
 
     private readonly HashSet<Type> _announcedBehaviors = new();
-
-    /// <summary>
-    /// Which entity carries which node, held natively so a runtime in another
-    /// language sees the same bindings instead of keeping a second map of its own.
-    /// </summary>
-    private readonly ScriptHost _scripts;
 
     private readonly Dictionary<Type, uint> _scriptTypes = new();
 
@@ -38,7 +37,7 @@ public sealed class NodeWorld : ISignalDeclarer
     /// length — on the tick path that is a per-frame allocation the size of the scene.
     /// </summary>
     internal int BoundCountOf(Type type) =>
-        _scriptTypes.TryGetValue(type, out var id) ? (int)_scripts.InstanceCount(id) : 0;
+        _scriptTypes.TryGetValue(type, out var id) ? (int)InstanceCount(id) : 0;
 
     /// <summary>
     /// The bound nodes of one type, read from the script host rather than from a list
@@ -51,7 +50,7 @@ public sealed class NodeWorld : ISignalDeclarer
         if (!_scriptTypes.TryGetValue(type, out var id)) return nodes;
 
         uint count = 0;
-        var entities = _scripts.Instances(id, &count);
+        var entities = Instances(id, &count);
         for (uint i = 0; i < count; i++)
             if (NodeOf(entities[i]) is { } node) nodes.Add(node);
         return nodes;
@@ -59,7 +58,7 @@ public sealed class NodeWorld : ISignalDeclarer
 
     /// <summary>
     /// Every currently-bound node. A caller needing its own node type filters
-    /// this with <c>OfType&lt;T&gt;()</c> — NodeWorld has no per-domain knowledge.
+    /// this with <c>OfType&lt;T&gt;()</c> — ScriptHost has no per-domain knowledge.
     /// </summary>
     public IReadOnlyList<Node> AllNodes
     {
@@ -111,9 +110,9 @@ public sealed class NodeWorld : ISignalDeclarer
         if (_announcedBehaviors.Add(type)) BehaviorTypeAdded?.Invoke(type);
     }
 
-    private readonly uint _nativeTransformCid;
+    private uint _nativeTransformCid;
 
-    private readonly KernelEngine.Logger.ILogger? _logger;
+    private KernelEngine.Logger.ILogger? _logger;
     private readonly HashSet<string> _reportedBorrows = new();
     private readonly Dictionary<Type, int> _lastBoundCount = new();
 
@@ -206,7 +205,7 @@ public sealed class NodeWorld : ISignalDeclarer
         foreach (var id in ScriptTypesAssignableTo(wanted))
         {
             ScriptResolve why;
-            var entity = _scripts.ResolveDescendant(owner.Entity, id, name, &why);
+            var entity = ResolveDescendant(owner.Entity, id, name, &why);
             if (why == ScriptResolve.Ambiguous)
             {
                 ReportAmbiguousBorrow(owner, "Child", wanted.Name);
@@ -238,7 +237,7 @@ public sealed class NodeWorld : ISignalDeclarer
         if (ids.Length == 1)
         {
             ScriptResolve why;
-            var entity = _scripts.ResolveAncestor(owner.Entity, ids[0], name, &why);
+            var entity = ResolveAncestor(owner.Entity, ids[0], name, &why);
             return entity == 0 ? null : NodeOf(entity);
         }
 
@@ -248,7 +247,7 @@ public sealed class NodeWorld : ISignalDeclarer
         return null;
     }
 
-    private readonly SignalBus? _signals;
+    private SignalBus? _signals;
     /// <summary>The signal bus this world raises through, or null when none is registered.</summary>
     public SignalBus? Signals => _signals;
 
@@ -297,12 +296,16 @@ public sealed class NodeWorld : ISignalDeclarer
     internal Emit<T> EmitFor<T>(ulong source) where T : unmanaged =>
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
-    internal NodeWorld(World world, IEcsRegistry ecs,
-                       ScriptHost scripts,
-                       KernelEngine.Logger.ILogger? logger = null,
-                       SignalBus? signals = null)
+    /// <summary>
+    /// Hands the host the collaborators its node-shaped surface needs, which the
+    /// generated constructor cannot take: it is derived from the C factory, and the
+    /// factory's business is the native host alone.
+    /// </summary>
+    /// <returns>The same instance, so composition reads as one expression.</returns>
+    internal ScriptHost Compose(World world, IEcsRegistry ecs,
+                                KernelEngine.Logger.ILogger? logger = null,
+                                SignalBus? signals = null)
     {
-        _scripts    = scripts;
         _signals    = signals;
         _world      = world;
         _ecs        = ecs;
@@ -310,6 +313,7 @@ public sealed class NodeWorld : ISignalDeclarer
         _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
         _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
         _ = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
+        return this;
     }
 
     /// <summary>
@@ -325,7 +329,7 @@ public sealed class NodeWorld : ISignalDeclarer
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
         var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
-        node.BindToNodeWorld(this, entity);
+        node.BindToScene(this, entity);
         BindScript(node);
         return node;
     }
@@ -374,7 +378,7 @@ public sealed class NodeWorld : ISignalDeclarer
         {
             var owned = cids.ToArray();
             fixed (uint* p = owned)
-                _scripts.RegisterType(clr.FullName ?? clr.Name, p, (uint)owned.Length, reach, &id);
+                RegisterType(clr.FullName ?? clr.Name, p, (uint)owned.Length, reach, &id);
         }
         _scriptTypes[clr] = id;
         return id;
@@ -382,11 +386,11 @@ public sealed class NodeWorld : ISignalDeclarer
 
     private void BindScript(Node node)
     {
-        _scripts.Bind(node.Entity, ScriptTypeOf(node), node);
+        Bind(node.Entity, ScriptTypeOf(node), node);
         AnnounceBehavior(node);
     }
 
-    private void UnbindScript(ulong entity) => _scripts.Unbind(entity);
+    private void UnbindScript(ulong entity) => Unbind(entity);
 
     /// <summary>
     /// The node bound to <paramref name="entity"/>, or null when none is. Null is the
@@ -397,7 +401,7 @@ public sealed class NodeWorld : ISignalDeclarer
     internal unsafe Node? NodeOf(ulong entity)
     {
         nint instance = 0;
-        if (!_scripts.TryInstanceOf(entity, null, &instance) || instance == 0) return null;
+        if (!TryInstanceOf(entity, null, &instance) || instance == 0) return null;
         return System.Runtime.InteropServices.GCHandle.FromIntPtr(instance).Target as Node;
     }
 
@@ -434,7 +438,7 @@ public sealed class NodeWorld : ISignalDeclarer
         UnbindScript(node.Entity);
         _signals?.ForgetEntity(node.Entity);
         _world.SceneTree.DestroyNode(node.Entity, _systemCtx);
-        node.UnbindFromNodeWorld();
+        node.UnbindFromScene();
     }
 
     /// <summary>
@@ -454,7 +458,7 @@ public sealed class NodeWorld : ISignalDeclarer
     /// </summary>
     internal void BindNativeEntity(Node node, ulong entity)
     {
-        node.BindToNodeWorld(this, entity);
+        node.BindToScene(this, entity);
         BindScript(node);
     }
 

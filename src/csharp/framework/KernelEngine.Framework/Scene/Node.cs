@@ -6,7 +6,7 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Base class for game-facing scene objects. A Node is the managed wrapper
 /// around an ECS entity. Game code instantiates subclasses with init properties
-/// (object-initializer syntax) and hands them to <see cref="NodeWorld.AddNode"/>;
+/// (object-initializer syntax) and hands them to <see cref="ScriptHost.AddNode"/>;
 /// AddNode creates the native entity and asks the node to materialize its components.
 /// </summary>
 public abstract class Node
@@ -23,38 +23,38 @@ public abstract class Node
     /// nothing; a node that wants a child says so with <see cref="AddChild{T}"/>,
     /// and a node that wants to give someone else a child asks that node for it.
     /// </remarks>
-    private NodeWorld? NodeWorld { get; set; }
+    private ScriptHost? ScriptHost { get; set; }
 
     /// <summary>
     /// Display name (debug / lookups). Read live from <c>ke_name_component</c> —
     /// not a managed copy, so it can never drift from the entity's actual name.
     /// "" before AddNode binds this node.
     /// </summary>
-    public string Name => NodeWorld?.GetName(Entity) ?? "";
+    public string Name => ScriptHost?.GetName(Entity) ?? "";
 
     /// <summary>True after AddNode binds this node to an entity.</summary>
-    public bool IsBound => NodeWorld != null;
+    public bool IsBound => ScriptHost != null;
 
     /// <summary>
     /// Parent node, resolved live from <c>ke_hierarchy_component</c>. Null before
     /// binding, when this node has no parent, or when the parent entity has no
     /// managed <see cref="Framework.Node"/> bound to it.
     /// </summary>
-    public Node? Parent => NodeWorld?.GetParent(Entity);
+    public Node? Parent => ScriptHost?.GetParent(Entity);
 
     /// <summary>
     /// Child nodes, walked live from <c>ke_hierarchy_component</c> in insertion
     /// order. Empty before binding.
     /// </summary>
-    public IReadOnlyList<Node> Children => NodeWorld?.GetChildren(Entity) ?? Array.Empty<Node>();
+    public IReadOnlyList<Node> Children => ScriptHost?.GetChildren(Entity) ?? Array.Empty<Node>();
 
     /// <summary>
-    /// Called once by <see cref="NodeWorld.AddNode"/> after the entity has been
+    /// Called once by <see cref="ScriptHost.AddNode"/> after the entity has been
     /// created and after <see cref="GeneratedBind"/> has materialized this node's
     /// generated components. Override to materialize components the generator does
     /// not know about. Base implementation is a no-op.
     /// </summary>
-    protected internal virtual void OnBind(NodeWorld nodeWorld) { }
+    protected internal virtual void OnBind(ScriptHost scriptHost) { }
 
     /// <summary>
     /// Materializes the components this node's generated properties are backed by:
@@ -65,7 +65,7 @@ public abstract class Node
     /// Separate from <see cref="OnBind"/> so the generator and the node's own author
     /// are never competing for the same method — a node that needs both keeps both.
     /// </remarks>
-    protected internal virtual void GeneratedBind(NodeWorld nodeWorld) { }
+    protected internal virtual void GeneratedBind(ScriptHost scriptHost) { }
 
     /// <summary>
     /// Called once after every entity in the scene is loaded and every component
@@ -94,7 +94,7 @@ public abstract class Node
     /// <see cref="OnUpdate"/> itself; a generated subclass gets the override
     /// emitted by <c>NodePropertyGenerator</c> when it detects the user's own
     /// partial declares <c>OnUpdate</c>. Base is false so a node with no
-    /// override never enters <see cref="Framework.NodeWorld.Behaviors"/>.
+    /// override never enters <see cref="Framework.ScriptHost.Behaviors"/>.
     /// </summary>
     protected internal virtual bool HasBehavior => false;
 
@@ -138,10 +138,10 @@ public abstract class Node
     /// <exception cref="InvalidOperationException">This node is not bound yet.</exception>
     protected T AddChild<T>(T child, string name = "") where T : Node
     {
-        if (NodeWorld is null)
+        if (ScriptHost is null)
             throw new InvalidOperationException(
                 $"'{GetType().Name}' cannot add a child before it is added to a world.");
-        return NodeWorld.AddNode(child, name, parent: this);
+        return ScriptHost.AddNode(child, name, parent: this);
     }
 
     /// <summary>
@@ -158,7 +158,7 @@ public abstract class Node
     /// node other than <c>this</c> means holding a reference to it and asking it
     /// — the same way adding a child does.
     /// </summary>
-    public void Destroy() => NodeWorld?.DestroyNode(this);
+    public void Destroy() => ScriptHost?.DestroyNode(this);
 
     /// <summary>
     /// Reads one of this entity's components by its ECS registration name, for a
@@ -167,7 +167,7 @@ public abstract class Node
     /// </summary>
     protected bool TryGetComponent<T>(string componentName, out T value) where T : unmanaged
     {
-        if (NodeWorld is not null) return NodeWorld.TryGetComponent(Entity, componentName, out value);
+        if (ScriptHost is not null) return ScriptHost.TryGetComponent(Entity, componentName, out value);
         value = default;
         return false;
     }
@@ -183,8 +183,8 @@ public abstract class Node
     /// </remarks>
     protected internal Child<T> BorrowChild<T>(string name) where T : Node
     {
-        if (NodeWorld?.ResolveDescendant(this, typeof(T), name) is T typed) return new Child<T>(typed);
-        NodeWorld?.ReportUnresolvedBorrow(this, "Child", typeof(T).Name, name);
+        if (ScriptHost?.ResolveDescendant(this, typeof(T), name) is T typed) return new Child<T>(typed);
+        ScriptHost?.ReportUnresolvedBorrow(this, "Child", typeof(T).Name, name);
         return default;
     }
 
@@ -193,7 +193,7 @@ public abstract class Node
     /// <typeparamref name="T"/> from this node.
     /// </summary>
     protected internal Emit<T> BorrowEmit<T>() where T : unmanaged =>
-        NodeWorld is null ? default : NodeWorld.EmitFor<T>(Entity);
+        ScriptHost is null ? default : ScriptHost.EmitFor<T>(Entity);
 
     /// <summary>
     /// Resolves a <see cref="Ref{T}"/> borrow anywhere in the tree, by name or — when
@@ -203,53 +203,53 @@ public abstract class Node
     {
         if (name.Length != 0)
         {
-            if (NodeWorld?.Find(name) is T named) return new Ref<T>(named);
-            NodeWorld?.ReportUnresolvedBorrow(this, "Ref", typeof(T).Name, name);
+            if (ScriptHost?.Find(name) is T named) return new Ref<T>(named);
+            ScriptHost?.ReportUnresolvedBorrow(this, "Ref", typeof(T).Name, name);
             return default;
         }
 
         T? found = null;
-        foreach (var node in NodeWorld?.AllNodes ?? [])
+        foreach (var node in ScriptHost?.AllNodes ?? [])
         {
             if (node is not T typed) continue;
             if (found is not null)
             {
-                NodeWorld?.ReportAmbiguousBorrow(this, "Ref", typeof(T).Name);
+                ScriptHost?.ReportAmbiguousBorrow(this, "Ref", typeof(T).Name);
                 return default;
             }
             found = typed;
         }
         if (found is not null) return new Ref<T>(found);
-        NodeWorld?.ReportUnresolvedBorrow(this, "Ref", typeof(T).Name, name);
+        ScriptHost?.ReportUnresolvedBorrow(this, "Ref", typeof(T).Name, name);
         return default;
     }
 
     /// <summary>Resolves a <see cref="Parent{T}"/> borrow to the nearest matching ancestor.</summary>
     protected internal Parent<T> BorrowParent<T>(string name) where T : Node
     {
-        if (NodeWorld?.ResolveAncestor(this, typeof(T), name) is T typed) return new Parent<T>(typed);
-        NodeWorld?.ReportUnresolvedBorrow(this, "Parent", typeof(T).Name, name);
+        if (ScriptHost?.ResolveAncestor(this, typeof(T), name) is T typed) return new Parent<T>(typed);
+        ScriptHost?.ReportUnresolvedBorrow(this, "Parent", typeof(T).Name, name);
         return default;
     }
 
-    internal void UnbindFromNodeWorld()
+    internal void UnbindFromScene()
     {
-        NodeWorld = null;
+        ScriptHost = null;
         Entity    = 0;
     }
 
     /// <summary>Whether this node is bound to <paramref name="world"/> specifically.</summary>
-    internal bool BelongsTo(NodeWorld world) => ReferenceEquals(NodeWorld, world);
+    internal bool BelongsTo(ScriptHost world) => ReferenceEquals(ScriptHost, world);
 
-    internal void BindToNodeWorld(NodeWorld nodeWorld, ulong entity)
+    internal void BindToScene(ScriptHost scriptHost, ulong entity)
     {
-        PreBind(nodeWorld, entity);
+        PreBind(scriptHost, entity);
         CompleteBind();
     }
 
-    internal void PreBind(NodeWorld nodeWorld, ulong entity)
+    internal void PreBind(ScriptHost scriptHost, ulong entity)
     {
-        NodeWorld = nodeWorld;
+        ScriptHost = scriptHost;
         Entity    = entity;
     }
 
@@ -262,8 +262,8 @@ public abstract class Node
     /// </summary>
     protected internal void GeneratedSeed<T>(uint cid, in T state) where T : unmanaged
     {
-        if (NodeWorld!.TryGetByCid<T>(Entity, cid, out _)) return;
-        NodeWorld.SetByCid(Entity, cid, in state);
+        if (ScriptHost!.TryGetByCid<T>(Entity, cid, out _)) return;
+        ScriptHost.SetByCid(Entity, cid, in state);
     }
 
     /// <summary>
@@ -273,11 +273,11 @@ public abstract class Node
     /// only thing a node's own storage needs it for.
     /// </summary>
     protected internal void GeneratedSet<T>(uint cid, in T state) where T : unmanaged =>
-        NodeWorld!.SetByCid(Entity, cid, in state);
+        ScriptHost!.SetByCid(Entity, cid, in state);
 
     /// <summary>Reads one of this node's component values. Counterpart to <see cref="GeneratedSet{T}"/>.</summary>
     protected internal bool GeneratedTryGet<T>(uint cid, out T state) where T : unmanaged =>
-        NodeWorld!.TryGetByCid(Entity, cid, out state);
+        ScriptHost!.TryGetByCid(Entity, cid, out state);
 
     /// <summary>
     /// Reaches one of this node's components in place, so a generated property touches
@@ -290,9 +290,9 @@ public abstract class Node
     /// </summary>
     protected internal ref T GeneratedStorage<T>(uint cid, ref T authored, out bool live) where T : unmanaged
     {
-        if (NodeWorld is not null)
+        if (ScriptHost is not null)
         {
-            var storage = NodeWorld.StorageByCid<T>(Entity, cid);
+            var storage = ScriptHost.StorageByCid<T>(Entity, cid);
             if (!storage.IsEmpty)
             {
                 live = true;
@@ -318,7 +318,7 @@ public abstract class Node
 
     internal void CompleteBind()
     {
-        GeneratedBind(NodeWorld!);
-        OnBind(NodeWorld!);
+        GeneratedBind(ScriptHost!);
+        OnBind(ScriptHost!);
     }
 }

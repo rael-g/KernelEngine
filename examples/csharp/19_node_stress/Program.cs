@@ -12,7 +12,7 @@ int ticks = ArgValue("--ticks", 300);
 int churn = ArgValue("--churn", 0);
 string kind = ArgText("--type", "both");
 
-NodeWorld? churnWorld = null;
+ScriptHost? churnWorld = null;
 
 var services = new ServiceCollection()
     .Add<INativeEcs, FlecsEcs>()
@@ -56,7 +56,7 @@ if (churn > 0)
     return;
 }
 
-static void RunChurn(NodeWorld world, int count)
+static void RunChurn(ScriptHost world, int count)
 {
     var made = new List<Mover>(count);
     for (int i = 0; i < count; i++) made.Add(world.AddNode(new Mover { Rate = 1f }, $"Churn{i}"));

@@ -15,12 +15,12 @@ public static class ModelExtensions
     /// <summary>
     /// Uploads <paramref name="model"/>'s textures, materials, and meshes via
     /// <see cref="IRenderResources"/>, then adds one <see cref="MeshRenderer"/> node per
-    /// sub-mesh to <paramref name="nodeWorld"/>. Converts the engine's <c>Vertex</c>
+    /// sub-mesh to <paramref name="scriptHost"/>. Converts the engine's <c>Vertex</c>
     /// layout (12 floats, tangent.w handedness) to <c>MeshVertex</c> (11 floats).
     /// Must be called from the render worker, because GPU uploads are pinned to ke.render.
     /// </summary>
     public static IReadOnlyList<MeshRenderer> AddModel(
-        this NodeWorld nodeWorld,
+        this ScriptHost scriptHost,
         IModel model,
         IRenderResources resources,
         string rootName = "Model")
@@ -60,7 +60,7 @@ public static class ModelExtensions
             var mesh     = resources.UploadMesh($"{rootName}#mesh{i}", converted, src.Indices);
             var material = src.MaterialIndex >= 0 ? materials[src.MaterialIndex] : default;
             var name     = string.IsNullOrEmpty(src.Name) ? $"{rootName}.Mesh_{i}" : $"{rootName}.{src.Name}";
-            nodes.Add(nodeWorld.AddNode(new MeshRenderer { MeshHandle = mesh, MaterialHandle = material }, name));
+            nodes.Add(scriptHost.AddNode(new MeshRenderer { MeshHandle = mesh, MaterialHandle = material }, name));
         }
         return nodes;
     }

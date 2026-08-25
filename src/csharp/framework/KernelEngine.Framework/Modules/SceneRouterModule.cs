@@ -22,7 +22,7 @@ public sealed class SceneRouterModule : IRuntimeModule
 
     /// <param name="initialScene">Overrides the project's default scene, if set.</param>
     /// <param name="sceneModuleDependency">
-    /// The module that must load first because it registers <see cref="NodeWorld"/> and
+    /// The module that must load first because it registers <see cref="ScriptHost"/> and
     /// drives the behavior system. Defaults to <see cref="SceneNodesModule"/>.
     /// </param>
     public SceneRouterModule(string? initialScene = null, Type? sceneModuleDependency = null)
@@ -41,7 +41,7 @@ public sealed class SceneRouterModule : IRuntimeModule
     {
         var scheduler = services.GetRequiredService<IScheduler>();
         var loader    = services.GetRequiredService<SceneLoader>();
-        var nodeWorld = services.GetRequiredService<NodeWorld>();
+        var scriptHost = services.GetRequiredService<ScriptHost>();
         var types     = services.GetRequiredService<NodeTypeRegistry>();
         var router    = services.GetRequiredService<SceneRouter>();
         var initial   = ResolveInitialScene(services);
@@ -52,7 +52,7 @@ public sealed class SceneRouterModule : IRuntimeModule
             {
                 var type = types.Resolve(typeName);
                 var node = (Node)ActivatorUtilities.CreateInstance(services, type);
-                nodeWorld.BindNativeEntity(node, entity);
+                scriptHost.BindNativeEntity(node, entity);
                 return true;
             }
             catch (Exception ex)
@@ -80,7 +80,7 @@ public sealed class SceneRouterModule : IRuntimeModule
 
         runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (_, ctx, _) =>
         {
-            using (nodeWorld.EnterSystem(ctx))
+            using (scriptHost.EnterSystem(ctx))
                 router.Flush();
         }, pinnedThread: RenderWorker);
     }

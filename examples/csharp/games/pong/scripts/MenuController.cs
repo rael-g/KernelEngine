@@ -30,7 +30,7 @@ public sealed class MenuController : Node
         _resources  = resources;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld)
+    protected override void OnBind(ScriptHost scriptHost)
     {
         var fontPath = ExamplePaths.SystemFont;
         _font = Font.Load(_resources, _fontLoader, fontPath, pixelSize: 72f);

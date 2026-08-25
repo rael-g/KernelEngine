@@ -8,7 +8,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>
 /// Scene infrastructure independent of any other domain: registers the
-/// <see cref="NodeWorld"/>, installs the BehaviorSystem that propagates transforms
+/// <see cref="ScriptHost"/>, installs the BehaviorSystem that propagates transforms
 /// and drives per-node <see cref="Node.OnUpdate"/>, and runs a one-shot scene
 /// setup callback on a dedicated worker thread. Framework has no concept of any
 /// other domain's components or node types (the same rule <c>ke_world</c> follows
@@ -24,7 +24,7 @@ public sealed class SceneNodesModule : IRuntimeModule
 {
     private const uint SetupWorker = 1;
 
-    private readonly Action<NodeWorld, IServiceProvider> _setup;
+    private readonly Action<ScriptHost, IServiceProvider> _setup;
 
     private KernelEngine.Input.IInputReader? _inputSnapshot;
 
@@ -33,10 +33,10 @@ public sealed class SceneNodesModule : IRuntimeModule
     public IEnumerable<Type> Dependencies => new[] { typeof(FrameworkModule) };
 
     /// <summary>Setup callback that only needs the node world.</summary>
-    public SceneNodesModule(Action<NodeWorld> setup) => _setup = (nw, _) => setup(nw);
+    public SceneNodesModule(Action<ScriptHost> setup) => _setup = (nw, _) => setup(nw);
 
     /// <summary>Setup callback that also wants to resolve DI services.</summary>
-    public SceneNodesModule(Action<NodeWorld, IServiceProvider> setup) => _setup = setup;
+    public SceneNodesModule(Action<ScriptHost, IServiceProvider> setup) => _setup = setup;
 
     /// <summary>
     /// The half-open range of <paramref name="count"/> items this body call owns. A
@@ -69,29 +69,26 @@ public sealed class SceneNodesModule : IRuntimeModule
                 KernelEngine.Common.Native.ke_error* err = null;
                 var handle = Native.NativeMethods.script_host_create(ecs.Native, null, &err);
                 if (handle.@ref == null) throw KernelError.FromNative(err, "script_host_create");
-                return new ScriptHost(handle);
+                return new ScriptHost(handle).Compose(
+                    sp.GetRequiredService<World>(),
+                    sp.GetRequiredService<IEcsRegistry>(),
+                    sp.GetService<KernelEngine.Logger.ILogger>(),
+                    sp.GetRequiredService<SignalBus>());
             }
         });
-        services.AddSingleton<NodeWorld>(sp =>
-            new NodeWorld(
-                sp.GetRequiredService<World>(),
-                sp.GetRequiredService<IEcsRegistry>(),
-                sp.GetRequiredService<ScriptHost>(),
-                sp.GetService<KernelEngine.Logger.ILogger>(),
-                sp.GetRequiredService<SignalBus>()));
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var nodeWorld = services.GetRequiredService<NodeWorld>();
+        var scriptHost = services.GetRequiredService<ScriptHost>();
         var world     = services.GetRequiredService<World>();
         var sceneTree = world.SceneTree;
         var input     = services.GetService<IInput>();
         var scheduler = services.GetRequiredService<IScheduler>();
         var evaluator = services.GetService<IActionEvaluator>();
 
-        var hierarchyCid = nodeWorld.CidOfName("hierarchy");
-        var nameCid      = nodeWorld.CidOfName("name");
+        var hierarchyCid = scriptHost.CidOfName("hierarchy");
+        var nameCid      = scriptHost.CidOfName("name");
 
         runtime.RegisterSystem("Scene.Input", RuntimePhase.PreUpdate, (_, _, _) =>
         {
@@ -100,7 +97,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             evaluator?.Evaluate(_inputSnapshot);
         }, accessList: Array.Empty<ComponentAccess>(), pinnedThread: 1);
 
-        DeclareSignals(nodeWorld, services);
+        DeclareSignals(scriptHost, services);
 
         var signals = services.GetService<SignalBus>();
         if (signals is not null)
@@ -115,16 +112,16 @@ public sealed class SceneNodesModule : IRuntimeModule
                     uint count = 0;
                     var list = signals.Deliveries(&count);
                     if (list == null) return;
-                    using (nodeWorld.EnterSystem(ctx))
+                    using (scriptHost.EnterSystem(ctx))
                         for (uint i = 0; i < count; i++)
-                            nodeWorld.Deliver(in list[i]);
+                            scriptHost.Deliver(in list[i]);
                 }
             }, accessList: Array.Empty<ComponentAccess>());
         }
 
-        nodeWorld.BehaviorTypeAdded += type =>
+        scriptHost.BehaviorTypeAdded += type =>
         {
-            var probe = (Node)nodeWorld.BehaviorsOf(type)[0];
+            var probe = (Node)scriptHost.BehaviorsOf(type)[0];
             var uses = new List<NodeComponentUse>();
             probe.CollectBehaviorComponents(uses);
 
@@ -132,7 +129,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             var reached = new Dictionary<uint, bool>();
             foreach (var use in uses)
             {
-                var cid = nodeWorld.CidOfName(use.Name);
+                var cid = scriptHost.CidOfName(use.Name);
                 if (cid == hierarchyCid || cid == nameCid) continue;
                 var into = use.Owned ? owned : reached;
                 into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
@@ -158,12 +155,12 @@ public sealed class SceneNodesModule : IRuntimeModule
 
             runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (_, ctx, dt) =>
             {
-                var view = new View(nodeWorld, dt, _inputSnapshot, ctx);
-                using (nodeWorld.EnterSystem(ctx))
+                var view = new View(scriptHost, dt, _inputSnapshot, ctx);
+                using (scriptHost.EnterSystem(ctx))
                 {
                     if (queries is null)
                     {
-                        var behaviors = nodeWorld.BehaviorsOf(type);
+                        var behaviors = scriptHost.BehaviorsOf(type);
                         var (from, upto) = SliceOf(ctx, behaviors.Count);
                         for (int i = from; i < upto; i++)
                             behaviors[i].OnUpdate(in view);
@@ -185,7 +182,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                         {
                             if (seen < first) continue;
                             if (seen >= last) break;
-                            if (nodeWorld.NodeOf(entities[e]) is { } node && node.GetType() == type)
+                            if (scriptHost.NodeOf(entities[e]) is { } node && node.GetType() == type)
                             {
                                 node.OnUpdate(in view);
                                 ran++;
@@ -195,7 +192,7 @@ public sealed class SceneNodesModule : IRuntimeModule
 
                     KernelEngine.Runtime.SystemContext.Slice(ctx, out uint _, out uint slices);
                     if (slices == 1)
-                        nodeWorld.ReportUnmatchedBehavior(type, ran, nodeWorld.BoundCountOf(type));
+                        scriptHost.ReportUnmatchedBehavior(type, ran, scriptHost.BoundCountOf(type));
                 }
             }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };
@@ -204,7 +201,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         Exception? err = null;
         scheduler.DispatchPinned(SetupWorker, () =>
         {
-            try   { _setup(nodeWorld, services); }
+            try   { _setup(scriptHost, services); }
             catch (Exception ex) { err = ex; }
             finally { done.Set(); }
         });
@@ -217,7 +214,7 @@ public sealed class SceneNodesModule : IRuntimeModule
     /// scene is read. That ordering is the whole point: the loader can only reject a
     /// misspelled signal name if the real names are already there to compare against.
     /// </summary>
-    private static void DeclareSignals(NodeWorld nodeWorld, IServiceProvider services)
+    private static void DeclareSignals(ScriptHost scriptHost, IServiceProvider services)
     {
         var registry = services.GetService<NodeTypeRegistry>();
         if (registry is null) return;
@@ -225,7 +222,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         foreach (var type in registry.RegisteredTypes)
         {
             var probe = (Node)ActivatorUtilities.CreateInstance(services, type);
-            probe.CollectSignalTypes(nodeWorld);
+            probe.CollectSignalTypes(scriptHost);
         }
     }
 }

@@ -338,14 +338,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         }
         sb.AppendLine();
 
-        sb.AppendLine($"    {overrideModifier} override void GeneratedBind(global::KernelEngine.Framework.NodeWorld nodeWorld)");
+        sb.AppendLine($"    {overrideModifier} override void GeneratedBind(global::KernelEngine.Framework.ScriptHost scriptHost)");
         sb.AppendLine("    {");
-        sb.AppendLine("        base.GeneratedBind(nodeWorld);");
+        sb.AppendLine("        base.GeneratedBind(scriptHost);");
         foreach (var slot in slots)
         {
             var resolveCid = isNative
-                ? $"nodeWorld.CidOfName(\"{slot.ComponentName}\")"
-                : $"nodeWorld.RegisterComponent<{slot.TypeName}>(\"{slot.ComponentName}\")";
+                ? $"scriptHost.CidOfName(\"{slot.ComponentName}\")"
+                : $"scriptHost.RegisterComponent<{slot.TypeName}>(\"{slot.ComponentName}\")";
             sb.AppendLine($"        {slot.Cid} = {resolveCid};");
             sb.AppendLine($"        GeneratedSeed({slot.Cid}, in {slot.State});");
         }

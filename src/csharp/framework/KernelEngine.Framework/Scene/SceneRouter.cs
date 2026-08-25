@@ -2,16 +2,16 @@ namespace KernelEngine.Framework;
 
 internal sealed class SceneRouter : ISceneRouter
 {
-    private readonly NodeWorld          _nodeWorld;
+    private readonly ScriptHost          _scriptHost;
     private readonly SceneLoader  _loader;
 
     private string? _pendingLoad;
 
     public string? CurrentScene { get; private set; }
 
-    public SceneRouter(NodeWorld nodeWorld, SceneLoader loader)
+    public SceneRouter(ScriptHost scriptHost, SceneLoader loader)
     {
-        _nodeWorld = nodeWorld;
+        _scriptHost = scriptHost;
         _loader    = loader;
     }
 
@@ -22,10 +22,10 @@ internal sealed class SceneRouter : ISceneRouter
         var name = Interlocked.Exchange(ref _pendingLoad, null);
         if (name is null) return;
 
-        _nodeWorld.Clear();
+        _scriptHost.Clear();
         var path = Path.Combine(AppContext.BaseDirectory, "scenes", $"{name}.scene.toml");
         _loader.Load(path);
-        _nodeWorld.TriggerReady();
+        _scriptHost.TriggerReady();
         CurrentScene = name;
     }
 }

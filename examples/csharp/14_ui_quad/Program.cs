@@ -97,8 +97,8 @@ sealed class BackgroundQuad : Node
 {
     private uint _quadCid;
 
-    protected override void OnBind(NodeWorld nodeWorld) =>
-        _quadCid = nodeWorld.RegisterComponent<ke_ui_quad_component>("ui_quad");
+    protected override void OnBind(ScriptHost scriptHost) =>
+        _quadCid = scriptHost.RegisterComponent<ke_ui_quad_component>("ui_quad");
 
     protected override bool HasBehavior => true;
 
