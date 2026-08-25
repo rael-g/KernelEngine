@@ -63,6 +63,7 @@ foreach (var dir in (string[])["src/c", "src/zig"])
         if (describedByKabic.Contains(key) || describedByClangSharp.Contains(key)) continue;
         if (excluded.ContainsKey(key)) continue;
         if (Path.GetFileName(header) == "component_fields.h") continue;
+        if (IsInlineOnly(header)) continue;
         holes.Add(Path.GetRelativePath(rootDir, header).Replace('\\', '/'));
     }
 
@@ -78,6 +79,32 @@ Console.Error.WriteLine();
 Console.Error.WriteLine("Add each to scripts/api_domains.json, to a .rsp, or to this script's");
 Console.Error.WriteLine("exclusion list with the reason it stays unbound.");
 return 1;
+
+/// <summary>
+/// True when a header declares nothing a binding could reach: every function it
+/// defines is <c>static inline</c>, so there is no symbol to import and no vtable to
+/// project. Derived rather than listed, so a new header-only helper does not have to
+/// remember to register itself as an exception.
+/// </summary>
+static bool IsInlineOnly(string header)
+{
+    var declaresSomething = false;
+    foreach (var raw in File.ReadAllLines(header))
+    {
+        var line = raw.Trim();
+        if (line.StartsWith("static inline", StringComparison.Ordinal)) continue;
+        if (line.StartsWith("typedef", StringComparison.Ordinal)
+            || line.StartsWith("struct ", StringComparison.Ordinal)
+            || line.StartsWith("enum ", StringComparison.Ordinal)
+            || line.Contains("_API ", StringComparison.Ordinal)
+            || line.Contains("(*", StringComparison.Ordinal))
+        {
+            declaresSomething = true;
+            break;
+        }
+    }
+    return !declaresSomething;
+}
 
 static string Norm(string path)
 {
