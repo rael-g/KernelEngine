@@ -458,7 +458,7 @@
       },
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Render.Native",
-      "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",
+      "outDir": "src/csharp/render/KernelEngine.Render.Scene",
       "usings": [],
       "composeHeaders": [
         "src/c/spatial/kernel_engine/spatial/transform.h"
@@ -485,7 +485,7 @@
       },
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Render.Native",
-      "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Scene",
+      "outDir": "src/csharp/render/KernelEngine.Render.Scene",
       "usings": [],
       "composeHeaders": [
         "src/c/spatial/kernel_engine/spatial/transform.h"

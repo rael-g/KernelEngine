@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The node types the render domain's component headers describe. They cannot live in
+    KernelEngine.Render because they derive from Node, and Framework already depends on
+    Render for the asset resolver's service pointer — the cycle is what forced these
+    types into a backend project, where a header domain has no business being. Here
+    they sit above both, so no backend owns them and any backend can be swapped under
+    them.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\KernelEngine.Render\KernelEngine.Render.csproj" />
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
+    <ProjectReference Include="..\..\text\KernelEngine.Text.Abstractions\KernelEngine.Text.Abstractions.csproj" />
+    <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>
