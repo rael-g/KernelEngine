@@ -123,6 +123,7 @@ public sealed class NodeWorld : ISignalDeclarer
 
     private readonly KernelEngine.Logger.ILogger? _logger;
     private readonly HashSet<string> _reportedBorrows = new();
+    private readonly Dictionary<Type, int> _lastBoundCount = new();
 
     /// <summary>
     /// Reports a borrow that resolved to nothing, once per node-and-name pair.
@@ -147,9 +148,19 @@ public sealed class NodeWorld : ISignalDeclarer
     /// nothing — the failure a scheduler cannot distinguish from a node with nothing
     /// to do, which is why it has to be said out loud.
     /// </summary>
+    /// <remarks>
+    /// Only judged on a tick where the type's instance count did not just change. A node
+    /// added from inside a system defers its entity's components to the wave barrier, so
+    /// on that one tick it is bound and its query legitimately reaches nothing — and
+    /// reporting is latched, which would turn that single tick into a permanent
+    /// accusation against a node that works.
+    /// </remarks>
     internal void ReportUnmatchedBehavior(Type type, int ran, int bound)
     {
-        if (_logger is null || ran >= bound) return;
+        var settled = _lastBoundCount.TryGetValue(type, out var previous) && previous == bound;
+        _lastBoundCount[type] = bound;
+
+        if (_logger is null || !settled || ran >= bound) return;
         if (!_reportedBorrows.Add($"unmatched/{type.FullName}")) return;
         _logger.Log(KernelEngine.Logger.LogLevel.Error, "scene.node",
             $"'{type.Name}' has {bound} bound instance(s) but its query reached {ran}; "
