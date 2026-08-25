@@ -162,12 +162,12 @@ public sealed class NodeWorld : ISignalDeclarer
     /// <summary>
     /// Reports a borrow that named no node and found more than one of its type.
     /// </summary>
-    internal void ReportAmbiguousBorrow(Node owner, string kind, string typeName, string first, string second)
+    internal void ReportAmbiguousBorrow(Node owner, string kind, string typeName)
     {
         if (_logger is null) return;
         if (!_reportedBorrows.Add($"{owner.Entity}/{kind}/{typeName}/?")) return;
         _logger.Log(KernelEngine.Logger.LogLevel.Warning, "scene.node",
-            $"'{owner.Name}' borrows {kind}<{typeName}> with no name, and both '{first}' and '{second}' answer to it; "
+            $"'{owner.Name}' borrows {kind}<{typeName}> and more than one node answers to it; "
             + "give the borrow a NodeName");
     }
 
@@ -200,16 +200,22 @@ public sealed class NodeWorld : ISignalDeclarer
     /// same way two nodes of one id are, so it is reported rather than resolved by
     /// picking whichever type registered first.
     /// </summary>
-    internal Node? ResolveDescendant(Node owner, Type wanted, string name)
+    internal unsafe Node? ResolveDescendant(Node owner, Type wanted, string name)
     {
         Node? found = null;
         foreach (var id in ScriptTypesAssignableTo(wanted))
         {
-            var entity = _scripts.ResolveDescendant(owner.Entity, id, name);
+            ScriptResolve why;
+            var entity = _scripts.ResolveDescendant(owner.Entity, id, name, &why);
+            if (why == ScriptResolve.Ambiguous)
+            {
+                ReportAmbiguousBorrow(owner, "Child", wanted.Name);
+                return null;
+            }
             if (entity == 0 || NodeOf(entity) is not { } node) continue;
             if (found is not null)
             {
-                ReportAmbiguousBorrow(owner, "Child", wanted.Name, found.Name, node.Name);
+                ReportAmbiguousBorrow(owner, "Child", wanted.Name);
                 return null;
             }
             found = node;
@@ -226,12 +232,13 @@ public sealed class NodeWorld : ISignalDeclarer
     /// answers alone. Widening the slot to say so would be modelling inheritance in a
     /// contract that has none.
     /// </remarks>
-    internal Node? ResolveAncestor(Node owner, Type wanted, string name)
+    internal unsafe Node? ResolveAncestor(Node owner, Type wanted, string name)
     {
         var ids = ScriptTypesAssignableTo(wanted);
         if (ids.Length == 1)
         {
-            var entity = _scripts.ResolveAncestor(owner.Entity, ids[0], name);
+            ScriptResolve why;
+            var entity = _scripts.ResolveAncestor(owner.Entity, ids[0], name, &why);
             return entity == 0 ? null : NodeOf(entity);
         }
 

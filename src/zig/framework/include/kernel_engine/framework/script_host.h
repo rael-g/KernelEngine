@@ -47,6 +47,20 @@ extern "C"
         KE_SCRIPT_REACH_ANY = 1,
     } ke_script_reach;
 
+    /// Why a resolve answered the way it did. Without it "no node answers" and "two
+    /// nodes answer" arrive as the same invalid entity, and a binding runtime can only
+    /// tell its author the borrow found nothing — sending them to look for a node that
+    /// is there twice.
+    typedef enum ke_script_resolve
+    {
+        /// Exactly one entity answered, and it is the one returned.
+        KE_SCRIPT_RESOLVE_FOUND = 0,
+        /// Nothing answered. The borrow names a node that is not there.
+        KE_SCRIPT_RESOLVE_NONE = 1,
+        /// More than one answered, so none was returned. Naming the borrow settles it.
+        KE_SCRIPT_RESOLVE_AMBIGUOUS = 2,
+    } ke_script_resolve;
+
     struct ke_script_host
     {
         void *handle;
@@ -127,19 +141,26 @@ extern "C"
         /// The entity below `entity` bound as an instance of `type`, searched
         /// depth-first. `name` narrows it to a node of that name; empty matches on
         /// type alone, and is ambiguous exactly when two candidates answer to it,
-        /// which returns KE_ENTITY_INVALID rather than picking one.
+        /// which returns KE_ENTITY_INVALID rather than picking one. `out_why` says
+        /// which of the two an invalid answer was, and may be NULL.
         /// @param name [utf8]
+        /// @param out_why [out, enum:ke_script_resolve]
         ke_entity (*resolve_descendant)(struct ke_script_host *self,
                                         ke_entity              entity,
                                         ke_script_type_id      type,
-                                        const char            *name);
+                                        const char            *name,
+                                        ke_script_resolve     *out_why);
 
-        /// The nearest entity above `entity` bound as an instance of `type`.
+        /// The nearest entity above `entity` bound as an instance of `type`. An
+        /// ancestor chain has one node at each level, so this never answers
+        /// ambiguous; `out_why` exists so both resolves read alike, and may be NULL.
         /// @param name [utf8]
+        /// @param out_why [out, enum:ke_script_resolve]
         ke_entity (*resolve_ancestor)(struct ke_script_host *self,
                                       ke_entity              entity,
                                       ke_script_type_id      type,
-                                      const char            *name);
+                                      const char            *name,
+                                      ke_script_resolve     *out_why);
     };
 
     /// Owner wrapper: destroy releases the type table and the bindings. The

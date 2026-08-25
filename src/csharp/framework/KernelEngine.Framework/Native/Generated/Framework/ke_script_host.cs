@@ -33,9 +33,9 @@ public unsafe partial struct ke_script_host
     [NativeTypeName("const ke_entity *(*)(struct ke_script_host *, ke_script_type_id, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, uint, uint*, ulong*> instances;
 
-    [NativeTypeName("ke_entity (*)(struct ke_script_host *, ke_entity, ke_script_type_id, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, sbyte*, ulong> resolve_descendant;
+    [NativeTypeName("ke_entity (*)(struct ke_script_host *, ke_entity, ke_script_type_id, const char *, ke_script_resolve *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, sbyte*, ke_script_resolve*, ulong> resolve_descendant;
 
-    [NativeTypeName("ke_entity (*)(struct ke_script_host *, ke_entity, ke_script_type_id, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, sbyte*, ulong> resolve_ancestor;
+    [NativeTypeName("ke_entity (*)(struct ke_script_host *, ke_entity, ke_script_type_id, const char *, ke_script_resolve *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, sbyte*, ke_script_resolve*, ulong> resolve_ancestor;
 }

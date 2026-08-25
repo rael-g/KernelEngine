@@ -15,6 +15,27 @@
           "doc": "Reaches entities it was not handed \u2014 a borrow, a lookup by name, a query. Anything unproven belongs here: over-declaring costs parallelism, while under-declaring corrupts memory."
         }
       ]
+    },
+    {
+      "name": "ke_script_resolve",
+      "doc": "Why a resolve answered the way it did. Without it \u0022no node answers\u0022 and \u0022two nodes answer\u0022 arrive as the same invalid entity, and a binding runtime can only tell its author the borrow found nothing \u2014 sending them to look for a node that is there twice.",
+      "values": [
+        {
+          "name": "KE_SCRIPT_RESOLVE_FOUND",
+          "value": 0,
+          "doc": "Exactly one entity answered, and it is the one returned."
+        },
+        {
+          "name": "KE_SCRIPT_RESOLVE_NONE",
+          "value": 1,
+          "doc": "Nothing answered. The borrow names a node that is not there."
+        },
+        {
+          "name": "KE_SCRIPT_RESOLVE_AMBIGUOUS",
+          "value": 2,
+          "doc": "More than one answered, so none was returned. Naming the borrow settles it."
+        }
+      ]
     }
   ],
   "structs": [],
@@ -261,7 +282,7 @@
           "name": "resolve_descendant",
           "returns": "ke_entity",
           "tags": [],
-          "doc": "The entity below \u0060entity\u0060 bound as an instance of \u0060type\u0060, searched depth-first. \u0060name\u0060 narrows it to a node of that name; empty matches on type alone, and is ambiguous exactly when two candidates answer to it, which returns KE_ENTITY_INVALID rather than picking one.",
+          "doc": "The entity below \u0060entity\u0060 bound as an instance of \u0060type\u0060, searched depth-first. \u0060name\u0060 narrows it to a node of that name; empty matches on type alone, and is ambiguous exactly when two candidates answer to it, which returns KE_ENTITY_INVALID rather than picking one. \u0060out_why\u0060 says which of the two an invalid answer was, and may be NULL.",
           "return_doc": null,
           "params": [
             {
@@ -283,6 +304,15 @@
                 "utf8"
               ],
               "doc": null
+            },
+            {
+              "name": "out_why",
+              "type": "ke_script_resolve *",
+              "tags": [
+                "out",
+                "enum:ke_script_resolve"
+              ],
+              "doc": null
             }
           ]
         },
@@ -290,7 +320,7 @@
           "name": "resolve_ancestor",
           "returns": "ke_entity",
           "tags": [],
-          "doc": "The nearest entity above \u0060entity\u0060 bound as an instance of \u0060type\u0060.",
+          "doc": "The nearest entity above \u0060entity\u0060 bound as an instance of \u0060type\u0060. An ancestor chain has one node at each level, so this never answers ambiguous; \u0060out_why\u0060 exists so both resolves read alike, and may be NULL.",
           "return_doc": null,
           "params": [
             {
@@ -310,6 +340,15 @@
               "type": "const char *",
               "tags": [
                 "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_why",
+              "type": "ke_script_resolve *",
+              "tags": [
+                "out",
+                "enum:ke_script_resolve"
               ],
               "doc": null
             }

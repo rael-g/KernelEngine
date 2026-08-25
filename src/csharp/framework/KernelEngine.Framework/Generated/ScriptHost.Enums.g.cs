@@ -11,3 +11,14 @@ public enum ScriptReach
     /// <summary>Reaches entities it was not handed — a borrow, a lookup by name, a query. Anything unproven belongs here: over-declaring costs parallelism, while under-declaring corrupts memory.</summary>
     Any = 1,
 }
+
+/// <summary>Why a resolve answered the way it did. Without it "no node answers" and "two nodes answer" arrive as the same invalid entity, and a binding runtime can only tell its author the borrow found nothing — sending them to look for a node that is there twice.</summary>
+public enum ScriptResolve
+{
+    /// <summary>Exactly one entity answered, and it is the one returned.</summary>
+    Found = 0,
+    /// <summary>Nothing answered. The borrow names a node that is not there.</summary>
+    None = 1,
+    /// <summary>More than one answered, so none was returned. Naming the borrow settles it.</summary>
+    Ambiguous = 2,
+}

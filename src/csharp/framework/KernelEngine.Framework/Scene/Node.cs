@@ -214,7 +214,7 @@ public abstract class Node
             if (node is not T typed) continue;
             if (found is not null)
             {
-                NodeWorld?.ReportAmbiguousBorrow(this, "Ref", typeof(T).Name, found.Name, node.Name);
+                NodeWorld?.ReportAmbiguousBorrow(this, "Ref", typeof(T).Name);
                 return default;
             }
             found = typed;
