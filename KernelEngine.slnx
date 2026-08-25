@@ -49,7 +49,7 @@
     <Project Path="src/csharp/physics/KernelEngine.Physics/KernelEngine.Physics.csproj" />
     <Project Path="src/csharp/physics/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render/KernelEngine.Render.csproj" />
-    <Project Path="src/csharp/render/KernelEngine.Render.Scene/KernelEngine.Render.Scene.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.Render.Native/KernelEngine.Render.Native.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Webgpu/KernelEngine.Render.Webgpu.csproj" />
     <Project Path="src/csharp/runtime/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
     <Project Path="src/csharp/scheduler/KernelEngine.Scheduler/KernelEngine.Scheduler.csproj" />

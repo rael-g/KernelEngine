@@ -10,7 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Asset.Abstractions\KernelEngine.Asset.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\render\KernelEngine.Render\KernelEngine.Render.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
     <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
   </ItemGroup>

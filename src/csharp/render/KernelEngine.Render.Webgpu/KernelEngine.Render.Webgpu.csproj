@@ -31,7 +31,6 @@
     <ProjectReference Include="..\..\view\KernelEngine.View\KernelEngine.View.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Render\KernelEngine.Render.csproj" /> <!-- INativeRenderResources -->
-    <ProjectReference Include="..\KernelEngine.Render.Scene\KernelEngine.Render.Scene.csproj" /> <!-- the render domain's node types -->
 
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
