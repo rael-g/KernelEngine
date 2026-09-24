@@ -22,3 +22,14 @@ public enum ScriptResolve
     /// <summary>More than one answered, so none was returned. Naming the borrow settles it.</summary>
     Ambiguous = 2,
 }
+
+/// <summary>Where a borrow looks for the node it names. One question asked three ways rather than three questions: a borrow is always "an instance of this type, optionally by this name", and only the region searched differs.</summary>
+public enum ScriptBorrow
+{
+    /// <summary>Below the borrower, depth-first. A node reaches a grandchild it names without every level in between forwarding it.</summary>
+    Descendant = 0,
+    /// <summary>The nearest above the borrower. An ancestor chain has one node per level, so this is the one reach that can never answer ambiguous.</summary>
+    Ancestor = 1,
+    /// <summary>Anywhere the type is bound, ignoring the borrower's position. What a node reporting to a sibling subsystem needs, and the reason this is asked here rather than by a binding walking every node it knows about.</summary>
+    Anywhere = 2,
+}

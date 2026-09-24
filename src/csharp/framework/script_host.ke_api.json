@@ -36,6 +36,27 @@
           "doc": "More than one answered, so none was returned. Naming the borrow settles it."
         }
       ]
+    },
+    {
+      "name": "ke_script_borrow",
+      "doc": "Where a borrow looks for the node it names. One question asked three ways rather than three questions: a borrow is always \u0022an instance of this type, optionally by this name\u0022, and only the region searched differs.",
+      "values": [
+        {
+          "name": "KE_SCRIPT_BORROW_DESCENDANT",
+          "value": 0,
+          "doc": "Below the borrower, depth-first. A node reaches a grandchild it names without every level in between forwarding it."
+        },
+        {
+          "name": "KE_SCRIPT_BORROW_ANCESTOR",
+          "value": 1,
+          "doc": "The nearest above the borrower. An ancestor chain has one node per level, so this is the one reach that can never answer ambiguous."
+        },
+        {
+          "name": "KE_SCRIPT_BORROW_ANYWHERE",
+          "value": 2,
+          "doc": "Anywhere the type is bound, ignoring the borrower\u0027s position. What a node reporting to a sibling subsystem needs, and the reason this is asked here rather than by a binding walking every node it knows about."
+        }
+      ]
     }
   ],
   "structs": [],
@@ -279,14 +300,16 @@
           ]
         },
         {
-          "name": "resolve_descendant",
+          "name": "resolve",
           "returns": "ke_entity",
-          "tags": [],
-          "doc": "The entity below \u0060entity\u0060 bound as an instance of \u0060type\u0060, searched depth-first. \u0060name\u0060 narrows it to a node of that name; empty matches on type alone, and is ambiguous exactly when two candidates answer to it, which returns KE_ENTITY_INVALID rather than picking one. \u0060out_why\u0060 says which of the two an invalid answer was, and may be NULL.",
+          "tags": [
+            "borrows"
+          ],
+          "doc": "The entity \u0060owner\u0060 borrows: an instance of \u0060type\u0060 found within \u0060reach\u0060. \u0060name\u0060 narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. \u0060out_why\u0060 says which of the two an invalid answer was, and may be NULL.",
           "return_doc": null,
           "params": [
             {
-              "name": "entity",
+              "name": "owner",
               "type": "ke_entity",
               "tags": [],
               "doc": null
@@ -306,40 +329,10 @@
               "doc": null
             },
             {
-              "name": "out_why",
-              "type": "ke_script_resolve *",
+              "name": "reach",
+              "type": "ke_script_borrow",
               "tags": [
-                "out",
-                "enum:ke_script_resolve"
-              ],
-              "doc": null
-            }
-          ]
-        },
-        {
-          "name": "resolve_ancestor",
-          "returns": "ke_entity",
-          "tags": [],
-          "doc": "The nearest entity above \u0060entity\u0060 bound as an instance of \u0060type\u0060. An ancestor chain has one node at each level, so this never answers ambiguous; \u0060out_why\u0060 exists so both resolves read alike, and may be NULL.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "entity",
-              "type": "ke_entity",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "type",
-              "type": "ke_script_type_id",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [
-                "utf8"
+                "enum:ke_script_borrow"
               ],
               "doc": null
             },

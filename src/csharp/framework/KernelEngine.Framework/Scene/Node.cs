@@ -175,16 +175,11 @@ public abstract class Node
     /// <summary>
     /// Resolves a <see cref="Child{T}"/> borrow. Called by generated dispatch each
     /// tick rather than cached, so a borrow can never outlive the node it points at.
+    /// An empty <paramref name="name"/> resolves by type.
     /// </summary>
-    /// <remarks>
-    /// An empty <paramref name="name"/> resolves by type. Resolution reaches the whole
-    /// subtree rather than the direct children alone, so a node reaches a grandchild it
-    /// names without every level in between having to forward it.
-    /// </remarks>
-    protected internal Child<T> BorrowChild<T>(string name) where T : Node
-    {
-        return ScriptHost?.ResolveDescendant(this, typeof(T), name) is T typed ? new Child<T>(typed) : default;
-    }
+    protected internal Child<T> BorrowChild<T>(string name) where T : Node =>
+        ScriptHost?.Borrow(this, typeof(T), name, ScriptBorrow.Descendant) is T typed
+            ? new Child<T>(typed) : default;
 
     /// <summary>
     /// Resolves an <see cref="Emit{T}"/> borrow: the right to raise signal
@@ -197,28 +192,14 @@ public abstract class Node
     /// Resolves a <see cref="Ref{T}"/> borrow anywhere in the tree, by name or — when
     /// none is given — by type, the same rule a child borrow follows.
     /// </summary>
-    protected internal Ref<T> BorrowRef<T>(string name) where T : Node
-    {
-        if (name.Length != 0)
-        {
-            return ScriptHost?.Find(name) is T named ? new Ref<T>(named) : default;
-        }
-
-        T? found = null;
-        foreach (var node in ScriptHost?.AllNodes ?? [])
-        {
-            if (node is not T typed) continue;
-            if (found is not null) return default;
-            found = typed;
-        }
-        return found is not null ? new Ref<T>(found) : default;
-    }
+    protected internal Ref<T> BorrowRef<T>(string name) where T : Node =>
+        ScriptHost?.Borrow(this, typeof(T), name, ScriptBorrow.Anywhere) is T typed
+            ? new Ref<T>(typed) : default;
 
     /// <summary>Resolves a <see cref="Parent{T}"/> borrow to the nearest matching ancestor.</summary>
-    protected internal Parent<T> BorrowParent<T>(string name) where T : Node
-    {
-        return ScriptHost?.ResolveAncestor(this, typeof(T), name) is T typed ? new Parent<T>(typed) : default;
-    }
+    protected internal Parent<T> BorrowParent<T>(string name) where T : Node =>
+        ScriptHost?.Borrow(this, typeof(T), name, ScriptBorrow.Ancestor) is T typed
+            ? new Parent<T>(typed) : default;
 
     internal void UnbindFromScene()
     {

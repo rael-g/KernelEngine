@@ -128,23 +128,13 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         return Handle->instances(Handle, type, outCount);
     }
 
-    /// <summary>The entity below `entity` bound as an instance of `type`, searched depth-first. `name` narrows it to a node of that name; empty matches on type alone, and is ambiguous exactly when two candidates answer to it, which returns KE_ENTITY_INVALID rather than picking one. `out_why` says which of the two an invalid answer was, and may be NULL.</summary>
-    public ulong ResolveDescendant(ulong entity, uint type, string name, ScriptResolve* outWhy)
+    /// <summary>The entity `owner` borrows: an instance of `type` found within `reach`. `name` narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. `out_why` says which of the two an invalid answer was, and may be NULL.</summary>
+    public ulong Resolve(ulong owner, uint type, string name, ScriptBorrow reach, ScriptResolve* outWhy)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            return Handle->resolve_descendant(Handle, entity, type, (sbyte*)namePtr, (ke_script_resolve *)outWhy);
-        }
-    }
-
-    /// <summary>The nearest entity above `entity` bound as an instance of `type`. An ancestor chain has one node at each level, so this never answers ambiguous; `out_why` exists so both resolves read alike, and may be NULL.</summary>
-    public ulong ResolveAncestor(ulong entity, uint type, string name, ScriptResolve* outWhy)
-    {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
-        fixed (byte* namePtr = nameBytes)
-        {
-            return Handle->resolve_ancestor(Handle, entity, type, (sbyte*)namePtr, (ke_script_resolve *)outWhy);
+            return Handle->resolve(Handle, owner, type, (sbyte*)namePtr, (ke_script_borrow)reach, (ke_script_resolve *)outWhy);
         }
     }
 

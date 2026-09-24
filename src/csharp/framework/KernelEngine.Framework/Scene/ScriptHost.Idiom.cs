@@ -128,49 +128,40 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// The node below <paramref name="owner"/> bound as <paramref name="wanted"/>, or
-    /// null when none is or more than one answers. Two ids answering is ambiguity the
-    /// same way two nodes of one id are, so it is reported rather than resolved by
-    /// picking whichever type registered first.
+    /// The node <paramref name="owner"/> borrows: an instance of <paramref name="wanted"/>
+    /// within <paramref name="reach"/>, or null when none is or more than one answers.
+    /// Two ids answering is ambiguity the same way two nodes of one id are, so neither is
+    /// resolved by picking whichever type registered first.
     /// </summary>
-    internal unsafe Node? ResolveDescendant(Node owner, Type wanted, string name)
+    /// <remarks>
+    /// An ancestor borrow across several ids is decided here instead: the slot answers
+    /// with an entity and not with its depth, so which of several candidates is nearest
+    /// cannot be read off the answers. Widening the slot to say so would be modelling
+    /// inheritance in a contract that has none.
+    /// </remarks>
+    internal unsafe Node? Borrow(Node owner, Type wanted, string name, ScriptBorrow reach)
     {
+        var ids = ScriptTypesAssignableTo(wanted);
+
+        if (reach == ScriptBorrow.Ancestor && ids.Length != 1)
+        {
+            for (var ancestor = owner.Parent; ancestor is not null; ancestor = ancestor.Parent)
+                if (wanted.IsInstanceOfType(ancestor) && (name.Length == 0 || ancestor.Name == name))
+                    return ancestor;
+            return null;
+        }
+
         Node? found = null;
-        foreach (var id in ScriptTypesAssignableTo(wanted))
+        foreach (var id in ids)
         {
             ScriptResolve why;
-            var entity = ResolveDescendant(owner.Entity, id, name, &why);
+            var entity = Resolve(owner.Entity, id, name, reach, &why);
             if (why == ScriptResolve.Ambiguous) return null;
             if (entity == 0 || NodeOf(entity) is not { } node) continue;
             if (found is not null) return null;
             found = node;
         }
         return found;
-    }
-
-    /// <summary>
-    /// The nearest node above <paramref name="owner"/> bound as <paramref name="wanted"/>.
-    /// </summary>
-    /// <remarks>
-    /// Only the single-id case goes native: the slot answers with an entity and not with
-    /// its depth, so which of several candidates is nearest cannot be decided from the
-    /// answers alone. Widening the slot to say so would be modelling inheritance in a
-    /// contract that has none.
-    /// </remarks>
-    internal unsafe Node? ResolveAncestor(Node owner, Type wanted, string name)
-    {
-        var ids = ScriptTypesAssignableTo(wanted);
-        if (ids.Length == 1)
-        {
-            ScriptResolve why;
-            var entity = ResolveAncestor(owner.Entity, ids[0], name, &why);
-            return entity == 0 ? null : NodeOf(entity);
-        }
-
-        for (var ancestor = owner.Parent; ancestor is not null; ancestor = ancestor.Parent)
-            if (wanted.IsInstanceOfType(ancestor) && (name.Length == 0 || ancestor.Name == name))
-                return ancestor;
-        return null;
     }
 
     private SignalBus? _signals;

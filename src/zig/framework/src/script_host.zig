@@ -314,11 +314,22 @@ fn why(out: [*c]c.ke_script_resolve, verdict: c.ke_script_resolve) void {
     if (out != null) out.* = verdict;
 }
 
-fn resolveDescendant(
+fn anywhere(s: *State, type_id: c.ke_script_type_id, wanted: []const u8, found: *c.ke_entity) bool {
+    if (type_id == c.KE_SCRIPT_TYPE_NONE or type_id > s.type_count) return false;
+    for (s.types[type_id - 1].entities.items) |e| {
+        if (!matches(s, e, type_id, wanted)) continue;
+        if (found.* != c.KE_ENTITY_INVALID) return true;
+        found.* = e;
+    }
+    return false;
+}
+
+fn resolve(
     self_in: ?*c.ke_script_host,
-    entity: c.ke_entity,
+    owner: c.ke_entity,
     type_id: c.ke_script_type_id,
     name_in: [*c]const u8,
+    reach: c.ke_script_borrow,
     out_why: [*c]c.ke_script_resolve,
 ) callconv(.c) c.ke_entity {
     const self = self_in orelse {
@@ -328,39 +339,30 @@ fn resolveDescendant(
     const s = stateOf(self);
     const wanted = if (name_in == null) &[_]u8{} else std.mem.span(name_in);
 
+    if (reach == c.KE_SCRIPT_BORROW_ANCESTOR) {
+        var cur = if (getHierarchy(s, owner)) |h| h.parent else c.KE_ENTITY_INVALID;
+        while (cur != c.KE_ENTITY_INVALID) {
+            if (matches(s, cur, type_id, wanted)) {
+                why(out_why, c.KE_SCRIPT_RESOLVE_FOUND);
+                return cur;
+            }
+            cur = if (getHierarchy(s, cur)) |h| h.parent else c.KE_ENTITY_INVALID;
+        }
+        why(out_why, c.KE_SCRIPT_RESOLVE_NONE);
+        return c.KE_ENTITY_INVALID;
+    }
+
     var found: c.ke_entity = c.KE_ENTITY_INVALID;
-    if (descendantOf(s, entity, type_id, wanted, &found)) {
+    const ambiguous = switch (reach) {
+        c.KE_SCRIPT_BORROW_ANYWHERE => anywhere(s, type_id, wanted, &found),
+        else => descendantOf(s, owner, type_id, wanted, &found),
+    };
+    if (ambiguous) {
         why(out_why, c.KE_SCRIPT_RESOLVE_AMBIGUOUS);
         return c.KE_ENTITY_INVALID;
     }
     why(out_why, if (found == c.KE_ENTITY_INVALID) c.KE_SCRIPT_RESOLVE_NONE else c.KE_SCRIPT_RESOLVE_FOUND);
     return found;
-}
-
-fn resolveAncestor(
-    self_in: ?*c.ke_script_host,
-    entity: c.ke_entity,
-    type_id: c.ke_script_type_id,
-    name_in: [*c]const u8,
-    out_why: [*c]c.ke_script_resolve,
-) callconv(.c) c.ke_entity {
-    const self = self_in orelse {
-        why(out_why, c.KE_SCRIPT_RESOLVE_NONE);
-        return c.KE_ENTITY_INVALID;
-    };
-    const s = stateOf(self);
-    const wanted = if (name_in == null) &[_]u8{} else std.mem.span(name_in);
-
-    var cur = if (getHierarchy(s, entity)) |h| h.parent else c.KE_ENTITY_INVALID;
-    while (cur != c.KE_ENTITY_INVALID) {
-        if (matches(s, cur, type_id, wanted)) {
-            why(out_why, c.KE_SCRIPT_RESOLVE_FOUND);
-            return cur;
-        }
-        cur = if (getHierarchy(s, cur)) |h| h.parent else c.KE_ENTITY_INVALID;
-    }
-    why(out_why, c.KE_SCRIPT_RESOLVE_NONE);
-    return c.KE_ENTITY_INVALID;
 }
 
 fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
@@ -432,8 +434,7 @@ pub export fn ke_script_host_create(
         .instance_of = &instanceOf,
         .instance_count = &instanceCount,
         .instances = &instances,
-        .resolve_descendant = &resolveDescendant,
-        .resolve_ancestor = &resolveAncestor,
+        .resolve = &resolve,
     };
 
     return .{ .ref = &s.api, .destroy = &destroy };
@@ -665,7 +666,7 @@ test "a descendant of the wanted type is found through intermediate nodes" {
     var marker: u32 = 1;
     try testing.expect(h.host().bind.?(h.host(), hit, audio, &marker, null));
 
-    try testing.expectEqual(hit, h.host().resolve_descendant.?(h.host(), ball, audio, "", null));
+    try testing.expectEqual(hit, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
 }
 
 test "a descendant named by the borrow is picked out of several of its type" {
@@ -682,7 +683,7 @@ test "a descendant named by the borrow is picked out of several of its type" {
     try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
     try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
 
-    try testing.expectEqual(score, h.host().resolve_descendant.?(h.host(), ball, audio, "ScoreSound", null));
+    try testing.expectEqual(score, h.host().resolve.?(h.host(), ball, audio, "ScoreSound", c.KE_SCRIPT_BORROW_DESCENDANT, null));
 }
 
 test "an unnamed borrow answered by two nodes resolves to nothing instead of guessing" {
@@ -699,7 +700,7 @@ test "an unnamed borrow answered by two nodes resolves to nothing instead of gue
     try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
     try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
 
-    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve_descendant.?(h.host(), ball, audio, "", null));
+    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
 }
 
 test "an invalid answer says whether nothing matched or too much did" {
@@ -711,19 +712,19 @@ test "an invalid answer says whether nothing matched or too much did" {
     const ball = h.tree.create("Ball", 0);
     var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_FOUND;
 
-    _ = h.host().resolve_descendant.?(h.host(), ball, audio, "", &verdict);
+    _ = h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, &verdict);
     try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_NONE), verdict);
 
     const hit = h.tree.create("HitSound", ball);
     var m1: u32 = 1;
     try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
-    try testing.expectEqual(hit, h.host().resolve_descendant.?(h.host(), ball, audio, "", &verdict));
+    try testing.expectEqual(hit, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, &verdict));
     try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_FOUND), verdict);
 
     const score = h.tree.create("ScoreSound", ball);
     var m2: u32 = 2;
     try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
-    _ = h.host().resolve_descendant.?(h.host(), ball, audio, "", &verdict);
+    _ = h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, &verdict);
     try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_AMBIGUOUS), verdict);
 }
 
@@ -736,7 +737,7 @@ test "an ancestor that is not there reads as none, never as ambiguous" {
     const lonely = h.tree.create("Lonely", 0);
     var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_AMBIGUOUS;
 
-    _ = h.host().resolve_ancestor.?(h.host(), lonely, field, "", &verdict);
+    _ = h.host().resolve.?(h.host(), lonely, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, &verdict);
     try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_NONE), verdict);
 }
 
@@ -751,7 +752,56 @@ test "a node of the wanted type outside the subtree is not a descendant" {
     var marker: u32 = 1;
     try testing.expect(h.host().bind.?(h.host(), elsewhere, audio, &marker, null));
 
-    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve_descendant.?(h.host(), ball, audio, "", null));
+    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
+}
+
+test "a borrow reaching anywhere finds a node the subtree does not contain" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    const elsewhere = h.tree.create("Music", 0);
+    var marker: u32 = 1;
+    try testing.expect(h.host().bind.?(h.host(), elsewhere, audio, &marker, null));
+
+    try testing.expectEqual(elsewhere, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_ANYWHERE, null));
+    try testing.expectEqual(elsewhere, h.host().resolve.?(h.host(), ball, audio, "Music", c.KE_SCRIPT_BORROW_ANYWHERE, null));
+}
+
+test "two nodes of one type anywhere are ambiguous until the borrow names one" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    const music = h.tree.create("Music", 0);
+    const hit = h.tree.create("HitSound", 0);
+    var m1: u32 = 1;
+    var m2: u32 = 2;
+    try testing.expect(h.host().bind.?(h.host(), music, audio, &m1, null));
+    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m2, null));
+
+    var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_FOUND;
+    _ = h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_ANYWHERE, &verdict);
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_AMBIGUOUS), verdict);
+
+    try testing.expectEqual(hit, h.host().resolve.?(h.host(), ball, audio, "HitSound", c.KE_SCRIPT_BORROW_ANYWHERE, &verdict));
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_FOUND), verdict);
+}
+
+test "a borrow reaching anywhere does not see a type nobody registered" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const ball = h.tree.create("Ball", 0);
+    var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_FOUND;
+    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID),
+        h.host().resolve.?(h.host(), ball, c.KE_SCRIPT_TYPE_NONE, "", c.KE_SCRIPT_BORROW_ANYWHERE, &verdict));
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_NONE), verdict);
 }
 
 test "the nearest ancestor of the wanted type wins over a further one" {
@@ -768,7 +818,7 @@ test "the nearest ancestor of the wanted type wins over a further one" {
     try testing.expect(h.host().bind.?(h.host(), outer, field, &m1, null));
     try testing.expect(h.host().bind.?(h.host(), inner, field, &m2, null));
 
-    try testing.expectEqual(inner, h.host().resolve_ancestor.?(h.host(), leaf, field, "", null));
+    try testing.expectEqual(inner, h.host().resolve.?(h.host(), leaf, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, null));
 }
 
 test "a node is not its own ancestor" {
@@ -781,5 +831,5 @@ test "a node is not its own ancestor" {
     var marker: u32 = 1;
     try testing.expect(h.host().bind.?(h.host(), node, field, &marker, null));
 
-    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve_ancestor.?(h.host(), node, field, "", null));
+    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), node, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, null));
 }

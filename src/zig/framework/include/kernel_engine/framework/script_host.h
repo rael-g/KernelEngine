@@ -61,6 +61,23 @@ extern "C"
         KE_SCRIPT_RESOLVE_AMBIGUOUS = 2,
     } ke_script_resolve;
 
+    /// [borrow_kinds] Where a borrow looks for the node it names. One question asked
+    /// three ways rather than three questions: a borrow is always "an instance of
+    /// this type, optionally by this name", and only the region searched differs.
+    typedef enum ke_script_borrow
+    {
+        /// Below the borrower, depth-first. A node reaches a grandchild it names
+        /// without every level in between forwarding it.
+        KE_SCRIPT_BORROW_DESCENDANT = 0,
+        /// The nearest above the borrower. An ancestor chain has one node per level,
+        /// so this is the one reach that can never answer ambiguous.
+        KE_SCRIPT_BORROW_ANCESTOR = 1,
+        /// Anywhere the type is bound, ignoring the borrower's position. What a node
+        /// reporting to a sibling subsystem needs, and the reason this is asked here
+        /// rather than by a binding walking every node it knows about.
+        KE_SCRIPT_BORROW_ANYWHERE = 2,
+    } ke_script_borrow;
+
     struct ke_script_host
     {
         void *handle;
@@ -138,29 +155,20 @@ extern "C"
                                       ke_script_type_id      type,
                                       uint32_t              *out_count);
 
-        /// The entity below `entity` bound as an instance of `type`, searched
-        /// depth-first. `name` narrows it to a node of that name; empty matches on
-        /// type alone, and is ambiguous exactly when two candidates answer to it,
-        /// which returns KE_ENTITY_INVALID rather than picking one. `out_why` says
-        /// which of the two an invalid answer was, and may be NULL.
+        /// [borrows] The entity `owner` borrows: an instance of `type` found within
+        /// `reach`. `name` narrows it to a node of that name; empty matches on type
+        /// alone, and answers ambiguous when two candidates qualify rather than
+        /// picking one. `out_why` says which of the two an invalid answer was, and
+        /// may be NULL.
         /// @param name [utf8]
+        /// @param reach [enum:ke_script_borrow]
         /// @param out_why [out, enum:ke_script_resolve]
-        ke_entity (*resolve_descendant)(struct ke_script_host *self,
-                                        ke_entity              entity,
-                                        ke_script_type_id      type,
-                                        const char            *name,
-                                        ke_script_resolve     *out_why);
-
-        /// The nearest entity above `entity` bound as an instance of `type`. An
-        /// ancestor chain has one node at each level, so this never answers
-        /// ambiguous; `out_why` exists so both resolves read alike, and may be NULL.
-        /// @param name [utf8]
-        /// @param out_why [out, enum:ke_script_resolve]
-        ke_entity (*resolve_ancestor)(struct ke_script_host *self,
-                                      ke_entity              entity,
-                                      ke_script_type_id      type,
-                                      const char            *name,
-                                      ke_script_resolve     *out_why);
+        ke_entity (*resolve)(struct ke_script_host *self,
+                             ke_entity              owner,
+                             ke_script_type_id      type,
+                             const char            *name,
+                             ke_script_borrow       reach,
+                             ke_script_resolve     *out_why);
     };
 
     /// Owner wrapper: destroy releases the type table and the bindings. The
