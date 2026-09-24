@@ -76,6 +76,28 @@ Expect("an enum out parameter keeps its indirection",
     contains: ["ProbeVerdict* outKind"],
     absent: ["ProbeVerdict outKind"]);
 
+// A run of consecutive float parameters that spell out one vector: the public surface
+// takes the vector, and the lanes are spread at the call. A C ABI cannot say "Vector2",
+// so without this every such slot grows a hand-written overload whose only content is
+// which argument goes where.
+Expect("consecutive lanes become one vector parameter",
+    Vtable("ke_probe", Slot("set_gravity", "void",
+        Param("x", "float", "vector2:gravity"),
+        Param("y", "float"))),
+    contains: ["public void SetGravity(Vector2 gravity)", "gravity.X, gravity.Y", "using System.Numerics;"],
+    absent: ["SetGravity(float x, float y)"]);
+
+// The lane run keeps its place among ordinary parameters rather than being hoisted.
+Expect("a vector parameter does not disturb the parameters around it",
+    Vtable("ke_probe", Slot("apply_impulse", "void",
+        Param("body", "uint32_t"),
+        Param("impulse_x", "float", "vector2:impulse"),
+        Param("impulse_y", "float"),
+        Param("wake", "ke_bool"))),
+    contains: ["public void ApplyImpulse(uint body, Vector2 impulse, bool wake)",
+               "body, impulse.X, impulse.Y, wake ? (byte)1 : (byte)0"],
+    absent: ["float impulseX"]);
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.

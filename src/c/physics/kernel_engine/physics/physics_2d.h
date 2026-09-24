@@ -57,7 +57,10 @@ extern "C"
     {
         void *handle;
 
-        /** Sets world gravity (m/s^2). Default is (0, -9.81). */
+        /**
+         * Sets world gravity (m/s^2). Default is (0, -9.81).
+         * @param x [vector2:gravity]
+         */
         void (*set_gravity)(struct ke_physics_2d *self, float x, float y);
 
         /**
@@ -66,7 +69,10 @@ extern "C"
          */
         void (*step)(struct ke_physics_2d *self, float dt);
 
-        /** Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error. */
+        /**
+         * Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.
+         * @param x [vector2:position]
+         */
         ke_body_2d (*create_body)(struct ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_error **out_error);
 
         /** Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID. */
@@ -76,6 +82,8 @@ extern "C"
          * Attaches a box fixture, sized by its half-extents and placed at the given offset
          * from the body origin. The offset is what lets one body carry several shapes in
          * different places — a character's feet and torso, a paddle's rounded ends.
+         * @param half_w [vector2:half_extents]
+         * @param offset_x [vector2:offset]
          * @param offset_angle Radians, CCW positive, about the offset center.
          * @param filter [opt] Layers the fixture occupies and tests against. NULL
          *               leaves it colliding with everything.
@@ -88,6 +96,7 @@ extern "C"
 
         /**
          * Attaches a circle fixture at the given offset from the body origin.
+         * @param offset_x [vector2:offset]
          * @param filter [opt] Layers the fixture occupies and tests against. NULL
          *               leaves it colliding with everything.
          */
@@ -103,13 +112,22 @@ extern "C"
          */
         void (*get_body_state)(struct ke_physics_2d *self, ke_body_2d body, ke_body_state_2d *out);
 
-        /** Teleports the body. Skips collision response — prefer apply_impulse for dynamic moves. */
+        /**
+         * Teleports the body. Skips collision response — prefer apply_impulse for dynamic moves.
+         * @param x [vector2:position]
+         */
         void (*set_body_position)(struct ke_physics_2d *self, ke_body_2d body, float x, float y, float angle);
 
-        /** Sets linear velocity directly (m/s). */
+        /**
+         * Sets linear velocity directly (m/s).
+         * @param vx [vector2:velocity]
+         */
         void (*set_body_velocity)(struct ke_physics_2d *self, ke_body_2d body, float vx, float vy);
 
-        /** Applies a linear impulse (kg*m/s) at the body center. */
+        /**
+         * Applies a linear impulse (kg*m/s) at the body center.
+         * @param impulse_x [vector2:impulse]
+         */
         void (*apply_impulse)(struct ke_physics_2d *self, ke_body_2d body, float impulse_x, float impulse_y);
 
         /**

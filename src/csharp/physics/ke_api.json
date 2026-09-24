@@ -110,7 +110,9 @@
             {
               "name": "x",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "vector2:gravity"
+              ],
               "doc": null
             },
             {
@@ -152,7 +154,9 @@
             {
               "name": "x",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "vector2:position"
+              ],
               "doc": null
             },
             {
@@ -200,7 +204,9 @@
             {
               "name": "half_w",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "vector2:half_extents"
+              ],
               "doc": null
             },
             {
@@ -212,7 +218,9 @@
             {
               "name": "offset_x",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "vector2:offset"
+              ],
               "doc": null
             },
             {
@@ -283,7 +291,9 @@
             {
               "name": "offset_x",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "vector2:offset"
+              ],
               "doc": null
             },
             {
@@ -365,7 +375,9 @@
             {
               "name": "x",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "vector2:position"
+              ],
               "doc": null
             },
             {
@@ -398,7 +410,9 @@
             {
               "name": "vx",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "vector2:velocity"
+              ],
               "doc": null
             },
             {
@@ -425,7 +439,9 @@
             {
               "name": "impulse_x",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "vector2:impulse"
+              ],
               "doc": null
             },
             {

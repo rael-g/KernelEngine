@@ -407,6 +407,7 @@ public static class CSharpBackend
             "using KernelEngine.Common.Native;",
             $"using {nativeNs};",
         };
+        if (HasVectorParams(vtable)) o.Add("using System.Numerics;");
         foreach (var u in extraUsings) o.Add($"using {u};");
         o.Add("");
         o.Add($"namespace {ns};");
@@ -540,10 +541,50 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
+    /// <summary>
+    /// The lane each parameter occupies in a vector a run of consecutive parameters
+    /// spells out. A C ABI has no vector type, so a position arrives as two floats and
+    /// every language that does have one re-groups them; doing that by hand is an
+    /// overload per slot whose only content is which argument goes where.
+    /// </summary>
+    static Dictionary<ApiParam, (string Vector, string Lane, int Arity, bool Leads)> VectorLanes(IReadOnlyList<ApiParam> ps)
+    {
+        var map = new Dictionary<ApiParam, (string, string, int, bool)>();
+        for (var i = 0; i < ps.Count; i++)
+        {
+            var arity = ps[i].Has("vector2") ? 2 : ps[i].Has("vector3") ? 3 : 0;
+            if (arity == 0) continue;
+            var vector = ps[i].TagValue($"vector{arity}")
+                ?? throw new InvalidOperationException(
+                    $"{ps[i].Name}: [vector{arity}] must name the vector, as [vector{arity}:<name>]");
+            if (i + arity > ps.Count)
+                throw new InvalidOperationException(
+                    $"{ps[i].Name}: [vector{arity}:{vector}] needs {arity} consecutive parameters, "
+                    + $"but only {ps.Count - i} follow");
+            for (var lane = 0; lane < arity; lane++)
+                map[ps[i + lane]] = (vector, "XYZ"[lane].ToString(), arity, lane == 0);
+            i += arity - 1;
+        }
+        return map;
+    }
+
+    /// <summary>Whether any slot on the vtable groups parameters into a vector.</summary>
+    static bool HasVectorParams(ApiStruct vtable) =>
+        vtable.Slots.Any(s => s.Params.Any(p => p.Has("vector2") || p.Has("vector3")));
+
     static void RenderSlotMethod(ApiModel model, List<string> o, ClassifiedSlot cs, Convention convention)
     {
         var slot = cs.Slot;
         var name = slot.TagValue("name") ?? Idioms.Pascal(slot.Name);
+        var lanes = VectorLanes(slot.Params);
+
+        string Sig(IEnumerable<ApiParam> ps) => string.Join(", ", SigParts(ps));
+
+        IEnumerable<string> SigParts(IEnumerable<ApiParam> ps) => ps
+            .Where(p => !lanes.TryGetValue(p, out var l) || l.Leads)
+            .Select(p => lanes.TryGetValue(p, out var l)
+                ? $"Vector{l.Arity} {Idioms.Ident(l.Vector)}"
+                : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}");
 
         switch (cs.Shape)
         {
@@ -551,7 +592,7 @@ public static class CSharpBackend
             {
                 var ret = CsType(model, CTypes.Deref(cs.OutParam!.Type));
                 var ins = cs.PublicParams.Where(p => p != cs.OutParam).ToList();
-                var sig = string.Join(", ", ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
+                var sig = Sig(ins);
                 var nativeArgs = string.Concat(cs.PublicParams.Select(p =>
                     ", " + (p == cs.OutParam ? "&result" : CallArg(p))));
 
@@ -581,7 +622,7 @@ public static class CSharpBackend
             case SlotShape.TupleOutParams:
             {
                 var ins = cs.PublicParams.Where(p => !cs.OutParams.Contains(p)).ToList();
-                var sig = string.Join(", ", ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
+                var sig = Sig(ins);
                 var names = cs.OutParams.Select(p => Idioms.Pascal(p.Name!)).ToList();
                 var types = cs.OutParams.Select(p => CsType(model, CTypes.Deref(p.Type))).ToList();
                 var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
@@ -622,7 +663,7 @@ public static class CSharpBackend
                 var outs = others.Where(p => p.Has("out")).ToList();
                 var ins = others.Where(p => !p.Has("out")).ToList();
 
-                var sigParts = ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}")
+                var sigParts = SigParts(ins)
                     .Append($"Span<{elem}> {pname}")
                     .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
 
@@ -673,7 +714,7 @@ public static class CSharpBackend
             {
                 var ins = cs.PublicParams.Where(p => !p.Has("out")).ToList();
                 var outs = cs.OutParams;
-                var sigParts = ins.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}")
+                var sigParts = SigParts(ins)
                     .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
 
                 var tryName = name.StartsWith("Try") ? name : $"Try{name}";
@@ -704,7 +745,7 @@ public static class CSharpBackend
                 var args = cs.PublicParams;
                 var byReturn = convention.SignalsFailureByReturn(slot.Returns);
                 var retType = byReturn ? "void" : CsType(model, slot.Returns);
-                var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
+                var sig = Sig(args);
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
                 o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
                     byReturn ? slot.ReturnDoc : null, throwsOnFail: true).TrimEnd());
@@ -753,7 +794,7 @@ public static class CSharpBackend
             default:
             {
                 var args = cs.PublicParams;
-                var sig = string.Join(", ", args.Select(p => $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
+                var sig = Sig(args);
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
                 var retType = slot.Returns == "ke_bool" ? "bool" : CsType(model, slot.Returns);
                 var needsCast = retType == "nint";
@@ -785,7 +826,8 @@ public static class CSharpBackend
         }
 
         string CallArg(ApiParam p) =>
-            p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
+            lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
+            : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
             : p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
             : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"

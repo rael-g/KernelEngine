@@ -4,8 +4,7 @@ namespace KernelEngine.Physics;
 
 /// <summary>
 /// The parts of <see cref="Physics2D"/> that express the native surface in C# terms
-/// rather than mirroring it: <see cref="Vector2"/> for coordinate pairs the ABI
-/// passes as loose floats, the <see cref="BodyHandle2D"/> value type over a bare
+/// rather than mirroring it: the <see cref="BodyHandle2D"/> value type over a bare
 /// uint id, the record-struct <see cref="BodyState2D"/> projection, and the
 /// "invalid handle is a silent no-op" policy the managed contract promises but the
 /// ABI does not. Everything that is a direct image of the C ABI is generated in
@@ -14,12 +13,9 @@ namespace KernelEngine.Physics;
 public unsafe partial class Physics2D : IPhysics2D
 {
     /// <inheritdoc/>
-    public void SetGravity(Vector2 gravity) => SetGravity(gravity.X, gravity.Y);
-
-    /// <inheritdoc/>
     BodyHandle2D IPhysics2D.CreateBody(BodyType2D type, Vector2 position)
     {
-        var id = CreateBody(type, position.X, position.Y);
+        var id = CreateBody(type, position);
         return id != 0 ? new BodyHandle2D(id) : BodyHandle2D.None;
     }
 
@@ -35,7 +31,7 @@ public unsafe partial class Physics2D : IPhysics2D
     {
         if (!body.IsValid) return;
         var native = ToNative(filter);
-        AddBoxFixture(body.Value, halfExtents.X, halfExtents.Y, offset.X, offset.Y, offsetAngle, density, friction, restitution,
+        AddBoxFixture(body.Value, halfExtents, offset, offsetAngle, density, friction, restitution,
             filter.HasValue ? &native : null);
     }
 
@@ -45,7 +41,7 @@ public unsafe partial class Physics2D : IPhysics2D
     {
         if (!body.IsValid) return;
         var native = ToNative(filter);
-        AddCircleFixture(body.Value, radius, offset.X, offset.Y, density, friction, restitution,
+        AddCircleFixture(body.Value, radius, offset, density, friction, restitution,
             filter.HasValue ? &native : null);
     }
 
@@ -55,19 +51,19 @@ public unsafe partial class Physics2D : IPhysics2D
     /// <inheritdoc/>
     public void SetBodyPosition(BodyHandle2D body, Vector2 position, float angle)
     {
-        if (body.IsValid) SetBodyPosition(body.Value, position.X, position.Y, angle);
+        if (body.IsValid) SetBodyPosition(body.Value, position, angle);
     }
 
     /// <inheritdoc/>
     public void SetBodyVelocity(BodyHandle2D body, Vector2 velocity)
     {
-        if (body.IsValid) SetBodyVelocity(body.Value, velocity.X, velocity.Y);
+        if (body.IsValid) SetBodyVelocity(body.Value, velocity);
     }
 
     /// <inheritdoc/>
     public void ApplyImpulse(BodyHandle2D body, Vector2 impulse)
     {
-        if (body.IsValid) ApplyImpulse(body.Value, impulse.X, impulse.Y);
+        if (body.IsValid) ApplyImpulse(body.Value, impulse);
     }
 
     /// <inheritdoc/>
