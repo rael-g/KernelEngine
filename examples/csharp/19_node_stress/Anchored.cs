@@ -21,7 +21,7 @@ public sealed partial class Anchored : Node
     /// <summary>How fast it moves, authored per instance so the instances differ.</summary>
     public partial float Rate { get; set; }
 
-    void Update(in View view, Child<Mover> unused)
+    void Update(in View view, Descendant<Mover> unused)
     {
         var v = Value;
         var step = Rate * view.DeltaTime;

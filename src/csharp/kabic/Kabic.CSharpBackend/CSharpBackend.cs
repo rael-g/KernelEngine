@@ -292,6 +292,66 @@ public static class CSharpBackend
     }
 
     /// <summary>
+    /// Emits one borrow wrapper per value of an enum that names where a borrow looks.
+    /// The engine asks one question with the region as a parameter, so a projection
+    /// that hands borrows to a script body needs one type per region and nothing else
+    /// varying between them; writing them out by hand is copying the same struct once
+    /// per enum value and letting the copies drift.
+    /// </summary>
+    public static string RenderBorrowWrappers(ApiEnum kinds, string ns, Convention convention)
+    {
+        var enumType = Idioms.TypeName(kinds.Name, convention);
+        var o = new List<string> { Header, $"namespace {ns};\n" };
+
+        o.Add("/// <summary>");
+        o.Add($"/// Marks a borrow wrapper with the <c>{enumType}</c> it resolves with, so a");
+        o.Add("/// projection recognises a borrow parameter by what it means rather than by a list");
+        o.Add("/// of type names kept in step by hand.");
+        o.Add("/// </summary>");
+        o.Add("[AttributeUsage(AttributeTargets.Struct)]");
+        o.Add("public sealed class NodeBorrowAttribute : Attribute");
+        o.Add("{");
+        o.Add("    /// <summary>Where this wrapper's borrow looks for the node it names.</summary>");
+        o.Add($"    public {enumType} Reach {{ get; }}");
+        o.Add("");
+        o.Add("    /// <param name=\"reach\">Where this wrapper's borrow looks for the node it names.</param>");
+        o.Add($"    public NodeBorrowAttribute({enumType} reach) => Reach = reach;");
+        o.Add("}");
+        o.Add("");
+
+        foreach (var v in kinds.Values)
+        {
+            var member = Idioms.EnumMember(v.Name, kinds.Name);
+            o.Add("/// <summary>");
+            o.Add($"/// {Escape(v.Doc ?? $"A borrow resolved with {member}.")} Obtained as a parameter rather");
+            o.Add("/// than stored in a field: re-resolved each time it is handed over, so it can never");
+            o.Add("/// dangle, and its type is what puts <typeparamref name=\"T\"/>'s components into the");
+            o.Add("/// borrowing body's access list.");
+            o.Add("/// </summary>");
+            o.Add($"[NodeBorrow({enumType}.{member})]");
+            o.Add($"public readonly ref struct {member}<T> where T : class");
+            o.Add("{");
+            o.Add("    private readonly T? _node;");
+            o.Add("");
+            o.Add("    /// <summary>The borrowed node, or null when none matched.</summary>");
+            o.Add("    public T? Node => _node;");
+            o.Add("");
+            o.Add("    /// <summary>True when a node matched this borrow.</summary>");
+            o.Add("    public bool IsBound => _node is not null;");
+            o.Add("");
+            o.Add("    /// <param name=\"node\">The node this borrow resolved to, or null when none matched.</param>");
+            o.Add($"    public {member}(T? node) => _node = node;");
+            o.Add("");
+            o.Add("    /// <summary>Unwraps the borrow, throwing when nothing matched.</summary>");
+            o.Add("    public T Value => _node ?? throw new InvalidOperationException(");
+            o.Add($"        $\"No node of type {{typeof(T).Name}} is bound for this {member.ToLowerInvariant()} borrow.\");");
+            o.Add("}");
+            o.Add("");
+        }
+        return string.Join('\n', o);
+    }
+
+    /// <summary>
     /// Emits the type-to-id cache for a slot that interns a type under its name and
     /// payload size. The engine identifies the thing by those two values precisely so
     /// that two languages agree on it; what a language then needs is the trip back to

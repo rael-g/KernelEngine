@@ -16,69 +16,6 @@ public sealed class NodeNameAttribute : Attribute
 }
 
 /// <summary>
-/// A borrow of a child node of type <typeparamref name="T"/>, obtained as a
-/// parameter rather than stored in a field. Re-resolved each tick, so it can never
-/// dangle, and its type is what puts <typeparamref name="T"/>'s components into the
-/// borrowing system's access list.
-/// </summary>
-public readonly ref struct Child<T> where T : Node
-{
-    private readonly T? _node;
-
-    /// <summary>The borrowed node, or null when no matching child is bound.</summary>
-    public T? Node => _node;
-
-    /// <summary>True when a matching child was found this tick.</summary>
-    public bool IsBound => _node is not null;
-
-    internal Child(T? node) => _node = node;
-
-    /// <summary>Unwraps the borrow, throwing when no matching child is bound.</summary>
-    public T Value => _node ?? throw new InvalidOperationException(
-        $"No child of type {typeof(T).Name} is bound for this borrow.");
-}
-
-/// <summary>
-/// A borrow of a node anywhere in the tree, matched by name. Unlike
-/// <see cref="Child{T}"/> it does not require a parent relationship, which is what
-/// a node reporting to a sibling subsystem needs.
-/// </summary>
-public readonly ref struct Ref<T> where T : Node
-{
-    private readonly T? _node;
-
-    /// <summary>The borrowed node, or null when no matching node is bound.</summary>
-    public T? Node => _node;
-
-    /// <summary>True when a matching node was found this tick.</summary>
-    public bool IsBound => _node is not null;
-
-    internal Ref(T? node) => _node = node;
-
-    /// <summary>Unwraps the borrow, throwing when no matching node is bound.</summary>
-    public T Value => _node ?? throw new InvalidOperationException(
-        $"No node of type {typeof(T).Name} is bound for this borrow.");
-}
-
-/// <summary>A borrow of the nearest ancestor of type <typeparamref name="T"/>.</summary>
-public readonly ref struct Parent<T> where T : Node
-{
-    private readonly T? _node;
-
-    /// <summary>The borrowed node, or null when no matching ancestor is bound.</summary>
-    public T? Node => _node;
-
-    /// <summary>True when a matching ancestor was found this tick.</summary>
-    public bool IsBound => _node is not null;
-
-    internal Parent(T? node) => _node = node;
-
-    /// <summary>Unwraps the borrow, throwing when no matching ancestor is bound.</summary>
-    public T Value => _node ?? throw new InvalidOperationException(
-        $"No ancestor of type {typeof(T).Name} is bound for this borrow.");
-}
-
-/// <summary>
 /// The right to raise signal <typeparamref name="T"/> from the node that declares
 /// it, obtained as a parameter like any other borrow. The node names the signal it
 /// raises and nothing else: who listens is a fact of the scene, wired through the

@@ -40,8 +40,8 @@ public sealed partial class Ball : Body2D
     }
 
     void Update(in View view,
-        [NodeName("HitSound")]   Child<AudioPlayer> hit,
-        [NodeName("ScoreSound")] Child<AudioPlayer> sfx,
+        [NodeName("HitSound")]   Descendant<AudioPlayer> hit,
+        [NodeName("ScoreSound")] Descendant<AudioPlayer> sfx,
         Emit<GoalScored> goal,
         Emit<BallLaunched> launched)
     {
@@ -69,7 +69,7 @@ public sealed partial class Ball : Body2D
         LastVelocity = Velocity;
     }
 
-    void Score(bool leftScored, Emit<GoalScored> goal, Child<AudioPlayer> sfx)
+    void Score(bool leftScored, Emit<GoalScored> goal, Descendant<AudioPlayer> sfx)
     {
         goal.Send(new GoalScored(leftScored));
         sfx.Node?.Play();

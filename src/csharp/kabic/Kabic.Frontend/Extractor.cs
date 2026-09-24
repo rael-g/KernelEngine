@@ -106,8 +106,11 @@ public static class Extractor
             if (isInt) next = long.Parse(rawValue) + 1;
             values.Add(new ApiEnumValue(e["name"]!.GetValue<string>(), rawValue, isInt, doc.Length > 0 ? doc : null));
         }
-        var enumDoc = DocParser.Parse(node).Summary;
-        return new ApiEnum(name, enumDoc.Length > 0 ? enumDoc : null, values);
+        var parsed = DocParser.Parse(node);
+        return new ApiEnum(name, parsed.Summary.Length > 0 ? parsed.Summary : null, values)
+        {
+            Tags = parsed.SummaryTags,
+        };
     }
 
     static ApiStruct ExtractStruct(JsonObject node, string name, byte[] bytes, List<string> errors)

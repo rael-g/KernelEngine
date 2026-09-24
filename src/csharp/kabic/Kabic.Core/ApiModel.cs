@@ -17,6 +17,12 @@ public record ApiEnumValue(string Name, string RawValue, bool IsInt, string? Doc
 
 public record ApiEnum(string Name, string? Doc, IReadOnlyList<ApiEnumValue> Values)
 {
+    /// <summary>The tags the enum's own doc block declared.</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
+
+    /// <summary>Whether the enum carries <paramref name="tag"/>, with or without a value.</summary>
+    public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
+
     /// <summary>
     /// Whether this enum came from a header this domain composes against rather than
     /// describes (<c>--compose</c>). Present because a composed struct's field can be
@@ -97,6 +103,7 @@ public static class ApiReader
                 }).ToList())
             {
                 External = e["external"]?.GetValue<bool>() == true,
+                Tags = e["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [],
             });
         }
 

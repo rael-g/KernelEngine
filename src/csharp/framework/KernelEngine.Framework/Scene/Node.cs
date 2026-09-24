@@ -173,13 +173,12 @@ public abstract class Node
     }
 
     /// <summary>
-    /// Resolves a <see cref="Child{T}"/> borrow. Called by generated dispatch each
-    /// tick rather than cached, so a borrow can never outlive the node it points at.
-    /// An empty <paramref name="name"/> resolves by type.
+    /// Resolves a borrow within <paramref name="reach"/>. Called by generated dispatch
+    /// each tick rather than cached, so a borrow can never outlive the node it points
+    /// at. An empty <paramref name="name"/> resolves by type alone.
     /// </summary>
-    protected internal Child<T> BorrowChild<T>(string name) where T : Node =>
-        ScriptHost?.Borrow(this, typeof(T), name, ScriptBorrow.Descendant) is T typed
-            ? new Child<T>(typed) : default;
+    protected internal T? Borrow<T>(string name, ScriptBorrow reach) where T : Node =>
+        ScriptHost?.Borrow(this, typeof(T), name, reach) as T;
 
     /// <summary>
     /// Resolves an <see cref="Emit{T}"/> borrow: the right to raise signal
@@ -187,19 +186,6 @@ public abstract class Node
     /// </summary>
     protected internal Emit<T> BorrowEmit<T>() where T : unmanaged =>
         ScriptHost is null ? default : ScriptHost.EmitFor<T>(Entity);
-
-    /// <summary>
-    /// Resolves a <see cref="Ref{T}"/> borrow anywhere in the tree, by name or — when
-    /// none is given — by type, the same rule a child borrow follows.
-    /// </summary>
-    protected internal Ref<T> BorrowRef<T>(string name) where T : Node =>
-        ScriptHost?.Borrow(this, typeof(T), name, ScriptBorrow.Anywhere) is T typed
-            ? new Ref<T>(typed) : default;
-
-    /// <summary>Resolves a <see cref="Parent{T}"/> borrow to the nearest matching ancestor.</summary>
-    protected internal Parent<T> BorrowParent<T>(string name) where T : Node =>
-        ScriptHost?.Borrow(this, typeof(T), name, ScriptBorrow.Ancestor) is T typed
-            ? new Parent<T>(typed) : default;
 
     internal void UnbindFromScene()
     {

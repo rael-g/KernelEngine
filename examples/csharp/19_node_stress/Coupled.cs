@@ -26,7 +26,7 @@ public sealed partial class Coupled : Node
     /// <summary>Value the node emits <see cref="Crossed"/> at.</summary>
     public partial float Threshold { get; set; }
 
-    void Update(in View view, [NodeName("Echo")] Child<Echo> echo, Emit<Crossed> crossed)
+    void Update(in View view, [NodeName("Echo")] Descendant<Echo> echo, Emit<Crossed> crossed)
     {
         var v = Value;
         var step = Rate * view.DeltaTime;

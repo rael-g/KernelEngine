@@ -39,6 +39,7 @@ public static class Serialization
             ["values"] = new JsonArray(e.Values.Select(v => (JsonNode)v.ToJson()).ToArray()),
         };
         if (e.External) o["external"] = true;
+        if (e.Tags.Count > 0) o["tags"] = new JsonArray(e.Tags.Select(t => (JsonNode)t!).ToArray());
         return o;
     }
 

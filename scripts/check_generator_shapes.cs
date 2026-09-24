@@ -76,6 +76,20 @@ Expect("an enum out parameter keeps its indirection",
     contains: ["ProbeVerdict* outKind"],
     absent: ["ProbeVerdict outKind"]);
 
+// An enum that names where a borrow looks: one wrapper per value, each carrying the
+// reach it resolves with. What stops a projection from keeping its own list of borrow
+// type names, which is a copy of this enum that nothing makes it update.
+ExpectBorrowKinds("a borrow-kinds enum emits one wrapper per value, each marked with its reach",
+    contains: [
+        "public sealed class NodeBorrowAttribute : Attribute",
+        "[NodeBorrow(ProbeReachKind.Near)]",
+        "public readonly ref struct Near<T> where T : class",
+        "public Near(T? node) => _node = node;",
+        "[NodeBorrow(ProbeReachKind.Far)]",
+        "public readonly ref struct Far<T> where T : class",
+    ],
+    absent: ["internal Near("]);
+
 foreach (var f in failures) Console.Error.WriteLine($"  {f}");
 if (failures.Count > 0)
 {
@@ -130,6 +144,37 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent)
     }
     if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
+
+    foreach (var needle in contains)
+        if (!emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected to find \"{needle}\"");
+
+    foreach (var needle in absent)
+        if (emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected NOT to find \"{needle}\"");
+}
+
+void ExpectBorrowKinds(string what, string[] contains, string[] absent)
+{
+    checks++;
+    var kinds = new ApiEnum("ke_probe_reach_kind", "Where a borrow looks.",
+    [
+        new ApiEnumValue("KE_PROBE_REACH_KIND_NEAR", "0", true, "Close by."),
+        new ApiEnumValue("KE_PROBE_REACH_KIND_FAR", "1", true, "Further off."),
+    ])
+    { Tags = ["borrow_kinds"] };
+
+    string emitted;
+    try
+    {
+        emitted = CSharpBackend.RenderBorrowWrappers(kinds, "Probe", Convention.KernelEngine);
+    }
+    catch (Exception ex)
+    {
+        failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+        return;
+    }
+    if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
     foreach (var needle in contains)
         if (!emitted.Contains(needle, StringComparison.Ordinal))

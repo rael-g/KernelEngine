@@ -56,6 +56,9 @@
           "value": 2,
           "doc": "Anywhere the type is bound, ignoring the borrower\u0027s position. What a node reporting to a sibling subsystem needs, and the reason this is asked here rather than by a binding walking every node it knows about."
         }
+      ],
+      "tags": [
+        "borrow_kinds"
       ]
     }
   ],

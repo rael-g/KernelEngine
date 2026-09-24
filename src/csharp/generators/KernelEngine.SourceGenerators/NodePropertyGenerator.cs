@@ -173,7 +173,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 if (kind == "Emit") { args.Add($"BorrowEmit<{arg}>()"); continue; }
                 var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
                 var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : "";
-                args.Add($"Borrow{kind}<{arg}>(\"{nodeName}\")");
+                var reach = ReachOf((INamedTypeSymbol)pp.Type)!;
+                args.Add($"new global::KernelEngine.Framework.{kind}<{arg}>("
+                    + $"Borrow<{arg}>(\"{nodeName}\", global::KernelEngine.Framework.ScriptBorrow.{reach}))");
             }
             sb.AppendLine($"        Update({string.Join(", ", args)});");
             sb.AppendLine("    }");
@@ -600,7 +602,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     static readonly DiagnosticDescriptor UpdateParameterRule = new(
         id: "KESG006",
         title: "Behavior parameter is not a borrow",
-        messageFormat: "Parameter '{0}' of Update is {1}, which is not Child<T>, Ref<T>, or Parent<T>; every access a behavior has must be a borrow parameter",
+        messageFormat: "Parameter '{0}' of Update is {1}, which is not a borrow wrapper or Emit<T>; every access a behavior has must be a borrow parameter",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -677,18 +679,26 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
     }
 
-    /// <summary>Which borrow a parameter type is, or null when it is not one.</summary>
+    /// <summary>
+    /// Which borrow a parameter type is, or null when it is not one. A wrapper says so
+    /// by carrying the reach it resolves with, which is what keeps the set of borrows
+    /// the vocabulary the engine declares rather than a list of names repeated here.
+    /// </summary>
     static string? BorrowKindOf(ITypeSymbol type)
     {
         if (type is not INamedTypeSymbol named || named.TypeArguments.Length != 1) return null;
-        return named.Name switch
-        {
-            "Child"  => "Child",
-            "Ref"    => "Ref",
-            "Parent" => "Parent",
-            "Emit"   => "Emit",
-            _        => null,
-        };
+        if (named.Name == "Emit") return "Emit";
+        return ReachOf(named) is not null ? named.Name : null;
+    }
+
+    /// <summary>The <c>ScriptBorrow</c> member a borrow wrapper resolves with, or null when the type is not one.</summary>
+    static string? ReachOf(INamedTypeSymbol named)
+    {
+        var marker = named.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeBorrowAttribute");
+        if (marker is null || marker.ConstructorArguments.Length != 1) return null;
+        var arg = marker.ConstructorArguments[0];
+        return (arg.Type as INamedTypeSymbol)?.GetMembers().OfType<IFieldSymbol>()
+            .FirstOrDefault(f => f.HasConstantValue && Equals(f.ConstantValue, arg.Value))?.Name;
     }
 
     /// <summary>
