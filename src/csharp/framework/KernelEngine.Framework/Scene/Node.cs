@@ -183,9 +183,7 @@ public abstract class Node
     /// </remarks>
     protected internal Child<T> BorrowChild<T>(string name) where T : Node
     {
-        if (ScriptHost?.ResolveDescendant(this, typeof(T), name) is T typed) return new Child<T>(typed);
-        ScriptHost?.ReportUnresolvedBorrow(this, "Child", typeof(T).Name, name);
-        return default;
+        return ScriptHost?.ResolveDescendant(this, typeof(T), name) is T typed ? new Child<T>(typed) : default;
     }
 
     /// <summary>
@@ -203,33 +201,23 @@ public abstract class Node
     {
         if (name.Length != 0)
         {
-            if (ScriptHost?.Find(name) is T named) return new Ref<T>(named);
-            ScriptHost?.ReportUnresolvedBorrow(this, "Ref", typeof(T).Name, name);
-            return default;
+            return ScriptHost?.Find(name) is T named ? new Ref<T>(named) : default;
         }
 
         T? found = null;
         foreach (var node in ScriptHost?.AllNodes ?? [])
         {
             if (node is not T typed) continue;
-            if (found is not null)
-            {
-                ScriptHost?.ReportAmbiguousBorrow(this, "Ref", typeof(T).Name);
-                return default;
-            }
+            if (found is not null) return default;
             found = typed;
         }
-        if (found is not null) return new Ref<T>(found);
-        ScriptHost?.ReportUnresolvedBorrow(this, "Ref", typeof(T).Name, name);
-        return default;
+        return found is not null ? new Ref<T>(found) : default;
     }
 
     /// <summary>Resolves a <see cref="Parent{T}"/> borrow to the nearest matching ancestor.</summary>
     protected internal Parent<T> BorrowParent<T>(string name) where T : Node
     {
-        if (ScriptHost?.ResolveAncestor(this, typeof(T), name) is T typed) return new Parent<T>(typed);
-        ScriptHost?.ReportUnresolvedBorrow(this, "Parent", typeof(T).Name, name);
-        return default;
+        return ScriptHost?.ResolveAncestor(this, typeof(T), name) is T typed ? new Parent<T>(typed) : default;
     }
 
     internal void UnbindFromScene()

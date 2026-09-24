@@ -32,14 +32,6 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     internal event Action<Type>? BehaviorTypeAdded;
 
     /// <summary>
-    /// How many entities are bound as <paramref name="type"/>. Asked instead of counting
-    /// <see cref="BehaviorsOf"/>, which would build a list of every instance to learn its
-    /// length — on the tick path that is a per-frame allocation the size of the scene.
-    /// </summary>
-    internal int BoundCountOf(Type type) =>
-        _scriptTypes.TryGetValue(type, out var id) ? (int)InstanceCount(id) : 0;
-
-    /// <summary>
     /// The bound nodes of one type, read from the script host rather than from a list
     /// kept here. A second list would be a copy of the bindings that only this language
     /// can see, and that goes stale the moment anything else unbinds one of them.
@@ -112,64 +104,6 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
     private uint _nativeTransformCid;
 
-    private KernelEngine.Logger.ILogger? _logger;
-    private readonly HashSet<string> _reportedBorrows = new();
-    private readonly Dictionary<Type, int> _lastBoundCount = new();
-
-    /// <summary>
-    /// Reports a borrow that resolved to nothing, once per node-and-name pair.
-    /// </summary>
-    /// <remarks>
-    /// An unresolved borrow is indistinguishable from a working one at the call site —
-    /// every method on it is a no-op — so the node just stops doing part of its job with
-    /// nothing said. Reported once because resolution runs every tick.
-    /// </remarks>
-    internal void ReportUnresolvedBorrow(Node owner, string kind, string typeName, string name)
-    {
-        if (_logger is null) return;
-        if (!_reportedBorrows.Add($"{owner.Entity}/{kind}/{typeName}/{name}")) return;
-        _logger.Log(KernelEngine.Logger.LogLevel.Warning, "scene.node",
-            $"'{owner.Name}' borrows {kind}<{typeName}> named '{name}', which resolves to no node");
-    }
-
-    /// <summary>
-    /// Reports a node type whose behavior ran on fewer instances than are bound,
-    /// once per type. Reaching instances through a query means a query that matches
-    /// nothing stops the behavior with no symptom other than the node quietly doing
-    /// nothing — the failure a scheduler cannot distinguish from a node with nothing
-    /// to do, which is why it has to be said out loud.
-    /// </summary>
-    /// <remarks>
-    /// Only judged on a tick where the type's instance count did not just change. A node
-    /// added from inside a system defers its entity's components to the wave barrier, so
-    /// on that one tick it is bound and its query legitimately reaches nothing — and
-    /// reporting is latched, which would turn that single tick into a permanent
-    /// accusation against a node that works.
-    /// </remarks>
-    internal void ReportUnmatchedBehavior(Type type, int ran, int bound)
-    {
-        var settled = _lastBoundCount.TryGetValue(type, out var previous) && previous == bound;
-        _lastBoundCount[type] = bound;
-
-        if (_logger is null || !settled || ran >= bound) return;
-        if (!_reportedBorrows.Add($"unmatched/{type.FullName}")) return;
-        _logger.Log(KernelEngine.Logger.LogLevel.Error, "scene.node",
-            $"'{type.Name}' has {bound} bound instance(s) but its query reached {ran}; "
-            + "the components it declares do not describe the entities it is bound to");
-    }
-
-    /// <summary>
-    /// Reports a borrow that named no node and found more than one of its type.
-    /// </summary>
-    internal void ReportAmbiguousBorrow(Node owner, string kind, string typeName)
-    {
-        if (_logger is null) return;
-        if (!_reportedBorrows.Add($"{owner.Entity}/{kind}/{typeName}/?")) return;
-        _logger.Log(KernelEngine.Logger.LogLevel.Warning, "scene.node",
-            $"'{owner.Name}' borrows {kind}<{typeName}> and more than one node answers to it; "
-            + "give the borrow a NodeName");
-    }
-
     private readonly Dictionary<Type, (int Stamp, uint[] Ids)> _assignableTypes = new();
 
     /// <summary>
@@ -206,17 +140,9 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         {
             ScriptResolve why;
             var entity = ResolveDescendant(owner.Entity, id, name, &why);
-            if (why == ScriptResolve.Ambiguous)
-            {
-                ReportAmbiguousBorrow(owner, "Child", wanted.Name);
-                return null;
-            }
+            if (why == ScriptResolve.Ambiguous) return null;
             if (entity == 0 || NodeOf(entity) is not { } node) continue;
-            if (found is not null)
-            {
-                ReportAmbiguousBorrow(owner, "Child", wanted.Name);
-                return null;
-            }
+            if (found is not null) return null;
             found = node;
         }
         return found;
@@ -302,14 +228,11 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// factory's business is the native host alone.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
-    internal ScriptHost Compose(World world, IEcsRegistry ecs,
-                                KernelEngine.Logger.ILogger? logger = null,
-                                SignalBus? signals = null)
+    internal ScriptHost Compose(World world, IEcsRegistry ecs, SignalBus? signals = null)
     {
         _signals    = signals;
         _world      = world;
         _ecs        = ecs;
-        _logger     = logger;
         _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
         _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
         _ = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");

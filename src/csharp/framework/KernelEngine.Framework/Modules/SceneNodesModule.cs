@@ -72,7 +72,6 @@ public sealed class SceneNodesModule : IRuntimeModule
                 return new ScriptHost(handle).Compose(
                     sp.GetRequiredService<World>(),
                     sp.GetRequiredService<IEcsRegistry>(),
-                    sp.GetService<KernelEngine.Logger.ILogger>(),
                     sp.GetRequiredService<SignalBus>());
             }
         });
@@ -173,7 +172,6 @@ public sealed class SceneNodesModule : IRuntimeModule
                         total += KernelEngine.Runtime.SystemContext.EntitiesOf(ctx, 0, s).Length;
 
                     var (first, last) = SliceOf(ctx, total);
-                    var ran = 0;
                     var seen = 0;
                     for (int s = 0; s < segments && seen < last; s++)
                     {
@@ -183,16 +181,9 @@ public sealed class SceneNodesModule : IRuntimeModule
                             if (seen < first) continue;
                             if (seen >= last) break;
                             if (scriptHost.NodeOf(entities[e]) is { } node && node.GetType() == type)
-                            {
                                 node.OnUpdate(in view);
-                                ran++;
-                            }
                         }
                     }
-
-                    KernelEngine.Runtime.SystemContext.Slice(ctx, out uint _, out uint slices);
-                    if (slices == 1)
-                        scriptHost.ReportUnmatchedBehavior(type, ran, scriptHost.BoundCountOf(type));
                 }
             }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };
