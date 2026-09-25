@@ -1,4 +1,4 @@
-# Rendering cheatsheet — low quality to RTGI
+# Rendering cheatsheet — low quality to path tracing
 
 Sep 24, 2026 · @Israel
 
@@ -8,6 +8,7 @@ Sep 24, 2026 · @Israel
 | --- | --- | --- |
 | G-buffer, light clustering | Forward+ PBR metallic-roughness | Physically plausible lighting, N lights |
 | Environment cubemap | Direct sampling (no split-sum) | Basic IBL |
+| Sun direction + cloud coverage scalar | Analytic sky model (Preetham/Hosek-Wilkie) | Cubemap reacts to weather without rebaking |
 
 **Stage optimizations:**
 
@@ -30,6 +31,10 @@ Sep 24, 2026 · @Israel
 | Height map (existing channel) | Simple parallax → multi-sample POM | Real surface depth |
 | None (reuses albedo) | Stochastic texturing (height-based blend) | Terrain without visible tiling |
 | Depth+normal from G-buffer | Simple SSAO (hemisphere) | Darkened contact/cavities |
+| Depth buffer + light direction | Screen-space contact shadows (short ray-march) | Catches thin occluders shadow maps miss |
+| Thickness/transmission map | Subsurface scattering (wrap lighting / pre-integrated) | Light transmission through thin surfaces (skin, foliage) |
+| Cloud texture (2D) + sun direction | Cloud shadows (projected onto terrain) | Low-frequency shadowing from weather without new geometry |
+| Rain wetness scalar | Wet-surface layering (thin water coat modulates specular/albedo) | Correct look during rain without new BRDF |
 
 **Stage optimizations:**
 
@@ -54,14 +59,14 @@ This tier is pure infrastructure cost — no standalone visual gain. But SSGI, t
 - Variance clipping / neighborhood clamping on TAA history, avoids ghosting
 - History rejection via disocclusion (depth+normal) instead of always reprojecting
 
-## Tier 3 (high/ultra) — Advanced screen-space
+## Tier 3 (high) — Advanced screen-space
 
 | Resource (A) | Algorithm (B) | Enables (X) |
 | --- | --- | --- |
 | STBN 3D (spatiotemporal noise) | GTAO (horizon-based, angular bitmask) | High-quality AO |
 | Mipped G-buffer radiance + Tier 2 | SSGI (extended GTAO + SH2 + reprojection) | 1-bounce on-screen GI |
 | Depth+normal+Tier 2 | Temporal SSR | Accurate screen-space reflections |
-| Scalar visibility term | Skylighting (sky-visibility) | Ambient darkens under roofs/canopy |
+| Cubemaps parallax-corrected | Reflection probes | Specular indirect without SSR |
 
 **Stage optimizations:**
 
@@ -69,21 +74,16 @@ This tier is pure infrastructure cost — no standalone visual gain. But SSGI, t
 - Horizon-scan direction jitter via the frame's STBN slice, fewer slices without visible noise
 - SSR: hierarchical ray marching on the depth mip chain (HZB) instead of a fixed step
 - Thickness heuristic in SSR, avoids false hits behind thin surfaces
+- Same thickness heuristic applied to SSGI sampling, avoids indirect light leaking through thin walls
 - Dedicated spatial denoiser (geometry/normal-aware recurrent blur) for SSGI/SSR, distinct from the Tier 2 temporal reprojection — removes residual per-pixel noise the history alone can't resolve
+- Dynamic cubemap re-render (full real-time capture) as a costlier alternative to the static parallax-corrected probe, trades GPU cost for always-fresh reflections
 
-## Tier 4 (ultra) — Off-screen rasterized GI
+## Tier 4 (ultra) — Baked/world-space extensions
 
 | Resource (A) | Algorithm (B) | Enables (X) |
 | --- | --- | --- |
-| BVH (TLAS/BLAS via wgpu-native's native ray query extension) + probe grid (SH/octahedral) | DDGI (probes updated per frame via ray query) | Multi-bounce diffuse GI with dynamic occluders/emissives |
-| Cubemaps parallax-corrected | Reflection probes | Specular indirect without SSR |
-
-**Stage optimizations:**
-
-- Sparse voxel octree (SVO) or SVDAG instead of a dense 3D texture, reduces memory
-- Clipmap (decreasing-resolution cascades by distance) as a cheaper alternative to the octree, at the cost of uniform resolution
-- DDGI: probe relocation (move probe outside geometry) + probe classification (disable redundant/inside-wall probes)
-- Reduced cone count using the voxelized radiance mip chain instead of more cones
+| SDF per mesh (baked) + composited scene volume | DFAO (sphere-trace toward sky in the SDF) | Ambient darkens near static occluders, on/off-screen, indoors and outdoors |
+| Froxel volume (3D screen-aligned grid) | Volumetric lighting (ray-marched in-scattering + extinction) | Godrays, atmospheric scattering |
 
 ## Tier 5 (RT) — Ray tracing foundation
 
@@ -92,16 +92,19 @@ This tier is pure infrastructure cost — no standalone visual gain. But SSGI, t
 | BVH (BLAS per mesh, TLAS per scene) | Ray query in compute | Ray-scene intersection |
 | BVH + STBN | RTAO | AO without screen-space artifacts |
 | BVH | RT shadows | Soft, correct area shadows |
+| BVH (TLAS/BLAS via wgpu-native's native ray query extension) + probe grid (SH/octahedral) | DDGI (probes updated per frame via ray query) | Multi-bounce diffuse GI with dynamic occluders/emissives |
+| BVH + roughness-based cone spread | RT reflections (ray-traced specular) | Accurate reflections without SSR's screen-space limits |
 
-Real gap today: wgpu still treats ray query/acceleration structures as an experimental feature ([wgpu#1040](https://github.com/gfx-rs/wgpu/issues/1040), [PR #10144](https://github.com/gfx-rs/wgpu/pull/10144)), with no stable RT pipeline. Until it matures, the route is BVH + traversal via compute shader.
+Real gap today: wgpu still treats ray query/acceleration structures as an experimental feature, with no stable RT pipeline. Until it matures, the route is BVH + traversal via compute shader.
 
 **Stage optimizations:**
 
 - Compact BLAS for static geometry, only the TLAS updates per transform each frame (refit is cheap but degrades with large deformation; full rebuild only when necessary)
 - Instancing via TLAS: the same BLAS referenced N times with different transforms, without duplicating geometry
 - Ray sorting/binning by direction before traversal, improves cache coherence
+- DDGI: probe relocation (move probe outside geometry) + probe classification (disable redundant/inside-wall probes)
 
-## Tier 6 (RT) — RTGI
+## Tier 6 (RT) — RTGI refinement & path tracing
 
 | Resource (A) | Algorithm (B) | Enables (X) |
 | --- | --- | --- |
@@ -139,3 +142,10 @@ Real gap today: wgpu still treats ray query/acceleration structures as an experi
 | Variable rate shading | Reduces shading cost in low-detail areas |
 | Bindless resources | Avoids bind-group churn when stacking features (Tiers 3-6) |
 | GPU-driven culling (frustum+occlusion+LOD in compute) | Moves the culling decision from CPU to GPU, generates indirect draws directly, no round-trip |
+
+## Tier 9 (cross-cutting) — HDR output & tonemapping
+
+| Resource (A) | Algorithm (B) | Enables (X) |
+| --- | --- | --- |
+| Luminance histogram/average of the HDR buffer | Auto-exposure (temporal eye adaptation) | Correct exposure across wildly different lighting, no manual per-area tuning |
+| HDR-capable swapchain (scRGB/HDR10) | Native HDR output | Full display dynamic range, bypasses the SDR tonemap clamp |
