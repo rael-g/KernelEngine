@@ -1,21 +1,24 @@
 
 namespace Kabic;
 
-public enum SlotShape { Fallible, Try, ReturnsOutParam, TupleOutParams, Sequence, Plain }
+public enum SlotShape { Fallible, Try, ReturnsOutParam, TupleOutParams, Plain }
 
-/// <param name="SequenceParam">The pointer half of a pointer+count pair, if any.</param>
-/// <param name="CountParam">
-/// The count half named by <c>[array_of:name]</c> — it disappears from the public
-/// signature (the sequence carries its own length) but is still passed natively.
-/// </param>
+/// <summary>
+/// A pointer+count pair: the pointer parameter carrying <c>[array_of:name]</c> and the
+/// parameter it names. Carrying a sequence is a property of the parameter, not of the
+/// slot — a slot may carry several, alongside a params bag and a closure.
+/// </summary>
+public record SequencePair(ApiParam Seq, ApiParam Count);
+
 /// <param name="OutParams">All <c>[out]</c> params other than a sequence, in declaration order.</param>
 /// <param name="PublicParams">
 /// Every parameter a caller still supplies: the trailing error out-param, and the
 /// count paired with a sequence, are already removed. A parameter marked
 /// <c>[expand]</c> has been replaced by one entry per field of the struct it points at.
 /// </param>
-public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiParam? OutParam, ApiParam? SequenceParam,
-    ApiParam? CountParam, IReadOnlyList<ApiParam> OutParams, IReadOnlyList<ApiParam> PublicParams)
+public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiParam? OutParam,
+    IReadOnlyList<SequencePair> Sequences,
+    IReadOnlyList<ApiParam> OutParams, IReadOnlyList<ApiParam> PublicParams)
 {
     /// <summary>The <c>[expand]</c> parameter, whose fields stand in for it in <see cref="PublicParams"/>.</summary>
     public ApiParam? ExpandedParam { get; init; }
@@ -150,10 +153,17 @@ public static class Classifier
 
         var isTry = slot.Has("try");
 
-        var seqParam = ps.FirstOrDefault(p => p.Has("array_of"));
-        var countName = seqParam?.TagValue("array_of");
-        var countParam = countName is not null ? ps.FirstOrDefault(p => p.Name == countName) : null;
-        if (countParam is not null) ps = ps.Where(p => p != countParam).ToList();
+        var sequences = new List<SequencePair>();
+        foreach (var seq in ps.Where(p => p.Has("array_of")))
+        {
+            var countName = seq.TagValue("array_of");
+            var count = ps.FirstOrDefault(p => p.Name == countName)
+                ?? throw new InvalidOperationException(
+                    $"{slot.Name}.{seq.Name}: [array_of:{countName}] names a length parameter "
+                    + "the slot does not declare");
+            sequences.Add(new SequencePair(seq, count));
+        }
+        ps = ps.Where(p => sequences.All(s => s.Count != p)).ToList();
 
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
 
@@ -164,13 +174,12 @@ public static class Classifier
         var tupleOut = allOut.Count >= 2 ? allOut : null;
 
         var shape = isTry ? SlotShape.Try
-            : seqParam is not null ? SlotShape.Sequence
             : outParam is not null ? SlotShape.ReturnsOutParam
             : tupleOut is not null ? SlotShape.TupleOutParams
             : fallible ? SlotShape.Fallible
             : SlotShape.Plain;
 
-        return new ClassifiedSlot(slot, shape, fallible, outParam, seqParam, countParam,
+        return new ClassifiedSlot(slot, shape, fallible, outParam, sequences,
             isTry ? allOut : tupleOut ?? [], ps)
         {
             ExpandedParam = expanded,

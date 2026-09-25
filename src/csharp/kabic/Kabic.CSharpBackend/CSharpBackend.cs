@@ -40,6 +40,25 @@ public static class CSharpBackend
         return (lines, depth);
     }
 
+    /// Emits the `fixed` pinning prologue for every pointer+count pair, returning the
+    /// lines and the number of braces the caller must close. Composes with the [utf8]
+    /// prologue: both only open blocks, in whatever order the caller emits them.
+    static (List<string> Lines, int Depth) SequencePrologue(ApiModel model,
+        IEnumerable<SequencePair> seqs, string indent)
+    {
+        var lines = new List<string>();
+        var depth = 0;
+        foreach (var s in seqs)
+        {
+            var n = Idioms.Ident(s.Seq.Name!);
+            var at = indent + new string(' ', depth * 4);
+            lines.Add($"{at}fixed ({CsType(model, CTypes.Deref(s.Seq.Type))}* {n}Ptr = {n})");
+            lines.Add($"{at}{{");
+            depth++;
+        }
+        return (lines, depth);
+    }
+
     /// A C type mapped to C#. Typedef aliases resolve first; pointers recurse so
     /// `const`/`struct` qualifiers are dropped and the pointee receives the same
     /// mapping as any other type. An opaque `void *` maps to `nint`.
@@ -1085,7 +1104,8 @@ public static class CSharpBackend
         ClassifiedSlot cs, Convention convention)
     {
         var slot = cs.Slot;
-        var name = slot.TagValue("name") ?? Idioms.Pascal(slot.Name);
+        var name = (slot.TagValue("name") ?? Idioms.Pascal(slot.Name))
+            + (cs.Sequences.Count > 0 ? "Raw" : "");
         var lanes = VectorLanes(slot.Params);
         var callbacks = CallbackPairs(model, cs);
         var groups = ClosureGroups(model, slot, callbacks);
@@ -1115,6 +1135,9 @@ public static class CSharpBackend
 
         string Sig(IEnumerable<ApiParam> ps) => string.Join(", ", SigParts(ps));
 
+        IEnumerable<ApiParam> NativeParams() => cs.Slot.Params
+            .Where(p => !cs.Fallible || p != cs.Slot.Params[^1]);
+
         IEnumerable<(string, string?)> DocParams(IEnumerable<ApiParam> ps) => ps
             .Where(p => callbacks.All(c => c.Ctx != p))
             .Select(p => (Idioms.Ident(p.Name!), p.Doc));
@@ -1126,6 +1149,8 @@ public static class CSharpBackend
                 ? $"Vector{l.Arity} {Idioms.Ident(l.Vector)}"
                 : callbacks.FirstOrDefault(c => c.Fn == p) is { } cb
                     ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
+                : cs.Sequences.Any(s => s.Seq == p)
+                    ? $"Span<{CsType(model, CTypes.Deref(p.Type))}> {Idioms.Ident(p.Name!)}"
                     : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}");
 
         switch (cs.Shape)
@@ -1135,14 +1160,18 @@ public static class CSharpBackend
                 var ret = CsType(model, CTypes.Deref(cs.OutParam!.Type));
                 var ins = cs.PublicParams.Where(p => p != cs.OutParam).ToList();
                 var sig = Sig(ins);
-                var nativeArgs = string.Concat(cs.PublicParams.Select(p =>
+                var nativeArgs = string.Concat(NativeParams().Select(p =>
                     ", " + (p == cs.OutParam ? "&result" : CallArg(p))));
 
                 Declare(o, decls, XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
                     slot.ReturnDoc, cs.Fallible).TrimEnd(), $"{ret} {name}({sig})");
                 o.Add("    {");
                 var (roPro, roDepth) = Utf8Prologue(ins, new string(' ', 8));
+                var (roSeq, roSeqDepth) = SequencePrologue(model, cs.Sequences,
+                    new string(' ', 8 + roDepth * 4));
                 o.AddRange(roPro);
+                o.AddRange(roSeq);
+                roDepth += roSeqDepth;
                 var roInd = new string(' ', 8 + roDepth * 4);
                 o.Add($"{roInd}{ret} result;");
                 if (cs.Fallible)
@@ -1168,8 +1197,7 @@ public static class CSharpBackend
                 var types = cs.OutParams.Select(p => CsType(model, CTypes.Deref(p.Type))).ToList();
                 var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
                 var locals = cs.OutParams.Select(p => Idioms.Ident(p.Name!)).ToList();
-                var nativeArgs = cs.Slot.Params
-                    .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
+                var nativeArgs = NativeParams()
                     .Select(p => cs.OutParams.Contains(p) ? $"&{Idioms.Ident(p.Name!)}" : CallArg(p));
                 var callArgs = string.Concat(nativeArgs.Select(a => ", " + a));
 
@@ -1177,7 +1205,11 @@ public static class CSharpBackend
                     throwsOnFail: cs.Fallible).TrimEnd(), $"({retTuple}) {name}({sig})");
                 o.Add("    {");
                 var (tuPro, tuDepth) = Utf8Prologue(ins, new string(' ', 8));
+                var (tuSeq, tuSeqDepth) = SequencePrologue(model, cs.Sequences,
+                    new string(' ', 8 + tuDepth * 4));
                 o.AddRange(tuPro);
+                o.AddRange(tuSeq);
+                tuDepth += tuSeqDepth;
                 var tuInd = new string(' ', 8 + tuDepth * 4);
                 foreach (var (t, n) in types.Zip(locals)) o.Add($"{tuInd}{t} {n};");
                 if (cs.Fallible)
@@ -1191,61 +1223,6 @@ public static class CSharpBackend
                 }
                 o.Add($"{tuInd}return ({string.Join(", ", locals)});");
                 for (var d = tuDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
-                o.Add("    }");
-                o.Add("");
-                return;
-            }
-            case SlotShape.Sequence:
-            {
-                var elem = CsType(model, CTypes.Deref(cs.SequenceParam!.Type));
-                var pname = Idioms.Ident(cs.SequenceParam!.Name!);
-                var others = cs.PublicParams.Where(p => p != cs.SequenceParam).ToList();
-                var outs = others.Where(p => p.Has("out")).ToList();
-                var ins = others.Where(p => !p.Has("out")).ToList();
-
-                var sigParts = SigParts(ins)
-                    .Append($"Span<{elem}> {pname}")
-                    .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
-
-                var retType = cs.Fallible || slot.Returns == "void" ? "void"
-                    : CsType(model, slot.Returns);
-
-                Declare(o, decls, XmlDoc("    ", slot.Doc,
-                    ins.Select(p => (Idioms.Ident(p.Name!), p.Doc))
-                       .Append((pname, cs.SequenceParam.Doc))
-                       .Concat(outs.Select(p => (Idioms.Ident(p.Name!), p.Doc))),
-                    slot.ReturnDoc, cs.Fallible).TrimEnd(),
-                    $"{retType} {name}Raw({string.Join(", ", sigParts)})");
-                o.Add("    {");
-                foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
-
-                var nativeArgs = cs.Slot.Params
-                    .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
-                    .Select(p =>
-                        p == cs.SequenceParam ? "p"
-                        : p == cs.CountParam ? $"({CsType(model, p.Type)}){pname}.Length"
-                        : outs.Contains(p) ? $"&{Idioms.Ident(p.Name!)}Local"
-                        : Idioms.Ident(p.Name!));
-
-                var call = $"Handle->{slot.Name}(Handle, {string.Join(", ", nativeArgs)}";
-                o.Add($"        fixed ({elem}* p = {pname})");
-                o.Add("        {");
-                if (cs.Fallible)
-                {
-                    o.Add("            ke_error* err = null;");
-                    o.Add($"            KernelError.ThrowIfFailed({call}, &err), err, \"{slot.Name}\");");
-                }
-                else if (retType == "void")
-                {
-                    o.Add($"            {call});");
-                }
-                else
-                {
-                    o.Add($"            var result = {call});");
-                }
-                foreach (var op in outs) o.Add($"            {Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
-                if (retType != "void" && !cs.Fallible) o.Add("            return result;");
-                o.Add("        }");
                 o.Add("    }");
                 o.Add("");
                 return;
@@ -1264,10 +1241,13 @@ public static class CSharpBackend
                 o.Add("    {");
                 foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
                 var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
+                var (tSeq, tSeqDepth) = SequencePrologue(model, cs.Sequences,
+                    new string(' ', 8 + tDepth * 4));
                 o.AddRange(tPro);
+                o.AddRange(tSeq);
+                tDepth += tSeqDepth;
                 var tInd = new string(' ', 8 + tDepth * 4);
-                var tryArgs = cs.Slot.Params
-                    .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
+                var tryArgs = NativeParams()
                     .Select(p => outs.Contains(p) ? $"&{Idioms.Ident(p.Name!)}Local" : CallArg(p));
                 var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
                     + (cs.Fallible ? ", null)" : ")")
@@ -1287,17 +1267,18 @@ public static class CSharpBackend
                 var retType = byReturn ? "void" : CsType(model, slot.Returns);
                 var sig = Sig(args);
                 var bagLocal = cs.ExpandedParam is null ? null : Idioms.Ident(cs.ExpandedParam.Name!);
-                var call = bagLocal is null
-                    ? string.Concat(args.Select(p => ", " + CallArg(p)))
-                    : string.Concat(cs.Slot.Params
-                        .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
-                        .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}" : CallArg(p))));
+                var call = string.Concat(NativeParams()
+                    .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}" : CallArg(p))));
                 Declare(o, decls, XmlDoc("    ", slot.Doc, DocParams(args),
                     byReturn ? null : slot.ReturnDoc, throwsOnFail: true).TrimEnd(),
                     $"{retType} {name}({sig})");
                 o.Add("    {");
                 var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
+                var (fSeq, fSeqDepth) = SequencePrologue(model, cs.Sequences,
+                    new string(' ', 8 + fDepth * 4));
                 o.AddRange(fPro);
+                o.AddRange(fSeq);
+                fDepth += fSeqDepth;
                 var fInd = new string(' ', 8 + fDepth * 4);
                 var rooted = args.Where(p => p.Has("rooted")).ToList();
                 foreach (var rp in rooted)
@@ -1309,7 +1290,8 @@ public static class CSharpBackend
                     o.Add($"{fInd}{cs.ExpandedStruct!.Name} {bagLocal} = default;");
                     foreach (var f in cs.ExpandedStruct.Fields)
                     {
-                        var arg = args.First(a => a.Name == f.Name);
+                        var arg = args.FirstOrDefault(a => a.Name == f.Name)
+                            ?? cs.Sequences.Select(s => s.Count).First(c => c.Name == f.Name);
                         o.Add($"{fInd}{bagLocal}.{f.Name} = {CallArg(arg)};");
                     }
                 }
@@ -1455,7 +1437,7 @@ public static class CSharpBackend
             {
                 var args = cs.PublicParams;
                 var sig = Sig(args);
-                var call = string.Concat(args.Select(p => ", " + CallArg(p)));
+                var call = string.Concat(NativeParams().Select(p => ", " + CallArg(p)));
                 var retType = slot.Returns == "ke_bool" ? "bool" : CsType(model, slot.Returns);
                 var needsCast = retType == "nint";
                 Declare(o, decls,
@@ -1463,7 +1445,11 @@ public static class CSharpBackend
                     $"{retType} {name}({sig})");
                 o.Add("    {");
                 var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
+                var (pSeq, pSeqDepth) = SequencePrologue(model, cs.Sequences,
+                    new string(' ', 8 + pDepth * 4));
                 o.AddRange(pPro);
+                o.AddRange(pSeq);
+                pDepth += pSeqDepth;
                 var pInd = new string(' ', 8 + pDepth * 4);
                 if (slot.Returns == "ke_bool")
                     o.Add($"{pInd}return Handle->{slot.Name}(Handle{call}) != 0;");
@@ -1491,6 +1477,10 @@ public static class CSharpBackend
                 ? $"{Idioms.Ident(p.Name!)} is null ? null : ({NativeFnPtr(model, fnOf)})&{fnOf.Trampoline}"
             : groups.FirstOrDefault(g => g.Ctx == p) is { } ctxOf
                 ? $"(void*)GCHandle.ToIntPtr({ctxOf.Handle})"
+            : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSeq
+                ? $"{Idioms.Ident(asSeq.Seq.Name!)}Ptr"
+            : cs.Sequences.FirstOrDefault(s => s.Count == p) is { } asCount
+                ? $"({CsType(model, asCount.Count.Type)}){Idioms.Ident(asCount.Seq.Name!)}.Length"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
             : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
             : p.Has("ctx") ? $"({CTypes.Normalize(p.Type)}){Idioms.Ident(p.Name!)}"

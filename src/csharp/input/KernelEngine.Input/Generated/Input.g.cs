@@ -92,10 +92,9 @@ public unsafe partial class Input : IDisposable, INativeInput
     /// <returns>Number of events written.</returns>
     public uint DrainEventsRaw(Span<ke_input_event> outBuf)
     {
-        fixed (ke_input_event* p = outBuf)
+        fixed (ke_input_event* outBufPtr = outBuf)
         {
-            var result = Handle->drain_events(Handle, p, (uint)outBuf.Length);
-            return result;
+            return Handle->drain_events(Handle, outBufPtr, (uint)outBuf.Length);
         }
     }
 

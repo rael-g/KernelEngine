@@ -190,6 +190,32 @@ Expect("an expanded params bag flattens the call and its shared context roots on
         ["slots"] = new JsonArray(),
     }]);
 
+// A pointer+count pair is a property of the parameter, not of the slot: a slot may
+// carry several, and each one still pins and passes its own length. Treating "carries a
+// sequence" as the slot's shape is what caps a slot at one array and blocks it from
+// composing with the rest.
+Expect("every pointer+count pair in a slot becomes its own span",
+    Vtable("ke_probe", Slot("declare", "uint64_t",
+        Param("name", "const char *", "utf8"),
+        Param("terms", "const ke_probe_term *", "array_of:term_count"),
+        Param("term_count", "uint32_t"),
+        Param("tags", "const uint32_t *", "array_of:tag_count"),
+        Param("tag_count", "uint32_t"),
+        Param("out_error", "ke_error **"))),
+    contains: ["public ulong DeclareRaw(string name, Span<ke_probe_term> terms, Span<uint> tags)",
+               "fixed (ke_probe_term* termsPtr = terms)",
+               "fixed (uint* tagsPtr = tags)",
+               "termsPtr, (uint)terms.Length, tagsPtr, (uint)tags.Length"],
+    absent: ["uint termCount", "uint tagCount"],
+    structs: [new JsonObject
+    {
+        ["name"] = "ke_probe_term",
+        ["doc"] = null,
+        ["tags"] = new JsonArray(),
+        ["fields"] = new JsonArray(Param("cid", "uint32_t")),
+        ["slots"] = new JsonArray(),
+    }]);
+
 // A lane carrying a context the engine owns and the caller only relays: the public
 // surface takes nint and the cast back to the ABI's own spelling happens at the call.
 // Leaving the native pointer type in the signature is what forces every consumer to

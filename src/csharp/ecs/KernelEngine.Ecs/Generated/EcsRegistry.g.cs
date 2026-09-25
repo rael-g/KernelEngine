@@ -121,23 +121,21 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <returns>KE_QUERY_INVALID on failure.</returns>
     public ulong QueryRegisterRaw(Span<uint> cids)
     {
-        fixed (uint* p = cids)
+        fixed (uint* cidsPtr = cids)
         {
-            var result = Handle->query_register(Handle, p, (nuint)cids.Length);
-            return result;
+            return Handle->query_register(Handle, cidsPtr, (nuint)cids.Length);
         }
     }
 
     /// <summary>Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.</summary>
     /// <param name="outSegments">Receives the matched segments.</param>
-    /// <param name="outCount">Receives how many segments were written.</param>
-    public void QueryResolveRaw(ulong query, Span<ke_ecs_segment> outSegments, out nuint outCount)
+    public nuint QueryResolveRaw(ulong query, Span<ke_ecs_segment> outSegments)
     {
-        nuint outCountLocal;
-        fixed (ke_ecs_segment* p = outSegments)
+        fixed (ke_ecs_segment* outSegmentsPtr = outSegments)
         {
-            Handle->query_resolve(Handle, query, p, (nuint)outSegments.Length, &outCountLocal);
-            outCount = outCountLocal;
+            nuint result;
+            Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, &result);
+            return result;
         }
     }
 
