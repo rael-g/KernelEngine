@@ -61,13 +61,11 @@ public unsafe partial class Logger : IDisposable, INativeLogger
         Handle->flush(Handle);
     }
 
+    private readonly List<GCHandle> _addSinkHandles = [];
+
     /// <summary>Takes ownership of a sink and starts routing entries to it.</summary>
     /// <param name="sink">Caller-implemented output target.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    // Roots each managed callback implementation for as long as native code
-    // holds a pointer to it; released by the destroy trampoline below.
-    private readonly List<GCHandle> _addSinkHandles = [];
-
     public void AddSink(ILoggerSinkNative sink, int minLevel = 0)
     {
         var gch = GCHandle.Alloc(sink);

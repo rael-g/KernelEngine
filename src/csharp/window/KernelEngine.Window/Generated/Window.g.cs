@@ -16,7 +16,7 @@ public unsafe interface INativeWindow
 }
 
 /// <summary>OS-level window abstraction.</summary>
-public unsafe partial class Window : IDisposable, INativeWindow
+public unsafe partial class Window : IDisposable, INativeWindow, IWindow
 {
     private ke_window* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_window*, void> _destroy;
@@ -98,4 +98,22 @@ public unsafe partial class Window : IDisposable, INativeWindow
     }
 
     partial void OnDispose();
+}
+
+/// <summary>The window contract game code depends on, so a caller names a capability rather than the <see cref="Window"/> that carries it.</summary>
+public unsafe interface IWindow : IDisposable
+{
+    /// <summary>Returns true once the user has requested the window to close.</summary>
+    bool ShouldClose();
+    /// <summary>Processes pending OS events. Call once per frame.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    void PollEvents();
+    /// <summary>Presents the back buffer. Call once per frame, after rendering.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    void SwapBuffers();
+    /// <summary>Retrieves the current client-area size in pixels.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    (int Width, int Height) GetSize();
+    /// <summary>Returns the platform-specific native handle (HWND, X11 Window, ...).</summary>
+    nint GetNativeHandle();
 }

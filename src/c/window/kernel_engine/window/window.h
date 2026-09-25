@@ -14,7 +14,7 @@ extern "C"
 
 #define KE_ID_WINDOW "ke_window"
 
-    /** OS-level window abstraction. */
+    /** [interface] OS-level window abstraction. */
     typedef struct ke_window
     {
         void *handle;

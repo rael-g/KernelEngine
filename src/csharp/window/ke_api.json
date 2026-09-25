@@ -5,7 +5,9 @@
     {
       "name": "ke_window",
       "doc": "OS-level window abstraction.",
-      "tags": [],
+      "tags": [
+        "interface"
+      ],
       "fields": [
         {
           "name": "handle",

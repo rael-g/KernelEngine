@@ -425,8 +425,12 @@ public static class CSharpBackend
         foreach (var cb in closures.DistinctBy(c => c.Delegate))
             RenderClosureDelegate(model, o, cb);
 
+        var domainIface = vtable.Has("interface") ? "I" + typeName : null;
+        var decls = domainIface is null ? null : new List<MemberDecl>();
+
         o.Add(XmlDoc("", vtable.Doc).TrimEnd());
-        o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}");
+        o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}"
+            + (domainIface is null ? "" : $", {domainIface}"));
         o.Add("{");
         o.Add($"    private {vtable.Name}* _native;");
         o.Add($"    private readonly delegate* unmanaged[Cdecl]<{vtable.Name}*, void> _destroy;");
@@ -544,10 +548,10 @@ public static class CSharpBackend
             if (cs.PublicParams.Any(p => !p.Has("closure")
                     && classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
             {
-                RenderCallbackMethod(o, vtable, cs, classified, typeName, convention);
+                RenderCallbackMethod(o, decls, vtable, cs, classified, typeName, convention);
                 continue;
             }
-            RenderSlotMethod(model, o, cs, convention);
+            RenderSlotMethod(model, o, decls, cs, convention);
         }
 
         foreach (var slot in vtable.Slots.Where(s => s.Has("interns")))
@@ -583,6 +587,22 @@ public static class CSharpBackend
         o.Add("    partial void OnDispose();");
         o.Add("}");
         o.Add("");
+
+        if (domainIface is not null)
+        {
+            o.Add($"/// <summary>The {typeName.ToLowerInvariant()} contract game code depends on, so a caller"
+                + $" names a capability rather than the <see cref=\"{typeName}\"/> that carries it.</summary>");
+            o.Add($"public unsafe interface {domainIface} : IDisposable");
+            o.Add("{");
+            foreach (var m in decls!)
+            {
+                if (m.Doc.Length > 0) o.Add(m.Doc);
+                o.Add($"    {m.Decl};");
+            }
+            o.Add("}");
+            o.Add("");
+        }
+
         return string.Join('\n', o);
     }
 
@@ -827,7 +847,23 @@ public static class CSharpBackend
         o.Add("");
     }
 
-    static void RenderSlotMethod(ApiModel model, List<string> o, ClassifiedSlot cs, Convention convention)
+    /// <summary>
+    /// One public member as the provider class declares it: the documentation block and the
+    /// signature, with no <c>public</c> keyword and no body. The domain interface is rendered
+    /// from these, so a signature the class emits and the signature the interface promises are
+    /// the same string rather than two renderings of the same intent.
+    /// </summary>
+    sealed record MemberDecl(string Doc, string Decl);
+
+    static void Declare(List<string> o, List<MemberDecl>? decls, string doc, string decl)
+    {
+        o.Add(doc);
+        o.Add($"    public {decl}");
+        decls?.Add(new MemberDecl(doc, decl));
+    }
+
+    static void RenderSlotMethod(ApiModel model, List<string> o, List<MemberDecl>? decls,
+        ClassifiedSlot cs, Convention convention)
     {
         var slot = cs.Slot;
         var name = slot.TagValue("name") ?? Idioms.Pascal(slot.Name);
@@ -863,9 +899,8 @@ public static class CSharpBackend
                 var nativeArgs = string.Concat(cs.PublicParams.Select(p =>
                     ", " + (p == cs.OutParam ? "&result" : CallArg(p))));
 
-                o.Add(XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
-                    slot.ReturnDoc, cs.Fallible).TrimEnd());
-                o.Add($"    public {ret} {name}({sig})");
+                Declare(o, decls, XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
+                    slot.ReturnDoc, cs.Fallible).TrimEnd(), $"{ret} {name}({sig})");
                 o.Add("    {");
                 var (roPro, roDepth) = Utf8Prologue(ins, new string(' ', 8));
                 o.AddRange(roPro);
@@ -899,9 +934,8 @@ public static class CSharpBackend
                     .Select(p => cs.OutParams.Contains(p) ? $"&{Idioms.Ident(p.Name!)}" : CallArg(p));
                 var callArgs = string.Concat(nativeArgs.Select(a => ", " + a));
 
-                o.Add(XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
-                    throwsOnFail: cs.Fallible).TrimEnd());
-                o.Add($"    public ({retTuple}) {name}({sig})");
+                Declare(o, decls, XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
+                    throwsOnFail: cs.Fallible).TrimEnd(), $"({retTuple}) {name}({sig})");
                 o.Add("    {");
                 var (tuPro, tuDepth) = Utf8Prologue(ins, new string(' ', 8));
                 o.AddRange(tuPro);
@@ -937,12 +971,12 @@ public static class CSharpBackend
                 var retType = cs.Fallible || slot.Returns == "void" ? "void"
                     : CsType(model, slot.Returns);
 
-                o.Add(XmlDoc("    ", slot.Doc,
+                Declare(o, decls, XmlDoc("    ", slot.Doc,
                     ins.Select(p => (Idioms.Ident(p.Name!), p.Doc))
                        .Append((pname, cs.SequenceParam.Doc))
                        .Concat(outs.Select(p => (Idioms.Ident(p.Name!), p.Doc))),
-                    slot.ReturnDoc, cs.Fallible).TrimEnd());
-                o.Add($"    public {retType} {name}Raw({string.Join(", ", sigParts)})");
+                    slot.ReturnDoc, cs.Fallible).TrimEnd(),
+                    $"{retType} {name}Raw({string.Join(", ", sigParts)})");
                 o.Add("    {");
                 foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
 
@@ -985,9 +1019,9 @@ public static class CSharpBackend
                     .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
 
                 var tryName = name.StartsWith("Try") ? name : $"Try{name}";
-                o.Add(XmlDoc("    ", slot.Doc,
-                    cs.PublicParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
-                o.Add($"    public bool {tryName}({string.Join(", ", sigParts)})");
+                Declare(o, decls, XmlDoc("    ", slot.Doc,
+                    cs.PublicParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
+                    $"bool {tryName}({string.Join(", ", sigParts)})");
                 o.Add("    {");
                 foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
                 var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
@@ -1014,9 +1048,9 @@ public static class CSharpBackend
                 var retType = byReturn ? "void" : CsType(model, slot.Returns);
                 var sig = Sig(args);
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
-                o.Add(XmlDoc("    ", slot.Doc, DocParams(args),
-                    byReturn ? slot.ReturnDoc : null, throwsOnFail: true).TrimEnd());
-                o.Add($"    public {retType} {name}({sig})");
+                Declare(o, decls, XmlDoc("    ", slot.Doc, DocParams(args),
+                    byReturn ? slot.ReturnDoc : null, throwsOnFail: true).TrimEnd(),
+                    $"{retType} {name}({sig})");
                 o.Add("    {");
                 var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
                 o.AddRange(fPro);
@@ -1138,8 +1172,9 @@ public static class CSharpBackend
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
                 var retType = slot.Returns == "ke_bool" ? "bool" : CsType(model, slot.Returns);
                 var needsCast = retType == "nint";
-                o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd());
-                o.Add($"    public {retType} {name}({sig})");
+                Declare(o, decls,
+                    XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
+                    $"{retType} {name}({sig})");
                 o.Add("    {");
                 var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
                 o.AddRange(pPro);
@@ -1199,8 +1234,8 @@ public static class CSharpBackend
         };
     }
 
-    static void RenderCallbackMethod(List<string> o, ApiStruct vtable, ClassifiedSlot cs,
-        ClassifiedModel classified, string ownerType, Convention convention)
+    static void RenderCallbackMethod(List<string> o, List<MemberDecl>? decls, ApiStruct vtable,
+        ClassifiedSlot cs, ClassifiedModel classified, string ownerType, Convention convention)
     {
         var slot = cs.Slot;
         var cbParam = cs.PublicParams.First(p => classified.Callbacks.Any(c => c.Name == p.Type.Trim()));
@@ -1210,14 +1245,13 @@ public static class CSharpBackend
         var handlesField = $"_{Idioms.Camel(slot.Name)}Handles";
         var otherParams = cs.PublicParams.Where(p => p != cbParam).ToList();
 
-        o.Add(XmlDoc("    ", slot.Doc, [(Idioms.Ident(cbParam.Name!), cbParam.Doc)], throwsOnFail: true).TrimEnd());
-        o.Add($"    // Roots each managed callback implementation for as long as native code");
-        o.Add($"    // holds a pointer to it; released by the destroy trampoline below.");
         o.Add($"    private readonly List<GCHandle> {handlesField} = [];");
         o.Add("");
         var lvlArg = hasLevel ? ", int minLevel = 0" : "";
         var otherArgs = string.Concat(otherParams.Select(p => $", {CsParamType2(p)} {Idioms.Ident(p.Name!)}"));
-        o.Add($"    public void {Idioms.Pascal(slot.Name)}({ifaceName} {Idioms.Ident(cbParam.Name!)}{otherArgs}{lvlArg})");
+        Declare(o, decls,
+            XmlDoc("    ", slot.Doc, [(Idioms.Ident(cbParam.Name!), cbParam.Doc)], throwsOnFail: true).TrimEnd(),
+            $"void {Idioms.Pascal(slot.Name)}({ifaceName} {Idioms.Ident(cbParam.Name!)}{otherArgs}{lvlArg})");
         o.Add("    {");
         o.Add($"        var gch = GCHandle.Alloc({Idioms.Ident(cbParam.Name!)});");
         o.Add($"        {handlesField}.Add(gch);");
@@ -1235,9 +1269,10 @@ public static class CSharpBackend
         o.Add("");
 
         var cbParamCsType = CTypes.Deref(cbParam.Type);
-        o.Add($"    /// <summary>{slot.Doc} Takes an already-built <c>{cbType.Name}</c> value directly — for one produced by a native factory, not a managed <see cref=\"{ifaceName}\"/>.</summary>");
-        o.Add(XmlDoc("    ", null, otherParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), throwsOnFail: true).TrimEnd());
-        o.Add($"    public void {Idioms.Pascal(slot.Name)}Raw({cbParamCsType} {Idioms.Ident(cbParam.Name!)}{otherArgs})");
+        Declare(o, decls,
+            $"    /// <summary>{slot.Doc} Takes an already-built <c>{cbType.Name}</c> value directly — for one produced by a native factory, not a managed <see cref=\"{ifaceName}\"/>.</summary>\n"
+            + XmlDoc("    ", null, otherParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), throwsOnFail: true).TrimEnd(),
+            $"void {Idioms.Pascal(slot.Name)}Raw({cbParamCsType} {Idioms.Ident(cbParam.Name!)}{otherArgs})");
         o.Add("    {");
         o.Add("        ke_error* err = null;");
         o.Add($"        KernelError.ThrowIfFailed(Handle->{slot.Name}(Handle, {Idioms.Ident(cbParam.Name!)}{extraCall}, &err), err, \"{slot.Name}\");");
