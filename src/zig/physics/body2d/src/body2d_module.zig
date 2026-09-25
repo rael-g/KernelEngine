@@ -102,7 +102,7 @@ fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
     return false;
 }
 
-fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     _ = dt;
     const m = moduleOf(user);
     const p = m.physics;
@@ -121,7 +121,10 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c
         const hs: [*c]c.ke_hierarchy_component = @ptrCast(@alignCast(segs[s].columns[0]));
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
-            parents.put(segs[s].entities[i], hs[i].parent) catch return true;
+            parents.put(segs[s].entities[i], hs[i].parent) catch {
+                c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "collider pass: parent index allocation failed", @src().file, @intCast(@src().line), null);
+                return false;
+            };
         }
     }
 
@@ -132,7 +135,10 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             if (bs[i].body == c.KE_BODY_2D_INVALID) continue;
-            bodies.put(segs[s].entities[i], bs[i].body) catch return true;
+            bodies.put(segs[s].entities[i], bs[i].body) catch {
+                c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "collider pass: body index allocation failed", @src().file, @intCast(@src().line), null);
+                return false;
+            };
         }
     }
 
