@@ -494,6 +494,26 @@
     }
   ],
   "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_input_action_event_func",
+      "returns": "void",
+      "lanes": [
+        {
+          "name": null,
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": null,
+          "type": "ke_input_action_event",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
   "type_aliases": {
     "ke_input_action_event_func": "void (*)(void *, ke_input_action_event)"
   }

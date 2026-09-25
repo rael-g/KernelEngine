@@ -328,6 +328,7 @@
     }
   ],
   "functions": [],
+  "callbacks": [],
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",

@@ -94,6 +94,38 @@
     }
   ],
   "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_script_factory_func",
+      "returns": "_Bool",
+      "lanes": [
+        {
+          "name": null,
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": null,
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": null,
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": null,
+          "type": "ke_error **",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",

@@ -11,6 +11,7 @@ public static class Serialization
         ["structs"] = new JsonArray(m.Structs.Where(s => !s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
         ["vtables"] = new JsonArray(m.Structs.Where(s => s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
         ["functions"] = new JsonArray(m.Functions.Select(f => (JsonNode)f.ToJson()).ToArray()),
+        ["callbacks"] = new JsonArray(m.Callbacks.Select(c => (JsonNode)c.ToJson()).ToArray()),
         ["type_aliases"] = m.TypeAliases.Aggregate(new JsonObject(),
             (o, kv) => { o[kv.Key] = kv.Value; return o; }),
     };
@@ -75,6 +76,13 @@ public static class Serialization
         if (s.External) o["external"] = true;
         return o;
     }
+
+    public static JsonObject ToJson(this ApiCallback c) => new()
+    {
+        ["name"] = c.Name,
+        ["returns"] = c.Returns,
+        ["lanes"] = new JsonArray(c.Lanes.Select(l => (JsonNode)l.ToJson()).ToArray()),
+    };
 
     public static JsonObject ToJson(this ApiFunction f) => new()
     {

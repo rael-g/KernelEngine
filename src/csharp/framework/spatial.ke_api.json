@@ -85,5 +85,6 @@
   ],
   "vtables": [],
   "functions": [],
+  "callbacks": [],
   "type_aliases": {}
 }

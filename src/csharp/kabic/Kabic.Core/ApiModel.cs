@@ -61,11 +61,30 @@ public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IR
 
 public record ApiFunction(string Name, string Returns, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params);
 
+/// <summary>
+/// A function-pointer typedef described lane by lane. Which lane carries the caller's
+/// opaque context, which carries a utf8 string, and which is an outbound error channel
+/// is a contract the typedef's own parameter documentation declares; the string
+/// spelling of the type carries none of it, and a backend that has to guess gets it
+/// wrong. Lanes keep the order the prototype declares, so an index identifies one.
+/// </summary>
+public record ApiCallback(string Name, string Returns, IReadOnlyList<ApiParam> Lanes);
+
 public class ApiModel
 {
     public List<ApiEnum> Enums { get; } = [];
     public List<ApiStruct> Structs { get; } = [];
     public List<ApiFunction> Functions { get; } = [];
+
+    /// <summary>
+    /// Function-pointer typedefs, keyed by the name a parameter is declared with.
+    /// <see cref="TypeAliases"/> also holds each one, spelled as a type; this holds the
+    /// description a projection needs to name the lanes.
+    /// </summary>
+    public List<ApiCallback> Callbacks { get; } = [];
+
+    /// <summary>The callback a parameter's type names, or <see langword="null"/> if it names none.</summary>
+    public ApiCallback? CallbackOf(string type) => Callbacks.FirstOrDefault(c => c.Name == type.Trim());
 
     /// <summary>
     /// Typedefs that resolve to a plain C primitive (<c>ke_entity</c> -> <c>uint64_t</c>),
@@ -133,6 +152,13 @@ public static class ApiReader
         if (root["type_aliases"] is System.Text.Json.Nodes.JsonObject aliases)
             foreach (var kv in aliases)
                 m.TypeAliases[kv.Key] = kv.Value!.GetValue<string>();
+
+        foreach (var c in root["callbacks"]?.AsArray() ?? [])
+        {
+            var o = c!.AsObject();
+            m.Callbacks.Add(new ApiCallback(Str(o, "name")!, Str(o, "returns")!,
+                o["lanes"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList()));
+        }
 
         foreach (var f in root["functions"]!.AsArray())
         {

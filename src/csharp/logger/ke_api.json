@@ -243,5 +243,6 @@
       "params": []
     }
   ],
+  "callbacks": [],
   "type_aliases": {}
 }

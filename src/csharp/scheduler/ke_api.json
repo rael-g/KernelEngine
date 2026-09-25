@@ -177,6 +177,38 @@
     }
   ],
   "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_task_func",
+      "returns": "void",
+      "lanes": [
+        {
+          "name": null,
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_task_on_complete_func",
+      "returns": "void",
+      "lanes": [
+        {
+          "name": null,
+          "type": "ke_task *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": null,
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
   "type_aliases": {
     "ke_task_func": "void (*)(void *)",
     "ke_task_on_complete_func": "void (*)(ke_task *, void *)"

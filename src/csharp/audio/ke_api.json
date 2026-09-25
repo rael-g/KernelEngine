@@ -144,6 +144,7 @@
     }
   ],
   "functions": [],
+  "callbacks": [],
   "type_aliases": {
     "ke_audio_sound": "uint32_t"
   }

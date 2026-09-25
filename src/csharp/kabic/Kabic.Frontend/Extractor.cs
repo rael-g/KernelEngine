@@ -62,6 +62,7 @@ public static class Extractor
                     var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
                     if (!target.StartsWith("struct ") && !target.StartsWith("enum ") && target != name)
                         api.TypeAliases[name] = target;
+                    if (ExtractCallback(node, name) is { } callback) api.Callbacks.Add(callback);
                     break;
                 }
             }
@@ -161,6 +162,63 @@ public static class Extractor
 
         var (structTags, structDoc, _, _) = DocParser.Parse(node);
         return new ApiStruct(name, structDoc.Length > 0 ? structDoc : null, structTags, fields, slots);
+    }
+
+    /// <summary>
+    /// Describes a function-pointer typedef lane by lane, or returns
+    /// <see langword="null"/> when the typedef names no prototype. A prototype carries
+    /// its lanes' types in declaration order and none of their names — a name reaches
+    /// the description only through the typedef's own <c>@param</c> documentation, which
+    /// states the index it belongs to.
+    /// </summary>
+    static ApiCallback? ExtractCallback(JsonObject node, string name)
+    {
+        var proto = FindProto(node["inner"] as JsonArray);
+        if (proto is null) return null;
+
+        var (_, _, pdocs, _) = DocParser.Parse(node);
+        var laneNames = new Dictionary<int, string>();
+        CollectParamIndices(node["inner"] as JsonArray, laneNames);
+
+        var types = ((proto["inner"] as JsonArray) ?? [])
+            .Select(t => t!["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "").ToList();
+        if (types.Count == 0) return null;
+
+        var lanes = types.Skip(1).Select((type, i) =>
+        {
+            var laneName = laneNames.TryGetValue(i, out var n) ? n : null;
+            var (tags, doc) = laneName is not null && pdocs.TryGetValue(laneName, out var d)
+                ? (d.Tags, d.Doc) : ([], "");
+            return new ApiParam(laneName, type, tags, doc.Length > 0 ? doc : null);
+        }).ToList();
+
+        return new ApiCallback(name, types[0], lanes);
+    }
+
+    static JsonObject? FindProto(JsonArray? inner)
+    {
+        foreach (var c in inner ?? [])
+        {
+            var n = c!.AsObject();
+            var kind = n["kind"]?.GetValue<string>();
+            if (kind == "FullComment") continue;
+            if (kind == "FunctionProtoType") return n;
+            if (FindProto(n["inner"] as JsonArray) is { } found) return found;
+        }
+        return null;
+    }
+
+    static void CollectParamIndices(JsonArray? inner, Dictionary<int, string> sink)
+    {
+        foreach (var c in inner ?? [])
+        {
+            var n = c!.AsObject();
+            if (n["kind"]?.GetValue<string>() == "ParamCommandComment"
+                && n["param"]?.GetValue<string>() is { } pname
+                && n["paramIdx"]?.GetValue<int>() is { } idx)
+                sink[idx] = pname;
+            CollectParamIndices(n["inner"] as JsonArray, sink);
+        }
     }
 
     static ApiFunction ExtractFunction(JsonObject node, string name, List<string> errors)

@@ -766,6 +766,7 @@
     }
   ],
   "functions": [],
+  "callbacks": [],
   "type_aliases": {
     "ke_body_2d": "uint32_t"
   }

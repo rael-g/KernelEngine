@@ -117,6 +117,32 @@
     }
   ],
   "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_load_model_complete_func",
+      "returns": "void",
+      "lanes": [
+        {
+          "name": "error",
+          "type": "const ke_error *",
+          "tags": [],
+          "doc": "NULL on success; pointer to a ke_error on failure (valid until the next failing call on this thread \u2014 copy what you need before returning)."
+        },
+        {
+          "name": "data",
+          "type": "struct ke_model_data *",
+          "tags": [],
+          "doc": "Loaded model data (valid only when error == NULL); NULL on failure."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [],
+          "doc": "Opaque pointer forwarded from load_model_async."
+        }
+      ]
+    }
+  ],
   "type_aliases": {
     "ke_load_model_complete_func": "void (*)(const ke_error *, struct ke_model_data *, void *)"
   }
