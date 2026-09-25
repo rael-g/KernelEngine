@@ -98,6 +98,26 @@ Expect("a vector parameter does not disturb the parameters around it",
                "body, impulse.X, impulse.Y, wake ? (byte)1 : (byte)0"],
     absent: ["float impulseX"]);
 
+// A function pointer paired with an opaque context: the two are one closure, and the
+// public surface takes one delegate. A managed handler can throw underneath native
+// frames that cannot carry an exception, so the trampoline parks it and the call
+// rethrows — swallowing it instead loses the failure entirely.
+Expect("a callback and its context become one delegate parameter",
+    Vtable("ke_probe", Slot("watch", "bool",
+        Param("on_event", "ke_probe_event_func", "closure:event_ctx"),
+        Param("event_ctx", "void *"),
+        Param("out_error", "ke_error **"))),
+    contains: ["public void Watch(Action<uint>? onEvent)",
+               "GCHandle.Alloc(onEvent)",
+               "private static void WatchOnEventTrampoline(void* ctx, uint arg1)",
+               "(delegate* unmanaged[Cdecl]<void*, uint, void>)&WatchOnEventTrampoline",
+               "handler(arg1)",
+               "s_parkedCallbackException ??= ex;",
+               "throw parked;",
+               "onEventHandle.Free();"],
+    absent: ["void* eventCtx", "ke_probe_event_func onEvent"],
+    aliases: new() { ["ke_probe_event_func"] = "void (*)(void *, uint32_t)" });
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.
@@ -121,7 +141,8 @@ if (failures.Count > 0)
 Console.WriteLine($"The backend emits all {checks} declared shape(s).");
 return 0;
 
-void Expect(string what, JsonObject vtable, string[] contains, string[] absent)
+void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
+    Dictionary<string, string>? aliases = null)
 {
     checks++;
     var api = new JsonObject
@@ -149,6 +170,8 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent)
         ["functions"] = new JsonArray(),
         ["type_aliases"] = new JsonObject { ["ke_entity"] = "uint64_t" },
     };
+    foreach (var (alias, target) in aliases ?? [])
+        api["type_aliases"]!.AsObject()[alias] = target;
 
     string emitted;
     try

@@ -444,6 +444,20 @@ public static class CSharpBackend
             o.Add("    /// </summary>");
             o.Add($"    private readonly Dictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
         }
+
+        if (vtable.Slots.Any(s => s.Params.Any(p => p.Has("closure"))))
+        {
+            o.Add("");
+            o.Add("    /// <summary>");
+            o.Add("    /// Where a managed exception waits out the native frames. A handler runs");
+            o.Add("    /// underneath engine code that has no way to carry an exception, so throwing");
+            o.Add("    /// through it would tear down the process; the trampoline parks it here and");
+            o.Add("    /// the call rethrows once the native stack has unwound. Per-thread, because");
+            o.Add("    /// a handler runs on whichever thread the engine called it from.");
+            o.Add("    /// </summary>");
+            o.Add("    [ThreadStatic]");
+            o.Add("    private static Exception? s_parkedCallbackException;");
+        }
         o.Add("");
         o.Add($"    private {vtable.Name}* Handle => _native != null ? _native");
         o.Add($"        : throw new ObjectDisposedException(nameof({typeName}));");
@@ -507,7 +521,8 @@ public static class CSharpBackend
             if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle") || cs.Slot.Has("raw_callback")
                 || cs.Slot.Has("idiom") || cs.PublicParams.Any(p => p.Has("raw_callback")))
                 continue;
-            if (cs.PublicParams.Any(p => classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
+            if (cs.PublicParams.Any(p => !p.Has("closure")
+                    && classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
             {
                 RenderCallbackMethod(o, vtable, cs, classified, typeName, convention);
                 continue;
@@ -572,19 +587,124 @@ public static class CSharpBackend
     static bool HasVectorParams(ApiStruct vtable) =>
         vtable.Slots.Any(s => s.Params.Any(p => p.Has("vector2") || p.Has("vector3")));
 
+    /// <summary>
+    /// A function-pointer parameter and the opaque context parameter that travels with
+    /// it, projected as one delegate. The pair is how a C ABI carries a closure: the
+    /// context is the closure's captured state and the function pointer is its body.
+    /// Every lane of the function-pointer type except the context becomes a type
+    /// argument of the delegate.
+    /// </summary>
+    internal sealed record CallbackPair(ApiParam Fn, ApiParam Ctx, string Delegate, string Trampoline,
+        IReadOnlyList<string> NativeLanes, int CtxLane);
+
+    static IReadOnlyList<CallbackPair> CallbackPairs(ApiModel model, ApiSlot slot)
+    {
+        var pairs = new List<CallbackPair>();
+        foreach (var fn in slot.Params.Where(p => p.Has("closure")))
+        {
+            var ctxName = fn.TagValue("closure")
+                ?? throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: [closure] must name the context parameter, as [closure:<name>]");
+            var ctx = slot.Params.FirstOrDefault(p => p.Name == ctxName)
+                ?? throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: [closure:{ctxName}] names no parameter of this slot");
+
+            var alias = model.TypeAliases.TryGetValue(fn.Type.Trim(), out var a) ? a : fn.Type.Trim();
+            var lanes = FnPtrLanes(alias)
+                ?? throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: [closure] needs a function-pointer type, but {fn.Type.Trim()} is {alias}");
+            if (!lanes.Returns.StartsWith("void"))
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: [closure] cannot carry a return value yet, but {fn.Type.Trim()} returns {lanes.Returns}");
+
+            var ctxLanes = lanes.Params.Select((t, i) => (t, i)).Where(x => x.t.Replace(" ", "") == "void*").ToList();
+            if (ctxLanes.Count != 1)
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: [closure] needs exactly one void* lane to carry the context, "
+                    + $"but {fn.Type.Trim()} has {ctxLanes.Count}");
+
+            var carried = lanes.Params.Where((_, i) => i != ctxLanes[0].i).Select(t => CsType(model, t)).ToList();
+            pairs.Add(new CallbackPair(fn, ctx,
+                carried.Count == 0 ? "Action" : $"Action<{string.Join(", ", carried)}>",
+                $"{Idioms.Pascal(slot.Name)}{Idioms.Pascal(fn.Name!)}Trampoline",
+                lanes.Params.Select(Idioms.CsForeignType).ToList(), ctxLanes[0].i));
+        }
+        return pairs;
+    }
+
+    /// <summary>
+    /// How the callback's function pointer is spelled where the vtable slot expects it.
+    /// A <see langword="null"/> handler has to pass a null pointer, and a conditional
+    /// has no common type between a null literal and a function pointer, so the typed
+    /// branch has to say what it is.
+    /// </summary>
+    static string NativeFnPtr(CallbackPair pair) =>
+        $"delegate* unmanaged[Cdecl]<{string.Join(", ", pair.NativeLanes.Select(t => t.Replace(" ", "")))}, void>";
+
+    static (string Returns, IReadOnlyList<string> Params)? FnPtrLanes(string type)
+    {
+        var star = type.IndexOf("(*", StringComparison.Ordinal);
+        if (star < 0) return null;
+        var open = type.IndexOf('(', star + 2);
+        var close = type.LastIndexOf(')');
+        if (open < 0 || close < open) return null;
+        var body = type[(open + 1)..close].Trim();
+        var lanes = body.Length == 0 || body == "void"
+            ? []
+            : body.Split(',').Select(s => s.Trim()).ToList();
+        return (type[..star].Trim(), lanes);
+    }
+
+    /// <summary>
+    /// The trampoline a <see cref="CallbackPair"/> needs: the unmanaged entry point the
+    /// engine calls, which unwraps the handle back into the delegate. A managed
+    /// exception cannot cross the native frame, so it is parked here and rethrown by the
+    /// call site once the native stack has unwound.
+    /// </summary>
+    static void RenderTrampoline(List<string> o, CallbackPair pair)
+    {
+        var ps = pair.NativeLanes
+            .Select((t, i) => i == pair.CtxLane ? "void* ctx" : $"{t.Trim()} arg{i}")
+            .ToList();
+        var call = string.Join(", ", Enumerable.Range(0, pair.NativeLanes.Count)
+            .Where(i => i != pair.CtxLane).Select(i => $"arg{i}"));
+
+        o.Add("    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]");
+        o.Add($"    private static void {pair.Trampoline}({string.Join(", ", ps)})");
+        o.Add("    {");
+        o.Add("        try");
+        o.Add("        {");
+        o.Add($"            if (GCHandle.FromIntPtr((nint)ctx).Target is {pair.Delegate} handler) handler({call});");
+        o.Add("        }");
+        o.Add("        catch (Exception ex)");
+        o.Add("        {");
+        o.Add("            s_parkedCallbackException ??= ex;");
+        o.Add("        }");
+        o.Add("    }");
+        o.Add("");
+    }
+
     static void RenderSlotMethod(ApiModel model, List<string> o, ClassifiedSlot cs, Convention convention)
     {
         var slot = cs.Slot;
         var name = slot.TagValue("name") ?? Idioms.Pascal(slot.Name);
         var lanes = VectorLanes(slot.Params);
+        var callbacks = CallbackPairs(model, slot);
+
+        if (callbacks.Count > 0 && cs.Shape is not SlotShape.Fallible)
+            throw new InvalidOperationException(
+                $"{slot.Name}: [closure] is only projected on a fallible slot so far, not {cs.Shape}");
 
         string Sig(IEnumerable<ApiParam> ps) => string.Join(", ", SigParts(ps));
 
         IEnumerable<string> SigParts(IEnumerable<ApiParam> ps) => ps
             .Where(p => !lanes.TryGetValue(p, out var l) || l.Leads)
+            .Where(p => callbacks.All(c => c.Ctx != p))
             .Select(p => lanes.TryGetValue(p, out var l)
                 ? $"Vector{l.Arity} {Idioms.Ident(l.Vector)}"
-                : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}");
+                : callbacks.FirstOrDefault(c => c.Fn == p) is { } cb
+                    ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
+                    : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}");
 
         switch (cs.Shape)
         {
@@ -757,6 +877,36 @@ public static class CSharpBackend
                 var rooted = args.Where(p => p.Has("rooted")).ToList();
                 foreach (var rp in rooted)
                     o.Add($"{fInd}var {Idioms.Ident(rp.Name!)}Handle = System.Runtime.InteropServices.GCHandle.Alloc({Idioms.Ident(rp.Name!)});");
+                if (callbacks.Count > 0)
+                {
+                    foreach (var cb in callbacks)
+                        o.Add($"{fInd}var {Idioms.Ident(cb.Fn.Name!)}Handle = {Idioms.Ident(cb.Fn.Name!)} is null"
+                            + $" ? default : GCHandle.Alloc({Idioms.Ident(cb.Fn.Name!)});");
+                    o.Add($"{fInd}s_parkedCallbackException = null;");
+                    o.Add($"{fInd}ke_error* err = null;");
+                    o.Add($"{fInd}bool ok;");
+                    o.Add($"{fInd}try");
+                    o.Add($"{fInd}{{");
+                    o.Add($"{fInd}    ok = Handle->{slot.Name}(Handle{call}, &err)"
+                        + (slot.Returns == "ke_bool" ? " != 0" : "") + ";");
+                    o.Add($"{fInd}}}");
+                    o.Add($"{fInd}finally");
+                    o.Add($"{fInd}{{");
+                    foreach (var cb in callbacks)
+                        o.Add($"{fInd}    if ({Idioms.Ident(cb.Fn.Name!)}Handle.IsAllocated) {Idioms.Ident(cb.Fn.Name!)}Handle.Free();");
+                    o.Add($"{fInd}}}");
+                    o.Add($"{fInd}if (s_parkedCallbackException is {{ }} parked)");
+                    o.Add($"{fInd}{{");
+                    o.Add($"{fInd}    s_parkedCallbackException = null;");
+                    o.Add($"{fInd}    throw parked;");
+                    o.Add($"{fInd}}}");
+                    o.Add($"{fInd}KernelError.ThrowIfFailed(ok, err, \"{slot.Name}\");");
+                    for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
+                    o.Add("    }");
+                    o.Add("");
+                    foreach (var cb in callbacks) RenderTrampoline(o, cb);
+                    return;
+                }
                 o.Add($"{fInd}ke_error* err = null;");
                 if (byReturn && rooted.Count > 0)
                 {
@@ -826,7 +976,11 @@ public static class CSharpBackend
         }
 
         string CallArg(ApiParam p) =>
-            lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
+            callbacks.FirstOrDefault(c => c.Fn == p) is { } fnOf
+                ? $"{Idioms.Ident(p.Name!)} is null ? null : ({NativeFnPtr(fnOf)})&{fnOf.Trampoline}"
+            : callbacks.FirstOrDefault(c => c.Ctx == p) is { } ctxOf
+                ? $"(void*)GCHandle.ToIntPtr({Idioms.Ident(ctxOf.Fn.Name!)}Handle)"
+            : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
             : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
             : p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
             : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"

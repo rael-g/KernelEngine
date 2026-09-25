@@ -41,9 +41,9 @@ public sealed unsafe class InputActionMap<TEnum> : IInputActionMap<TEnum>, IActi
     /// <inheritdoc/>
     public void Evaluate(IInputReader? input)
     {
-        if (input is not INativeInputReader native) { _native.Evaluate(null); return; }
+        if (input is not INativeInputReader native) { _native.Evaluate(null, null); return; }
         var snapshot = native.Native;
-        _native.Evaluate(&snapshot);
+        _native.Evaluate(&snapshot, null);
     }
 
     /// <inheritdoc/>

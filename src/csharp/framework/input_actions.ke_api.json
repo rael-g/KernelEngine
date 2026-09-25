@@ -306,7 +306,7 @@
           "name": "evaluate",
           "returns": "_Bool",
           "tags": [],
-          "doc": null,
+          "doc": "Runs one frame of binding evaluation against updating polling state and firing for each phase transition. A null updates polling only.",
           "return_doc": null,
           "params": [
             {
@@ -319,7 +319,7 @@
               "name": "on_event",
               "type": "ke_input_action_event_func",
               "tags": [
-                "raw_callback"
+                "closure:event_ctx"
               ],
               "doc": null
             },

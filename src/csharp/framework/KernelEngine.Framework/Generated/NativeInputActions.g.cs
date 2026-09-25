@@ -23,6 +23,16 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
     private readonly delegate* unmanaged[Cdecl]<ke_input_actions*, void> _destroy;
     private readonly bool _borrowed;
 
+    /// <summary>
+    /// Where a managed exception waits out the native frames. A handler runs
+    /// underneath engine code that has no way to carry an exception, so throwing
+    /// through it would tear down the process; the trampoline parks it here and
+    /// the call rethrows once the native stack has unwound. Per-thread, because
+    /// a handler runs on whichever thread the engine called it from.
+    /// </summary>
+    [ThreadStatic]
+    private static Exception? s_parkedCallbackException;
+
     private ke_input_actions* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(NativeInputActions));
 
@@ -103,6 +113,43 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
     {
         ke_error* err = null;
         KernelError.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, up, down, left, right, &err), err, "bind_key_quad");
+    }
+
+    /// <summary>Runs one frame of binding evaluation against updating polling state and firing for each phase transition. A null updates polling only.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    public void Evaluate(ke_input_snapshot* snapshot, Action<ke_input_action_event>? onEvent)
+    {
+        var onEventHandle = onEvent is null ? default : GCHandle.Alloc(onEvent);
+        s_parkedCallbackException = null;
+        ke_error* err = null;
+        bool ok;
+        try
+        {
+            ok = Handle->evaluate(Handle, snapshot, onEvent is null ? null : (delegate* unmanaged[Cdecl]<void*, ke_input_action_event, void>)&EvaluateOnEventTrampoline, (void*)GCHandle.ToIntPtr(onEventHandle), &err);
+        }
+        finally
+        {
+            if (onEventHandle.IsAllocated) onEventHandle.Free();
+        }
+        if (s_parkedCallbackException is { } parked)
+        {
+            s_parkedCallbackException = null;
+            throw parked;
+        }
+        KernelError.ThrowIfFailed(ok, err, "evaluate");
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void EvaluateOnEventTrampoline(void* ctx, ke_input_action_event arg1)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is Action<ke_input_action_event> handler) handler(arg1);
+        }
+        catch (Exception ex)
+        {
+            s_parkedCallbackException ??= ex;
+        }
     }
 
 

@@ -62,7 +62,10 @@ extern "C"
         bool (*bind_key_quad)(struct ke_input_actions *self, int32_t action_id,
                               ke_key up, ke_key down, ke_key left, ke_key right, ke_error **out_error);
 
-        /** @param on_event [raw_callback] */
+        /** Runs one frame of binding evaluation against @p snapshot, updating polling
+         * state and firing @p on_event for each phase transition. A null @p on_event
+         * updates polling only.
+         * @param on_event [closure:event_ctx] */
         bool (*evaluate)(struct ke_input_actions *self,
                          const ke_input_snapshot    *snapshot,
                          ke_input_action_event_func  on_event,
