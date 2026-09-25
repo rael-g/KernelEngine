@@ -155,9 +155,9 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     const label_cid = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields);
     registerFields(w, label_cid, &c.ke_label_component_fields);
 
-    _ = w.register_component_apply.?(w, camera_cid, component_apply.ke_render_apply_camera, null, null);
-    _ = w.register_component_apply.?(w, mesh_cid, component_apply.ke_render_apply_mesh, null, null);
-    _ = w.register_component_apply.?(w, sprite_cid, component_apply.ke_render_apply_sprite2d, null, null);
+    if (!w.register_component_apply.?(w, camera_cid, component_apply.ke_render_apply_camera, null, null)) return false;
+    if (!w.register_component_apply.?(w, mesh_cid, component_apply.ke_render_apply_mesh, null, null)) return false;
+    if (!w.register_component_apply.?(w, sprite_cid, component_apply.ke_render_apply_sprite2d, null, null)) return false;
     return true;
 }
 

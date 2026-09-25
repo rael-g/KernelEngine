@@ -486,6 +486,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-deferred-lighting-include", b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" })),
         argF(b, "ke-forward-include", b.pathJoin(&.{ src_zig, "render/forward/include" })),
         argF(b, "ke-lib-dir", lib_dir),
+        argF(b, "kerror-src", kerror_src),
     }, &.{
         &common.step,            &runtime.step, &render_service.step, &view_space.step,
         &tonemap.step,           &skybox.step,  &ui.step,

@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const c = @import("cimport.zig").c;
+const E = @import("kerror").Errors(c);
 
 const pi: f32 = 3.14159265358979323846;
 
@@ -35,13 +36,19 @@ pub export fn ke_render_apply_camera(
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
     n: u32,
-    _: [*c][*c]c.ke_error,
+    out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
     const cam: *c.ke_camera_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         if (!keyIs(entry, "fov_degrees")) continue;
-        const f = asFloat(&entry.value) orelse return false;
-        if (!(f > 0.0 and f < 180.0)) return false;
+        const f = asFloat(&entry.value) orelse {
+            E.fail(out_error, .invalid_argument, "fov_degrees needs a number of degrees", @src());
+            return false;
+        };
+        if (!(f > 0.0 and f < 180.0)) {
+            E.fail(out_error, .invalid_argument, "fov_degrees is an angle strictly between 0 and 180", @src());
+            return false;
+        }
         cam.fov = f * (pi / 180.0);
     }
     return true;
@@ -67,12 +74,15 @@ pub export fn ke_render_apply_mesh(
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
     n: u32,
-    _: [*c][*c]c.ke_error,
+    out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
     const m: *c.ke_mesh_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         if (!keyIs(entry, "alpha_mode")) continue;
-        m.alpha_mode = alphaModeOf(&entry.value) orelse return false;
+        m.alpha_mode = alphaModeOf(&entry.value) orelse {
+            E.fail(out_error, .invalid_argument, "alpha_mode is one of 'opaque', 'mask' or 'blend'", @src());
+            return false;
+        };
     }
     return true;
 }
@@ -83,12 +93,15 @@ pub export fn ke_render_apply_sprite2d(
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
     n: u32,
-    _: [*c][*c]c.ke_error,
+    out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
     const sp: *c.ke_sprite2d_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         if (!keyIs(entry, "alpha_mode")) continue;
-        sp.alpha_mode = alphaModeOf(&entry.value) orelse return false;
+        sp.alpha_mode = alphaModeOf(&entry.value) orelse {
+            E.fail(out_error, .invalid_argument, "alpha_mode is one of 'opaque', 'mask' or 'blend'", @src());
+            return false;
+        };
     }
     return true;
 }
@@ -271,6 +284,42 @@ test "a misspelled sprite alpha mode fails the load, matching a mesh" {
     var list = [_]c.ke_variant_table_entry{keyed("alpha_mode", vString("transparent"))};
     try testing.expect(!ke_render_apply_sprite2d(null, &sp, &list, @intCast(list.len), null));
     try testing.expectEqual(@as(@TypeOf(sp.alpha_mode), c.KE_ALPHA_MODE_BLEND), sp.alpha_mode);
+}
+
+test "a rejected field of view says it is measured in degrees instead of failing namelessly" {
+    var cam = std.mem.zeroes(c.ke_camera_component);
+    var list = [_]c.ke_variant_table_entry{keyed("fov_degrees", vString("wide"))};
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!ke_render_apply_camera(null, &cam, &list, @intCast(list.len), &err));
+    try testing.expect(err != null);
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "degrees") != null);
+}
+
+test "a field of view outside the open half turn says which range it left" {
+    var cam = std.mem.zeroes(c.ke_camera_component);
+    var list = [_]c.ke_variant_table_entry{keyed("fov_degrees", vFloat(180.0))};
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!ke_render_apply_camera(null, &cam, &list, @intCast(list.len), &err));
+    try testing.expect(err != null);
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "between 0 and 180") != null);
+}
+
+test "a misspelled alpha mode names the three spellings it could have been" {
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    var list = [_]c.ke_variant_table_entry{keyed("alpha_mode", vString("blnd"))};
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!ke_render_apply_mesh(null, &m, &list, @intCast(list.len), &err));
+    try testing.expect(err != null);
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "'blend'") != null);
+}
+
+test "a sprite rejecting an alpha mode reports it the same way a mesh does" {
+    var sp = std.mem.zeroes(c.ke_sprite2d_component);
+    var list = [_]c.ke_variant_table_entry{keyed("alpha_mode", vString("transparent"))};
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!ke_render_apply_sprite2d(null, &sp, &list, @intCast(list.len), &err));
+    try testing.expect(err != null);
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "'blend'") != null);
 }
 
 test "a sprite leaves every key it does not claim for the rest of the engine" {

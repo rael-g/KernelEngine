@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
     const ke_deferred_lighting = b.option([]const u8, "ke-deferred-lighting-include", "ke_render_deferred_lighting plugin include dir") orelse @panic("-Dke-deferred-lighting-include required");
     const ke_forward = b.option([]const u8, "ke-forward-include", "ke_render_forward plugin include dir") orelse @panic("-Dke-forward-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
+    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/render_module.zig"),
@@ -54,6 +55,11 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("ke_render_deferred_lighting", .{});
     mod.linkSystemLibrary("ke_render_forward", .{});
     mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
+    mod.addImport("kerror", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = kerror_src },
+        .target = target,
+        .optimize = optimize,
+    }));
 
     const lib = b.addLibrary(.{
         .name = "ke_render_module",
@@ -94,6 +100,11 @@ pub fn build(b: *std.Build) void {
     test_mod.linkSystemLibrary("ke_render_deferred_lighting", .{});
     test_mod.linkSystemLibrary("ke_render_forward", .{});
     test_mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
+    test_mod.addImport("kerror", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = kerror_src },
+        .target = target,
+        .optimize = optimize,
+    }));
 
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
