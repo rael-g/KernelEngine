@@ -67,14 +67,18 @@ fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c
     return true;
 }
 
+fn consoleSinkWrite(stream: *c.FILE, event: *const c.ke_log_event) void {
+    const label = ke_log_level_to_string(event.level);
+    const tag: [*c]const u8 = if (event.tag != null) event.tag else "";
+    const message: [*c]const u8 = if (event.message != null) event.message else "";
+    _ = c.fprintf(stream, "[%s] %s: %s\n", label, tag, message);
+    _ = c.fflush(stream);
+}
+
 fn consoleSinkLog(self: ?*c.ke_logger_sink, event: [*c]const c.ke_log_event) callconv(.c) void {
     _ = self;
     if (event == null) return;
-    const label = ke_log_level_to_string(event.*.level);
-    const tag: [*c]const u8 = if (event.*.tag != null) event.*.tag else "";
-    const message: [*c]const u8 = if (event.*.message != null) event.*.message else "";
-    _ = c.fprintf(c.stderr, "[%s] %s: %s\n", label, tag, message);
-    _ = c.fflush(c.stderr);
+    if (c.stderr) |stream| consoleSinkWrite(stream, &event.*);
 }
 
 fn consoleSinkFlush(self: ?*c.ke_logger_sink) callconv(.c) void {
@@ -265,15 +269,39 @@ test "a sink with a null log fn is skipped" {
     logger.ref.*.log.?(logger.ref, &ev);
 }
 
-test "the console sink tolerates a null tag and message" {
-    const sink = ke_console_sink_create();
+fn expectConsoleSinkWrites(expected: []const u8, event: *const c.ke_log_event) !void {
+    const stream = c.tmpfile() orelse return error.TmpFileUnavailable;
+    defer _ = c.fclose(stream);
 
+    consoleSinkWrite(stream, event);
+
+    if (c.fseek(stream, 0, c.SEEK_SET) != 0) return error.SeekFailed;
+    var buffer: [256]u8 = undefined;
+    const read = c.fread(&buffer, 1, buffer.len, stream);
+    try testing.expectEqualStrings(expected, buffer[0..read]);
+}
+
+test "the console sink writes the level, tag and message of an event" {
+    var ev = std.mem.zeroes(c.ke_log_event);
+    ev.level = c.KE_LOG_LEVEL_INFO;
+    ev.tag = "TEST";
+    ev.message = "Message";
+
+    try expectConsoleSinkWrites("[INFO] TEST: Message\n", &ev);
+}
+
+test "the console sink tolerates a null tag and message" {
     var ev = std.mem.zeroes(c.ke_log_event);
     ev.level = c.KE_LOG_LEVEL_INFO;
     ev.tag = null;
     ev.message = null;
 
-    sink.log.?(null, &ev);
+    try expectConsoleSinkWrites("[INFO] : \n", &ev);
+}
+
+test "the console sink ignores an event it has no pointer to" {
+    const sink = ke_console_sink_create();
+    sink.log.?(null, null);
 }
 
 test "destroy calls each sink destroy fn" {
