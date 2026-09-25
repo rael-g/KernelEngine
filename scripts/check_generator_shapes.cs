@@ -165,6 +165,23 @@ Expect("a slot that only answers becomes a property, in the class and in the con
                "public unsafe interface IProbe : IDisposable", "    ulong Root { get; }"],
     absent: ["public ulong Root()", "    ulong Root;"]);
 
+// Data a caller holds, emitted from the header rather than spelled a second time by
+// hand. The second spelling is what makes a reinterpret cast necessary, and a cast is
+// only ever as true as the sentence written next to it.
+ExpectValueStruct("a value struct is emitted with its layout pinned",
+    ValueStruct("ke_vertex", ("x", "float"), ("y", "float"), ("z", "float")),
+    contains: ["[StructLayout(LayoutKind.Sequential)]", "public struct Vertex",
+               "public float X;", "public float Y;", "public float Z;"],
+    absent: ["MemoryMarshal", "Unsafe.As"]);
+
+// A pointer field would make the struct a view onto memory somebody else owns, which is
+// a lifetime question a plain value cannot answer. Emitting it anyway is how a span with
+// no owner reaches game code.
+ExpectValueStruct("a value struct refuses a pointer field",
+    ValueStruct("ke_mesh_data", ("vertices", "ke_vertex *")),
+    contains: [], absent: [],
+    throws: "makes the lifetime of that data someone else's question");
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.
@@ -246,6 +263,44 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
         if (emitted.Contains(needle, StringComparison.Ordinal))
             failures.Add($"{what}: expected NOT to find \"{needle}\"");
 }
+
+void ExpectValueStruct(string what, ApiStruct s, string[] contains, string[] absent, string? throws = null)
+{
+    checks++;
+    var model = new ApiModel();
+    model.Structs.Add(s);
+
+    string emitted;
+    try
+    {
+        emitted = CSharpBackend.RenderStruct(model, s, "Probe", Convention.KernelEngine);
+    }
+    catch (Exception ex)
+    {
+        if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+        else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+            failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+        return;
+    }
+    if (throws is not null)
+    {
+        failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+        return;
+    }
+    if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+
+    foreach (var needle in contains)
+        if (!emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected to find \"{needle}\"");
+
+    foreach (var needle in absent)
+        if (emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected NOT to find \"{needle}\"");
+}
+
+static ApiStruct ValueStruct(string name, params (string Name, string Type)[] fields) =>
+    new(name, null, ["value"],
+        fields.Select(f => new ApiField(f.Name, f.Type, [], null)).ToList(), []);
 
 void ExpectBorrowKinds(string what, string[] contains, string[] absent)
 {

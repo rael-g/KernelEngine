@@ -52,6 +52,10 @@ if (model.Enums.Any(e => !e.External))
     File.WriteAllText(Path.Combine(enumsDir, enumsFile), CSharpBackend.RenderEnums(model, ns, convention));
 }
 
+foreach (var value in model.Structs.Where(s => s.Has("value") && !s.External && !s.IsVtable))
+    File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(value.Name, convention)}.g.cs"),
+        CSharpBackend.RenderStruct(model, value, ns, convention));
+
 foreach (var kinds in model.Enums.Where(e => !e.External && e.Has("borrow_kinds")))
     File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(kinds.Name, convention)}Wrappers.g.cs"),
         CSharpBackend.RenderBorrowWrappers(kinds, ns, convention));

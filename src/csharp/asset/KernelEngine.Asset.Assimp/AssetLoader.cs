@@ -22,7 +22,11 @@ internal sealed unsafe class MeshData : IModelMesh
     public int MaterialIndex { get; }
     public string Name { get; }
 
-    /// <summary>Vertices exposed as managed <see cref="Vertex"/> (binary-compatible with <c>ke_vertex</c>).</summary>
+    /// <summary>
+    /// Vertices exposed as <see cref="Vertex"/>. Both spellings are generated from the same
+    /// declaration of <c>ke_vertex</c>, so a field added there reaches this cast on both
+    /// sides or on neither.
+    /// </summary>
     public ReadOnlySpan<Vertex> Vertices =>
         MemoryMarshal.Cast<ke_vertex, Vertex>(new ReadOnlySpan<ke_vertex>(_vertices, (int)_vertexCount));
 

@@ -1,0 +1,90 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_vertex",
+      "doc": "Per-vertex data expected by ke_render::create_mesh.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "nx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "ny",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "nz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "u",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "v",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "tx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "ty",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tw",
+          "type": "float",
+          "tags": [],
+          "doc": "Bitangent sign: \u002B1 or -1 (bitangent = cross(N,T)*tw)"
+        }
+      ]
+    }
+  ],
+  "vtables": [],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {}
+}

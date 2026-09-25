@@ -293,6 +293,42 @@ public static class CSharpBackend
     }
 
     /// <summary>
+    /// Emits the structs a header marked <c>[value]</c>: plain data a caller holds and hands
+    /// back, as opposed to the handles, parameter bags and vtables that are the ABI's own
+    /// plumbing. The alternative in this codebase has been a second hand-written spelling
+    /// plus a reinterpret cast between the two, where the only thing asserting the layouts
+    /// agree is the sentence next to the cast.
+    /// </summary>
+    public static string RenderStruct(ApiModel model, ApiStruct s, string ns, Convention convention)
+    {
+        var o = new List<string>
+        {
+            Header,
+            "using System.Runtime.InteropServices;\n",
+            $"namespace {ns};\n",
+        };
+        o.Add(s.Doc is not null
+            ? XmlDoc("", s.Doc).TrimEnd()
+            : $"/// <summary>Mirrors <c>{s.Name}</c>.</summary>");
+        o.Add("[StructLayout(LayoutKind.Sequential)]");
+        o.Add($"public struct {Idioms.TypeName(s.Name, convention)}");
+        o.Add("{");
+        foreach (var f in s.Fields)
+        {
+            if (CTypes.IsPointer(f.Type))
+                throw new InvalidOperationException(
+                    $"{s.Name}.{f.Name}: [value] describes data a caller holds, and a pointer"
+                    + " field makes the lifetime of that data someone else's question. Describe"
+                    + " the pointer as a sequence on the slot that hands it out instead.");
+            if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
+            o.Add($"    public {CsType(model, f.Type)} {Idioms.Pascal(f.Name)};");
+        }
+        o.Add("}");
+        o.Add("");
+        return string.Join('\n', o);
+    }
+
+    /// <summary>
     /// Emits one borrow wrapper per value of an enum that names where a borrow looks.
     /// The engine asks one question with the region as a parameter, so a projection
     /// that hands borrows to a script body needs one type per region and nothing else

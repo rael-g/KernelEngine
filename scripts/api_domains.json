@@ -508,6 +508,21 @@
       "usings": [
         "KernelEngine.Input.Native"
       ]
+    },
+    {
+      "name": "mesh",
+      "headers": [
+        "src/c/render/kernel_engine/render/mesh.h"
+      ],
+      "includeDirs": [
+        "src/c/render",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/common/mesh.ke_api.json",
+      "namespace": "KernelEngine.Common",
+      "nativeNamespace": "KernelEngine.Common.Native",
+      "outDir": "src/csharp/common/KernelEngine.Common/Generated",
+      "usings": []
     }
   ],
   "bindings": [
