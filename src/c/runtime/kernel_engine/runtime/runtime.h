@@ -49,14 +49,14 @@ typedef struct ke_query_decl {
 
 /// Registers the module's components and systems against the runtime it is being
 /// loaded into. Runs inside register_module, before that call returns.
-/// @param runtime   The runtime the module is being loaded into.
+/// @param runtime   [self] The runtime the module is being loaded into.
 /// @param user_data [context] Opaque context forwarded from register_module.
 /// @param out_error Set when the module cannot load; registration fails with it.
 /// @return false when the module refused to load.
 typedef bool (*ke_module_load_fn)(ke_runtime *runtime, void *user_data, ke_error **out_error);
 
 /// Releases whatever the matching load acquired, as the runtime is torn down.
-/// @param runtime   The runtime the module was loaded into.
+/// @param runtime   [self] The runtime the module was loaded into.
 /// @param user_data [context] Opaque context forwarded from register_module.
 typedef void (*ke_module_unload_fn)(ke_runtime *runtime, void *user_data);
 
@@ -82,7 +82,9 @@ typedef struct ke_runtime_module_params {
 /// raises a fresh error there, which tick() then fails with. The remaining bodies
 /// of the same wave still run — they were already dispatched — but no later phase
 /// of that tick starts.
-/// @param ctx       The body's only doorway to component memory for this call.
+/// @param ctx       [ctx] The body's only doorway to component memory for this
+///                  call. Opaque to a managed caller, which forwards it to the
+///                  entry points that take one.
 /// @param user_data [context] Opaque context forwarded from register_system.
 /// @param dt        Seconds since the previous tick, or the fixed timestep in
 ///                  KE_PHASE_FIXED_UPDATE.

@@ -19,14 +19,14 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void Create_Tick_Destroy_NoSystems()
     {
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         runtime.Tick(1f / 60f);
     }
 
     [Fact]
     public void RegisterModule_InvokesOnLoad_Once()
     {
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         var loadCount = 0;
         var id = runtime.RegisterModule("TestModule", _ => loadCount++);
         Assert.NotEqual(0u, id);
@@ -36,7 +36,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterModule_InvokesOnUnload_WhenRuntimeIsDisposed()
     {
-        var runtime = new Runtime(_ecs, _taskScheduler);
+        IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         var unloadCount = 0;
         runtime.RegisterModule("UnloadModule", _ => { }, _ => unloadCount++);
         Assert.Equal(0, unloadCount);
@@ -49,7 +49,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterModule_UnloadsInReverseRegistrationOrder()
     {
-        var runtime = new Runtime(_ecs, _taskScheduler);
+        IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         var order = new List<string>();
         runtime.RegisterModule("First", _ => { }, _ => order.Add("First"));
         runtime.RegisterModule("Second", _ => { }, _ => order.Add("Second"));
@@ -62,7 +62,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisteredSystem_FiresOncePerTick()
     {
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         var tickCount = 0;
         runtime.RegisterModule("TickModule", rt =>
         {
@@ -78,7 +78,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterSystem_DirectlyFromCallerCode_Works()
     {
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         var calls = 0;
         runtime.RegisterSystem("Bare", RuntimePhase.Update, (_, _) => calls++);
         runtime.Tick(0.016f);
@@ -89,7 +89,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void SystemException_PropagatesAtTick()
     {
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         runtime.RegisterSystem("Boom", RuntimePhase.Update,
             (_, _) => throw new InvalidOperationException("kaboom"));
 
@@ -102,7 +102,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void SystemException_StopsTheRestOfTheTick()
     {
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         var laterRan = false;
         runtime.RegisterSystem("Boom", RuntimePhase.PreUpdate,
             (_, _) => throw new InvalidOperationException("kaboom"));
@@ -116,7 +116,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RenderSystemException_SurvivesTheTickThatDispatchedIt()
     {
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         using var released = new ManualResetEventSlim(false);
 
         runtime.RegisterSystem("BoomRender", RuntimePhase.Render, (_, _) =>
@@ -135,7 +135,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void EverySystemThatThrowsIsReported_NotJustTheLast()
     {
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         runtime.RegisterSystem("BoomA", RuntimePhase.Update,
             (_, _) => throw new InvalidOperationException("a"));
         runtime.RegisterSystem("BoomB", RuntimePhase.Update,
@@ -149,7 +149,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void Dispose_IsIdempotent()
     {
-        var runtime = new Runtime(_ecs, _taskScheduler);
+        IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         runtime.Dispose();
         runtime.Dispose();
     }
@@ -157,7 +157,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void OperationsAfterDispose_Throw()
     {
-        var runtime = new Runtime(_ecs, _taskScheduler);
+        IRuntime runtime = new Runtime(_ecs, _taskScheduler);
         runtime.Dispose();
         Assert.Throws<ObjectDisposedException>(() => runtime.Tick(0.016f));
     }

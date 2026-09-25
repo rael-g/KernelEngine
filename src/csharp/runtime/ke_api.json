@@ -823,7 +823,9 @@
         {
           "name": "runtime",
           "type": "ke_runtime *",
-          "tags": [],
+          "tags": [
+            "self"
+          ],
           "doc": "The runtime the module is being loaded into."
         },
         {
@@ -850,7 +852,9 @@
         {
           "name": "runtime",
           "type": "ke_runtime *",
-          "tags": [],
+          "tags": [
+            "self"
+          ],
           "doc": "The runtime the module was loaded into."
         },
         {
@@ -871,8 +875,10 @@
         {
           "name": "ctx",
           "type": "ke_system_ctx *",
-          "tags": [],
-          "doc": "The body\u0027s only doorway to component memory for this call."
+          "tags": [
+            "ctx"
+          ],
+          "doc": "The body\u0027s only doorway to component memory for this call. Opaque to a managed caller, which forwards it to the entry points that take one."
         },
         {
           "name": "user_data",

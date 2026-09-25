@@ -131,7 +131,7 @@ Expect("a retained closure is kept per key and reports through the channel it de
         Param("apply", "ke_probe_apply_fn", "closure:ctx,retained:cid"),
         Param("ctx", "void *"),
         Param("out_error", "ke_error **"))),
-    contains: ["public unsafe delegate bool ProbeApply(uint tick);",
+    contains: ["public unsafe delegate void ProbeApply(uint tick);",
                "private readonly Dictionary<uint, GCHandle> _retainedApply = new();",
                "public void RegisterApply(uint cid, ProbeApply? apply)",
                "private static bool RegisterApplyTrampoline(void* ctx, uint arg1, ke_error** arg2)",
@@ -253,6 +253,46 @@ Expect("a context lane is an nint the caller relays, not a native pointer",
         Param("parent", "ke_entity"))),
     contains: ["public ulong Spawn(nint sys, ulong parent)", "(ke_system_ctx*)sys, parent"],
     absent: ["ke_system_ctx* sys"]);
+
+// The same relay rule, one level down: a lane of a callback the caller implements. A
+// handler is game-facing code, so leaving the ABI's pointer in the delegate would make
+// every body that never looks at it compile unsafe.
+//
+// A handler reporting through an error channel says failure by throwing, so the boolean
+// it returns natively is not the caller's to answer: the delegate returns nothing and
+// the trampoline reports for it.
+Expect("a handler relays a context lane as nint and reports its own failure by throwing",
+    Vtable("ke_probe", Slot("register_body", "bool",
+        Param("body", "ke_probe_body_fn", "closure:ctx"),
+        Param("ctx", "void *"),
+        Param("out_error", "ke_error **"))),
+    contains: ["public unsafe delegate void ProbeBody(nint sys, float dt);",
+               "handler((nint)arg0, arg2);",
+               "return true;"],
+    absent: ["delegate bool ProbeBody", "ke_system_ctx* sys"],
+    aliases: new() { ["ke_probe_body_fn"] = "bool (*)(ke_system_ctx *, void *, float, ke_error **)" },
+    callbacks: [Callback("ke_probe_body_fn", "bool",
+        Param("sys", "ke_system_ctx *", "ctx"), Param("ctx", "void *", "context"),
+        Param("dt", "float"), Param("out_error", "ke_error **"))]);
+
+// A lane typed as the provider the call was made on: managed code already holds the
+// wrapper for that pointer, so the handler is handed the wrapper. Reaching it means the
+// context points at an object naming the provider — which is not the same reason the
+// failure queue needs one, and a handler that runs inside the registering call still has
+// its exception rethrown there rather than stored.
+Expect("a handler called with the provider is handed the managed wrapper, not the pointer",
+    Vtable("ke_probe", Slot("register_body", "bool",
+        Param("body", "ke_probe_body_fn", "closure:ctx"),
+        Param("ctx", "void *"),
+        Param("out_error", "ke_error **"))),
+    contains: ["public unsafe delegate void ProbeBody(Probe probe);",
+               "public required Probe Owner;",
+               "handler(state.Owner);"],
+    absent: ["_callbackFailures", "ke_probe* probe"],
+    aliases: new() { ["ke_probe_body_fn"] = "bool (*)(ke_probe *, void *, ke_error **)" },
+    callbacks: [Callback("ke_probe_body_fn", "bool",
+        Param("probe", "ke_probe *", "self"), Param("ctx", "void *", "context"),
+        Param("out_error", "ke_error **"))]);
 
 // A slot that only answers, with nothing to ask and no way to fail: a property reads as
 // what it is, state the provider already holds. Emitted as a method it grows a

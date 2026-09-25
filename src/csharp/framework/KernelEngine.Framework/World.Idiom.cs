@@ -64,7 +64,6 @@ public unsafe partial class World : IDisposable
         {
             var reader = new VariantReader(entries, count);
             callback(ref *(T*)component, in reader);
-            return true;
         });
     }
 

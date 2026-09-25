@@ -21,7 +21,7 @@ public unsafe interface INativeWorld
 /// <param name="component">The component's memory, already added to the entity.</param>
 /// <param name="entries">The block's keys, one per key the scene declared.</param>
 /// <param name="count">Number of entries.</param>
-public unsafe delegate bool ComponentApply(nint component, ke_variant_table_entry* entries, uint count);
+public unsafe delegate void ComponentApply(nint component, ke_variant_table_entry* entries, uint count);
 
 
 public unsafe partial class World : IDisposable, INativeWorld
@@ -101,7 +101,10 @@ public unsafe partial class World : IDisposable, INativeWorld
         try
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is ComponentApply handler)
-                return handler((nint)arg1, arg2, arg3);
+            {
+                handler((nint)arg1, arg2, arg3);
+                return true;
+            }
             return false;
         }
         catch (Exception ex)

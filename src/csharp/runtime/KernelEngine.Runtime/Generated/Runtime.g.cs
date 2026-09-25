@@ -19,16 +19,16 @@ public unsafe interface INativeRuntime
 
 /// <summary>Registers the module's components and systems against the runtime it is being loaded into. Runs inside register_module, before that call returns.</summary>
 /// <param name="runtime">The runtime the module is being loaded into.</param>
-public unsafe delegate bool ModuleLoad(ke_runtime* runtime);
+public unsafe delegate void ModuleLoad(Runtime runtime);
 
 /// <summary>Releases whatever the matching load acquired, as the runtime is torn down.</summary>
 /// <param name="runtime">The runtime the module was loaded into.</param>
-public unsafe delegate void ModuleUnload(ke_runtime* runtime);
+public unsafe delegate void ModuleUnload(Runtime runtime);
 
 /// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
-/// <param name="ctx">The body's only doorway to component memory for this call.</param>
+/// <param name="ctx">The body's only doorway to component memory for this call. Opaque to a managed caller, which forwards it to the entry points that take one.</param>
 /// <param name="dt">Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE.</param>
-public unsafe delegate bool SystemExecute(ke_system_ctx* ctx, float dt);
+public unsafe delegate void SystemExecute(nint ctx, float dt);
 
 
 public unsafe partial class Runtime : IDisposable, INativeRuntime
@@ -122,7 +122,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
         {
             var userDataHandle = onLoad is null && onUnload is null
                 ? default
-                : GCHandle.Alloc(new RegisterModuleClosures { OnLoad = onLoad, OnUnload = onUnload });
+                : GCHandle.Alloc(new RegisterModuleClosures { Owner = this, OnLoad = onLoad, OnUnload = onUnload });
             ke_runtime_module_params p = default;
             p.name = (sbyte*)namePtr;
             p.user_data = (void*)GCHandle.ToIntPtr(userDataHandle);
@@ -152,6 +152,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
     /// <summary>The handlers reached through one shared context pointer.</summary>
     private sealed class RegisterModuleClosures
     {
+        public required Runtime Owner;
         public ModuleLoad? OnLoad;
         public ModuleUnload? OnUnload;
     }
@@ -162,7 +163,10 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
         try
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterModuleClosures state && state.OnLoad is { } handler)
-                return handler(arg0);
+            {
+                handler(state.Owner);
+                return true;
+            }
             return false;
         }
         catch (Exception ex)
@@ -178,7 +182,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
         try
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterModuleClosures state && state.OnUnload is { } handler)
-                handler(arg0);
+                handler(state.Owner);
         }
         catch (Exception ex)
         {
@@ -255,7 +259,10 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
         try
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterSystemClosures state && state.Execute is { } handler)
-                return handler(arg0, arg2);
+            {
+                handler((nint)arg0, arg2);
+                return true;
+            }
             return false;
         }
         catch (Exception ex)

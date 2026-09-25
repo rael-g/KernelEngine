@@ -38,41 +38,40 @@ public sealed unsafe partial class Runtime : IRuntime
     }
 
     /// <inheritdoc />
-    public ulong RegisterModule(string name, Action<IRuntime> onLoad, Action<IRuntime>? onUnload = null)
+    ulong IRuntime.RegisterModule(string name, Action<IRuntime> onLoad, Action<IRuntime>? onUnload = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(onLoad);
 
-        return RegisterModule(name,
-            _ => { onLoad(this); return true; },
-            onUnload is null ? null : _ => onUnload(this));
+        return RegisterModule(name, rt => onLoad(rt),
+            onUnload is null ? null : rt => onUnload(rt));
     }
 
     /// <inheritdoc />
-    public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
+    ulong IRuntime.RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
                                  IReadOnlyList<QueryDecl>? queries = null,
                                  IReadOnlyList<ComponentAccess>? accessList = null,
                                  uint pinnedThread = 0,
                                  bool perEntity = false)
     {
         ArgumentNullException.ThrowIfNull(execute);
-        return RegisterSystem(name, phase, (_, dt) => { execute(this, dt); return true; },
+        return RegisterSystemDeclared(name, phase, (_, dt) => execute(this, dt),
                                queries, accessList, pinnedThread, perEntity);
     }
 
     /// <inheritdoc />
-    public ulong RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
+    ulong IRuntime.RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
                                  IReadOnlyList<QueryDecl>? queries = null,
                                  IReadOnlyList<ComponentAccess>? accessList = null,
                                  uint pinnedThread = 0,
                                  bool perEntity = false)
     {
         ArgumentNullException.ThrowIfNull(execute);
-        return RegisterSystem(name, phase, (ctx, dt) => { execute(this, (nint)ctx, dt); return true; },
+        return RegisterSystemDeclared(name, phase, (ctx, dt) => execute(this, ctx, dt),
                                queries, accessList, pinnedThread, perEntity);
     }
 
-    private ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute execute,
+    private ulong RegisterSystemDeclared(string name, RuntimePhase phase, SystemExecute execute,
                                   IReadOnlyList<QueryDecl>? queries,
                                   IReadOnlyList<ComponentAccess>? accessList,
                                   uint pinnedThread,

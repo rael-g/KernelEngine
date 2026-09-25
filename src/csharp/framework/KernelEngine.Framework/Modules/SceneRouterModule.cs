@@ -51,7 +51,6 @@ public sealed class SceneRouterModule : IRuntimeModule
             var type = types.Resolve(typeName);
             var node = (Node)ActivatorUtilities.CreateInstance(services, type);
             scriptHost.BindNativeEntity(node, entity);
-            return true;
         });
 
         var done = new System.Threading.ManualResetEventSlim(false);

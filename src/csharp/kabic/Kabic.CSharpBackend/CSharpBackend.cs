@@ -499,13 +499,13 @@ public static class CSharpBackend
         o.Add("}");
         o.Add("");
 
+        var domainIface = vtable.Has("interface") ? "I" + typeName : null;
+        var decls = domainIface is null ? null : new List<MemberDecl>();
+
         var closures = VtableClosures(model, slots);
         var closureGroups = VtableClosureGroups(model, slots, typeName);
         foreach (var cb in closures.DistinctBy(c => c.Delegate))
-            RenderClosureDelegate(model, o, cb);
-
-        var domainIface = vtable.Has("interface") ? "I" + typeName : null;
-        var decls = domainIface is null ? null : new List<MemberDecl>();
+            RenderClosureDelegate(model, o, cb, domainIface ?? typeName);
 
         o.Add(XmlDoc("", vtable.Doc).TrimEnd());
         o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}"
@@ -566,7 +566,7 @@ public static class CSharpBackend
             o.Add("    private static Exception? s_parkedCallbackException;");
         }
 
-        if (closureGroups.Any(c => c.NeedsOwner))
+        if (closureGroups.Any(c => c.Pairs.Any(c.Queues)))
         {
             o.Add("");
             o.Add("    /// <summary>");
@@ -664,7 +664,7 @@ public static class CSharpBackend
                 RenderCallbackMethod(o, decls, vtable, cs, classified, typeName, convention);
                 continue;
             }
-            RenderSlotMethod(model, o, decls, cs, convention, typeName, Drains(slots));
+            RenderSlotMethod(model, o, decls, cs, convention, typeName, Drains(model, slots));
         }
 
         foreach (var slot in vtable.Slots.Where(s => s.Has("interns")))
@@ -847,8 +847,23 @@ public static class CSharpBackend
     }
 
     /// <summary>How a lane is spelled in the delegate the caller implements.</summary>
-    static string ManagedLane(ApiModel model, ApiParam lane) =>
-        lane.Has("utf8") ? "string" : IsBoolType(lane.Type) ? "bool" : CsType(model, lane.Type);
+    static string ManagedLane(ApiModel model, ApiParam lane, string selfType) =>
+        lane.Has("self") ? selfType
+        : lane.Has("ctx") ? "nint"
+        : lane.Has("utf8") ? "string"
+        : IsBoolType(lane.Type) ? "bool"
+        : CsType(model, lane.Type);
+
+    /// <summary>
+    /// What a handler returns on the managed side. A callback reporting failure through
+    /// an error channel says it in managed code by throwing, so the boolean it returns
+    /// natively carries nothing a caller could still answer: the trampoline reports
+    /// success for a handler that returned at all, and failure for one that threw.
+    /// </summary>
+    static string ManagedReturn(ApiModel model, ApiCallback callback, int? errorLane) =>
+        errorLane is not null && IsBoolType(callback.Returns)
+            ? "void"
+            : ManagedLane(model, new ApiParam(null, callback.Returns, [], null), "");
 
     static IReadOnlyList<CallbackPair> CallbackPairs(ApiModel model, ClassifiedSlot cs)
     {
@@ -955,8 +970,24 @@ public static class CSharpBackend
         /// failure raises it. Reaching the provider means the context must point at an
         /// object holding it rather than at the bare delegate.
         /// </summary>
-        public bool NeedsOwner => OwnerDrains && Pairs.Any(p =>
-            p.Lifetime == ClosureLifetime.Retained && p.ErrorLane is not null);
+        public bool NeedsOwner => HandsBackProvider || Pairs.Any(Queues);
+
+        /// <summary>
+        /// Whether this handler's exception is the kind that has to wait on the provider:
+        /// one that outlives the call registering it, reports failure through a channel of
+        /// its own, and has a slot declared to answer for it. A handler running inside the
+        /// registering call is rethrown there instead, and needs no queue.
+        /// </summary>
+        public bool Queues(CallbackPair pair) => OwnerDrains
+            && pair.Lifetime == ClosureLifetime.Retained && pair.ErrorLane is not null;
+
+        /// <summary>
+        /// Whether a handler of this group is called with the provider that registered it.
+        /// The ABI spells that lane as a pointer to the same object the call was made on,
+        /// which managed code already holds a wrapper for; handing the wrapper back is the
+        /// only projection that keeps the handler on the managed surface.
+        /// </summary>
+        public bool HandsBackProvider => Pairs.Any(p => p.Callback.Lanes.Any(l => l.Has("self")));
 
         /// <summary>Whether the context points at a generated state object rather than the delegate itself.</summary>
         public bool UsesState => Shared || NeedsOwner;
@@ -1022,7 +1053,7 @@ public static class CSharpBackend
     static IReadOnlyList<ClosureGroup> VtableClosureGroups(ApiModel model, IEnumerable<ClassifiedSlot> slots,
         string owner)
     {
-        var drains = Drains(slots);
+        var drains = Drains(model, slots);
         return slots
             .SelectMany(s => ClosureGroups(model, s.Slot, CallbackPairs(model, s), owner, drains))
             .ToList();
@@ -1033,7 +1064,13 @@ public static class CSharpBackend
     /// handler's failure. Without one there is no call to raise the exception at, so the
     /// provider keeps no queue and the handler's own error channel stays its only report.
     /// </summary>
-    static bool Drains(IEnumerable<ClassifiedSlot> slots) => slots.Any(s => s.Slot.Has("drains"));
+    static bool Drains(ApiModel model, IEnumerable<ClassifiedSlot> slots)
+    {
+        var all = slots.ToList();
+        return all.Any(s => s.Slot.Has("drains"))
+            && all.SelectMany(s => CallbackPairs(model, s))
+                .Any(p => p.Lifetime == ClosureLifetime.Retained && p.ErrorLane is not null);
+    }
 
     /// <summary>Every closure a vtable projects, across all its slots.</summary>
     static IReadOnlyList<CallbackPair> VtableClosures(ApiModel model, IEnumerable<ClassifiedSlot> slots) =>
@@ -1059,16 +1096,16 @@ public static class CSharpBackend
     /// rather than as an <c>Action</c>, because a lane can be a pointer and a generic
     /// type argument cannot.
     /// </summary>
-    static void RenderClosureDelegate(ApiModel model, List<string> o, CallbackPair pair)
+    static void RenderClosureDelegate(ApiModel model, List<string> o, CallbackPair pair, string selfType)
     {
         var ps = CarriedLanes(pair).Select(i => pair.Callback.Lanes[i])
-            .Select((l, n) => $"{ManagedLane(model, l)} {Idioms.Ident(l.Name ?? $"arg{n}")}");
+            .Select((l, n) => $"{ManagedLane(model, l, selfType)} {Idioms.Ident(l.Name ?? $"arg{n}")}");
         var doc = pair.Callback.Lanes
             .Where(l => l.Name is not null && l.Doc is not null)
             .Where(l => CarriedLanes(pair).Any(i => pair.Callback.Lanes[i] == l))
             .Select(l => (Idioms.Ident(l.Name!), l.Doc));
         o.Add(XmlDoc("", pair.Callback.Doc ?? pair.Fn.Doc, doc).TrimEnd());
-        o.Add($"public unsafe delegate {ManagedLane(model, new ApiParam(null, pair.Callback.Returns, [], null))} "
+        o.Add($"public unsafe delegate {ManagedReturn(model, pair.Callback, pair.ErrorLane)} "
             + $"{pair.Delegate}({string.Join(", ", ps)});");
         o.Add("");
     }
@@ -1105,12 +1142,15 @@ public static class CSharpBackend
         var ps = lanes.Select((l, i) => i == pair.CtxLane
             ? "void* ctx"
             : $"{BlittableLane(model, l.Type)} arg{i}");
-        var args = string.Join(", ", CarriedLanes(pair).Select(i => lanes[i].Has("utf8")
+        var args = string.Join(", ", CarriedLanes(pair).Select(i => lanes[i].Has("self")
+            ? "state.Owner"
+            : lanes[i].Has("utf8")
             ? $"Marshal.PtrToStringUTF8((nint)arg{i}) ?? \"\""
-            : ManagedLane(model, lanes[i]) != BlittableLane(model, lanes[i].Type)
-                ? $"({ManagedLane(model, lanes[i])})arg{i}"
+            : ManagedLane(model, lanes[i], group.Owner) != BlittableLane(model, lanes[i].Type)
+                ? $"({ManagedLane(model, lanes[i], group.Owner)})arg{i}"
             : $"arg{i}"));
         var returns = IsBoolType(pair.Callback.Returns);
+        var handlerAnswers = ManagedReturn(model, pair.Callback, pair.ErrorLane) != "void";
         var nativeReturn = BlittableLane(model, pair.Callback.Returns);
 
         o.Add("    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]");
@@ -1122,14 +1162,22 @@ public static class CSharpBackend
             ? $"            if (GCHandle.FromIntPtr((nint)ctx).Target is {group.StateType} state"
                 + $" && state.{ClosureGroup.Field(pair)} is {{ }} handler)"
             : $"            if (GCHandle.FromIntPtr((nint)ctx).Target is {pair.Delegate} handler)");
-        o.Add($"                {(returns ? $"return handler({args});" : $"handler({args});")}");
+        if (returns && !handlerAnswers)
+        {
+            o.Add("            {");
+            o.Add($"                handler({args});");
+            o.Add("                return true;");
+            o.Add("            }");
+        }
+        else
+            o.Add($"                {(returns ? $"return handler({args});" : $"handler({args});")}");
         if (returns) o.Add("            return false;");
         o.Add("        }");
         o.Add("        catch (Exception ex)");
         o.Add("        {");
         if (pair.ErrorLane is { } errLane)
         {
-            if (group.NeedsOwner)
+            if (group.Queues(pair))
             {
                 o.Add("            if (GCHandle.FromIntPtr((nint)ctx).Target is"
                     + $" {group.StateType} failed)");
@@ -1482,7 +1530,7 @@ public static class CSharpBackend
                     foreach (var rp in rooted)
                         o.Add($"{fInd}_rooted[{Idioms.Ident(rp.TagValue("rooted")!)}] = {Idioms.Ident(rp.Name!)}Handle;");
                 }
-                else if (byReturn && slot.Has("drains"))
+                else if (byReturn && ownerDrains && slot.Has("drains"))
                 {
                     var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
                         + (slot.Returns == "ke_bool" ? " != 0" : "");
