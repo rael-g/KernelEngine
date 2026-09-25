@@ -47,7 +47,7 @@ inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const sm = moduleOf(user);
     const core = sm.core;
     const dev = sm.device;
@@ -106,7 +106,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     }, &err);
     if (sm.bind_group == c.KE_GPU_INVALID_HANDLE) {
         core.*.end_pass.?(core, pc);
-        return true;
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox pass: bind group creation failed", @src().file, @intCast(@src().line), err);
+        return false;
     }
 
     const rp = pc.*.begin_render.?(pc);

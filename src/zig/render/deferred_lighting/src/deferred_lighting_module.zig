@@ -100,7 +100,7 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     if (err != null) logGpuError(dl.logger, err, "deferred frame bind group");
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const dl = moduleOf(user);
     const core = dl.core;
     const dev = dl.device;
@@ -190,7 +190,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         .entry_count = 4,
         .entries = &gbuf_entries,
     }, &err);
-    if (err != null) logGpuError(dl.logger, err, "deferred gbuffer bind group");
+    if (dl.gbuf_bind_group == c.KE_GPU_INVALID_HANDLE) {
+        logGpuError(dl.logger, err, "deferred gbuffer bind group");
+        core.*.end_pass.?(core, pc);
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "deferred lighting pass: gbuffer bind group creation failed", @src().file, @intCast(@src().line), err);
+        return false;
+    }
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &dl.pipeline_params));

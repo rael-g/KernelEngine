@@ -34,7 +34,7 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const tm = moduleOf(user);
     const core = tm.core;
     const dev = tm.device;
@@ -56,7 +56,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         .entry_count = 2,
         .entries = &entries,
     }, &err);
-    if (err != null) logGpuError(tm.logger, err, "tonemap bind group");
+    if (tm.bind_group == c.KE_GPU_INVALID_HANDLE) {
+        logGpuError(tm.logger, err, "tonemap bind group");
+        core.*.end_pass.?(core, pc);
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "tonemap pass: bind group creation failed", @src().file, @intCast(@src().line), err);
+        return false;
+    }
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &tm.pipeline_params));
