@@ -102,9 +102,10 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>Opens a pass's recording context, from inside a render system's body.</summary>
-    public ke_render_pass_ctx* BeginPass(ke_system_ctx* sys, ke_render_pass_io* io)
+    /// <param name="sys">The system context whose body is recording the pass.</param>
+    public ke_render_pass_ctx* BeginPass(nint sys, ke_render_pass_io* io)
     {
-        return Handle->begin_pass(Handle, sys, io);
+        return Handle->begin_pass(Handle, (ke_system_ctx*)sys, io);
     }
 
     /// <summary>Closes a recording context opened by begin_pass.</summary>

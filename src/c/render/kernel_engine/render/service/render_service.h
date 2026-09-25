@@ -92,6 +92,7 @@ struct ke_render_service
     ke_component_id (*cid)(struct ke_render_service *self, const char *name);
 
     /// Opens a pass's recording context, from inside a render system's body.
+    /// @param sys [ctx] The system context whose body is recording the pass.
     struct ke_render_pass_ctx *(*begin_pass)(struct ke_render_service *self,
                                              ke_system_ctx *sys,
                                              const ke_render_pass_io *io);

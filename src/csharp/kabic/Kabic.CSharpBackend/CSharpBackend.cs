@@ -86,6 +86,7 @@ public static class CSharpBackend
         if (p.Has("utf8")) return "string";
         if (p.Has("rooted")) return "object";
         if (p.Has("opaque")) return "void*";
+        if (p.Has("ctx")) return "nint";
         if (model.Enums.Any(e => e.Name == p.Type.Trim()))
             return Idioms.TypeName(p.Type.Trim(), convention);
         return CsType(model, p.Type);
@@ -597,7 +598,7 @@ public static class CSharpBackend
             foreach (var m in decls!)
             {
                 if (m.Doc.Length > 0) o.Add(m.Doc);
-                o.Add($"    {m.Decl};");
+                o.Add($"    {m.InterfaceLine}");
             }
             o.Add("}");
             o.Add("");
@@ -853,13 +854,17 @@ public static class CSharpBackend
     /// from these, so a signature the class emits and the signature the interface promises are
     /// the same string rather than two renderings of the same intent.
     /// </summary>
-    sealed record MemberDecl(string Doc, string Decl);
+    sealed record MemberDecl(string Doc, string Decl, bool Property)
+    {
+        /// <summary>How the interface spells this member: a method ends the declaration, a property opens a getter.</summary>
+        public string InterfaceLine => Property ? $"{Decl} {{ get; }}" : $"{Decl};";
+    }
 
-    static void Declare(List<string> o, List<MemberDecl>? decls, string doc, string decl)
+    static void Declare(List<string> o, List<MemberDecl>? decls, string doc, string decl, bool property = false)
     {
         o.Add(doc);
         o.Add($"    public {decl}");
-        decls?.Add(new MemberDecl(doc, decl));
+        decls?.Add(new MemberDecl(doc, decl, property));
     }
 
     static void RenderSlotMethod(ApiModel model, List<string> o, List<MemberDecl>? decls,
@@ -873,6 +878,25 @@ public static class CSharpBackend
         if (callbacks.Count > 0 && cs.Shape is not SlotShape.Fallible)
             throw new InvalidOperationException(
                 $"{slot.Name}: [closure] is only projected on a fallible slot so far, not {cs.Shape}");
+
+        if (slot.Has("property"))
+        {
+            if (cs.PublicParams.Count > 0 || cs.Shape is not SlotShape.Plain)
+                throw new InvalidOperationException(
+                    $"{slot.Name}: [property] needs a slot that only answers -- no parameters and no"
+                    + $" failure channel, so there is nothing for a getter to drop. Got {cs.Shape}"
+                    + $" with {cs.PublicParams.Count} parameter(s).");
+
+            var pType = slot.Returns == "ke_bool" ? "bool" : CsType(model, slot.Returns);
+            Declare(o, decls, XmlDoc("    ", slot.Doc ?? slot.ReturnDoc).TrimEnd(),
+                $"{pType} {name}", property: true);
+            o.Add("    {");
+            o.Add($"        get => Handle->{slot.Name}(Handle)"
+                + (slot.Returns == "ke_bool" ? " != 0" : "") + ";");
+            o.Add("    }");
+            o.Add("");
+            return;
+        }
 
         string Sig(IEnumerable<ApiParam> ps) => string.Join(", ", SigParts(ps));
 
@@ -1207,6 +1231,7 @@ public static class CSharpBackend
                 ? $"(void*)GCHandle.ToIntPtr({Idioms.Ident(ctxOf.Fn.Name!)}Handle)"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
             : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
+            : p.Has("ctx") ? $"({CTypes.Normalize(p.Type)}){Idioms.Ident(p.Name!)}"
             : p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
             : p.Type.Trim() == "ke_bool" ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"

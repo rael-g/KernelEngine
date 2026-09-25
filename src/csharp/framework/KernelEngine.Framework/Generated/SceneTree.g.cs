@@ -46,24 +46,34 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         _borrowed = borrowed;
     }
 
+    /// <summary>The tree's root entity. Valid for the whole lifetime of the tree.</summary>
+    public ulong Root
+    {
+        get => Handle->root(Handle);
+    }
+
+    /// <summary>Creates a node attached under `parent`, or under the root when `parent` is KE_ENTITY_INVALID.</summary>
+    /// <param name="ctx">The system context the call is running inside, which defers the structural change to the wave barrier. Null creates the node immediately.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong CreateNode(string name, ulong parent, ke_system_ctx* ctx)
+    public ulong CreateNode(string name, ulong parent, nint ctx)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
             ke_error* err = null;
-            var result = Handle->create_node(Handle, (sbyte*)namePtr, parent, ctx, &err);
+            var result = Handle->create_node(Handle, (sbyte*)namePtr, parent, (ke_system_ctx*)ctx, &err);
             if (err != null) throw KernelError.FromNative(err, "create_node");
             return result;
         }
     }
 
+    /// <summary>Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent.</summary>
+    /// <param name="ctx">The system context the call is running inside, which defers the teardown to the wave barrier. Null destroys the node immediately.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void DestroyNode(ulong entity, ke_system_ctx* ctx)
+    public void DestroyNode(ulong entity, nint ctx)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->destroy_node(Handle, entity, ctx, &err), err, "destroy_node");
+        KernelError.ThrowIfFailed(Handle->destroy_node(Handle, entity, (ke_system_ctx*)ctx, &err), err, "destroy_node");
     }
 
 

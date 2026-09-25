@@ -145,6 +145,26 @@ Expect("a retained closure is kept per key and reports through the channel it de
         Param("ctx", "void *", "context"), Param("tick", "uint32_t"),
         Param("out_error", "ke_error **"))]);
 
+// A lane carrying a context the engine owns and the caller only relays: the public
+// surface takes nint and the cast back to the ABI's own spelling happens at the call.
+// Leaving the native pointer type in the signature is what forces every consumer to
+// be compiled unsafe just to pass a value it never looks at.
+Expect("a context lane is an nint the caller relays, not a native pointer",
+    Vtable("ke_probe", Slot("spawn", "ke_entity",
+        Param("sys", "ke_system_ctx *", "ctx"),
+        Param("parent", "ke_entity"))),
+    contains: ["public ulong Spawn(nint sys, ulong parent)", "(ke_system_ctx*)sys, parent"],
+    absent: ["ke_system_ctx* sys"]);
+
+// A slot that only answers, with nothing to ask and no way to fail: a property reads as
+// what it is, state the provider already holds. Emitted as a method it grows a
+// hand-written property beside it whose whole body is the call it wraps.
+Expect("a slot that only answers becomes a property, in the class and in the contract alike",
+    Vtable("ke_probe", "interface", Slot("root", "ke_entity", "property")),
+    contains: ["public ulong Root", "get => Handle->root(Handle);",
+               "public unsafe interface IProbe : IDisposable", "    ulong Root { get; }"],
+    absent: ["public ulong Root()", "    ulong Root;"]);
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.
@@ -258,14 +278,24 @@ void ExpectBorrowKinds(string what, string[] contains, string[] absent)
             failures.Add($"{what}: expected NOT to find \"{needle}\"");
 }
 
-static JsonObject Vtable(string name, params JsonObject[] slots) => new()
+static JsonObject Vtable(string name, params object[] rest)
 {
-    ["name"] = name,
-    ["doc"] = null,
-    ["tags"] = new JsonArray(),
-    ["fields"] = new JsonArray(new JsonObject { ["name"] = "handle", ["type"] = "void *", ["tags"] = new JsonArray(), ["doc"] = null }),
-    ["slots"] = new JsonArray(slots.Cast<JsonNode>().ToArray()),
-};
+    var tags = new JsonArray();
+    var slots = new JsonArray();
+    foreach (var item in rest)
+    {
+        if (item is JsonObject s) slots.Add(s);
+        else if (item is string t) foreach (var one in t.Split(',')) tags.Add((JsonNode)one.Trim());
+    }
+    return new()
+    {
+        ["name"] = name,
+        ["doc"] = null,
+        ["tags"] = tags,
+        ["fields"] = new JsonArray(new JsonObject { ["name"] = "handle", ["type"] = "void *", ["tags"] = new JsonArray(), ["doc"] = null }),
+        ["slots"] = slots,
+    };
+}
 
 static JsonObject Slot(string name, string returns, params object[] rest)
 {

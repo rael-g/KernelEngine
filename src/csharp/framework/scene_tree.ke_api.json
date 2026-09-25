@@ -19,9 +19,9 @@
           "name": "root",
           "returns": "ke_entity",
           "tags": [
-            "idiom"
+            "property"
           ],
-          "doc": "Superseded by the managed Root property, same name.",
+          "doc": "The tree\u0027s root entity. Valid for the whole lifetime of the tree.",
           "return_doc": null,
           "params": []
         },
@@ -29,7 +29,7 @@
           "name": "create_node",
           "returns": "ke_entity",
           "tags": [],
-          "doc": null,
+          "doc": "Creates a node attached under \u0060parent\u0060, or under the root when \u0060parent\u0060 is KE_ENTITY_INVALID.",
           "return_doc": null,
           "params": [
             {
@@ -49,8 +49,10 @@
             {
               "name": "ctx",
               "type": "ke_system_ctx *",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "ctx"
+              ],
+              "doc": "The system context the call is running inside, which defers the structural change to the wave barrier. Null creates the node immediately."
             },
             {
               "name": "out_error",
@@ -64,7 +66,7 @@
           "name": "destroy_node",
           "returns": "_Bool",
           "tags": [],
-          "doc": null,
+          "doc": "Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent.",
           "return_doc": null,
           "params": [
             {
@@ -76,8 +78,10 @@
             {
               "name": "ctx",
               "type": "ke_system_ctx *",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "ctx"
+              ],
+              "doc": "The system context the call is running inside, which defers the teardown to the wave barrier. Null destroys the node immediately."
             },
             {
               "name": "out_error",
