@@ -92,6 +92,22 @@ pub fn Errors(comptime c: type) type {
             if (out_error != null) out_error.* = &slot;
         }
 
+        /// Raise an error whose type was decided elsewhere, here on the calling
+        /// thread. What crossed is the type singleton; the message describes where
+        /// the failure was picked up rather than what went wrong, because the
+        /// originating thread's slot is long recycled by the time this runs.
+        pub fn failWithType(out_error: [*c][*c]c.ke_error, error_type: *const c.ke_error_type,
+                            msg: [*c]const u8, src: std.builtin.SourceLocation) void {
+            slot = .{
+                .type = error_type,
+                .message = msg,
+                .file = src.file,
+                .line = @intCast(src.line),
+                .cause = null,
+            };
+            if (out_error != null) out_error.* = &slot;
+        }
+
         /// Prints the error chain to stderr and ends the process — no OS crash
         /// dialog, message always readable first. Mirrors ke_common's
         /// ke_error_fatal so a backend abort hook (flecs, enkiTS, ...) can give

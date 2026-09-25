@@ -310,7 +310,8 @@ const AsyncCtx = struct {
     user_data: ?*anyopaque,
 };
 
-fn asyncBody(data: ?*anyopaque) callconv(.c) void {
+fn asyncBody(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
+    _ = out_failure;
     const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return));
     const gpa = ctx.state.gpa;
     const model = loadModel(ctx.state, ctx.path.ptr, null);
@@ -429,7 +430,8 @@ fn boxGltfPath() ?[:0]const u8 {
 
 fn immediateDispatch(self: [*c]c.ke_scheduler, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
     _ = self;
-    if (func) |f| f(data);
+    var failure: [*c]const c.ke_error_type = null;
+    if (func) |f| f(data, &failure);
     return @ptrFromInt(1);
 }
 

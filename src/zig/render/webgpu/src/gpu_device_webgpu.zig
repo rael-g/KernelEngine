@@ -505,7 +505,7 @@ fn reapCompletedCompiles(s: *DeviceState) void {
     while (i < s.pending_compiles_count) {
         const task = s.pending_compiles[i].?;
         if (sched.is_completed.?(sched, task)) {
-            sched.wait.?(sched, task);
+            _ = sched.wait.?(sched, task, null);
             s.pending_compiles_count -= 1;
             s.pending_compiles[i] = s.pending_compiles[s.pending_compiles_count];
             continue;
@@ -983,7 +983,8 @@ fn debugSleepMs(ms: u64) void {
     }
 }
 
-fn runAsyncCompileJob(data: ?*anyopaque) callconv(.c) void {
+fn runAsyncCompileJob(data: ?*anyopaque, out_failure: [*c][*c]const ke.ke_error_type) callconv(.c) void {
+    _ = out_failure;
     const job: *AsyncCompileJob = @ptrCast(@alignCast(data.?));
     debugSleepMs(debugAsyncDelayMs(&job.build));
     const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(job.device, &job.build.desc);
@@ -1038,7 +1039,7 @@ fn flushPipelineCompiles(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     const sched = s.scheduler orelse return;
     var i: u32 = 0;
     while (i < s.pending_compiles_count) : (i += 1) {
-        sched.wait.?(sched, s.pending_compiles[i].?);
+        _ = sched.wait.?(sched, s.pending_compiles[i].?, null);
     }
     s.pending_compiles_count = 0;
 }

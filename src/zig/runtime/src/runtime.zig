@@ -554,7 +554,8 @@ const TaskPkg = struct {
     allow_defer: bool,
 };
 
-fn taskPkgRun(data: ?*anyopaque) callconv(.c) void {
+fn taskPkgRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
+    _ = out_failure;
     const pkg: *TaskPkg = @ptrCast(@alignCast(data.?));
     if (pkg.allow_defer) pkg.state.defer_q = &pkg.defer_q;
     pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt);
@@ -579,7 +580,7 @@ fn runWaveBody(wc: *WaveRunCtx) void {
     }
     t = 0;
     while (t < wc.wave_size) : (t += 1) {
-        sched.wait.?(sched, wc.tasks[t]);
+        _ = sched.wait.?(sched, wc.tasks[t], null);
     }
 }
 
@@ -801,14 +802,15 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
     }
 }
 
-fn renderJobRun(data: ?*anyopaque) callconv(.c) void {
+fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
+    _ = out_failure;
     const job: *RenderJob = @ptrCast(@alignCast(data.?));
     runtimeRunPhase(job.h, c.KE_PHASE_RENDER, job.dt);
 }
 
 fn runtimeJoinPendingRender(h: *RuntimeHandle) void {
     const task = h.state.pending_render_task orelse return;
-    h.state.scheduler.wait.?(h.state.scheduler, task);
+    _ = h.state.scheduler.wait.?(h.state.scheduler, task, null);
     h.state.pending_render_task = null;
 }
 

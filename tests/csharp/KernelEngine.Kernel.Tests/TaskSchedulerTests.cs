@@ -18,23 +18,25 @@ public sealed class SchedulerTests
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe ke_task* SyncDispatchOnComplete(
         ke_scheduler* self,
-        delegate* unmanaged[Cdecl]<void*, void> func,
+        delegate* unmanaged[Cdecl]<void*, ke_error_type**, void> func,
         void* data,
-        delegate* unmanaged[Cdecl]<ke_task*, void*, void> on_complete,
+        delegate* unmanaged[Cdecl]<ke_task*, void*, ke_error_type*, void> on_complete,
         void* user_data)
     {
-        if (func != null) func(data);
-        if (on_complete != null) on_complete(null, user_data);
+        ke_error_type* failure = null;
+        if (func != null) func(data, &failure);
+        if (on_complete != null) on_complete(null, user_data, failure);
         return null;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe ke_task* SyncDispatch(
         ke_scheduler* self,
-        delegate* unmanaged[Cdecl]<void*, void> func,
+        delegate* unmanaged[Cdecl]<void*, ke_error_type**, void> func,
         void* data)
     {
-        if (func != null) func(data);
+        ke_error_type* failure = null;
+        if (func != null) func(data, &failure);
         return null;
     }
 
@@ -45,7 +47,7 @@ public sealed class SchedulerTests
     private static unsafe void NoopDestroy(ke_scheduler* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe void NoopWait(ke_scheduler* self, ke_task* task) { }
+    private static unsafe bool NoopWait(ke_scheduler* self, ke_task* task, ke_error** outError) => true;
 
     private sealed class MockSchedulerHandle : IDisposable
     {
@@ -80,6 +82,14 @@ public sealed class SchedulerTests
         bool ran = false;
         await mock.Scheduler.Dispatch(() => { ran = true; });
         Assert.True(ran);
+    }
+
+    [Fact]
+    public async Task Dispatch_Action_PropagatesException()
+    {
+        using var mock = new MockSchedulerHandle();
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => mock.Scheduler.Dispatch(() => throw new InvalidOperationException("boom")));
     }
 
     [Fact]

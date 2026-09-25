@@ -45,10 +45,12 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler
         _borrowed = borrowed;
     }
 
-    /// <summary>Blocks the calling thread until the task completes.</summary>
+    /// <summary>Blocks the calling thread until the task completes, then reports whatever the task body failed with. A task nobody waits on carries its failure to its grave, which is why a dispatch with no completion channel cannot be projected. The error is raised here, on the waiting thread, from the type the body named. What the body meant by it does not survive the crossing: the message names the slot rather than the failure.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
     public void Wait(ke_task* task)
     {
-        Handle->wait(Handle, task);
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(Handle->wait(Handle, task, &err), err, "wait");
     }
 
     /// <summary>Returns true if the task has finished.</summary>

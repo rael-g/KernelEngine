@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Scheduler.Native;
 
@@ -32,14 +32,21 @@ public unsafe partial class Scheduler : IScheduler
     public uint NumWorkers => GetNumWorkers();
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void NativePinnedCallback(void* data)
+    private static void NativePinnedCallback(void* data, ke_error_type** outFailure)
     {
         var handle = GCHandle.FromIntPtr((IntPtr)data);
         var action = (Action)handle.Target!;
-        try   { action(); }
-        catch {  }
+        try { action(); }
+        catch (Exception ex) { UnobservedDispatchFailure?.Invoke(ex); }
         finally { handle.Free(); }
     }
+
+    /// <summary>
+    /// Raised when work dispatched through <see cref="IScheduler.DispatchPinned"/> throws.
+    /// That overload answers nothing, so there is no task to fault and no caller to throw
+    /// at; without a subscriber the failure is only observable here.
+    /// </summary>
+    public static event Action<Exception>? UnobservedDispatchFailure;
 
     /// <summary>
     /// Schedules an <see cref="Action"/> on the native thread pool and returns a <see cref="KernelTask"/>.
@@ -58,13 +65,14 @@ public unsafe partial class Scheduler : IScheduler
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var actionHandle = GCHandle.Alloc(action);
-        var tcsHandle = GCHandle.Alloc(tcs);
+        var job = new DispatchJob(action);
+        var jobHandle = GCHandle.Alloc(job);
+        var tcsHandle = GCHandle.Alloc((job, tcs));
 
         Handle->dispatch_on_complete(
             Handle,
             &NativeWorkCallback,
-            (void*)GCHandle.ToIntPtr(actionHandle),
+            (void*)GCHandle.ToIntPtr(jobHandle),
             &NativeCompletionCallback,
             (void*)GCHandle.ToIntPtr(tcsHandle)
         );
@@ -83,7 +91,7 @@ public unsafe partial class Scheduler : IScheduler
             catch (Exception ex) { tcs.SetException(ex); }
         };
 
-        var actionHandle = GCHandle.Alloc(wrapper);
+        var actionHandle = GCHandle.Alloc(new DispatchJob(wrapper));
         var tcsHandle = GCHandle.Alloc(tcs);
 
         Handle->dispatch_on_complete(
@@ -97,29 +105,39 @@ public unsafe partial class Scheduler : IScheduler
         return tcs.Task;
     }
 
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void NativeWorkCallback(void* data)
+    /// <summary>
+    /// Carries a dispatched body and whatever it threw from the worker thread to the
+    /// completion callback. The native channel hands on a <c>ke_error_type</c>, which
+    /// survives the thread crossing but names only the category; the exception itself
+    /// never leaves managed memory, so it reaches the task intact.
+    /// </summary>
+    private sealed class DispatchJob(Action body)
     {
-        var handle = GCHandle.FromIntPtr((IntPtr)data);
-        var action = (Action)handle.Target!;
-        try { action(); }
-        catch (Exception) { }
-        finally { handle.Free(); }
+        public readonly Action Body = body;
+        public Exception? Failure;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void NativeCompletionCallback(ke_task* task, void* userData)
+    private static void NativeWorkCallback(void* data, ke_error_type** outFailure)
     {
-        var handle = GCHandle.FromIntPtr((IntPtr)userData);
-        var tcs = (TaskCompletionSource)handle.Target!;
-        handle.Free();
-        tcs.TrySetResult();
+        var job = (DispatchJob)GCHandle.FromIntPtr((IntPtr)data).Target!;
+        try { job.Body(); }
+        catch (Exception ex) { job.Failure = ex; }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void NativeGenericCompletionCallback(ke_task* task, void* userData)
+    private static void NativeCompletionCallback(ke_task* task, void* userData, ke_error_type* failure)
     {
         var handle = GCHandle.FromIntPtr((IntPtr)userData);
+        var (job, tcs) = ((DispatchJob, TaskCompletionSource))handle.Target!;
         handle.Free();
+        if (job.Failure is { } ex) tcs.TrySetException(ex);
+        else tcs.TrySetResult();
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void NativeGenericCompletionCallback(ke_task* task, void* userData, ke_error_type* failure)
+    {
+        GCHandle.FromIntPtr((IntPtr)userData).Free();
     }
 }
