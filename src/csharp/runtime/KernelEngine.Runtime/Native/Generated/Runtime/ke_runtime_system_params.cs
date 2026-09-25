@@ -28,6 +28,6 @@ public unsafe partial struct ke_runtime_system_params
 
     public void* user_data;
 
-    [NativeTypeName("void (*)(ke_system_ctx *, void *, float)")]
+    [NativeTypeName("ke_system_execute_fn")]
     public delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, void> execute;
 }

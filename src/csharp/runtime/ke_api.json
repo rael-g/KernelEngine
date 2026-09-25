@@ -98,33 +98,6 @@
       ]
     },
     {
-      "name": "ke_runtime_params",
-      "doc": null,
-      "tags": [],
-      "fields": [
-        {
-          "name": "fixed_dt",
-          "type": "float",
-          "tags": [],
-          "doc": "Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60."
-        },
-        {
-          "name": "fixed_dt_max_accum",
-          "type": "float",
-          "tags": [],
-          "doc": "Largest catch-up budget a tick may accumulate, in seconds; excess is discarded. 0 selects 0.25."
-        },
-        {
-          "name": "max_systems_per_phase",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "Most systems one phase may hold; registering past it fails. 0 selects 256."
-        }
-      ]
-    }
-  ],
-  "vtables": [
-    {
       "name": "ke_runtime_module_params",
       "doc": null,
       "tags": [],
@@ -140,44 +113,18 @@
           "type": "void *",
           "tags": [],
           "doc": null
-        }
-      ],
-      "slots": [
+        },
         {
           "name": "on_load",
-          "returns": "_Bool",
+          "type": "ke_module_load_fn",
           "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [
-            {
-              "name": "user_data",
-              "type": "void *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ]
+          "doc": null
         },
         {
           "name": "on_unload",
-          "returns": "void",
+          "type": "ke_module_unload_fn",
           "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [
-            {
-              "name": "user_data",
-              "type": "void *",
-              "tags": [],
-              "doc": null
-            }
-          ]
+          "doc": null
         }
       ]
     },
@@ -239,32 +186,42 @@
           "type": "void *",
           "tags": [],
           "doc": null
-        }
-      ],
-      "slots": [
+        },
         {
           "name": "execute",
-          "returns": "void",
+          "type": "ke_system_execute_fn",
           "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [
-            {
-              "name": "user_data",
-              "type": "void *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "dt",
-              "type": "float",
-              "tags": [],
-              "doc": null
-            }
-          ]
+          "doc": null
         }
       ]
     },
+    {
+      "name": "ke_runtime_params",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "fixed_dt",
+          "type": "float",
+          "tags": [],
+          "doc": "Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60."
+        },
+        {
+          "name": "fixed_dt_max_accum",
+          "type": "float",
+          "tags": [],
+          "doc": "Largest catch-up budget a tick may accumulate, in seconds; excess is discarded. 0 selects 0.25."
+        },
+        {
+          "name": "max_systems_per_phase",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Most systems one phase may hold; registering past it fails. 0 selects 256."
+        }
+      ]
+    }
+  ],
+  "vtables": [
     {
       "name": "ke_runtime",
       "doc": null,
@@ -824,6 +781,81 @@
   ],
   "callbacks": [
     {
+      "name": "ke_module_load_fn",
+      "returns": "_Bool",
+      "doc": "Registers the module\u0027s components and systems against the runtime it is being loaded into. Runs inside register_module, before that call returns.",
+      "lanes": [
+        {
+          "name": "runtime",
+          "type": "ke_runtime *",
+          "tags": [],
+          "doc": "The runtime the module is being loaded into."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_module."
+        },
+        {
+          "name": "out_error",
+          "type": "ke_error **",
+          "tags": [],
+          "doc": "Set when the module cannot load; registration fails with it."
+        }
+      ]
+    },
+    {
+      "name": "ke_module_unload_fn",
+      "returns": "void",
+      "doc": "Releases whatever the matching load acquired, as the runtime is torn down.",
+      "lanes": [
+        {
+          "name": "runtime",
+          "type": "ke_runtime *",
+          "tags": [],
+          "doc": "The runtime the module was loaded into."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_module."
+        }
+      ]
+    },
+    {
+      "name": "ke_system_execute_fn",
+      "returns": "void",
+      "doc": "One call of a system body. The runtime calls it once per tick the system\u0027s phase runs, or once per slice when the system declared per_entity.",
+      "lanes": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [],
+          "doc": "The body\u0027s only doorway to component memory for this call."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_system."
+        },
+        {
+          "name": "dt",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE."
+        }
+      ]
+    },
+    {
       "name": "ke_defer_fn",
       "returns": "void",
       "doc": "A structural operation run serially at the wave barrier. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world.",
@@ -848,6 +880,9 @@
     "ke_component_id": "uint32_t",
     "ke_module_id": "uint64_t",
     "ke_system_id": "uint64_t",
+    "ke_module_load_fn": "_Bool (*)(ke_runtime *, void *, ke_error **)",
+    "ke_module_unload_fn": "void (*)(ke_runtime *, void *)",
+    "ke_system_execute_fn": "void (*)(ke_system_ctx *, void *, float)",
     "ke_defer_fn": "void (*)(ke_ecs *, void *)"
   }
 }

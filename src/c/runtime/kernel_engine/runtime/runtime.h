@@ -47,12 +47,33 @@ typedef struct ke_query_decl {
     uint32_t            term_count;
 } ke_query_decl;
 
+/// Registers the module's components and systems against the runtime it is being
+/// loaded into. Runs inside register_module, before that call returns.
+/// @param runtime   The runtime the module is being loaded into.
+/// @param user_data [context] Opaque context forwarded from register_module.
+/// @param out_error Set when the module cannot load; registration fails with it.
+/// @return false when the module refused to load.
+typedef bool (*ke_module_load_fn)(ke_runtime *runtime, void *user_data, ke_error **out_error);
+
+/// Releases whatever the matching load acquired, as the runtime is torn down.
+/// @param runtime   The runtime the module was loaded into.
+/// @param user_data [context] Opaque context forwarded from register_module.
+typedef void (*ke_module_unload_fn)(ke_runtime *runtime, void *user_data);
+
 typedef struct ke_runtime_module_params {
-    const char *name;
-    void       *user_data;
-    bool (*on_load)(ke_runtime *runtime, void *user_data, ke_error **out_error);
-    void      (*on_unload)(ke_runtime *runtime, void *user_data);
+    const char         *name;
+    void               *user_data;
+    ke_module_load_fn   on_load;
+    ke_module_unload_fn on_unload;
 } ke_runtime_module_params;
+
+/// One call of a system body. The runtime calls it once per tick the system's
+/// phase runs, or once per slice when the system declared per_entity.
+/// @param ctx       The body's only doorway to component memory for this call.
+/// @param user_data [context] Opaque context forwarded from register_system.
+/// @param dt        Seconds since the previous tick, or the fixed timestep in
+///                  KE_PHASE_FIXED_UPDATE.
+typedef void (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt);
 
 typedef struct ke_runtime_system_params {
     const char *name;
@@ -82,8 +103,8 @@ typedef struct ke_runtime_system_params {
     /// visiting, or touching state shared across the set.
     bool per_entity;
 
-    void *user_data;
-    void (*execute)(ke_system_ctx *ctx, void *user_data, float dt);
+    void                *user_data;
+    ke_system_execute_fn execute;
 } ke_runtime_system_params;
 
 typedef struct ke_runtime {
