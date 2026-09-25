@@ -94,7 +94,7 @@ public class RuntimeTests : IDisposable
             (_, _) => throw new InvalidOperationException("kaboom"));
 
         var ex = Assert.Throws<InvalidOperationException>(() => runtime.Tick(0.016f));
-        Assert.Equal("System execution threw", ex.Message);
+        Assert.Equal("A handler registered with this provider threw", ex.Message);
         Assert.NotNull(ex.InnerException);
         Assert.Equal("kaboom", ex.InnerException!.Message);
     }

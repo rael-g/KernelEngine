@@ -146,19 +146,23 @@
         {
           "name": "name",
           "type": "const char *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the system in diagnostics and in the failure a body raises."
         },
         {
           "name": "phase",
           "type": "ke_phase",
           "tags": [],
-          "doc": null
+          "doc": "Which phase of the tick the body runs in."
         },
         {
           "name": "queries",
           "type": "const ke_query_decl *",
-          "tags": [],
+          "tags": [
+            "array_of:query_count"
+          ],
           "doc": "Queries the system reads through. The runtime registers them, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view."
         },
         {
@@ -170,7 +174,9 @@
         {
           "name": "access_list",
           "type": "const ke_component_access *",
-          "tags": [],
+          "tags": [
+            "array_of:access_count"
+          ],
           "doc": "Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and entity-keyed reads via ke_system_ctx_get."
         },
         {
@@ -183,7 +189,7 @@
           "name": "pinned_thread",
           "type": "uint32_t",
           "tags": [],
-          "doc": null
+          "doc": "The worker the body must run on, or 0 to let any wave thread take it."
         },
         {
           "name": "per_entity",
@@ -194,14 +200,19 @@
         {
           "name": "user_data",
           "type": "void *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded unchanged to every call of the body."
         },
         {
           "name": "execute",
           "type": "ke_system_execute_fn",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "closure:user_data",
+            "retained:return"
+          ],
+          "doc": "The body itself."
         }
       ]
     },
@@ -272,14 +283,16 @@
           "name": "register_system",
           "returns": "ke_system_id",
           "tags": [],
-          "doc": null,
-          "return_doc": null,
+          "doc": "Registers a system body against the phase and the component access it declares.",
+          "return_doc": "0 when the system was refused.",
           "params": [
             {
               "name": "p",
               "type": "const ke_runtime_system_params *",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "expand"
+              ],
+              "doc": "What the system is called, when it runs, and what it touches."
             },
             {
               "name": "out_error",
@@ -293,10 +306,10 @@
           "name": "tick",
           "returns": "_Bool",
           "tags": [
-            "name:TickNative"
+            "drains"
           ],
-          "doc": "A system body written in a managed language cannot let an exception cross this boundary, so its binding parks the failure and rethrows it after the call returns. That wrapper has to be what callers reach for, or the error is silently dropped by whoever calls the raw entry point instead.",
-          "return_doc": null,
+          "doc": "Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body\u0027s error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.",
+          "return_doc": "false when a body of this tick failed.",
           "params": [
             {
               "name": "dt",
@@ -315,7 +328,10 @@
         {
           "name": "flush_render",
           "returns": "_Bool",
-          "tags": [],
+          "tags": [
+            "drains",
+            "name:Flush"
+          ],
           "doc": "Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.",
           "return_doc": "false when a body of the render phase failed.",
           "params": [

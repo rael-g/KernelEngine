@@ -91,21 +91,26 @@ typedef struct ke_runtime_module_params {
 typedef bool (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt, ke_error **out_error);
 
 typedef struct ke_runtime_system_params {
+    /// [utf8] Identifies the system in diagnostics and in the failure a body raises.
     const char *name;
-    ke_phase    phase;
 
-    /// Queries the system reads through. The runtime registers them, derives the
-    /// scheduling access list from their terms, and resolves them into segments
-    /// the body reads via ke_system_ctx_view.
+    /// Which phase of the tick the body runs in.
+    ke_phase phase;
+
+    /// [array_of:query_count] Queries the system reads through. The runtime registers
+    /// them, derives the scheduling access list from their terms, and resolves them
+    /// into segments the body reads via ke_system_ctx_view.
     const ke_query_decl *queries;
     uint32_t             query_count;
 
-    /// Cids the system touches that no query term covers, folded into the derived
-    /// set so the wave-builder still orders on them: ordering-only tags (render
-    /// resources carry no data) and entity-keyed reads via ke_system_ctx_get.
+    /// [array_of:access_count] Cids the system touches that no query term covers,
+    /// folded into the derived set so the wave-builder still orders on them:
+    /// ordering-only tags (render resources carry no data) and entity-keyed reads
+    /// via ke_system_ctx_get.
     const ke_component_access *access_list;
     uint32_t                   access_count;
 
+    /// The worker the body must run on, or 0 to let any wave thread take it.
     uint32_t pinned_thread;
 
     /// The body's work on one entity is independent of every other entity it
@@ -118,7 +123,10 @@ typedef struct ke_runtime_system_params {
     /// visiting, or touching state shared across the set.
     bool per_entity;
 
-    void                *user_data;
+    /// [context] Forwarded unchanged to every call of the body.
+    void *user_data;
+
+    /// [closure:user_data, retained:return] The body itself.
     ke_system_execute_fn execute;
 } ke_runtime_system_params;
 
@@ -128,15 +136,21 @@ typedef struct ke_runtime {
     /// Loads a module into the runtime, running its load hook before returning.
     /// @param p [expand] What the module is called and the hooks it registers.
     ke_module_id (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_error **out_error);
+    /// Registers a system body against the phase and the component access it declares.
+    /// @param p [expand] What the system is called, when it runs, and what it touches.
+    /// @return 0 when the system was refused.
     ke_system_id (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_error **out_error);
 
-    /// [name:TickNative] A system body written in a managed language cannot let an
-    /// exception cross this boundary, so its binding parks the failure and rethrows
-    /// it after the call returns. That wrapper has to be what callers reach for, or
-    /// the error is silently dropped by whoever calls the raw entry point instead.
-    bool         (*tick)(ke_runtime *self, float dt, ke_error **out_error);
+    /// [drains] Runs one tick: every sim phase in order, then the render phase.
+    ///
+    /// A system body written in a managed language cannot let an exception cross this
+    /// boundary, so its binding reports the failure through the body's error lane and
+    /// leaves the exception itself with the runtime. This is where a body that failed
+    /// during the tick is answered for.
+    /// @return false when a body of this tick failed.
+    bool (*tick)(ke_runtime *self, float dt, ke_error **out_error);
 
-    /// Blocks until any render phase dispatched by a previous tick() has
+    /// [drains, name:Flush] Blocks until any render phase dispatched by a previous tick() has
     /// finished, and fails with whatever a body of that phase failed with. That
     /// phase outlives the tick that dispatched it, so this is where its failure is
     /// reported rather than by the tick that started it.

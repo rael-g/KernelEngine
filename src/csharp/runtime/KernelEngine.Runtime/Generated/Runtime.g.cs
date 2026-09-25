@@ -25,6 +25,11 @@ public unsafe delegate bool ModuleLoad(ke_runtime* runtime);
 /// <param name="runtime">The runtime the module was loaded into.</param>
 public unsafe delegate void ModuleUnload(ke_runtime* runtime);
 
+/// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
+/// <param name="ctx">The body's only doorway to component memory for this call.</param>
+/// <param name="dt">Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE.</param>
+public unsafe delegate bool SystemExecute(ke_system_ctx* ctx, float dt);
+
 
 public unsafe partial class Runtime : IDisposable, INativeRuntime
 {
@@ -40,6 +45,13 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
     private readonly Dictionary<ulong, GCHandle> _retainedUserData = new();
 
     /// <summary>
+    /// Keeps every registered handler reachable, one per key the slot registers against.
+    /// The engine holds only an opaque pointer to it, which stops nothing on this
+    /// side from collecting or moving the object before the engine calls back into it.
+    /// </summary>
+    private readonly Dictionary<ulong, GCHandle> _retainedExecute = new();
+
+    /// <summary>
     /// Where a managed exception waits out the native frames. A handler runs
     /// underneath engine code that has no way to carry an exception, so throwing
     /// through it would tear down the process; the trampoline parks it here and
@@ -48,6 +60,30 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
     /// </summary>
     [ThreadStatic]
     private static Exception? s_parkedCallbackException;
+
+    /// <summary>
+    /// What retained handlers of this provider have thrown and not yet been told
+    /// about. A retained handler outlives the call that registered it, so there is
+    /// no call left to rethrow at; it reports failure through its own channel and
+    /// leaves the exception here for whichever call observes that failure. A handler
+    /// may run on any thread the engine calls it from, and may fail more than once
+    /// before anyone asks, so nothing here is ever discarded unread.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentQueue<Exception> _callbackFailures = new();
+
+    /// <summary>
+    /// Throws what retained handlers have reported since the last drain, as they
+    /// threw it, or returns when none have. More than one may have failed before
+    /// anyone asked, so they are reported together rather than the last one winning.
+    /// </summary>
+    private void DrainCallbackFailures()
+    {
+        var collected = new List<Exception>();
+        while (_callbackFailures.TryDequeue(out var failure)) collected.Add(failure);
+        if (collected.Count == 0) return;
+        throw new InvalidOperationException("A handler registered with this provider threw",
+            collected.Count == 1 ? collected[0] : new AggregateException(collected));
+    }
 
     private ke_runtime* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Runtime));
@@ -150,29 +186,105 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
         }
     }
 
+    /// <summary>Registers a system body against the phase and the component access it declares.</summary>
+    /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
+    /// <param name="phase">Which phase of the tick the body runs in.</param>
+    /// <param name="queries">Queries the system reads through. The runtime registers them, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view.</param>
+    /// <param name="accessList">Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and entity-keyed reads via ke_system_ctx_get.</param>
+    /// <param name="pinnedThread">The worker the body must run on, or 0 to let any wave thread take it.</param>
+    /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
+    /// <param name="execute">The body itself.</param>
+    /// <returns>0 when the system was refused.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong RegisterSystem(ke_runtime_system_params* p)
+    public ulong RegisterSystemRaw(string name, RuntimePhase phase, Span<ke_query_decl> queries, Span<ke_component_access> accessList, uint pinnedThread, bool perEntity, SystemExecute? execute)
     {
-        ke_error* err = null;
-        var result = Handle->register_system(Handle, p, &err);
-        if (err != null) throw KernelError.FromNative(err, "register_system");
-        return result;
+        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        fixed (byte* namePtr = nameBytes)
+        {
+            fixed (ke_query_decl* queriesPtr = queries)
+            {
+                fixed (ke_component_access* accessListPtr = accessList)
+                {
+                    var executeHandle = execute is null
+                        ? default
+                        : GCHandle.Alloc(new RegisterSystemClosures { Owner = this, Execute = execute });
+                    ke_runtime_system_params p = default;
+                    p.name = (sbyte*)namePtr;
+                    p.phase = (ke_phase)phase;
+                    p.queries = queriesPtr;
+                    p.query_count = (uint)queries.Length;
+                    p.access_list = accessListPtr;
+                    p.access_count = (uint)accessList.Length;
+                    p.pinned_thread = pinnedThread;
+                    p.per_entity = perEntity;
+                    p.user_data = (void*)GCHandle.ToIntPtr(executeHandle);
+                    p.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, ke_error**, bool>)&RegisterSystemExecuteTrampoline;
+                    ke_error* err = null;
+                    ulong result;
+                    try
+                    {
+                        result = Handle->register_system(Handle, &p, &err);
+                    }
+                    catch
+                    {
+                        if (executeHandle.IsAllocated) executeHandle.Free();
+                        throw;
+                    }
+                    if (err != null)
+                    {
+                        if (executeHandle.IsAllocated) executeHandle.Free();
+                        throw KernelError.FromNative(err, "register_system");
+                    }
+                    if (executeHandle.IsAllocated) _retainedExecute[result] = executeHandle;
+                    return result;
+                }
+            }
+        }
     }
 
-    /// <summary>A system body written in a managed language cannot let an exception cross this boundary, so its binding parks the failure and rethrows it after the call returns. That wrapper has to be what callers reach for, or the error is silently dropped by whoever calls the raw entry point instead.</summary>
+    /// <summary>The handler, and the provider a failure of it is reported to.</summary>
+    private sealed class RegisterSystemClosures
+    {
+        public required Runtime Owner;
+        public SystemExecute? Execute;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static bool RegisterSystemExecuteTrampoline(ke_system_ctx* arg0, void* ctx, float arg2, ke_error** arg3)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterSystemClosures state && state.Execute is { } handler)
+                return handler(arg0, arg2);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterSystemClosures failed)
+                failed.Owner._callbackFailures.Enqueue(ex);
+            KernelError.ToNative(arg3, ex, "ke_system_execute_fn");
+            return false;
+        }
+    }
+
+    /// <summary>Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body's error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void TickNative(float dt)
+    public void Tick(float dt)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->tick(Handle, dt, &err), err, "tick");
+        if (!Handle->tick(Handle, dt, &err) && _callbackFailures.IsEmpty)
+            throw KernelError.FromNative(err, "tick");
+        DrainCallbackFailures();
     }
 
     /// <summary>Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void FlushRender()
+    public void Flush()
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->flush_render(Handle, &err), err, "flush_render");
+        if (!Handle->flush_render(Handle, &err) && _callbackFailures.IsEmpty)
+            throw KernelError.FromNative(err, "flush_render");
+        DrainCallbackFailures();
     }
 
     /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>
@@ -180,6 +292,8 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
     {
         OnDispose();
         if (_native == null) return;
+        foreach (var retained in _retainedExecute.Values) retained.Free();
+        _retainedExecute.Clear();
         if (_borrowed)
         {
             foreach (var retained in _retainedUserData.Values) retained.Free();
