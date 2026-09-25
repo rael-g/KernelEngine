@@ -74,6 +74,39 @@ public class RuntimeTests : IDisposable
     }
 
     [Fact]
+    public void RenderSystemException_SurvivesTheTickThatDispatchedIt()
+    {
+        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using var released = new ManualResetEventSlim(false);
+
+        runtime.RegisterSystem("BoomRender", RuntimePhase.Render, (_, _) =>
+        {
+            released.Wait();
+            throw new InvalidOperationException("render kaboom");
+        });
+
+        runtime.Tick(0.016f);
+        released.Set();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => runtime.Flush());
+        Assert.Equal("render kaboom", ex.InnerException!.Message);
+    }
+
+    [Fact]
+    public void EverySystemThatThrowsIsReported_NotJustTheLast()
+    {
+        using var runtime = new Runtime(_ecs, _taskScheduler);
+        runtime.RegisterSystem("BoomA", RuntimePhase.Update,
+            (_, _) => throw new InvalidOperationException("a"));
+        runtime.RegisterSystem("BoomB", RuntimePhase.Update,
+            (_, _) => throw new InvalidOperationException("b"));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => runtime.Tick(0.016f));
+        var aggregate = Assert.IsType<AggregateException>(ex.InnerException);
+        Assert.Equal(["a", "b"], aggregate.InnerExceptions.Select(e => e.Message).Order());
+    }
+
+    [Fact]
     public void Dispose_IsIdempotent()
     {
         var runtime = new Runtime(_ecs, _taskScheduler);
