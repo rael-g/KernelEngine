@@ -34,13 +34,13 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const tm = moduleOf(user);
     const core = tm.core;
     const dev = tm.device;
 
     const pc = core.*.begin_pass.?(core, ctx, &tm.io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     const hdr_view = pc.*.read.?(pc, "hdr");
     const samp = core.*.sampler.?(core);
@@ -64,6 +64,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
 fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,

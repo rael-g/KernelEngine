@@ -81,8 +81,8 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
 /// the second would read the order buffer while the first was still filling it.
 /// The buffer is private scratch that nothing else consumes, so there is nothing
 /// to gain from exposing the split and a race to lose.
-fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
-    const s: *State = @ptrCast(@alignCast(user orelse return));
+fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const s: *State = @ptrCast(@alignCast(user orelse return true));
     flatten(s, ctx);
 
     const identity = identityMatrix();
@@ -106,6 +106,7 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.
         }
         mat4.mul(&w.matrix, &local, parent_world);
     }
+    return true;
 }
 
 fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {

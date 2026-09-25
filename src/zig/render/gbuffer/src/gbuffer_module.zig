@@ -97,7 +97,7 @@ inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const gb = moduleOf(user);
     const core = gb.core;
 
@@ -105,13 +105,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
 
     const pc = core.*.begin_pass.?(core, ctx, &gb.io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     if (cam_segc == 0 or cam_segs[0].count == 0) {
         const rp0 = pc.*.begin_render.?(pc);
         rp0.*.end.?(rp0);
         core.*.end_pass.?(core, pc);
-        return;
+        return true;
     }
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
@@ -167,6 +167,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
 fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,

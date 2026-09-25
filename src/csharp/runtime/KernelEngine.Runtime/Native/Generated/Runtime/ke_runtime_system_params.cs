@@ -29,5 +29,5 @@ public unsafe partial struct ke_runtime_system_params
     public void* user_data;
 
     [NativeTypeName("ke_system_execute_fn")]
-    public delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, void> execute;
+    public delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, KernelEngine.Common.Native.ke_error**, bool> execute;
 }

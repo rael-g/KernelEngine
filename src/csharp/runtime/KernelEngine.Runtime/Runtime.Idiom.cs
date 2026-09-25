@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
@@ -13,9 +14,10 @@ namespace KernelEngine.Runtime;
 /// The parts of <see cref="Runtime"/> that are not a direct image of the C ABI:
 /// registration takes managed delegates, which have no ABI shape, so each one is
 /// held by a GC root and reached through a static trampoline; and an exception
-/// thrown inside a system body cannot cross the C boundary, so it is queued on the
-/// runtime that owns the system and rethrown by the next <see cref="Tick"/> or
-/// <see cref="Flush"/>. Everything mirroring the vtable 1:1 is generated in
+/// thrown inside a system body cannot cross the C boundary, so the trampoline fails
+/// the body through its error lane — which stops the tick — and queues the exception
+/// itself on the runtime that owns the system, to be rethrown as it is by the call
+/// that observes the failure. Everything mirroring the vtable 1:1 is generated in
 /// <c>Generated/Runtime.g.cs</c>.
 /// </summary>
 public sealed unsafe partial class Runtime : IRuntime
@@ -39,7 +41,8 @@ public sealed unsafe partial class Runtime : IRuntime
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void SystemExecuteTrampoline(ke_system_ctx* ctx, void* userData, float dt)
+    private static bool SystemExecuteTrampoline(ke_system_ctx* ctx, void* userData, float dt,
+                                                ke_error** outError)
     {
         var entry = (SystemEntry)GCHandle.FromIntPtr((nint)userData).Target!;
         try
@@ -48,10 +51,13 @@ public sealed unsafe partial class Runtime : IRuntime
                 entry.ExecuteCtx(entry.Owner, (nint)ctx, dt);
             else
                 entry.Execute!(entry.Owner, dt);
+            return true;
         }
         catch (Exception ex)
         {
             entry.Owner._systemFailures.Enqueue(ex);
+            KernelError.ToNative(outError, ex, "ke_system_execute_fn");
+            return false;
         }
     }
 
@@ -191,7 +197,13 @@ public sealed unsafe partial class Runtime : IRuntime
     /// <inheritdoc />
     public void Tick(float dt)
     {
-        TickNative(dt);
+        try
+        {
+            TickNative(dt);
+        }
+        catch (KernelError) when (!_systemFailures.IsEmpty)
+        {
+        }
         DrainSystemFailures();
     }
 

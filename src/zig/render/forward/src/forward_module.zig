@@ -175,19 +175,19 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame bind group");
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const fwd = moduleOf(user);
     const core = fwd.core;
 
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
-    if (cam_segc == 0 or cam_segs[0].count == 0) return;
+    if (cam_segc == 0 or cam_segs[0].count == 0) return true;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, ctx, &fwd.io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
@@ -280,6 +280,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
 fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,

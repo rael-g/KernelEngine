@@ -209,12 +209,12 @@ fn emitQuad(ui: *UiState, vertex_count: *u32, batch_count: *u32, tex_in: c.ke_te
     ui.batches[batch_count.* - 1].vertex_count += 6;
 }
 
-fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const ui = moduleOf(user);
 
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 0, &segc);
-    if (segc == 0) return;
+    if (segc == 0) return true;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
@@ -228,9 +228,10 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
             shapeLabel(ui, labels + i, bw, bh);
         }
     }
+    return true;
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const ui = moduleOf(user);
     const core = ui.core;
 
@@ -238,10 +239,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     const quad_segs = c.ke_system_ctx_view(ctx, 0, &quad_segc);
     var label_segc: usize = 0;
     const label_segs = c.ke_system_ctx_view(ctx, 1, &label_segc);
-    if (quad_segc == 0 and label_segc == 0) return;
+    if (quad_segc == 0 and label_segc == 0) return true;
 
     const pc = core.*.begin_pass.?(core, ctx, &ui.io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     var vertex_count: u32 = 0;
     var batch_count: u32 = 0;
@@ -285,7 +286,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     if (vertex_count == 0) {
         core.*.end_pass.?(core, pc);
-        return;
+        return true;
     }
 
     var bw: u32 = 0;
@@ -313,6 +314,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
 fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,

@@ -176,7 +176,7 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
     );
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const core: *c.ke_render_service = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
@@ -190,6 +190,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
             resolveMaterial(core, meshes + i);
         }
     }
+    return true;
 }
 
 const testing = std.testing;

@@ -9,7 +9,7 @@ pub const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) void;
+const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32, [*c][*c]c.ke_error) callconv(.c) bool;
 
 const DEFAULT_GRID_X: u32 = 32;
 const DEFAULT_GRID_Y: u32 = 18;
@@ -63,23 +63,26 @@ fn registerComponent(
     return e.component_register.?(e, name, @sizeOf(T), table, @intCast(fields.len), null);
 }
 
-fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
     _ = st.core.ref.*.begin_frame.?(st.core.ref, null);
+    return true;
 }
 
-fn clearSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn clearSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
     const pc = st.core.ref.*.begin_pass.?(st.core.ref, ctx, &st.io);
-    if (pc == null) return;
+    if (pc == null) return true;
     const rp = pc.*.begin_render.?(pc);
     rp.*.end.?(rp);
     st.core.ref.*.end_pass.?(st.core.ref, pc);
+    return true;
 }
 
-fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
     _ = st.core.ref.*.end_frame.?(st.core.ref, null);
+    return true;
 }
 
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,

@@ -92,7 +92,7 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
     );
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
@@ -121,6 +121,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
             _ = c.ke_system_ctx_attach(ctx, segs[s].entities[i], st.mesh_cid, null, 0);
         }
     }
+    return true;
 }
 
 const testing = std.testing;

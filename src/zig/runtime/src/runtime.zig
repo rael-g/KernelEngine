@@ -397,6 +397,7 @@ const RegisteredModule = struct {
 const RenderJob = struct {
     h: *RuntimeHandle,
     dt: f32,
+    failure: PhaseFailure = .{},
 };
 
 const RuntimeState = struct {
@@ -577,18 +578,35 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
 const TaskPkg = struct {
     state: CtxState,
     ctx: c.ke_system_ctx,
-    execute: ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) void,
+    execute: ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32, [*c][*c]c.ke_error) callconv(.c) bool,
     user_data: ?*anyopaque,
     dt: f32,
     defer_q: DeferQueue,
     allow_defer: bool,
 };
 
+/// What a body failed with, reduced to what survives leaving the worker that ran
+/// it: the type singleton, and the name of the system to blame. The ke_error the
+/// body filled belongs to that thread's slot and is gone by the time anyone asks.
+const PhaseFailure = struct {
+    type: ?*const c.ke_error_type = null,
+    system: [*c]const u8 = null,
+
+    fn firstOf(self: PhaseFailure, other: PhaseFailure) PhaseFailure {
+        return if (self.type != null) self else other;
+    }
+};
+
 fn taskPkgRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
-    _ = out_failure;
     const pkg: *TaskPkg = @ptrCast(@alignCast(data.?));
     if (pkg.allow_defer) pkg.state.defer_q = &pkg.defer_q;
-    pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt);
+    var err: [*c]c.ke_error = null;
+    if (pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt, &err)) return;
+    if (out_failure == null) return;
+    out_failure.* = if (err != null and err.*.type != null)
+        err.*.type
+    else
+        E.typeOf(.general);
 }
 
 const WaveRunCtx = struct {
@@ -599,7 +617,7 @@ const WaveRunCtx = struct {
     wave_size: u32,
 };
 
-fn runWaveBody(wc: *WaveRunCtx) void {
+fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
     const sched = wc.h.state.scheduler;
     var t: u32 = 0;
     while (t < wc.wave_size) : (t += 1) {
@@ -608,10 +626,18 @@ fn runWaveBody(wc: *WaveRunCtx) void {
         else
             wc.tasks[t] = sched.dispatch.?(sched, taskPkgRun, &wc.pkgs[t]);
     }
+    var failure = PhaseFailure{};
     t = 0;
     while (t < wc.wave_size) : (t += 1) {
-        _ = sched.wait.?(sched, wc.tasks[t], null);
+        var err: [*c]c.ke_error = null;
+        if (sched.wait.?(sched, wc.tasks[t], &err)) continue;
+        if (failure.type != null) continue;
+        failure = .{
+            .type = if (err != null and err.*.type != null) err.*.type else E.typeOf(.general),
+            .system = wc.pkgs[t].state.system_name,
+        };
     }
+    return failure;
 }
 
 fn freePhaseScratch(h: *RuntimeHandle) void {
@@ -630,13 +656,13 @@ fn freePhaseScratch(h: *RuntimeHandle) void {
     h.state.phase_pinned = null;
 }
 
-fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
-    if (h.state.system_count == 0) return;
+fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
+    if (h.state.system_count == 0) return .{};
 
     const cap: usize = h.state.max_systems_per_phase;
     const base: usize = @as(usize, @intCast(phase)) * cap;
-    const phase_indices = (h.state.phase_indices orelse return) + base;
-    const phase_params = (h.state.phase_params orelse return) + base;
+    const phase_indices = (h.state.phase_indices orelse return .{}) + base;
+    const phase_params = (h.state.phase_params orelse return .{}) + base;
     var phase_count: u32 = 0;
     for (0..h.state.system_count) |si| {
         const rs = h.state.systems.?[si].?;
@@ -647,16 +673,17 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
         phase_params[phase_count] = rs.params;
         phase_count += 1;
     }
-    if (phase_count == 0) return;
+    if (phase_count == 0) return .{};
 
-    const wave_assignments = (h.state.wave_assignments orelse return) + base;
+    const wave_assignments = (h.state.wave_assignments orelse return .{}) + base;
     var wave_count: u32 = 0;
     ke_runtime_debug_compute_waves(phase_params, phase_count, wave_assignments, &wave_count);
 
-    const pkgs = (h.state.phase_pkgs orelse return) + base;
-    const tasks = (h.state.phase_tasks orelse return) + base;
-    const pinned = (h.state.phase_pinned orelse return) + base;
+    const pkgs = (h.state.phase_pkgs orelse return .{}) + base;
+    const tasks = (h.state.phase_tasks orelse return .{}) + base;
+    const pinned = (h.state.phase_pinned orelse return .{}) + base;
 
+    var failure = PhaseFailure{};
     var w: u32 = 0;
     while (w < wave_count) : (w += 1) {
         var wave_size: u32 = 0;
@@ -709,7 +736,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
         }
 
         var wc = WaveRunCtx{ .h = h, .pkgs = pkgs, .tasks = tasks, .pinned = pinned, .wave_size = wave_size };
-        runWaveBody(&wc);
+        failure = failure.firstOf(runWaveBody(&wc));
 
         var t: u32 = 0;
         while (t < wave_size) : (t += 1) {
@@ -717,7 +744,10 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) void {
             if (pkgs[t].defer_q.cmds) |cmds| cFree(DeferCommand, cmds, pkgs[t].defer_q.capacity);
             if (pkgs[t].defer_q.arena) |arena| cFree(u8, arena, pkgs[t].defer_q.arena_capacity);
         }
+
+        if (failure.type != null) break;
     }
+    return failure;
 }
 
 /// How many concurrent slices one system's body is run as. A system that did not
@@ -833,15 +863,24 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
 }
 
 fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
-    _ = out_failure;
     const job: *RenderJob = @ptrCast(@alignCast(data.?));
-    runtimeRunPhase(job.h, c.KE_PHASE_RENDER, job.dt);
+    job.failure = runtimeRunPhase(job.h, c.KE_PHASE_RENDER, job.dt);
+    if (job.failure.type) |t| {
+        if (out_failure != null) out_failure.* = t;
+    }
 }
 
-fn runtimeJoinPendingRender(h: *RuntimeHandle) void {
-    const task = h.state.pending_render_task orelse return;
+/// Waits out the render phase dispatched by the previous tick and hands back what
+/// it failed with, which is carried on the job rather than in the runtime because
+/// that phase runs alongside the sim phases of the tick after it.
+fn runtimeJoinPendingRender(h: *RuntimeHandle) PhaseFailure {
+    const task = h.state.pending_render_task orelse return .{};
     _ = h.state.scheduler.wait.?(h.state.scheduler, task, null);
     h.state.pending_render_task = null;
+    const job = h.state.render_job orelse return .{};
+    const failure = job.failure;
+    job.failure = .{};
+    return failure;
 }
 
 fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -856,21 +895,26 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
     const h = handleOf(self.?);
 
     runtimePrepareSystems(h);
-    runtimeRunPhase(h, c.KE_PHASE_PRE_UPDATE, dt);
+    var failure = runtimeRunPhase(h, c.KE_PHASE_PRE_UPDATE, dt);
 
     h.state.fixed_accumulator += dt;
     if (h.state.fixed_accumulator > h.state.fixed_dt_max_accum) {
         h.state.fixed_accumulator = h.state.fixed_dt_max_accum;
     }
-    while (h.state.fixed_accumulator >= h.state.fixed_dt) {
-        runtimeRunPhase(h, c.KE_PHASE_FIXED_UPDATE, h.state.fixed_dt);
+    while (failure.type == null and h.state.fixed_accumulator >= h.state.fixed_dt) {
+        failure = runtimeRunPhase(h, c.KE_PHASE_FIXED_UPDATE, h.state.fixed_dt);
         h.state.fixed_accumulator -= h.state.fixed_dt;
     }
 
-    runtimeRunPhase(h, c.KE_PHASE_UPDATE, dt);
-    runtimeRunPhase(h, c.KE_PHASE_POST_UPDATE, dt);
+    if (failure.type == null) failure = runtimeRunPhase(h, c.KE_PHASE_UPDATE, dt);
+    if (failure.type == null) failure = runtimeRunPhase(h, c.KE_PHASE_POST_UPDATE, dt);
 
-    runtimeJoinPendingRender(h);
+    failure = runtimeJoinPendingRender(h).firstOf(failure);
+    if (failure.type) |t| {
+        E.failWithType(out_error, t, failure.system orelse "system body failed", @src());
+        return false;
+    }
+
     runtimeExtractRenderState(h);
 
     if (h.state.render_job == null) {
@@ -879,9 +923,14 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
     if (h.state.render_job) |job| {
         job.h = h;
         job.dt = dt;
+        job.failure = .{};
         h.state.pending_render_task = h.state.scheduler.dispatch.?(h.state.scheduler, renderJobRun, job);
     } else {
-        runtimeRunPhase(h, c.KE_PHASE_RENDER, dt);
+        failure = runtimeRunPhase(h, c.KE_PHASE_RENDER, dt);
+        if (failure.type) |t| {
+            E.failWithType(out_error, t, failure.system orelse "system body failed", @src());
+            return false;
+        }
     }
 
     return true;
@@ -889,14 +938,14 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
 
 fn runtimeFlushRender(self: ?*c.ke_runtime) callconv(.c) void {
     if (self == null or self.?.handle == null) return;
-    runtimeJoinPendingRender(handleOf(self.?));
+    _ = runtimeJoinPendingRender(handleOf(self.?));
 }
 
 fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     if (self == null or self.?.handle == null) return;
     const h = handleOf(self.?);
 
-    runtimeJoinPendingRender(h);
+    _ = runtimeJoinPendingRender(h);
 
     if (h.state.modules) |modules| {
         var i = h.state.module_count;
@@ -1033,13 +1082,21 @@ fn systemParams(name: [*c]const u8, phase: c_int) c.ke_runtime_system_params {
     return s;
 }
 
-fn noopSystem(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {}
+fn noopSystem(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    return true;
+}
+
+fn refusingSystem(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    E.fail(out_error, .not_supported, "body refused", @src());
+    return false;
+}
 
 const Counter = std.atomic.Value(u32);
 
-fn countingSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+fn countingSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const counter: *Counter = @ptrCast(@alignCast(ud.?));
     _ = counter.fetchAdd(1, .acq_rel);
+    return true;
 }
 
 const ModuleCtx = struct {
@@ -1047,9 +1104,10 @@ const ModuleCtx = struct {
     system_ticks: Counter = Counter.init(0),
 };
 
-fn moduleTickSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+fn moduleTickSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const ctx: *ModuleCtx = @ptrCast(@alignCast(ud.?));
     _ = ctx.system_ticks.fetchAdd(1, .acq_rel);
+    return true;
 }
 
 fn testModuleOnLoad(runtime: ?*c.ke_runtime, ud: ?*anyopaque, _: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -1095,7 +1153,7 @@ const SliceProbe = struct {
     reported_count: Counter = Counter.init(0),
 };
 
-fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const probe: *SliceProbe = @ptrCast(@alignCast(ud.?));
     var index: u32 = 99;
     var count: u32 = 99;
@@ -1103,6 +1161,7 @@ fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c
     _ = probe.calls.fetchAdd(1, .acq_rel);
     probe.reported_count.store(count, .release);
     if (index < probe.seen.len) _ = probe.seen[index].fetchAdd(1, .acq_rel);
+    return true;
 }
 
 test "a system that does not promise per-entity work runs as one slice" {
@@ -1280,6 +1339,29 @@ test "registering a module with no params is refused" {
     try testing.expectEqual(@as(c.ke_module_id, 0), f.rt().register_module.?(f.rt(), null, null));
 }
 
+test "a body that fails the tick keeps the later phases from running" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var counter = Counter.init(0);
+
+    var boom = systemParams("Boom", c.KE_PHASE_PRE_UPDATE);
+    boom.execute = &refusingSystem;
+    try testing.expect(f.rt().register_system.?(f.rt(), &boom, null) != 0);
+
+    var later = systemParams("Later", c.KE_PHASE_POST_UPDATE);
+    later.execute = &countingSystem;
+    later.user_data = &counter;
+    try testing.expect(f.rt().register_system.?(f.rt(), &later, null) != 0);
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.rt().tick.?(f.rt(), 1.0 / 60.0, &err));
+    try testing.expect(err != null);
+    try testing.expectEqualStrings("ke.error.not_supported", std.mem.span(err.*.type.*.name));
+    try testing.expectEqualStrings("Boom", std.mem.span(err.*.message));
+    try testing.expectEqual(@as(u32, 0), counter.load(.acquire));
+}
+
 test "registering a system with no execute body is refused" {
     var f = try Fixture.init();
     defer f.deinit();
@@ -1320,7 +1402,7 @@ const ParallelSlot = struct {
 
 const parallel_rendezvous_spin_cap: u32 = 4_000_000;
 
-fn parallelWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+fn parallelWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const slot: *ParallelSlot = @ptrCast(@alignCast(ud.?));
     const p = slot.probe;
 
@@ -1337,6 +1419,7 @@ fn parallelWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) vo
     if (a != 0 and b != 0 and a != b) p.distinct.store(true, .release);
 
     _ = p.total.fetchAdd(1, .acq_rel);
+    return true;
 }
 
 test "disjoint systems in one wave run on more than one thread" {
@@ -1380,10 +1463,11 @@ const OrderSlot = struct {
     tag: u32,
 };
 
-fn orderWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+fn orderWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const slot: *OrderSlot = @ptrCast(@alignCast(ud.?));
     const i = slot.probe.next.fetchAdd(1, .acq_rel);
     if (i < slot.probe.slots.len) slot.probe.slots[i].store(slot.tag, .release);
+    return true;
 }
 
 test "systems conflicting on a component run one after the other" {
@@ -1498,9 +1582,10 @@ test "a negative delta time is refused" {
 var g_gated_render_runs = Counter.init(0);
 var g_gated_render_may_finish = std.atomic.Value(bool).init(false);
 
-fn gatedRenderBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+fn gatedRenderBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     while (!g_gated_render_may_finish.load(.acquire)) std.atomic.spinLoopHint();
     _ = g_gated_render_runs.fetchAdd(1, .acq_rel);
+    return true;
 }
 
 test "tick dispatches the render phase without waiting for it" {
@@ -1532,17 +1617,18 @@ const ExtractProbe = struct {
 
 var g_extract_probe = ExtractProbe{};
 
-fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
     const segs = ke_system_ctx_view(ctx, 0, &seg_count);
-    if (segs == null) return;
+    if (segs == null) return true;
     for (0..seg_count) |s| {
         const col: [*]i32 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
         for (0..segs[s].count) |i| col[i] = 42;
     }
+    return true;
 }
 
-fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
     const segs = ke_system_ctx_view(ctx, 0, &seg_count);
     if (segs != null and seg_count > 0 and segs[0].count > 0) {
@@ -1553,6 +1639,7 @@ fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(
         }
     }
     _ = g_extract_probe.runs.fetchAdd(1, .acq_rel);
+    return true;
 }
 
 test "the render extract carries this tick's sim write" {
@@ -1608,7 +1695,7 @@ const Vec3 = extern struct {
 var g_extract_pv_sum: f64 = 0.0;
 var g_extract_pv_runs = Counter.init(0);
 
-fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
     const segs = ke_system_ctx_view(ctx, 0, &seg_count);
     if (segs != null) {
@@ -1621,6 +1708,7 @@ fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(
         }
     }
     _ = g_extract_pv_runs.fetchAdd(1, .acq_rel);
+    return true;
 }
 
 test "the render extract keeps multi term columns aligned" {
@@ -1803,10 +1891,11 @@ const SpawnProbe = struct {
     cid: c.ke_component_id = 0,
 };
 
-fn spawnerBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+fn spawnerBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const probe: *SpawnProbe = @ptrCast(@alignCast(ud.?));
     for (&probe.ids) |*slot| slot.* = ke_system_ctx_spawn(ctx);
     _ = probe.calls.fetchAdd(1, .acq_rel);
+    return true;
 }
 
 test "a deferred spawn is applied at the wave barrier" {
@@ -1868,12 +1957,13 @@ const MutatorProbe = struct {
     ok: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 };
 
-fn mutatorBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) void {
+fn mutatorBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const probe: *MutatorProbe = @ptrCast(@alignCast(ud.?));
     const attached = ke_system_ctx_attach(ctx, 42, 5, &probe.payload, 1);
     const detached = ke_system_ctx_detach(ctx, 42, 5);
     const despawned = ke_system_ctx_despawn(ctx, 42);
     probe.ok.store(attached and detached and despawned, .release);
+    return true;
 }
 
 test "deferred attach detach and despawn are applied at the barrier" {
@@ -1893,8 +1983,9 @@ test "deferred attach detach and despawn are applied at the barrier" {
     try testing.expectEqual(@as(u32, 3), ke_system_ctx_defer_applied_count());
 }
 
-fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     _ = ke_system_ctx_spawn(ctx);
+    return true;
 }
 
 test "the defer queue drains between ticks" {
@@ -1937,10 +2028,10 @@ test "a zero size component registers as a usable tag" {
     try testing.expectEqual(@as(usize, 1), total);
 }
 
-fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
     const segs = ke_system_ctx_view(ctx, 0, &seg_count);
-    if (segs == null) return;
+    if (segs == null) return true;
 
     var sink: f32 = 0.0;
     for (0..seg_count) |s| {
@@ -1948,6 +2039,7 @@ fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.
         for (0..segs[s].count) |i| sink += col[i].x;
     }
     std.mem.doNotOptimizeAway(sink);
+    return true;
 }
 
 test "two readers sharing a wave read the same storage without conflicting" {
@@ -1991,15 +2083,16 @@ test "two readers sharing a wave read the same storage without conflicting" {
 
 var g_pv_sum: f64 = 0.0;
 
-fn posVelBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) void {
+fn posVelBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
     const segs = ke_system_ctx_view(ctx, 0, &seg_count);
-    if (segs == null) return;
+    if (segs == null) return true;
     for (0..seg_count) |s| {
         const pc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
         const vc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[1] orelse continue));
         for (0..segs[s].count) |i| g_pv_sum += @as(f64, pc[i].x) + @as(f64, vc[i].x);
     }
+    return true;
 }
 
 test "a multi term query hands back aligned columns" {

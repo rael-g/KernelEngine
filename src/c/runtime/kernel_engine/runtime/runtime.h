@@ -76,11 +76,19 @@ typedef struct ke_runtime_module_params {
 
 /// One call of a system body. The runtime calls it once per tick the system's
 /// phase runs, or once per slice when the system declared per_entity.
+///
+/// A body runs on a worker thread, so only the type of what it failed with makes
+/// the trip back: the runtime carries that type to the thread driving the tick and
+/// raises a fresh error there, which tick() then fails with. The remaining bodies
+/// of the same wave still run — they were already dispatched — but no later phase
+/// of that tick starts.
 /// @param ctx       The body's only doorway to component memory for this call.
 /// @param user_data [context] Opaque context forwarded from register_system.
 /// @param dt        Seconds since the previous tick, or the fixed timestep in
 ///                  KE_PHASE_FIXED_UPDATE.
-typedef void (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt);
+/// @param out_error Set when the body cannot finish its work; the tick fails with it.
+/// @return false when the body failed.
+typedef bool (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt, ke_error **out_error);
 
 typedef struct ke_runtime_system_params {
     const char *name;

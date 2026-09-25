@@ -87,11 +87,11 @@ inline fn moduleOf(user: ?*anyopaque) *ShadowModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const sh = moduleOf(user);
     const core = sh.core;
 
-    const light_dir = lightDirOf(ctx) orelse return;
+    const light_dir = lightDirOf(ctx) orelse return true;
 
     const lvp = lightViewProj(sh.view_space, sh.ndc, sh.params, light_dir);
     var lvp_arr: [16]f32 = undefined;
@@ -99,7 +99,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);
 
     const pc = core.*.begin_pass.?(core, ctx, &sh.io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sh.pipeline_params));
@@ -133,6 +133,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
 fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,

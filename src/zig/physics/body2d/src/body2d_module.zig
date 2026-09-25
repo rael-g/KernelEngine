@@ -25,7 +25,7 @@ fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anyt
     if (lg.log) |f| f(lg, &ev);
 }
 
-fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) void {
+fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const m = moduleOf(user);
     const p = m.physics;
 
@@ -87,6 +87,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) v
             tcs[i].rotation = st.angle;
         }
     }
+    return true;
 }
 
 fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
@@ -101,12 +102,12 @@ fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
     return false;
 }
 
-fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) void {
+fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     _ = dt;
     const m = moduleOf(user);
     const p = m.physics;
 
-    if (!anyUnattached(ctx)) return;
+    if (!anyUnattached(ctx)) return true;
 
     var parents = std.AutoHashMap(c.ke_entity, c.ke_entity).init(gpa);
     defer parents.deinit();
@@ -120,7 +121,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.
         const hs: [*c]c.ke_hierarchy_component = @ptrCast(@alignCast(segs[s].columns[0]));
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
-            parents.put(segs[s].entities[i], hs[i].parent) catch return;
+            parents.put(segs[s].entities[i], hs[i].parent) catch return true;
         }
     }
 
@@ -131,7 +132,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             if (bs[i].body == c.KE_BODY_2D_INVALID) continue;
-            bodies.put(segs[s].entities[i], bs[i].body) catch return;
+            bodies.put(segs[s].entities[i], bs[i].body) catch return true;
         }
     }
 
@@ -164,6 +165,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.
                 .{ segs[s].entities[i], col.kind, col.half_extents.x, col.half_extents.y, col.radius, off.x, off.y, angle, col.density, col.friction, col.restitution, ok });
         }
     }
+    return true;
 }
 
 /// Climbs the hierarchy from a shape to the nearest entity that owns a body.

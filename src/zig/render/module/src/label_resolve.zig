@@ -71,7 +71,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     return font;
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
@@ -86,6 +86,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) vo
             l.font_handle = bake(st, l);
         }
     }
+    return true;
 }
 
 const testing = std.testing;

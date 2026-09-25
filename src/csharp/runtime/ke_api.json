@@ -842,8 +842,8 @@
     },
     {
       "name": "ke_system_execute_fn",
-      "returns": "void",
-      "doc": "One call of a system body. The runtime calls it once per tick the system\u0027s phase runs, or once per slice when the system declared per_entity.",
+      "returns": "_Bool",
+      "doc": "One call of a system body. The runtime calls it once per tick the system\u0027s phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run \u2014 they were already dispatched \u2014 but no later phase of that tick starts.",
       "lanes": [
         {
           "name": "ctx",
@@ -864,6 +864,12 @@
           "type": "float",
           "tags": [],
           "doc": "Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE."
+        },
+        {
+          "name": "out_error",
+          "type": "ke_error **",
+          "tags": [],
+          "doc": "Set when the body cannot finish its work; the tick fails with it."
         }
       ]
     },
@@ -894,7 +900,7 @@
     "ke_system_id": "uint64_t",
     "ke_module_load_fn": "_Bool (*)(ke_runtime *, void *, ke_error **)",
     "ke_module_unload_fn": "void (*)(ke_runtime *, void *)",
-    "ke_system_execute_fn": "void (*)(ke_system_ctx *, void *, float)",
+    "ke_system_execute_fn": "_Bool (*)(ke_system_ctx *, void *, float, ke_error **)",
     "ke_defer_fn": "void (*)(ke_ecs *, void *)"
   }
 }

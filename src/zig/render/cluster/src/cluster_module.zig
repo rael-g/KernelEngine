@@ -101,7 +101,7 @@ inline fn moduleOf(user: ?*anyopaque) *ClusterModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const cm = moduleOf(user);
     const core = cm.core;
     const deg2rad: f32 = std.math.pi / 180.0;
@@ -177,12 +177,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
 
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 2, &cam_segc);
-    if (cam_segc == 0 or cam_segs[0].count == 0) return;
+    if (cam_segc == 0 or cam_segs[0].count == 0) return true;
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, ctx, &cm.cull_io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
@@ -207,6 +207,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     cp.*.dispatch.?(cp, (cm.num_clusters + 63) / 64, 1, 1);
     cp.*.end.?(cp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
 fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) void {
