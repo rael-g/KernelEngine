@@ -1293,7 +1293,7 @@ public static class CSharpBackend
                         .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
                         .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}" : CallArg(p))));
                 Declare(o, decls, XmlDoc("    ", slot.Doc, DocParams(args),
-                    byReturn ? slot.ReturnDoc : null, throwsOnFail: true).TrimEnd(),
+                    byReturn ? null : slot.ReturnDoc, throwsOnFail: true).TrimEnd(),
                     $"{retType} {name}({sig})");
                 o.Add("    {");
                 var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));

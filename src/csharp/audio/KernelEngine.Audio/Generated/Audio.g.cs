@@ -47,6 +47,7 @@ public unsafe partial class Audio : IDisposable, INativeAudio
 
     /// <summary>Loads a sound for repeated playback; the backend autodetects the format.</summary>
     /// <param name="path">Filesystem path to the audio file.</param>
+    /// <returns>KE_AUDIO_SOUND_INVALID on error.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
     public uint LoadSound(string path)
     {

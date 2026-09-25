@@ -46,6 +46,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>Declares a transient resource the core allocates and recycles.</summary>
+    /// <returns>The tag-component cid to place in a pass's access_list.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
     public uint Declare(ke_render_resource_desc* desc)
     {
@@ -56,6 +57,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>Imports an externally-owned texture under `name`.</summary>
+    /// <returns>Its tag-component cid.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
     public uint ImportTexture(sbyte* name, ulong tex)
     {
@@ -132,6 +134,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
 
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
     /// <param name="key">Dedup cache key; required.</param>
+    /// <returns>A handle a ke_mesh_component references.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_mesh_handle UploadMesh(string key, void* vertices, nuint verticesSize, ushort* indices, uint indexCount)
     {
