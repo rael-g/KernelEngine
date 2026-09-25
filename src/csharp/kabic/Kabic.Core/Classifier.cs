@@ -11,10 +11,18 @@ public enum SlotShape { Fallible, Try, ReturnsOutParam, TupleOutParams, Sequence
 /// <param name="OutParams">All <c>[out]</c> params other than a sequence, in declaration order.</param>
 /// <param name="PublicParams">
 /// Every parameter a caller still supplies: the trailing error out-param, and the
-/// count paired with a sequence, are already removed.
+/// count paired with a sequence, are already removed. A parameter marked
+/// <c>[expand]</c> has been replaced by one entry per field of the struct it points at.
 /// </param>
 public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiParam? OutParam, ApiParam? SequenceParam,
-    ApiParam? CountParam, IReadOnlyList<ApiParam> OutParams, IReadOnlyList<ApiParam> PublicParams);
+    ApiParam? CountParam, IReadOnlyList<ApiParam> OutParams, IReadOnlyList<ApiParam> PublicParams)
+{
+    /// <summary>The <c>[expand]</c> parameter, whose fields stand in for it in <see cref="PublicParams"/>.</summary>
+    public ApiParam? ExpandedParam { get; init; }
+
+    /// <summary>The struct <see cref="ExpandedParam"/> points at, whose fields the call has to rebuild.</summary>
+    public ApiStruct? ExpandedStruct { get; init; }
+}
 
 public enum ConstructorKind { FromFactory, FromHandle, None }
 
@@ -61,7 +69,7 @@ public static class Classifier
             else if (isOwnable || explicitProviders.Contains(v.Name))
                 result.Providers.Add(v);
 
-            result.SlotsByVtable[v.Name] = v.Slots.Select(s => ClassifySlot(s, convention)).ToList();
+            result.SlotsByVtable[v.Name] = v.Slots.Select(s => ClassifySlot(model, s, convention)).ToList();
 
             var init = v.Slots.FirstOrDefault(s => s.Has("lifecycle") && s.TagValue("lifecycle") == "init");
             if (init is not null) result.LifecycleInit[v.Name] = init.Name;
@@ -105,11 +113,40 @@ public static class Classifier
         return result;
     }
 
-    static ClassifiedSlot ClassifySlot(ApiSlot slot, Convention convention)
+    /// <summary>
+    /// The <c>[expand]</c> parameter of a slot and the struct it points at, or a pair of
+    /// nulls when the slot has none.
+    /// </summary>
+    public static (ApiParam? Param, ApiStruct? Bag) ExpandedBag(ApiModel model, ApiSlot slot)
+    {
+        var expanded = slot.Params.FirstOrDefault(p => p.Has("expand"));
+        if (expanded is null) return (null, null);
+
+        if (!CTypes.IsPointer(expanded.Type))
+            throw new InvalidOperationException(
+                $"{slot.Name}.{expanded.Name}: [expand] rebuilds a struct the call passes by "
+                + $"reference, but {expanded.Type.Trim()} is not a pointer");
+
+        var bagName = CTypes.Deref(expanded.Type).Trim()
+            .Replace("const ", "").Replace("struct ", "").Trim();
+        var bag = model.Structs.FirstOrDefault(s => s.Name == bagName)
+            ?? throw new InvalidOperationException(
+                $"{slot.Name}.{expanded.Name}: [expand] needs the fields of {bagName}, "
+                + "and no struct by that name is described");
+        return (expanded, bag);
+    }
+
+    static ClassifiedSlot ClassifySlot(ApiModel model, ApiSlot slot, Convention convention)
     {
         var ps = slot.Params.ToList();
         var fallible = convention.IsFallible(slot.Returns, ps);
         if (fallible) ps = ps[..^1];
+
+        var (expanded, bag) = ExpandedBag(model, slot);
+        if (expanded is not null)
+            ps = ps.SelectMany(p => p == expanded
+                ? bag!.Fields.Select(f => new ApiParam(f.Name, f.Type, f.Tags, f.Doc))
+                : (IEnumerable<ApiParam>)[p]).ToList();
 
         var isTry = slot.Has("try");
 
@@ -134,6 +171,10 @@ public static class Classifier
             : SlotShape.Plain;
 
         return new ClassifiedSlot(slot, shape, fallible, outParam, seqParam, countParam,
-            isTry ? allOut : tupleOut ?? [], ps);
+            isTry ? allOut : tupleOut ?? [], ps)
+        {
+            ExpandedParam = expanded,
+            ExpandedStruct = bag,
+        };
     }
 }

@@ -480,7 +480,8 @@ public static class CSharpBackend
         o.Add("}");
         o.Add("");
 
-        var closures = VtableClosures(model, vtable);
+        var closures = VtableClosures(model, slots);
+        var closureGroups = VtableClosureGroups(model, slots);
         foreach (var cb in closures.DistinctBy(c => c.Delegate))
             RenderClosureDelegate(model, o, cb);
 
@@ -512,20 +513,23 @@ public static class CSharpBackend
             o.Add($"    private readonly Dictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
         }
 
-        foreach (var cb in closures.Where(c => c.Lifetime == ClosureLifetime.Retained))
+        foreach (var cg in closureGroups.Where(c => c.Lifetime == ClosureLifetime.Retained))
         {
             o.Add("");
             o.Add("    /// <summary>");
-            o.Add(cb.RetainKey is not null
+            o.Add(cg.RetainKey is not null
                 ? "    /// Keeps every registered handler reachable, one per key the slot registers"
                     + " against."
-                : "    /// Keeps the registered handler reachable.");
+                : cg.Shared
+                    ? "    /// Keeps the registered handlers reachable, all of them through the one"
+                        + " context they share."
+                    : "    /// Keeps the registered handler reachable.");
             o.Add("    /// The engine holds only an opaque pointer to it, which stops nothing on this");
             o.Add("    /// side from collecting or moving the object before the engine calls back into it.");
             o.Add("    /// </summary>");
-            o.Add(cb.RetainKey is { } key
-                ? $"    private readonly Dictionary<{CsType(model, key.Type)}, GCHandle> {RetainedField(cb)} = new();"
-                : $"    private GCHandle {RetainedField(cb)};");
+            o.Add(cg.RetainKey is { } key
+                ? $"    private readonly Dictionary<{CsType(model, key.Type)}, GCHandle> {cg.Retained} = new();"
+                : $"    private GCHandle {cg.Retained};");
         }
 
         if (closures.Any(c => c.ErrorLane is null))
@@ -626,15 +630,15 @@ public static class CSharpBackend
             o.Add("        foreach (var rooted in _rooted.Values) rooted.Free();");
             o.Add("        _rooted.Clear();");
         }
-        foreach (var cb in closures.Where(c => c.Lifetime == ClosureLifetime.Retained))
+        foreach (var cg in closureGroups.Where(c => c.Lifetime == ClosureLifetime.Retained))
         {
-            if (cb.RetainKey is not null)
+            if (cg.RetainKey is not null)
             {
-                o.Add($"        foreach (var retained in {RetainedField(cb)}.Values) retained.Free();");
-                o.Add($"        {RetainedField(cb)}.Clear();");
+                o.Add($"        foreach (var retained in {cg.Retained}.Values) retained.Free();");
+                o.Add($"        {cg.Retained}.Clear();");
             }
             else
-                o.Add($"        if ({RetainedField(cb)}.IsAllocated) {RetainedField(cb)}.Free();");
+                o.Add($"        if ({cg.Retained}.IsAllocated) {cg.Retained}.Free();");
         }
         o.Add("        if (_borrowed) { _native = null; return; }");
         if (shutdownSlot is not null)
@@ -750,15 +754,17 @@ public static class CSharpBackend
     static string ManagedLane(ApiModel model, ApiParam lane) =>
         lane.Has("utf8") ? "string" : IsBoolType(lane.Type) ? "bool" : CsType(model, lane.Type);
 
-    static IReadOnlyList<CallbackPair> CallbackPairs(ApiModel model, ApiSlot slot)
+    static IReadOnlyList<CallbackPair> CallbackPairs(ApiModel model, ClassifiedSlot cs)
     {
+        var slot = cs.Slot;
+        var scope = cs.PublicParams;
         var pairs = new List<CallbackPair>();
-        foreach (var fn in slot.Params.Where(p => p.Has("closure")))
+        foreach (var fn in scope.Where(p => p.Has("closure")))
         {
             var ctxName = fn.TagValue("closure")
                 ?? throw new InvalidOperationException(
                     $"{slot.Name}.{fn.Name}: [closure] must name the context parameter, as [closure:<name>]");
-            var ctx = slot.Params.FirstOrDefault(p => p.Name == ctxName)
+            var ctx = scope.FirstOrDefault(p => p.Name == ctxName)
                 ?? throw new InvalidOperationException(
                     $"{slot.Name}.{fn.Name}: [closure:{ctxName}] names no parameter of this slot");
 
@@ -786,7 +792,7 @@ public static class CSharpBackend
             ApiParam? retainKey = null;
             if (fn.TagValue("retained") is { } keyName)
             {
-                retainKey = slot.Params.FirstOrDefault(p => p.Name == keyName)
+                retainKey = scope.FirstOrDefault(p => p.Name == keyName)
                     ?? throw new InvalidOperationException(
                         $"{slot.Name}.{fn.Name}: [retained:{keyName}] names no parameter of this slot");
             }
@@ -817,12 +823,63 @@ public static class CSharpBackend
             : $"{Idioms.Pascal(slot.Name)}{Idioms.Pascal(fn.Name!)}Trampoline";
 
     /// <summary>The field that keeps a retained closure reachable for as long as the engine holds it.</summary>
-    static string RetainedField(CallbackPair pair) =>
-        $"_retained{Idioms.Pascal(pair.Fn.Name!)}";
+    /// <summary>
+    /// Every closure reached through one context parameter. A context is a single
+    /// pointer, so the closures sharing it have to share the one object it points at:
+    /// allocating a handle per closure would hand each trampoline whichever handle the
+    /// call happened to write last. A group of one needs no such object and keeps the
+    /// delegate as the handle's target directly.
+    /// </summary>
+    internal sealed record ClosureGroup(ApiParam Ctx, IReadOnlyList<CallbackPair> Pairs, string StateType)
+    {
+        public bool Shared => Pairs.Count > 1;
+
+        string Basis => (Shared ? Ctx.Name : Pairs[0].Fn.Name)!;
+
+        /// <summary>The local holding the one GC root this group's context points at.</summary>
+        public string Handle => $"{Idioms.Ident(Basis)}Handle";
+
+        /// <summary>The field keeping that root reachable for as long as the engine may call back.</summary>
+        public string Retained => $"_retained{Idioms.Pascal(Basis)}";
+
+        /// <summary>
+        /// How long the shared object has to stay reachable: as long as its longest-lived
+        /// member, since freeing it at the first member's end would leave the others
+        /// pointing at collected memory.
+        /// </summary>
+        public ClosureLifetime Lifetime => Pairs.Any(p => p.Lifetime == ClosureLifetime.Retained)
+            ? ClosureLifetime.Retained
+            : ClosureLifetime.Scoped;
+
+        public ApiParam? RetainKey => Pairs[0].RetainKey;
+
+        /// <summary>How the state object names the slot holding one of the grouped delegates.</summary>
+        public static string Field(CallbackPair pair) => Idioms.Pascal(pair.Fn.Name!);
+    }
+
+    static IReadOnlyList<ClosureGroup> ClosureGroups(ApiSlot slot, IReadOnlyList<CallbackPair> pairs)
+    {
+        var groups = pairs
+            .GroupBy(p => p.Ctx)
+            .Select(g => new ClosureGroup(g.Key, g.ToList(), $"{Idioms.Pascal(slot.Name)}Closures"))
+            .ToList();
+
+        foreach (var g in groups.Where(x => x.Shared))
+        {
+            if (g.Pairs.Any(p => p.RetainKey is not null))
+                throw new InvalidOperationException(
+                    $"{slot.Name}: a closure sharing the context '{g.Ctx.Name}' is keyed by [retained:<key>], "
+                    + "which needs a root per key while the context has exactly one");
+        }
+        return groups;
+    }
+
+    static IReadOnlyList<ClosureGroup> VtableClosureGroups(ApiModel model, IEnumerable<ClassifiedSlot> slots) =>
+        slots.SelectMany(s => ClosureGroups(s.Slot, CallbackPairs(model, s))).ToList();
 
     /// <summary>Every closure a vtable projects, across all its slots.</summary>
-    static IReadOnlyList<CallbackPair> VtableClosures(ApiModel model, ApiStruct vtable) =>
-        vtable.Slots.SelectMany(s => CallbackPairs(model, s)).ToList();
+    static IReadOnlyList<CallbackPair> VtableClosures(ApiModel model, IEnumerable<ClassifiedSlot> slots) =>
+        slots.SelectMany(s => CallbackPairs(model, s)).ToList();
 
     /// <summary>Lanes the delegate carries: everything but the context and the error channel.</summary>
     static IEnumerable<int> CarriedLanes(CallbackPair pair) =>
@@ -866,7 +923,22 @@ public static class CSharpBackend
     /// rethrown by the call site once the native stack has unwound, which only holds
     /// because a closure without a channel is never allowed to outlive its call.
     /// </summary>
-    static void RenderTrampoline(ApiModel model, List<string> o, CallbackPair pair)
+    /// <summary>
+    /// The object a shared context points at: one field per closure reached through it,
+    /// so a single GC root answers for all of them.
+    /// </summary>
+    static void RenderClosureState(List<string> o, ClosureGroup group)
+    {
+        o.Add("    /// <summary>The handlers reached through one shared context pointer.</summary>");
+        o.Add($"    private sealed class {group.StateType}");
+        o.Add("    {");
+        foreach (var p in group.Pairs)
+            o.Add($"        public {p.Delegate}? {ClosureGroup.Field(p)};");
+        o.Add("    }");
+        o.Add("");
+    }
+
+    static void RenderTrampoline(ApiModel model, List<string> o, CallbackPair pair, ClosureGroup group)
     {
         var lanes = pair.Callback.Lanes;
         var ps = lanes.Select((l, i) => i == pair.CtxLane
@@ -885,7 +957,10 @@ public static class CSharpBackend
         o.Add("    {");
         o.Add("        try");
         o.Add("        {");
-        o.Add($"            if (GCHandle.FromIntPtr((nint)ctx).Target is {pair.Delegate} handler)");
+        o.Add(group.Shared
+            ? $"            if (GCHandle.FromIntPtr((nint)ctx).Target is {group.StateType} state"
+                + $" && state.{ClosureGroup.Field(pair)} is {{ }} handler)"
+            : $"            if (GCHandle.FromIntPtr((nint)ctx).Target is {pair.Delegate} handler)");
         o.Add($"                {(returns ? $"return handler({args});" : $"handler({args});")}");
         if (returns) o.Add("            return false;");
         o.Add("        }");
@@ -931,7 +1006,8 @@ public static class CSharpBackend
         var slot = cs.Slot;
         var name = slot.TagValue("name") ?? Idioms.Pascal(slot.Name);
         var lanes = VectorLanes(slot.Params);
-        var callbacks = CallbackPairs(model, slot);
+        var callbacks = CallbackPairs(model, cs);
+        var groups = ClosureGroups(slot, callbacks);
 
         if (callbacks.Count > 0 && cs.Shape is not SlotShape.Fallible)
             throw new InvalidOperationException(
@@ -1129,7 +1205,12 @@ public static class CSharpBackend
                 var byReturn = convention.SignalsFailureByReturn(slot.Returns);
                 var retType = byReturn ? "void" : CsType(model, slot.Returns);
                 var sig = Sig(args);
-                var call = string.Concat(args.Select(p => ", " + CallArg(p)));
+                var bagLocal = cs.ExpandedParam is null ? null : Idioms.Ident(cs.ExpandedParam.Name!);
+                var call = bagLocal is null
+                    ? string.Concat(args.Select(p => ", " + CallArg(p)))
+                    : string.Concat(cs.Slot.Params
+                        .Where(p => !cs.Fallible || p != cs.Slot.Params[^1])
+                        .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}" : CallArg(p))));
                 Declare(o, decls, XmlDoc("    ", slot.Doc, DocParams(args),
                     byReturn ? slot.ReturnDoc : null, throwsOnFail: true).TrimEnd(),
                     $"{retType} {name}({sig})");
@@ -1140,13 +1221,39 @@ public static class CSharpBackend
                 var rooted = args.Where(p => p.Has("rooted")).ToList();
                 foreach (var rp in rooted)
                     o.Add($"{fInd}var {Idioms.Ident(rp.Name!)}Handle = System.Runtime.InteropServices.GCHandle.Alloc({Idioms.Ident(rp.Name!)});");
+
+                void BuildBag()
+                {
+                    if (bagLocal is null) return;
+                    o.Add($"{fInd}{cs.ExpandedStruct!.Name} {bagLocal} = default;");
+                    foreach (var f in cs.ExpandedStruct.Fields)
+                    {
+                        var arg = args.First(a => a.Name == f.Name);
+                        o.Add($"{fInd}{bagLocal}.{f.Name} = {CallArg(arg)};");
+                    }
+                }
+
                 if (callbacks.Count > 0)
                 {
-                    var scoped = callbacks.Where(c => c.Lifetime == ClosureLifetime.Scoped).ToList();
+                    var scoped = groups.Where(g => g.Lifetime == ClosureLifetime.Scoped).ToList();
                     var parks = callbacks.Any(c => c.ErrorLane is null);
-                    foreach (var cb in callbacks)
-                        o.Add($"{fInd}var {Idioms.Ident(cb.Fn.Name!)}Handle = {Idioms.Ident(cb.Fn.Name!)} is null"
-                            + $" ? default : GCHandle.Alloc({Idioms.Ident(cb.Fn.Name!)});");
+                    foreach (var g in groups)
+                    {
+                        if (!g.Shared)
+                        {
+                            var fn = Idioms.Ident(g.Pairs[0].Fn.Name!);
+                            o.Add($"{fInd}var {g.Handle} = {fn} is null ? default : GCHandle.Alloc({fn});");
+                            continue;
+                        }
+                        var inits = string.Join(", ", g.Pairs.Select(p =>
+                            $"{ClosureGroup.Field(p)} = {Idioms.Ident(p.Fn.Name!)}"));
+                        var allNull = string.Join(" && ", g.Pairs.Select(p =>
+                            $"{Idioms.Ident(p.Fn.Name!)} is null"));
+                        o.Add($"{fInd}var {g.Handle} = {allNull}");
+                        o.Add($"{fInd}    ? default");
+                        o.Add($"{fInd}    : GCHandle.Alloc(new {g.StateType} {{ {inits} }});");
+                    }
+                    BuildBag();
                     if (parks) o.Add($"{fInd}s_parkedCallbackException = null;");
                     o.Add($"{fInd}ke_error* err = null;");
                     o.Add($"{fInd}bool ok;");
@@ -1159,16 +1266,16 @@ public static class CSharpBackend
                     {
                         o.Add($"{fInd}finally");
                         o.Add($"{fInd}{{");
-                        foreach (var cb in scoped)
-                            o.Add($"{fInd}    if ({Idioms.Ident(cb.Fn.Name!)}Handle.IsAllocated) {Idioms.Ident(cb.Fn.Name!)}Handle.Free();");
+                        foreach (var g in scoped)
+                            o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
                         o.Add($"{fInd}}}");
                     }
                     else
                     {
                         o.Add($"{fInd}catch");
                         o.Add($"{fInd}{{");
-                        foreach (var cb in callbacks)
-                            o.Add($"{fInd}    if ({Idioms.Ident(cb.Fn.Name!)}Handle.IsAllocated) {Idioms.Ident(cb.Fn.Name!)}Handle.Free();");
+                        foreach (var g in groups)
+                            o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
                         o.Add($"{fInd}    throw;");
                         o.Add($"{fInd}}}");
                     }
@@ -1180,39 +1287,44 @@ public static class CSharpBackend
                         o.Add($"{fInd}    throw parked;");
                         o.Add($"{fInd}}}");
                     }
-                    var retained = callbacks.Where(c => c.Lifetime == ClosureLifetime.Retained).ToList();
+                    var retained = groups.Where(g => g.Lifetime == ClosureLifetime.Retained).ToList();
                     if (retained.Count == 0)
                         o.Add($"{fInd}KernelError.ThrowIfFailed(ok, err, \"{slot.Name}\");");
                     else
                     {
                         o.Add($"{fInd}if (!ok)");
                         o.Add($"{fInd}{{");
-                        foreach (var cb in retained)
-                            o.Add($"{fInd}    if ({Idioms.Ident(cb.Fn.Name!)}Handle.IsAllocated) {Idioms.Ident(cb.Fn.Name!)}Handle.Free();");
+                        foreach (var g in retained)
+                            o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
                         o.Add($"{fInd}    throw KernelError.FromNative(err, \"{slot.Name}\");");
                         o.Add($"{fInd}}}");
-                        foreach (var cb in retained)
+                        foreach (var g in retained)
                         {
-                            var field = RetainedField(cb);
-                            if (cb.RetainKey is { } key)
+                            var field = g.Retained;
+                            if (g.RetainKey is { } key)
                             {
                                 var k = Idioms.Ident(key.Name!);
-                                o.Add($"{fInd}if ({field}.Remove({k}, out var replaced{Idioms.Pascal(cb.Fn.Name!)})) replaced{Idioms.Pascal(cb.Fn.Name!)}.Free();");
-                                o.Add($"{fInd}{field}[{k}] = {Idioms.Ident(cb.Fn.Name!)}Handle;");
+                                var replaced = $"replaced{Idioms.Pascal(g.Pairs[0].Fn.Name!)}";
+                                o.Add($"{fInd}if ({field}.Remove({k}, out var {replaced})) {replaced}.Free();");
+                                o.Add($"{fInd}{field}[{k}] = {g.Handle};");
                             }
                             else
                             {
                                 o.Add($"{fInd}if ({field}.IsAllocated) {field}.Free();");
-                                o.Add($"{fInd}{field} = {Idioms.Ident(cb.Fn.Name!)}Handle;");
+                                o.Add($"{fInd}{field} = {g.Handle};");
                             }
                         }
                     }
                     for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                     o.Add("    }");
                     o.Add("");
-                    foreach (var cb in callbacks) RenderTrampoline(model, o, cb);
+                    foreach (var g in groups.Where(x => x.Shared)) RenderClosureState(o, g);
+                    foreach (var g in groups)
+                        foreach (var cb in g.Pairs)
+                            RenderTrampoline(model, o, cb, g);
                     return;
                 }
+                BuildBag();
                 o.Add($"{fInd}ke_error* err = null;");
                 if (byReturn && rooted.Count > 0)
                 {
@@ -1285,8 +1397,8 @@ public static class CSharpBackend
         string CallArg(ApiParam p) =>
             callbacks.FirstOrDefault(c => c.Fn == p) is { } fnOf
                 ? $"{Idioms.Ident(p.Name!)} is null ? null : ({NativeFnPtr(model, fnOf)})&{fnOf.Trampoline}"
-            : callbacks.FirstOrDefault(c => c.Ctx == p) is { } ctxOf
-                ? $"(void*)GCHandle.ToIntPtr({Idioms.Ident(ctxOf.Fn.Name!)}Handle)"
+            : groups.FirstOrDefault(g => g.Ctx == p) is { } ctxOf
+                ? $"(void*)GCHandle.ToIntPtr({ctxOf.Handle})"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
             : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
             : p.Has("ctx") ? $"({CTypes.Normalize(p.Type)}){Idioms.Ident(p.Name!)}"
