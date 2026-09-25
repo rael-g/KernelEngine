@@ -500,7 +500,7 @@ public static class CSharpBackend
         o.Add("");
 
         var closures = VtableClosures(model, slots);
-        var closureGroups = VtableClosureGroups(model, slots);
+        var closureGroups = VtableClosureGroups(model, slots, typeName);
         foreach (var cb in closures.DistinctBy(c => c.Delegate))
             RenderClosureDelegate(model, o, cb);
 
@@ -564,6 +564,36 @@ public static class CSharpBackend
             o.Add("    /// </summary>");
             o.Add("    [ThreadStatic]");
             o.Add("    private static Exception? s_parkedCallbackException;");
+        }
+
+        if (closureGroups.Any(c => c.NeedsOwner))
+        {
+            o.Add("");
+            o.Add("    /// <summary>");
+            o.Add("    /// What retained handlers of this provider have thrown and not yet been told");
+            o.Add("    /// about. A retained handler outlives the call that registered it, so there is");
+            o.Add("    /// no call left to rethrow at; it reports failure through its own channel and");
+            o.Add("    /// leaves the exception here for whichever call observes that failure. A handler");
+            o.Add("    /// may run on any thread the engine calls it from, and may fail more than once");
+            o.Add("    /// before anyone asks, so nothing here is ever discarded unread.");
+            o.Add("    /// </summary>");
+            o.Add("    private readonly System.Collections.Concurrent.ConcurrentQueue<Exception>"
+                + " _callbackFailures = new();");
+            o.Add("");
+            o.Add("    /// <summary>");
+            o.Add("    /// Throws what retained handlers have reported since the last drain, as they");
+            o.Add("    /// threw it, or returns when none have. More than one may have failed before");
+            o.Add("    /// anyone asked, so they are reported together rather than the last one winning.");
+            o.Add("    /// </summary>");
+            o.Add("    private void DrainCallbackFailures()");
+            o.Add("    {");
+            o.Add("        var collected = new List<Exception>();");
+            o.Add("        while (_callbackFailures.TryDequeue(out var failure)) collected.Add(failure);");
+            o.Add("        if (collected.Count == 0) return;");
+            o.Add("        throw new InvalidOperationException(\"A handler registered with this"
+                + " provider threw\",");
+            o.Add("            collected.Count == 1 ? collected[0] : new AggregateException(collected));");
+            o.Add("    }");
         }
         o.Add("");
         o.Add($"    private {vtable.Name}* Handle => _native != null ? _native");
@@ -634,7 +664,7 @@ public static class CSharpBackend
                 RenderCallbackMethod(o, decls, vtable, cs, classified, typeName, convention);
                 continue;
             }
-            RenderSlotMethod(model, o, decls, cs, convention);
+            RenderSlotMethod(model, o, decls, cs, convention, typeName, Drains(slots));
         }
 
         foreach (var slot in vtable.Slots.Where(s => s.Has("interns")))
@@ -913,9 +943,23 @@ public static class CSharpBackend
     /// delegate as the handle's target directly.
     /// </summary>
     internal sealed record ClosureGroup(ApiParam Ctx, IReadOnlyList<CallbackPair> Pairs, string StateType,
-        string ReturnType)
+        string ReturnType, string Owner, bool OwnerDrains)
     {
         public bool Shared => Pairs.Count > 1;
+
+        /// <summary>
+        /// Whether the trampoline has to reach the provider that registered the closure.
+        /// A retained handler reporting through a lane of its own outlives the call that
+        /// registered it, so the exception it threw has nowhere to be rethrown at that
+        /// call; it is queued on the provider instead, and the slot that observes the
+        /// failure raises it. Reaching the provider means the context must point at an
+        /// object holding it rather than at the bare delegate.
+        /// </summary>
+        public bool NeedsOwner => OwnerDrains && Pairs.Any(p =>
+            p.Lifetime == ClosureLifetime.Retained && p.ErrorLane is not null);
+
+        /// <summary>Whether the context points at a generated state object rather than the delegate itself.</summary>
+        public bool UsesState => Shared || NeedsOwner;
 
         string Basis => (Shared ? Ctx.Name : Pairs[0].Fn.Name)!;
 
@@ -956,12 +1000,13 @@ public static class CSharpBackend
         public static string Field(CallbackPair pair) => Idioms.Pascal(pair.Fn.Name!);
     }
 
-    static IReadOnlyList<ClosureGroup> ClosureGroups(ApiModel model, ApiSlot slot, IReadOnlyList<CallbackPair> pairs)
+    static IReadOnlyList<ClosureGroup> ClosureGroups(ApiModel model, ApiSlot slot, IReadOnlyList<CallbackPair> pairs,
+        string owner, bool ownerDrains)
     {
         var groups = pairs
             .GroupBy(p => p.Ctx)
             .Select(g => new ClosureGroup(g.Key, g.ToList(), $"{Idioms.Pascal(slot.Name)}Closures",
-                CsType(model, slot.Returns)))
+                CsType(model, slot.Returns), owner, ownerDrains))
             .ToList();
 
         foreach (var g in groups.Where(x => x.Shared))
@@ -974,8 +1019,21 @@ public static class CSharpBackend
         return groups;
     }
 
-    static IReadOnlyList<ClosureGroup> VtableClosureGroups(ApiModel model, IEnumerable<ClassifiedSlot> slots) =>
-        slots.SelectMany(s => ClosureGroups(model, s.Slot, CallbackPairs(model, s))).ToList();
+    static IReadOnlyList<ClosureGroup> VtableClosureGroups(ApiModel model, IEnumerable<ClassifiedSlot> slots,
+        string owner)
+    {
+        var drains = Drains(slots);
+        return slots
+            .SelectMany(s => ClosureGroups(model, s.Slot, CallbackPairs(model, s), owner, drains))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Whether any slot of the vtable is declared as the one that answers for a retained
+    /// handler's failure. Without one there is no call to raise the exception at, so the
+    /// provider keeps no queue and the handler's own error channel stays its only report.
+    /// </summary>
+    static bool Drains(IEnumerable<ClassifiedSlot> slots) => slots.Any(s => s.Slot.Has("drains"));
 
     /// <summary>Every closure a vtable projects, across all its slots.</summary>
     static IReadOnlyList<CallbackPair> VtableClosures(ApiModel model, IEnumerable<ClassifiedSlot> slots) =>
@@ -1029,9 +1087,12 @@ public static class CSharpBackend
     /// </summary>
     static void RenderClosureState(List<string> o, ClosureGroup group)
     {
-        o.Add("    /// <summary>The handlers reached through one shared context pointer.</summary>");
+        o.Add(group.Shared
+            ? "    /// <summary>The handlers reached through one shared context pointer.</summary>"
+            : "    /// <summary>The handler, and the provider a failure of it is reported to.</summary>");
         o.Add($"    private sealed class {group.StateType}");
         o.Add("    {");
+        if (group.NeedsOwner) o.Add($"        public required {group.Owner} Owner;");
         foreach (var p in group.Pairs)
             o.Add($"        public {p.Delegate}? {ClosureGroup.Field(p)};");
         o.Add("    }");
@@ -1057,7 +1118,7 @@ public static class CSharpBackend
         o.Add("    {");
         o.Add("        try");
         o.Add("        {");
-        o.Add(group.Shared
+        o.Add(group.UsesState
             ? $"            if (GCHandle.FromIntPtr((nint)ctx).Target is {group.StateType} state"
                 + $" && state.{ClosureGroup.Field(pair)} is {{ }} handler)"
             : $"            if (GCHandle.FromIntPtr((nint)ctx).Target is {pair.Delegate} handler)");
@@ -1068,6 +1129,12 @@ public static class CSharpBackend
         o.Add("        {");
         if (pair.ErrorLane is { } errLane)
         {
+            if (group.NeedsOwner)
+            {
+                o.Add("            if (GCHandle.FromIntPtr((nint)ctx).Target is"
+                    + $" {group.StateType} failed)");
+                o.Add("                failed.Owner._callbackFailures.Enqueue(ex);");
+            }
             o.Add($"            KernelError.ToNative(arg{errLane}, ex, \"{pair.Callback.Name}\");");
             if (returns) o.Add("            return false;");
         }
@@ -1101,14 +1168,14 @@ public static class CSharpBackend
     }
 
     static void RenderSlotMethod(ApiModel model, List<string> o, List<MemberDecl>? decls,
-        ClassifiedSlot cs, Convention convention)
+        ClassifiedSlot cs, Convention convention, string owner, bool ownerDrains)
     {
         var slot = cs.Slot;
         var name = (slot.TagValue("name") ?? Idioms.Pascal(slot.Name))
             + (cs.Sequences.Count > 0 ? "Raw" : "");
         var lanes = VectorLanes(slot.Params);
         var callbacks = CallbackPairs(model, cs);
-        var groups = ClosureGroups(model, slot, callbacks);
+        var groups = ClosureGroups(model, slot, callbacks, owner, ownerDrains);
 
         if (callbacks.Count > 0 && cs.Shape is not SlotShape.Fallible)
             throw new InvalidOperationException(
@@ -1302,14 +1369,16 @@ public static class CSharpBackend
                     var parks = callbacks.Any(c => c.Parks && !c.Teardown);
                     foreach (var g in groups)
                     {
-                        if (!g.Shared)
+                        if (!g.UsesState)
                         {
                             var fn = Idioms.Ident(g.Pairs[0].Fn.Name!);
                             o.Add($"{fInd}var {g.Handle} = {fn} is null ? default : GCHandle.Alloc({fn});");
                             continue;
                         }
-                        var inits = string.Join(", ", g.Pairs.Select(p =>
-                            $"{ClosureGroup.Field(p)} = {Idioms.Ident(p.Fn.Name!)}"));
+                        var inits = string.Join(", ", g.Pairs
+                            .Select(p => $"{ClosureGroup.Field(p)} = {Idioms.Ident(p.Fn.Name!)}")
+                            .Prepend(g.NeedsOwner ? "Owner = this" : null)
+                            .Where(x => x is not null));
                         var allNull = string.Join(" && ", g.Pairs.Select(p =>
                             $"{Idioms.Ident(p.Fn.Name!)} is null"));
                         o.Add($"{fInd}var {g.Handle} = {allNull}");
@@ -1392,7 +1461,7 @@ public static class CSharpBackend
                     for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                     o.Add("    }");
                     o.Add("");
-                    foreach (var g in groups.Where(x => x.Shared)) RenderClosureState(o, g);
+                    foreach (var g in groups.Where(x => x.UsesState)) RenderClosureState(o, g);
                     foreach (var g in groups)
                         foreach (var cb in g.Pairs)
                             RenderTrampoline(model, o, cb, g);
@@ -1412,6 +1481,14 @@ public static class CSharpBackend
                     o.Add($"{fInd}}}");
                     foreach (var rp in rooted)
                         o.Add($"{fInd}_rooted[{Idioms.Ident(rp.TagValue("rooted")!)}] = {Idioms.Ident(rp.Name!)}Handle;");
+                }
+                else if (byReturn && slot.Has("drains"))
+                {
+                    var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
+                        + (slot.Returns == "ke_bool" ? " != 0" : "");
+                    o.Add($"{fInd}if (!{boolCall} && _callbackFailures.IsEmpty)");
+                    o.Add($"{fInd}    throw KernelError.FromNative(err, \"{slot.Name}\");");
+                    o.Add($"{fInd}DrainCallbackFailures();");
                 }
                 else if (byReturn)
                 {

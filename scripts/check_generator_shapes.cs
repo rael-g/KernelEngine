@@ -190,6 +190,33 @@ Expect("an expanded params bag flattens the call and its shared context roots on
         ["slots"] = new JsonArray(),
     }]);
 
+// A retained handler reporting through a lane of its own: the registering call has
+// already returned by the time it fails, so there is nothing left to rethrow at. The
+// exception is queued on the provider and raised by the slot that observes the failure,
+// which is why the context has to point at an object naming that provider rather than at
+// the delegate. Filling the lane and dropping the exception loses the type, the message
+// and the stack of whatever actually went wrong.
+Expect("a retained handler's exception is queued on its provider and raised where the failure is observed",
+    Vtable("ke_probe",
+        Slot("register_apply", "bool",
+            Param("cid", "uint32_t"),
+            Param("apply", "ke_probe_apply_fn", "closure:ctx,retained:cid"),
+            Param("ctx", "void *"),
+            Param("out_error", "ke_error **")),
+        Slot("run", "bool", "drains", Param("out_error", "ke_error **"))),
+    contains: ["private readonly System.Collections.Concurrent.ConcurrentQueue<Exception> _callbackFailures = new();",
+               "private void DrainCallbackFailures()",
+               "GCHandle.Alloc(new RegisterApplyClosures { Owner = this, Apply = apply })",
+               "public required Probe Owner;",
+               "failed.Owner._callbackFailures.Enqueue(ex);",
+               "if (!Handle->run(Handle, &err) && _callbackFailures.IsEmpty)",
+               "DrainCallbackFailures();"],
+    absent: ["GCHandle.Alloc(apply)"],
+    aliases: new() { ["ke_probe_apply_fn"] = "bool (*)(void *, uint32_t, ke_error **)" },
+    callbacks: [Callback("ke_probe_apply_fn", "bool",
+        Param("ctx", "void *", "context"), Param("tick", "uint32_t"),
+        Param("out_error", "ke_error **"))]);
+
 // A pointer+count pair is a property of the parameter, not of the slot: a slot may
 // carry several, and each one still pins and passes its own length. Treating "carries a
 // sequence" as the slot's shape is what caps a slot at one array and blocks it from

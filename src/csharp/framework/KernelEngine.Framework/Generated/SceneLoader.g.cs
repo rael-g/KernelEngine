@@ -34,6 +34,30 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
     /// </summary>
     private GCHandle _retainedFactory;
 
+    /// <summary>
+    /// What retained handlers of this provider have thrown and not yet been told
+    /// about. A retained handler outlives the call that registered it, so there is
+    /// no call left to rethrow at; it reports failure through its own channel and
+    /// leaves the exception here for whichever call observes that failure. A handler
+    /// may run on any thread the engine calls it from, and may fail more than once
+    /// before anyone asks, so nothing here is ever discarded unread.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentQueue<Exception> _callbackFailures = new();
+
+    /// <summary>
+    /// Throws what retained handlers have reported since the last drain, as they
+    /// threw it, or returns when none have. More than one may have failed before
+    /// anyone asked, so they are reported together rather than the last one winning.
+    /// </summary>
+    private void DrainCallbackFailures()
+    {
+        var collected = new List<Exception>();
+        while (_callbackFailures.TryDequeue(out var failure)) collected.Add(failure);
+        if (collected.Count == 0) return;
+        throw new InvalidOperationException("A handler registered with this provider threw",
+            collected.Count == 1 ? collected[0] : new AggregateException(collected));
+    }
+
     private ke_scene_loader* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(SceneLoader));
 
@@ -57,7 +81,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         _borrowed = borrowed;
     }
 
-    /// <summary>Loads the scene at instantiating every entity it declares.</summary>
+    /// <summary>Loads the scene at instantiating every entity it declares. This is where a script factory that refused an entity is answered for.</summary>
     /// <param name="path">Path to the scene file.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void Load(string path)
@@ -66,7 +90,9 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         fixed (byte* pathPtr = pathBytes)
         {
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->load(Handle, (sbyte*)pathPtr, &err), err, "load");
+            if (!Handle->load(Handle, (sbyte*)pathPtr, &err) && _callbackFailures.IsEmpty)
+                throw KernelError.FromNative(err, "load");
+            DrainCallbackFailures();
         }
     }
 
@@ -75,7 +101,9 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
     /// <exception cref="KernelError">The native call failed.</exception>
     public void RegisterScriptFactory(ScriptFactory? factory)
     {
-        var factoryHandle = factory is null ? default : GCHandle.Alloc(factory);
+        var factoryHandle = factory is null
+            ? default
+            : GCHandle.Alloc(new RegisterScriptFactoryClosures { Owner = this, Factory = factory });
         ke_error* err = null;
         bool ok;
         try
@@ -96,17 +124,26 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         _retainedFactory = factoryHandle;
     }
 
+    /// <summary>The handler, and the provider a failure of it is reported to.</summary>
+    private sealed class RegisterScriptFactoryClosures
+    {
+        public required SceneLoader Owner;
+        public ScriptFactory? Factory;
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static bool RegisterScriptFactoryTrampoline(void* ctx, ulong arg1, sbyte* arg2, ke_error** arg3)
     {
         try
         {
-            if (GCHandle.FromIntPtr((nint)ctx).Target is ScriptFactory handler)
+            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterScriptFactoryClosures state && state.Factory is { } handler)
                 return handler(arg1, Marshal.PtrToStringUTF8((nint)arg2) ?? "");
             return false;
         }
         catch (Exception ex)
         {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterScriptFactoryClosures failed)
+                failed.Owner._callbackFailures.Enqueue(ex);
             KernelError.ToNative(arg3, ex, "ke_script_factory_func");
             return false;
         }
