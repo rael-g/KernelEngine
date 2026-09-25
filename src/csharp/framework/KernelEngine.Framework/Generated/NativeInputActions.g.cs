@@ -16,6 +16,10 @@ public unsafe interface INativeInputActions
     ke_input_actions* Native { get; }
 }
 
+/// <summary>Reports one phase transition of one binding.</summary>
+/// <param name="@event">The transition, naming the action it belongs to.</param>
+public unsafe delegate void InputActionEvent(ke_input_action_event @event);
+
 
 public unsafe partial class NativeInputActions : IDisposable, INativeInputActions
 {
@@ -117,7 +121,7 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
 
     /// <summary>Runs one frame of binding evaluation against updating polling state and firing for each phase transition. A null updates polling only.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void Evaluate(ke_input_snapshot* snapshot, Action<ke_input_action_event>? onEvent)
+    public void Evaluate(ke_input_snapshot* snapshot, InputActionEvent? onEvent)
     {
         var onEventHandle = onEvent is null ? default : GCHandle.Alloc(onEvent);
         s_parkedCallbackException = null;
@@ -144,7 +148,8 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
     {
         try
         {
-            if (GCHandle.FromIntPtr((nint)ctx).Target is Action<ke_input_action_event> handler) handler(arg1);
+            if (GCHandle.FromIntPtr((nint)ctx).Target is InputActionEvent handler)
+                handler(arg1);
         }
         catch (Exception ex)
         {

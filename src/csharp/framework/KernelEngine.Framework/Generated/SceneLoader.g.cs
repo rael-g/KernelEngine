@@ -15,12 +15,24 @@ public unsafe interface INativeSceneLoader
     ke_scene_loader* Native { get; }
 }
 
+/// <summary>Builds and binds the script an entity's declared type names.</summary>
+/// <param name="entity">The entity the script is bound to.</param>
+/// <param name="typeName">Qualified node type name, as the scene file spells it.</param>
+public unsafe delegate bool ScriptFactory(ulong entity, string typeName);
+
 
 public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
 {
     private ke_scene_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_scene_loader*, void> _destroy;
     private readonly bool _borrowed;
+
+    /// <summary>
+    /// Keeps the registered handler reachable.
+    /// The engine holds only an opaque pointer to it, which stops nothing on this
+    /// side from collecting or moving the object before the engine calls back into it.
+    /// </summary>
+    private GCHandle _retainedFactory;
 
     private ke_scene_loader* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(SceneLoader));
@@ -45,11 +57,67 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         _borrowed = borrowed;
     }
 
+    /// <summary>Loads the scene at instantiating every entity it declares.</summary>
+    /// <param name="path">Path to the scene file.</param>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    public void Load(string path)
+    {
+        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        fixed (byte* pathPtr = pathBytes)
+        {
+            ke_error* err = null;
+            KernelError.ThrowIfFailed(Handle->load(Handle, (sbyte*)pathPtr, &err), err, "load");
+        }
+    }
+
+    /// <summary>Registers the factory consulted for every entity that declares a type. Replaces any factory registered before it.</summary>
+    /// <param name="factory">Consulted once per typed entity.</param>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    public void RegisterScriptFactory(ScriptFactory? factory)
+    {
+        var factoryHandle = factory is null ? default : GCHandle.Alloc(factory);
+        ke_error* err = null;
+        bool ok;
+        try
+        {
+            ok = Handle->register_script_factory(Handle, factory is null ? null : (delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, ke_error**, bool>)&RegisterScriptFactoryTrampoline, (void*)GCHandle.ToIntPtr(factoryHandle), &err);
+        }
+        catch
+        {
+            if (factoryHandle.IsAllocated) factoryHandle.Free();
+            throw;
+        }
+        if (!ok)
+        {
+            if (factoryHandle.IsAllocated) factoryHandle.Free();
+            throw KernelError.FromNative(err, "register_script_factory");
+        }
+        if (_retainedFactory.IsAllocated) _retainedFactory.Free();
+        _retainedFactory = factoryHandle;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static bool RegisterScriptFactoryTrampoline(void* ctx, ulong arg1, sbyte* arg2, ke_error** arg3)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is ScriptFactory handler)
+                return handler(arg1, Marshal.PtrToStringUTF8((nint)arg2) ?? "");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            KernelError.ToNative(arg3, ex, "ke_script_factory_func");
+            return false;
+        }
+    }
+
     /// <summary>Releases the native sceneloader.</summary>
     public void Dispose()
     {
         OnDispose();
         if (_native == null) return;
+        if (_retainedFactory.IsAllocated) _retainedFactory.Free();
         if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;

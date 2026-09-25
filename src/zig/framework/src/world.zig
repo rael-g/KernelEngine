@@ -14,6 +14,7 @@ const apply_initial_capacity: u32 = 16;
 const ApplyEntry = struct {
     cid: c.ke_component_id,
     fn_ptr: c.ke_component_apply_fn,
+    ctx: ?*anyopaque,
     fields: ?[*]const c.ke_component_field,
     field_count: u32,
 };
@@ -93,7 +94,7 @@ fn entryFor(s: *State, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) ?*
     }
 
     const entry = &s.apply_registry.?[s.apply_count];
-    entry.* = .{ .cid = cid, .fn_ptr = null, .fields = null, .field_count = 0 };
+    entry.* = .{ .cid = cid, .fn_ptr = null, .ctx = null, .fields = null, .field_count = 0 };
     s.apply_count += 1;
     return entry;
 }
@@ -102,6 +103,7 @@ fn worldRegisterComponentApply(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
     apply_fn: c.ke_component_apply_fn,
+    ctx: ?*anyopaque,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
     const self = self_in orelse {
@@ -114,6 +116,7 @@ fn worldRegisterComponentApply(
     }
     const entry = entryFor(stateOf(self), cid, out_error) orelse return false;
     entry.fn_ptr = apply_fn;
+    entry.ctx = ctx;
     return true;
 }
 
@@ -159,13 +162,16 @@ fn worldGetComponentFields(
 fn worldGetComponentApply(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
+    out_ctx: [*c]?*anyopaque,
 ) callconv(.c) c.ke_component_apply_fn {
     const self = self_in orelse return null;
     if (self.handle == null) return null;
     const s = stateOf(self);
     const reg = s.apply_registry orelse return null;
     for (reg[0..s.apply_count]) |entry| {
-        if (entry.cid == cid) return entry.fn_ptr;
+        if (entry.cid != cid) continue;
+        if (out_ctx != null) out_ctx.* = entry.ctx;
+        return entry.fn_ptr;
     }
     return null;
 }
@@ -194,7 +200,7 @@ fn registerBuiltin(
     const cid = e.component_register.?(e, name, size, fields orelse null, field_count, out_error);
     if (cid == 0) return false;
     if (fields) |f| _ = world.register_component_fields.?(world, cid, f, field_count, null);
-    if (apply_fn != null) _ = world.register_component_apply.?(world, cid, apply_fn, null);
+    if (apply_fn != null) _ = world.register_component_apply.?(world, cid, apply_fn, null, null);
     return true;
 }
 

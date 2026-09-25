@@ -17,12 +17,25 @@ public unsafe interface INativeWorld
     ke_world* Native { get; }
 }
 
+/// <summary>Fills a component from a scene block's keys. Entries are mutable so the callback can mark what it took: a key it accepted must have `consumed` set, or the loader will report it as one nothing in the engine wanted.</summary>
+/// <param name="component">The component's memory, already added to the entity.</param>
+/// <param name="entries">The block's keys, one per key the scene declared.</param>
+/// <param name="count">Number of entries.</param>
+public unsafe delegate bool ComponentApply(nint component, ke_variant_table_entry* entries, uint count);
+
 
 public unsafe partial class World : IDisposable, INativeWorld
 {
     private ke_world* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_world*, void> _destroy;
     private readonly bool _borrowed;
+
+    /// <summary>
+    /// Keeps every registered handler reachable, one per key the slot registers against.
+    /// The engine holds only an opaque pointer to it, which stops nothing on this
+    /// side from collecting or moving the object before the engine calls back into it.
+    /// </summary>
+    private readonly Dictionary<uint, GCHandle> _retainedApply = new();
 
     private ke_world* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(World));
@@ -55,11 +68,56 @@ public unsafe partial class World : IDisposable, INativeWorld
         KernelError.ThrowIfFailed(Handle->register_component_fields(Handle, cid, fields, fieldCount, &err), err, "register_component_fields");
     }
 
+    /// <summary>Registers the callback consulted for what a field table cannot describe. Replaces any callback registered for the same component.</summary>
+    /// <param name="cid">The component the callback answers for.</param>
+    /// <param name="apply">Consulted after the field table.</param>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    public void RegisterComponentApply(uint cid, ComponentApply? apply)
+    {
+        var applyHandle = apply is null ? default : GCHandle.Alloc(apply);
+        ke_error* err = null;
+        bool ok;
+        try
+        {
+            ok = Handle->register_component_apply(Handle, cid, apply is null ? null : (delegate* unmanaged[Cdecl]<void*, void*, ke_variant_table_entry*, uint, ke_error**, bool>)&RegisterComponentApplyTrampoline, (void*)GCHandle.ToIntPtr(applyHandle), &err);
+        }
+        catch
+        {
+            if (applyHandle.IsAllocated) applyHandle.Free();
+            throw;
+        }
+        if (!ok)
+        {
+            if (applyHandle.IsAllocated) applyHandle.Free();
+            throw KernelError.FromNative(err, "register_component_apply");
+        }
+        if (_retainedApply.Remove(cid, out var replacedApply)) replacedApply.Free();
+        _retainedApply[cid] = applyHandle;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static bool RegisterComponentApplyTrampoline(void* ctx, void* arg1, ke_variant_table_entry* arg2, uint arg3, ke_error** arg4)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is ComponentApply handler)
+                return handler((nint)arg1, arg2, arg3);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            KernelError.ToNative(arg4, ex, "ke_component_apply_fn");
+            return false;
+        }
+    }
+
     /// <summary>Releases the native world.</summary>
     public void Dispose()
     {
         OnDispose();
         if (_native == null) return;
+        foreach (var retained in _retainedApply.Values) retained.Free();
+        _retainedApply.Clear();
         if (_borrowed) { _native = null; return; }
         _destroy(_native);
         _native = null;

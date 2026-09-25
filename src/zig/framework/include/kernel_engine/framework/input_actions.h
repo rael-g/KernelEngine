@@ -35,6 +35,9 @@ extern "C"
         float           x, y, z;
     } ke_input_action_event;
 
+    /** Reports one phase transition of one binding.
+     * @param ctx   [context] Opaque context forwarded from the call that registered it.
+     * @param event The transition, naming the action it belongs to. */
     typedef void (*ke_input_action_event_func)(void *ctx, ke_input_action_event event);
 
     typedef struct ke_input_actions

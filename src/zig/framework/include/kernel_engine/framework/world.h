@@ -23,12 +23,19 @@ extern "C"
     /// accepted must have `consumed` set, or the loader will report it as one
     /// nothing in the engine wanted.
     ///
+    /// @param ctx       [context] Opaque context forwarded from register_component_apply.
+    /// @param component The component's memory, already added to the entity.
+    /// @param entries   The block's keys, one per key the scene declared.
+    /// @param count     Number of entries.
+    /// @param out_error Set when the callback rejects a value; the load fails with it.
     /// @return false when a key the callback owns carries a value it cannot map,
     /// which fails the load. Only the callback holds that mapping, so only it can
     /// tell a value apart from a typo.
-    typedef bool (*ke_component_apply_fn)(void                   *component,
+    typedef bool (*ke_component_apply_fn)(void                   *ctx,
+                                          void                   *component,
                                           ke_variant_table_entry *entries,
-                                          uint32_t                count);
+                                          uint32_t                count,
+                                          ke_error              **out_error);
 
     typedef struct ke_world ke_world;
 
@@ -79,17 +86,22 @@ extern "C"
                                                           ke_component_id  cid,
                                                           uint32_t        *out_count);
 
-        /** @param apply [raw_callback] */
+        /** Registers the callback consulted for what a field table cannot
+         * describe. Replaces any callback registered for the same component.
+         * @param cid   The component the callback answers for.
+         * @param apply [closure:ctx,retained:cid] Consulted after the field table.
+         * @param ctx   Forwarded to @p apply unchanged. */
         bool (*register_component_apply)(struct ke_world      *self,
                                          ke_component_id       cid,
                                          ke_component_apply_fn apply,
+                                         void                 *ctx,
                                          ke_error            **out_error);
 
-        /** [raw_callback] Returns a bare C function pointer with no
-         * ABI-derivable managed shape, same reasoning as any [raw_callback]
-         * parameter — left to the idiom layer entirely. */
+        /** [idiom] Callback registered for `cid`, or NULL. Writes the context it
+         * was registered with through `out_ctx`. */
         ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
-                                                      ke_component_id  cid);
+                                                     ke_component_id  cid,
+                                                     void           **out_ctx);
 
     };
 

@@ -498,18 +498,21 @@
     {
       "name": "ke_input_action_event_func",
       "returns": "void",
+      "doc": "Reports one phase transition of one binding.",
       "lanes": [
         {
-          "name": null,
+          "name": "ctx",
           "type": "void *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from the call that registered it."
         },
         {
-          "name": null,
+          "name": "event",
           "type": "ke_input_action_event",
           "tags": [],
-          "doc": null
+          "doc": "The transition, naming the action it belongs to."
         }
       ]
     }

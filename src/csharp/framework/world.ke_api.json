@@ -155,22 +155,29 @@
           "name": "register_component_apply",
           "returns": "_Bool",
           "tags": [],
-          "doc": null,
+          "doc": "Registers the callback consulted for what a field table cannot describe. Replaces any callback registered for the same component.",
           "return_doc": null,
           "params": [
             {
               "name": "cid",
               "type": "ke_component_id",
               "tags": [],
-              "doc": null
+              "doc": "The component the callback answers for."
             },
             {
               "name": "apply",
               "type": "ke_component_apply_fn",
               "tags": [
-                "raw_callback"
+                "closure:ctx",
+                "retained:cid"
               ],
-              "doc": null
+              "doc": "Consulted after the field table."
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": "Forwarded to unchanged."
             },
             {
               "name": "out_error",
@@ -184,14 +191,20 @@
           "name": "get_component_apply",
           "returns": "ke_component_apply_fn",
           "tags": [
-            "raw_callback"
+            "idiom"
           ],
-          "doc": "Returns a bare C function pointer with no ABI-derivable managed shape, same reasoning as any [raw_callback] parameter \u2014 left to the idiom layer entirely.",
+          "doc": "Callback registered for \u0060cid\u0060, or NULL. Writes the context it was registered with through \u0060out_ctx\u0060.",
           "return_doc": null,
           "params": [
             {
               "name": "cid",
               "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_ctx",
+              "type": "void **",
               "tags": [],
               "doc": null
             }
@@ -228,24 +241,39 @@
     {
       "name": "ke_component_apply_fn",
       "returns": "_Bool",
+      "doc": "Fills a component from a scene block\u0027s keys. Entries are mutable so the callback can mark what it took: a key it accepted must have \u0060consumed\u0060 set, or the loader will report it as one nothing in the engine wanted.",
       "lanes": [
         {
-          "name": null,
+          "name": "ctx",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_component_apply."
+        },
+        {
+          "name": "component",
           "type": "void *",
           "tags": [],
-          "doc": null
+          "doc": "The component\u0027s memory, already added to the entity."
         },
         {
-          "name": null,
+          "name": "entries",
           "type": "ke_variant_table_entry *",
           "tags": [],
-          "doc": null
+          "doc": "The block\u0027s keys, one per key the scene declared."
         },
         {
-          "name": null,
+          "name": "count",
           "type": "uint32_t",
           "tags": [],
-          "doc": null
+          "doc": "Number of entries."
+        },
+        {
+          "name": "out_error",
+          "type": "ke_error **",
+          "tags": [],
+          "doc": "Set when the callback rejects a value; the load fails with it."
         }
       ]
     }
@@ -253,6 +281,6 @@
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
-    "ke_component_apply_fn": "_Bool (*)(void *, ke_variant_table_entry *, uint32_t)"
+    "ke_component_apply_fn": "_Bool (*)(void *, void *, ke_variant_table_entry *, uint32_t, ke_error **)"
   }
 }

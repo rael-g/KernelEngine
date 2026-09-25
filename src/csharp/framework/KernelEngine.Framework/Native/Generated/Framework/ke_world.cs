@@ -21,9 +21,9 @@ public unsafe partial struct ke_world
     [NativeTypeName("const ke_component_field *(*)(struct ke_world *, ke_component_id, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_world*, uint, uint*, KernelEngine.Ecs.Native.ke_component_field*> get_component_fields;
 
-    [NativeTypeName("bool (*)(struct ke_world *, ke_component_id, ke_component_apply_fn, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, KernelEngine.Ecs.Native.ke_variant_table_entry*, uint, bool>, KernelEngine.Common.Native.ke_error**, bool> register_component_apply;
+    [NativeTypeName("bool (*)(struct ke_world *, ke_component_id, ke_component_apply_fn, void *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, void*, KernelEngine.Ecs.Native.ke_variant_table_entry*, uint, KernelEngine.Common.Native.ke_error**, bool>, void*, KernelEngine.Common.Native.ke_error**, bool> register_component_apply;
 
-    [NativeTypeName("ke_component_apply_fn (*)(struct ke_world *, ke_component_id)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, uint, delegate* unmanaged[Cdecl]<void*, KernelEngine.Ecs.Native.ke_variant_table_entry*, uint, bool>> get_component_apply;
+    [NativeTypeName("ke_component_apply_fn (*)(struct ke_world *, ke_component_id, void **)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, uint, void**, delegate* unmanaged[Cdecl]<void*, void*, KernelEngine.Ecs.Native.ke_variant_table_entry*, uint, KernelEngine.Common.Native.ke_error**, bool>> get_component_apply;
 }

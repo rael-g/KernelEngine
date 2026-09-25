@@ -335,7 +335,8 @@ fn applyComponentBlock(
 
     var field_count: u32 = 0;
     const fields = world.get_component_fields.?(world, meta.cid, &field_count);
-    const apply_fn = world.get_component_apply.?(world, meta.cid);
+    var apply_ctx: ?*anyopaque = null;
+    const apply_fn = world.get_component_apply.?(world, meta.cid, &apply_ctx);
     if (fields == null and apply_fn == null) {
         structural(world, out_error, "component '{s}' has no field mapping registered", .{comp_name});
         return false;
@@ -360,8 +361,13 @@ fn applyComponentBlock(
     if (fields != null)
         fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count);
     if (apply_fn) |f| {
-        if (!f(comp, entries.ptr, @intCast(entries.len))) {
-            structural(world, out_error, "component '{s}' was given a value it cannot hold", .{comp_name});
+        var apply_error: [*c]c.ke_error = null;
+        if (!f(apply_ctx, comp, entries.ptr, @intCast(entries.len), &apply_error)) {
+            if (apply_error != null) {
+                if (out_error != null) out_error.* = apply_error;
+            } else {
+                structural(world, out_error, "component '{s}' was given a value it cannot hold", .{comp_name});
+            }
             return false;
         }
     }
@@ -940,7 +946,14 @@ const DemoComponent = extern struct {
     mode: i32,
 };
 
-fn demoApply(ptr: ?*anyopaque, e: [*c]c.ke_variant_table_entry, n: u32) callconv(.c) bool {
+fn demoApply(
+    ctx: ?*anyopaque,
+    ptr: ?*anyopaque,
+    e: [*c]c.ke_variant_table_entry,
+    n: u32,
+    _: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    if (ctx) |seen| @as(*bool, @ptrCast(seen)).* = true;
     const d: *DemoComponent = @ptrCast(@alignCast(ptr));
     if (n == 0) return true;
     for (e[0..n]) |*entry| {
@@ -1964,7 +1977,8 @@ test "a user component is applied through the callback its owner registered" {
     const demo_cid = e.component_register.?(e, "demo", @sizeOf(DemoComponent), null, 0, null);
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
-    try testing.expect(w.*.register_component_apply.?(w, demo_cid, demoApply, null));
+    var saw_ctx = false;
+    try testing.expect(w.*.register_component_apply.?(w, demo_cid, demoApply, &saw_ctx, null));
 
     var scene = TempScene.init();
     defer scene.deinit();
@@ -1984,6 +1998,47 @@ test "a user component is applied through the callback its owner registered" {
     const d: *DemoComponent = @ptrCast(@alignCast(fakeComponentGet(e, entity, demo_cid).?));
     try testing.expectEqual(@as(f32, 1.5), d.fov);
     try testing.expectEqual(@as(i32, 7), d.mode);
+    try testing.expect(saw_ctx);
+}
+
+fn rejectingApply(
+    _: ?*anyopaque,
+    _: ?*anyopaque,
+    e: [*c]c.ke_variant_table_entry,
+    n: u32,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    for (e[0..n]) |*entry| entry.consumed = true;
+    E.fail(out_error, .invalid_argument, "fov is measured in degrees, not in fathoms", @src());
+    return false;
+}
+
+test "the reason an apply callback rejects a value reaches the caller instead of a generic one" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const e = &f.ecs.vtable;
+    const demo_cid = e.component_register.?(e, "demo", @sizeOf(DemoComponent), null, 0, null);
+    try testing.expect(demo_cid != 0);
+    const w = f.world_h.ref.?;
+    try testing.expect(w.*.register_component_apply.?(w, demo_cid, rejectingApply, null, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Test"
+        \\[entity.demo]
+        \\fov = 1.5
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    const loader = f.loader_h.ref.?;
+    try testing.expect(!loader.*.load.?(loader, try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "fathoms") != null);
 }
 
 test "a loader is never created without a world" {

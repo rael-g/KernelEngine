@@ -18,17 +18,17 @@
         {
           "name": "load",
           "returns": "_Bool",
-          "tags": [
-            "idiom"
-          ],
-          "doc": "Superseded by the managed Load method, same name \u2014 it also rethrows a managed exception the script-factory trampoline caught mid-call, which has no ABI-derivable shape.",
+          "tags": [],
+          "doc": "Loads the scene at instantiating every entity it declares.",
           "return_doc": null,
           "params": [
             {
               "name": "path",
               "type": "const char *",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Path to the scene file."
             },
             {
               "name": "out_error",
@@ -42,22 +42,23 @@
           "name": "register_script_factory",
           "returns": "_Bool",
           "tags": [],
-          "doc": null,
+          "doc": "Registers the factory consulted for every entity that declares a type. Replaces any factory registered before it.",
           "return_doc": null,
           "params": [
             {
               "name": "factory",
               "type": "ke_script_factory_func",
               "tags": [
-                "raw_callback"
+                "closure:ctx",
+                "retained"
               ],
-              "doc": null
+              "doc": "Consulted once per typed entity."
             },
             {
               "name": "ctx",
               "type": "void *",
               "tags": [],
-              "doc": null
+              "doc": "Forwarded to unchanged."
             },
             {
               "name": "out_error",
@@ -98,30 +99,35 @@
     {
       "name": "ke_script_factory_func",
       "returns": "_Bool",
+      "doc": "Builds and binds the script an entity\u0027s declared type names.",
       "lanes": [
         {
-          "name": null,
+          "name": "ctx",
           "type": "void *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_script_factory."
         },
         {
-          "name": null,
+          "name": "entity",
           "type": "ke_entity",
           "tags": [],
-          "doc": null
+          "doc": "The entity the script is bound to."
         },
         {
-          "name": null,
+          "name": "type_name",
           "type": "const char *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Qualified node type name, as the scene file spells it."
         },
         {
-          "name": null,
+          "name": "out_error",
           "type": "ke_error **",
           "tags": [],
-          "doc": null
+          "doc": "Set when the factory rejects the entity; the load fails with it."
         }
       ]
     }
