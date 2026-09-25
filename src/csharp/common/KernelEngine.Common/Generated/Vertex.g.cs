@@ -7,7 +7,7 @@ namespace KernelEngine.Common;
 
 /// <summary>Per-vertex data expected by ke_render::create_mesh.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public struct Vertex
+public partial struct Vertex
 {
     /// <summary>Object-space position</summary>
     public float X;

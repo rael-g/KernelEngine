@@ -53,7 +53,7 @@ public static class Extractor
                     api.Structs.Add(ExtractStruct(node, name, bytes, errors) with { External = compose });
                     break;
 
-                case "FunctionDecl" when name is not null && name.StartsWith("ke_"):
+                case "FunctionDecl" when name is not null && name.StartsWith("ke_") && HasSymbol(node):
                     api.Functions.Add(ExtractFunction(node, name, errors));
                     break;
 
@@ -220,6 +220,14 @@ public static class Extractor
             CollectParamIndices(n["inner"] as JsonArray, sink);
         }
     }
+
+    /// <summary>
+    /// Whether the declaration leaves a symbol a caller in another language could link
+    /// against. A <c>static inline</c> helper in a header does not: every translation unit
+    /// that includes it compiles its own copy and none of them is exported, so describing
+    /// it as part of the API promises a binding that cannot be written.
+    /// </summary>
+    static bool HasSymbol(JsonObject node) => node["storageClass"]?.GetValue<string>() != "static";
 
     static ApiFunction ExtractFunction(JsonObject node, string name, List<string> errors)
     {

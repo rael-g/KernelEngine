@@ -170,7 +170,7 @@ Expect("a slot that only answers becomes a property, in the class and in the con
 // only ever as true as the sentence written next to it.
 ExpectValueStruct("a value struct is emitted with its layout pinned",
     ValueStruct("ke_vertex", ("x", "float"), ("y", "float"), ("z", "float")),
-    contains: ["[StructLayout(LayoutKind.Sequential)]", "public struct Vertex",
+    contains: ["[StructLayout(LayoutKind.Sequential)]", "public partial struct Vertex",
                "public float X;", "public float Y;", "public float Z;"],
     absent: ["MemoryMarshal", "Unsafe.As"]);
 
@@ -181,6 +181,23 @@ ExpectValueStruct("a value struct refuses a pointer field",
     ValueStruct("ke_mesh_data", ("vertices", "ke_vertex *")),
     contains: [], absent: [],
     throws: "makes the lifetime of that data someone else's question");
+
+// The ABI's math primitives are named structs, not loose lanes, so they map by type
+// rather than by a tag naming the run. The managed equivalents occupy the same bytes,
+// which is what lets the struct be handed over as itself.
+ExpectValueStruct("a value struct's math fields take the managed math types",
+    ValueStruct("ke_transform", ("position", "ke_vec3"), ("rotation", "ke_quat"), ("scale", "ke_vec3")),
+    contains: ["using System.Numerics;", "public Vector3 Position;", "public Quaternion Rotation;",
+               "public Vector3 Scale;"],
+    absent: ["ke_vec3", "ke_quat"]);
+
+// A fixed char array reads far better as a string, and a node property is allowed to say
+// so. A value struct is not: a string is a reference, the array is bytes inline, and the
+// struct crosses as itself.
+ExpectValueStruct("a value struct refuses a fixed char array",
+    ValueStruct("ke_named", ("name", "char [64]")),
+    contains: [], absent: [],
+    throws: "has no managed type of the same size");
 
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow

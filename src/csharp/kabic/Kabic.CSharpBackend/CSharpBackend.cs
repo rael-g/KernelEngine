@@ -301,31 +301,53 @@ public static class CSharpBackend
     /// </summary>
     public static string RenderStruct(ApiModel model, ApiStruct s, string ns, Convention convention)
     {
-        var o = new List<string>
-        {
-            Header,
-            "using System.Runtime.InteropServices;\n",
-            $"namespace {ns};\n",
-        };
+        var needsNumerics = s.Fields.Any(f => ValueFieldType(model, s, f).StartsWith("Vector", StringComparison.Ordinal)
+            || ValueFieldType(model, s, f) == "Quaternion");
+
+        var o = new List<string> { Header };
+        if (needsNumerics) o.Add("using System.Numerics;");
+        o.Add("using System.Runtime.InteropServices;\n");
+        o.Add($"namespace {ns};\n");
         o.Add(s.Doc is not null
             ? XmlDoc("", s.Doc).TrimEnd()
             : $"/// <summary>Mirrors <c>{s.Name}</c>.</summary>");
         o.Add("[StructLayout(LayoutKind.Sequential)]");
-        o.Add($"public struct {Idioms.TypeName(s.Name, convention)}");
+        o.Add($"public partial struct {Idioms.TypeName(s.Name, convention)}");
         o.Add("{");
         foreach (var f in s.Fields)
         {
-            if (CTypes.IsPointer(f.Type))
-                throw new InvalidOperationException(
-                    $"{s.Name}.{f.Name}: [value] describes data a caller holds, and a pointer"
-                    + " field makes the lifetime of that data someone else's question. Describe"
-                    + " the pointer as a sequence on the slot that hands it out instead.");
             if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
-            o.Add($"    public {CsType(model, f.Type)} {Idioms.Pascal(f.Name)};");
+            o.Add($"    public {ValueFieldType(model, s, f)} {Idioms.Pascal(f.Name)};");
         }
         o.Add("}");
         o.Add("");
         return string.Join('\n', o);
+    }
+
+    /// <summary>
+    /// The type one field of a <c>[value]</c> struct takes. Every answer here has to occupy
+    /// the same bytes as the field it stands for, because the struct is handed to native code
+    /// as itself rather than marshalled field by field. That rules out the conveniences a
+    /// node property affords — a fixed char array reads far better as a string, and is a
+    /// different size — so those are refused rather than quietly changing the layout.
+    /// </summary>
+    static string ValueFieldType(ApiModel model, ApiStruct s, ApiField f)
+    {
+        if (CTypes.IsPointer(f.Type))
+            throw new InvalidOperationException(
+                $"{s.Name}.{f.Name}: [value] describes data a caller holds, and a pointer"
+                + " field makes the lifetime of that data someone else's question. Describe"
+                + " the pointer as a sequence on the slot that hands it out instead.");
+
+        if (IsCharArray(f.Type))
+            throw new InvalidOperationException(
+                $"{s.Name}.{f.Name}: [value] copies the struct as it stands, and a fixed char"
+                + " array has no managed type of the same size -- a string is a reference."
+                + " Hand the text out through a slot that can encode it.");
+
+        if (VectorArity(f.Type) is int n) return $"Vector{n}";
+        if (NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v)) return v.CsType;
+        return CsType(model, f.Type);
     }
 
     /// <summary>

@@ -523,6 +523,20 @@
       "nativeNamespace": "KernelEngine.Common.Native",
       "outDir": "src/csharp/common/KernelEngine.Common/Generated",
       "usings": []
+    },
+    {
+      "name": "math",
+      "headers": [
+        "src/zig/common/include/kernel_engine/common/math.h"
+      ],
+      "includeDirs": [
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/common/math.ke_api.json",
+      "namespace": "KernelEngine.Common",
+      "nativeNamespace": "KernelEngine.Common.Native",
+      "outDir": "src/csharp/common/KernelEngine.Common/Generated",
+      "usings": []
     }
   ],
   "bindings": [
