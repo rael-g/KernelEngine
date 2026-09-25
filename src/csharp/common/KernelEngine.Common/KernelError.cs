@@ -70,6 +70,23 @@ public sealed class KernelError : Exception
             throw FromNative(error, context);
     }
 
+    /// <summary>
+    /// Writes <paramref name="exception"/> into a native <c>ke_error**</c> lane, so a failure
+    /// raised inside a managed callback travels home through the channel the C ABI already
+    /// provides instead of being swallowed at the boundary. The native side copies the
+    /// message, so the buffer here only has to outlive this call. The error carries no type:
+    /// a managed exception belongs to none of the native type singletons.
+    /// </summary>
+    public static unsafe void ToNative(ke_error** outError, Exception exception, string? context = null)
+    {
+        if (outError is null) return;
+        var text = System.Text.Encoding.UTF8.GetBytes(Prefix(context, exception.Message));
+        var message = new byte[text.Length + 1];
+        text.CopyTo(message, 0);
+        fixed (byte* p = message)
+            NativeMethods.error_set(outError, null, (sbyte*)p, null, 0, null);
+    }
+
     private static string Prefix(string? context, string message) =>
         string.IsNullOrEmpty(context) ? message : $"{context}: {message}";
 }

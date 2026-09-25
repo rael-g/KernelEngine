@@ -181,6 +181,7 @@
     {
       "name": "ke_task_func",
       "returns": "void",
+      "doc": null,
       "lanes": [
         {
           "name": null,
@@ -193,6 +194,7 @@
     {
       "name": "ke_task_on_complete_func",
       "returns": "void",
+      "doc": null,
       "lanes": [
         {
           "name": null,

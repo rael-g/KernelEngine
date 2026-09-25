@@ -107,7 +107,8 @@ Expect("a callback and its context become one delegate parameter",
         Param("on_event", "ke_probe_event_func", "closure:event_ctx"),
         Param("event_ctx", "void *"),
         Param("out_error", "ke_error **"))),
-    contains: ["public void Watch(Action<uint>? onEvent)",
+    contains: ["public unsafe delegate void ProbeEvent(uint tick);",
+               "public void Watch(ProbeEvent? onEvent)",
                "GCHandle.Alloc(onEvent)",
                "private static void WatchOnEventTrampoline(void* ctx, uint arg1)",
                "(delegate* unmanaged[Cdecl]<void*, uint, void>)&WatchOnEventTrampoline",
@@ -115,8 +116,34 @@ Expect("a callback and its context become one delegate parameter",
                "s_parkedCallbackException ??= ex;",
                "throw parked;",
                "onEventHandle.Free();"],
-    absent: ["void* eventCtx", "ke_probe_event_func onEvent"],
-    aliases: new() { ["ke_probe_event_func"] = "void (*)(void *, uint32_t)" });
+    absent: ["void* eventCtx", "ke_probe_event_func onEvent", "_retainedOnEvent"],
+    aliases: new() { ["ke_probe_event_func"] = "void (*)(void *, uint32_t)" },
+    callbacks: [Callback("ke_probe_event_func", "void",
+        Param("ctx", "void *", "context"), Param("tick", "uint32_t"))]);
+
+// A closure the engine keeps after the call that registered it, one per key it is
+// registered against. It is only projectable because the callback carries an error
+// channel of its own: parking would have nothing to rethrow it once the registering
+// call has already returned, which is how an asynchronous failure gets lost.
+Expect("a retained closure is kept per key and reports through the channel it declares",
+    Vtable("ke_probe", Slot("register_apply", "bool",
+        Param("cid", "uint32_t"),
+        Param("apply", "ke_probe_apply_fn", "closure:ctx,retained:cid"),
+        Param("ctx", "void *"),
+        Param("out_error", "ke_error **"))),
+    contains: ["public unsafe delegate bool ProbeApply(uint tick);",
+               "private readonly Dictionary<uint, GCHandle> _retainedApply = new();",
+               "public void RegisterApply(uint cid, ProbeApply? apply)",
+               "private static bool RegisterApplyTrampoline(void* ctx, uint arg1, ke_error** arg2)",
+               "KernelError.ToNative(arg2, ex, \"ke_probe_apply_fn\");",
+               "if (_retainedApply.Remove(cid, out var replacedApply)) replacedApply.Free();",
+               "_retainedApply[cid] = applyHandle;",
+               "foreach (var retained in _retainedApply.Values) retained.Free();"],
+    absent: ["s_parkedCallbackException", "void* ctx)", "applyHandle.Free();\n        _retainedApply"],
+    aliases: new() { ["ke_probe_apply_fn"] = "bool (*)(void *, uint32_t, ke_error **)" },
+    callbacks: [Callback("ke_probe_apply_fn", "bool",
+        Param("ctx", "void *", "context"), Param("tick", "uint32_t"),
+        Param("out_error", "ke_error **"))]);
 
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
@@ -142,7 +169,7 @@ Console.WriteLine($"The backend emits all {checks} declared shape(s).");
 return 0;
 
 void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
-    Dictionary<string, string>? aliases = null)
+    Dictionary<string, string>? aliases = null, JsonObject[]? callbacks = null)
 {
     checks++;
     var api = new JsonObject
@@ -167,6 +194,7 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
             ["slots"] = new JsonArray(),
         }),
         ["vtables"] = new JsonArray(vtable),
+        ["callbacks"] = new JsonArray((callbacks ?? []).Cast<JsonNode>().ToArray()),
         ["functions"] = new JsonArray(),
         ["type_aliases"] = new JsonObject { ["ke_entity"] = "uint64_t" },
     };
@@ -258,6 +286,14 @@ static JsonObject Slot(string name, string returns, params object[] rest)
         ["params"] = ps,
     };
 }
+
+static JsonObject Callback(string name, string returns, params JsonObject[] lanes) => new()
+{
+    ["name"] = name,
+    ["returns"] = returns,
+    ["doc"] = null,
+    ["lanes"] = new JsonArray(lanes.Cast<JsonNode>().ToArray()),
+};
 
 static JsonObject Param(string name, string type, string tags = "") => new()
 {

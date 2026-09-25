@@ -421,6 +421,10 @@ public static class CSharpBackend
         o.Add("}");
         o.Add("");
 
+        var closures = VtableClosures(model, vtable);
+        foreach (var cb in closures.DistinctBy(c => c.Delegate))
+            RenderClosureDelegate(model, o, cb);
+
         o.Add(XmlDoc("", vtable.Doc).TrimEnd());
         o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}");
         o.Add("{");
@@ -445,7 +449,23 @@ public static class CSharpBackend
             o.Add($"    private readonly Dictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
         }
 
-        if (vtable.Slots.Any(s => s.Params.Any(p => p.Has("closure"))))
+        foreach (var cb in closures.Where(c => c.Lifetime == ClosureLifetime.Retained))
+        {
+            o.Add("");
+            o.Add("    /// <summary>");
+            o.Add(cb.RetainKey is not null
+                ? "    /// Keeps every registered handler reachable, one per key the slot registers"
+                    + " against."
+                : "    /// Keeps the registered handler reachable.");
+            o.Add("    /// The engine holds only an opaque pointer to it, which stops nothing on this");
+            o.Add("    /// side from collecting or moving the object before the engine calls back into it.");
+            o.Add("    /// </summary>");
+            o.Add(cb.RetainKey is { } key
+                ? $"    private readonly Dictionary<{CsType(model, key.Type)}, GCHandle> {RetainedField(cb)} = new();"
+                : $"    private GCHandle {RetainedField(cb)};");
+        }
+
+        if (closures.Any(c => c.ErrorLane is null))
         {
             o.Add("");
             o.Add("    /// <summary>");
@@ -543,6 +563,16 @@ public static class CSharpBackend
             o.Add("        foreach (var rooted in _rooted.Values) rooted.Free();");
             o.Add("        _rooted.Clear();");
         }
+        foreach (var cb in closures.Where(c => c.Lifetime == ClosureLifetime.Retained))
+        {
+            if (cb.RetainKey is not null)
+            {
+                o.Add($"        foreach (var retained in {RetainedField(cb)}.Values) retained.Free();");
+                o.Add($"        {RetainedField(cb)}.Clear();");
+            }
+            else
+                o.Add($"        if ({RetainedField(cb)}.IsAllocated) {RetainedField(cb)}.Free();");
+        }
         o.Add("        if (_borrowed) { _native = null; return; }");
         if (shutdownSlot is not null)
             o.Add($"        _native->{shutdownSlot}(_native, null);");
@@ -588,14 +618,58 @@ public static class CSharpBackend
         vtable.Slots.Any(s => s.Params.Any(p => p.Has("vector2") || p.Has("vector3")));
 
     /// <summary>
+    /// How long the managed handler must stay reachable after the call that registered it.
+    /// <see cref="Scoped"/> dies with the call; <see cref="Retained"/> lives until the
+    /// object is disposed or another handler replaces it. A retained closure the slot
+    /// registers against a key keeps one handler per key value rather than one in total.
+    /// </summary>
+    internal enum ClosureLifetime { Scoped, Retained }
+
+    /// <summary>
     /// A function-pointer parameter and the opaque context parameter that travels with
     /// it, projected as one delegate. The pair is how a C ABI carries a closure: the
     /// context is the closure's captured state and the function pointer is its body.
-    /// Every lane of the function-pointer type except the context becomes a type
-    /// argument of the delegate.
+    /// Every lane of the function-pointer type except the context and the outbound error
+    /// channel becomes a parameter of the delegate.
     /// </summary>
-    internal sealed record CallbackPair(ApiParam Fn, ApiParam Ctx, string Delegate, string Trampoline,
-        IReadOnlyList<string> NativeLanes, int CtxLane);
+    internal sealed record CallbackPair(ApiParam Fn, ApiParam Ctx, ClosureLifetime Lifetime,
+        string Delegate, string Trampoline, ApiCallback Callback,
+        int CtxLane, int? ErrorLane, ApiParam? RetainKey);
+
+    /// <summary>
+    /// The name a callback typedef projects to. The typedef is where the ABI already
+    /// named the concept, so two slots taking the same one share a delegate instead of
+    /// each inventing a name from the slot it appears in.
+    /// </summary>
+    static string DelegateName(ApiCallback callback)
+    {
+        var n = callback.Name;
+        if (n.StartsWith("ke_", StringComparison.Ordinal)) n = n[3..];
+        if (n.EndsWith("_func", StringComparison.Ordinal)) n = n[..^5];
+        else if (n.EndsWith("_fn", StringComparison.Ordinal)) n = n[..^3];
+        return Idioms.Pascal(n);
+    }
+
+    /// <summary>Whether a C type spells a boolean.</summary>
+    static bool IsBoolType(string type) => type.Trim() is "_Bool" or "bool" or "ke_bool";
+
+    /// <summary>
+    /// How a lane is spelled where the unmanaged entry point declares it: pointer depth
+    /// preserved and typedefs resolved to what they alias, so the pointer matches the
+    /// function-pointer type the vtable slot declares, depth for depth.
+    /// </summary>
+    static string BlittableLane(ApiModel model, string type)
+    {
+        var t = type.Trim().Replace("const ", "").Replace("struct ", "").Trim();
+        var stars = t.Count(c => c == '*');
+        var basis = model.ResolveAlias(t.TrimEnd('*', ' '));
+        if (stars == 0 && IsBoolType(basis)) return "bool";
+        return Idioms.CsForeignType(basis) + new string('*', stars);
+    }
+
+    /// <summary>How a lane is spelled in the delegate the caller implements.</summary>
+    static string ManagedLane(ApiModel model, ApiParam lane) =>
+        lane.Has("utf8") ? "string" : IsBoolType(lane.Type) ? "bool" : CsType(model, lane.Type);
 
     static IReadOnlyList<CallbackPair> CallbackPairs(ApiModel model, ApiSlot slot)
     {
@@ -609,28 +683,72 @@ public static class CSharpBackend
                 ?? throw new InvalidOperationException(
                     $"{slot.Name}.{fn.Name}: [closure:{ctxName}] names no parameter of this slot");
 
-            var alias = model.TypeAliases.TryGetValue(fn.Type.Trim(), out var a) ? a : fn.Type.Trim();
-            var lanes = FnPtrLanes(alias)
+            var callback = model.CallbackOf(fn.Type)
                 ?? throw new InvalidOperationException(
-                    $"{slot.Name}.{fn.Name}: [closure] needs a function-pointer type, but {fn.Type.Trim()} is {alias}");
-            if (!lanes.Returns.StartsWith("void"))
-                throw new InvalidOperationException(
-                    $"{slot.Name}.{fn.Name}: [closure] cannot carry a return value yet, but {fn.Type.Trim()} returns {lanes.Returns}");
+                    $"{slot.Name}.{fn.Name}: [closure] needs a function-pointer typedef, but {fn.Type.Trim()} is not one");
 
-            var ctxLanes = lanes.Params.Select((t, i) => (t, i)).Where(x => x.t.Replace(" ", "") == "void*").ToList();
-            if (ctxLanes.Count != 1)
+            var ctxLane = callback.Lanes.Select((l, i) => (l, i))
+                .Where(x => x.l.Has("context"))
+                .Select(x => (int?)x.i).FirstOrDefault()
+                ?? throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: [closure:{ctxName}] hands the context to {callback.Name}, "
+                    + "which declares no lane to receive it — a lane's type says nothing about which one "
+                    + "carries the context, so the typedef has to mark it [context]");
+            if (callback.Lanes[ctxLane].Type.Replace(" ", "") != "void*")
                 throw new InvalidOperationException(
-                    $"{slot.Name}.{fn.Name}: [closure] needs exactly one void* lane to carry the context, "
-                    + $"but {fn.Type.Trim()} has {ctxLanes.Count}");
+                    $"{slot.Name}.{fn.Name}: {callback.Name}'s [context] lane is "
+                    + $"{callback.Lanes[ctxLane].Type.Trim()}, and a context travels as void*");
 
-            var carried = lanes.Params.Where((_, i) => i != ctxLanes[0].i).Select(t => CsType(model, t)).ToList();
-            pairs.Add(new CallbackPair(fn, ctx,
-                carried.Count == 0 ? "Action" : $"Action<{string.Join(", ", carried)}>",
-                $"{Idioms.Pascal(slot.Name)}{Idioms.Pascal(fn.Name!)}Trampoline",
-                lanes.Params.Select(Idioms.CsForeignType).ToList(), ctxLanes[0].i));
+            int? errorLane = callback.Lanes.Select((l, i) => (l, i))
+                .Where(x => x.l.Type.Replace(" ", "") == "ke_error**")
+                .Select(x => (int?)x.i).FirstOrDefault();
+
+            var lifetime = fn.Has("retained") ? ClosureLifetime.Retained : ClosureLifetime.Scoped;
+            ApiParam? retainKey = null;
+            if (fn.TagValue("retained") is { } keyName)
+            {
+                retainKey = slot.Params.FirstOrDefault(p => p.Name == keyName)
+                    ?? throw new InvalidOperationException(
+                        $"{slot.Name}.{fn.Name}: [retained:{keyName}] names no parameter of this slot");
+            }
+            if (lifetime == ClosureLifetime.Retained && errorLane is null)
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: a retained closure outlives the call that registered it, so a "
+                    + $"handler that throws has nowhere to report; {callback.Name} needs a ke_error** lane");
+            if (errorLane is not null && !IsBoolType(callback.Returns))
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: {callback.Name} has a ke_error** lane but returns "
+                    + $"{callback.Returns}, so the caller cannot tell that it failed");
+
+            pairs.Add(new CallbackPair(fn, ctx, lifetime, DelegateName(callback),
+                TrampolineName(slot, fn),
+                callback, ctxLane, errorLane, retainKey));
         }
         return pairs;
     }
+
+    /// <summary>
+    /// Names the unmanaged entry point for one closure. Both the slot and the parameter
+    /// identify it, because a slot may take more than one — but a slot whose name already
+    /// ends in the parameter's would only stutter it back.
+    /// </summary>
+    static string TrampolineName(ApiSlot slot, ApiParam fn) =>
+        slot.Name.EndsWith("_" + fn.Name, StringComparison.Ordinal) || slot.Name == fn.Name
+            ? $"{Idioms.Pascal(slot.Name)}Trampoline"
+            : $"{Idioms.Pascal(slot.Name)}{Idioms.Pascal(fn.Name!)}Trampoline";
+
+    /// <summary>The field that keeps a retained closure reachable for as long as the engine holds it.</summary>
+    static string RetainedField(CallbackPair pair) =>
+        $"_retained{Idioms.Pascal(pair.Fn.Name!)}";
+
+    /// <summary>Every closure a vtable projects, across all its slots.</summary>
+    static IReadOnlyList<CallbackPair> VtableClosures(ApiModel model, ApiStruct vtable) =>
+        vtable.Slots.SelectMany(s => CallbackPairs(model, s)).ToList();
+
+    /// <summary>Lanes the delegate carries: everything but the context and the error channel.</summary>
+    static IEnumerable<int> CarriedLanes(CallbackPair pair) =>
+        Enumerable.Range(0, pair.Callback.Lanes.Count)
+            .Where(i => i != pair.CtxLane && i != pair.ErrorLane);
 
     /// <summary>
     /// How the callback's function pointer is spelled where the vtable slot expects it.
@@ -638,47 +756,72 @@ public static class CSharpBackend
     /// has no common type between a null literal and a function pointer, so the typed
     /// branch has to say what it is.
     /// </summary>
-    static string NativeFnPtr(CallbackPair pair) =>
-        $"delegate* unmanaged[Cdecl]<{string.Join(", ", pair.NativeLanes.Select(t => t.Replace(" ", "")))}, void>";
+    static string NativeFnPtr(ApiModel model, CallbackPair pair) =>
+        $"delegate* unmanaged[Cdecl]<{string.Join(", ", pair.Callback.Lanes.Select(l => BlittableLane(model, l.Type)))}"
+        + $", {BlittableLane(model, pair.Callback.Returns)}>";
 
-    static (string Returns, IReadOnlyList<string> Params)? FnPtrLanes(string type)
+    /// <summary>
+    /// The delegate a projected closure asks the caller for. Declared beside the class
+    /// rather than as an <c>Action</c>, because a lane can be a pointer and a generic
+    /// type argument cannot.
+    /// </summary>
+    static void RenderClosureDelegate(ApiModel model, List<string> o, CallbackPair pair)
     {
-        var star = type.IndexOf("(*", StringComparison.Ordinal);
-        if (star < 0) return null;
-        var open = type.IndexOf('(', star + 2);
-        var close = type.LastIndexOf(')');
-        if (open < 0 || close < open) return null;
-        var body = type[(open + 1)..close].Trim();
-        var lanes = body.Length == 0 || body == "void"
-            ? []
-            : body.Split(',').Select(s => s.Trim()).ToList();
-        return (type[..star].Trim(), lanes);
+        var ps = CarriedLanes(pair).Select(i => pair.Callback.Lanes[i])
+            .Select((l, n) => $"{ManagedLane(model, l)} {Idioms.Ident(l.Name ?? $"arg{n}")}");
+        var doc = pair.Callback.Lanes
+            .Where(l => l.Name is not null && l.Doc is not null)
+            .Where(l => CarriedLanes(pair).Any(i => pair.Callback.Lanes[i] == l))
+            .Select(l => (Idioms.Ident(l.Name!), l.Doc));
+        o.Add(XmlDoc("", pair.Callback.Doc ?? pair.Fn.Doc, doc).TrimEnd());
+        o.Add($"public unsafe delegate {ManagedLane(model, new ApiParam(null, pair.Callback.Returns, [], null))} "
+            + $"{pair.Delegate}({string.Join(", ", ps)});");
+        o.Add("");
     }
 
     /// <summary>
     /// The trampoline a <see cref="CallbackPair"/> needs: the unmanaged entry point the
-    /// engine calls, which unwraps the handle back into the delegate. A managed
-    /// exception cannot cross the native frame, so it is parked here and rethrown by the
-    /// call site once the native stack has unwound.
+    /// engine calls, which unwraps the handle back into the delegate. A managed exception
+    /// cannot cross the native frame. Where the callback declares an error channel it is
+    /// translated into one and reported as a failure; where it does not, it is parked and
+    /// rethrown by the call site once the native stack has unwound, which only holds
+    /// because a closure without a channel is never allowed to outlive its call.
     /// </summary>
-    static void RenderTrampoline(List<string> o, CallbackPair pair)
+    static void RenderTrampoline(ApiModel model, List<string> o, CallbackPair pair)
     {
-        var ps = pair.NativeLanes
-            .Select((t, i) => i == pair.CtxLane ? "void* ctx" : $"{t.Trim()} arg{i}")
-            .ToList();
-        var call = string.Join(", ", Enumerable.Range(0, pair.NativeLanes.Count)
-            .Where(i => i != pair.CtxLane).Select(i => $"arg{i}"));
+        var lanes = pair.Callback.Lanes;
+        var ps = lanes.Select((l, i) => i == pair.CtxLane
+            ? "void* ctx"
+            : $"{BlittableLane(model, l.Type)} arg{i}");
+        var args = string.Join(", ", CarriedLanes(pair).Select(i => lanes[i].Has("utf8")
+            ? $"Marshal.PtrToStringUTF8((nint)arg{i}) ?? \"\""
+            : ManagedLane(model, lanes[i]) != BlittableLane(model, lanes[i].Type)
+                ? $"({ManagedLane(model, lanes[i])})arg{i}"
+            : $"arg{i}"));
+        var returns = IsBoolType(pair.Callback.Returns);
+        var nativeReturn = BlittableLane(model, pair.Callback.Returns);
 
         o.Add("    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]");
-        o.Add($"    private static void {pair.Trampoline}({string.Join(", ", ps)})");
+        o.Add($"    private static {nativeReturn} {pair.Trampoline}({string.Join(", ", ps)})");
         o.Add("    {");
         o.Add("        try");
         o.Add("        {");
-        o.Add($"            if (GCHandle.FromIntPtr((nint)ctx).Target is {pair.Delegate} handler) handler({call});");
+        o.Add($"            if (GCHandle.FromIntPtr((nint)ctx).Target is {pair.Delegate} handler)");
+        o.Add($"                {(returns ? $"return handler({args});" : $"handler({args});")}");
+        if (returns) o.Add("            return false;");
         o.Add("        }");
         o.Add("        catch (Exception ex)");
         o.Add("        {");
-        o.Add("            s_parkedCallbackException ??= ex;");
+        if (pair.ErrorLane is { } errLane)
+        {
+            o.Add($"            KernelError.ToNative(arg{errLane}, ex, \"{pair.Callback.Name}\");");
+            if (returns) o.Add("            return false;");
+        }
+        else
+        {
+            o.Add("            s_parkedCallbackException ??= ex;");
+            if (returns) o.Add("            return false;");
+        }
         o.Add("        }");
         o.Add("    }");
         o.Add("");
@@ -696,6 +839,10 @@ public static class CSharpBackend
                 $"{slot.Name}: [closure] is only projected on a fallible slot so far, not {cs.Shape}");
 
         string Sig(IEnumerable<ApiParam> ps) => string.Join(", ", SigParts(ps));
+
+        IEnumerable<(string, string?)> DocParams(IEnumerable<ApiParam> ps) => ps
+            .Where(p => callbacks.All(c => c.Ctx != p))
+            .Select(p => (Idioms.Ident(p.Name!), p.Doc));
 
         IEnumerable<string> SigParts(IEnumerable<ApiParam> ps) => ps
             .Where(p => !lanes.TryGetValue(p, out var l) || l.Leads)
@@ -867,7 +1014,7 @@ public static class CSharpBackend
                 var retType = byReturn ? "void" : CsType(model, slot.Returns);
                 var sig = Sig(args);
                 var call = string.Concat(args.Select(p => ", " + CallArg(p)));
-                o.Add(XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
+                o.Add(XmlDoc("    ", slot.Doc, DocParams(args),
                     byReturn ? slot.ReturnDoc : null, throwsOnFail: true).TrimEnd());
                 o.Add($"    public {retType} {name}({sig})");
                 o.Add("    {");
@@ -879,10 +1026,12 @@ public static class CSharpBackend
                     o.Add($"{fInd}var {Idioms.Ident(rp.Name!)}Handle = System.Runtime.InteropServices.GCHandle.Alloc({Idioms.Ident(rp.Name!)});");
                 if (callbacks.Count > 0)
                 {
+                    var scoped = callbacks.Where(c => c.Lifetime == ClosureLifetime.Scoped).ToList();
+                    var parks = callbacks.Any(c => c.ErrorLane is null);
                     foreach (var cb in callbacks)
                         o.Add($"{fInd}var {Idioms.Ident(cb.Fn.Name!)}Handle = {Idioms.Ident(cb.Fn.Name!)} is null"
                             + $" ? default : GCHandle.Alloc({Idioms.Ident(cb.Fn.Name!)});");
-                    o.Add($"{fInd}s_parkedCallbackException = null;");
+                    if (parks) o.Add($"{fInd}s_parkedCallbackException = null;");
                     o.Add($"{fInd}ke_error* err = null;");
                     o.Add($"{fInd}bool ok;");
                     o.Add($"{fInd}try");
@@ -890,21 +1039,62 @@ public static class CSharpBackend
                     o.Add($"{fInd}    ok = Handle->{slot.Name}(Handle{call}, &err)"
                         + (slot.Returns == "ke_bool" ? " != 0" : "") + ";");
                     o.Add($"{fInd}}}");
-                    o.Add($"{fInd}finally");
-                    o.Add($"{fInd}{{");
-                    foreach (var cb in callbacks)
-                        o.Add($"{fInd}    if ({Idioms.Ident(cb.Fn.Name!)}Handle.IsAllocated) {Idioms.Ident(cb.Fn.Name!)}Handle.Free();");
-                    o.Add($"{fInd}}}");
-                    o.Add($"{fInd}if (s_parkedCallbackException is {{ }} parked)");
-                    o.Add($"{fInd}{{");
-                    o.Add($"{fInd}    s_parkedCallbackException = null;");
-                    o.Add($"{fInd}    throw parked;");
-                    o.Add($"{fInd}}}");
-                    o.Add($"{fInd}KernelError.ThrowIfFailed(ok, err, \"{slot.Name}\");");
+                    if (scoped.Count > 0)
+                    {
+                        o.Add($"{fInd}finally");
+                        o.Add($"{fInd}{{");
+                        foreach (var cb in scoped)
+                            o.Add($"{fInd}    if ({Idioms.Ident(cb.Fn.Name!)}Handle.IsAllocated) {Idioms.Ident(cb.Fn.Name!)}Handle.Free();");
+                        o.Add($"{fInd}}}");
+                    }
+                    else
+                    {
+                        o.Add($"{fInd}catch");
+                        o.Add($"{fInd}{{");
+                        foreach (var cb in callbacks)
+                            o.Add($"{fInd}    if ({Idioms.Ident(cb.Fn.Name!)}Handle.IsAllocated) {Idioms.Ident(cb.Fn.Name!)}Handle.Free();");
+                        o.Add($"{fInd}    throw;");
+                        o.Add($"{fInd}}}");
+                    }
+                    if (parks)
+                    {
+                        o.Add($"{fInd}if (s_parkedCallbackException is {{ }} parked)");
+                        o.Add($"{fInd}{{");
+                        o.Add($"{fInd}    s_parkedCallbackException = null;");
+                        o.Add($"{fInd}    throw parked;");
+                        o.Add($"{fInd}}}");
+                    }
+                    var retained = callbacks.Where(c => c.Lifetime == ClosureLifetime.Retained).ToList();
+                    if (retained.Count == 0)
+                        o.Add($"{fInd}KernelError.ThrowIfFailed(ok, err, \"{slot.Name}\");");
+                    else
+                    {
+                        o.Add($"{fInd}if (!ok)");
+                        o.Add($"{fInd}{{");
+                        foreach (var cb in retained)
+                            o.Add($"{fInd}    if ({Idioms.Ident(cb.Fn.Name!)}Handle.IsAllocated) {Idioms.Ident(cb.Fn.Name!)}Handle.Free();");
+                        o.Add($"{fInd}    throw KernelError.FromNative(err, \"{slot.Name}\");");
+                        o.Add($"{fInd}}}");
+                        foreach (var cb in retained)
+                        {
+                            var field = RetainedField(cb);
+                            if (cb.RetainKey is { } key)
+                            {
+                                var k = Idioms.Ident(key.Name!);
+                                o.Add($"{fInd}if ({field}.Remove({k}, out var replaced{Idioms.Pascal(cb.Fn.Name!)})) replaced{Idioms.Pascal(cb.Fn.Name!)}.Free();");
+                                o.Add($"{fInd}{field}[{k}] = {Idioms.Ident(cb.Fn.Name!)}Handle;");
+                            }
+                            else
+                            {
+                                o.Add($"{fInd}if ({field}.IsAllocated) {field}.Free();");
+                                o.Add($"{fInd}{field} = {Idioms.Ident(cb.Fn.Name!)}Handle;");
+                            }
+                        }
+                    }
                     for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                     o.Add("    }");
                     o.Add("");
-                    foreach (var cb in callbacks) RenderTrampoline(o, cb);
+                    foreach (var cb in callbacks) RenderTrampoline(model, o, cb);
                     return;
                 }
                 o.Add($"{fInd}ke_error* err = null;");
@@ -977,7 +1167,7 @@ public static class CSharpBackend
 
         string CallArg(ApiParam p) =>
             callbacks.FirstOrDefault(c => c.Fn == p) is { } fnOf
-                ? $"{Idioms.Ident(p.Name!)} is null ? null : ({NativeFnPtr(fnOf)})&{fnOf.Trampoline}"
+                ? $"{Idioms.Ident(p.Name!)} is null ? null : ({NativeFnPtr(model, fnOf)})&{fnOf.Trampoline}"
             : callbacks.FirstOrDefault(c => c.Ctx == p) is { } ctxOf
                 ? $"(void*)GCHandle.ToIntPtr({Idioms.Ident(ctxOf.Fn.Name!)}Handle)"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"

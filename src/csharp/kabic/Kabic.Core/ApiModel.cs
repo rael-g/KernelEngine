@@ -68,7 +68,7 @@ public record ApiFunction(string Name, string Returns, string? Doc, string? Retu
 /// spelling of the type carries none of it, and a backend that has to guess gets it
 /// wrong. Lanes keep the order the prototype declares, so an index identifies one.
 /// </summary>
-public record ApiCallback(string Name, string Returns, IReadOnlyList<ApiParam> Lanes);
+public record ApiCallback(string Name, string Returns, string? Doc, IReadOnlyList<ApiParam> Lanes);
 
 public class ApiModel
 {
@@ -156,7 +156,7 @@ public static class ApiReader
         foreach (var c in root["callbacks"]?.AsArray() ?? [])
         {
             var o = c!.AsObject();
-            m.Callbacks.Add(new ApiCallback(Str(o, "name")!, Str(o, "returns")!,
+            m.Callbacks.Add(new ApiCallback(Str(o, "name")!, Str(o, "returns")!, Str(o, "doc"),
                 o["lanes"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList()));
         }
 

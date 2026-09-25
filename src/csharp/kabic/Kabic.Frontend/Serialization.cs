@@ -81,6 +81,7 @@ public static class Serialization
     {
         ["name"] = c.Name,
         ["returns"] = c.Returns,
+        ["doc"] = c.Doc,
         ["lanes"] = new JsonArray(c.Lanes.Select(l => (JsonNode)l.ToJson()).ToArray()),
     };
 

@@ -826,6 +826,7 @@
     {
       "name": "ke_defer_fn",
       "returns": "void",
+      "doc": "A structural operation run serially at the wave barrier. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world.",
       "lanes": [
         {
           "name": null,

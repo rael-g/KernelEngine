@@ -121,6 +121,7 @@
     {
       "name": "ke_load_model_complete_func",
       "returns": "void",
+      "doc": "Completion callback for ke_asset_loader::load_model_async.",
       "lanes": [
         {
           "name": "error",
