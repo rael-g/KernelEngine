@@ -100,6 +100,20 @@ public class RuntimeTests : IDisposable
     }
 
     [Fact]
+    public void SystemException_StopsTheRestOfTheTick()
+    {
+        using var runtime = new Runtime(_ecs, _taskScheduler);
+        var laterRan = false;
+        runtime.RegisterSystem("Boom", RuntimePhase.PreUpdate,
+            (_, _) => throw new InvalidOperationException("kaboom"));
+        runtime.RegisterSystem("Later", RuntimePhase.PostUpdate, (_, _) => laterRan = true);
+
+        Assert.Throws<InvalidOperationException>(() => runtime.Tick(0.016f));
+
+        Assert.False(laterRan);
+    }
+
+    [Fact]
     public void RenderSystemException_SurvivesTheTickThatDispatchedIt()
     {
         using var runtime = new Runtime(_ecs, _taskScheduler);
