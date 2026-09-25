@@ -20,7 +20,7 @@ zig build test --prefix build/native                 # every plugin's own Zig te
 build/native/bin/c_demo_01                           # run a C example (Linux name; c_demo_01.exe on Windows)
 ```
 
-Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — no separate install step, and no build/CMake-preset directory split between "configure" and "install" locations. C# expects native libraries at `build/native/bin/`.
+Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — no separate install step, and no build/CMake-preset directory split between "configure" and "install" locations. Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
 
 **Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
 
