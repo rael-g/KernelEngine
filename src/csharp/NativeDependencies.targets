@@ -27,7 +27,6 @@
     <NativeArch>arm64</NativeArch>
   </PropertyGroup>
 
-  <!-- Construct the RID for the NuGet package -->
   <PropertyGroup>
     <NativeRID>$(NativeOS)-$(NativeArch)</NativeRID>
     <NativePreset>$(NativeRID)-$(NativeConfig)</NativePreset>
@@ -48,45 +47,21 @@
     <NativePre></NativePre>
   </PropertyGroup>
 
-  <!--
-    The root build.zig converges every plugin's .so/.dll into one shared
-    install prefix regardless of platform (no separate CMake preset dir per
-    OS anymore), so this is a single path, not one split by $(NativeOS).
-    Every plugin's own build.zig installs its shared library to "lib" under
-    that prefix (executables go to "bin" instead) — a deliberate convention
-    change from CMake, which pointed both RUNTIME_ and LIBRARY_OUTPUT_DIRECTORY
-    at the same "bin" folder.
-  -->
   <PropertyGroup>
     <NativeTypeDir>lib</NativeTypeDir>
   </PropertyGroup>
 
-
   <PropertyGroup>
-    <!-- Relative to NativeDependencies.targets (src/csharp/) -->
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))</RepoRoot>
     <NativeFinalDir>$(RepoRoot)/build/native/$(NativeTypeDir)</NativeFinalDir>
   </PropertyGroup>
 
-  <!--
-    Csprojs declare every native DLL they need via:
-
-        <ItemGroup>
-          <NativeDep Include="ke_common" />
-          <NativeDep Include="ke_runtime" />
-        </ItemGroup>
-
-    The legacy single-target shortcut `<NativeTarget>ke_foo</NativeTarget>` is
-    still honored — it just gets folded into the same list at evaluation time.
-  -->
   <ItemGroup Condition="'$(NativeTarget)' != ''">
     <NativeDep Include="$(NativeTarget)" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="@(NativeDep -> '$(NativeFinalDir)/$(NativePre)%(Identity).$(NativeExt)')">
-      <!-- %(Filename) already carries the platform prefix from the resolved
-           path; re-applying $(NativePre) here would double it. -->
       <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
