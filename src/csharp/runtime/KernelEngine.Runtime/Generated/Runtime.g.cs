@@ -167,10 +167,12 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
         KernelError.ThrowIfFailed(Handle->tick(Handle, dt, &err), err, "tick");
     }
 
-    /// <summary>Blocks until any render phase dispatched by a previous tick() has finished. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
+    /// <summary>Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
     public void FlushRender()
     {
-        Handle->flush_render(Handle);
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(Handle->flush_render(Handle, &err), err, "flush_render");
     }
 
     /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>

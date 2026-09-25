@@ -314,11 +314,18 @@
         },
         {
           "name": "flush_render",
-          "returns": "void",
+          "returns": "_Bool",
           "tags": [],
-          "doc": "Blocks until any render phase dispatched by a previous tick() has finished. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.",
-          "return_doc": null,
-          "params": []
+          "doc": "Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.",
+          "return_doc": "false when a body of the render phase failed.",
+          "params": [
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ]
         }
       ]
     },

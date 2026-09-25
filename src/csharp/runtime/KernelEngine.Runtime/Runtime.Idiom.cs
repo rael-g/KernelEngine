@@ -210,7 +210,13 @@ public sealed unsafe partial class Runtime : IRuntime
     /// <inheritdoc />
     public void Flush()
     {
-        FlushRender();
+        try
+        {
+            FlushRender();
+        }
+        catch (KernelError) when (!_systemFailures.IsEmpty)
+        {
+        }
         DrainSystemFailures();
     }
 

@@ -137,11 +137,16 @@ typedef struct ke_runtime {
     bool         (*tick)(ke_runtime *self, float dt, ke_error **out_error);
 
     /// Blocks until any render phase dispatched by a previous tick() has
-    /// finished. tick() dispatches render asynchronously and returns before it
-    /// completes; callers that need to tear down render-owned native resources
-    /// (GPU device, swapchain surface) must call this first, or the still-running
-    /// render phase races the teardown. A no-op if nothing is pending.
-    void (*flush_render)(ke_runtime *self);
+    /// finished, and fails with whatever a body of that phase failed with. That
+    /// phase outlives the tick that dispatched it, so this is where its failure is
+    /// reported rather than by the tick that started it.
+    ///
+    /// tick() dispatches render asynchronously and returns before it completes;
+    /// callers that need to tear down render-owned native resources (GPU device,
+    /// swapchain surface) must call this first, or the still-running render phase
+    /// races the teardown. A no-op if nothing is pending.
+    /// @return false when a body of the render phase failed.
+    bool (*flush_render)(ke_runtime *self, ke_error **out_error);
 } ke_runtime;
 
 typedef struct ke_runtime_handle {

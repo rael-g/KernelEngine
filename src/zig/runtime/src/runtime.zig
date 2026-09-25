@@ -936,9 +936,17 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
     return true;
 }
 
-fn runtimeFlushRender(self: ?*c.ke_runtime) callconv(.c) void {
-    if (self == null or self.?.handle == null) return;
-    _ = runtimeJoinPendingRender(handleOf(self.?));
+fn runtimeFlushRender(self: ?*c.ke_runtime, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (self == null or self.?.handle == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const failure = runtimeJoinPendingRender(handleOf(self.?));
+    if (failure.type) |t| {
+        E.failWithType(out_error, t, failure.system orelse "system body failed", @src());
+        return false;
+    }
+    return true;
 }
 
 fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
@@ -1067,7 +1075,7 @@ const Fixture = struct {
     }
 
     fn flushRender(self: *Fixture) void {
-        self.rt().flush_render.?(self.rt());
+        _ = self.rt().flush_render.?(self.rt(), null);
     }
 };
 

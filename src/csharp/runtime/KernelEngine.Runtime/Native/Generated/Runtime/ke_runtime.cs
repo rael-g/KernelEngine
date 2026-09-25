@@ -15,6 +15,6 @@ public unsafe partial struct ke_runtime
     [NativeTypeName("bool (*)(ke_runtime *, float, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, float, KernelEngine.Common.Native.ke_error**, bool> tick;
 
-    [NativeTypeName("void (*)(ke_runtime *)")]
-    public delegate* unmanaged[Cdecl]<ke_runtime*, void> flush_render;
+    [NativeTypeName("bool (*)(ke_runtime *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, KernelEngine.Common.Native.ke_error**, bool> flush_render;
 }
