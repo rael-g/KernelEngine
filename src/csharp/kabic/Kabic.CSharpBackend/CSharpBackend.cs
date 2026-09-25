@@ -517,7 +517,7 @@ public static class CSharpBackend
         {
             o.Add("");
             o.Add("    /// <summary>");
-            o.Add(cg.RetainKey is not null
+            o.Add(cg.Keyed
                 ? "    /// Keeps every registered handler reachable, one per key the slot registers"
                     + " against."
                 : cg.Shared
@@ -527,8 +527,9 @@ public static class CSharpBackend
             o.Add("    /// The engine holds only an opaque pointer to it, which stops nothing on this");
             o.Add("    /// side from collecting or moving the object before the engine calls back into it.");
             o.Add("    /// </summary>");
-            o.Add(cg.RetainKey is { } key
-                ? $"    private readonly Dictionary<{CsType(model, key.Type)}, GCHandle> {cg.Retained} = new();"
+            o.Add(cg.Keyed
+                ? $"    private readonly Dictionary<{cg.KeyType ?? CsType(model, cg.RetainKey!.Type)}, GCHandle>"
+                    + $" {cg.Retained} = new();"
                 : $"    private GCHandle {cg.Retained};");
         }
 
@@ -620,7 +621,12 @@ public static class CSharpBackend
         foreach (var slot in vtable.Slots.Where(s => s.Has("interns")))
             RenderInterning(o, slot, model, convention);
 
-        o.Add($"    /// <summary>Releases the native {typeName.ToLowerInvariant()}.</summary>");
+        var teardownParks = closureGroups.Any(g => g.Pairs.Any(p => p.Teardown && p.Parks));
+
+        o.Add(teardownParks
+            ? $"    /// <summary>Releases the native {typeName.ToLowerInvariant()}, and rethrows"
+                + " whatever a teardown handler threw once the native stack has unwound.</summary>"
+            : $"    /// <summary>Releases the native {typeName.ToLowerInvariant()}.</summary>");
         o.Add("    public void Dispose()");
         o.Add("    {");
         o.Add("        OnDispose();");
@@ -630,21 +636,49 @@ public static class CSharpBackend
             o.Add("        foreach (var rooted in _rooted.Values) rooted.Free();");
             o.Add("        _rooted.Clear();");
         }
-        foreach (var cg in closureGroups.Where(c => c.Lifetime == ClosureLifetime.Retained))
+        var retainedGroups = closureGroups.Where(c => c.Lifetime == ClosureLifetime.Retained).ToList();
+        var survivors = retainedGroups.Where(c => c.Pairs.Any(p => p.Teardown)).ToList();
+
+        void FreeRetained(IEnumerable<ClosureGroup> gs, string ind = "        ")
         {
-            if (cg.RetainKey is not null)
+            foreach (var cg in gs)
             {
-                o.Add($"        foreach (var retained in {cg.Retained}.Values) retained.Free();");
-                o.Add($"        {cg.Retained}.Clear();");
+                if (cg.Keyed)
+                {
+                    o.Add($"{ind}foreach (var retained in {cg.Retained}.Values) retained.Free();");
+                    o.Add($"{ind}{cg.Retained}.Clear();");
+                }
+                else
+                    o.Add($"{ind}if ({cg.Retained}.IsAllocated) {cg.Retained}.Free();");
             }
-            else
-                o.Add($"        if ({cg.Retained}.IsAllocated) {cg.Retained}.Free();");
         }
-        o.Add("        if (_borrowed) { _native = null; return; }");
+
+        FreeRetained(retainedGroups.Except(survivors));
+        if (survivors.Count > 0)
+        {
+            o.Add("        if (_borrowed)");
+            o.Add("        {");
+            FreeRetained(survivors, "            ");
+            o.Add("            _native = null;");
+            o.Add("            return;");
+            o.Add("        }");
+        }
+        else
+            o.Add("        if (_borrowed) { _native = null; return; }");
         if (shutdownSlot is not null)
             o.Add($"        _native->{shutdownSlot}(_native, null);");
+        if (teardownParks) o.Add("        s_parkedCallbackException = null;");
         o.Add("        _destroy(_native);");
         o.Add("        _native = null;");
+        FreeRetained(survivors);
+        if (teardownParks)
+        {
+            o.Add("        if (s_parkedCallbackException is { } parked)");
+            o.Add("        {");
+            o.Add("            s_parkedCallbackException = null;");
+            o.Add("            throw parked;");
+            o.Add("        }");
+        }
         o.Add("    }");
         o.Add("");
         o.Add("    partial void OnDispose();");
@@ -717,7 +751,14 @@ public static class CSharpBackend
     /// </summary>
     internal sealed record CallbackPair(ApiParam Fn, ApiParam Ctx, ClosureLifetime Lifetime,
         string Delegate, string Trampoline, ApiCallback Callback,
-        int CtxLane, int? ErrorLane, ApiParam? RetainKey);
+        int CtxLane, int? ErrorLane, ApiParam? RetainKey, bool RetainByReturn, bool Teardown)
+    {
+        /// <summary>
+        /// Whether a throwing handler has to wait out the native frames in the parking
+        /// field instead of reporting through a lane of its own.
+        /// </summary>
+        public bool Parks => ErrorLane is null;
+    }
 
     /// <summary>
     /// The name a callback typedef projects to. The typedef is where the ABI already
@@ -732,6 +773,12 @@ public static class CSharpBackend
         else if (n.EndsWith("_fn", StringComparison.Ordinal)) n = n[..^3];
         return Idioms.Pascal(n);
     }
+
+    /// <summary>
+    /// What <c>[retained:&lt;key&gt;]</c> writes when the value telling one registration from
+    /// another is the slot's return rather than anything the caller passed in.
+    /// </summary>
+    const string ReturnKey = "return";
 
     /// <summary>Whether a C type spells a boolean.</summary>
     static bool IsBoolType(string type) => type.Trim() is "_Bool" or "bool" or "ke_bool";
@@ -790,16 +837,32 @@ public static class CSharpBackend
 
             var lifetime = fn.Has("retained") ? ClosureLifetime.Retained : ClosureLifetime.Scoped;
             ApiParam? retainKey = null;
+            var retainByReturn = false;
             if (fn.TagValue("retained") is { } keyName)
             {
-                retainKey = scope.FirstOrDefault(p => p.Name == keyName)
-                    ?? throw new InvalidOperationException(
-                        $"{slot.Name}.{fn.Name}: [retained:{keyName}] names no parameter of this slot");
+                if (keyName == ReturnKey)
+                {
+                    if (slot.Returns.Trim() is "void")
+                        throw new InvalidOperationException(
+                            $"{slot.Name}.{fn.Name}: [retained:{ReturnKey}] keys the registration on what the "
+                            + "slot returns, and this one returns nothing");
+                    retainByReturn = true;
+                }
+                else
+                    retainKey = scope.FirstOrDefault(p => p.Name == keyName)
+                        ?? throw new InvalidOperationException(
+                            $"{slot.Name}.{fn.Name}: [retained:{keyName}] names no parameter of this slot");
             }
-            if (lifetime == ClosureLifetime.Retained && errorLane is null)
+            var teardown = fn.Has("teardown");
+            if (teardown && lifetime != ClosureLifetime.Retained)
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{fn.Name}: [teardown] says the engine calls this handler while the "
+                    + "provider is being destroyed, which only a [retained] closure survives to see");
+            if (lifetime == ClosureLifetime.Retained && errorLane is null && !teardown)
                 throw new InvalidOperationException(
                     $"{slot.Name}.{fn.Name}: a retained closure outlives the call that registered it, so a "
-                    + $"handler that throws has nowhere to report; {callback.Name} needs a ke_error** lane");
+                    + $"handler that throws has nowhere to report; {callback.Name} needs a ke_error** lane, "
+                    + "or [teardown] if the engine only calls it from the destroy this object drives");
             if (errorLane is not null && !IsBoolType(callback.Returns))
                 throw new InvalidOperationException(
                     $"{slot.Name}.{fn.Name}: {callback.Name} has a ke_error** lane but returns "
@@ -807,7 +870,7 @@ public static class CSharpBackend
 
             pairs.Add(new CallbackPair(fn, ctx, lifetime, DelegateName(callback),
                 TrampolineName(slot, fn),
-                callback, ctxLane, errorLane, retainKey));
+                callback, ctxLane, errorLane, retainKey, retainByReturn, teardown));
         }
         return pairs;
     }
@@ -830,7 +893,8 @@ public static class CSharpBackend
     /// call happened to write last. A group of one needs no such object and keeps the
     /// delegate as the handle's target directly.
     /// </summary>
-    internal sealed record ClosureGroup(ApiParam Ctx, IReadOnlyList<CallbackPair> Pairs, string StateType)
+    internal sealed record ClosureGroup(ApiParam Ctx, IReadOnlyList<CallbackPair> Pairs, string StateType,
+        string ReturnType)
     {
         public bool Shared => Pairs.Count > 1;
 
@@ -851,17 +915,34 @@ public static class CSharpBackend
             ? ClosureLifetime.Retained
             : ClosureLifetime.Scoped;
 
-        public ApiParam? RetainKey => Pairs[0].RetainKey;
+        /// <summary>
+        /// The parameter whose value tells one registration's root from another's, when the
+        /// slot registers against a key it was handed rather than replacing a single handler.
+        /// </summary>
+        public ApiParam? RetainKey => Pairs.Select(p => p.RetainKey).FirstOrDefault(k => k is not null);
+
+        /// <summary>
+        /// Whether the identity distinguishing one registration from another is what the
+        /// slot returns, the case when nothing the caller passed names the registration.
+        /// </summary>
+        public bool RetainByReturn => Pairs.Any(p => p.RetainByReturn);
+
+        /// <summary>Whether this group keeps a root per registration rather than one in total.</summary>
+        public bool Keyed => RetainKey is not null || RetainByReturn;
+
+        /// <summary>How the dictionary of roots is keyed, when the group keeps one per registration.</summary>
+        public string? KeyType => RetainByReturn ? ReturnType : null;
 
         /// <summary>How the state object names the slot holding one of the grouped delegates.</summary>
         public static string Field(CallbackPair pair) => Idioms.Pascal(pair.Fn.Name!);
     }
 
-    static IReadOnlyList<ClosureGroup> ClosureGroups(ApiSlot slot, IReadOnlyList<CallbackPair> pairs)
+    static IReadOnlyList<ClosureGroup> ClosureGroups(ApiModel model, ApiSlot slot, IReadOnlyList<CallbackPair> pairs)
     {
         var groups = pairs
             .GroupBy(p => p.Ctx)
-            .Select(g => new ClosureGroup(g.Key, g.ToList(), $"{Idioms.Pascal(slot.Name)}Closures"))
+            .Select(g => new ClosureGroup(g.Key, g.ToList(), $"{Idioms.Pascal(slot.Name)}Closures",
+                CsType(model, slot.Returns)))
             .ToList();
 
         foreach (var g in groups.Where(x => x.Shared))
@@ -875,7 +956,7 @@ public static class CSharpBackend
     }
 
     static IReadOnlyList<ClosureGroup> VtableClosureGroups(ApiModel model, IEnumerable<ClassifiedSlot> slots) =>
-        slots.SelectMany(s => ClosureGroups(s.Slot, CallbackPairs(model, s))).ToList();
+        slots.SelectMany(s => ClosureGroups(model, s.Slot, CallbackPairs(model, s))).ToList();
 
     /// <summary>Every closure a vtable projects, across all its slots.</summary>
     static IReadOnlyList<CallbackPair> VtableClosures(ApiModel model, IEnumerable<ClassifiedSlot> slots) =>
@@ -1007,7 +1088,7 @@ public static class CSharpBackend
         var name = slot.TagValue("name") ?? Idioms.Pascal(slot.Name);
         var lanes = VectorLanes(slot.Params);
         var callbacks = CallbackPairs(model, cs);
-        var groups = ClosureGroups(slot, callbacks);
+        var groups = ClosureGroups(model, slot, callbacks);
 
         if (callbacks.Count > 0 && cs.Shape is not SlotShape.Fallible)
             throw new InvalidOperationException(
@@ -1236,7 +1317,7 @@ public static class CSharpBackend
                 if (callbacks.Count > 0)
                 {
                     var scoped = groups.Where(g => g.Lifetime == ClosureLifetime.Scoped).ToList();
-                    var parks = callbacks.Any(c => c.ErrorLane is null);
+                    var parks = callbacks.Any(c => c.Parks && !c.Teardown);
                     foreach (var g in groups)
                     {
                         if (!g.Shared)
@@ -1255,11 +1336,15 @@ public static class CSharpBackend
                     }
                     BuildBag();
                     if (parks) o.Add($"{fInd}s_parkedCallbackException = null;");
+                    var signalsOk = IsBoolType(slot.Returns);
+                    var capture = signalsOk ? "ok" : retType == "void" ? null : "result";
+                    var failed = signalsOk ? "!ok" : "err != null";
                     o.Add($"{fInd}ke_error* err = null;");
-                    o.Add($"{fInd}bool ok;");
+                    if (signalsOk) o.Add($"{fInd}bool ok;");
+                    else if (capture is not null) o.Add($"{fInd}{retType} {capture};");
                     o.Add($"{fInd}try");
                     o.Add($"{fInd}{{");
-                    o.Add($"{fInd}    ok = Handle->{slot.Name}(Handle{call}, &err)"
+                    o.Add($"{fInd}    {(capture is null ? "" : capture + " = ")}Handle->{slot.Name}(Handle{call}, &err)"
                         + (slot.Returns == "ke_bool" ? " != 0" : "") + ";");
                     o.Add($"{fInd}}}");
                     if (scoped.Count > 0)
@@ -1288,11 +1373,15 @@ public static class CSharpBackend
                         o.Add($"{fInd}}}");
                     }
                     var retained = groups.Where(g => g.Lifetime == ClosureLifetime.Retained).ToList();
-                    if (retained.Count == 0)
+                    if (retained.Count == 0 && signalsOk)
                         o.Add($"{fInd}KernelError.ThrowIfFailed(ok, err, \"{slot.Name}\");");
+                    else if (retained.Count == 0)
+                    {
+                        o.Add($"{fInd}if ({failed}) throw KernelError.FromNative(err, \"{slot.Name}\");");
+                    }
                     else
                     {
-                        o.Add($"{fInd}if (!ok)");
+                        o.Add($"{fInd}if ({failed})");
                         o.Add($"{fInd}{{");
                         foreach (var g in retained)
                             o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
@@ -1301,7 +1390,9 @@ public static class CSharpBackend
                         foreach (var g in retained)
                         {
                             var field = g.Retained;
-                            if (g.RetainKey is { } key)
+                            if (g.RetainByReturn)
+                                o.Add($"{fInd}if ({g.Handle}.IsAllocated) {field}[{capture}] = {g.Handle};");
+                            else if (g.RetainKey is { } key)
                             {
                                 var k = Idioms.Ident(key.Name!);
                                 var replaced = $"replaced{Idioms.Pascal(g.Pairs[0].Fn.Name!)}";
@@ -1315,6 +1406,7 @@ public static class CSharpBackend
                             }
                         }
                     }
+                    if (capture == "result") o.Add($"{fInd}return result;");
                     for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                     o.Add("    }");
                     o.Add("");

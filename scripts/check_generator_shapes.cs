@@ -145,6 +145,51 @@ Expect("a retained closure is kept per key and reports through the channel it de
         Param("ctx", "void *", "context"), Param("tick", "uint32_t"),
         Param("out_error", "ke_error **"))]);
 
+// A params bag the caller fills field by field, not a struct it has to assemble: the
+// bag is rebuilt at the call site so the public surface stays one flat parameter list.
+// Both hooks travel on the one context field, so they share the single object it points
+// at — a handle each would hand every trampoline whichever one the call wrote last. The
+// teardown hook has no error channel because the engine calls it from the destroy this
+// object drives, which is the call that rethrows what it parked.
+Expect("an expanded params bag flattens the call and its shared context roots one object",
+    Vtable("ke_probe", Slot("register_module", "uint64_t",
+        Param("p", "const ke_probe_module_params *", "expand"),
+        Param("out_error", "ke_error **"))),
+    contains: ["public ulong RegisterModule(string name, ProbeLoad? onLoad, ProbeUnload? onUnload)",
+               "private readonly Dictionary<ulong, GCHandle> _retainedUserData = new();",
+               "GCHandle.Alloc(new RegisterModuleClosures { OnLoad = onLoad, OnUnload = onUnload })",
+               "ke_probe_module_params p = default;",
+               "p.user_data = (void*)GCHandle.ToIntPtr(userDataHandle);",
+               "result = Handle->register_module(Handle, &p, &err);",
+               "if (userDataHandle.IsAllocated) _retainedUserData[result] = userDataHandle;",
+               "return result;",
+               "private sealed class RegisterModuleClosures",
+               "state.OnLoad is { } handler",
+               "state.OnUnload is { } handler",
+               "s_parkedCallbackException ??= ex;",
+               "s_parkedCallbackException = null;\n        _destroy(_native);",
+               "foreach (var retained in _retainedUserData.Values) retained.Free();",
+               "throw parked;"],
+    absent: ["ke_probe_module_params* p", "void* userData", "onLoadHandle", "onUnloadHandle"],
+    aliases: new() { ["ke_probe_load_fn"] = "bool (*)(void *, ke_error **)",
+                     ["ke_probe_unload_fn"] = "void (*)(void *)" },
+    callbacks: [Callback("ke_probe_load_fn", "bool",
+                    Param("ctx", "void *", "context"), Param("out_error", "ke_error **")),
+                Callback("ke_probe_unload_fn", "void",
+                    Param("ctx", "void *", "context"))],
+    structs: [new JsonObject
+    {
+        ["name"] = "ke_probe_module_params",
+        ["doc"] = null,
+        ["tags"] = new JsonArray(),
+        ["fields"] = new JsonArray(
+            Param("name", "const char *", "utf8"),
+            Param("user_data", "void *", "context"),
+            Param("on_load", "ke_probe_load_fn", "closure:user_data"),
+            Param("on_unload", "ke_probe_unload_fn", "closure:user_data,retained:return,teardown")),
+        ["slots"] = new JsonArray(),
+    }]);
+
 // A lane carrying a context the engine owns and the caller only relays: the public
 // surface takes nint and the cast back to the ABI's own spelling happens at the call.
 // Leaving the native pointer type in the signature is what forces every consumer to
@@ -223,7 +268,8 @@ Console.WriteLine($"The backend emits all {checks} declared shape(s).");
 return 0;
 
 void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
-    Dictionary<string, string>? aliases = null, JsonObject[]? callbacks = null)
+    Dictionary<string, string>? aliases = null, JsonObject[]? callbacks = null,
+    JsonObject[]? structs = null)
 {
     checks++;
     var api = new JsonObject
@@ -252,6 +298,8 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
         ["functions"] = new JsonArray(),
         ["type_aliases"] = new JsonObject { ["ke_entity"] = "uint64_t" },
     };
+    foreach (var extra in structs ?? [])
+        api["structs"]!.AsArray().Add(extra);
     foreach (var (alias, target) in aliases ?? [])
         api["type_aliases"]!.AsObject()[alias] = target;
 
