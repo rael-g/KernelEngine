@@ -112,7 +112,7 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[09_many_lights] Exited cleanly.");
 

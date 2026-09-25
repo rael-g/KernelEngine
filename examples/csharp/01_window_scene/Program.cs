@@ -72,7 +72,7 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[01_window_scene] Exited cleanly.");
 

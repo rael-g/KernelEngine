@@ -61,9 +61,16 @@ typedef bool (*ke_module_load_fn)(ke_runtime *runtime, void *user_data, ke_error
 typedef void (*ke_module_unload_fn)(ke_runtime *runtime, void *user_data);
 
 typedef struct ke_runtime_module_params {
-    const char         *name;
-    void               *user_data;
-    ke_module_load_fn   on_load;
+    /// [utf8] Identifies the module in diagnostics.
+    const char *name;
+
+    /// [context] Forwarded unchanged to both hooks.
+    void *user_data;
+
+    /// [closure:user_data] Registers the module's components and systems.
+    ke_module_load_fn on_load;
+
+    /// [closure:user_data, retained:return, teardown] Releases what the load acquired.
     ke_module_unload_fn on_unload;
 } ke_runtime_module_params;
 
@@ -110,6 +117,8 @@ typedef struct ke_runtime_system_params {
 typedef struct ke_runtime {
     void *handle;
 
+    /// Loads a module into the runtime, running its load hook before returning.
+    /// @param p [expand] What the module is called and the hooks it registers.
     ke_module_id (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_error **out_error);
     ke_system_id (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_error **out_error);
 

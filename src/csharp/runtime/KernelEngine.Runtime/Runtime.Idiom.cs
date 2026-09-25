@@ -20,7 +20,6 @@ namespace KernelEngine.Runtime;
 /// </summary>
 public sealed unsafe partial class Runtime : IRuntime
 {
-    private readonly List<GCHandle> _moduleHandles = [];
     private readonly List<GCHandle> _systemHandles = [];
 
     /// <summary>
@@ -32,40 +31,11 @@ public sealed unsafe partial class Runtime : IRuntime
     /// </summary>
     private readonly System.Collections.Concurrent.ConcurrentQueue<Exception> _systemFailures = new();
 
-    private sealed class ModuleEntry
-    {
-        public required Runtime Owner { get; init; }
-        public required Action<IRuntime> OnLoad { get; init; }
-
-        /// <summary>
-        /// What <see cref="OnLoad"/> threw. Held on the entry rather than on the runtime
-        /// because the load runs inside the registering call, and a system failing
-        /// concurrently on a worker would otherwise be reported as this module's.
-        /// </summary>
-        public Exception? Failure;
-    }
-
     private sealed class SystemEntry
     {
         public required Runtime Owner { get; init; }
         public Action<IRuntime, float>? Execute { get; init; }
         public Action<IRuntime, nint, float>? ExecuteCtx { get; init; }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static bool ModuleLoadTrampoline(ke_runtime* rt, void* userData, ke_error** out_error)
-    {
-        var entry = (ModuleEntry)GCHandle.FromIntPtr((nint)userData).Target!;
-        try
-        {
-            entry.OnLoad(entry.Owner);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            entry.Failure = ex;
-            return false;
-        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -126,28 +96,14 @@ public sealed unsafe partial class Runtime : IRuntime
     }
 
     /// <inheritdoc />
-    public ulong RegisterModule(string name, Action<IRuntime> onLoad)
+    public ulong RegisterModule(string name, Action<IRuntime> onLoad, Action<IRuntime>? onUnload = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(onLoad);
 
-        var entry = new ModuleEntry { Owner = this, OnLoad = onLoad };
-        var handle = GCHandle.Alloc(entry);
-        _moduleHandles.Add(handle);
-
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + "\0");
-        fixed (byte* namePtr = nameBytes)
-        {
-            ke_runtime_module_params p = default;
-            p.name      = (sbyte*)namePtr;
-            p.user_data = (void*)GCHandle.ToIntPtr(handle);
-            p.on_load   = &ModuleLoadTrampoline;
-
-            var id = RegisterModule(&p);
-            if (entry.Failure is { } trampolineEx)
-                throw new InvalidOperationException($"Module '{name}' OnLoad threw", trampolineEx);
-            return id;
-        }
+        return RegisterModule(name,
+            _ => { onLoad(this); return true; },
+            onUnload is null ? null : _ => onUnload(this));
     }
 
     /// <inheritdoc />
@@ -248,9 +204,8 @@ public sealed unsafe partial class Runtime : IRuntime
 
     partial void OnDispose()
     {
-        foreach (var h in _moduleHandles) if (h.IsAllocated) h.Free();
-        _moduleHandles.Clear();
         foreach (var h in _systemHandles) if (h.IsAllocated) h.Free();
         _systemHandles.Clear();
+        DrainSystemFailures();
     }
 }

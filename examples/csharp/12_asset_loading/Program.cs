@@ -72,6 +72,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[12_asset_loading] Exited cleanly.");

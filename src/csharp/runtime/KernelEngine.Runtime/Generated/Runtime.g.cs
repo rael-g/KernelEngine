@@ -17,12 +17,37 @@ public unsafe interface INativeRuntime
     ke_runtime* Native { get; }
 }
 
+/// <summary>Registers the module's components and systems against the runtime it is being loaded into. Runs inside register_module, before that call returns.</summary>
+/// <param name="runtime">The runtime the module is being loaded into.</param>
+public unsafe delegate bool ModuleLoad(ke_runtime* runtime);
+
+/// <summary>Releases whatever the matching load acquired, as the runtime is torn down.</summary>
+/// <param name="runtime">The runtime the module was loaded into.</param>
+public unsafe delegate void ModuleUnload(ke_runtime* runtime);
+
 
 public unsafe partial class Runtime : IDisposable, INativeRuntime
 {
     private ke_runtime* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_runtime*, void> _destroy;
     private readonly bool _borrowed;
+
+    /// <summary>
+    /// Keeps every registered handler reachable, one per key the slot registers against.
+    /// The engine holds only an opaque pointer to it, which stops nothing on this
+    /// side from collecting or moving the object before the engine calls back into it.
+    /// </summary>
+    private readonly Dictionary<ulong, GCHandle> _retainedUserData = new();
+
+    /// <summary>
+    /// Where a managed exception waits out the native frames. A handler runs
+    /// underneath engine code that has no way to carry an exception, so throwing
+    /// through it would tear down the process; the trampoline parks it here and
+    /// the call rethrows once the native stack has unwound. Per-thread, because
+    /// a handler runs on whichever thread the engine called it from.
+    /// </summary>
+    [ThreadStatic]
+    private static Exception? s_parkedCallbackException;
 
     private ke_runtime* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Runtime));
@@ -49,13 +74,80 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
         _borrowed = borrowed;
     }
 
+    /// <summary>Loads a module into the runtime, running its load hook before returning.</summary>
+    /// <param name="name">Identifies the module in diagnostics.</param>
+    /// <param name="onLoad">Registers the module's components and systems.</param>
+    /// <param name="onUnload">Releases what the load acquired.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong RegisterModule(ke_runtime_module_params* p)
+    public ulong RegisterModule(string name, ModuleLoad? onLoad, ModuleUnload? onUnload)
     {
-        ke_error* err = null;
-        var result = Handle->register_module(Handle, p, &err);
-        if (err != null) throw KernelError.FromNative(err, "register_module");
-        return result;
+        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        fixed (byte* namePtr = nameBytes)
+        {
+            var userDataHandle = onLoad is null && onUnload is null
+                ? default
+                : GCHandle.Alloc(new RegisterModuleClosures { OnLoad = onLoad, OnUnload = onUnload });
+            ke_runtime_module_params p = default;
+            p.name = (sbyte*)namePtr;
+            p.user_data = (void*)GCHandle.ToIntPtr(userDataHandle);
+            p.on_load = onLoad is null ? null : (delegate* unmanaged[Cdecl]<ke_runtime*, void*, ke_error**, bool>)&RegisterModuleOnLoadTrampoline;
+            p.on_unload = onUnload is null ? null : (delegate* unmanaged[Cdecl]<ke_runtime*, void*, void>)&RegisterModuleOnUnloadTrampoline;
+            ke_error* err = null;
+            ulong result;
+            try
+            {
+                result = Handle->register_module(Handle, &p, &err);
+            }
+            catch
+            {
+                if (userDataHandle.IsAllocated) userDataHandle.Free();
+                throw;
+            }
+            if (err != null)
+            {
+                if (userDataHandle.IsAllocated) userDataHandle.Free();
+                throw KernelError.FromNative(err, "register_module");
+            }
+            if (userDataHandle.IsAllocated) _retainedUserData[result] = userDataHandle;
+            return result;
+        }
+    }
+
+    /// <summary>The handlers reached through one shared context pointer.</summary>
+    private sealed class RegisterModuleClosures
+    {
+        public ModuleLoad? OnLoad;
+        public ModuleUnload? OnUnload;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static bool RegisterModuleOnLoadTrampoline(ke_runtime* arg0, void* ctx, ke_error** arg2)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterModuleClosures state && state.OnLoad is { } handler)
+                return handler(arg0);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            KernelError.ToNative(arg2, ex, "ke_module_load_fn");
+            return false;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void RegisterModuleOnUnloadTrampoline(ke_runtime* arg0, void* ctx)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterModuleClosures state && state.OnUnload is { } handler)
+                handler(arg0);
+        }
+        catch (Exception ex)
+        {
+            s_parkedCallbackException ??= ex;
+        }
     }
 
     /// <exception cref="KernelError">The native call failed.</exception>
@@ -81,14 +173,28 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
         Handle->flush_render(Handle);
     }
 
-    /// <summary>Releases the native runtime.</summary>
+    /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>
     public void Dispose()
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
+        if (_borrowed)
+        {
+            foreach (var retained in _retainedUserData.Values) retained.Free();
+            _retainedUserData.Clear();
+            _native = null;
+            return;
+        }
+        s_parkedCallbackException = null;
         _destroy(_native);
         _native = null;
+        foreach (var retained in _retainedUserData.Values) retained.Free();
+        _retainedUserData.Clear();
+        if (s_parkedCallbackException is { } parked)
+        {
+            s_parkedCallbackException = null;
+            throw parked;
+        }
     }
 
     partial void OnDispose();

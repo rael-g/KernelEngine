@@ -71,7 +71,7 @@ if (churn > 0)
         + $"({perNode:F1} bytes retained per node created)");
     Console.WriteLine("[19_node_stress] a node whose handle is never freed cannot be collected, "
         + "so a real leak grows with rounds instead of settling");
-    runtime.UnloadModules(sp);
+    runtime.Dispose();
     return 0;
 }
 
@@ -102,7 +102,7 @@ foreach (var line in failures) Console.WriteLine($"[19_node_stress] FAIL {line}"
 if (failures.Count == 0 && coupled.Count > 0)
     Console.WriteLine($"[19_node_stress] borrows and signals held across {coupled.Count} parents");
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 return failures.Count;
 
 /// <summary>

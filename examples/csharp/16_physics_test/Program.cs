@@ -79,7 +79,7 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[16_physics_test] Exited cleanly.");
 

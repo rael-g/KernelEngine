@@ -68,7 +68,7 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[06_shadow_map] Exited cleanly.");
 

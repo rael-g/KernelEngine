@@ -86,7 +86,7 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[08_spot_lights] Exited cleanly.");
 

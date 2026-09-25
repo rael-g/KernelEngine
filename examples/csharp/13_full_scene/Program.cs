@@ -117,7 +117,7 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[13_full_scene] Exited cleanly.");
 

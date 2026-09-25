@@ -73,7 +73,7 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[07_point_lights] Exited cleanly.");
 

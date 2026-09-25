@@ -41,9 +41,10 @@ public interface IRuntime : IDisposable
 {
     /// <summary>
     /// Registers a module. The runtime calls <paramref name="onLoad"/> during
-    /// the Startup phase in dependency order.
+    /// the Startup phase in dependency order, and <paramref name="onUnload"/> as the
+    /// runtime is disposed, in reverse registration order.
     /// </summary>
-    ulong RegisterModule(string name, Action<IRuntime> onLoad);
+    ulong RegisterModule(string name, Action<IRuntime> onLoad, Action<IRuntime>? onUnload = null);
 
     /// <summary>
     /// Registers a system in the given scheduler <paramref name="phase"/>.

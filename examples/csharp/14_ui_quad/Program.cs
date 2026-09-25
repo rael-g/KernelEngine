@@ -89,7 +89,7 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[14_ui_quad] Exited cleanly.");
 

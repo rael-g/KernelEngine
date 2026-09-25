@@ -105,26 +105,36 @@
         {
           "name": "name",
           "type": "const char *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the module in diagnostics."
         },
         {
           "name": "user_data",
           "type": "void *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded unchanged to both hooks."
         },
         {
           "name": "on_load",
           "type": "ke_module_load_fn",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "closure:user_data"
+          ],
+          "doc": "Registers the module\u0027s components and systems."
         },
         {
           "name": "on_unload",
           "type": "ke_module_unload_fn",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "closure:user_data",
+            "retained:return",
+            "teardown"
+          ],
+          "doc": "Releases what the load acquired."
         }
       ]
     },
@@ -239,14 +249,16 @@
           "name": "register_module",
           "returns": "ke_module_id",
           "tags": [],
-          "doc": null,
+          "doc": "Loads a module into the runtime, running its load hook before returning.",
           "return_doc": null,
           "params": [
             {
               "name": "p",
               "type": "const ke_runtime_module_params *",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "expand"
+              ],
+              "doc": "What the module is called and the hooks it registers."
             },
             {
               "name": "out_error",

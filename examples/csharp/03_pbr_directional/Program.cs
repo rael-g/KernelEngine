@@ -74,7 +74,7 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[03_pbr_directional] Exited cleanly.");
 

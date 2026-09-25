@@ -34,6 +34,32 @@ public class RuntimeTests : IDisposable
     }
 
     [Fact]
+    public void RegisterModule_InvokesOnUnload_WhenRuntimeIsDisposed()
+    {
+        var runtime = new Runtime(_ecs, _taskScheduler);
+        var unloadCount = 0;
+        runtime.RegisterModule("UnloadModule", _ => { }, _ => unloadCount++);
+        Assert.Equal(0, unloadCount);
+
+        runtime.Dispose();
+
+        Assert.Equal(1, unloadCount);
+    }
+
+    [Fact]
+    public void RegisterModule_UnloadsInReverseRegistrationOrder()
+    {
+        var runtime = new Runtime(_ecs, _taskScheduler);
+        var order = new List<string>();
+        runtime.RegisterModule("First", _ => { }, _ => order.Add("First"));
+        runtime.RegisterModule("Second", _ => { }, _ => order.Add("Second"));
+
+        runtime.Dispose();
+
+        Assert.Equal(["Second", "First"], order);
+    }
+
+    [Fact]
     public void RegisteredSystem_FiresOncePerTick()
     {
         using var runtime = new Runtime(_ecs, _taskScheduler);
