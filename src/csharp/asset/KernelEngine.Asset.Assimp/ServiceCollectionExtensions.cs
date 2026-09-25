@@ -24,7 +24,7 @@ public static class ServiceCollectionExtensions
                 ke_error* err = null;
                 var handle = Native.NativeMethods.asset_loader_assimp_create(&@params, &err);
                 if (handle.@ref == null) throw KernelError.FromNative(err, "asset_loader_assimp_create");
-                var scheduler = (KernelEngine.Scheduler.Scheduler)sp.GetRequiredService<IScheduler>();
+                var scheduler = sp.GetRequiredService<IScheduler>();
                 return new AssetLoader(handle, scheduler);
             }
         });

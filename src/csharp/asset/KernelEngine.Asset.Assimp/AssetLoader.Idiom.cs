@@ -16,10 +16,10 @@ namespace KernelEngine.Asset.Assimp;
 /// </summary>
 public unsafe partial class AssetLoader : IAssetLoader
 {
-    private readonly KernelEngine.Scheduler.Scheduler _scheduler;
+    private readonly INativeScheduler _scheduler;
 
     /// <summary>Wraps an owner <c>ke_asset_loader_handle</c>, keeping the scheduler <c>LoadModelAsync</c> dispatches onto.</summary>
-    public AssetLoader(ke_asset_loader_handle handle, KernelEngine.Scheduler.Scheduler scheduler) : this(handle)
+    public AssetLoader(ke_asset_loader_handle handle, INativeScheduler scheduler) : this(handle)
     {
         _scheduler = scheduler;
     }
@@ -45,7 +45,7 @@ public unsafe partial class AssetLoader : IAssetLoader
         {
             native->load_model_async(
                 native,
-                ((INativeScheduler)_scheduler).Native,
+                _scheduler.Native,
                 (sbyte*)pathPtr,
                 &NativeLoadCompleteCallback,
                 (void*)GCHandle.ToIntPtr(stateHandle));

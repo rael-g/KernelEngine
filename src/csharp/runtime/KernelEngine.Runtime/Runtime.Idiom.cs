@@ -122,12 +122,7 @@ public sealed unsafe partial class Runtime : IRuntime
     private static ke_scheduler* NativeSchedulerOf(IScheduler taskScheduler)
     {
         ArgumentNullException.ThrowIfNull(taskScheduler);
-        if (taskScheduler is not KernelEngine.Scheduler.Scheduler concrete)
-            throw new ArgumentException(
-                $"Runtime currently requires {nameof(KernelEngine.Scheduler.Scheduler)} (or a subclass) as the "
-                + $"{nameof(IScheduler)} impl; got {taskScheduler.GetType().Name}.",
-                nameof(taskScheduler));
-        return ((INativeScheduler)concrete).Native;
+        return taskScheduler.Native;
     }
 
     /// <inheritdoc />
