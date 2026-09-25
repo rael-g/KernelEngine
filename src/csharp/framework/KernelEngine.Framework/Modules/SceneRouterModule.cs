@@ -48,18 +48,10 @@ public sealed class SceneRouterModule : IRuntimeModule
 
         loader.RegisterScriptFactory((entity, typeName) =>
         {
-            try
-            {
-                var type = types.Resolve(typeName);
-                var node = (Node)ActivatorUtilities.CreateInstance(services, type);
-                scriptHost.BindNativeEntity(node, entity);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[SceneRouter] script factory failed for '{typeName}' entity={entity}: {ex.Message}");
-                return false;
-            }
+            var type = types.Resolve(typeName);
+            var node = (Node)ActivatorUtilities.CreateInstance(services, type);
+            scriptHost.BindNativeEntity(node, entity);
+            return true;
         });
 
         var done = new System.Threading.ManualResetEventSlim(false);

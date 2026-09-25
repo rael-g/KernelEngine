@@ -243,11 +243,28 @@ fn normalizeTypeName(name: [*c]const u8, out: *[type_name_max]u8) ?[*:0]const u8
     return @ptrCast(out);
 }
 
-fn dispatchScript(s: *State, entity: c.ke_entity, type_name: [*c]const u8) void {
-    const factory = s.script_factory orelse return;
+fn dispatchScript(
+    s: *State,
+    entity: c.ke_entity,
+    type_name: [*c]const u8,
+    out_error: [*c][*c]c.ke_error,
+) bool {
+    const factory = s.script_factory orelse return true;
     var buf: [type_name_max]u8 = undefined;
-    const resolved = normalizeTypeName(type_name, &buf) orelse return;
-    _ = factory(s.script_ctx, entity, resolved, null);
+    const resolved = normalizeTypeName(type_name, &buf) orelse {
+        E.fail(out_error, .invalid_argument, "entity type name is longer than the loader accepts", @src());
+        return false;
+    };
+
+    var factory_error: [*c]c.ke_error = null;
+    if (factory(s.script_ctx, entity, resolved, &factory_error)) return true;
+
+    if (factory_error != null) {
+        if (out_error != null) out_error.* = factory_error;
+    } else {
+        E.fail(out_error, .general, "script factory rejected the entity type", @src());
+    }
+    return false;
 }
 
 fn tableEntryCount(tbl: *c.toml_table_t) usize {
@@ -589,15 +606,17 @@ fn processEntity(
 
     const type_d = c.toml_string_in(args.entity_tbl, "type");
     if (type_d.ok != 0) {
-        dispatchScript(s, entity, type_d.u.s);
+        const dispatched = dispatchScript(s, entity, type_d.u.s, out_error);
         std.c.free(type_d.u.s);
+        if (!dispatched) return false;
     }
 
     if (args.override_outer) |outer| {
         const outer_type = c.toml_string_in(outer, "type");
         if (outer_type.ok != 0) {
-            dispatchScript(s, entity, outer_type.u.s);
+            const dispatched = dispatchScript(s, entity, outer_type.u.s, out_error);
             std.c.free(outer_type.u.s);
+            if (!dispatched) return false;
         }
     }
 
@@ -1773,6 +1792,86 @@ test "the script factory receives the entity and the normalized type name" {
     try testing.expectEqual(@as(i32, 1), spy.calls);
     try testing.expectEqualStrings("paddle_controller", std.mem.sliceTo(&spy.last_type, 0));
     try testing.expectEqual(f.find("Paddle"), spy.last_entity);
+}
+
+fn rejectingFactory(
+    ctx: ?*anyopaque,
+    entity: c.ke_entity,
+    type_name: [*c]const u8,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    _ = entity;
+    _ = type_name;
+    _ = out_error;
+    const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
+    spy.calls += 1;
+    return false;
+}
+
+fn reportingFactory(
+    ctx: ?*anyopaque,
+    entity: c.ke_entity,
+    type_name: [*c]const u8,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    _ = entity;
+    _ = type_name;
+    const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
+    spy.calls += 1;
+    E.fail(out_error, .not_found, "no script is registered under that type", @src());
+    return false;
+}
+
+test "a factory that rejects an entity fails the load instead of being discarded" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var spy: ScriptSpy = .{};
+    const l = f.loader();
+    try testing.expect(l.register_script_factory.?(l, rejectingFactory, &spy, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Paddle"
+        \\type = "PaddleController"
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expectEqual(@as(i32, 1), spy.calls);
+    try testing.expect(err != null);
+}
+
+test "a factory's own error reaches the caller rather than being replaced" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var spy: ScriptSpy = .{};
+    const l = f.loader();
+    try testing.expect(l.register_script_factory.?(l, reportingFactory, &spy, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Paddle"
+        \\type = "PaddleController"
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+    try testing.expectEqualStrings(
+        "no script is registered under that type",
+        std.mem.span(err.*.message),
+    );
+    try testing.expectEqual(E.typeOf(.not_found), @as(*const c.ke_error_type, @ptrCast(err.*.type)));
 }
 
 fn normalizedName(name: [*c]const u8) []const u8 {
