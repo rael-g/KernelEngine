@@ -389,6 +389,11 @@ const RegisteredSystem = struct {
     derived_access_count: u32,
 };
 
+const RegisteredModule = struct {
+    user_data: ?*anyopaque,
+    on_unload: c.ke_module_unload_fn,
+};
+
 const RenderJob = struct {
     h: *RuntimeHandle,
     dt: f32,
@@ -400,6 +405,9 @@ const RuntimeState = struct {
     systems: ?[*]?*RegisteredSystem,
     system_count: usize,
     system_capacity: usize,
+    modules: ?[*]RegisteredModule,
+    module_count: usize,
+    module_capacity: usize,
     next_module_id: u64,
     next_system_id: u64,
     fixed_dt: f32,
@@ -432,9 +440,31 @@ fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_
         return 0;
     }
     const h = handleOf(self.?);
+
+    if (h.state.module_count == h.state.module_capacity) {
+        const new_cap: usize = if (h.state.module_capacity != 0) h.state.module_capacity * 2 else 4;
+        const new_buf = cAlloc(RegisteredModule, new_cap) orelse {
+            E.fail(out_error, .out_of_memory, "module array allocation failed", @src());
+            return 0;
+        };
+        if (h.state.modules) |old| {
+            @memcpy(new_buf[0..h.state.module_count], old[0..h.state.module_count]);
+            cFree(RegisteredModule, old, h.state.module_capacity);
+        }
+        h.state.modules = new_buf;
+        h.state.module_capacity = new_cap;
+    }
+
+    const slot = h.state.module_count;
+    h.state.modules.?[slot] = .{ .user_data = p.*.user_data, .on_unload = p.*.on_unload };
+    h.state.module_count += 1;
+
     h.state.next_module_id += 1;
     const id = h.state.next_module_id;
-    if (!p.*.on_load.?(self, p.*.user_data, out_error)) return 0;
+    if (!p.*.on_load.?(self, p.*.user_data, out_error)) {
+        h.state.modules.?[slot] = .{ .user_data = null, .on_unload = null };
+        return 0;
+    }
     return id;
 }
 
@@ -867,6 +897,16 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     const h = handleOf(self.?);
 
     runtimeJoinPendingRender(h);
+
+    if (h.state.modules) |modules| {
+        var i = h.state.module_count;
+        while (i > 0) {
+            i -= 1;
+            if (modules[i].on_unload) |unload| unload(self, modules[i].user_data);
+        }
+        cFree(RegisteredModule, modules, h.state.module_capacity);
+    }
+
     if (h.state.render_job) |rj| cFree(RenderJob, @ptrCast(rj), 1);
 
     if (h.state.systems) |systems| {
@@ -1024,6 +1064,31 @@ fn testModuleOnLoad(runtime: ?*c.ke_runtime, ud: ?*anyopaque, _: [*c][*c]c.ke_er
     return rtp.register_system.?(rtp, &sys, null) != 0;
 }
 
+const UnloadRecorder = struct {
+    seen: [4]u32 = [_]u32{0} ** 4,
+    count: usize = 0,
+};
+
+const OrderedModule = struct {
+    recorder: *UnloadRecorder,
+    tag: u32,
+};
+
+fn orderedOnLoad(_: ?*c.ke_runtime, _: ?*anyopaque, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    return true;
+}
+
+fn refusingOnLoad(_: ?*c.ke_runtime, _: ?*anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    E.fail(out_error, .invalid_argument, "module refused to load", @src());
+    return false;
+}
+
+fn orderedOnUnload(_: ?*c.ke_runtime, ud: ?*anyopaque) callconv(.c) void {
+    const m: *OrderedModule = @ptrCast(@alignCast(ud.?));
+    m.recorder.seen[m.recorder.count] = m.tag;
+    m.recorder.count += 1;
+}
+
 const SliceProbe = struct {
     calls: Counter = Counter.init(0),
     seen: [64]Counter = [_]Counter{Counter.init(0)} ** 64,
@@ -1137,6 +1202,75 @@ test "a registered system fires once per tick" {
     for (0..10) |_| try testing.expect(f.tick(1.0 / 60.0));
 
     try testing.expectEqual(@as(u32, 10), ctx.system_ticks.load(.acquire));
+}
+
+test "a module's unload hook runs when the runtime is destroyed" {
+    var recorder = UnloadRecorder{};
+    var only = OrderedModule{ .recorder = &recorder, .tag = 7 };
+
+    var f = try Fixture.init();
+    var mod = std.mem.zeroes(c.ke_runtime_module_params);
+    mod.name = "UnloadModule";
+    mod.user_data = &only;
+    mod.on_load = &orderedOnLoad;
+    mod.on_unload = &orderedOnUnload;
+
+    try testing.expect(f.rt().register_module.?(f.rt(), &mod, null) != 0);
+    try testing.expectEqual(@as(usize, 0), recorder.count);
+
+    f.deinit();
+
+    try testing.expectEqual(@as(usize, 1), recorder.count);
+    try testing.expectEqual(@as(u32, 7), recorder.seen[0]);
+}
+
+test "modules unload in reverse registration order" {
+    var recorder = UnloadRecorder{};
+    var first = OrderedModule{ .recorder = &recorder, .tag = 1 };
+    var second = OrderedModule{ .recorder = &recorder, .tag = 2 };
+    var third = OrderedModule{ .recorder = &recorder, .tag = 3 };
+
+    var f = try Fixture.init();
+    for ([_]*OrderedModule{ &first, &second, &third }) |m| {
+        var mod = std.mem.zeroes(c.ke_runtime_module_params);
+        mod.name = "Ordered";
+        mod.user_data = m;
+        mod.on_load = &orderedOnLoad;
+        mod.on_unload = &orderedOnUnload;
+        try testing.expect(f.rt().register_module.?(f.rt(), &mod, null) != 0);
+    }
+
+    f.deinit();
+
+    try testing.expectEqual(@as(usize, 3), recorder.count);
+    try testing.expectEqualSlices(u32, &[_]u32{ 3, 2, 1 }, recorder.seen[0..3]);
+}
+
+test "a module whose load failed is not unloaded" {
+    var recorder = UnloadRecorder{};
+    var loaded = OrderedModule{ .recorder = &recorder, .tag = 1 };
+    var refused = OrderedModule{ .recorder = &recorder, .tag = 2 };
+
+    var f = try Fixture.init();
+
+    var good = std.mem.zeroes(c.ke_runtime_module_params);
+    good.name = "Loads";
+    good.user_data = &loaded;
+    good.on_load = &orderedOnLoad;
+    good.on_unload = &orderedOnUnload;
+    try testing.expect(f.rt().register_module.?(f.rt(), &good, null) != 0);
+
+    var bad = std.mem.zeroes(c.ke_runtime_module_params);
+    bad.name = "Refuses";
+    bad.user_data = &refused;
+    bad.on_load = &refusingOnLoad;
+    bad.on_unload = &orderedOnUnload;
+    try testing.expectEqual(@as(c.ke_module_id, 0), f.rt().register_module.?(f.rt(), &bad, null));
+
+    f.deinit();
+
+    try testing.expectEqual(@as(usize, 1), recorder.count);
+    try testing.expectEqual(@as(u32, 1), recorder.seen[0]);
 }
 
 test "registering a module with no params is refused" {
