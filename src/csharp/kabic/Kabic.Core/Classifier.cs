@@ -120,10 +120,6 @@ public static class Classifier
 
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
 
-        // An out parameter only becomes the method's return when the slot has no
-        // answer of its own. A slot that already returns something meaningful is
-        // reporting two things at once, and promoting the out parameter over the
-        // return drops the very thing the caller asked for.
         var carriesReturn = slot.Returns.Trim() is not "void"
             && !convention.SignalsFailureByReturn(slot.Returns);
         var outParam = allOut.Count == 1 && !carriesReturn ? allOut[0] : null;
