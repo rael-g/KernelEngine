@@ -120,9 +120,11 @@ public unsafe partial class Scheduler : IScheduler
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void NativeWorkCallback(void* data, ke_error_type** outFailure)
     {
-        var job = (DispatchJob)GCHandle.FromIntPtr((IntPtr)data).Target!;
+        var handle = GCHandle.FromIntPtr((IntPtr)data);
+        var job = (DispatchJob)handle.Target!;
         try { job.Body(); }
         catch (Exception ex) { job.Failure = ex; }
+        finally { handle.Free(); }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

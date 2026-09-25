@@ -92,6 +92,27 @@ public sealed class SchedulerTests
             () => mock.Scheduler.Dispatch(() => throw new InvalidOperationException("boom")));
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static async Task<WeakReference> DispatchAndForget(SchedImpl scheduler)
+    {
+        var body = new object();
+        await scheduler.Dispatch(() => GC.KeepAlive(body));
+        return new WeakReference(body);
+    }
+
+    [Fact]
+    public async Task Dispatch_Action_ReleasesTheHandleRootingTheBody()
+    {
+        using var mock = new MockSchedulerHandle();
+        WeakReference body = await DispatchAndForget(mock.Scheduler);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.False(body.IsAlive);
+    }
+
     [Fact]
     public async Task Dispatch_Func_ReturnsResult()
     {
