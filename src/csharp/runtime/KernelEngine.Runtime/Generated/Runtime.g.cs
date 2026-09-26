@@ -200,14 +200,14 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
     /// <param name="execute">The body itself.</param>
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong RegisterSystemRaw(string name, RuntimePhase phase, Span<ke_query_decl> queries, Span<ke_component_access> accessList, uint pinnedThread, bool perEntity, SystemExecute? execute)
+    public ulong RegisterSystemRaw(string name, RuntimePhase phase, Span<QueryDecl> queries, Span<ComponentAccess> accessList, uint pinnedThread, bool perEntity, SystemExecute? execute)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            fixed (ke_query_decl* queriesPtr = queries)
+            fixed (QueryDecl* queriesPtr = queries)
             {
-                fixed (ke_component_access* accessListPtr = accessList)
+                fixed (ComponentAccess* accessListPtr = accessList)
                 {
                     var executeHandle = execute is null
                         ? default
@@ -215,9 +215,9 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
                     ke_runtime_system_params p = default;
                     p.name = (sbyte*)namePtr;
                     p.phase = (ke_phase)phase;
-                    p.queries = queriesPtr;
+                    p.queries = (ke_query_decl*)queriesPtr;
                     p.query_count = (uint)queries.Length;
-                    p.access_list = accessListPtr;
+                    p.access_list = (ke_component_access*)accessListPtr;
                     p.access_count = (uint)accessList.Length;
                     p.pinned_thread = pinnedThread;
                     p.per_entity = perEntity;

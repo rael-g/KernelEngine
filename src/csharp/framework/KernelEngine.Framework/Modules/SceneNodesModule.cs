@@ -94,7 +94,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             input?.Update();
             _inputSnapshot = input?.CaptureSnapshot();
             evaluator?.Evaluate(_inputSnapshot);
-        }, accessList: Array.Empty<ComponentAccess>(), pinnedThread: 1);
+        }, accessList: [], pinnedThread: 1);
 
         DeclareSignals(scriptHost, services);
 
@@ -102,7 +102,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         if (signals is not null)
         {
             runtime.RegisterSystem("Scene.Signals.Clear", RuntimePhase.PreUpdate, (_, _, _) =>
-                signals.ClearFrame(), accessList: Array.Empty<ComponentAccess>());
+                signals.ClearFrame(), accessList: []);
 
             runtime.RegisterSystem("Scene.Signals.Deliver", RuntimePhase.PostUpdate, (_, ctx, _) =>
             {
@@ -115,7 +115,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                         for (uint i = 0; i < count; i++)
                             scriptHost.Deliver(in list[i]);
                 }
-            }, accessList: Array.Empty<ComponentAccess>());
+            }, accessList: []);
         }
 
         scriptHost.BehaviorTypeAdded += type =>
@@ -134,23 +134,21 @@ public sealed class SceneNodesModule : IRuntimeModule
                 into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
             }
 
-            var terms = owned
-                .Select(e => e.Value ? ComponentAccess.Write(e.Key) : ComponentAccess.Read(e.Key))
-                .ToArray();
+            var terms = owned.Select(e => Touches(e.Key, e.Value)).ToArray();
 
             var access = new List<ComponentAccess>
             {
-                ComponentAccess.Read(hierarchyCid),
-                ComponentAccess.Read(nameCid),
+                Touches(hierarchyCid, writes: false),
+                Touches(nameCid, writes: false),
             };
             foreach (var (cid, isWrite) in reached)
                 if (!owned.ContainsKey(cid))
-                    access.Add(isWrite ? ComponentAccess.Write(cid) : ComponentAccess.Read(cid));
+                    access.Add(Touches(cid, isWrite));
 
-            var queries = terms.Length is > 0 and <= QueryDecl.MaxTerms ? new[] { new QueryDecl(terms) } : null;
+            var queries = terms.Length is > 0 and <= QueryDecl.TermsCapacity ? new[] { Query(terms) } : null;
             if (queries is null)
                 foreach (var (cid, isWrite) in owned)
-                    access.Add(isWrite ? ComponentAccess.Write(cid) : ComponentAccess.Read(cid));
+                    access.Add(Touches(cid, isWrite));
 
             runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (_, ctx, dt) =>
             {
@@ -198,6 +196,16 @@ public sealed class SceneNodesModule : IRuntimeModule
         });
         done.Wait();
         if (err != null) throw new InvalidOperationException("Scene setup failed", err);
+    }
+
+    private static ComponentAccess Touches(uint cid, bool writes) =>
+        new() { Cid = cid, Access = writes ? RuntimeAccess.Write : RuntimeAccess.Read };
+
+    private static QueryDecl Query(ComponentAccess[] terms)
+    {
+        var decl = new QueryDecl { TermCount = (uint)terms.Length };
+        for (var i = 0; i < terms.Length; i++) decl.Terms[i] = terms[i];
+        return decl;
     }
 
     /// <summary>

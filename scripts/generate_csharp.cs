@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 using Kabic;
 using Kabic.CSharp;
 
-string? apiPath = null, ns = null, nativeNs = null, outDir = null, enumsOutDir = null, library = null, domain = null;
+string? apiPath = null, ns = null, nativeNs = null, outDir = null, contractOutDir = null, library = null, domain = null;
 var explicitProviders = new HashSet<string>();
 var explicitCallbacks = new HashSet<string>();
 var extraUsings = new List<string>();
@@ -18,7 +18,7 @@ for (var i = 0; i < args.Length; i++)
         case "--namespace": ns = args[++i]; break;
         case "--native-namespace": nativeNs = args[++i]; break;
         case "--out": outDir = args[++i]; break;
-        case "--enums-out": enumsOutDir = args[++i]; break;
+        case "--contract-out": contractOutDir = args[++i]; break;
         case "--provider": explicitProviders.Add(args[++i]); break;
         case "--callback": explicitCallbacks.Add(args[++i]); break;
         case "--using": extraUsings.Add(args[++i]); break;
@@ -31,7 +31,8 @@ if (apiPath is null || ns is null || nativeNs is null || outDir is null)
 {
     Console.Error.WriteLine("usage: dotnet run scripts/generate_csharp.cs -- --api <ke_api.json> "
         + "--namespace <NS> --native-namespace <NS.Native> --out <dir> "
-        + "[--provider <vtable>]... [--callback <vtable>]... [--using <NS>]... [--library <so-name>] [--domain <name>]");
+        + "[--contract-out <dir>] [--provider <vtable>]... [--callback <vtable>]... [--using <NS>]..."
+        + " [--library <so-name>] [--domain <name>]");
     return 1;
 }
 
@@ -42,19 +43,23 @@ var classified = Classifier.Classify(model, explicitProviders, explicitCallbacks
 
 Directory.CreateDirectory(outDir);
 
+var contractDir = contractOutDir ?? outDir;
+
 if (model.Enums.Any(e => !e.External))
 {
-    var enumsDir = enumsOutDir ?? outDir;
-    Directory.CreateDirectory(enumsDir);
+    Directory.CreateDirectory(contractDir);
     var enumsFile = domain is null
         ? "Enums.g.cs"
         : $"{Idioms.TypeName(domain, convention)}.Enums.g.cs";
-    File.WriteAllText(Path.Combine(enumsDir, enumsFile), CSharpBackend.RenderEnums(model, ns, convention));
+    File.WriteAllText(Path.Combine(contractDir, enumsFile), CSharpBackend.RenderEnums(model, ns, convention));
 }
 
 foreach (var value in model.Structs.Where(s => s.Has("value") && !s.External && !s.IsVtable))
-    File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(value.Name, convention)}.g.cs"),
+{
+    Directory.CreateDirectory(contractDir);
+    File.WriteAllText(Path.Combine(contractDir, $"{Idioms.TypeName(value.Name, convention)}.g.cs"),
         CSharpBackend.RenderStruct(model, value, ns, convention));
+}
 
 foreach (var kinds in model.Enums.Where(e => !e.External && e.Has("borrow_kinds")))
     File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(kinds.Name, convention)}Wrappers.g.cs"),

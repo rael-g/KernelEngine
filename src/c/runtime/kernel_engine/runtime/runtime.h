@@ -34,12 +34,17 @@ typedef enum ke_access {
     KE_ACCESS_WRITE = 1 << 1,
 } ke_access;
 
+/// [value] One component a system touches, and how. The scheduler groups systems into
+/// parallel waves by comparing these: two systems conflict when they name the same
+/// component and at least one writes it, and conflicting systems are placed in
+/// different waves. A system that declares nothing conflicts with nothing, and is
+/// therefore free to run concurrently with everything.
 typedef struct ke_component_access {
     ke_component_id cid;
     ke_access       access;
 } ke_component_access;
 
-/// A query a system reads through: a tuple of components (matched together) with
+/// [value] A query a system reads through: a tuple of components (matched together) with
 /// the access mode the scheduler uses to order waves. Resolved into archetype
 /// segments before the wave; the system body reads them via ke_system_ctx_view.
 typedef struct ke_query_decl {

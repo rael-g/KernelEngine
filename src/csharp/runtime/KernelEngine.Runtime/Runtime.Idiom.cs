@@ -6,12 +6,10 @@ using KernelEngine.Scheduler.Native;
 namespace KernelEngine.Runtime;
 
 /// <summary>
-/// The parts of <see cref="Runtime"/> that are not a direct image of the C ABI: a
-/// system is registered against queries described by managed records, which have to be
-/// laid out as the ABI's own structs before the call can take them, and a body written
-/// against the managed surface is handed the runtime rather than the raw context
-/// pointer. Everything mirroring the vtable 1:1 is generated in
-/// <c>Generated/Runtime.g.cs</c>.
+/// The parts of <see cref="Runtime"/> that are not a direct image of the C ABI: a body
+/// written against the managed surface is handed the runtime rather than the raw context
+/// pointer, and the borrowed dependencies are taken as their managed wrappers. Everything
+/// mirroring the vtable 1:1 is generated in <c>Generated/Runtime.g.cs</c>.
 /// </summary>
 public sealed unsafe partial class Runtime : IRuntime
 {
@@ -49,8 +47,8 @@ public sealed unsafe partial class Runtime : IRuntime
 
     /// <inheritdoc />
     ulong IRuntime.RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, float> execute,
-                                 IReadOnlyList<QueryDecl>? queries = null,
-                                 IReadOnlyList<ComponentAccess>? accessList = null,
+                                 QueryDecl[]? queries = null,
+                                 ComponentAccess[]? accessList = null,
                                  uint pinnedThread = 0,
                                  bool perEntity = false)
     {
@@ -61,8 +59,8 @@ public sealed unsafe partial class Runtime : IRuntime
 
     /// <inheritdoc />
     ulong IRuntime.RegisterSystem(string name, RuntimePhase phase, Action<IRuntime, nint, float> execute,
-                                 IReadOnlyList<QueryDecl>? queries = null,
-                                 IReadOnlyList<ComponentAccess>? accessList = null,
+                                 QueryDecl[]? queries = null,
+                                 ComponentAccess[]? accessList = null,
                                  uint pinnedThread = 0,
                                  bool perEntity = false)
     {
@@ -72,36 +70,12 @@ public sealed unsafe partial class Runtime : IRuntime
     }
 
     private ulong RegisterSystemDeclared(string name, RuntimePhase phase, SystemExecute execute,
-                                  IReadOnlyList<QueryDecl>? queries,
-                                  IReadOnlyList<ComponentAccess>? accessList,
+                                  QueryDecl[]? queries,
+                                  ComponentAccess[]? accessList,
                                   uint pinnedThread,
                                   bool perEntity)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
-
-        var nativeQueries = new ke_query_decl[queries?.Count ?? 0];
-        for (var q = 0; q < nativeQueries.Length; q++)
-        {
-            var terms = queries![q].Terms ?? [];
-            if (terms.Length > QueryDecl.MaxTerms)
-                throw new ArgumentException(
-                    $"Query {q} of system '{name}' declares {terms.Length} terms; the ABI allows {QueryDecl.MaxTerms}.",
-                    nameof(queries));
-            for (var t = 0; t < terms.Length; t++)
-            {
-                nativeQueries[q].terms[t].cid = terms[t].Cid;
-                nativeQueries[q].terms[t].access = (ke_access)terms[t].Access;
-            }
-            nativeQueries[q].term_count = (uint)terms.Length;
-        }
-
-        var nativeAccess = new ke_component_access[accessList?.Count ?? 0];
-        for (var a = 0; a < nativeAccess.Length; a++)
-        {
-            nativeAccess[a].cid = accessList![a].Cid;
-            nativeAccess[a].access = (ke_access)accessList[a].Access;
-        }
-
-        return RegisterSystemRaw(name, phase, nativeQueries, nativeAccess, pinnedThread, perEntity, execute);
+        return RegisterSystemRaw(name, phase, queries ?? [], accessList ?? [], pinnedThread, perEntity, execute);
     }
 }

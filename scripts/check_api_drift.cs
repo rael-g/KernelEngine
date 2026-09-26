@@ -33,7 +33,7 @@ try
         var ns = d["namespace"]!.GetValue<string>();
         var nativeNs = d["nativeNamespace"]!.GetValue<string>();
         var committedOutDir = Path.Combine(rootDir, d["outDir"]!.GetValue<string>());
-        var committedAbstractionsDir = d["abstractionsOutDir"] is not null
+        var committedContractDir = d["abstractionsOutDir"] is not null
             ? Path.Combine(rootDir, d["abstractionsOutDir"]!.GetValue<string>()) : committedOutDir;
         var usings = d["usings"]?.AsArray().Select(u => u!.GetValue<string>()).ToList() ?? [];
         var library = d["library"]?.GetValue<string>();
@@ -42,7 +42,7 @@ try
 
         var tmpApiJson = Path.Combine(tmpRoot, $"{name}.ke_api.json");
         var tmpOutDir = Path.Combine(tmpRoot, name, "out");
-        var tmpEnumsDir = d["abstractionsOutDir"] is not null ? Path.Combine(tmpRoot, name, "abstractions") : tmpOutDir;
+        var tmpContractDir = d["abstractionsOutDir"] is not null ? Path.Combine(tmpRoot, name, "abstractions") : tmpOutDir;
 
         var extractArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "extract_api.cs"), "--",
             "--out", tmpApiJson };
@@ -68,7 +68,7 @@ try
 
         var genArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "generate_csharp.cs"), "--",
             "--api", tmpApiJson, "--namespace", ns, "--native-namespace", nativeNs,
-            "--out", tmpOutDir, "--enums-out", tmpEnumsDir, "--domain", name };
+            "--out", tmpOutDir, "--contract-out", tmpContractDir, "--domain", name };
         foreach (var u in usings) genArgs.AddRange(["--using", u]);
         if (library is not null) genArgs.AddRange(["--library", library]);
 
@@ -79,7 +79,7 @@ try
             continue;
         }
 
-        if (!DirsEqual(tmpOutDir, committedOutDir) || !DirsEqual(tmpEnumsDir, committedAbstractionsDir))
+        if (!DirsEqual(tmpOutDir, committedOutDir) || !DirsEqual(tmpContractDir, committedContractDir))
         {
             Console.WriteLine($"[!] {name}: generated C# is out of date "
                 + $"(committed: {Path.GetRelativePath(rootDir, committedOutDir)})");

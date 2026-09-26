@@ -38,13 +38,13 @@ foreach (var dRaw in domains)
 
     var apiJson = Rebase(d["apiJson"]!.GetValue<string>());
     var outDir = Rebase(d["outDir"]!.GetValue<string>());
-    var enumsDir = d["abstractionsOutDir"] is not null
+    var contractDir = d["abstractionsOutDir"] is not null
         ? Rebase(d["abstractionsOutDir"]!.GetValue<string>()) : outDir;
     if (shadowRoot is not null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(apiJson)!);
         Directory.CreateDirectory(outDir);
-        Directory.CreateDirectory(enumsDir);
+        Directory.CreateDirectory(contractDir);
     }
 
     var extractArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "extract_api.cs"), "--",
@@ -64,7 +64,7 @@ foreach (var dRaw in domains)
     var genArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "generate_csharp.cs"), "--",
         "--api", apiJson, "--namespace", d["namespace"]!.GetValue<string>(),
         "--native-namespace", d["nativeNamespace"]!.GetValue<string>(),
-        "--out", outDir, "--enums-out", enumsDir, "--domain", name };
+        "--out", outDir, "--contract-out", contractDir, "--domain", name };
     foreach (var u in d["usings"]?.AsArray() ?? []) genArgs.AddRange(["--using", u!.GetValue<string>()]);
     if (d["library"] is JsonNode lib) genArgs.AddRange(["--library", lib.GetValue<string>()]);
 

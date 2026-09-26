@@ -424,6 +424,7 @@ public static class CSharpBackend
     /// </summary>
     static string ValueTypeName(ApiModel model, string cType, Convention convention) =>
         model.Structs.Any(v => v.Name == cType.Trim() && v.Has("value") && !v.External)
+        || model.Enums.Any(e => e.Name == cType.Trim() && !e.External)
             ? Idioms.TypeName(cType.Trim(), convention)
             : CsType(model, cType);
 
