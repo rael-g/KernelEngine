@@ -10,6 +10,15 @@ public enum SlotShape { Fallible, Try, ReturnsOutParam, TupleOutParams, Plain }
 /// </summary>
 public record SequencePair(ApiParam Seq, ApiParam Count);
 
+/// <summary>
+/// An opaque-payload pair: the <c>void *</c> parameter carrying <c>[bytes_of:name]</c> and
+/// the byte count it names. The two are one value the caller already holds as a type, so
+/// the projection takes that type and derives the count from it -- left apart, the caller
+/// supplies the address and the size of the same variable and nothing checks that the two
+/// describe it.
+/// </summary>
+public record BlobPair(ApiParam Blob, ApiParam Size);
+
 /// <param name="OutParams">All <c>[out]</c> params other than a sequence, in declaration order.</param>
 /// <param name="PublicParams">
 /// Every parameter a caller still supplies: the trailing error out-param, and the
@@ -41,6 +50,13 @@ public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiPa
     /// address, which is the whole of what a binding is supposed to have stopped doing.
     /// </summary>
     public IReadOnlyList<ApiParam> TrailingOuts { get; init; } = [];
+
+    /// <summary>
+    /// The opaque payloads the slot takes, each with the byte count bounding it. The count
+    /// leaves the signature the same way a sequence's does, and the payload is spelled as
+    /// the caller's own type.
+    /// </summary>
+    public IReadOnlyList<BlobPair> Blobs { get; init; } = [];
 }
 
 public enum ConstructorKind { FromFactory, FromHandle, None }
@@ -200,6 +216,27 @@ public static class Classifier
         }
         ps = ps.Where(p => sequences.All(s => s.Count != p)).ToList();
 
+        var blobs = new List<BlobPair>();
+        foreach (var blob in ps.Where(p => p.Has("bytes_of")))
+        {
+            if (!CTypes.IsPointer(blob.Type))
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{blob.Name}: [bytes_of] bounds the bytes a pointer reaches, and "
+                    + $"{blob.Type.Trim()} is not one");
+            if (CTypes.Deref(blob.Type).Replace("const ", "").Trim() is not "void")
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{blob.Name}: [bytes_of] is how an opaque payload names the type it "
+                    + $"carries, and {blob.Type.Trim()} already names one -- a typed sequence is "
+                    + "[array_of:] instead.");
+            var sizeName = blob.TagValue("bytes_of");
+            var size = ps.FirstOrDefault(p => p.Name == sizeName)
+                ?? throw new InvalidOperationException(
+                    $"{slot.Name}.{blob.Name}: [bytes_of:{sizeName}] names a byte-count parameter "
+                    + "the slot does not declare");
+            blobs.Add(new BlobPair(blob, size));
+        }
+        ps = ps.Where(p => blobs.All(b => b.Size != p)).ToList();
+
         ApiParam? returnCount = null;
         if (slot.ReturnTagValue("array_of") is { } returnCountName)
         {
@@ -252,6 +289,13 @@ public static class Classifier
                 + " something the header says, so the projection for it has to be chosen rather"
                 + " than guessed at here.");
 
+        if (blobs.Count > 0 && shape is not SlotShape.Plain)
+            throw new InvalidOperationException(
+                $"{slot.Name}: the slot takes an opaque payload and is projected as {shape}. The"
+                + " payload is spelled as the caller's own type, which makes the method generic, and"
+                + " how that reads alongside the rest of this shape is a choice rather than something"
+                + " to infer from the header here.");
+
         return new ClassifiedSlot(slot, shape, fallible, outParam, sequences,
             isTry ? allOut : tupleOut ?? [], ps)
         {
@@ -259,6 +303,7 @@ public static class Classifier
             ExpandedStruct = bag,
             ReturnCount = returnCount,
             TrailingOuts = trailingOuts,
+            Blobs = blobs,
         };
     }
 }

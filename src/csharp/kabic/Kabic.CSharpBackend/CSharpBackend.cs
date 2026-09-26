@@ -202,6 +202,32 @@ public static class CSharpBackend
             ? p.Name!["out_".Length..]
             : p.Name!;
 
+    /// <summary>
+    /// The type parameter standing for an opaque payload. Named after the parameter it
+    /// carries, so a slot taking two payloads spells which is which instead of leaving the
+    /// caller to count positions.
+    /// </summary>
+    static string BlobTypeParam(ApiParam p) => "T" + Idioms.Pascal(p.Name!);
+
+    /// <summary>
+    /// The pinned payload and the byte count derived from it. The count is the size of the
+    /// type the caller passed, which is the whole reason the pair travels as one value.
+    /// </summary>
+    static (List<string> Lines, int Depth) BlobPrologue(IEnumerable<BlobPair> blobs, string indent)
+    {
+        var lines = new List<string>();
+        var depth = 0;
+        foreach (var b in blobs)
+        {
+            var n = Idioms.Ident(b.Blob.Name!);
+            var at = indent + new string(' ', depth * 4);
+            lines.Add($"{at}fixed ({BlobTypeParam(b.Blob)}* {n}Ptr = &{n})");
+            lines.Add($"{at}{{");
+            depth++;
+        }
+        return (lines, depth);
+    }
+
     static string OutElement(ApiModel model, ApiParam p, Convention convention) =>
         p.TagValue("enum") is { } named
             ? Idioms.TypeName(named, convention)
@@ -1509,6 +1535,8 @@ public static class CSharpBackend
                         ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
                     : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
                         ? $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}"
+                    : cs.Blobs.Any(b => b.Blob == p)
+                        ? $"in {BlobTypeParam(p)} {Idioms.Ident(p.Name!)}"
                     : cs.TrailingOuts.Contains(p)
                         ? $"out {OutElement(model, p, convention)} {Idioms.Ident(WrittenName(p))}"
                         : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"))
@@ -1836,18 +1864,25 @@ public static class CSharpBackend
                 var needsCast = retType == "nint" ? "(nint)"
                     : spanElement is null && slot.Returns != "ke_bool"
                         ? ReturnCast(model, slot.Returns, convention) : "";
+                var generics = cs.Blobs.Count == 0 ? ""
+                    : "<" + string.Join(", ", cs.Blobs.Select(b => BlobTypeParam(b.Blob))) + ">";
+                var constraints = string.Concat(cs.Blobs
+                    .Select(b => $" where {BlobTypeParam(b.Blob)} : unmanaged"));
                 Declare(o, decls,
                     XmlDoc("    ", slot.Doc, args.Select(p =>
                         (Idioms.Ident(cs.TrailingOuts.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)),
                         slot.ReturnDoc).TrimEnd(),
-                    $"{retType} {name}({sig})");
+                    $"{retType} {name}{generics}({sig}){constraints}");
                 o.Add("    {");
                 var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
                 var (pSeq, pSeqDepth) = SequencePrologue(model, cs.Sequences,
                     new string(' ', 8 + pDepth * 4), convention);
+                var (pBlob, pBlobDepth) = BlobPrologue(cs.Blobs,
+                    new string(' ', 8 + (pDepth + pSeqDepth) * 4));
                 o.AddRange(pPro);
                 o.AddRange(pSeq);
-                pDepth += pSeqDepth;
+                o.AddRange(pBlob);
+                pDepth += pSeqDepth + pBlobDepth;
                 var pInd = new string(' ', 8 + pDepth * 4);
                 foreach (var op in cs.TrailingOuts)
                     o.Add($"{pInd}{OutElement(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
@@ -1893,6 +1928,10 @@ public static class CSharpBackend
                 ? $"(void*)GCHandle.ToIntPtr({ctxOf.Handle})"
             : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSeq
                 ? SequenceArg(model, asSeq, convention)
+            : cs.Blobs.FirstOrDefault(b => b.Blob == p) is { } asBlob
+                ? $"({NativePointerType(model, p.Type)}){Idioms.Ident(p.Name!)}Ptr"
+            : cs.Blobs.FirstOrDefault(b => b.Size == p) is { } asSize
+                ? $"({CsType(model, asSize.Size.Type)})sizeof({BlobTypeParam(asSize.Blob)})"
             : p == cs.ReturnCount ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local")
             : cs.TrailingOuts.Contains(p)
                 ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local")
@@ -2086,6 +2125,10 @@ public static class CSharpBackend
 
         var args = (self is null ? [] : new[] { selfArg! }).Concat(rest.Select(p =>
             p == cs.ReturnCount || writes.Contains(p) ? OutAddress(model, p, convention, Local(p))
+            : cs.Blobs.FirstOrDefault(b => b.Blob == p) is { } asBlob
+                ? $"({NativePointerType(model, p.Type)}){Idioms.Ident(p.Name!)}Ptr"
+            : cs.Blobs.FirstOrDefault(b => b.Size == p) is { } asSize
+                ? $"({CsType(model, asSize.Size.Type)})sizeof({BlobTypeParam(asSize.Blob)})"
             : p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!)));
         var call = $"{(cs.ReturnCount is null ? ReturnCast(model, f.Returns, convention) : "")}"
@@ -2093,13 +2136,20 @@ public static class CSharpBackend
             + (f.Returns == "ke_bool" ? " != 0" : "");
 
         var sigParts = (selfSig is null ? [] : new[] { selfSig }).Concat(ins.Select(p =>
-            cs.TrailingOuts.Contains(p)
+            cs.Blobs.Any(b => b.Blob == p)
+                ? $"in {BlobTypeParam(p)} {Idioms.Ident(p.Name!)}"
+            : cs.TrailingOuts.Contains(p)
                 ? $"out {OutElement(model, p, convention)} {Idioms.Ident(WrittenName(p))}"
                 : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
 
+        var generics = cs.Blobs.Count == 0 ? ""
+            : "<" + string.Join(", ", cs.Blobs.Select(b => BlobTypeParam(b.Blob))) + ">";
+        var constraints = string.Concat(cs.Blobs
+            .Select(b => $" where {BlobTypeParam(b.Blob)} : unmanaged"));
+
         o.Add(XmlDoc("    ", f.Doc, ins.Select(p =>
             (Idioms.Ident(cs.TrailingOuts.Contains(p) ? WrittenName(p) : p.Name!), p.Doc))).TrimEnd());
-        o.Add($"    public static {retType} {methodName}({string.Join(", ", sigParts)})");
+        o.Add($"    public static {retType} {methodName}{generics}({string.Join(", ", sigParts)}){constraints}");
         o.Add("    {");
 
         var needsFixed = self is not null && !selfIsCtx;
@@ -2126,14 +2176,23 @@ public static class CSharpBackend
                 : $"return ({string.Join(", ", tupleOuts.Select(Local))});");
         }
 
-        var indent = new string(' ', needsFixed ? 12 : 8);
+        var pins = new List<string>();
         if (needsFixed)
+            pins.Add($"fixed ({CsType(model, CTypes.Deref(self!.Type))}* p = &{Idioms.Ident(self.Name!)})");
+        foreach (var b in cs.Blobs)
+            pins.Add($"fixed ({BlobTypeParam(b.Blob)}* {Idioms.Ident(b.Blob.Name!)}Ptr"
+                + $" = &{Idioms.Ident(b.Blob.Name!)})");
+
+        var braced = pins.Count > 1 || (pins.Count == 1 && body.Count > 1);
+        for (var i = 0; i < pins.Count; i++)
         {
-            o.Add($"        fixed ({CsType(model, CTypes.Deref(self!.Type))}* p = &{Idioms.Ident(self.Name!)})");
-            if (body.Count > 1) o.Add("        {");
+            var at = new string(' ', 8 + i * 4);
+            o.Add(at + pins[i]);
+            if (braced) o.Add(at + "{");
         }
+        var indent = new string(' ', 8 + pins.Count * 4);
         foreach (var line in body) o.Add(indent + line);
-        if (needsFixed && body.Count > 1) o.Add("        }");
+        if (braced) for (var i = pins.Count - 1; i >= 0; i--) o.Add(new string(' ', 8 + i * 4) + "}");
         o.Add("    }");
         o.Add("");
     }

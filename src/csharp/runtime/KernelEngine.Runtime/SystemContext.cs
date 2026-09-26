@@ -1,33 +1,13 @@
-using System.Runtime.InteropServices;
-
 namespace KernelEngine.Runtime;
 
 /// <summary>
-/// Typed reads of a system context on top of <see cref="SystemCtx"/>: a component
-/// attached from a value rather than from the byte pair the ABI takes, and the entities
-/// of one resolved segment. A context of zero is accepted throughout — it means "outside
-/// a system", and every operation answers the same way the native side does for it.
+/// Typed reads of a system context on top of <see cref="SystemCtx"/>: how many segments a
+/// query resolved to, and the entities of one of them. A context of zero is accepted
+/// throughout — it means "outside a system", and every operation answers the same way the
+/// native side does for it.
 /// </summary>
 public static unsafe class SystemContext
 {
-    [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl,
-               EntryPoint = "ke_system_ctx_attach", ExactSpelling = true)]
-    private static extern byte ke_system_ctx_attach(void* ctx, ulong entity, uint cid,
-                                                    void* data, nuint size);
-
-    /// <summary>
-    /// Deferred-attaches component <paramref name="cid"/> to <paramref name="entity"/>
-    /// with <paramref name="value"/> as its data. The component is added at the wave
-    /// barrier; the value is copied immediately so its lifetime need not extend past
-    /// this call. Returns false if no context (0) or on allocation failure — the
-    /// caller then falls back to its immediate path.
-    /// </summary>
-    public static bool Attach<T>(nint ctx, ulong entity, uint cid, in T value) where T : unmanaged
-    {
-        fixed (T* p = &value)
-            return ke_system_ctx_attach((void*)ctx, entity, cid, p, (nuint)sizeof(T)) != 0;
-    }
-
     /// <summary>
     /// How many archetype segments the system's query at <paramref name="queryIndex"/>
     /// resolved to this tick. Zero for a system that declared no query, so a caller

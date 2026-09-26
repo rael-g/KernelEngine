@@ -48,9 +48,10 @@ public unsafe partial class SystemCtx
     }
 
     /// <summary>Deferred-attaches `size` bytes of `data` as component `cid` of `entity`, applied at the wave barrier. The bytes are copied, so the caller's buffer need not outlive the call. False for a context of zero, which is the caller's signal to use its immediate path instead.</summary>
-    public static bool Attach(nint ctx, ulong entity, uint cid, void* data, nuint size)
+    public static bool Attach<TData>(nint ctx, ulong entity, uint cid, in TData data) where TData : unmanaged
     {
-        return Native.ke_system_ctx_attach((ke_system_ctx*)ctx, entity, cid, data, size);
+        fixed (TData* dataPtr = &data)
+            return Native.ke_system_ctx_attach((ke_system_ctx*)ctx, entity, cid, (void*)dataPtr, (nuint)sizeof(TData));
     }
 
 

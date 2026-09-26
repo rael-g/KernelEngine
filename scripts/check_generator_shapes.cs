@@ -132,6 +132,34 @@ ExpectFreeFunctions("a free function honours [ctx], [out] and a counted return",
     absent: ["in ke_probe_ctx ctx", "fixed (ke_probe_ctx* p =",
              "Samples(nint ctx, uint query, nuint* outCount)", "out uint index"]);
 
+// An opaque payload bounded by a byte count. The caller already holds the value as a type,
+// so the pair travels as that type and the count is derived from it -- left apart, the
+// caller passes the address and the size of the same variable and nothing relates the two.
+ExpectFreeFunctions("an opaque payload counted in bytes takes the caller's own type",
+    [
+        Function("ke_probe_ctx_attach", "bool",
+            Param("ctx", "ke_probe_ctx *", "ctx"),
+            Param("entity", "uint64_t"),
+            Param("data", "const void *", "bytes_of:size"),
+            Param("size", "size_t")),
+    ],
+    contains: ["public static bool Attach<TData>(nint ctx, ulong entity, in TData data)"
+               + " where TData : unmanaged",
+               "fixed (TData* dataPtr = &data)",
+               "return Native.ke_probe_ctx_attach((ke_probe_ctx*)ctx, entity, (void*)dataPtr,"
+               + " (nuint)sizeof(TData));"],
+    absent: ["public static bool Attach(nint"]);
+
+// The same tag on a pointer that already names its type. Deriving the count from a type
+// parameter there would let the caller name a second type over bytes the declaration has
+// already spoken for.
+Expect("a typed pointer tagged as an opaque payload is refused",
+    Vtable("ke_probe", Slot("write", "void",
+        Param("data", "const uint32_t *", "bytes_of:size"),
+        Param("size", "size_t"))),
+    contains: [], absent: [],
+    throws: "already names one");
+
 // A run of consecutive float parameters that spell out one vector: the public surface
 // takes the vector, and the lanes are spread at the call. A C ABI cannot say "Vector2",
 // so without this every such slot grows a hand-written overload whose only content is

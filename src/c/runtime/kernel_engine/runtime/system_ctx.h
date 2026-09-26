@@ -97,6 +97,7 @@ KE_RUNTIME_API ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx);
 /// outlive the call. False for a context of zero, which is the caller's signal to
 /// use its immediate path instead.
 /// @param ctx [ctx]
+/// @param data [bytes_of:size]
 KE_RUNTIME_API bool     ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
                                                ke_component_id cid, const void *data, size_t size);
 

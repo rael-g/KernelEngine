@@ -102,7 +102,7 @@ public interface IRenderResources
     /// <paramref name="key"/> (same convention as <see cref="UploadTexture"/>).
     /// Queuing a UI quad no longer goes through this interface — attach a
     /// <c>ke_ui_quad_component</c> ("ui_quad") to an entity via
-    /// <c>ScriptHost</c>/<c>SystemContext.Attach</c> instead; the "render.ui"
+    /// <c>ScriptHost</c>/<c>SystemCtx.Attach</c> instead; the "render.ui"
     /// pass reads it through a declared ECS query.
     /// </summary>
     FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,

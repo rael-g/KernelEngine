@@ -763,7 +763,9 @@
         {
           "name": "data",
           "type": "const void *",
-          "tags": [],
+          "tags": [
+            "bytes_of:size"
+          ],
           "doc": null
         },
         {

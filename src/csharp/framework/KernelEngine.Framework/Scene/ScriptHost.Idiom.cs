@@ -437,7 +437,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         {
             var existing = _ecs.GetComponent<T>(entity, cid);
             if (!existing.IsEmpty) { existing[0] = value; return; }
-            if (Runtime.SystemContext.Attach(_systemCtx, entity, cid, in value)) return;
+            if (Runtime.SystemCtx.Attach(_systemCtx, entity, cid, in value)) return;
         }
         var sp = _ecs.AddComponent<T>(entity, cid);
         if (!sp.IsEmpty) sp[0] = value;
@@ -460,7 +460,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// keeps its context internal, so this is the only path to it.
     /// </summary>
     public bool Attach<T>(in View view, ulong entity, uint cid, in T value) where T : unmanaged =>
-        KernelEngine.Runtime.SystemContext.Attach(view.SystemContext, entity, cid, in value);
+        KernelEngine.Runtime.SystemCtx.Attach(view.SystemContext, entity, cid, in value);
 
     /// <summary>Resolves the cid a component is registered under, or throws when the name is unknown.</summary>
     public uint CidOfName(string name) =>
