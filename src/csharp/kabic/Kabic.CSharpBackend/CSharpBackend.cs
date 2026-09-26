@@ -44,7 +44,7 @@ public static class CSharpBackend
     /// lines and the number of braces the caller must close. Composes with the [utf8]
     /// prologue: both only open blocks, in whatever order the caller emits them.
     static (List<string> Lines, int Depth) SequencePrologue(ApiModel model,
-        IEnumerable<SequencePair> seqs, string indent)
+        IEnumerable<SequencePair> seqs, string indent, Convention convention)
     {
         var lines = new List<string>();
         var depth = 0;
@@ -52,11 +52,36 @@ public static class CSharpBackend
         {
             var n = Idioms.Ident(s.Seq.Name!);
             var at = indent + new string(' ', depth * 4);
-            lines.Add($"{at}fixed ({CsType(model, CTypes.Deref(s.Seq.Type))}* {n}Ptr = {n})");
+            lines.Add($"{at}fixed ({SequenceElement(model, s, convention)}* {n}Ptr = {n})");
             lines.Add($"{at}{{");
             depth++;
         }
         return (lines, depth);
+    }
+
+    /// The element type a sequence parameter is spelled with. A <c>[value]</c> element
+    /// takes its managed mirror, so a caller composes the span out of the projection it
+    /// already holds rather than the native spelling of the same bytes.
+    static string SequenceElement(ApiModel model, SequencePair s, Convention convention) =>
+        ValueTypeName(model, StripQualifiers(CTypes.Deref(s.Seq.Type)), convention);
+
+    /// The pinned pointer a sequence parameter hands the vtable. A <c>[value]</c> element is
+    /// pinned as its managed mirror, which the slot takes under the native spelling of the
+    /// same bytes -- so the cast is between two projections of one declaration, not between
+    /// a generated type and a hand-written guess at its layout.
+    static string SequenceArg(ApiModel model, SequencePair s, Convention convention)
+    {
+        var n = Idioms.Ident(s.Seq.Name!);
+        var native = CsType(model, CTypes.Deref(s.Seq.Type));
+        return SequenceElement(model, s, convention) == native ? $"{n}Ptr" : $"({native}*){n}Ptr";
+    }
+
+    static string StripQualifiers(string cType)
+    {
+        var t = cType.Trim();
+        if (t.StartsWith("const ", StringComparison.Ordinal)) t = t["const ".Length..];
+        if (t.StartsWith("struct ", StringComparison.Ordinal)) t = t["struct ".Length..];
+        return t.Trim();
     }
 
     /// A C type mapped to C#. Typedef aliases resolve first; pointers recurse so
@@ -320,11 +345,17 @@ public static class CSharpBackend
     /// </summary>
     public static string RenderStruct(ApiModel model, ApiStruct s, string ns, Convention convention)
     {
-        var needsNumerics = s.Fields.Any(f => ValueFieldType(model, s, f).StartsWith("Vector", StringComparison.Ordinal)
-            || ValueFieldType(model, s, f) == "Quaternion");
+        var needsNumerics = s.Fields.Any(f => ValueFieldType(model, s, f, convention).StartsWith("Vector", StringComparison.Ordinal)
+            || ValueFieldType(model, s, f, convention) == "Quaternion");
+        var inlineArrays = s.Fields
+            .Select(f => (Field: f, Array: ValueArray(model, s, f, convention)))
+            .Where(x => x.Array is not null)
+            .Select(x => (x.Field, Array: x.Array!.Value))
+            .ToList();
 
         var o = new List<string> { Header };
         if (needsNumerics) o.Add("using System.Numerics;");
+        if (inlineArrays.Count > 0) o.Add("using System.Runtime.CompilerServices;");
         o.Add("using System.Runtime.InteropServices;\n");
         o.Add($"namespace {ns};\n");
         o.Add(s.Doc is not null
@@ -333,15 +364,68 @@ public static class CSharpBackend
         o.Add("[StructLayout(LayoutKind.Sequential)]");
         o.Add($"public partial struct {Idioms.TypeName(s.Name, convention)}");
         o.Add("{");
+        foreach (var (f, array) in inlineArrays)
+        {
+            o.Add($"    /// <summary>Elements <c>{Idioms.Pascal(f.Name)}</c> has room for, as the ABI"
+                + " fixes it. A caller composing the field from a set it does not control checks this"
+                + " first -- there is no element past it to write.</summary>");
+            o.Add($"    public const int {Idioms.Pascal(f.Name)}Capacity = {array.Arity};");
+            o.Add("");
+        }
         foreach (var f in s.Fields)
         {
             if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
-            o.Add($"    public {ValueFieldType(model, s, f)} {Idioms.Pascal(f.Name)};");
+            o.Add($"    public {ValueFieldType(model, s, f, convention)} {Idioms.Pascal(f.Name)};");
+        }
+        foreach (var (f, array) in inlineArrays)
+        {
+            o.Add("");
+            o.Add($"    /// <summary>The <c>{f.Type.Trim()}</c> of <c>{Idioms.Pascal(f.Name)}</c> laid"
+                + " out inline, so the field occupies the bytes the ABI reads it from.</summary>");
+            o.Add($"    [InlineArray({Idioms.Pascal(f.Name)}Capacity)]");
+            o.Add($"    public partial struct {array.Buffer}");
+            o.Add("    {");
+            o.Add($"        public {array.Element} Element;");
+            o.Add("    }");
         }
         o.Add("}");
         o.Add("");
         return string.Join('\n', o);
     }
+
+    /// <summary>
+    /// The fixed-size array a <c>[value]</c> field describes, or null when it describes a
+    /// single element. A managed struct cannot spell <c>T[8]</c> inline for a <c>T</c> that
+    /// is itself a struct, so the arity moves into an <c>[InlineArray]</c> wrapper that
+    /// occupies the same bytes -- the alternative being a field that silently stands for
+    /// one element where the ABI reads several.
+    /// </summary>
+    static (string Buffer, string Element, int Arity)? ValueArray(ApiModel model, ApiStruct s, ApiField f,
+        Convention convention)
+    {
+        var m = Regex.Match(f.Type.Trim(), @"^(.+?)\s*\[(\d+)\]$");
+        if (!m.Success || IsCharArray(f.Type) || VectorArity(f.Type) is not null) return null;
+
+        var element = m.Groups[1].Value.Trim();
+        if (CTypes.IsPointer(element))
+            throw new InvalidOperationException(
+                $"{s.Name}.{f.Name}: [value] describes data a caller holds, and an array of"
+                + " pointers makes the lifetime of what they reach someone else's question.");
+
+        return ($"{Idioms.Pascal(f.Name)}Buffer", ValueTypeName(model, element, convention),
+            int.Parse(m.Groups[2].Value));
+    }
+
+    /// <summary>
+    /// A C type named inside a <c>[value]</c> struct or handed out as a sequence of one.
+    /// Another <c>[value]</c> struct resolves to its own managed mirror rather than the
+    /// native spelling, so the two projections compose instead of a caller holding one
+    /// type whose fields are the other.
+    /// </summary>
+    static string ValueTypeName(ApiModel model, string cType, Convention convention) =>
+        model.Structs.Any(v => v.Name == cType.Trim() && v.Has("value") && !v.External)
+            ? Idioms.TypeName(cType.Trim(), convention)
+            : CsType(model, cType);
 
     /// <summary>
     /// The type one field of a <c>[value]</c> struct takes. Every answer here has to occupy
@@ -350,7 +434,7 @@ public static class CSharpBackend
     /// node property affords — a fixed char array reads far better as a string, and is a
     /// different size — so those are refused rather than quietly changing the layout.
     /// </summary>
-    static string ValueFieldType(ApiModel model, ApiStruct s, ApiField f)
+    static string ValueFieldType(ApiModel model, ApiStruct s, ApiField f, Convention convention)
     {
         if (CTypes.IsPointer(f.Type))
             throw new InvalidOperationException(
@@ -366,7 +450,8 @@ public static class CSharpBackend
 
         if (VectorArity(f.Type) is int n) return $"Vector{n}";
         if (NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v)) return v.CsType;
-        return CsType(model, f.Type);
+        if (ValueArray(model, s, f, convention) is { } array) return array.Buffer;
+        return ValueTypeName(model, f.Type, convention);
     }
 
     /// <summary>
@@ -1264,8 +1349,8 @@ public static class CSharpBackend
                 ? $"Vector{l.Arity} {Idioms.Ident(l.Vector)}"
                 : callbacks.FirstOrDefault(c => c.Fn == p) is { } cb
                     ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
-                : cs.Sequences.Any(s => s.Seq == p)
-                    ? $"Span<{CsType(model, CTypes.Deref(p.Type))}> {Idioms.Ident(p.Name!)}"
+                : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
+                    ? $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}"
                     : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}");
 
         switch (cs.Shape)
@@ -1283,7 +1368,7 @@ public static class CSharpBackend
                 o.Add("    {");
                 var (roPro, roDepth) = Utf8Prologue(ins, new string(' ', 8));
                 var (roSeq, roSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + roDepth * 4));
+                    new string(' ', 8 + roDepth * 4), convention);
                 o.AddRange(roPro);
                 o.AddRange(roSeq);
                 roDepth += roSeqDepth;
@@ -1321,7 +1406,7 @@ public static class CSharpBackend
                 o.Add("    {");
                 var (tuPro, tuDepth) = Utf8Prologue(ins, new string(' ', 8));
                 var (tuSeq, tuSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + tuDepth * 4));
+                    new string(' ', 8 + tuDepth * 4), convention);
                 o.AddRange(tuPro);
                 o.AddRange(tuSeq);
                 tuDepth += tuSeqDepth;
@@ -1357,7 +1442,7 @@ public static class CSharpBackend
                 foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
                 var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
                 var (tSeq, tSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + tDepth * 4));
+                    new string(' ', 8 + tDepth * 4), convention);
                 o.AddRange(tPro);
                 o.AddRange(tSeq);
                 tDepth += tSeqDepth;
@@ -1390,7 +1475,7 @@ public static class CSharpBackend
                 o.Add("    {");
                 var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
                 var (fSeq, fSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + fDepth * 4));
+                    new string(' ', 8 + fDepth * 4), convention);
                 o.AddRange(fPro);
                 o.AddRange(fSeq);
                 fDepth += fSeqDepth;
@@ -1571,7 +1656,7 @@ public static class CSharpBackend
                 o.Add("    {");
                 var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
                 var (pSeq, pSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + pDepth * 4));
+                    new string(' ', 8 + pDepth * 4), convention);
                 o.AddRange(pPro);
                 o.AddRange(pSeq);
                 pDepth += pSeqDepth;
@@ -1603,7 +1688,7 @@ public static class CSharpBackend
             : groups.FirstOrDefault(g => g.Ctx == p) is { } ctxOf
                 ? $"(void*)GCHandle.ToIntPtr({ctxOf.Handle})"
             : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSeq
-                ? $"{Idioms.Ident(asSeq.Seq.Name!)}Ptr"
+                ? SequenceArg(model, asSeq, convention)
             : cs.Sequences.FirstOrDefault(s => s.Count == p) is { } asCount
                 ? $"({CsType(model, asCount.Count.Type)}){Idioms.Ident(asCount.Seq.Name!)}.Length"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"

@@ -337,6 +337,26 @@ ExpectValueStruct("a value struct refuses a fixed char array",
     contains: [], absent: [],
     throws: "has no managed type of the same size");
 
+// A fixed array of another value struct. C# cannot spell `T[8]` inline for a struct T, so
+// the arity has to move into an [InlineArray] wrapper occupying the same bytes -- emitting
+// the field as one element instead is how a caller writes past what the ABI reads.
+ExpectValueStruct("a value struct's fixed array of value structs takes an inline-array buffer",
+    ValueStruct("ke_query_decl", ("terms", "ke_component_access[8]"), ("term_count", "uint32_t")),
+    contains: ["using System.Runtime.CompilerServices;", "public const int TermsCapacity = 8;",
+               "public TermsBuffer Terms;", "public uint TermCount;", "[InlineArray(TermsCapacity)]",
+               "public partial struct TermsBuffer", "public ComponentAccess Element;"],
+    absent: ["public ke_component_access", "public ComponentAccess Terms;"],
+    alongside: [ValueStruct("ke_component_access", ("cid", "uint32_t"), ("access", "uint32_t"))]);
+
+// The element of a value struct's array is the other struct's own projection, not the
+// native spelling of the same bytes -- otherwise one generated type's fields are another
+// generator's, and the two drift independently.
+ExpectValueStruct("a value struct naming another value struct takes its mirror",
+    ValueStruct("ke_query_term", ("access", "ke_component_access")),
+    contains: ["public ComponentAccess Access;"],
+    absent: ["ke_component_access"],
+    alongside: [ValueStruct("ke_component_access", ("cid", "uint32_t"), ("access", "uint32_t"))]);
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.
@@ -422,11 +442,13 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
             failures.Add($"{what}: expected NOT to find \"{needle}\"");
 }
 
-void ExpectValueStruct(string what, ApiStruct s, string[] contains, string[] absent, string? throws = null)
+void ExpectValueStruct(string what, ApiStruct s, string[] contains, string[] absent, string? throws = null,
+    ApiStruct[]? alongside = null)
 {
     checks++;
     var model = new ApiModel();
     model.Structs.Add(s);
+    foreach (var other in alongside ?? []) model.Structs.Add(other);
 
     string emitted;
     try
