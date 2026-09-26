@@ -66,9 +66,19 @@ Expect("a slot that answers and writes spells the written value out",
     Vtable("ke_probe", Slot("ask", "ke_entity",
         Param("entity", "ke_entity"),
         Param("out_kind", "ke_probe_verdict *", "out,enum:ke_probe_verdict"))),
-    contains: ["public ulong Ask(ulong entity, out ProbeVerdict outKind)", "ProbeVerdict outKindLocal;",
-               "(ke_probe_verdict*)&outKindLocal", "outKind = outKindLocal;"],
+    contains: ["public ulong Ask(ulong entity, out ProbeVerdict kind)", "ProbeVerdict kindLocal;",
+               "(ke_probe_verdict*)&kindLocal", "kind = kindLocal;"],
     absent: ["ProbeVerdict* outKind", "public ProbeVerdict Ask("]);
+
+// The same stripping, where the name it would free is already taken. Picking a winner here
+// would hand two of the slot's parameters to the caller under one name, and which one the
+// caller then reads is not something the header says.
+Expect("a stripped out_ name colliding with a declared parameter is refused",
+    Vtable("ke_probe", Slot("ask_kind", "void",
+        Param("kind", "uint32_t"),
+        Param("out_kind", "uint32_t *", "out"))),
+    contains: [], absent: [],
+    throws: "already answers to kind");
 
 // A slot answering with the front of a sequence and the count beside it: the two are one
 // value, so the caller supplies neither pointer. Left apart, the count stays an out
@@ -79,9 +89,9 @@ Expect("a returned pointer counted by an out parameter becomes a span",
         Param("type", "uint32_t"),
         Param("out_count", "uint32_t *", "out"),
         Returning("array_of:out_count"))),
-    contains: ["public ReadOnlySpan<uint> Samples(uint type)", "uint outCountLocal = 0;",
-               "var front = Handle->samples(Handle, type, &outCountLocal);",
-               "return front == null ? default : new ReadOnlySpan<uint>(front, (int)outCountLocal);"],
+    contains: ["public ReadOnlySpan<uint> Samples(uint type)", "uint countLocal = 0;",
+               "var front = Handle->samples(Handle, type, &countLocal);",
+               "return front == null ? default : new ReadOnlySpan<uint>(front, (int)countLocal);"],
     absent: ["out uint outCount", "public uint* Samples("]);
 
 // The same tags on a free function, which reaches a contract by symbol instead of by
@@ -102,14 +112,14 @@ ExpectFreeFunctions("a free function honours [ctx], [out] and a counted return",
             Param("out_count", "uint32_t *", "out")),
     ],
     contains: ["public static ReadOnlySpan<uint> Samples(nint ctx, uint query)",
-               "var front = Native.ke_probe_ctx_samples((ke_probe_ctx*)ctx, query, &outCountLocal);",
-               "nuint outCountLocal = 0;",
-               "return front == null ? default : new ReadOnlySpan<uint>(front, (int)outCountLocal);",
-               "public static (uint OutIndex, uint OutCount) Share(nint ctx)",
-               "Native.ke_probe_ctx_share((ke_probe_ctx*)ctx, &outIndex, &outCount);",
-               "return (outIndex, outCount);"],
+               "var front = Native.ke_probe_ctx_samples((ke_probe_ctx*)ctx, query, &countLocal);",
+               "nuint countLocal = 0;",
+               "return front == null ? default : new ReadOnlySpan<uint>(front, (int)countLocal);",
+               "public static (uint Index, uint Count) Share(nint ctx)",
+               "Native.ke_probe_ctx_share((ke_probe_ctx*)ctx, &index, &count);",
+               "return (index, count);"],
     absent: ["in ke_probe_ctx ctx", "fixed (ke_probe_ctx* p =",
-             "Samples(nint ctx, uint query, nuint* outCount)", "out uint outIndex"]);
+             "Samples(nint ctx, uint query, nuint* outCount)", "out uint index"]);
 
 // A run of consecutive float parameters that spell out one vector: the public surface
 // takes the vector, and the lanes are spread at the call. A C ABI cannot say "Vector2",
@@ -438,7 +448,7 @@ return 0;
 
 void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
     Dictionary<string, string>? aliases = null, JsonObject[]? callbacks = null,
-    JsonObject[]? structs = null)
+    JsonObject[]? structs = null, string? throws = null)
 {
     checks++;
     var api = new JsonObject
@@ -484,11 +494,17 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
     }
     catch (Exception ex)
     {
-        failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+        if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+        else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+            failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+        return;
+    }
+    if (throws is not null)
+    {
+        failures.Add($"{what}: expected the backend to refuse, it emitted instead");
         return;
     }
     if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
-
 
     foreach (var needle in contains)
         if (!emitted.Contains(needle, StringComparison.Ordinal))

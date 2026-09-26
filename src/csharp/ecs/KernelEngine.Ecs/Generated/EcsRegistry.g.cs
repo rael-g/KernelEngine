@@ -78,16 +78,16 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
 
     /// <summary>Looks up a previously registered component by name.</summary>
     /// <param name="name">Component name to find.</param>
-    /// <param name="outMeta">Receives the component's id, size, and field metadata.</param>
+    /// <param name="meta">Receives the component's id, size, and field metadata.</param>
     /// <returns>false if no component of that name is registered.</returns>
-    public bool TryComponentLookup(string name, out ke_component_meta outMeta)
+    public bool TryComponentLookup(string name, out ke_component_meta meta)
     {
-        ke_component_meta outMetaLocal;
+        ke_component_meta metaLocal;
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            var found = Handle->component_lookup(Handle, (sbyte*)namePtr, &outMetaLocal, null);
-            outMeta = outMetaLocal;
+            var found = Handle->component_lookup(Handle, (sbyte*)namePtr, &metaLocal, null);
+            meta = metaLocal;
             return found;
         }
     }

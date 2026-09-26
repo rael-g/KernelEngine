@@ -84,9 +84,9 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     /// <summary>The components a registered type's instances carry, in registration order. This is what a host turns into the type's query and access list, so it is read back rather than re-derived by each binding.</summary>
     public ReadOnlySpan<uint> TypeComponents(uint type)
     {
-        uint outCountLocal = 0;
-        var front = Handle->type_components(Handle, type, &outCountLocal);
-        return front == null ? default : new ReadOnlySpan<uint>(front, (int)outCountLocal);
+        uint countLocal = 0;
+        var front = Handle->type_components(Handle, type, &countLocal);
+        return front == null ? default : new ReadOnlySpan<uint>(front, (int)countLocal);
     }
 
     /// <summary>How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id, because refusing to parallelise something unknown is the safe direction.</summary>
@@ -117,13 +117,13 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>The instance bound to `entity`. False when none is, which is the normal answer rather than a failure: an entity a scene made without a script, or one another runtime owns, matches the same queries.</summary>
-    public bool TryInstanceOf(ulong entity, out uint outType, out nint outInstance)
+    public bool TryInstanceOf(ulong entity, out uint type, out nint instance)
     {
-        uint outTypeLocal;
-        nint outInstanceLocal;
-        var found = Handle->instance_of(Handle, entity, &outTypeLocal, (void**)&outInstanceLocal);
-        outType = outTypeLocal;
-        outInstance = outInstanceLocal;
+        uint typeLocal;
+        nint instanceLocal;
+        var found = Handle->instance_of(Handle, entity, &typeLocal, (void**)&instanceLocal);
+        type = typeLocal;
+        instance = instanceLocal;
         return found;
     }
 
@@ -136,20 +136,20 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     /// <summary>The entities bound as instances of `type`, in binding order. What lets a binding runtime drive a type's instances without keeping a parallel list of its own — the list that only its own language can see, and that drifts from the bindings the moment anything else unbinds one. The slice belongs to the host and is invalidated by the next bind or unbind of that type, which is the same tick's structural change a caller already defers to the wave barrier.</summary>
     public ReadOnlySpan<ulong> Instances(uint type)
     {
-        uint outCountLocal = 0;
-        var front = Handle->instances(Handle, type, &outCountLocal);
-        return front == null ? default : new ReadOnlySpan<ulong>(front, (int)outCountLocal);
+        uint countLocal = 0;
+        var front = Handle->instances(Handle, type, &countLocal);
+        return front == null ? default : new ReadOnlySpan<ulong>(front, (int)countLocal);
     }
 
     /// <summary>The entity `owner` borrows: an instance of `type` found within `reach`. `name` narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. `out_why` says which of the two an invalid answer was, and may be NULL.</summary>
-    public ulong Resolve(ulong owner, uint type, string name, ScriptBorrow reach, out ScriptResolve outWhy)
+    public ulong Resolve(ulong owner, uint type, string name, ScriptBorrow reach, out ScriptResolve why)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            ScriptResolve outWhyLocal;
-            var result = Handle->resolve(Handle, owner, type, (sbyte*)namePtr, (ke_script_borrow)reach, (ke_script_resolve*)&outWhyLocal);
-            outWhy = outWhyLocal;
+            ScriptResolve whyLocal;
+            var result = Handle->resolve(Handle, owner, type, (sbyte*)namePtr, (ke_script_borrow)reach, (ke_script_resolve*)&whyLocal);
+            why = whyLocal;
             return result;
         }
     }

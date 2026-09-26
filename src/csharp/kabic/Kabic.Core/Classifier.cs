@@ -216,6 +216,22 @@ public static class Classifier
 
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
 
+        var written = allOut.Concat(returnCount is null ? [] : new[] { returnCount }).ToList();
+        var stripped = written.Where(p => p.Name!.StartsWith("out_", StringComparison.Ordinal)
+                                       && p.Name!.Length > "out_".Length)
+            .Select(p => (Param: p, Bare: p.Name!["out_".Length..])).ToList();
+        foreach (var (p, bare) in stripped)
+        {
+            var taken = slot.Params.FirstOrDefault(q => q != p && q.Name == bare)
+                ?? stripped.FirstOrDefault(other => other.Param != p && other.Bare == bare).Param;
+            if (taken is not null)
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{p.Name}: a written-back parameter is projected without the out_ that"
+                    + $" only marked its direction, and {taken.Name} already answers to {bare}. Two"
+                    + " parameters reaching the caller under one name is not something to resolve by"
+                    + " picking one, so rename the declaration instead.");
+        }
+
         var carriesReturn = slot.Returns.Trim() is not "void"
             && !convention.SignalsFailureByReturn(slot.Returns);
         var outParam = allOut.Count == 1 && !carriesReturn ? allOut[0] : null;

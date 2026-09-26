@@ -182,22 +182,22 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
     }
 
 
-    public (float OutX, float OutY) GetAxis2d(int actionId)
+    public (float X, float Y) GetAxis2d(int actionId)
     {
-        float outX;
-        float outY;
-        Handle->get_axis2d(Handle, actionId, &outX, &outY);
-        return (outX, outY);
+        float x;
+        float y;
+        Handle->get_axis2d(Handle, actionId, &x, &y);
+        return (x, y);
     }
 
 
-    public (float OutX, float OutY, float OutZ) GetAxis3d(int actionId)
+    public (float X, float Y, float Z) GetAxis3d(int actionId)
     {
-        float outX;
-        float outY;
-        float outZ;
-        Handle->get_axis3d(Handle, actionId, &outX, &outY, &outZ);
-        return (outX, outY, outZ);
+        float x;
+        float y;
+        float z;
+        Handle->get_axis3d(Handle, actionId, &x, &y, &z);
+        return (x, y, z);
     }
 
     /// <summary>Releases the native nativeinputactions.</summary>

@@ -172,6 +172,16 @@ public static class CSharpBackend
     /// gone. A declared <c>[enum]</c> is the managed spelling here as much as anywhere else:
     /// the pointer type alone only says which bytes are written, not which type names them.
     /// </summary>
+    /// <summary>
+    /// What to call a parameter the callee writes. A leading <c>out_</c> is how C marks the
+    /// direction, and the projection already marks it -- as <c>out</c>, as a tuple element,
+    /// or by returning it -- so carrying the prefix across would spell it twice.
+    /// </summary>
+    static string WrittenName(ApiParam p) =>
+        p.Name!.StartsWith("out_", StringComparison.Ordinal) && p.Name!.Length > "out_".Length
+            ? p.Name!["out_".Length..]
+            : p.Name!;
+
     static string OutElement(ApiModel model, ApiParam p, Convention convention) =>
         p.TagValue("enum") is { } named
             ? Idioms.TypeName(named, convention)
@@ -1480,7 +1490,7 @@ public static class CSharpBackend
                     : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
                         ? $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}"
                     : cs.TrailingOuts.Contains(p)
-                        ? $"out {OutElement(model, p, convention)} {Idioms.Ident(p.Name!)}"
+                        ? $"out {OutElement(model, p, convention)} {Idioms.Ident(WrittenName(p))}"
                         : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"))
                 .ToList();
 
@@ -1537,12 +1547,13 @@ public static class CSharpBackend
             {
                 var ins = cs.PublicParams.Where(p => !cs.OutParams.Contains(p)).ToList();
                 var sig = Sig(ins);
-                var names = cs.OutParams.Select(p => Idioms.Pascal(p.Name!)).ToList();
+                var names = cs.OutParams.Select(p => Idioms.Pascal(WrittenName(p))).ToList();
                 var types = cs.OutParams.Select(p => OutElement(model, p, convention)).ToList();
                 var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
-                var locals = cs.OutParams.Select(p => Idioms.Ident(p.Name!)).ToList();
+                var locals = cs.OutParams.Select(p => Idioms.Ident(WrittenName(p))).ToList();
                 var nativeArgs = NativeParams()
-                    .Select(p => cs.OutParams.Contains(p) ? OutAddress(model, p, convention, Idioms.Ident(p.Name!)) : CallArg(p));
+                    .Select(p => cs.OutParams.Contains(p)
+                        ? OutAddress(model, p, convention, Idioms.Ident(WrittenName(p))) : CallArg(p));
                 var callArgs = string.Concat(nativeArgs.Select(a => ", " + a));
 
                 Declare(o, decls, XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
@@ -1576,14 +1587,15 @@ public static class CSharpBackend
                 var ins = cs.PublicParams.Where(p => !p.Has("out")).ToList();
                 var outs = cs.OutParams;
                 var sigParts = SigParts(ins)
-                    .Concat(outs.Select(p => $"out {OutElement(model, p, convention)} {Idioms.Ident(p.Name!)}"));
+                    .Concat(outs.Select(p => $"out {OutElement(model, p, convention)} {Idioms.Ident(WrittenName(p))}"));
 
                 var tryName = name.StartsWith("Try") ? name : $"Try{name}";
                 Declare(o, decls, XmlDoc("    ", slot.Doc,
-                    cs.PublicParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
+                    cs.PublicParams.Select(p =>
+                        (Idioms.Ident(outs.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
                     $"bool {tryName}({string.Join(", ", sigParts)})");
                 o.Add("    {");
-                foreach (var op in outs) o.Add($"        {OutElement(model, op, convention)} {Idioms.Ident(op.Name!)}Local;");
+                foreach (var op in outs) o.Add($"        {OutElement(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
                 var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
                 var (tSeq, tSeqDepth) = SequencePrologue(model, cs.Sequences,
                     new string(' ', 8 + tDepth * 4), convention);
@@ -1592,12 +1604,14 @@ public static class CSharpBackend
                 tDepth += tSeqDepth;
                 var tInd = new string(' ', 8 + tDepth * 4);
                 var tryArgs = NativeParams()
-                    .Select(p => outs.Contains(p) ? OutAddress(model, p, convention, $"{Idioms.Ident(p.Name!)}Local") : CallArg(p));
+                    .Select(p => outs.Contains(p)
+                        ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local") : CallArg(p));
                 var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
                     + (cs.Fallible ? ", null)" : ")")
                     + (slot.Returns == "ke_bool" ? " != 0" : "");
                 o.Add($"{tInd}var found = {tryCall};");
-                foreach (var op in outs) o.Add($"{tInd}{Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
+                foreach (var op in outs)
+                    o.Add($"{tInd}{Idioms.Ident(WrittenName(op))} = {Idioms.Ident(WrittenName(op))}Local;");
                 o.Add($"{tInd}return found;");
                 for (var d = tDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
@@ -1798,7 +1812,9 @@ public static class CSharpBackend
                     : CsType(model, slot.Returns);
                 var needsCast = retType == "nint";
                 Declare(o, decls,
-                    XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
+                    XmlDoc("    ", slot.Doc, args.Select(p =>
+                        (Idioms.Ident(cs.TrailingOuts.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)),
+                        slot.ReturnDoc).TrimEnd(),
                     $"{retType} {name}({sig})");
                 o.Add("    {");
                 var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
@@ -1809,16 +1825,16 @@ public static class CSharpBackend
                 pDepth += pSeqDepth;
                 var pInd = new string(' ', 8 + pDepth * 4);
                 foreach (var op in cs.TrailingOuts)
-                    o.Add($"{pInd}{OutElement(model, op, convention)} {Idioms.Ident(op.Name!)}Local;");
+                    o.Add($"{pInd}{OutElement(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
                 var pCall = $"Handle->{slot.Name}(Handle{call})"
                     + (slot.Returns == "ke_bool" ? " != 0" : "");
                 var pHolds = cs.TrailingOuts.Count > 0;
                 if (spanElement is not null)
                 {
-                    var countLocal = $"{Idioms.Ident(cs.ReturnCount!.Name!)}Local";
+                    var countLocal = $"{Idioms.Ident(WrittenName(cs.ReturnCount!))}Local";
                     var native = CsType(model, CTypes.Deref(slot.Returns));
                     var front = spanElement == native ? "front" : $"({spanElement}*)front";
-                    o.Add($"{pInd}{CsType(model, CTypes.Deref(cs.ReturnCount.Type))} {countLocal} = 0;");
+                    o.Add($"{pInd}{CsType(model, CTypes.Deref(cs.ReturnCount!.Type))} {countLocal} = 0;");
                     o.Add($"{pInd}var front = {pCall};");
                     o.Add($"{pInd}{(pHolds ? "var result =" : "return")} front == null ? default"
                         + $" : new ReadOnlySpan<{spanElement}>({front}, (int){countLocal});");
@@ -1836,7 +1852,7 @@ public static class CSharpBackend
                 else
                     o.Add($"{pInd}return {(needsCast ? "(nint)" : "")}{pCall};");
                 foreach (var op in cs.TrailingOuts)
-                    o.Add($"{pInd}{Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
+                    o.Add($"{pInd}{Idioms.Ident(WrittenName(op))} = {Idioms.Ident(WrittenName(op))}Local;");
                 if (retType != "void" && pHolds) o.Add($"{pInd}return result;");
                 for (var d = pDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
@@ -1852,8 +1868,9 @@ public static class CSharpBackend
                 ? $"(void*)GCHandle.ToIntPtr({ctxOf.Handle})"
             : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSeq
                 ? SequenceArg(model, asSeq, convention)
-            : p == cs.ReturnCount ? OutAddress(model, p, convention, $"{Idioms.Ident(p.Name!)}Local")
-            : cs.TrailingOuts.Contains(p) ? OutAddress(model, p, convention, $"{Idioms.Ident(p.Name!)}Local")
+            : p == cs.ReturnCount ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local")
+            : cs.TrailingOuts.Contains(p)
+                ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local")
             : cs.Sequences.FirstOrDefault(s => s.Count == p) is { } asCount
                 ? $"({CsType(model, asCount.Count.Type)}){Idioms.Ident(asCount.Seq.Name!)}.Length"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
@@ -2035,10 +2052,11 @@ public static class CSharpBackend
             : cs.OutParam is not null ? OutElement(model, cs.OutParam, convention)
             : tupleOuts.Count > 0
                 ? "(" + string.Join(", ", tupleOuts.Select(p =>
-                    $"{OutElement(model, p, convention)} {Idioms.Pascal(p.Name!)}")) + ")"
+                    $"{OutElement(model, p, convention)} {Idioms.Pascal(WrittenName(p))}")) + ")"
             : f.Returns == "ke_bool" ? "bool" : CsType(model, f.Returns);
 
-        string Local(ApiParam p) => Idioms.Ident(p.Name!)
+        string Local(ApiParam p) => Idioms.Ident(writes.Contains(p) || p == cs.ReturnCount
+            ? WrittenName(p) : p.Name!)
             + (cs.TrailingOuts.Contains(p) || p == cs.ReturnCount ? "Local" : "");
 
         var args = (self is null ? [] : new[] { selfArg! }).Concat(rest.Select(p =>
@@ -2050,10 +2068,11 @@ public static class CSharpBackend
 
         var sigParts = (selfSig is null ? [] : new[] { selfSig }).Concat(ins.Select(p =>
             cs.TrailingOuts.Contains(p)
-                ? $"out {OutElement(model, p, convention)} {Idioms.Ident(p.Name!)}"
+                ? $"out {OutElement(model, p, convention)} {Idioms.Ident(WrittenName(p))}"
                 : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
 
-        o.Add(XmlDoc("    ", f.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc))).TrimEnd());
+        o.Add(XmlDoc("    ", f.Doc, ins.Select(p =>
+            (Idioms.Ident(cs.TrailingOuts.Contains(p) ? WrittenName(p) : p.Name!), p.Doc))).TrimEnd());
         o.Add($"    public static {retType} {methodName}({string.Join(", ", sigParts)})");
         o.Add("    {");
 
@@ -2075,7 +2094,7 @@ public static class CSharpBackend
         else
         {
             body.Add($"{call};");
-            foreach (var p in cs.TrailingOuts) body.Add($"{Idioms.Ident(p.Name!)} = {Local(p)};");
+            foreach (var p in cs.TrailingOuts) body.Add($"{Idioms.Ident(WrittenName(p))} = {Local(p)};");
             body.Add(cs.OutParam is not null
                 ? $"return {Local(cs.OutParam)};"
                 : $"return ({string.Join(", ", tupleOuts.Select(Local))});");
