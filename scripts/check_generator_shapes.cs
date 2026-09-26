@@ -462,6 +462,27 @@ ExpectValueStruct("a value struct naming another value struct takes its mirror",
     absent: ["ke_component_access"],
     alongside: [ValueStruct("ke_component_access", ("cid", "uint32_t"), ("access", "uint32_t"))]);
 
+// A struct the ABI hands out carrying a pointer and the count bounding it. The pair is one
+// value wherever it sits: a slot answering with it already hands out a span, so a field
+// answering with it that does not is the same declaration read two ways -- and every caller
+// re-derives bounds the struct had already given.
+ExpectStructSpans("a counted pointer field of a native struct reads as a span",
+    CountedStruct("ke_probe_segment",
+        ("entities", "const uint64_t *", "array_of:count"),
+        ("count", "size_t", "")),
+    contains: ["namespace Probe.Native;", "public unsafe partial struct ke_probe_segment",
+               "public readonly ReadOnlySpan<ulong> Entities => entities == null ? default"
+               + " : new ReadOnlySpan<ulong>(entities, (int)count);"],
+    absent: ["public ulong* entities;", "MemoryMarshal", "Unsafe.As"]);
+
+// The same tag naming a field the struct does not declare. Bounding the sequence by a
+// length nothing holds is how a span reaches past what the ABI wrote.
+ExpectStructSpans("a counted pointer field naming a length the struct lacks is refused",
+    CountedStruct("ke_probe_segment",
+        ("entities", "const uint64_t *", "array_of:total")),
+    contains: [], absent: [],
+    throws: "names a length field the struct does not declare");
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.
@@ -664,6 +685,50 @@ static JsonObject Function(string name, string returns, params object[] rest)
 static ApiStruct ValueStruct(string name, params (string Name, string Type)[] fields) =>
     new(name, null, ["value"],
         fields.Select(f => new ApiField(f.Name, f.Type, [], null)).ToList(), []);
+
+/// <summary>
+/// A struct the ABI hands out, whose counted pointers are read as spans. The struct is the
+/// ABI's own, not a <c>[value]</c> mirror, so this is the other emitter and so its own
+/// fixture.
+/// </summary>
+void ExpectStructSpans(string what, ApiStruct s, string[] contains, string[] absent, string? throws = null)
+{
+    checks++;
+    var model = new ApiModel();
+    model.Structs.Add(s);
+
+    string emitted;
+    try
+    {
+        emitted = CSharpBackend.RenderStructSpans(model, s, "Probe.Native", Convention.KernelEngine);
+    }
+    catch (Exception ex)
+    {
+        if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+        else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+            failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+        return;
+    }
+    if (throws is not null)
+    {
+        failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+        return;
+    }
+    if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+
+    foreach (var needle in contains)
+        if (!emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected to find \"{needle}\"");
+
+    foreach (var needle in absent)
+        if (emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected NOT to find \"{needle}\"");
+}
+
+static ApiStruct CountedStruct(string name, params (string Name, string Type, string Tags)[] fields) =>
+    new(name, null, [],
+        fields.Select(f => new ApiField(f.Name, f.Type,
+            f.Tags is "" ? [] : f.Tags.Split(','), null)).ToList(), []);
 
 void ExpectBorrowKinds(string what, string[] contains, string[] absent)
 {

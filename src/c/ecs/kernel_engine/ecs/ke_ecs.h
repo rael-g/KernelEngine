@@ -23,7 +23,7 @@ extern "C"
      */
     typedef struct ke_ecs_segment
     {
-        const ke_entity *entities;
+        const ke_entity *entities; ///< [array_of:count] The entities this segment matched.
         void            *columns[KE_QUERY_MAX_TERMS];
         size_t           count;
     } ke_ecs_segment;

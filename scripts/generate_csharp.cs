@@ -61,6 +61,12 @@ foreach (var value in model.Structs.Where(s => s.Has("value") && !s.External && 
         CSharpBackend.RenderStruct(model, value, ns, convention));
 }
 
+foreach (var counted in model.Structs.Where(s => !s.External && !s.IsVtable
+    && !convention.IsParamsType(s.Name)
+    && s.Fields.Any(f => f.Has("array_of"))))
+    File.WriteAllText(Path.Combine(outDir, $"{counted.Name}.Spans.g.cs"),
+        CSharpBackend.RenderStructSpans(model, counted, nativeNs, convention));
+
 foreach (var kinds in model.Enums.Where(e => !e.External && e.Has("borrow_kinds")))
     File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(kinds.Name, convention)}Wrappers.g.cs"),
         CSharpBackend.RenderBorrowWrappers(kinds, ns, convention));

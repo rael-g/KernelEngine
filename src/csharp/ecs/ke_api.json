@@ -77,8 +77,10 @@
         {
           "name": "entities",
           "type": "const ke_entity *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": "The entities this segment matched."
         },
         {
           "name": "columns",

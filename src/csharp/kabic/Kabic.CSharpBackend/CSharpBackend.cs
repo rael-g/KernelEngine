@@ -534,6 +534,52 @@ public static class CSharpBackend
     }
 
     /// <summary>
+    /// Emits the span each <c>[array_of:]</c> field of a struct reads as, onto the struct the
+    /// ABI declares rather than a second type beside it. A pointer and the count bounding it
+    /// are one value wherever they sit: a slot answering with the pair already hands out a
+    /// span, and a caller reaching the same pair through a field otherwise re-derives the
+    /// bounds the declaration had already given.
+    /// </summary>
+    public static string RenderStructSpans(ApiModel model, ApiStruct s, string nativeNs, Convention convention)
+    {
+        var o = new List<string> { Header };
+        o.Add($"namespace {nativeNs};\n");
+        o.Add($"/// <summary>The counted pointers of <c>{s.Name}</c>, read as the sequences they"
+            + " bound.</summary>");
+        o.Add($"public unsafe partial struct {s.Name}");
+        o.Add("{");
+
+        var first = true;
+        foreach (var f in s.Fields.Where(x => x.Has("array_of")))
+        {
+            if (!first) o.Add("");
+            first = false;
+
+            if (!CTypes.IsPointer(f.Type))
+                throw new InvalidOperationException(
+                    $"{s.Name}.{f.Name}: [array_of] bounds the elements a pointer reaches, and "
+                    + $"{f.Type.Trim()} is not one");
+
+            var countName = f.TagValue("array_of");
+            var count = s.Fields.FirstOrDefault(x => x.Name == countName)
+                ?? throw new InvalidOperationException(
+                    $"{s.Name}.{f.Name}: [array_of:{countName}] names a length field the struct "
+                    + "does not declare");
+
+            var element = ValueTypeName(model, StripQualifiers(CTypes.Deref(f.Type)), convention);
+            o.Add(!string.IsNullOrEmpty(f.Doc)
+                ? $"    /// <summary>{Escape(f.Doc)}</summary>"
+                : $"    /// <summary>The <c>{count.Name}</c> elements <c>{f.Name}</c> reaches.</summary>");
+            o.Add($"    public readonly ReadOnlySpan<{element}> {Idioms.Pascal(f.Name)} => {f.Name} == null"
+                + $" ? default : new ReadOnlySpan<{element}>({f.Name}, (int){count.Name});");
+        }
+
+        o.Add("}");
+        o.Add("");
+        return string.Join('\n', o);
+    }
+
+    /// <summary>
     /// The fixed-size array a <c>[value]</c> field describes, or null when it describes a
     /// single element. A managed struct cannot spell <c>T[8]</c> inline for a <c>T</c> that
     /// is itself a struct, so the arity moves into an <c>[InlineArray]</c> wrapper that

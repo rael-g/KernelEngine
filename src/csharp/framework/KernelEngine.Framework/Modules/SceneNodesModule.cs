@@ -164,16 +164,16 @@ public sealed class SceneNodesModule : IRuntimeModule
                         return;
                     }
 
-                    var segments = KernelEngine.Runtime.SystemContext.SegmentCount(ctx);
+                    var segments = KernelEngine.Runtime.SystemCtx.View(ctx, 0);
                     var total = 0;
-                    for (int s = 0; s < segments; s++)
-                        total += KernelEngine.Runtime.SystemContext.EntitiesOf(ctx, 0, s).Length;
+                    for (int s = 0; s < segments.Length; s++)
+                        total += segments[s].Entities.Length;
 
                     var (first, last) = SliceOf(ctx, total);
                     var seen = 0;
-                    for (int s = 0; s < segments && seen < last; s++)
+                    for (int s = 0; s < segments.Length && seen < last; s++)
                     {
-                        var entities = KernelEngine.Runtime.SystemContext.EntitiesOf(ctx, 0, s);
+                        var entities = segments[s].Entities;
                         for (int e = 0; e < entities.Length; e++, seen++)
                         {
                             if (seen < first) continue;
