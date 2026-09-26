@@ -95,7 +95,9 @@
             {
               "name": "components",
               "type": "const ke_component_id *",
-              "tags": [],
+              "tags": [
+                "array_of:component_count"
+              ],
               "doc": null
             },
             {
@@ -113,7 +115,9 @@
             {
               "name": "out_id",
               "type": "ke_script_type_id *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             },
             {
@@ -255,13 +259,17 @@
             {
               "name": "out_type",
               "type": "ke_script_type_id *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             },
             {
               "name": "out_instance",
               "type": "void **",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
           ]

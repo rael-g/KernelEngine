@@ -139,7 +139,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// cannot be read off the answers. Widening the slot to say so would be modelling
     /// inheritance in a contract that has none.
     /// </remarks>
-    internal unsafe Node? Borrow(Node owner, Type wanted, string name, ScriptBorrow reach)
+    internal Node? Borrow(Node owner, Type wanted, string name, ScriptBorrow reach)
     {
         var ids = ScriptTypesAssignableTo(wanted);
 
@@ -154,8 +154,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         Node? found = null;
         foreach (var id in ids)
         {
-            ScriptResolve why;
-            var entity = Resolve(owner.Entity, id, name, reach, &why);
+            var entity = Resolve(owner.Entity, id, name, reach, out var why);
             if (why == ScriptResolve.Ambiguous) return null;
             if (entity == 0 || NodeOf(entity) is not { } node) continue;
             if (found is not null) return null;
@@ -287,13 +286,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
                 cids.Add(cid);
 
         var reach = node.ReachesOnlyItself ? ScriptReach.Self : ScriptReach.Any;
-        uint id = 0;
-        unsafe
-        {
-            var owned = cids.ToArray();
-            fixed (uint* p = owned)
-                RegisterType(clr.FullName ?? clr.Name, p, (uint)owned.Length, reach, &id);
-        }
+        var id = RegisterType(clr.FullName ?? clr.Name, cids.ToArray(), reach);
         _scriptTypes[clr] = id;
         return id;
     }
@@ -312,10 +305,9 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// or one another language's runtime owns, carries the same components and matches
     /// the same query without any node here standing behind it.
     /// </summary>
-    internal unsafe Node? NodeOf(ulong entity)
+    internal Node? NodeOf(ulong entity)
     {
-        nint instance = 0;
-        if (!TryInstanceOf(entity, null, &instance) || instance == 0) return null;
+        if (!TryInstanceOf(entity, out _, out var instance) || instance == 0) return null;
         return System.Runtime.InteropServices.GCHandle.FromIntPtr(instance).Target as Node;
     }
 

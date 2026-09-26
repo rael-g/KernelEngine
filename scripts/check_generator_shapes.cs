@@ -21,16 +21,6 @@ using Kabic.CSharp;
 var failures = new List<string>();
 var checks = 0;
 
-// A slot that answers and also writes an out parameter: the answer is the return, and
-// the out parameter stays a parameter. Getting this backwards compiles and silently
-// drops what the caller asked for.
-Expect("a slot with a return and an out parameter keeps both",
-    Vtable("ke_probe", Slot("resolve", "ke_entity",
-        Param("entity", "ke_entity"),
-        Param("out_why", "ke_probe_verdict *", "out"))),
-    contains: ["public ulong Resolve(ulong entity,"],
-    absent: ["public ProbeVerdict Resolve("]);
-
 // A slot with nothing to answer: the out parameter is the answer.
 Expect("a void slot's single out parameter becomes the return",
     Vtable("ke_probe", Slot("size_of", "void",
@@ -68,13 +58,17 @@ Expect("an interning slot emits the type cache and its reverse",
     contains: ["public uint SignalIdOf<T>() where T : unmanaged", "public Type? SignalIdTypeOf(uint id)"],
     absent: []);
 
-// An enum parameter that is a pointer stays a pointer; taking it by value compiles
-// into a cast from a value to a pointer, which does not.
-Expect("an enum out parameter keeps its indirection",
+// A slot that answers and also writes: the answer stays the return and the written value
+// becomes an out parameter. Hoisting it instead would silently drop what the caller asked
+// for; leaving it the pointer the ABI takes makes every call site declare the local and
+// take its address, which is the binding work a projection exists to have already done.
+Expect("a slot that answers and writes spells the written value out",
     Vtable("ke_probe", Slot("ask", "ke_entity",
+        Param("entity", "ke_entity"),
         Param("out_kind", "ke_probe_verdict *", "out,enum:ke_probe_verdict"))),
-    contains: ["ProbeVerdict* outKind"],
-    absent: ["ProbeVerdict outKind"]);
+    contains: ["public ulong Ask(ulong entity, out ProbeVerdict outKind)", "ProbeVerdict outKindLocal;",
+               "(ke_probe_verdict*)&outKindLocal", "outKind = outKindLocal;"],
+    absent: ["ProbeVerdict* outKind", "public ProbeVerdict Ask("]);
 
 // A run of consecutive float parameters that spell out one vector: the public surface
 // takes the vector, and the lanes are spread at the call. A C ABI cannot say "Vector2",
@@ -320,9 +314,8 @@ Expect("a slot that only answers becomes a property, in the class and in the con
 // to be allowed everywhere around it, for the sake of a signature that spells none. So it
 // follows the signature instead: absent above, present here.
 Expect("a contract spelling a pointer keeps the keyword",
-    Vtable("ke_probe", "interface", Slot("ask", "ke_entity",
-        Param("out_kind", "ke_probe_verdict *", "out,enum:ke_probe_verdict"))),
-    contains: ["public unsafe interface IProbe : IDisposable", "    ulong Ask(ProbeVerdict* outKind);"],
+    Vtable("ke_probe", "interface", Slot("samples", "const uint32_t *")),
+    contains: ["public unsafe interface IProbe : IDisposable", "    uint* Samples();"],
     absent: ["public interface IProbe : IDisposable"]);
 
 // Data a caller holds, emitted from the header rather than spelled a second time by

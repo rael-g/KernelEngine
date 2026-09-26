@@ -161,6 +161,42 @@ public static class CSharpBackend
         return $"delegate* unmanaged[Cdecl]<{string.Join(", ", parameters.Append(returns))}>";
     }
 
+    /// <summary>
+    /// What a parameter the callee writes holds, once the indirection carrying it back is
+    /// gone. A declared <c>[enum]</c> is the managed spelling here as much as anywhere else:
+    /// the pointer type alone only says which bytes are written, not which type names them.
+    /// </summary>
+    static string OutElement(ApiModel model, ApiParam p, Convention convention) =>
+        p.TagValue("enum") is { } named
+            ? Idioms.TypeName(named, convention)
+            : CsType(model, CTypes.Deref(p.Type));
+
+    /// <summary>
+    /// A pointer type as the native side spells it. <see cref="CsType"/> answers <c>nint</c>
+    /// for an opaque pointer, which is what a caller should hold but not what the vtable
+    /// field declares -- so the address of one is the address of the wrong type as far as
+    /// the compiler is concerned.
+    /// </summary>
+    static string NativePointerType(ApiModel model, string cType)
+    {
+        var t = cType.Trim();
+        if (!CTypes.IsPointer(t)) return CsType(model, t);
+        var inner = CTypes.Deref(t).Trim();
+        if (inner.StartsWith("const ", StringComparison.Ordinal)) inner = inner["const ".Length..];
+        if (inner.StartsWith("struct ", StringComparison.Ordinal)) inner = inner["struct ".Length..];
+        return (inner is "void" ? "void" : NativePointerType(model, inner)) + "*";
+    }
+
+    /// <summary>
+    /// The address of the local standing in for an <c>out</c> parameter, cast back to what
+    /// the ABI declares wherever the managed spelling of it differs.
+    /// </summary>
+    static string OutAddress(ApiModel model, ApiParam p, Convention convention, string local)
+    {
+        var native = NativePointerType(model, p.Type);
+        return native == OutElement(model, p, convention) + "*" ? $"&{local}" : $"({native})&{local}";
+    }
+
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
     {
         var tagEnum = p.TagValue("enum");
@@ -1437,6 +1473,8 @@ public static class CSharpBackend
                         ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
                     : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
                         ? $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}"
+                    : cs.TrailingOuts.Contains(p)
+                        ? $"out {OutElement(model, p, convention)} {Idioms.Ident(p.Name!)}"
                         : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"))
                 .ToList();
 
@@ -1457,11 +1495,11 @@ public static class CSharpBackend
         {
             case SlotShape.ReturnsOutParam:
             {
-                var ret = CsType(model, CTypes.Deref(cs.OutParam!.Type));
+                var ret = OutElement(model, cs.OutParam!, convention);
                 var ins = cs.PublicParams.Where(p => p != cs.OutParam).ToList();
                 var sig = Sig(ins);
                 var nativeArgs = string.Concat(NativeParams().Select(p =>
-                    ", " + (p == cs.OutParam ? "&result" : CallArg(p))));
+                    ", " + (p == cs.OutParam ? OutAddress(model, p, convention, "result") : CallArg(p))));
 
                 Declare(o, decls, XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
                     slot.ReturnDoc, cs.Fallible).TrimEnd(), $"{ret} {name}({sig})");
@@ -1494,11 +1532,11 @@ public static class CSharpBackend
                 var ins = cs.PublicParams.Where(p => !cs.OutParams.Contains(p)).ToList();
                 var sig = Sig(ins);
                 var names = cs.OutParams.Select(p => Idioms.Pascal(p.Name!)).ToList();
-                var types = cs.OutParams.Select(p => CsType(model, CTypes.Deref(p.Type))).ToList();
+                var types = cs.OutParams.Select(p => OutElement(model, p, convention)).ToList();
                 var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
                 var locals = cs.OutParams.Select(p => Idioms.Ident(p.Name!)).ToList();
                 var nativeArgs = NativeParams()
-                    .Select(p => cs.OutParams.Contains(p) ? $"&{Idioms.Ident(p.Name!)}" : CallArg(p));
+                    .Select(p => cs.OutParams.Contains(p) ? OutAddress(model, p, convention, Idioms.Ident(p.Name!)) : CallArg(p));
                 var callArgs = string.Concat(nativeArgs.Select(a => ", " + a));
 
                 Declare(o, decls, XmlDoc("    ", slot.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
@@ -1532,14 +1570,14 @@ public static class CSharpBackend
                 var ins = cs.PublicParams.Where(p => !p.Has("out")).ToList();
                 var outs = cs.OutParams;
                 var sigParts = SigParts(ins)
-                    .Concat(outs.Select(p => $"out {CsType(model, CTypes.Deref(p.Type))} {Idioms.Ident(p.Name!)}"));
+                    .Concat(outs.Select(p => $"out {OutElement(model, p, convention)} {Idioms.Ident(p.Name!)}"));
 
                 var tryName = name.StartsWith("Try") ? name : $"Try{name}";
                 Declare(o, decls, XmlDoc("    ", slot.Doc,
                     cs.PublicParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
                     $"bool {tryName}({string.Join(", ", sigParts)})");
                 o.Add("    {");
-                foreach (var op in outs) o.Add($"        {CsType(model, CTypes.Deref(op.Type))} {Idioms.Ident(op.Name!)}Local;");
+                foreach (var op in outs) o.Add($"        {OutElement(model, op, convention)} {Idioms.Ident(op.Name!)}Local;");
                 var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
                 var (tSeq, tSeqDepth) = SequencePrologue(model, cs.Sequences,
                     new string(' ', 8 + tDepth * 4), convention);
@@ -1548,7 +1586,7 @@ public static class CSharpBackend
                 tDepth += tSeqDepth;
                 var tInd = new string(' ', 8 + tDepth * 4);
                 var tryArgs = NativeParams()
-                    .Select(p => outs.Contains(p) ? $"&{Idioms.Ident(p.Name!)}Local" : CallArg(p));
+                    .Select(p => outs.Contains(p) ? OutAddress(model, p, convention, $"{Idioms.Ident(p.Name!)}Local") : CallArg(p));
                 var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
                     + (cs.Fallible ? ", null)" : ")")
                     + (slot.Returns == "ke_bool" ? " != 0" : "");
@@ -1761,20 +1799,25 @@ public static class CSharpBackend
                 o.AddRange(pSeq);
                 pDepth += pSeqDepth;
                 var pInd = new string(' ', 8 + pDepth * 4);
-                if (slot.Returns == "ke_bool")
-                    o.Add($"{pInd}return Handle->{slot.Name}(Handle{call}) != 0;");
-                else if (retType == "void")
+                foreach (var op in cs.TrailingOuts)
+                    o.Add($"{pInd}{OutElement(model, op, convention)} {Idioms.Ident(op.Name!)}Local;");
+                var pCall = $"Handle->{slot.Name}(Handle{call})"
+                    + (slot.Returns == "ke_bool" ? " != 0" : "");
+                if (retType == "void")
                 {
-                    o.Add($"{pInd}Handle->{slot.Name}(Handle{call});");
+                    o.Add($"{pInd}{pCall};");
                     if (slot.TagValue("unroots") is string freedKey)
                     {
                         o.Add($"{pInd}if (_rooted.Remove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
                     }
                 }
-                else if (needsCast)
-                    o.Add($"{pInd}return (nint)Handle->{slot.Name}(Handle{call});");
+                else if (cs.TrailingOuts.Count > 0)
+                    o.Add($"{pInd}var result = {(needsCast ? "(nint)" : "")}{pCall};");
                 else
-                    o.Add($"{pInd}return Handle->{slot.Name}(Handle{call});");
+                    o.Add($"{pInd}return {(needsCast ? "(nint)" : "")}{pCall};");
+                foreach (var op in cs.TrailingOuts)
+                    o.Add($"{pInd}{Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
+                if (retType != "void" && cs.TrailingOuts.Count > 0) o.Add($"{pInd}return result;");
                 for (var d = pDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
@@ -1789,6 +1832,7 @@ public static class CSharpBackend
                 ? $"(void*)GCHandle.ToIntPtr({ctxOf.Handle})"
             : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSeq
                 ? SequenceArg(model, asSeq, convention)
+            : cs.TrailingOuts.Contains(p) ? OutAddress(model, p, convention, $"{Idioms.Ident(p.Name!)}Local")
             : cs.Sequences.FirstOrDefault(s => s.Count == p) is { } asCount
                 ? $"({CsType(model, asCount.Count.Type)}){Idioms.Ident(asCount.Seq.Name!)}.Length"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"

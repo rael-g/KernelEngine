@@ -55,13 +55,18 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
 
     /// <summary>Registers a script type under `name`, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails when it does not — two languages naming one type differently would otherwise disagree about what a node in a scene file is.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void RegisterType(string name, uint* components, uint componentCount, ScriptReach reach, uint* outId)
+    public uint RegisterType(string name, Span<uint> components, ScriptReach reach)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->register_type(Handle, (sbyte*)namePtr, components, componentCount, (ke_script_reach)reach, outId, &err), err, "register_type");
+            fixed (uint* componentsPtr = components)
+            {
+                uint result;
+                ke_error* err = null;
+                KernelError.ThrowIfFailed(Handle->register_type(Handle, (sbyte*)namePtr, componentsPtr, (uint)components.Length, (ke_script_reach)reach, &result, &err), err, "register_type");
+                return result;
+            }
         }
     }
 
@@ -110,9 +115,13 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>The instance bound to `entity`. False when none is, which is the normal answer rather than a failure: an entity a scene made without a script, or one another runtime owns, matches the same queries.</summary>
-    public bool TryInstanceOf(ulong entity, uint* outType, nint* outInstance)
+    public bool TryInstanceOf(ulong entity, out uint outType, out nint outInstance)
     {
-        var found = Handle->instance_of(Handle, entity, outType, (void**)outInstance);
+        uint outTypeLocal;
+        nint outInstanceLocal;
+        var found = Handle->instance_of(Handle, entity, &outTypeLocal, (void**)&outInstanceLocal);
+        outType = outTypeLocal;
+        outInstance = outInstanceLocal;
         return found;
     }
 
@@ -129,12 +138,15 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>The entity `owner` borrows: an instance of `type` found within `reach`. `name` narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. `out_why` says which of the two an invalid answer was, and may be NULL.</summary>
-    public ulong Resolve(ulong owner, uint type, string name, ScriptBorrow reach, ScriptResolve* outWhy)
+    public ulong Resolve(ulong owner, uint type, string name, ScriptBorrow reach, out ScriptResolve outWhy)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            return Handle->resolve(Handle, owner, type, (sbyte*)namePtr, (ke_script_borrow)reach, (ke_script_resolve *)outWhy);
+            ScriptResolve outWhyLocal;
+            var result = Handle->resolve(Handle, owner, type, (sbyte*)namePtr, (ke_script_borrow)reach, (ke_script_resolve*)&outWhyLocal);
+            outWhy = outWhyLocal;
+            return result;
         }
     }
 

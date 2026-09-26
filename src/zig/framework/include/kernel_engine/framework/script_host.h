@@ -88,6 +88,8 @@ extern "C"
         /// fails when it does not — two languages naming one type differently would
         /// otherwise disagree about what a node in a scene file is.
         /// @param name [utf8]
+        /// @param components [array_of:component_count]
+        /// @param out_id [out]
         bool (*register_type)(struct ke_script_host *self,
                               const char            *name,
                               const ke_component_id *components,
@@ -133,6 +135,8 @@ extern "C"
         /// [try] The instance bound to `entity`. False when none is, which is the
         /// normal answer rather than a failure: an entity a scene made without a
         /// script, or one another runtime owns, matches the same queries.
+        /// @param out_type [out]
+        /// @param out_instance [out]
         bool (*instance_of)(struct ke_script_host *self,
                             ke_entity              entity,
                             ke_script_type_id     *out_type,
@@ -162,7 +166,7 @@ extern "C"
         /// may be NULL.
         /// @param name [utf8]
         /// @param reach [enum:ke_script_borrow]
-        /// @param out_why [out, enum:ke_script_resolve]
+        /// @param out_why [out,enum:ke_script_resolve]
         ke_entity (*resolve)(struct ke_script_host *self,
                              ke_entity              owner,
                              ke_script_type_id      type,

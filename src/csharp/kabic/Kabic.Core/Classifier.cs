@@ -25,6 +25,14 @@ public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiPa
 
     /// <summary>The struct <see cref="ExpandedParam"/> points at, whose fields the call has to rebuild.</summary>
     public ApiStruct? ExpandedStruct { get; init; }
+
+    /// <summary>
+    /// The <c>[out]</c> parameters of a slot that already answers, so none of them could
+    /// become the return. They stay parameters, and the projection spells them <c>out</c>:
+    /// left as the pointers the ABI takes, the caller declares the local and takes its
+    /// address, which is the whole of what a binding is supposed to have stopped doing.
+    /// </summary>
+    public IReadOnlyList<ApiParam> TrailingOuts { get; init; } = [];
 }
 
 public enum ConstructorKind { FromFactory, FromHandle, None }
@@ -179,11 +187,20 @@ public static class Classifier
             : fallible ? SlotShape.Fallible
             : SlotShape.Plain;
 
+        var trailingOuts = shape is SlotShape.Plain or SlotShape.Fallible ? allOut : [];
+        if (trailingOuts.Count > 0 && shape is SlotShape.Fallible)
+            throw new InvalidOperationException(
+                $"{slot.Name}: the slot answers, fails and writes {string.Join(", ", trailingOuts.Select(p => p.Name))}"
+                + " -- three answers to one question. Which of them the caller reads first is not"
+                + " something the header says, so the projection for it has to be chosen rather"
+                + " than guessed at here.");
+
         return new ClassifiedSlot(slot, shape, fallible, outParam, sequences,
             isTry ? allOut : tupleOut ?? [], ps)
         {
             ExpandedParam = expanded,
             ExpandedStruct = bag,
+            TrailingOuts = trailingOuts,
         };
     }
 }
