@@ -84,6 +84,33 @@ Expect("a returned pointer counted by an out parameter becomes a span",
                "return front == null ? default : new ReadOnlySpan<uint>(front, (int)outCountLocal);"],
     absent: ["out uint outCount", "public uint* Samples("]);
 
+// The same tags on a free function, which reaches a contract by symbol instead of by
+// vtable field. A receiver declared [ctx] is the opaque token its callers already hold, so
+// it is passed along rather than pinned as a value; what the function writes and what it
+// returns are read exactly as a slot's are. Read differently, one header line would
+// project two ways depending on which emitter got to it.
+ExpectFreeFunctions("a free function honours [ctx], [out] and a counted return",
+    [
+        Function("ke_probe_ctx_samples", "const uint32_t *",
+            Param("ctx", "ke_probe_ctx *", "ctx"),
+            Param("query", "uint32_t"),
+            Param("out_count", "size_t *", "out"),
+            Returning("array_of:out_count")),
+        Function("ke_probe_ctx_share", "void",
+            Param("ctx", "ke_probe_ctx *", "ctx"),
+            Param("out_index", "uint32_t *", "out"),
+            Param("out_count", "uint32_t *", "out")),
+    ],
+    contains: ["public static ReadOnlySpan<uint> Samples(nint ctx, uint query)",
+               "var front = Native.ke_probe_ctx_samples((ke_probe_ctx*)ctx, query, &outCountLocal);",
+               "nuint outCountLocal = 0;",
+               "return front == null ? default : new ReadOnlySpan<uint>(front, (int)outCountLocal);",
+               "public static (uint OutIndex, uint OutCount) Share(nint ctx)",
+               "Native.ke_probe_ctx_share((ke_probe_ctx*)ctx, &outIndex, &outCount);",
+               "return (outIndex, outCount);"],
+    absent: ["in ke_probe_ctx ctx", "fixed (ke_probe_ctx* p =",
+             "Samples(nint ctx, uint query, nuint* outCount)", "out uint outIndex"]);
+
 // A run of consecutive float parameters that spell out one vector: the public surface
 // takes the vector, and the lanes are spread at the call. A C ABI cannot say "Vector2",
 // so without this every such slot grows a hand-written overload whose only content is
@@ -506,6 +533,77 @@ void ExpectValueStruct(string what, ApiStruct s, string[] contains, string[] abs
     foreach (var needle in absent)
         if (emitted.Contains(needle, StringComparison.Ordinal))
             failures.Add($"{what}: expected NOT to find \"{needle}\"");
+}
+
+/// <summary>
+/// Renders the free functions of a bare struct: an operation reached by a symbol rather
+/// than by a vtable field, which is a separate emitter and so a separate fixture.
+/// </summary>
+void ExpectFreeFunctions(string what, JsonObject[] functions, string[] contains, string[] absent)
+{
+    checks++;
+    var api = new JsonObject
+    {
+        ["enums"] = new JsonArray(),
+        ["structs"] = new JsonArray(new JsonObject
+        {
+            ["name"] = "ke_probe_ctx",
+            ["doc"] = null,
+            ["tags"] = new JsonArray(),
+            ["fields"] = new JsonArray(
+                new JsonObject { ["name"] = "handle", ["type"] = "void *", ["tags"] = new JsonArray(), ["doc"] = null }),
+            ["slots"] = new JsonArray(),
+        }),
+        ["vtables"] = new JsonArray(),
+        ["callbacks"] = new JsonArray(),
+        ["functions"] = new JsonArray(functions.Cast<JsonNode>().ToArray()),
+        ["type_aliases"] = new JsonObject(),
+    };
+
+    string emitted;
+    try
+    {
+        var model = ApiReader.Read(api);
+        var convention = Convention.KernelEngine;
+        var classified = Classifier.Classify(model, [], [], convention);
+        var (owner, group) = classified.FreeFunctionGroups.Single();
+        emitted = CSharpBackend.RenderFreeFunctions(model, owner, group, "Probe", "Probe.Native",
+            [], "ke_probe", convention);
+    }
+    catch (Exception ex)
+    {
+        failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+        return;
+    }
+    if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+
+    foreach (var needle in contains)
+        if (!emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected to find \"{needle}\"");
+
+    foreach (var needle in absent)
+        if (emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected NOT to find \"{needle}\"");
+}
+
+static JsonObject Function(string name, string returns, params object[] rest)
+{
+    var returnTags = new JsonArray();
+    var ps = new JsonArray();
+    foreach (var item in rest)
+    {
+        if (item is JsonObject p) ps.Add(p);
+        else if (item is ReturnTags rt) foreach (var one in rt.Tags.Split(',')) returnTags.Add((JsonNode)one.Trim());
+    }
+    return new JsonObject
+    {
+        ["name"] = name,
+        ["returns"] = returns,
+        ["doc"] = null,
+        ["return_doc"] = null,
+        ["return_tags"] = returnTags,
+        ["params"] = ps,
+    };
 }
 
 static ApiStruct ValueStruct(string name, params (string Name, string Type)[] fields) =>

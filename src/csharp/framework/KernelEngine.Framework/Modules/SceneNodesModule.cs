@@ -50,7 +50,7 @@ public sealed class SceneNodesModule : IRuntimeModule
     /// </remarks>
     private static (int First, int Last) SliceOf(nint ctx, int count)
     {
-        KernelEngine.Runtime.SystemContext.Slice(ctx, out var index, out var slices);
+        var (index, slices) = KernelEngine.Runtime.SystemCtx.Slice(ctx);
         if (slices <= 1) return (0, count);
 
         var per   = count / (int)slices;

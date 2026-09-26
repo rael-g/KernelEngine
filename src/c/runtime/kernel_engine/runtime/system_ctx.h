@@ -59,6 +59,9 @@ KE_RUNTIME_API void ke_runtime_debug_compute_waves(const ke_runtime_system_param
 /// single-threaded before the wave, because an ECS iterator allocates from
 /// storage shared across the wave's parallel systems. Returns NULL for an
 /// out-of-range index or a system that declared no queries.
+/// @param ctx [ctx]
+/// @param out_count [out]
+/// @return [array_of:out_count]
 KE_RUNTIME_API const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx,
                                                           uint32_t query_index,
                                                           size_t *out_count);
@@ -66,25 +69,42 @@ KE_RUNTIME_API const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx,
 /// Reports which share of its entity set this body call owns: *out_index in
 /// [0, *out_count). A system that did not declare per_entity always gets index 0
 /// of count 1, so a body written against this reads the whole set without asking
-/// whether it was sliced.
+/// whether it was sliced. A context of zero reports index 0 of count 1, which is
+/// what a caller outside a system needs to read its whole set unconditionally.
+/// @param ctx [ctx]
+/// @param out_index [out]
+/// @param out_count [out]
 KE_RUNTIME_API void ke_system_ctx_slice(ke_system_ctx *ctx, uint32_t *out_index, uint32_t *out_count);
 
 /// Reserves an entity id usable immediately, callable during a parallel wave.
 /// The id may be referenced at once; components given via attach land at the
-/// wave barrier.
+/// wave barrier. A context of zero reserves nothing and answers KE_ENTITY_INVALID.
+/// @param ctx [ctx]
 KE_RUNTIME_API ke_entity ke_system_ctx_reserve(ke_system_ctx *ctx);
 
 /// Enqueues a structural mutation to run at the wave barrier, for work the fixed
 /// spawn/attach/despawn verbs cannot express. `user_size` bytes of `user` are
 /// copied, so the caller's buffer need not outlive the call. False on OOM.
+/// @param ctx [ctx]
 KE_RUNTIME_API bool ke_system_ctx_defer(ke_system_ctx *ctx, ke_defer_fn fn,
                                           const void *user, size_t user_size);
 
+/// @param ctx [ctx]
 KE_RUNTIME_API ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx);
+
+/// Deferred-attaches `size` bytes of `data` as component `cid` of `entity`, applied
+/// at the wave barrier. The bytes are copied, so the caller's buffer need not
+/// outlive the call. False for a context of zero, which is the caller's signal to
+/// use its immediate path instead.
+/// @param ctx [ctx]
 KE_RUNTIME_API bool     ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
                                                ke_component_id cid, const void *data, size_t size);
+
+/// @param ctx [ctx]
 KE_RUNTIME_API bool     ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity,
                                                ke_component_id cid);
+
+/// @param ctx [ctx]
 KE_RUNTIME_API bool     ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity);
 
 #ifdef __cplusplus

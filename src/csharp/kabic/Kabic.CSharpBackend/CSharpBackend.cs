@@ -1985,6 +1985,114 @@ public static class CSharpBackend
         return string.Join('\n', o);
     }
 
+    /// <summary>
+    /// One free function as a projected method. A receiver declared <c>[ctx]</c> is the
+    /// opaque token its callers already hold, so it is passed along rather than pinned;
+    /// anything else is a value and has to be pinned to be addressed. What the function
+    /// writes and what it returns are read from the same classification a vtable slot
+    /// gets, so a tag means one thing wherever the header puts it.
+    /// </summary>
+    static void RenderFreeFunction(ApiModel model, List<string> o, GroupedFunction g, string prefix,
+        Convention convention)
+    {
+        var f = g.Fn;
+        var cs = g.Classified;
+        var self = g.SelfParam;
+        var rest = self is not null ? f.Params.Skip(1).ToList() : f.Params.ToList();
+        var methodName = Idioms.Pascal(f.Name.StartsWith(prefix) ? f.Name[prefix.Length..]
+            : convention.StripPrefix(f.Name));
+
+        var selfIsCtx = self is not null && self.Has("ctx");
+        var selfSig = self is null ? null
+            : selfIsCtx ? $"nint {Idioms.Ident(self.Name!)}"
+            : $"in {CsType(model, CTypes.Deref(self.Type))} {Idioms.Ident(self.Name!)}";
+        var selfArg = self is null ? null
+            : selfIsCtx ? $"({NativePointerType(model, self.Type)}){Idioms.Ident(self.Name!)}" : "p";
+
+        var tupleOuts = cs.Shape is SlotShape.TupleOutParams ? cs.OutParams : [];
+        var writes = cs.TrailingOuts.Concat(tupleOuts)
+            .Concat(cs.OutParam is null ? [] : new[] { cs.OutParam }).ToList();
+
+        if (cs.ReturnCount is not null || writes.Count > 0)
+        {
+            if (cs.Shape is SlotShape.Try || cs.Fallible || cs.ExpandedParam is not null || cs.Sequences.Count > 0)
+                throw new InvalidOperationException(
+                    $"{f.Name}: a free function that writes or answers with a sequence is projected"
+                    + $" plainly, and this one also declares {cs.Shape}"
+                    + (cs.Fallible ? " with a failure channel" : "")
+                    + " -- which of them the caller reads first is a choice, not something to infer here.");
+            if (cs.ReturnCount is not null && writes.Count > 0)
+                throw new InvalidOperationException(
+                    $"{f.Name}: the return carries the sequence, and {string.Join(", ", writes.Select(p => p.Name))}"
+                    + " is written besides -- two answers reached by one call, and the sequence is"
+                    + " the one the return already spells, so the other has nowhere to go.");
+        }
+
+        var ins = cs.PublicParams
+            .Where(p => !tupleOuts.Contains(p) && p != cs.OutParam).ToList();
+        var spanElement = cs.ReturnCount is null ? null : ReturnElement(model, cs.Slot, convention);
+        var retType = spanElement is not null ? $"ReadOnlySpan<{spanElement}>"
+            : cs.OutParam is not null ? OutElement(model, cs.OutParam, convention)
+            : tupleOuts.Count > 0
+                ? "(" + string.Join(", ", tupleOuts.Select(p =>
+                    $"{OutElement(model, p, convention)} {Idioms.Pascal(p.Name!)}")) + ")"
+            : f.Returns == "ke_bool" ? "bool" : CsType(model, f.Returns);
+
+        string Local(ApiParam p) => Idioms.Ident(p.Name!)
+            + (cs.TrailingOuts.Contains(p) || p == cs.ReturnCount ? "Local" : "");
+
+        var args = (self is null ? [] : new[] { selfArg! }).Concat(rest.Select(p =>
+            p == cs.ReturnCount || writes.Contains(p) ? OutAddress(model, p, convention, Local(p))
+            : p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}"
+            : Idioms.Ident(p.Name!)));
+        var call = $"Native.{f.Name}({string.Join(", ", args)})"
+            + (f.Returns == "ke_bool" ? " != 0" : "");
+
+        var sigParts = (selfSig is null ? [] : new[] { selfSig }).Concat(ins.Select(p =>
+            cs.TrailingOuts.Contains(p)
+                ? $"out {OutElement(model, p, convention)} {Idioms.Ident(p.Name!)}"
+                : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"));
+
+        o.Add(XmlDoc("    ", f.Doc, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc))).TrimEnd());
+        o.Add($"    public static {retType} {methodName}({string.Join(", ", sigParts)})");
+        o.Add("    {");
+
+        var needsFixed = self is not null && !selfIsCtx;
+        var body = new List<string>();
+        foreach (var p in writes)
+            body.Add($"{OutElement(model, p, convention)} {Local(p)};");
+        if (cs.ReturnCount is not null)
+        {
+            var native = CsType(model, CTypes.Deref(f.Returns));
+            var front = spanElement == native ? "front" : $"({spanElement}*)front";
+            body.Add($"{CsType(model, CTypes.Deref(cs.ReturnCount.Type))} {Local(cs.ReturnCount)} = 0;");
+            body.Add($"var front = {call};");
+            body.Add($"return front == null ? default"
+                + $" : new ReadOnlySpan<{spanElement}>({front}, (int){Local(cs.ReturnCount)});");
+        }
+        else if (writes.Count == 0)
+            body.Add((retType == "void" ? "" : "return ") + call + ";");
+        else
+        {
+            body.Add($"{call};");
+            foreach (var p in cs.TrailingOuts) body.Add($"{Idioms.Ident(p.Name!)} = {Local(p)};");
+            body.Add(cs.OutParam is not null
+                ? $"return {Local(cs.OutParam)};"
+                : $"return ({string.Join(", ", tupleOuts.Select(Local))});");
+        }
+
+        var indent = new string(' ', needsFixed ? 12 : 8);
+        if (needsFixed)
+        {
+            o.Add($"        fixed ({CsType(model, CTypes.Deref(self!.Type))}* p = &{Idioms.Ident(self.Name!)})");
+            if (body.Count > 1) o.Add("        {");
+        }
+        foreach (var line in body) o.Add(indent + line);
+        if (needsFixed && body.Count > 1) o.Add("        }");
+        o.Add("    }");
+        o.Add("");
+    }
+
     public static string RenderFreeFunctions(ApiModel model, string owner, List<GroupedFunction> fns, string ns, string nativeNs,
         IReadOnlyList<string> extraUsings, string libraryName, Convention convention)
     {
@@ -2008,39 +2116,7 @@ public static class CSharpBackend
             "{",
         ]);
 
-        foreach (var g in fns)
-        {
-            var f = g.Fn;
-            var self = g.SelfParam;
-            var rest = self is not null ? f.Params.Skip(1).ToList() : f.Params;
-            var strippedName = f.Name.StartsWith(prefix) ? f.Name[prefix.Length..]
-                : convention.StripPrefix(f.Name);
-            var methodName = Idioms.Pascal(strippedName);
-            var sig = string.Join(", ", rest.Select(p =>
-                CsParamType(model, p, convention) + " " + Idioms.Ident(p.Name!)));
-            var call = string.Concat(rest.Select(p => ", " + (p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}" : Idioms.Ident(p.Name!))));
-            var retType = f.Returns == "ke_bool" ? "bool" : CsType(model, f.Returns);
-            var selfSig = self is not null ? $"in {CsType(model, CTypes.Deref(self.Type))} {Idioms.Ident(self.Name!)}" : null;
-            var fullSig = string.Join(", ", new[] { selfSig }.Where(s => s is not null).Append(sig).Where(s => s!.Length > 0));
-
-            o.Add(XmlDoc("    ", f.Doc, rest.Select(p => (Idioms.Ident(p.Name!), p.Doc))).TrimEnd());
-            o.Add($"    public static {retType} {methodName}({fullSig})");
-            o.Add("    {");
-            var ret = retType == "void" ? "" : "return ";
-            var coerce = f.Returns == "ke_bool" ? " != 0" : "";
-            if (self is not null)
-            {
-                o.Add($"        fixed ({CsType(model, CTypes.Deref(self.Type))}* p = &{Idioms.Ident(self.Name!)})");
-                o.Add($"            {ret}Native.{f.Name}(p{call}){coerce};");
-            }
-            else
-            {
-                var call2 = string.Join(", ", rest.Select(p => p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}" : Idioms.Ident(p.Name!)));
-                o.Add($"        {ret}Native.{f.Name}({call2}){coerce};");
-            }
-            o.Add("    }");
-            o.Add("");
-        }
+        foreach (var g in fns) RenderFreeFunction(model, o, g, prefix, convention);
 
         o.Add("    private static unsafe class Native");
         o.Add("    {");

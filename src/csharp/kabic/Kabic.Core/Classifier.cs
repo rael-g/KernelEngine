@@ -47,7 +47,13 @@ public enum ConstructorKind { FromFactory, FromHandle, None }
 
 public record ConstructorPlan(ConstructorKind Kind, ApiFunction? Factory, string? HandleTypeName, bool NeedsWrapper);
 
-public record GroupedFunction(ApiFunction Fn, ApiParam? SelfParam);
+/// <param name="Classified">
+/// What the function's own parameters and return declare, read with the same rules a
+/// vtable slot's are. A free function is the same contract reached by a symbol instead of
+/// a field, so a tag placed on one has to mean what it means on the other -- read twice,
+/// the same header line would project two different ways.
+/// </param>
+public record GroupedFunction(ApiFunction Fn, ApiParam? SelfParam, ClassifiedSlot Classified);
 
 public class ClassifiedModel
 {
@@ -126,7 +132,8 @@ public static class Classifier
             if (owner is null) continue;
             var selfParam = firstParamType == owner ? fn.Params[0] : null;
             (result.FreeFunctionGroups.TryGetValue(owner, out var list)
-                ? list : result.FreeFunctionGroups[owner] = []).Add(new GroupedFunction(fn, selfParam));
+                ? list : result.FreeFunctionGroups[owner] = []).Add(
+                new GroupedFunction(fn, selfParam, ClassifySlot(model, AsSlot(fn, selfParam), convention)));
         }
 
         return result;
@@ -154,6 +161,18 @@ public static class Classifier
                 + "and no struct by that name is described");
         return (expanded, bag);
     }
+
+    /// <summary>
+    /// A free function read as the slot it is, with the receiver dropped: the receiver is
+    /// how the call reaches the contract, never part of what the contract answers, so
+    /// leaving it in would let it be mistaken for a value the caller supplies.
+    /// </summary>
+    static ApiSlot AsSlot(ApiFunction fn, ApiParam? self) =>
+        new(fn.Name, fn.Returns, [], fn.Doc, fn.ReturnDoc,
+            (self is null ? fn.Params : fn.Params.Skip(1)).ToList())
+        {
+            ReturnTags = fn.ReturnTags,
+        };
 
     static ClassifiedSlot ClassifySlot(ApiModel model, ApiSlot slot, Convention convention)
     {

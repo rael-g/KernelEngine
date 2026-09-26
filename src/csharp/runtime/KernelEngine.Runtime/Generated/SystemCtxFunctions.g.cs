@@ -13,59 +13,56 @@ namespace KernelEngine.Runtime;
 public unsafe partial class SystemCtx
 {
     /// <summary>The system body's only path to component memory. Returns the resolved archetype segments for the system's query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call — the segments were resolved single-threaded before the wave, because an ECS iterator allocates from storage shared across the wave's parallel systems. Returns NULL for an out-of-range index or a system that declared no queries.</summary>
-    public static ke_ecs_segment* View(in ke_system_ctx ctx, uint queryIndex, nuint* outCount)
+    public static ReadOnlySpan<ke_ecs_segment> View(nint ctx, uint queryIndex)
     {
-        fixed (ke_system_ctx* p = &ctx)
-            return Native.ke_system_ctx_view(p, queryIndex, outCount);
+        nuint outCountLocal = 0;
+        var front = Native.ke_system_ctx_view((ke_system_ctx*)ctx, queryIndex, &outCountLocal);
+        return front == null ? default : new ReadOnlySpan<ke_ecs_segment>(front, (int)outCountLocal);
     }
 
-    /// <summary>Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1, so a body written against this reads the whole set without asking whether it was sliced.</summary>
-    public static void Slice(in ke_system_ctx ctx, uint* outIndex, uint* outCount)
+    /// <summary>Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1, so a body written against this reads the whole set without asking whether it was sliced. A context of zero reports index 0 of count 1, which is what a caller outside a system needs to read its whole set unconditionally.</summary>
+    public static (uint OutIndex, uint OutCount) Slice(nint ctx)
     {
-        fixed (ke_system_ctx* p = &ctx)
-            Native.ke_system_ctx_slice(p, outIndex, outCount);
+        uint outIndex;
+        uint outCount;
+        Native.ke_system_ctx_slice((ke_system_ctx*)ctx, &outIndex, &outCount);
+        return (outIndex, outCount);
     }
 
-    /// <summary>Reserves an entity id usable immediately, callable during a parallel wave. The id may be referenced at once; components given via attach land at the wave barrier.</summary>
-    public static ulong Reserve(in ke_system_ctx ctx)
+    /// <summary>Reserves an entity id usable immediately, callable during a parallel wave. The id may be referenced at once; components given via attach land at the wave barrier. A context of zero reserves nothing and answers KE_ENTITY_INVALID.</summary>
+    public static ulong Reserve(nint ctx)
     {
-        fixed (ke_system_ctx* p = &ctx)
-            return Native.ke_system_ctx_reserve(p);
+        return Native.ke_system_ctx_reserve((ke_system_ctx*)ctx);
     }
 
     /// <summary>Enqueues a structural mutation to run at the wave barrier, for work the fixed spawn/attach/despawn verbs cannot express. `user_size` bytes of `user` are copied, so the caller's buffer need not outlive the call. False on OOM.</summary>
-    public static bool Defer(in ke_system_ctx ctx, delegate* unmanaged[Cdecl]<ke_ecs*, nint, void> fn, void* user, nuint userSize)
+    public static bool Defer(nint ctx, delegate* unmanaged[Cdecl]<ke_ecs*, nint, void> fn, void* user, nuint userSize)
     {
-        fixed (ke_system_ctx* p = &ctx)
-            return Native.ke_system_ctx_defer(p, fn, user, userSize);
+        return Native.ke_system_ctx_defer((ke_system_ctx*)ctx, fn, user, userSize);
     }
 
 
-    public static ulong Spawn(in ke_system_ctx ctx)
+    public static ulong Spawn(nint ctx)
     {
-        fixed (ke_system_ctx* p = &ctx)
-            return Native.ke_system_ctx_spawn(p);
+        return Native.ke_system_ctx_spawn((ke_system_ctx*)ctx);
+    }
+
+    /// <summary>Deferred-attaches `size` bytes of `data` as component `cid` of `entity`, applied at the wave barrier. The bytes are copied, so the caller's buffer need not outlive the call. False for a context of zero, which is the caller's signal to use its immediate path instead.</summary>
+    public static bool Attach(nint ctx, ulong entity, uint cid, void* data, nuint size)
+    {
+        return Native.ke_system_ctx_attach((ke_system_ctx*)ctx, entity, cid, data, size);
     }
 
 
-    public static bool Attach(in ke_system_ctx ctx, ulong entity, uint cid, void* data, nuint size)
+    public static bool Detach(nint ctx, ulong entity, uint cid)
     {
-        fixed (ke_system_ctx* p = &ctx)
-            return Native.ke_system_ctx_attach(p, entity, cid, data, size);
+        return Native.ke_system_ctx_detach((ke_system_ctx*)ctx, entity, cid);
     }
 
 
-    public static bool Detach(in ke_system_ctx ctx, ulong entity, uint cid)
+    public static bool Despawn(nint ctx, ulong entity)
     {
-        fixed (ke_system_ctx* p = &ctx)
-            return Native.ke_system_ctx_detach(p, entity, cid);
-    }
-
-
-    public static bool Despawn(in ke_system_ctx ctx, ulong entity)
-    {
-        fixed (ke_system_ctx* p = &ctx)
-            return Native.ke_system_ctx_despawn(p, entity);
+        return Native.ke_system_ctx_despawn((ke_system_ctx*)ctx, entity);
     }
 
     private static unsafe class Native
