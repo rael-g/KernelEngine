@@ -193,14 +193,14 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
     /// <summary>Registers a system body against the phase and the component access it declares.</summary>
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
     /// <param name="phase">Which phase of the tick the body runs in.</param>
+    /// <param name="execute">The body itself.</param>
     /// <param name="queries">Queries the system reads through. The runtime registers them, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view.</param>
-    /// <param name="accessList">Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and entity-keyed reads via ke_system_ctx_get.</param>
+    /// <param name="accessList">Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and entity-keyed reads via ke_system_ctx_get. Declaring nothing is not "no opinion" -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage says so.</param>
     /// <param name="pinnedThread">The worker the body must run on, or 0 to let any wave thread take it.</param>
     /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
-    /// <param name="execute">The body itself.</param>
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong RegisterSystemRaw(string name, RuntimePhase phase, Span<QueryDecl> queries, Span<ComponentAccess> accessList, uint pinnedThread, bool perEntity, SystemExecute? execute)
+    public ulong RegisterSystemRaw(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
@@ -215,14 +215,14 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
                     ke_runtime_system_params p = default;
                     p.name = (sbyte*)namePtr;
                     p.phase = (ke_phase)phase;
+                    p.user_data = (void*)GCHandle.ToIntPtr(executeHandle);
+                    p.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, ke_error**, bool>)&RegisterSystemExecuteTrampoline;
                     p.queries = (ke_query_decl*)queriesPtr;
                     p.query_count = (uint)queries.Length;
                     p.access_list = (ke_component_access*)accessListPtr;
                     p.access_count = (uint)accessList.Length;
                     p.pinned_thread = pinnedThread;
                     p.per_entity = perEntity;
-                    p.user_data = (void*)GCHandle.ToIntPtr(executeHandle);
-                    p.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, ke_error**, bool>)&RegisterSystemExecuteTrampoline;
                     ke_error* err = null;
                     ulong result;
                     try

@@ -9,6 +9,11 @@ public unsafe partial struct ke_runtime_system_params
 
     public ke_phase phase;
 
+    public void* user_data;
+
+    [NativeTypeName("ke_system_execute_fn")]
+    public delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, KernelEngine.Common.Native.ke_error**, bool> execute;
+
     [NativeTypeName("const ke_query_decl *")]
     public ke_query_decl* queries;
 
@@ -25,9 +30,4 @@ public unsafe partial struct ke_runtime_system_params
     public uint pinned_thread;
 
     public bool per_entity;
-
-    public void* user_data;
-
-    [NativeTypeName("ke_system_execute_fn")]
-    public delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, KernelEngine.Common.Native.ke_error**, bool> execute;
 }

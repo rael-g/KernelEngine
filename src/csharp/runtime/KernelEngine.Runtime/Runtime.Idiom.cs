@@ -76,6 +76,7 @@ public sealed unsafe partial class Runtime : IRuntime
                                   bool perEntity)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
-        return RegisterSystemRaw(name, phase, queries ?? [], accessList ?? [], pinnedThread, perEntity, execute);
+        return RegisterSystemRaw(name, phase, execute, queries ?? [], accessList ?? [],
+            pinnedThread, perEntity);
     }
 }

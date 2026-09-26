@@ -76,6 +76,41 @@ public static class CSharpBackend
         return SequenceElement(model, s, convention) == native ? $"{n}Ptr" : $"({native}*){n}Ptr";
     }
 
+    /// <summary>
+    /// The value a <c>[default:...]</c> parameter takes when the caller leaves it out. The
+    /// header is where the default belongs: a params-bag field that documents "or 0 to let
+    /// any wave thread take it" is describing an optional parameter, and spelling that 0 a
+    /// second time in a hand-written overload is how the two come to disagree.
+    /// </summary>
+    static string DefaultLiteral(ApiModel model, ClassifiedSlot cs, ApiParam p, ApiSlot slot)
+    {
+        var v = p.TagValue("default")!.Trim();
+        if (cs.Sequences.Any(s => s.Seq == p))
+            return v is "empty"
+                ? "default"
+                : throw new InvalidOperationException(
+                    $"{slot.Name}.{p.Name}: a sequence the caller may leave out is the empty one, so"
+                    + $" [default:empty] is the only default it takes -- got \"{v}\".");
+
+        if (p.Type.Trim() is "ke_bool" or "_Bool" or "bool" || p.Has("bool"))
+            return v is "true" or "false"
+                ? v
+                : throw new InvalidOperationException(
+                    $"{slot.Name}.{p.Name}: a boolean default is true or false -- got \"{v}\".");
+
+        if (model.Enums.FirstOrDefault(e => e.Name == p.Type.Trim()) is { } e)
+            return e.Values.Any(ev => ev.Name == v)
+                ? $"{Idioms.TypeName(e.Name, Convention.KernelEngine)}.{Idioms.EnumMember(v, e.Name)}"
+                : throw new InvalidOperationException(
+                    $"{slot.Name}.{p.Name}: [default:{v}] is not a value of {e.Name}.");
+
+        return long.TryParse(v, out _)
+            ? v
+            : throw new InvalidOperationException(
+                $"{slot.Name}.{p.Name}: [default:{v}] is not a literal this projection can spell."
+                + " A default has to be a constant the caller sees, not an expression.");
+    }
+
     static string StripQualifiers(string cType)
     {
         var t = cType.Trim();
@@ -1343,16 +1378,32 @@ public static class CSharpBackend
             .Where(p => callbacks.All(c => c.Ctx != p))
             .Select(p => (Idioms.Ident(p.Name!), p.Doc));
 
-        IEnumerable<string> SigParts(IEnumerable<ApiParam> ps) => ps
-            .Where(p => !lanes.TryGetValue(p, out var l) || l.Leads)
-            .Where(p => callbacks.All(c => c.Ctx != p))
-            .Select(p => lanes.TryGetValue(p, out var l)
-                ? $"Vector{l.Arity} {Idioms.Ident(l.Vector)}"
-                : callbacks.FirstOrDefault(c => c.Fn == p) is { } cb
-                    ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
-                : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
-                    ? $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}"
-                    : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}");
+        IEnumerable<string> SigParts(IEnumerable<ApiParam> ps)
+        {
+            var parts = ps
+                .Where(p => !lanes.TryGetValue(p, out var l) || l.Leads)
+                .Where(p => callbacks.All(c => c.Ctx != p))
+                .Select(p => (Param: p, Text: lanes.TryGetValue(p, out var l)
+                    ? $"Vector{l.Arity} {Idioms.Ident(l.Vector)}"
+                    : callbacks.FirstOrDefault(c => c.Fn == p) is { } cb
+                        ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
+                    : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
+                        ? $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}"
+                        : $"{CsParamType(model, p, convention)} {Idioms.Ident(p.Name!)}"))
+                .ToList();
+
+            var optionalFrom = parts.FindIndex(x => x.Param.Has("default"));
+            if (optionalFrom >= 0 && parts.Skip(optionalFrom).Any(x => !x.Param.Has("default")))
+                throw new InvalidOperationException(
+                    $"{slot.Name}: a parameter carrying [default] is one the caller may leave out, so"
+                    + " every parameter after it must carry one too. Reorder the fields so the ones"
+                    + $" with a default come last -- {string.Join(", ", parts.Skip(optionalFrom)
+                        .Where(x => !x.Param.Has("default")).Select(x => x.Param.Name))} has none.");
+
+            return parts.Select(x => x.Param.Has("default")
+                ? $"{x.Text} = {DefaultLiteral(model, cs, x.Param, slot)}"
+                : x.Text);
+        }
 
         switch (cs.Shape)
         {

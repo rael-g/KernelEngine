@@ -104,24 +104,32 @@ typedef struct ke_runtime_system_params {
     /// Which phase of the tick the body runs in.
     ke_phase phase;
 
-    /// [array_of:query_count] Queries the system reads through. The runtime registers
-    /// them, derives the scheduling access list from their terms, and resolves them
-    /// into segments the body reads via ke_system_ctx_view.
+    /// [context] Forwarded unchanged to every call of the body.
+    void *user_data;
+
+    /// [closure:user_data, retained:return] The body itself.
+    ke_system_execute_fn execute;
+
+    /// [array_of:query_count, default:empty] Queries the system reads through. The runtime
+    /// registers them, derives the scheduling access list from their terms, and resolves
+    /// them into segments the body reads via ke_system_ctx_view.
     const ke_query_decl *queries;
     uint32_t             query_count;
 
-    /// [array_of:access_count] Cids the system touches that no query term covers,
-    /// folded into the derived set so the wave-builder still orders on them:
+    /// [array_of:access_count, default:empty] Cids the system touches that no query term
+    /// covers, folded into the derived set so the wave-builder still orders on them:
     /// ordering-only tags (render resources carry no data) and entity-keyed reads
-    /// via ke_system_ctx_get.
+    /// via ke_system_ctx_get. Declaring nothing is not "no opinion" -- it says the system
+    /// conflicts with nobody, so it may run concurrently with every other system in its
+    /// phase. Anything touching component storage says so.
     const ke_component_access *access_list;
     uint32_t                   access_count;
 
-    /// The worker the body must run on, or 0 to let any wave thread take it.
+    /// [default:0] The worker the body must run on, or 0 to let any wave thread take it.
     uint32_t pinned_thread;
 
-    /// The body's work on one entity is independent of every other entity it
-    /// visits. The runtime may then run it as several concurrent slices of the
+    /// [default:false] The body's work on one entity is independent of every other entity
+    /// it visits. The runtime may then run it as several concurrent slices of the
     /// same entity set, each body call handling the share ke_system_ctx_slice
     /// reports. False keeps the body one call over the whole set.
     ///
@@ -129,12 +137,6 @@ typedef struct ke_runtime_system_params {
     /// the promise is a body reaching an entity other than the one it is
     /// visiting, or touching state shared across the set.
     bool per_entity;
-
-    /// [context] Forwarded unchanged to every call of the body.
-    void *user_data;
-
-    /// [closure:user_data, retained:return] The body itself.
-    ke_system_execute_fn execute;
 } ke_runtime_system_params;
 
 typedef struct ke_runtime {
