@@ -90,9 +90,9 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id, because refusing to parallelise something unknown is the safe direction.</summary>
-    public ke_script_reach TypeReach(uint type)
+    public ScriptReach TypeReach(uint type)
     {
-        return Handle->type_reach(Handle, type);
+        return (ScriptReach)Handle->type_reach(Handle, type);
     }
 
     /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it silently, since the previous binding's owner would then never learn its object was dropped.</summary>

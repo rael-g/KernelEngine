@@ -70,6 +70,17 @@ Expect("a slot that answers and writes spells the written value out",
                "(ke_probe_verdict*)&kindLocal", "kind = kindLocal;"],
     absent: ["ProbeVerdict* outKind", "public ProbeVerdict Ask("]);
 
+// A slot answering with a declared enum. The same type as a parameter is already projected
+// by name, so leaving the return as the ABI's integer would make one declaration mean two
+// things depending on which side of the slot it sits on -- and hand every call site the cast
+// back to the names the header already gave the values.
+Expect("a slot answering with a declared enum answers in its names",
+    Vtable("ke_probe", Slot("verdict_of", "ke_probe_verdict",
+        Param("entity", "ke_entity"))),
+    contains: ["public ProbeVerdict VerdictOf(ulong entity)",
+               "return (ProbeVerdict)Handle->verdict_of(Handle, entity);"],
+    absent: ["public ke_probe_verdict VerdictOf("]);
+
 // The same stripping, where the name it would free is already taken. Picking a winner here
 // would hand two of the slot's parameters to the caller under one name, and which one the
 // caller then reads is not something the header says.

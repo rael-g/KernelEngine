@@ -173,6 +173,26 @@ public static class CSharpBackend
     /// the pointer type alone only says which bytes are written, not which type names them.
     /// </summary>
     /// <summary>
+    /// What a slot answers with, as its caller reads it. A declared enum names its own
+    /// values, and a parameter of that type is already projected by the name -- a return of
+    /// the same type staying the ABI's integer would make one declaration mean two things
+    /// depending on which side of the slot it sits on.
+    /// </summary>
+    static string ReturnType(ApiModel model, string cType, Convention convention) =>
+        model.Enums.Any(e => e.Name == cType.Trim())
+            ? Idioms.TypeName(cType.Trim(), convention)
+            : CsType(model, cType);
+
+    /// <summary>
+    /// The cast carrying the ABI's answer into what <see cref="ReturnType"/> spells, or
+    /// nothing where the two already agree.
+    /// </summary>
+    static string ReturnCast(ApiModel model, string cType, Convention convention) =>
+        model.Enums.Any(e => e.Name == cType.Trim())
+            ? $"({Idioms.TypeName(cType.Trim(), convention)})"
+            : "";
+
+    /// <summary>
     /// What to call a parameter the callee writes. A leading <c>out_</c> is how C marks the
     /// direction, and the projection already marks it -- as <c>out</c>, as a tuple element,
     /// or by returning it -- so carrying the prefix across would spell it twice.
@@ -1458,11 +1478,11 @@ public static class CSharpBackend
                     + $" failure channel, so there is nothing for a getter to drop. Got {cs.Shape}"
                     + $" with {cs.PublicParams.Count} parameter(s).");
 
-            var pType = slot.Returns == "ke_bool" ? "bool" : CsType(model, slot.Returns);
+            var pType = slot.Returns == "ke_bool" ? "bool" : ReturnType(model, slot.Returns, convention);
             Declare(o, decls, XmlDoc("    ", slot.Doc ?? slot.ReturnDoc).TrimEnd(),
                 $"{pType} {name}", property: true);
             o.Add("    {");
-            o.Add($"        get => Handle->{slot.Name}(Handle)"
+            o.Add($"        get => {(slot.Returns == "ke_bool" ? "" : ReturnCast(model, slot.Returns, convention))}Handle->{slot.Name}(Handle)"
                 + (slot.Returns == "ke_bool" ? " != 0" : "") + ";");
             o.Add("    }");
             o.Add("");
@@ -1622,7 +1642,7 @@ public static class CSharpBackend
             {
                 var args = cs.PublicParams;
                 var byReturn = convention.SignalsFailureByReturn(slot.Returns);
-                var retType = byReturn ? "void" : CsType(model, slot.Returns);
+                var retType = byReturn ? "void" : ReturnType(model, slot.Returns, convention);
                 var sig = Sig(args);
                 var bagLocal = cs.ExpandedParam is null ? null : Idioms.Ident(cs.ExpandedParam.Name!);
                 var call = string.Concat(NativeParams()
@@ -1686,7 +1706,9 @@ public static class CSharpBackend
                     else if (capture is not null) o.Add($"{fInd}{retType} {capture};");
                     o.Add($"{fInd}try");
                     o.Add($"{fInd}{{");
-                    o.Add($"{fInd}    {(capture is null ? "" : capture + " = ")}Handle->{slot.Name}(Handle{call}, &err)"
+                    o.Add($"{fInd}    {(capture is null ? "" : capture + " = ")}"
+                        + $"{(signalsOk ? "" : ReturnCast(model, slot.Returns, convention))}"
+                        + $"Handle->{slot.Name}(Handle{call}, &err)"
                         + (slot.Returns == "ke_bool" ? " != 0" : "") + ";");
                     o.Add($"{fInd}}}");
                     if (scoped.Count > 0)
@@ -1789,7 +1811,8 @@ public static class CSharpBackend
                 }
                 else
                 {
-                    o.Add($"{fInd}var result = Handle->{slot.Name}(Handle{call}, &err);");
+                    o.Add($"{fInd}var result = {ReturnCast(model, slot.Returns, convention)}"
+                        + $"Handle->{slot.Name}(Handle{call}, &err);");
                     if (CTypes.IsPointer(slot.Returns))
                         o.Add($"{fInd}if (result == null) throw KernelError.FromNative(err, \"{slot.Name}\");");
                     else
@@ -1809,8 +1832,10 @@ public static class CSharpBackend
                 var spanElement = cs.ReturnCount is null ? null : ReturnElement(model, slot, convention);
                 var retType = spanElement is not null ? $"ReadOnlySpan<{spanElement}>"
                     : slot.Returns == "ke_bool" ? "bool"
-                    : CsType(model, slot.Returns);
-                var needsCast = retType == "nint";
+                    : ReturnType(model, slot.Returns, convention);
+                var needsCast = retType == "nint" ? "(nint)"
+                    : spanElement is null && slot.Returns != "ke_bool"
+                        ? ReturnCast(model, slot.Returns, convention) : "";
                 Declare(o, decls,
                     XmlDoc("    ", slot.Doc, args.Select(p =>
                         (Idioms.Ident(cs.TrailingOuts.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)),
@@ -1848,9 +1873,9 @@ public static class CSharpBackend
                     }
                 }
                 else if (pHolds)
-                    o.Add($"{pInd}var result = {(needsCast ? "(nint)" : "")}{pCall};");
+                    o.Add($"{pInd}var result = {needsCast}{pCall};");
                 else
-                    o.Add($"{pInd}return {(needsCast ? "(nint)" : "")}{pCall};");
+                    o.Add($"{pInd}return {needsCast}{pCall};");
                 foreach (var op in cs.TrailingOuts)
                     o.Add($"{pInd}{Idioms.Ident(WrittenName(op))} = {Idioms.Ident(WrittenName(op))}Local;");
                 if (retType != "void" && pHolds) o.Add($"{pInd}return result;");
@@ -2053,7 +2078,7 @@ public static class CSharpBackend
             : tupleOuts.Count > 0
                 ? "(" + string.Join(", ", tupleOuts.Select(p =>
                     $"{OutElement(model, p, convention)} {Idioms.Pascal(WrittenName(p))}")) + ")"
-            : f.Returns == "ke_bool" ? "bool" : CsType(model, f.Returns);
+            : f.Returns == "ke_bool" ? "bool" : ReturnType(model, f.Returns, convention);
 
         string Local(ApiParam p) => Idioms.Ident(writes.Contains(p) || p == cs.ReturnCount
             ? WrittenName(p) : p.Name!)
@@ -2063,7 +2088,8 @@ public static class CSharpBackend
             p == cs.ReturnCount || writes.Contains(p) ? OutAddress(model, p, convention, Local(p))
             : p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!)));
-        var call = $"Native.{f.Name}({string.Join(", ", args)})"
+        var call = $"{(cs.ReturnCount is null ? ReturnCast(model, f.Returns, convention) : "")}"
+            + $"Native.{f.Name}({string.Join(", ", args)})"
             + (f.Returns == "ke_bool" ? " != 0" : "");
 
         var sigParts = (selfSig is null ? [] : new[] { selfSig }).Concat(ins.Select(p =>
