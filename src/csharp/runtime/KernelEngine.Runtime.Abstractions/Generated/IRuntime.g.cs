@@ -7,19 +7,19 @@ namespace KernelEngine.Runtime;
 
 /// <summary>Registers the module's components and systems against the runtime it is being loaded into. Runs inside register_module, before that call returns.</summary>
 /// <param name="runtime">The runtime the module is being loaded into.</param>
-public unsafe delegate void ModuleLoad(IRuntime runtime);
+public delegate void ModuleLoad(IRuntime runtime);
 
 /// <summary>Releases whatever the matching load acquired, as the runtime is torn down.</summary>
 /// <param name="runtime">The runtime the module was loaded into.</param>
-public unsafe delegate void ModuleUnload(IRuntime runtime);
+public delegate void ModuleUnload(IRuntime runtime);
 
 /// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
 /// <param name="ctx">The body's only doorway to component memory for this call. Opaque to a managed caller, which forwards it to the entry points that take one.</param>
 /// <param name="dt">Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE.</param>
-public unsafe delegate void SystemExecute(nint ctx, float dt);
+public delegate void SystemExecute(nint ctx, float dt);
 
 /// <summary>The runtime contract game code depends on, so a caller names a capability rather than the <see cref="Runtime"/> that carries it.</summary>
-public unsafe interface IRuntime : IDisposable
+public interface IRuntime : IDisposable
 {
     /// <summary>Loads a module into the runtime, running its load hook before returning.</summary>
     /// <param name="name">Identifies the module in diagnostics.</param>

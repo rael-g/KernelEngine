@@ -18,7 +18,7 @@ public unsafe interface INativeInputActions
 
 /// <summary>Reports one phase transition of one binding.</summary>
 /// <param name="@event">The transition, naming the action it belongs to.</param>
-public unsafe delegate void InputActionEvent(ke_input_action_event @event);
+public delegate void InputActionEvent(ke_input_action_event @event);
 
 
 public unsafe partial class NativeInputActions : IDisposable, INativeInputActions

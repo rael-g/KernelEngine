@@ -107,7 +107,7 @@ Expect("a callback and its context become one delegate parameter",
         Param("on_event", "ke_probe_event_func", "closure:event_ctx"),
         Param("event_ctx", "void *"),
         Param("out_error", "ke_error **"))),
-    contains: ["public unsafe delegate void ProbeEvent(uint tick);",
+    contains: ["public delegate void ProbeEvent(uint tick);",
                "public void Watch(ProbeEvent? onEvent)",
                "GCHandle.Alloc(onEvent)",
                "private static void WatchOnEventTrampoline(void* ctx, uint arg1)",
@@ -131,7 +131,7 @@ Expect("a retained closure is kept per key and reports through the channel it de
         Param("apply", "ke_probe_apply_fn", "closure:ctx,retained:cid"),
         Param("ctx", "void *"),
         Param("out_error", "ke_error **"))),
-    contains: ["public unsafe delegate void ProbeApply(uint tick);",
+    contains: ["public delegate void ProbeApply(uint tick);",
                "private readonly Dictionary<uint, GCHandle> _retainedApply = new();",
                "public void RegisterApply(uint cid, ProbeApply? apply)",
                "private static bool RegisterApplyTrampoline(void* ctx, uint arg1, ke_error** arg2)",
@@ -278,7 +278,7 @@ Expect("a handler relays a context lane as nint and reports its own failure by t
         Param("body", "ke_probe_body_fn", "closure:ctx"),
         Param("ctx", "void *"),
         Param("out_error", "ke_error **"))),
-    contains: ["public unsafe delegate void ProbeBody(nint sys, float dt);",
+    contains: ["public delegate void ProbeBody(nint sys, float dt);",
                "handler((nint)arg0, arg2);",
                "return true;"],
     absent: ["delegate bool ProbeBody", "ke_system_ctx* sys"],
@@ -297,7 +297,7 @@ Expect("a handler called with the provider is handed the managed wrapper, not th
         Param("body", "ke_probe_body_fn", "closure:ctx"),
         Param("ctx", "void *"),
         Param("out_error", "ke_error **"))),
-    contains: ["public unsafe delegate void ProbeBody(Probe probe);",
+    contains: ["public delegate void ProbeBody(Probe probe);",
                "public required Probe Owner;",
                "handler(state.Owner);"],
     absent: ["_callbackFailures", "ke_probe* probe"],
@@ -312,8 +312,18 @@ Expect("a handler called with the provider is handed the managed wrapper, not th
 Expect("a slot that only answers becomes a property, in the class and in the contract alike",
     Vtable("ke_probe", "interface", Slot("root", "ke_entity", "property")),
     contains: ["public ulong Root", "get => Handle->root(Handle);",
-               "public unsafe interface IProbe : IDisposable", "    ulong Root { get; }"],
-    absent: ["public ulong Root()", "    ulong Root;"]);
+               "public interface IProbe : IDisposable", "    ulong Root { get; }"],
+    absent: ["public ulong Root()", "    ulong Root;", "public unsafe interface IProbe"]);
+
+// The keyword is a permission the project holding the file has to grant, and it grants it
+// project-wide. A contract or a delegate naming nothing but managed types asks for pointers
+// to be allowed everywhere around it, for the sake of a signature that spells none. So it
+// follows the signature instead: absent above, present here.
+Expect("a contract spelling a pointer keeps the keyword",
+    Vtable("ke_probe", "interface", Slot("ask", "ke_entity",
+        Param("out_kind", "ke_probe_verdict *", "out,enum:ke_probe_verdict"))),
+    contains: ["public unsafe interface IProbe : IDisposable", "    ulong Ask(ProbeVerdict* outKind);"],
+    absent: ["public interface IProbe : IDisposable"]);
 
 // Data a caller holds, emitted from the header rather than spelled a second time by
 // hand. The second spelling is what makes a reinterpret cast necessary, and a cast is

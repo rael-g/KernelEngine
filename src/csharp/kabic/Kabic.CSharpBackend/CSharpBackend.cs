@@ -885,7 +885,7 @@ public static class CSharpBackend
 
         contract.Add($"/// <summary>The {typeName.ToLowerInvariant()} contract game code depends on, so a caller"
             + $" names a capability rather than the <see cref=\"{typeName}\"/> that carries it.</summary>");
-        contract.Add($"public unsafe interface {domainIface} : IDisposable");
+        contract.Add($"public {PointerModifier(decls!.Select(m => m.Decl))}interface {domainIface} : IDisposable");
         contract.Add("{");
         foreach (var m in decls!)
         {
@@ -1257,13 +1257,15 @@ public static class CSharpBackend
     static void RenderClosureDelegate(ApiModel model, List<string> o, CallbackPair pair, string selfType)
     {
         var ps = CarriedLanes(pair).Select(i => pair.Callback.Lanes[i])
-            .Select((l, n) => $"{ManagedLane(model, l, selfType)} {Idioms.Ident(l.Name ?? $"arg{n}")}");
+            .Select((l, n) => $"{ManagedLane(model, l, selfType)} {Idioms.Ident(l.Name ?? $"arg{n}")}")
+            .ToList();
+        var ret = ManagedReturn(model, pair.Callback, pair.ErrorLane);
         var doc = pair.Callback.Lanes
             .Where(l => l.Name is not null && l.Doc is not null)
             .Where(l => CarriedLanes(pair).Any(i => pair.Callback.Lanes[i] == l))
             .Select(l => (Idioms.Ident(l.Name!), l.Doc));
         o.Add(XmlDoc("", pair.Callback.Doc ?? pair.Fn.Doc, doc).TrimEnd());
-        o.Add($"public unsafe delegate {ManagedReturn(model, pair.Callback, pair.ErrorLane)} "
+        o.Add($"public {PointerModifier(ps.Append(ret))}delegate {ret} "
             + $"{pair.Delegate}({string.Join(", ", ps)});");
         o.Add("");
     }
@@ -1365,6 +1367,15 @@ public static class CSharpBackend
         /// <summary>How the interface spells this member: a method ends the declaration, a property opens a getter.</summary>
         public string InterfaceLine => Property ? $"{Decl} {{ get; }}" : $"{Decl};";
     }
+
+    /// <summary>
+    /// The <c>unsafe</c> keyword, but only for a declaration that actually spells a pointer.
+    /// Emitting it unconditionally makes every project holding such a declaration turn
+    /// <c>AllowUnsafeBlocks</c> on, which is a real permission -- a contract naming nothing but
+    /// managed types should not ask its consumers for it.
+    /// </summary>
+    static string PointerModifier(IEnumerable<string> signatures) =>
+        signatures.Any(s => s.Contains('*', StringComparison.Ordinal)) ? "unsafe " : "";
 
     static void Declare(List<string> o, List<MemberDecl>? decls, string doc, string decl, bool property = false)
     {

@@ -18,7 +18,7 @@ public unsafe interface INativeSceneLoader
 /// <summary>Builds and binds the script an entity's declared type names.</summary>
 /// <param name="entity">The entity the script is bound to.</param>
 /// <param name="typeName">Qualified node type name, as the scene file spells it.</param>
-public unsafe delegate void ScriptFactory(ulong entity, string typeName);
+public delegate void ScriptFactory(ulong entity, string typeName);
 
 
 public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader

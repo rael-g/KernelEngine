@@ -6,7 +6,7 @@ using KernelEngine.Common;
 namespace KernelEngine.Window;
 
 /// <summary>The window contract game code depends on, so a caller names a capability rather than the <see cref="Window"/> that carries it.</summary>
-public unsafe interface IWindow : IDisposable
+public interface IWindow : IDisposable
 {
     /// <summary>Returns true once the user has requested the window to close.</summary>
     bool ShouldClose();
