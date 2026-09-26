@@ -303,11 +303,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// or one another language's runtime owns, carries the same components and matches
     /// the same query without any node here standing behind it.
     /// </summary>
-    internal Node? NodeOf(ulong entity)
-    {
-        if (!TryInstanceOf(entity, out _, out var instance) || instance == 0) return null;
-        return System.Runtime.InteropServices.GCHandle.FromIntPtr(instance).Target as Node;
-    }
+    internal Node? NodeOf(ulong entity) =>
+        TryInstanceOf(entity, out _, out var instance) ? instance as Node : null;
 
     /// <summary>Finds a node by its exact name or path, resolved through the native scene tree.</summary>
     public Node? Find(string name)

@@ -273,7 +273,8 @@
               "name": "out_instance",
               "type": "void **",
               "tags": [
-                "out"
+                "out",
+                "rooted"
               ],
               "doc": null
             }

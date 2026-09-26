@@ -117,13 +117,13 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>The instance bound to `entity`. False when none is, which is the normal answer rather than a failure: an entity a scene made without a script, or one another runtime owns, matches the same queries.</summary>
-    public bool TryInstanceOf(ulong entity, out uint type, out nint instance)
+    public bool TryInstanceOf(ulong entity, out uint type, out object? instance)
     {
         uint typeLocal;
         nint instanceLocal;
         var found = Handle->instance_of(Handle, entity, &typeLocal, (void**)&instanceLocal);
         type = typeLocal;
-        instance = instanceLocal;
+        instance = instanceLocal == 0 ? null : System.Runtime.InteropServices.GCHandle.FromIntPtr(instanceLocal).Target;
         return found;
     }
 

@@ -42,10 +42,25 @@ Expect("a rooted parameter takes an object and is kept alive",
         Slot("bind", "bool", Param("entity", "ke_entity"),
              Param("instance", "void *", "rooted:entity"),
              Param("out_error", "ke_error **")),
-        Slot("drop", "void", "unroots:entity", Param("entity", "ke_entity"))),
+        Slot("drop", "void", "unroots:entity", Param("entity", "ke_entity")),
+        Slot("instance_of", "bool", "try", Param("entity", "ke_entity"),
+             Param("out_type", "uint32_t *", "out"),
+             Param("out_instance", "void **", "out,rooted"))),
     contains: ["public void Bind(ulong entity, object instance)", "GCHandle.Alloc(instance)",
-               "_rooted[entity] = instanceHandle;", "freed.Free();"],
-    absent: ["public void Bind(ulong entity, nint instance)"]);
+               "_rooted[entity] = instanceHandle;", "freed.Free();",
+               "public bool TryInstanceOf(ulong entity, out uint type, out object? instance)",
+               "nint instanceLocal;",
+               "instance = instanceLocal == 0 ? null :"
+               + " System.Runtime.InteropServices.GCHandle.FromIntPtr(instanceLocal).Target;"],
+    absent: ["public void Bind(ulong entity, nint instance)", "out nint instance)"]);
+
+// The read side only means anything because the write side handed over a handle, so a
+// pointer the native side would have to dereference cannot be one.
+Expect("a rooted written-back parameter that is not an opaque pointer is refused",
+    Vtable("ke_probe", Slot("instance_of", "bool", "try", Param("entity", "ke_entity"),
+        Param("out_instance", "uint64_t *", "out,rooted"))),
+    contains: [], absent: [],
+    throws: "a rooted pointer is the one thing it never does");
 
 // A slot that interns a type under a name and a size: the type-to-id cache is emitted
 // once here instead of by hand in every consumer.

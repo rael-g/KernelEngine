@@ -228,10 +228,33 @@ public static class CSharpBackend
         return (lines, depth);
     }
 
+    /// <summary>
+    /// How a written-back parameter reads to the caller. A <c>[rooted]</c> one is the handle
+    /// the rooting side allocated coming back, and the only reason it crossed as an opaque
+    /// pointer was that the native side stores it without ever looking inside -- so what the
+    /// caller gets back is the object it handed over, not the number standing for it.
+    /// </summary>
     static string OutElement(ApiModel model, ApiParam p, Convention convention) =>
+        p.Has("rooted") ? "object?" : OutLocal(model, p, convention);
+
+    /// <summary>
+    /// The local the call writes through, spelled as the ABI declares it. This is the type
+    /// whose address the slot takes, which is not always the type the caller reads.
+    /// </summary>
+    static string OutLocal(ApiModel model, ApiParam p, Convention convention) =>
         p.TagValue("enum") is { } named
             ? Idioms.TypeName(named, convention)
             : CsType(model, CTypes.Deref(p.Type));
+
+    /// <summary>
+    /// The local read back as the caller's type. Everything but a rooted handle reads as
+    /// itself; a rooted one resolves to the object, with a null pointer meaning no object
+    /// rather than a handle to reconstruct.
+    /// </summary>
+    static string OutRead(ApiParam p, string local) =>
+        p.Has("rooted")
+            ? $"{local} == 0 ? null : System.Runtime.InteropServices.GCHandle.FromIntPtr({local}).Target"
+            : local;
 
     /// <summary>
     /// A pointer type as the native side spells it. <see cref="CsType"/> answers <c>nint</c>
@@ -256,7 +279,7 @@ public static class CSharpBackend
     static string OutAddress(ApiModel model, ApiParam p, Convention convention, string local)
     {
         var native = NativePointerType(model, p.Type);
-        return native == OutElement(model, p, convention) + "*" ? $"&{local}" : $"({native})&{local}";
+        return native == OutLocal(model, p, convention) + "*" ? $"&{local}" : $"({native})&{local}";
     }
 
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
@@ -1621,7 +1644,7 @@ public static class CSharpBackend
                 o.AddRange(roSeq);
                 roDepth += roSeqDepth;
                 var roInd = new string(' ', 8 + roDepth * 4);
-                o.Add($"{roInd}{ret} result;");
+                o.Add($"{roInd}{OutLocal(model, cs.OutParam!, convention)} result;");
                 if (cs.Fallible)
                 {
                     o.Add($"{roInd}ke_error* err = null;");
@@ -1631,7 +1654,7 @@ public static class CSharpBackend
                 {
                     o.Add($"{roInd}Handle->{slot.Name}(Handle{nativeArgs});");
                 }
-                o.Add($"{roInd}return result;");
+                o.Add($"{roInd}return {OutRead(cs.OutParam!, "result")};");
                 for (var d = roDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
@@ -1660,7 +1683,8 @@ public static class CSharpBackend
                 o.AddRange(tuSeq);
                 tuDepth += tuSeqDepth;
                 var tuInd = new string(' ', 8 + tuDepth * 4);
-                foreach (var (t, n) in types.Zip(locals)) o.Add($"{tuInd}{t} {n};");
+                foreach (var (p, n) in cs.OutParams.Zip(locals))
+                    o.Add($"{tuInd}{OutLocal(model, p, convention)} {n};");
                 if (cs.Fallible)
                 {
                     o.Add($"{tuInd}ke_error* err = null;");
@@ -1670,7 +1694,7 @@ public static class CSharpBackend
                 {
                     o.Add($"{tuInd}Handle->{slot.Name}(Handle{callArgs});");
                 }
-                o.Add($"{tuInd}return ({string.Join(", ", locals)});");
+                o.Add($"{tuInd}return ({string.Join(", ", cs.OutParams.Zip(locals, OutRead))});");
                 for (var d = tuDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
@@ -1689,7 +1713,7 @@ public static class CSharpBackend
                         (Idioms.Ident(outs.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
                     $"bool {tryName}({string.Join(", ", sigParts)})");
                 o.Add("    {");
-                foreach (var op in outs) o.Add($"        {OutElement(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
+                foreach (var op in outs) o.Add($"        {OutLocal(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
                 var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
                 var (tSeq, tSeqDepth) = SequencePrologue(model, cs.Sequences,
                     new string(' ', 8 + tDepth * 4), convention);
@@ -1705,7 +1729,8 @@ public static class CSharpBackend
                     + (slot.Returns == "ke_bool" ? " != 0" : "");
                 o.Add($"{tInd}var found = {tryCall};");
                 foreach (var op in outs)
-                    o.Add($"{tInd}{Idioms.Ident(WrittenName(op))} = {Idioms.Ident(WrittenName(op))}Local;");
+                    o.Add($"{tInd}{Idioms.Ident(WrittenName(op))} = "
+                        + $"{OutRead(op, $"{Idioms.Ident(WrittenName(op))}Local")};");
                 o.Add($"{tInd}return found;");
                 for (var d = tDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
@@ -1931,7 +1956,7 @@ public static class CSharpBackend
                 pDepth += pSeqDepth + pBlobDepth;
                 var pInd = new string(' ', 8 + pDepth * 4);
                 foreach (var op in cs.TrailingOuts)
-                    o.Add($"{pInd}{OutElement(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
+                    o.Add($"{pInd}{OutLocal(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
                 var pCall = $"Handle->{slot.Name}(Handle{call})"
                     + (slot.Returns == "ke_bool" ? " != 0" : "");
                 var pHolds = cs.TrailingOuts.Count > 0;
@@ -1958,7 +1983,8 @@ public static class CSharpBackend
                 else
                     o.Add($"{pInd}return {needsCast}{pCall};");
                 foreach (var op in cs.TrailingOuts)
-                    o.Add($"{pInd}{Idioms.Ident(WrittenName(op))} = {Idioms.Ident(WrittenName(op))}Local;");
+                    o.Add($"{pInd}{Idioms.Ident(WrittenName(op))} = "
+                        + $"{OutRead(op, $"{Idioms.Ident(WrittenName(op))}Local")};");
                 if (retType != "void" && pHolds) o.Add($"{pInd}return result;");
                 for (var d = pDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
@@ -2201,7 +2227,7 @@ public static class CSharpBackend
         var needsFixed = self is not null && !selfIsCtx;
         var body = new List<string>();
         foreach (var p in writes)
-            body.Add($"{OutElement(model, p, convention)} {Local(p)};");
+            body.Add($"{OutLocal(model, p, convention)} {Local(p)};");
         if (cs.ReturnCount is not null)
         {
             var native = CsType(model, CTypes.Deref(f.Returns));
@@ -2216,10 +2242,11 @@ public static class CSharpBackend
         else
         {
             body.Add($"{call};");
-            foreach (var p in cs.TrailingOuts) body.Add($"{Idioms.Ident(WrittenName(p))} = {Local(p)};");
+            foreach (var p in cs.TrailingOuts)
+                body.Add($"{Idioms.Ident(WrittenName(p))} = {OutRead(p, Local(p))};");
             body.Add(cs.OutParam is not null
-                ? $"return {Local(cs.OutParam)};"
-                : $"return ({string.Join(", ", tupleOuts.Select(Local))});");
+                ? $"return {OutRead(cs.OutParam, Local(cs.OutParam))};"
+                : $"return ({string.Join(", ", tupleOuts.Select(p => OutRead(p, Local(p))))});");
         }
 
         var pins = new List<string>();

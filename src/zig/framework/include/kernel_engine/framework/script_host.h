@@ -138,7 +138,7 @@ extern "C"
         /// normal answer rather than a failure: an entity a scene made without a
         /// script, or one another runtime owns, matches the same queries.
         /// @param out_type [out]
-        /// @param out_instance [out]
+        /// @param out_instance [out,rooted]
         bool (*instance_of)(struct ke_script_host *self,
                             ke_entity              entity,
                             ke_script_type_id     *out_type,

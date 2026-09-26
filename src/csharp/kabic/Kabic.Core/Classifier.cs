@@ -253,6 +253,14 @@ public static class Classifier
 
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
 
+        foreach (var rooted in allOut.Where(p => p.Has("rooted")))
+            if (rooted.Type.Replace(" ", "") is not "void**")
+                throw new InvalidOperationException(
+                    $"{slot.Name}.{rooted.Name}: [rooted] on a written-back parameter reads back the"
+                    + " same opaque pointer the rooting side handed over, so the slot writes a"
+                    + $" void ** -- {rooted.Type.Trim()} is a type the native side would have to"
+                    + " dereference, and a rooted pointer is the one thing it never does.");
+
         var written = allOut.Concat(returnCount is null ? [] : new[] { returnCount }).ToList();
         var stripped = written.Where(p => p.Name!.StartsWith("out_", StringComparison.Ordinal)
                                        && p.Name!.Length > "out_".Length)
