@@ -31,6 +31,8 @@ typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
 struct ke_system_ctx {
     void *handle;
 
+    /// @param out_count [out]
+    /// @return [array_of:out_count]
     const ke_ecs_segment *(*view)(ke_system_ctx *self, uint32_t query_index, size_t *out_count);
     ke_entity (*reserve)(ke_system_ctx *self);
     bool (*defer)(ke_system_ctx *self, ke_defer_fn fn, const void *user, size_t user_size);

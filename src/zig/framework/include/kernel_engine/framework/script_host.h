@@ -108,6 +108,8 @@ extern "C"
         /// The components a registered type's instances carry, in registration
         /// order. This is what a host turns into the type's query and access list,
         /// so it is read back rather than re-derived by each binding.
+        /// @param out_count [out]
+        /// @return [array_of:out_count]
         const ke_component_id *(*type_components)(struct ke_script_host *self,
                                                   ke_script_type_id      type,
                                                   uint32_t              *out_count);
@@ -155,6 +157,8 @@ extern "C"
         /// The slice belongs to the host and is invalidated by the next bind or
         /// unbind of that type, which is the same tick's structural change a caller
         /// already defers to the wave barrier.
+        /// @param out_count [out]
+        /// @return [array_of:out_count]
         const ke_entity *(*instances)(struct ke_script_host *self,
                                       ke_script_type_id      type,
                                       uint32_t              *out_count);

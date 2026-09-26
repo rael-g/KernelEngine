@@ -410,9 +410,14 @@
             {
               "name": "out_count",
               "type": "size_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
+          ],
+          "return_tags": [
+            "array_of:out_count"
           ]
         },
         {

@@ -27,6 +27,14 @@ public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiPa
     public ApiStruct? ExpandedStruct { get; init; }
 
     /// <summary>
+    /// The parameter the slot's returned pointer is counted by, when the return declares
+    /// <c>[array_of:<name>]</c>. The two together are one value, so the caller supplies
+    /// neither: the count leaves the signature and the return becomes a span. Left apart,
+    /// every caller re-derives the same bounds from a pointer it was handed raw.
+    /// </summary>
+    public ApiParam? ReturnCount { get; init; }
+
+    /// <summary>
     /// The <c>[out]</c> parameters of a slot that already answers, so none of them could
     /// become the return. They stay parameters, and the projection spells them <c>out</c>:
     /// left as the pointers the ABI takes, the caller declares the local and takes its
@@ -173,6 +181,20 @@ public static class Classifier
         }
         ps = ps.Where(p => sequences.All(s => s.Count != p)).ToList();
 
+        ApiParam? returnCount = null;
+        if (slot.ReturnTagValue("array_of") is { } returnCountName)
+        {
+            if (!CTypes.IsPointer(slot.Returns))
+                throw new InvalidOperationException(
+                    $"{slot.Name}: the return declares [array_of:{returnCountName}], and "
+                    + $"{slot.Returns.Trim()} is not a pointer, so there is no sequence to bound");
+            returnCount = ps.FirstOrDefault(p => p.Name == returnCountName)
+                ?? throw new InvalidOperationException(
+                    $"{slot.Name}: the return's [array_of:{returnCountName}] names a length "
+                    + "parameter the slot does not declare");
+            ps = ps.Where(p => p != returnCount).ToList();
+        }
+
         var allOut = ps.Where(p => p.Has("out") && !p.Has("array_of")).ToList();
 
         var carriesReturn = slot.Returns.Trim() is not "void"
@@ -200,6 +222,7 @@ public static class Classifier
         {
             ExpandedParam = expanded,
             ExpandedStruct = bag,
+            ReturnCount = returnCount,
             TrailingOuts = trailingOuts,
         };
     }

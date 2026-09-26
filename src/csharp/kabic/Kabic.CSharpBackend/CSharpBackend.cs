@@ -161,6 +161,12 @@ public static class CSharpBackend
         return $"delegate* unmanaged[Cdecl]<{string.Join(", ", parameters.Append(returns))}>";
     }
 
+    /// The element type a returned sequence is spelled with, taking a <c>[value]</c>
+    /// element's managed mirror for the same reason a sequence parameter does: the caller
+    /// reads the bytes through the projection it already holds.
+    static string ReturnElement(ApiModel model, ApiSlot slot, Convention convention) =>
+        ValueTypeName(model, StripQualifiers(CTypes.Deref(slot.Returns)), convention);
+
     /// <summary>
     /// What a parameter the callee writes holds, once the indirection carrying it back is
     /// gone. A declared <c>[enum]</c> is the managed spelling here as much as anywhere else:
@@ -1786,7 +1792,10 @@ public static class CSharpBackend
                 var args = cs.PublicParams;
                 var sig = Sig(args);
                 var call = string.Concat(NativeParams().Select(p => ", " + CallArg(p)));
-                var retType = slot.Returns == "ke_bool" ? "bool" : CsType(model, slot.Returns);
+                var spanElement = cs.ReturnCount is null ? null : ReturnElement(model, slot, convention);
+                var retType = spanElement is not null ? $"ReadOnlySpan<{spanElement}>"
+                    : slot.Returns == "ke_bool" ? "bool"
+                    : CsType(model, slot.Returns);
                 var needsCast = retType == "nint";
                 Declare(o, decls,
                     XmlDoc("    ", slot.Doc, args.Select(p => (Idioms.Ident(p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
@@ -1803,7 +1812,18 @@ public static class CSharpBackend
                     o.Add($"{pInd}{OutElement(model, op, convention)} {Idioms.Ident(op.Name!)}Local;");
                 var pCall = $"Handle->{slot.Name}(Handle{call})"
                     + (slot.Returns == "ke_bool" ? " != 0" : "");
-                if (retType == "void")
+                var pHolds = cs.TrailingOuts.Count > 0;
+                if (spanElement is not null)
+                {
+                    var countLocal = $"{Idioms.Ident(cs.ReturnCount!.Name!)}Local";
+                    var native = CsType(model, CTypes.Deref(slot.Returns));
+                    var front = spanElement == native ? "front" : $"({spanElement}*)front";
+                    o.Add($"{pInd}{CsType(model, CTypes.Deref(cs.ReturnCount.Type))} {countLocal} = 0;");
+                    o.Add($"{pInd}var front = {pCall};");
+                    o.Add($"{pInd}{(pHolds ? "var result =" : "return")} front == null ? default"
+                        + $" : new ReadOnlySpan<{spanElement}>({front}, (int){countLocal});");
+                }
+                else if (retType == "void")
                 {
                     o.Add($"{pInd}{pCall};");
                     if (slot.TagValue("unroots") is string freedKey)
@@ -1811,13 +1831,13 @@ public static class CSharpBackend
                         o.Add($"{pInd}if (_rooted.Remove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
                     }
                 }
-                else if (cs.TrailingOuts.Count > 0)
+                else if (pHolds)
                     o.Add($"{pInd}var result = {(needsCast ? "(nint)" : "")}{pCall};");
                 else
                     o.Add($"{pInd}return {(needsCast ? "(nint)" : "")}{pCall};");
                 foreach (var op in cs.TrailingOuts)
                     o.Add($"{pInd}{Idioms.Ident(op.Name!)} = {Idioms.Ident(op.Name!)}Local;");
-                if (retType != "void" && cs.TrailingOuts.Count > 0) o.Add($"{pInd}return result;");
+                if (retType != "void" && pHolds) o.Add($"{pInd}return result;");
                 for (var d = pDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
                 o.Add("");
@@ -1832,6 +1852,7 @@ public static class CSharpBackend
                 ? $"(void*)GCHandle.ToIntPtr({ctxOf.Handle})"
             : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSeq
                 ? SequenceArg(model, asSeq, convention)
+            : p == cs.ReturnCount ? OutAddress(model, p, convention, $"{Idioms.Ident(p.Name!)}Local")
             : cs.TrailingOuts.Contains(p) ? OutAddress(model, p, convention, $"{Idioms.Ident(p.Name!)}Local")
             : cs.Sequences.FirstOrDefault(s => s.Count == p) is { } asCount
                 ? $"({CsType(model, asCount.Count.Type)}){Idioms.Ident(asCount.Seq.Name!)}.Length"

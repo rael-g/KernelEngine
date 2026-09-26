@@ -132,7 +132,7 @@ public static class Extractor
             }
             var qual = f["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
             var (ret, paramTypes) = SplitFnPtr(qual);
-            var (summaryTags, summary, pdocs, retDoc) = DocParser.Parse(f);
+            var (summaryTags, summary, pdocs, retTags, retDoc) = DocParser.Parse(f);
 
             if (ret is null)
             {
@@ -157,10 +157,10 @@ public static class Extractor
                 slotParams.Add(new ApiParam(pname, paramTypes[i], tags, doc.Length > 0 ? doc : null));
             }
             slots.Add(new ApiSlot(fieldName, ret, summaryTags, summary.Length > 0 ? summary : null,
-                retDoc.Length > 0 ? retDoc : null, slotParams));
+                retDoc.Length > 0 ? retDoc : null, slotParams) { ReturnTags = retTags });
         }
 
-        var (structTags, structDoc, _, _) = DocParser.Parse(node);
+        var (structTags, structDoc, _, _, _) = DocParser.Parse(node);
         return new ApiStruct(name, structDoc.Length > 0 ? structDoc : null, structTags, fields, slots);
     }
 
@@ -176,7 +176,7 @@ public static class Extractor
         var proto = FindProto(node["inner"] as JsonArray);
         if (proto is null) return null;
 
-        var (_, summary, pdocs, _) = DocParser.Parse(node);
+        var (_, summary, pdocs, _, _) = DocParser.Parse(node);
         var laneNames = new Dictionary<int, string>();
         CollectParamIndices(node["inner"] as JsonArray, laneNames);
 
@@ -231,7 +231,7 @@ public static class Extractor
 
     static ApiFunction ExtractFunction(JsonObject node, string name, List<string> errors)
     {
-        var (_, summary, pdocs, retDoc) = DocParser.Parse(node);
+        var (_, summary, pdocs, retTags, retDoc) = DocParser.Parse(node);
         var paramDecls = ((node["inner"] as JsonArray) ?? [])
             .Where(c => c!["kind"]?.GetValue<string>() == "ParmVarDecl").Select(c => c!.AsObject()).ToList();
         var pnames = paramDecls.Select(p => p["name"]?.GetValue<string>()).ToList();
@@ -252,7 +252,7 @@ public static class Extractor
         }).ToList();
 
         return new ApiFunction(name, returns, summary.Length > 0 ? summary : null,
-            retDoc.Length > 0 ? retDoc : null, parameters);
+            retDoc.Length > 0 ? retDoc : null, parameters) { ReturnTags = retTags };
     }
 
     static string SliceRange(byte[] bytes, JsonObject node)

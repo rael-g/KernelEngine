@@ -8,7 +8,8 @@ public static class DocParser
 {
     static readonly Regex TagBlock = new(@"^\s*\[([^\]]+)\]\s*");
 
-    public static (List<string> SummaryTags, string Summary, Dictionary<string, (List<string> Tags, string Doc)> Params, string ReturnDoc)
+    public static (List<string> SummaryTags, string Summary, Dictionary<string, (List<string> Tags, string Doc)> Params,
+                   List<string> ReturnTags, string ReturnDoc)
         Parse(JsonObject? node)
     {
         var summary = new List<string>();
@@ -50,7 +51,7 @@ public static class DocParser
 
         var pmap = paramChunks.ToDictionary(kv => kv.Key, kv => SplitTags(kv.Value));
         var (summaryTags, summaryText) = SplitTags(summary);
-        return (summaryTags, summaryText,
-                pmap, string.Join(' ', string.Join(' ', returnChunks).Split(' ', StringSplitOptions.RemoveEmptyEntries)));
+        var (returnTags, returnText) = SplitTags(returnChunks);
+        return (summaryTags, summaryText, pmap, returnTags, returnText);
     }
 }

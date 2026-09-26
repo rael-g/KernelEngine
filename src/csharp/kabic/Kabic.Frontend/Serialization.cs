@@ -52,15 +52,21 @@ public static class Serialization
         ["doc"] = f.Doc,
     };
 
-    public static JsonObject ToJson(this ApiSlot s) => new()
+    public static JsonObject ToJson(this ApiSlot s)
     {
-        ["name"] = s.Name,
-        ["returns"] = s.Returns,
-        ["tags"] = new JsonArray(s.Tags.Select(t => (JsonNode)t).ToArray()),
-        ["doc"] = s.Doc,
-        ["return_doc"] = s.ReturnDoc,
-        ["params"] = new JsonArray(s.Params.Select(p => (JsonNode)p.ToJson()).ToArray()),
-    };
+        var o = new JsonObject
+        {
+            ["name"] = s.Name,
+            ["returns"] = s.Returns,
+            ["tags"] = new JsonArray(s.Tags.Select(t => (JsonNode)t).ToArray()),
+            ["doc"] = s.Doc,
+            ["return_doc"] = s.ReturnDoc,
+            ["params"] = new JsonArray(s.Params.Select(p => (JsonNode)p.ToJson()).ToArray()),
+        };
+        if (s.ReturnTags.Count > 0)
+            o["return_tags"] = new JsonArray(s.ReturnTags.Select(t => (JsonNode)t).ToArray());
+        return o;
+    }
 
     public static JsonObject ToJson(this ApiStruct s)
     {
@@ -85,12 +91,18 @@ public static class Serialization
         ["lanes"] = new JsonArray(c.Lanes.Select(l => (JsonNode)l.ToJson()).ToArray()),
     };
 
-    public static JsonObject ToJson(this ApiFunction f) => new()
+    public static JsonObject ToJson(this ApiFunction f)
     {
-        ["name"] = f.Name,
-        ["returns"] = f.Returns,
-        ["doc"] = f.Doc,
-        ["return_doc"] = f.ReturnDoc,
-        ["params"] = new JsonArray(f.Params.Select(p => (JsonNode)p.ToJson()).ToArray()),
-    };
+        var o = new JsonObject
+        {
+            ["name"] = f.Name,
+            ["returns"] = f.Returns,
+            ["doc"] = f.Doc,
+            ["return_doc"] = f.ReturnDoc,
+            ["params"] = new JsonArray(f.Params.Select(p => (JsonNode)p.ToJson()).ToArray()),
+        };
+        if (f.ReturnTags.Count > 0)
+            o["return_tags"] = new JsonArray(f.ReturnTags.Select(t => (JsonNode)t).ToArray());
+        return o;
+    }
 }

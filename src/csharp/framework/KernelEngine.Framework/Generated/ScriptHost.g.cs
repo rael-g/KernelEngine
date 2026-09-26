@@ -82,9 +82,11 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>The components a registered type's instances carry, in registration order. This is what a host turns into the type's query and access list, so it is read back rather than re-derived by each binding.</summary>
-    public uint* TypeComponents(uint type, uint* outCount)
+    public ReadOnlySpan<uint> TypeComponents(uint type)
     {
-        return Handle->type_components(Handle, type, outCount);
+        uint outCountLocal = 0;
+        var front = Handle->type_components(Handle, type, &outCountLocal);
+        return front == null ? default : new ReadOnlySpan<uint>(front, (int)outCountLocal);
     }
 
     /// <summary>How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id, because refusing to parallelise something unknown is the safe direction.</summary>
@@ -132,9 +134,11 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>The entities bound as instances of `type`, in binding order. What lets a binding runtime drive a type's instances without keeping a parallel list of its own — the list that only its own language can see, and that drifts from the bindings the moment anything else unbinds one. The slice belongs to the host and is invalidated by the next bind or unbind of that type, which is the same tick's structural change a caller already defers to the wave barrier.</summary>
-    public ulong* Instances(uint type, uint* outCount)
+    public ReadOnlySpan<ulong> Instances(uint type)
     {
-        return Handle->instances(Handle, type, outCount);
+        uint outCountLocal = 0;
+        var front = Handle->instances(Handle, type, &outCountLocal);
+        return front == null ? default : new ReadOnlySpan<ulong>(front, (int)outCountLocal);
     }
 
     /// <summary>The entity `owner` borrows: an instance of `type` found within `reach`. `name` narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. `out_why` says which of the two an invalid answer was, and may be NULL.</summary>

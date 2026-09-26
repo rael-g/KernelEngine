@@ -70,6 +70,20 @@ Expect("a slot that answers and writes spells the written value out",
                "(ke_probe_verdict*)&outKindLocal", "outKind = outKindLocal;"],
     absent: ["ProbeVerdict* outKind", "public ProbeVerdict Ask("]);
 
+// A slot answering with the front of a sequence and the count beside it: the two are one
+// value, so the caller supplies neither pointer. Left apart, the count stays an out
+// parameter and the return stays a raw pointer, which makes every call site re-derive the
+// same bounds -- the arithmetic a projection exists to have already done once.
+Expect("a returned pointer counted by an out parameter becomes a span",
+    Vtable("ke_probe", Slot("samples", "const uint32_t *",
+        Param("type", "uint32_t"),
+        Param("out_count", "uint32_t *", "out"),
+        Returning("array_of:out_count"))),
+    contains: ["public ReadOnlySpan<uint> Samples(uint type)", "uint outCountLocal = 0;",
+               "var front = Handle->samples(Handle, type, &outCountLocal);",
+               "return front == null ? default : new ReadOnlySpan<uint>(front, (int)outCountLocal);"],
+    absent: ["out uint outCount", "public uint* Samples("]);
+
 // A run of consecutive float parameters that spell out one vector: the public surface
 // takes the vector, and the lanes are spread at the call. A C ABI cannot say "Vector2",
 // so without this every such slot grows a hand-written overload whose only content is
@@ -551,10 +565,12 @@ static JsonObject Vtable(string name, params object[] rest)
 static JsonObject Slot(string name, string returns, params object[] rest)
 {
     var tags = new JsonArray();
+    var returnTags = new JsonArray();
     var ps = new JsonArray();
     foreach (var item in rest)
     {
         if (item is JsonObject p) ps.Add(p);
+        else if (item is ReturnTags rt) foreach (var one in rt.Tags.Split(',')) returnTags.Add((JsonNode)one.Trim());
         else if (item is string t) foreach (var one in t.Split(',')) tags.Add((JsonNode)one.Trim());
     }
     return new JsonObject
@@ -564,6 +580,7 @@ static JsonObject Slot(string name, string returns, params object[] rest)
         ["tags"] = tags,
         ["doc"] = null,
         ["returnDoc"] = null,
+        ["return_tags"] = returnTags,
         ["params"] = ps,
     };
 }
@@ -576,6 +593,9 @@ static JsonObject Callback(string name, string returns, params JsonObject[] lane
     ["lanes"] = new JsonArray(lanes.Cast<JsonNode>().ToArray()),
 };
 
+/// <summary>Declares tags on a slot's return, for a fixture to pass among its parameters.</summary>
+static ReturnTags Returning(string tags) => new(tags);
+
 static JsonObject Param(string name, string type, string tags = "") => new()
 {
     ["name"] = name,
@@ -583,3 +603,6 @@ static JsonObject Param(string name, string type, string tags = "") => new()
     ["tags"] = new JsonArray(tags.Length == 0 ? [] : tags.Split(',').Select(t => (JsonNode)t.Trim()).ToArray()),
     ["doc"] = null,
 };
+
+/// <summary>What the slot's <c>@return</c> block declares, which is not the slot's own tag.</summary>
+record ReturnTags(string Tags);

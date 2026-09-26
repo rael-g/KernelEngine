@@ -36,15 +36,13 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// kept here. A second list would be a copy of the bindings that only this language
     /// can see, and that goes stale the moment anything else unbinds one of them.
     /// </summary>
-    internal unsafe List<Node> BehaviorsOf(Type type)
+    internal List<Node> BehaviorsOf(Type type)
     {
         var nodes = new List<Node>();
         if (!_scriptTypes.TryGetValue(type, out var id)) return nodes;
 
-        uint count = 0;
-        var entities = Instances(id, &count);
-        for (uint i = 0; i < count; i++)
-            if (NodeOf(entities[i]) is { } node) nodes.Add(node);
+        foreach (var entity in Instances(id))
+            if (NodeOf(entity) is { } node) nodes.Add(node);
         return nodes;
     }
 

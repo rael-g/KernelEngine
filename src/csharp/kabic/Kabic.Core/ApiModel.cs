@@ -9,8 +9,19 @@ public record ApiParam(string? Name, string Type, IReadOnlyList<string> Tags, st
 
 public record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params)
 {
+    /// <summary>
+    /// The tags the slot's <c>@return</c> block declared. A return is not a parameter and
+    /// cannot carry one of its own, so what the returned value means beyond its type —
+    /// that it is the front of a sequence, say — has nowhere else to be stated.
+    /// </summary>
+    public IReadOnlyList<string> ReturnTags { get; init; } = [];
+
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
+
+    /// <summary>The value of <paramref name="tag"/> on the slot's return, or null.</summary>
+    public string? ReturnTagValue(string tag) =>
+        ReturnTags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
 public record ApiEnumValue(string Name, string RawValue, bool IsInt, string? Doc);
@@ -59,7 +70,11 @@ public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IR
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
-public record ApiFunction(string Name, string Returns, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params);
+public record ApiFunction(string Name, string Returns, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params)
+{
+    /// <summary>The tags the function's <c>@return</c> block declared.</summary>
+    public IReadOnlyList<string> ReturnTags { get; init; } = [];
+}
 
 /// <summary>
 /// A function-pointer typedef described lane by lane. Which lane carries the caller's
@@ -164,14 +179,23 @@ public static class ApiReader
         {
             var o = f!.AsObject();
             m.Functions.Add(new ApiFunction(Str(o, "name")!, Str(o, "returns")!, Str(o, "doc"), Str(o, "return_doc"),
-                o["params"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList()));
+                o["params"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList())
+            {
+                ReturnTags = ReadTags(o, "return_tags"),
+            });
         }
         return m;
     }
 
     static ApiSlot ReadSlot(System.Text.Json.Nodes.JsonObject o) => new(Str(o, "name")!, Str(o, "returns")!,
         o["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [], Str(o, "doc"),
-        Str(o, "return_doc"), o["params"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList());
+        Str(o, "return_doc"), o["params"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList())
+    {
+        ReturnTags = ReadTags(o, "return_tags"),
+    };
+
+    static List<string> ReadTags(System.Text.Json.Nodes.JsonObject o, string key) =>
+        o[key]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [];
 
     static ApiParam ReadParam(System.Text.Json.Nodes.JsonObject o) => new(Str(o, "name"), Str(o, "type")!,
         o["tags"]!.AsArray().Select(t => t!.GetValue<string>()).ToList(), Str(o, "doc"));

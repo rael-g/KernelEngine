@@ -169,9 +169,14 @@
             {
               "name": "out_count",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
+          ],
+          "return_tags": [
+            "array_of:out_count"
           ]
         },
         {
@@ -305,9 +310,14 @@
             {
               "name": "out_count",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
+          ],
+          "return_tags": [
+            "array_of:out_count"
           ]
         },
         {
