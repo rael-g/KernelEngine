@@ -319,7 +319,9 @@
         {
           "name": "query_resolve",
           "returns": "void",
-          "tags": [],
+          "tags": [
+            "raw"
+          ],
           "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
           "return_doc": null,
           "params": [

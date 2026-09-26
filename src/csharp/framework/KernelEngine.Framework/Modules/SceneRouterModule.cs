@@ -69,7 +69,7 @@ public sealed class SceneRouterModule : IRuntimeModule
         if (err is not null)
             throw new InvalidOperationException("Initial scene load failed", err);
 
-        runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (_, ctx, _) =>
+        runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (ctx, _) =>
         {
             using (scriptHost.EnterSystem(ctx))
                 router.Flush();

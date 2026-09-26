@@ -942,7 +942,9 @@
         {
           "name": "drain_events",
           "returns": "uint32_t",
-          "tags": [],
+          "tags": [
+            "raw"
+          ],
           "doc": "Drains pending discrete events and clears the queue. Events beyond the buffer capacity are dropped. Must run on the same thread as the sinks below.",
           "return_doc": "Number of events written.",
           "params": [

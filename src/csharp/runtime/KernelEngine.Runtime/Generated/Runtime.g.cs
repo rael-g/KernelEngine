@@ -17,21 +17,8 @@ public unsafe interface INativeRuntime
     ke_runtime* Native { get; }
 }
 
-/// <summary>Registers the module's components and systems against the runtime it is being loaded into. Runs inside register_module, before that call returns.</summary>
-/// <param name="runtime">The runtime the module is being loaded into.</param>
-public unsafe delegate void ModuleLoad(Runtime runtime);
-
-/// <summary>Releases whatever the matching load acquired, as the runtime is torn down.</summary>
-/// <param name="runtime">The runtime the module was loaded into.</param>
-public unsafe delegate void ModuleUnload(Runtime runtime);
-
-/// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
-/// <param name="ctx">The body's only doorway to component memory for this call. Opaque to a managed caller, which forwards it to the entry points that take one.</param>
-/// <param name="dt">Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE.</param>
-public unsafe delegate void SystemExecute(nint ctx, float dt);
-
-
-public unsafe partial class Runtime : IDisposable, INativeRuntime
+/// <summary>Owns the simulation world, dispatches systems across the worker pool and drives the frame loop. Game code names this rather than the scheduler behind it, so what a module registers against says nothing about which runtime is carrying it.</summary>
+public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
 {
     private ke_runtime* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_runtime*, void> _destroy;
@@ -113,9 +100,9 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
     /// <summary>Loads a module into the runtime, running its load hook before returning.</summary>
     /// <param name="name">Identifies the module in diagnostics.</param>
     /// <param name="onLoad">Registers the module's components and systems.</param>
-    /// <param name="onUnload">Releases what the load acquired.</param>
+    /// <param name="onUnload">Releases what the load acquired. A module that acquired nothing leaves it out.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong RegisterModule(string name, ModuleLoad? onLoad, ModuleUnload? onUnload)
+    public ulong RegisterModule(string name, ModuleLoad? onLoad, ModuleUnload? onUnload = null)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
@@ -200,7 +187,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime
     /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong RegisterSystemRaw(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false)
+    public ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)

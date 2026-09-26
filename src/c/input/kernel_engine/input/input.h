@@ -52,7 +52,7 @@ extern "C"
         void (*get_snapshot)(struct ke_input *self, ke_input_snapshot *out_snapshot);
 
         /**
-         * Drains pending discrete events and clears the queue. Events beyond the
+         * [raw] Drains pending discrete events and clears the queue. Events beyond the
          * buffer capacity are dropped. Must run on the same thread as the sinks below.
          * @param out_buf [out,array_of:capacity] Receives the drained events.
          * @param capacity Maximum number of events to write.

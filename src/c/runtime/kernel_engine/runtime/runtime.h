@@ -75,7 +75,8 @@ typedef struct ke_runtime_module_params {
     /// [closure:user_data] Registers the module's components and systems.
     ke_module_load_fn on_load;
 
-    /// [closure:user_data, retained:return, teardown] Releases what the load acquired.
+    /// [closure:user_data, retained:return, teardown, default:none] Releases what the load
+    /// acquired. A module that acquired nothing leaves it out.
     ke_module_unload_fn on_unload;
 } ke_runtime_module_params;
 
@@ -139,6 +140,9 @@ typedef struct ke_runtime_system_params {
     bool per_entity;
 } ke_runtime_system_params;
 
+/// [interface] Owns the simulation world, dispatches systems across the worker pool and
+/// drives the frame loop. Game code names this rather than the scheduler behind it, so
+/// what a module registers against says nothing about which runtime is carrying it.
 typedef struct ke_runtime {
     void *handle;
 

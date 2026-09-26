@@ -150,12 +150,14 @@ Expect("a retained closure is kept per key and reports through the channel it de
 // Both hooks travel on the one context field, so they share the single object it points
 // at — a handle each would hand every trampoline whichever one the call wrote last. The
 // teardown hook has no error channel because the engine calls it from the destroy this
-// object drives, which is the call that rethrows what it parked.
+// object drives, which is the call that rethrows what it parked. The bag says that hook
+// may be left out, so the projection spells the absence instead of an overload whose only
+// content is passing null.
 Expect("an expanded params bag flattens the call and its shared context roots one object",
     Vtable("ke_probe", Slot("register_module", "uint64_t",
         Param("p", "const ke_probe_module_params *", "expand"),
         Param("out_error", "ke_error **"))),
-    contains: ["public ulong RegisterModule(string name, ProbeLoad? onLoad, ProbeUnload? onUnload)",
+    contains: ["public ulong RegisterModule(string name, ProbeLoad? onLoad, ProbeUnload? onUnload = null)",
                "private readonly Dictionary<ulong, GCHandle> _retainedUserData = new();",
                "GCHandle.Alloc(new RegisterModuleClosures { OnLoad = onLoad, OnUnload = onUnload })",
                "ke_probe_module_params p = default;",
@@ -186,7 +188,7 @@ Expect("an expanded params bag flattens the call and its shared context roots on
             Param("name", "const char *", "utf8"),
             Param("user_data", "void *", "context"),
             Param("on_load", "ke_probe_load_fn", "closure:user_data"),
-            Param("on_unload", "ke_probe_unload_fn", "closure:user_data,retained:return,teardown")),
+            Param("on_unload", "ke_probe_unload_fn", "closure:user_data,retained:return,teardown,default:none")),
         ["slots"] = new JsonArray(),
     }]);
 
@@ -229,7 +231,7 @@ Expect("every pointer+count pair in a slot becomes its own span",
         Param("tags", "const uint32_t *", "array_of:tag_count"),
         Param("tag_count", "uint32_t"),
         Param("out_error", "ke_error **"))),
-    contains: ["public ulong DeclareRaw(string name, Span<ke_probe_term> terms, Span<uint> tags)",
+    contains: ["public ulong Declare(string name, Span<ke_probe_term> terms, Span<uint> tags)",
                "fixed (ke_probe_term* termsPtr = terms)",
                "fixed (uint* tagsPtr = tags)",
                "termsPtr, (uint)terms.Length, tagsPtr, (uint)tags.Length"],
@@ -242,6 +244,16 @@ Expect("every pointer+count pair in a slot becomes its own span",
         ["fields"] = new JsonArray(Param("cid", "uint32_t")),
         ["slots"] = new JsonArray(),
     }]);
+
+// A slot says for itself that its projection is the unadorned one something above is
+// expected to wrap. Inferring it from "carries a sequence" names three slots Raw that
+// nothing wraps, and puts the suffix on a contract game code reads.
+Expect("only a slot declaring itself raw takes the suffix",
+    Vtable("ke_probe", Slot("drain", "uint32_t", "raw",
+        Param("out_buf", "uint32_t *", "out,array_of:capacity"),
+        Param("capacity", "uint32_t"))),
+    contains: ["public uint DrainRaw(Span<uint> outBuf)"],
+    absent: ["public uint Drain("]);
 
 // A lane carrying a context the engine owns and the caller only relays: the public
 // surface takes nint and the cast back to the ABI's own spelling happens at the call.
@@ -423,7 +435,8 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
         var convention = Convention.KernelEngine;
         var classified = Classifier.Classify(model, [], [], convention);
         var provider = classified.Providers.Single();
-        emitted = CSharpBackend.RenderProvider(model, provider, classified, "Probe", "Probe.Native", [], convention);
+        var source = CSharpBackend.RenderProvider(model, provider, classified, "Probe", "Probe.Native", [], convention);
+        emitted = source.Class + (source.Contract ?? "");
     }
     catch (Exception ex)
     {

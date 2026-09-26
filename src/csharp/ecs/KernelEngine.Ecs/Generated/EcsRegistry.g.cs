@@ -119,7 +119,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <summary>Registers a query over a component tuple (entities matching ALL cids).</summary>
     /// <param name="cids">Component tuple to match.</param>
     /// <returns>KE_QUERY_INVALID on failure.</returns>
-    public ulong QueryRegisterRaw(Span<uint> cids)
+    public ulong QueryRegister(Span<uint> cids)
     {
         fixed (uint* cidsPtr = cids)
         {

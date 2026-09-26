@@ -89,7 +89,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         var hierarchyCid = scriptHost.CidOfName("hierarchy");
         var nameCid      = scriptHost.CidOfName("name");
 
-        runtime.RegisterSystem("Scene.Input", RuntimePhase.PreUpdate, (_, _, _) =>
+        runtime.RegisterSystem("Scene.Input", RuntimePhase.PreUpdate, (_, _) =>
         {
             input?.Update();
             _inputSnapshot = input?.CaptureSnapshot();
@@ -101,10 +101,10 @@ public sealed class SceneNodesModule : IRuntimeModule
         var signals = services.GetService<SignalBus>();
         if (signals is not null)
         {
-            runtime.RegisterSystem("Scene.Signals.Clear", RuntimePhase.PreUpdate, (_, _, _) =>
+            runtime.RegisterSystem("Scene.Signals.Clear", RuntimePhase.PreUpdate, (_, _) =>
                 signals.ClearFrame(), accessList: []);
 
-            runtime.RegisterSystem("Scene.Signals.Deliver", RuntimePhase.PostUpdate, (_, ctx, _) =>
+            runtime.RegisterSystem("Scene.Signals.Deliver", RuntimePhase.PostUpdate, (ctx, _) =>
             {
                 unsafe
                 {
@@ -150,7 +150,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                 foreach (var (cid, isWrite) in owned)
                     access.Add(Touches(cid, isWrite));
 
-            runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (_, ctx, dt) =>
+            runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (ctx, dt) =>
             {
                 var view = new View(scriptHost, dt, _inputSnapshot, ctx);
                 using (scriptHost.EnterSystem(ctx))
@@ -183,7 +183,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                         }
                     }
                 }
-            }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
+            }, queries: queries ?? [], accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };
 
         var done = new System.Threading.ManualResetEventSlim(false);

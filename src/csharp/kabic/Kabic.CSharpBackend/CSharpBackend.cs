@@ -85,6 +85,13 @@ public static class CSharpBackend
     static string DefaultLiteral(ApiModel model, ClassifiedSlot cs, ApiParam p, ApiSlot slot)
     {
         var v = p.TagValue("default")!.Trim();
+        if (p.Has("closure"))
+            return v is "none"
+                ? "null"
+                : throw new InvalidOperationException(
+                    $"{slot.Name}.{p.Name}: a handler the caller may leave out is an absent one, so"
+                    + $" [default:none] is the only default it takes -- got \"{v}\".");
+
         if (cs.Sequences.Any(s => s.Seq == p))
             return v is "empty"
                 ? "default"
@@ -590,7 +597,16 @@ public static class CSharpBackend
         o.Add("");
     }
 
-    public static string RenderProvider(ApiModel model, ApiStruct vtable, ClassifiedModel classified,
+    /// <summary>
+    /// The class projecting a vtable, and -- where the vtable declares one -- the contract
+    /// naming what it can do. The two are separate units because the contract is what a
+    /// caller depends on and the class is what satisfies it: emitting them together puts
+    /// the contract in whichever assembly holds the native call, so depending on the
+    /// capability drags the implementation along with it.
+    /// </summary>
+    public readonly record struct ProviderSource(string Class, string? Contract);
+
+    public static ProviderSource RenderProvider(ApiModel model, ApiStruct vtable, ClassifiedModel classified,
         string ns, string nativeNs, IReadOnlyList<string> extraUsings, Convention convention)
     {
         var typeName = Idioms.TypeName(vtable.Name, convention);
@@ -623,10 +639,20 @@ public static class CSharpBackend
         var domainIface = vtable.Has("interface") ? "I" + typeName : null;
         var decls = domainIface is null ? null : new List<MemberDecl>();
 
+        var contract = domainIface is null ? null : new List<string> { Header };
+        if (contract is not null)
+        {
+            if (HasVectorParams(vtable)) contract.Add("using System.Numerics;");
+            contract.Add("using KernelEngine.Common;");
+            contract.Add("");
+            contract.Add($"namespace {ns};");
+            contract.Add("");
+        }
+
         var closures = VtableClosures(model, slots);
         var closureGroups = VtableClosureGroups(model, slots, typeName);
         foreach (var cb in closures.DistinctBy(c => c.Delegate))
-            RenderClosureDelegate(model, o, cb, domainIface ?? typeName);
+            RenderClosureDelegate(model, contract ?? o, cb, domainIface ?? typeName);
 
         o.Add(XmlDoc("", vtable.Doc).TrimEnd());
         o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}"
@@ -855,22 +881,33 @@ public static class CSharpBackend
         o.Add("}");
         o.Add("");
 
-        if (domainIface is not null)
-        {
-            o.Add($"/// <summary>The {typeName.ToLowerInvariant()} contract game code depends on, so a caller"
-                + $" names a capability rather than the <see cref=\"{typeName}\"/> that carries it.</summary>");
-            o.Add($"public unsafe interface {domainIface} : IDisposable");
-            o.Add("{");
-            foreach (var m in decls!)
-            {
-                if (m.Doc.Length > 0) o.Add(m.Doc);
-                o.Add($"    {m.InterfaceLine}");
-            }
-            o.Add("}");
-            o.Add("");
-        }
+        if (contract is null) return new ProviderSource(string.Join('\n', o), null);
 
-        return string.Join('\n', o);
+        contract.Add($"/// <summary>The {typeName.ToLowerInvariant()} contract game code depends on, so a caller"
+            + $" names a capability rather than the <see cref=\"{typeName}\"/> that carries it.</summary>");
+        contract.Add($"public unsafe interface {domainIface} : IDisposable");
+        contract.Add("{");
+        foreach (var m in decls!)
+        {
+            if (m.Doc.Length > 0) contract.Add(m.Doc);
+            contract.Add($"    {m.InterfaceLine}");
+        }
+        contract.Add("}");
+        contract.Add("");
+
+        var text = string.Join('\n', contract);
+        var code = string.Join('\n', contract.Where(l => !l.TrimStart().StartsWith("///", StringComparison.Ordinal)));
+        var native = model.Structs.Select(s => s.Name)
+            .Concat(model.Enums.Where(e => e.External).Select(e => e.Name))
+            .FirstOrDefault(n => Regex.IsMatch(code, $@"\b{Regex.Escape(n)}\b"));
+        if (native is not null)
+            throw new InvalidOperationException(
+                $"{vtable.Name}: {domainIface} names {native}, which is the ABI's own spelling rather"
+                + " than a managed projection of it. A contract stands apart from the call that"
+                + " satisfies it, so every type it mentions has to be one a caller can reach without"
+                + " the native layer.");
+
+        return new ProviderSource(string.Join('\n', o), text);
     }
 
     /// <summary>
@@ -1341,7 +1378,7 @@ public static class CSharpBackend
     {
         var slot = cs.Slot;
         var name = (slot.TagValue("name") ?? Idioms.Pascal(slot.Name))
-            + (cs.Sequences.Count > 0 ? "Raw" : "");
+            + (slot.Has("raw") ? "Raw" : "");
         var lanes = VectorLanes(slot.Params);
         var callbacks = CallbackPairs(model, cs);
         var groups = ClosureGroups(model, slot, callbacks, owner, ownerDrains);

@@ -66,8 +66,16 @@ foreach (var kinds in model.Enums.Where(e => !e.External && e.Has("borrow_kinds"
         CSharpBackend.RenderBorrowWrappers(kinds, ns, convention));
 
 foreach (var provider in classified.Providers)
-    File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(provider.Name, convention)}.g.cs"),
-        CSharpBackend.RenderProvider(model, provider, classified, ns, nativeNs, extraUsings, convention));
+{
+    var typeName = Idioms.TypeName(provider.Name, convention);
+    var source = CSharpBackend.RenderProvider(model, provider, classified, ns, nativeNs, extraUsings, convention);
+    File.WriteAllText(Path.Combine(outDir, $"{typeName}.g.cs"), source.Class);
+    if (source.Contract is not null)
+    {
+        Directory.CreateDirectory(contractDir);
+        File.WriteAllText(Path.Combine(contractDir, $"I{typeName}.g.cs"), source.Contract);
+    }
+}
 
 foreach (var callback in classified.Callbacks)
     File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(callback.Name, convention)}Native.g.cs"),

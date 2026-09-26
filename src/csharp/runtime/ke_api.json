@@ -136,9 +136,10 @@
           "tags": [
             "closure:user_data",
             "retained:return",
-            "teardown"
+            "teardown",
+            "default:none"
           ],
-          "doc": "Releases what the load acquired."
+          "doc": "Releases what the load acquired. A module that acquired nothing leaves it out."
         }
       ]
     },
@@ -255,8 +256,10 @@
   "vtables": [
     {
       "name": "ke_runtime",
-      "doc": null,
-      "tags": [],
+      "doc": "Owns the simulation world, dispatches systems across the worker pool and drives the frame loop. Game code names this rather than the scheduler behind it, so what a module registers against says nothing about which runtime is carrying it.",
+      "tags": [
+        "interface"
+      ],
       "fields": [
         {
           "name": "handle",
