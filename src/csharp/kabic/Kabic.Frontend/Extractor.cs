@@ -157,7 +157,11 @@ public static class Extractor
                 slotParams.Add(new ApiParam(pname, paramTypes[i], tags, doc.Length > 0 ? doc : null));
             }
             slots.Add(new ApiSlot(fieldName, ret, summaryTags, summary.Length > 0 ? summary : null,
-                retDoc.Length > 0 ? retDoc : null, slotParams) { ReturnTags = retTags });
+                retDoc.Length > 0 ? retDoc : null, slotParams)
+            {
+                ReturnTags = retTags,
+                Receiver = paramTypes.Count > 0 ? paramTypes[0] : null,
+            });
         }
 
         var (structTags, structDoc, _, _, _) = DocParser.Parse(node);

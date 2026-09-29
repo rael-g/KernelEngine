@@ -65,6 +65,7 @@ public static class Serialization
         };
         if (s.ReturnTags.Count > 0)
             o["return_tags"] = new JsonArray(s.ReturnTags.Select(t => (JsonNode)t).ToArray());
+        if (s.Receiver is not null) o["receiver"] = s.Receiver;
         return o;
     }
 

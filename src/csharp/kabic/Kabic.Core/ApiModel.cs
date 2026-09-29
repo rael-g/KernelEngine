@@ -16,6 +16,15 @@ public record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, s
     /// </summary>
     public IReadOnlyList<string> ReturnTags { get; init; } = [];
 
+    /// <summary>
+    /// The type of the parameter the slot hangs off, which is not always the struct that
+    /// declares it: an owner wrapper's <c>destroy</c> takes the value the wrapper holds,
+    /// not the wrapper. A backend that declares the ABI itself instead of importing the
+    /// header has no other source for it, and a declaration naming the wrong pointer type
+    /// still compiles.
+    /// </summary>
+    public string? Receiver { get; init; }
+
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 
@@ -192,6 +201,7 @@ public static class ApiReader
         Str(o, "return_doc"), o["params"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList())
     {
         ReturnTags = ReadTags(o, "return_tags"),
+        Receiver = Str(o, "receiver"),
     };
 
     static List<string> ReadTags(System.Text.Json.Nodes.JsonObject o, string key) =>
