@@ -13,10 +13,14 @@ namespace KernelEngine.Runtime;
 public unsafe partial class RuntimeSystemParams
 {
 
-    public static void RuntimeDebugComputeWaves(in ke_runtime_system_params systems, uint systemCount, uint* outWaveAssignments, uint* outWaveCount)
+    public static uint RuntimeDebugComputeWaves(in ke_runtime_system_params systems, uint systemCount, uint* outWaveAssignments)
     {
         fixed (ke_runtime_system_params* p = &systems)
-            Native.ke_runtime_debug_compute_waves(p, systemCount, outWaveAssignments, outWaveCount);
+        {
+            uint waveCount;
+            Native.ke_runtime_debug_compute_waves(p, systemCount, outWaveAssignments, &waveCount);
+            return waveCount;
+        }
     }
 
     private static unsafe class Native

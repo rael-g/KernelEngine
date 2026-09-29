@@ -71,12 +71,14 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>Resolves a type by name without registering it, so a scene naming a type nobody declared fails instead of inventing an empty one.</summary>
-    public bool TryTypeLookup(string name, uint* outId)
+    public bool TryTypeLookup(string name, out uint id)
     {
+        uint idLocal;
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            var found = Handle->type_lookup(Handle, (sbyte*)namePtr, outId);
+            var found = Handle->type_lookup(Handle, (sbyte*)namePtr, &idLocal);
+            id = idLocal;
             return found;
         }
     }

@@ -40,12 +40,15 @@ struct ke_system_ctx {
     bool (*attach)(ke_system_ctx *self, ke_entity entity, ke_component_id cid, const void *data, size_t size);
     bool (*detach)(ke_system_ctx *self, ke_entity entity, ke_component_id cid);
     bool (*despawn)(ke_system_ctx *self, ke_entity entity);
+    /// @param out_index [out]
+    /// @param out_count [out]
     void (*slice)(ke_system_ctx *self, uint32_t *out_index, uint32_t *out_count);
 };
 
 KE_RUNTIME_API uint32_t ke_system_ctx_defer_applied_count(void);
 KE_RUNTIME_API void     ke_system_ctx_reset_defer_applied(void);
 
+/// @param out_wave_count [out]
 KE_RUNTIME_API void ke_runtime_debug_compute_waves(const ke_runtime_system_params *systems,
                                                      uint32_t                        system_count,
                                                      uint32_t                       *out_wave_assignments,

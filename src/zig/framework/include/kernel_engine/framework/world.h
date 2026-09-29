@@ -80,8 +80,9 @@ extern "C"
                                           uint32_t                  field_count,
                                           ke_error                **out_error);
 
-        /** [idiom] Field table registered for `cid`, or NULL. Writes the entry
-         * count through `out_count`. */
+        /** [idiom] Field table registered for `cid`, or NULL.
+         * @param out_count [out]
+         * @return [array_of:out_count] */
         const ke_component_field *(*get_component_fields)(struct ke_world *self,
                                                           ke_component_id  cid,
                                                           uint32_t        *out_count);
@@ -97,8 +98,9 @@ extern "C"
                                          void                 *ctx,
                                          ke_error            **out_error);
 
-        /** [idiom] Callback registered for `cid`, or NULL. Writes the context it
-         * was registered with through `out_ctx`. */
+        /** [idiom] Callback registered for `cid`, or NULL, and the context it was
+         * registered with.
+         * @param out_ctx [out] */
         ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
                                                      ke_component_id  cid,
                                                      void           **out_ctx);

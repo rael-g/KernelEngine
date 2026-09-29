@@ -99,7 +99,8 @@
               ],
               "doc": "Entry to write. Not valid after the call returns."
             }
-          ]
+          ],
+          "receiver": "struct ke_logger_sink *"
         },
         {
           "name": "flush",
@@ -107,7 +108,8 @@
           "tags": [],
           "doc": "Flushes any buffered output.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_logger_sink *"
         },
         {
           "name": "destroy",
@@ -115,7 +117,8 @@
           "tags": [],
           "doc": "Releases the sink. Called by the logger that took ownership.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_logger_sink *"
         }
       ]
     },
@@ -147,7 +150,8 @@
               ],
               "doc": "Entry to dispatch."
             }
-          ]
+          ],
+          "receiver": "struct ke_logger *"
         },
         {
           "name": "flush",
@@ -155,7 +159,8 @@
           "tags": [],
           "doc": "Flushes every registered sink.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_logger *"
         },
         {
           "name": "add_sink",
@@ -178,7 +183,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_logger *"
         }
       ]
     },
@@ -201,7 +207,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_logger *"
         }
       ]
     }

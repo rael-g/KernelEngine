@@ -177,7 +177,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_font_loader *"
         },
         {
           "name": "free_font",
@@ -192,7 +193,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_font_loader *"
         }
       ]
     },
@@ -215,7 +217,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_font_loader *"
         }
       ]
     }

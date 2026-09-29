@@ -36,7 +36,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_image_loader *"
         },
         {
           "name": "free_image",
@@ -51,7 +52,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_image_loader *"
         }
       ]
     },
@@ -74,7 +76,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_image_loader *"
         }
       ]
     }

@@ -364,7 +364,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "step",
@@ -379,7 +380,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "create_body",
@@ -414,7 +416,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "destroy_body",
@@ -429,7 +432,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "add_box_fixture",
@@ -510,7 +514,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "add_circle_fixture",
@@ -577,7 +582,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "get_body_state",
@@ -600,7 +606,8 @@
               ],
               "doc": "Receives position, angle, and velocities."
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "set_body_position",
@@ -635,7 +642,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "set_body_velocity",
@@ -664,7 +672,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "apply_impulse",
@@ -693,7 +702,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "set_body_fixed_rotation",
@@ -714,7 +724,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "set_body_gravity_scale",
@@ -735,7 +746,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_physics_2d *"
         }
       ],
       "external": true
@@ -759,7 +771,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_physics_2d *"
         }
       ],
       "external": true

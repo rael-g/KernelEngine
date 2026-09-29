@@ -44,7 +44,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "free_texture",
@@ -59,7 +60,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "resolve_mesh",
@@ -90,7 +92,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "free_mesh",
@@ -105,7 +108,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "resolve_material",
@@ -136,7 +140,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "resolve_font",
@@ -191,7 +196,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "free_font",
@@ -206,7 +212,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "resolve_texture_into",
@@ -237,7 +244,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "resolve_mesh_into",
@@ -268,7 +276,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         },
         {
           "name": "resolve_material_into",
@@ -299,7 +308,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_resolver *"
         }
       ]
     },
@@ -322,7 +332,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_asset_resolver *"
         }
       ]
     }

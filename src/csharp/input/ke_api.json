@@ -869,7 +869,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "is_key_pressed",
@@ -886,7 +887,8 @@
               ],
               "doc": "Key to query. Out-of-range codes read as false."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "is_key_released",
@@ -903,7 +905,8 @@
               ],
               "doc": "Key to query. Out-of-range codes read as false."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "is_key_down",
@@ -920,7 +923,8 @@
               ],
               "doc": "Key to query. Out-of-range codes read as false."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "get_snapshot",
@@ -937,7 +941,8 @@
               ],
               "doc": "Receives the snapshot."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "drain_events",
@@ -963,7 +968,8 @@
               "tags": [],
               "doc": "Maximum number of events to write."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "on_key",
@@ -990,7 +996,8 @@
               ],
               "doc": "Whether the key went down or up."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "on_mouse_move",
@@ -1013,7 +1020,8 @@
               "tags": [],
               "doc": "Cursor position on the vertical axis, in pixels."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "on_mouse_button",
@@ -1040,7 +1048,8 @@
               ],
               "doc": "Whether the button went down or up."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         },
         {
           "name": "on_mouse_scroll",
@@ -1063,7 +1072,8 @@
               "tags": [],
               "doc": "Vertical scroll delta."
             }
-          ]
+          ],
+          "receiver": "struct ke_input *"
         }
       ]
     },
@@ -1086,7 +1096,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_input *"
         }
       ]
     }

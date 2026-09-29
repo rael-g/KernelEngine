@@ -172,7 +172,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "import_texture",
@@ -199,7 +200,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "import_tag",
@@ -220,7 +222,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "import_buffer",
@@ -253,7 +256,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "import_bind_group",
@@ -286,7 +290,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "cid",
@@ -301,7 +306,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "begin_pass",
@@ -324,7 +330,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "end_pass",
@@ -339,7 +346,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "begin_frame",
@@ -354,7 +362,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "end_frame",
@@ -369,7 +378,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "upload_mesh",
@@ -416,13 +426,16 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "mesh_buffers",
           "returns": "ke_bool",
-          "tags": [],
-          "doc": "Resolves a mesh handle to its GPU buffers (for a pass to bind \u002B draw).",
+          "tags": [
+            "try"
+          ],
+          "doc": "Resolves a mesh handle to its GPU buffers (for a pass to bind \u002B draw). Returns false for a handle this service never uploaded, so a pass skips the draw instead of binding whatever the out parameters held.",
           "return_doc": null,
           "params": [
             {
@@ -434,22 +447,29 @@
             {
               "name": "out_vbo",
               "type": "ke_gpu_buffer *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             },
             {
               "name": "out_ibo",
               "type": "ke_gpu_buffer *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             },
             {
               "name": "out_index_count",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "set_clear_color",
@@ -482,7 +502,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "upload_texture",
@@ -523,7 +544,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "create_material",
@@ -609,7 +631,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "material_layout",
@@ -617,7 +640,8 @@
           "tags": [],
           "doc": "The per-material bind-group layout (descriptor set 1) a forward pipeline must declare so its set-1 bind groups (from material_bind_group) are valid.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "material_bind_group",
@@ -632,7 +656,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "material_alpha_mode",
@@ -647,7 +672,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "material_alpha_cutoff",
@@ -662,7 +688,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "upload_cubemap",
@@ -697,7 +724,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "texture_view",
@@ -712,7 +740,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "sampler",
@@ -720,7 +749,8 @@
           "tags": [],
           "doc": "The shared filtering sampler the core creates (linear, repeat).",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "resource_view",
@@ -735,7 +765,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "resource_texture",
@@ -750,7 +781,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "resource_buffer",
@@ -765,7 +797,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "resource_buffer_size",
@@ -780,7 +813,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "resource_bind_group",
@@ -795,7 +829,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "resource_bind_group_layout",
@@ -810,7 +845,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "backbuffer_size",
@@ -822,16 +858,21 @@
             {
               "name": "out_w",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             },
             {
               "name": "out_h",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "upload",
@@ -864,7 +905,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "get_or_create_pipeline",
@@ -879,7 +921,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "material_shader",
@@ -894,7 +937,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "retain_mesh",
@@ -909,7 +953,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "release_mesh",
@@ -924,7 +969,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "retain_texture",
@@ -939,7 +985,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "release_texture",
@@ -954,7 +1001,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "retain_material",
@@ -969,7 +1017,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "release_material",
@@ -984,7 +1033,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "try_get_mesh",
@@ -1011,7 +1061,8 @@
               ],
               "doc": "Receives the resident handle on a cache hit."
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "try_get_texture",
@@ -1038,7 +1089,8 @@
               ],
               "doc": "Receives the resident handle on a cache hit."
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "try_get_material",
@@ -1065,7 +1117,8 @@
               ],
               "doc": "Receives the resident handle on a cache hit."
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "white_texture",
@@ -1073,7 +1126,8 @@
           "tags": [],
           "doc": "The built-in 1\u00D71 white texture, resolvable everywhere a neutral albedo is wanted.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_render_service *"
         },
         {
           "name": "load_shader",
@@ -1100,7 +1154,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_render_service *"
         }
       ]
     },
@@ -1123,7 +1178,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_render_service *"
         }
       ]
     }

@@ -38,7 +38,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scene_loader *"
         },
         {
           "name": "register_script_factory",
@@ -68,7 +69,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scene_loader *"
         }
       ]
     },
@@ -91,7 +93,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_scene_loader *"
         }
       ]
     }

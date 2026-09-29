@@ -126,7 +126,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "type_lookup",
@@ -148,10 +149,13 @@
             {
               "name": "out_id",
               "type": "ke_script_type_id *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "type_components",
@@ -177,7 +181,8 @@
           ],
           "return_tags": [
             "array_of:out_count"
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "type_reach",
@@ -192,7 +197,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "bind",
@@ -227,7 +233,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "unbind",
@@ -244,7 +251,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "instance_of",
@@ -278,7 +286,8 @@
               ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "instance_count",
@@ -293,7 +302,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "instances",
@@ -319,7 +329,8 @@
           ],
           "return_tags": [
             "array_of:out_count"
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         },
         {
           "name": "resolve",
@@ -367,7 +378,8 @@
               ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_script_host *"
         }
       ]
     },
@@ -390,7 +402,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_script_host *"
         }
       ]
     }

@@ -88,7 +88,9 @@
             {
               "name": "out_id",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             },
             {
@@ -97,7 +99,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_signal_bus *"
         },
         {
           "name": "signal_lookup",
@@ -119,10 +122,13 @@
             {
               "name": "out_id",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_signal_bus *"
         },
         {
           "name": "connect",
@@ -161,7 +167,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_signal_bus *"
         },
         {
           "name": "disconnect",
@@ -194,7 +201,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_signal_bus *"
         },
         {
           "name": "forget_entity",
@@ -209,7 +217,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_signal_bus *"
         },
         {
           "name": "emit",
@@ -248,7 +257,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_signal_bus *"
         },
         {
           "name": "deliveries",
@@ -260,10 +270,16 @@
             {
               "name": "out_count",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
-          ]
+          ],
+          "return_tags": [
+            "array_of:out_count"
+          ],
+          "receiver": "struct ke_signal_bus *"
         },
         {
           "name": "clear_frame",
@@ -271,7 +287,8 @@
           "tags": [],
           "doc": "Discards this frame\u0027s emissions and deliveries. Connections survive.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_signal_bus *"
         }
       ]
     },
@@ -294,7 +311,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_signal_bus *"
         }
       ]
     }

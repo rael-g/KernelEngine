@@ -38,7 +38,8 @@
               ],
               "doc": "Opaque context passed to func unchanged."
             }
-          ]
+          ],
+          "receiver": "struct ke_scheduler *"
         },
         {
           "name": "dispatch_on_complete",
@@ -79,7 +80,8 @@
               ],
               "doc": "Opaque context passed to on_complete unchanged."
             }
-          ]
+          ],
+          "receiver": "struct ke_scheduler *"
         },
         {
           "name": "wait",
@@ -100,7 +102,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scheduler *"
         },
         {
           "name": "is_completed",
@@ -115,7 +118,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scheduler *"
         },
         {
           "name": "dispatch_pinned",
@@ -146,7 +150,8 @@
               ],
               "doc": "Opaque context passed to func unchanged."
             }
-          ]
+          ],
+          "receiver": "struct ke_scheduler *"
         },
         {
           "name": "get_num_workers",
@@ -154,7 +159,8 @@
           "tags": [],
           "doc": "Returns the number of worker threads in the pool.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_scheduler *"
         }
       ]
     },
@@ -177,7 +183,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_scheduler *"
         }
       ]
     }

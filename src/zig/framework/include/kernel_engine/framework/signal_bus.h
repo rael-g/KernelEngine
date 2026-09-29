@@ -58,6 +58,7 @@ extern "C"
         /// registration under a different size fails instead.
         /// @param name [utf8, type_name]
         /// @param payload_size [type_size]
+        /// @param out_id [out]
         bool (*signal_id)(struct ke_signal_bus *self,
                           const char           *name,
                           uint32_t              payload_size,
@@ -69,6 +70,7 @@ extern "C"
         /// file is exactly that caller: signal_id would happily invent the signal
         /// its author misspelled, and the connection would then never fire.
         /// @param name [utf8]
+        /// @param out_id [out]
         bool (*signal_lookup)(struct ke_signal_bus *self,
                               const char           *name,
                               uint32_t             *out_id);
@@ -107,6 +109,8 @@ extern "C"
         /// Joins this frame's emissions against the connection table and returns
         /// the resulting deliveries. Idempotent within a frame: calling it twice
         /// returns the same list rather than duplicating it.
+        /// @param out_count [out]
+        /// @return [array_of:out_count]
         const ke_signal_delivery *(*deliveries)(struct ke_signal_bus *self, uint32_t *out_count);
 
         /// Discards this frame's emissions and deliveries. Connections survive.

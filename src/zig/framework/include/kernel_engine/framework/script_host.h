@@ -101,6 +101,7 @@ extern "C"
         /// [try] Resolves a type by name without registering it, so a scene naming
         /// a type nobody declared fails instead of inventing an empty one.
         /// @param name [utf8]
+        /// @param out_id [out]
         bool (*type_lookup)(struct ke_script_host *self,
                             const char            *name,
                             ke_script_type_id     *out_id);

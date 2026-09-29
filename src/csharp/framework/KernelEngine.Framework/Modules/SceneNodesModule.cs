@@ -106,15 +106,11 @@ public sealed class SceneNodesModule : IRuntimeModule
 
             runtime.RegisterSystem("Scene.Signals.Deliver", RuntimePhase.PostUpdate, (ctx, _) =>
             {
-                unsafe
-                {
-                    uint count = 0;
-                    var list = signals.Deliveries(&count);
-                    if (list == null) return;
-                    using (scriptHost.EnterSystem(ctx))
-                        for (uint i = 0; i < count; i++)
-                            scriptHost.Deliver(in list[i]);
-                }
+                var list = signals.Deliveries();
+                if (list.IsEmpty) return;
+                using (scriptHost.EnterSystem(ctx))
+                    for (var i = 0; i < list.Length; i++)
+                        scriptHost.Deliver(in list[i]);
             }, accessList: []);
         }
 

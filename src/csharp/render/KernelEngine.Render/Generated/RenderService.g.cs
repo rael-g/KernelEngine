@@ -148,10 +148,17 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>Resolves a mesh handle to its GPU buffers (for a pass to bind + draw).</summary>
-    public bool MeshBuffers(ke_mesh_handle h, ulong* outVbo, ulong* outIbo, uint* outIndexCount)
+    /// <summary>Resolves a mesh handle to its GPU buffers (for a pass to bind + draw). Returns false for a handle this service never uploaded, so a pass skips the draw instead of binding whatever the out parameters held.</summary>
+    public bool TryMeshBuffers(ke_mesh_handle h, out ulong vbo, out ulong ibo, out uint indexCount)
     {
-        return Handle->mesh_buffers(Handle, h, outVbo, outIbo, outIndexCount) != 0;
+        ulong vboLocal;
+        ulong iboLocal;
+        uint indexCountLocal;
+        var found = Handle->mesh_buffers(Handle, h, &vboLocal, &iboLocal, &indexCountLocal) != 0;
+        vbo = vboLocal;
+        ibo = iboLocal;
+        indexCount = indexCountLocal;
+        return found;
     }
 
     /// <summary>The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).</summary>
@@ -280,9 +287,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>The backbuffer's pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame's size.</summary>
-    public void BackbufferSize(uint* outW, uint* outH)
+    public (uint W, uint H) BackbufferSize()
     {
-        Handle->backbuffer_size(Handle, outW, outH);
+        uint w;
+        uint h;
+        Handle->backbuffer_size(Handle, &w, &h);
+        return (w, h);
     }
 
     /// <summary>Records a buffer upload to be flushed single-threaded at end_frame (before submit).</summary>

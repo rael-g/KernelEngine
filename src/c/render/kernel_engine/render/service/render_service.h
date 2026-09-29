@@ -112,7 +112,12 @@ struct ke_render_service
                                   const void *vertices, size_t vertices_size,
                                   const uint16_t *indices, uint32_t index_count,
                                   ke_error **out_error);
-    /// Resolves a mesh handle to its GPU buffers (for a pass to bind + draw).
+    /// [try] Resolves a mesh handle to its GPU buffers (for a pass to bind +
+    /// draw). Returns false for a handle this service never uploaded, so a pass
+    /// skips the draw instead of binding whatever the out parameters held.
+    /// @param out_vbo [out]
+    /// @param out_ibo [out]
+    /// @param out_index_count [out]
     ke_bool (*mesh_buffers)(struct ke_render_service *self, ke_mesh_handle h,
                             ke_gpu_buffer *out_vbo, ke_gpu_buffer *out_ibo,
                             uint32_t *out_index_count);
@@ -180,6 +185,8 @@ struct ke_render_service
     /// The backbuffer's pixel size, callable from any phase. Refreshed once per
     /// frame at begin_frame, so a caller earlier in the tick reads the previous
     /// frame's size.
+    /// @param out_w [out]
+    /// @param out_h [out]
     void (*backbuffer_size)(struct ke_render_service *self, uint32_t *out_w, uint32_t *out_h);
 
     /// Records a buffer upload to be flushed single-threaded at end_frame

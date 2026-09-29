@@ -23,7 +23,8 @@
           ],
           "doc": "The tree\u0027s root entity. Valid for the whole lifetime of the tree.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_scene_tree *"
         },
         {
           "name": "create_node",
@@ -60,7 +61,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scene_tree *"
         },
         {
           "name": "destroy_node",
@@ -89,7 +91,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scene_tree *"
         },
         {
           "name": "destroy_all",
@@ -97,7 +100,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_scene_tree *"
         },
         {
           "name": "find_node",
@@ -120,7 +124,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scene_tree *"
         },
         {
           "name": "parent",
@@ -135,7 +140,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scene_tree *"
         },
         {
           "name": "first_child",
@@ -150,7 +156,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scene_tree *"
         },
         {
           "name": "next_sibling",
@@ -165,7 +172,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_scene_tree *"
         },
         {
           "name": "propagate_transforms",
@@ -173,7 +181,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_scene_tree *"
         }
       ]
     },
@@ -196,7 +205,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_scene_tree *"
         }
       ]
     }

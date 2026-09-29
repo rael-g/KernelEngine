@@ -32,7 +32,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_window *"
         },
         {
           "name": "on_shutdown",
@@ -49,7 +50,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_window *"
         },
         {
           "name": "should_close",
@@ -57,7 +59,8 @@
           "tags": [],
           "doc": "Returns true once the user has requested the window to close.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_window *"
         },
         {
           "name": "poll_events",
@@ -72,7 +75,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_window *"
         },
         {
           "name": "swap_buffers",
@@ -87,7 +91,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_window *"
         },
         {
           "name": "get_size",
@@ -118,7 +123,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_window *"
         },
         {
           "name": "get_native_handle",
@@ -126,7 +132,8 @@
           "tags": [],
           "doc": "Returns the platform-specific native handle (HWND, X11 Window, ...).",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_window *"
         }
       ]
     },
@@ -149,7 +156,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_window *"
         }
       ]
     }

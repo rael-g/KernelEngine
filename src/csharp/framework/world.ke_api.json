@@ -73,7 +73,8 @@
           ],
           "doc": "Superseded by the managed Ecs property (DI-injected IEcsRegistry), same name.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_world *"
         },
         {
           "name": "runtime",
@@ -83,7 +84,8 @@
           ],
           "doc": "Superseded by the managed Runtime property (DI-injected IRuntime), same name.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_world *"
         },
         {
           "name": "scene_tree",
@@ -93,7 +95,8 @@
           ],
           "doc": "Superseded by the managed SceneTree property, same name.",
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "struct ke_world *"
         },
         {
           "name": "register_component_fields",
@@ -126,7 +129,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_world *"
         },
         {
           "name": "get_component_fields",
@@ -134,7 +138,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "Field table registered for \u0060cid\u0060, or NULL. Writes the entry count through \u0060out_count\u0060.",
+          "doc": "Field table registered for \u0060cid\u0060, or NULL.",
           "return_doc": null,
           "params": [
             {
@@ -146,10 +150,16 @@
             {
               "name": "out_count",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
-          ]
+          ],
+          "return_tags": [
+            "array_of:out_count"
+          ],
+          "receiver": "struct ke_world *"
         },
         {
           "name": "register_component_apply",
@@ -185,7 +195,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_world *"
         },
         {
           "name": "get_component_apply",
@@ -193,7 +204,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "Callback registered for \u0060cid\u0060, or NULL. Writes the context it was registered with through \u0060out_ctx\u0060.",
+          "doc": "Callback registered for \u0060cid\u0060, or NULL, and the context it was registered with.",
           "return_doc": null,
           "params": [
             {
@@ -205,10 +216,13 @@
             {
               "name": "out_ctx",
               "type": "void **",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_world *"
         }
       ]
     },
@@ -231,7 +245,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_world *"
         }
       ]
     }

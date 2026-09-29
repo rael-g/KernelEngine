@@ -36,7 +36,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_loader *"
         },
         {
           "name": "free_model",
@@ -51,7 +52,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_loader *"
         },
         {
           "name": "load_model_async",
@@ -88,7 +90,8 @@
               "tags": [],
               "doc": "Forwarded unchanged to"
             }
-          ]
+          ],
+          "receiver": "struct ke_asset_loader *"
         }
       ]
     },
@@ -111,7 +114,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_asset_loader *"
         }
       ]
     }

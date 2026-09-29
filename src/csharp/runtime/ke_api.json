@@ -290,7 +290,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_runtime *"
         },
         {
           "name": "register_system",
@@ -313,7 +314,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_runtime *"
         },
         {
           "name": "tick",
@@ -336,7 +338,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_runtime *"
         },
         {
           "name": "flush_render",
@@ -354,7 +357,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_runtime *"
         }
       ]
     },
@@ -377,7 +381,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_runtime *"
         }
       ]
     },
@@ -418,7 +423,8 @@
           ],
           "return_tags": [
             "array_of:out_count"
-          ]
+          ],
+          "receiver": "ke_system_ctx *"
         },
         {
           "name": "reserve",
@@ -426,7 +432,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_system_ctx *"
         },
         {
           "name": "defer",
@@ -453,7 +460,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_system_ctx *"
         },
         {
           "name": "spawn",
@@ -461,7 +469,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_system_ctx *"
         },
         {
           "name": "attach",
@@ -494,7 +503,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_system_ctx *"
         },
         {
           "name": "detach",
@@ -515,7 +525,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_system_ctx *"
         },
         {
           "name": "despawn",
@@ -530,7 +541,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_system_ctx *"
         },
         {
           "name": "slice",
@@ -542,16 +554,21 @@
             {
               "name": "out_index",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             },
             {
               "name": "out_count",
               "type": "uint32_t *",
-              "tags": [],
+              "tags": [
+                "out"
+              ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "ke_system_ctx *"
         }
       ]
     }
@@ -598,7 +615,9 @@
         {
           "name": "out_wave_count",
           "type": "uint32_t *",
-          "tags": [],
+          "tags": [
+            "out"
+          ],
           "doc": null
         }
       ]

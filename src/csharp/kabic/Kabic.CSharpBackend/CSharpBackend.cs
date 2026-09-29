@@ -748,8 +748,7 @@ public static class CSharpBackend
         o.Add($"    public uint {name}Of<T>() where T : unmanaged");
         o.Add("    {");
         o.Add($"        if ({ids}.TryGetValue(typeof(T), out var cached)) return cached;");
-        o.Add("        uint resolved = 0;");
-        o.Add($"        {name}(typeof(T).Name, (uint)sizeof(T), &resolved);");
+        o.Add($"        var resolved = {name}(typeof(T).Name, (uint)sizeof(T));");
         o.Add($"        {ids}[typeof(T)] = resolved;");
         o.Add($"        {types}[resolved] = typeof(T);");
         o.Add("        return resolved;");

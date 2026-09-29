@@ -47,23 +47,27 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
 
     /// <summary>Resolves a signal by name, registering it on first use. The payload size is part of the identity, not metadata: two languages naming the same signal with different payload layouts would otherwise alias one id and read each other's bytes at the wrong stride. A second registration under a different size fails instead.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void SignalId(string name, uint payloadSize, uint* outId)
+    public uint SignalId(string name, uint payloadSize)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
+            uint result;
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->signal_id(Handle, (sbyte*)namePtr, payloadSize, outId, &err), err, "signal_id");
+            KernelError.ThrowIfFailed(Handle->signal_id(Handle, (sbyte*)namePtr, payloadSize, &result, &err), err, "signal_id");
+            return result;
         }
     }
 
     /// <summary>Resolves a signal by name without registering it, so a caller that did not author the name can tell an existing signal from a typo. A scene file is exactly that caller: signal_id would happily invent the signal its author misspelled, and the connection would then never fire.</summary>
-    public bool TrySignalLookup(string name, uint* outId)
+    public bool TrySignalLookup(string name, out uint id)
     {
+        uint idLocal;
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            var found = Handle->signal_lookup(Handle, (sbyte*)namePtr, outId);
+            var found = Handle->signal_lookup(Handle, (sbyte*)namePtr, &idLocal);
+            id = idLocal;
             return found;
         }
     }
@@ -97,9 +101,11 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     }
 
     /// <summary>Joins this frame's emissions against the connection table and returns the resulting deliveries. Idempotent within a frame: calling it twice returns the same list rather than duplicating it.</summary>
-    public ke_signal_delivery* Deliveries(uint* outCount)
+    public ReadOnlySpan<ke_signal_delivery> Deliveries()
     {
-        return Handle->deliveries(Handle, outCount);
+        uint countLocal = 0;
+        var front = Handle->deliveries(Handle, &countLocal);
+        return front == null ? default : new ReadOnlySpan<ke_signal_delivery>(front, (int)countLocal);
     }
 
     /// <summary>Discards this frame's emissions and deliveries. Connections survive.</summary>
@@ -115,8 +121,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     public uint SignalIdOf<T>() where T : unmanaged
     {
         if (_signalIdIds.TryGetValue(typeof(T), out var cached)) return cached;
-        uint resolved = 0;
-        SignalId(typeof(T).Name, (uint)sizeof(T), &resolved);
+        var resolved = SignalId(typeof(T).Name, (uint)sizeof(T));
         _signalIdIds[typeof(T)] = resolved;
         _signalIdTypes[resolved] = typeof(T);
         return resolved;

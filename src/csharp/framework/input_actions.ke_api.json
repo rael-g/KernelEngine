@@ -128,7 +128,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "get_action_id",
@@ -145,7 +146,8 @@
               ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "add_action",
@@ -168,7 +170,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "bind_key",
@@ -195,7 +198,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "bind_mouse_button",
@@ -222,7 +226,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "bind_key_pair",
@@ -255,7 +260,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "bind_key_quad",
@@ -300,7 +306,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "evaluate",
@@ -335,7 +342,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "is_action_down",
@@ -350,7 +358,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "was_action_pressed",
@@ -365,7 +374,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "was_action_released",
@@ -380,7 +390,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "get_axis1d",
@@ -395,7 +406,8 @@
               "tags": [],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "get_axis2d",
@@ -426,7 +438,8 @@
               ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         },
         {
           "name": "get_axis3d",
@@ -465,7 +478,8 @@
               ],
               "doc": null
             }
-          ]
+          ],
+          "receiver": "struct ke_input_actions *"
         }
       ]
     },
@@ -488,7 +502,8 @@
           "tags": [],
           "doc": null,
           "return_doc": null,
-          "params": []
+          "params": [],
+          "receiver": "ke_input_actions *"
         }
       ]
     }
