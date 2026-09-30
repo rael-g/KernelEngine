@@ -2,27 +2,25 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 
 /// <summary>An entity's authored 3D pose.</summary>
-[GeneratedNodeComponent(typeof(ke_transform_component), "transform")]
+[GeneratedNodeComponent(typeof(TransformComponent), "transform")]
 public partial class Node3D : Node
 {
     public Node3D()
     {
-        _generatedState0.rotation = new ke_quat { x = 0f, y = 0f, z = 0f, w = 1f };
-        _generatedState0.scale = new ke_vec3 { x = 1f, y = 1f, z = 1f };
+        _generatedState0 = TransformComponent.Default;
     }
 
-    [NativeField("position", Component = typeof(ke_transform_component))]
+    [NativeField("Position", Component = typeof(TransformComponent))]
     public partial Vector3 Position { get; set; }
 
-    [NativeField("rotation", Component = typeof(ke_transform_component))]
+    [NativeField("Rotation", Component = typeof(TransformComponent))]
     public partial Quaternion Rotation { get; set; }
 
-    [NativeField("scale", Component = typeof(ke_transform_component))]
+    [NativeField("Scale", Component = typeof(TransformComponent))]
     public partial Vector3 Scale { get; set; }
 }

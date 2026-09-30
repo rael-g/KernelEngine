@@ -2,42 +2,40 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Physics.Native;
 using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
 /// <summary>A 2D rigid body. Pose and motion are stored here because the simulation owns them between ticks; the node's own transform2d is written back from this component each tick by the physics plugin's own system, so what a script reads and what the hierarchy composes are the same two dimensions the body moves in. The same system creates and destroys the underlying body by reconciling this component against the world, so the entity is the identity and a script never acquires, threads, or releases a handle.</summary>
-[GeneratedNodeComponent(typeof(ke_body2d_component), "body2d")]
+[GeneratedNodeComponent(typeof(Body2dComponent), "body2d")]
 public partial class Body2D : Node2D
 {
     public Body2D()
     {
-        _generatedState0.gravity_scale = 1f;
+        _generatedState0 = Body2dComponent.Default;
     }
 
-    [NativeField("type", Component = typeof(ke_body2d_component))]
+    [NativeField("Type", Component = typeof(Body2dComponent))]
     public partial BodyType2D Type { get; set; }
 
-    [NativeField("position", Component = typeof(ke_body2d_component))]
+    [NativeField("Position", Component = typeof(Body2dComponent))]
     public partial Vector2 Position { get; set; }
 
     /// <summary>Radians, CCW positive.</summary>
-    [NativeField("angle", Component = typeof(ke_body2d_component))]
+    [NativeField("Angle", Component = typeof(Body2dComponent))]
     public partial float Angle { get; set; }
 
-    [NativeField("velocity", Component = typeof(ke_body2d_component))]
+    [NativeField("Velocity", Component = typeof(Body2dComponent))]
     public partial Vector2 Velocity { get; set; }
 
     /// <summary>Radians per second, CCW positive.</summary>
-    [NativeField("angular_velocity", Component = typeof(ke_body2d_component))]
+    [NativeField("AngularVelocity", Component = typeof(Body2dComponent))]
     public partial float AngularVelocity { get; set; }
 
-    [NativeField("gravity_scale", Component = typeof(ke_body2d_component))]
+    [NativeField("GravityScale", Component = typeof(Body2dComponent))]
     public partial float GravityScale { get; set; }
 
     /// <summary>Keeps the body's angle fixed against every torque, including contacts. What anything that must stay upright sets — characters, projectiles.</summary>
-    [NativeField("fixed_rotation", Component = typeof(ke_body2d_component))]
+    [NativeField("FixedRotation", Component = typeof(Body2dComponent))]
     public partial bool FixedRotation { get; set; }
 }

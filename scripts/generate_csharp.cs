@@ -54,11 +54,11 @@ if (model.Enums.Any(e => !e.External))
     File.WriteAllText(Path.Combine(contractDir, enumsFile), CSharpBackend.RenderEnums(model, ns, convention));
 }
 
-foreach (var value in model.Structs.Where(s => s.Has("value") && !s.External && !s.IsVtable))
+foreach (var value in model.Structs.Where(CSharpBackend.IsValue))
 {
     Directory.CreateDirectory(contractDir);
     File.WriteAllText(Path.Combine(contractDir, $"{Idioms.TypeName(value.Name, convention)}.g.cs"),
-        CSharpBackend.RenderStruct(model, value, ns, convention));
+        CSharpBackend.RenderStruct(model, value, ns, extraUsings, convention));
 }
 
 foreach (var counted in model.Structs.Where(s => !s.External && !s.IsVtable
@@ -93,7 +93,7 @@ foreach (var component in model.Structs.Where(s => !s.IsVtable && !s.External &&
     var nodeName = component.TagValue("node")!;
     nodeNames.Add(nodeName);
     File.WriteAllText(Path.Combine(outDir, $"{nodeName}.g.cs"),
-        CSharpBackend.RenderNodeType(model, component, ns, nativeNs, extraUsings, convention));
+        CSharpBackend.RenderNodeType(model, component, ns, extraUsings, convention));
 }
 
 if (nodeNames.Count > 0)

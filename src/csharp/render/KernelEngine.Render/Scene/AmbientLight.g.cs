@@ -2,20 +2,18 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>Scene-wide ambient light node. First entity with this component wins.</summary>
-[GeneratedNodeComponent(typeof(ke_ambient_light_component), "ambient_light")]
+[GeneratedNodeComponent(typeof(AmbientLightComponent), "ambient_light")]
 public partial class AmbientLight : Node3D
 {
     public AmbientLight()
     {
-        _generatedState0.color = new ke_vec3 { x = 0.05f, y = 0.05f, z = 0.05f };
+        _generatedState0 = AmbientLightComponent.Default;
     }
 
-    [NativeField("color", Component = typeof(ke_ambient_light_component))]
+    [NativeField("Color", Component = typeof(AmbientLightComponent))]
     public partial Vector3 Color { get; set; }
 }

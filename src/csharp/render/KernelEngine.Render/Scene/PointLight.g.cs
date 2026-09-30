@@ -2,29 +2,25 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>Point light node — emits light in all directions from this entity's world position.</summary>
-[GeneratedNodeComponent(typeof(ke_point_light_component), "point_light")]
+[GeneratedNodeComponent(typeof(PointLightComponent), "point_light")]
 public partial class PointLight : Node3D
 {
     public PointLight()
     {
-        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState0.intensity = 1f;
-        _generatedState0.radius = 10f;
+        _generatedState0 = PointLightComponent.Default;
     }
 
     /// <summary>Linear RGB.</summary>
-    [NativeField("color", Component = typeof(ke_point_light_component))]
+    [NativeField("Color", Component = typeof(PointLightComponent))]
     public partial Vector3 Color { get; set; }
 
-    [NativeField("intensity", Component = typeof(ke_point_light_component))]
+    [NativeField("Intensity", Component = typeof(PointLightComponent))]
     public partial float Intensity { get; set; }
 
-    [NativeField("radius", Component = typeof(ke_point_light_component))]
+    [NativeField("Radius", Component = typeof(PointLightComponent))]
     public partial float Radius { get; set; }
 }

@@ -520,6 +520,39 @@ ExpectValueStruct("a value struct naming another value struct takes its mirror",
     absent: ["ke_component_access"],
     alongside: [ValueStruct("ke_component_access", ("cid", "uint32_t"), ("access", "uint32_t"))]);
 
+// A node type's backing state is the component's own projection, so a property reads the
+// field it names and nothing reinterprets bytes on the way. The alternative -- state typed
+// as the raw binding struct -- needs a cast per property that checks size and not order, so
+// it would keep passing after a field moved.
+ExpectNodeType("a node type backs its state with the component's own projection",
+    NodeStruct("ke_probe_component", "Probe3D",
+        ("position", "ke_vec3", []),
+        ("layers", "uint32_t", ["default:1"])),
+    contains: ["[GeneratedNodeComponent(typeof(ProbeComponent), \"probe\")]",
+               "public partial class Probe3D : Node",
+               "_generatedState0 = ProbeComponent.Default;",
+               "[NativeField(\"Position\", Component = typeof(ProbeComponent))]",
+               "public partial Vector3 Position { get; set; }",
+               "[NativeField(\"Layers\", Component = typeof(ProbeComponent))]"],
+    absent: ["typeof(ke_probe_component)", "ke_vec3", "_generatedState0.position"]);
+
+// A node whose header states no default seeds nothing: the projection's Default exists only
+// where a field declares one, and a constructor naming it otherwise would not compile.
+ExpectNodeType("a node type with no stated default seeds nothing",
+    NodeStruct("ke_bare_component", "Bare", ("value", "float", [])),
+    contains: ["public Bare()"],
+    absent: ["Default;"]);
+
+// The component struct a [node:] tag implies. The node's state has to be a projection with
+// the same layout, so declaring the node is enough -- [value] beside it would be the same
+// fact stated twice, and a node whose struct someone forgot to tag would back its state
+// with the binding type instead.
+ExpectValueStruct("a node component is projected without saying [value] as well",
+    NodeStruct("ke_probe_component", "Probe3D", ("position", "ke_vec3", [])),
+    contains: ["public partial struct ProbeComponent", "public const string Name = \"probe\";",
+               "public Vector3 Position;"],
+    absent: []);
+
 // A struct the ABI hands out carrying a pointer and the count bounding it. The pair is one
 // value wherever it sits: a slot answering with it already hands out a span, so a field
 // answering with it that does not is the same declaration read two ways -- and every caller
@@ -633,6 +666,30 @@ void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
             failures.Add($"{what}: expected NOT to find \"{needle}\"");
 }
 
+/// <summary>
+/// Renders the node type a <c>[node:]</c> struct declares: the class a game writes against,
+/// whose backing state and property surface come from the same struct the ABI declares.
+/// </summary>
+void ExpectNodeType(string what, ApiStruct component, string[] contains, string[] absent,
+    ApiStruct[]? alongside = null)
+{
+    checks++;
+    var model = new ApiModel();
+    model.Structs.Add(component);
+    foreach (var other in alongside ?? []) model.Structs.Add(other);
+
+    var emitted = CSharpBackend.RenderNodeType(model, component, "Probe", [], Convention.KernelEngine);
+    if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+
+    foreach (var needle in contains)
+        if (!emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected to find \"{needle}\"");
+
+    foreach (var needle in absent)
+        if (emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected NOT to find \"{needle}\"");
+}
+
 void ExpectValueStruct(string what, ApiStruct s, string[] contains, string[] absent, string? throws = null,
     ApiStruct[]? alongside = null)
 {
@@ -644,7 +701,7 @@ void ExpectValueStruct(string what, ApiStruct s, string[] contains, string[] abs
     string emitted;
     try
     {
-        emitted = CSharpBackend.RenderStruct(model, s, "Probe", Convention.KernelEngine);
+        emitted = CSharpBackend.RenderStruct(model, s, "Probe", [], Convention.KernelEngine);
     }
     catch (Exception ex)
     {
@@ -750,6 +807,14 @@ static ApiStruct ValueStruct(string name, params (string Name, string Type)[] fi
 /// </summary>
 static ApiStruct TaggedValueStruct(string name, params (string Name, string Type, string[] Tags)[] fields) =>
     new(name, null, ["value"],
+        fields.Select(f => new ApiField(f.Name, f.Type, f.Tags, null)).ToList(), []);
+
+/// <summary>
+/// A component struct declaring the node type a game writes against, with per-field tags.
+/// </summary>
+static ApiStruct NodeStruct(string name, string node,
+    params (string Name, string Type, string[] Tags)[] fields) =>
+    new(name, null, [$"node:{node}"],
         fields.Select(f => new ApiField(f.Name, f.Type, f.Tags, null)).ToList(), []);
 
 /// <summary>

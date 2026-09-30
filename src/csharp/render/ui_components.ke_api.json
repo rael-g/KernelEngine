@@ -103,8 +103,10 @@
     },
     {
       "name": "ke_label_glyph_quad",
-      "doc": null,
-      "tags": [],
+      "doc": "One shaped glyph: the screen-space rectangle it draws to and the atlas rectangle it samples from.",
+      "tags": [
+        "value"
+      ],
       "fields": [
         {
           "name": "dst_x",

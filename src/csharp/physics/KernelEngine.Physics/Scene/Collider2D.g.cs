@@ -2,48 +2,41 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Physics.Native;
 using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
 /// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. Named for what it holds — a kind, extents, density, friction, restitution — rather than for a shape it is not. It is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin's own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.</summary>
-[GeneratedNodeComponent(typeof(ke_collider2d_component), "collider2d")]
+[GeneratedNodeComponent(typeof(Collider2dComponent), "collider2d")]
 public partial class Collider2D : Node2D
 {
     public Collider2D()
     {
-        _generatedState0.half_extents = new ke_vec2 { x = 0.5f, y = 0.5f };
-        _generatedState0.radius = 0.5f;
-        _generatedState0.density = 1f;
-        _generatedState0.friction = 0.3f;
-        _generatedState0.layer = 1;
-        _generatedState0.mask = 4294967295;
+        _generatedState0 = Collider2dComponent.Default;
     }
 
-    [NativeField("kind", Component = typeof(ke_collider2d_component))]
+    [NativeField("Kind", Component = typeof(Collider2dComponent))]
     public partial ShapeKind2d Kind { get; set; }
 
-    [NativeField("half_extents", Component = typeof(ke_collider2d_component))]
+    [NativeField("HalfExtents", Component = typeof(Collider2dComponent))]
     public partial Vector2 HalfExtents { get; set; }
 
-    [NativeField("radius", Component = typeof(ke_collider2d_component))]
+    [NativeField("Radius", Component = typeof(Collider2dComponent))]
     public partial float Radius { get; set; }
 
-    [NativeField("density", Component = typeof(ke_collider2d_component))]
+    [NativeField("Density", Component = typeof(Collider2dComponent))]
     public partial float Density { get; set; }
 
-    [NativeField("friction", Component = typeof(ke_collider2d_component))]
+    [NativeField("Friction", Component = typeof(Collider2dComponent))]
     public partial float Friction { get; set; }
 
     /// <summary>Bounciness. 0 absorbs the impact, 1 returns all of it.</summary>
-    [NativeField("restitution", Component = typeof(ke_collider2d_component))]
+    [NativeField("Restitution", Component = typeof(Collider2dComponent))]
     public partial float Restitution { get; set; }
 
-    [NativeField("layer", Component = typeof(ke_collider2d_component))]
+    [NativeField("Layer", Component = typeof(Collider2dComponent))]
     public partial uint Layer { get; set; }
 
-    [NativeField("mask", Component = typeof(ke_collider2d_component))]
+    [NativeField("Mask", Component = typeof(Collider2dComponent))]
     public partial uint Mask { get; set; }
 }

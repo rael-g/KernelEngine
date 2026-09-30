@@ -308,23 +308,22 @@ public static class CSharpBackend
     /// a hand-written one are indistinguishable to it once both compile down to a
     /// <c>partial</c> class with <c>partial</c> properties.
     /// </summary>
-    public static string RenderNodeType(ApiModel model, ApiStruct component, string ns, string nativeNs,
+    public static string RenderNodeType(ApiModel model, ApiStruct component, string ns,
         IEnumerable<string> extraUsings, Convention convention)
     {
         var nodeName = component.TagValue("node") ?? throw new InvalidOperationException($"{component.Name} has no [node:] tag");
-        var nativeType = component.Name;
+        var stateType = Idioms.TypeName(component.Name, convention);
         var componentName = convention.ComponentNameFor(component.Name);
 
         var baseName = BaseNodeOf(model, component) ?? "Node";
 
-        var o = new List<string> { Header, "using System.Numerics;", "using KernelEngine.Common.Native;" };
-        if (nativeNs != "KernelEngine.Common.Native") o.Add($"using {nativeNs};");
+        var o = new List<string> { Header, "using System.Numerics;" };
         foreach (var u in extraUsings) o.Add($"using {u};");
         o.Add("");
         o.Add($"namespace {ns};\n");
         o.Add(component.Doc is not null ? XmlDoc("", component.Doc).TrimEnd()
-            : $"/// <summary>Mirrors <c>{nativeType}</c>.</summary>");
-        o.Add($"[GeneratedNodeComponent(typeof({nativeType}), \"{componentName}\")]");
+            : $"/// <summary>Mirrors <c>{component.Name}</c>.</summary>");
+        o.Add($"[GeneratedNodeComponent(typeof({stateType}), \"{componentName}\")]");
         o.Add($"public partial class {nodeName} : {baseName}");
         o.Add("{");
 
@@ -333,7 +332,7 @@ public static class CSharpBackend
         o.Add($"    public {nodeName}()");
         o.Add("    {");
         for (var i = 0; i < slots.Count; i++)
-            foreach (var line in ComponentInit(model, slots[i], i)) o.Add($"        {line}");
+            foreach (var line in ComponentInit(slots[i], i, convention)) o.Add($"        {line}");
         o.Add("    }");
 
         foreach (var c in slots)
@@ -392,11 +391,16 @@ public static class CSharpBackend
         return spec;
     }
 
-    /// <summary>The <c>[default:]</c> seeding for one component, targeting its own backing slot.</summary>
-    static IEnumerable<string> ComponentInit(ApiModel model, ApiStruct c, int index)
+    /// <summary>
+    /// The <c>[default:]</c> seeding for one component, targeting its own backing slot. The
+    /// values are not spelled again here: the state the node holds is the component's own
+    /// projection, so the neutral surface it starts on is the one that projection already
+    /// declares.
+    /// </summary>
+    static IEnumerable<string> ComponentInit(ApiStruct c, int index, Convention convention)
     {
-        foreach (var f in c.Fields)
-            foreach (var line in FieldInit(model, f, index)) yield return line;
+        if (!c.Fields.Any(f => f.TagValue("default") is not null)) yield break;
+        yield return $"_generatedState{index} = {Idioms.TypeName(c.Name, convention)}.Default;";
     }
 
     /// <summary>
@@ -414,7 +418,8 @@ public static class CSharpBackend
             var propType = NodePropertyType(model, f, convention);
             yield return "";
             if (!string.IsNullOrEmpty(f.Doc)) yield return $"    /// <summary>{Escape(f.Doc)}</summary>";
-            yield return $"    [NativeField(\"{f.Name}\", Component = typeof({c.Name}))]";
+            yield return $"    [NativeField(\"{Idioms.Pascal(f.Name)}\", Component = "
+                + $"typeof({Idioms.TypeName(c.Name, convention)}))]";
             yield return $"    public partial {propType} {propName} {{ get; set; }}";
         }
     }
@@ -463,30 +468,6 @@ public static class CSharpBackend
         : model.Enums.Any(e => e.Name == f.Type.Trim()) ? Idioms.TypeName(f.Type.Trim(), convention)
         : f.Has("bool") ? "bool" : CsType(model, f.Type);
 
-    static IEnumerable<string> FieldInit(ApiModel model, ApiField f, int index)
-    {
-        var d = f.TagValue("default");
-        if (d is null) return [];
-        if (VectorArity(f.Type) is int n)
-        {
-            var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length != n)
-                throw new InvalidOperationException(
-                    $"{f.Name}: [default:{d}] has {parts.Length} components but the field is float[{n}]");
-            return parts.Select((p, i) => $"_generatedState{index}.{f.Name}[{i}] = {p}f;");
-        }
-        if (NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v))
-        {
-            var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length != v.Lanes.Length)
-                throw new InvalidOperationException(
-                    $"{f.Name}: [default:{d}] has {parts.Length} components but the field is {f.Type.Trim()}");
-            var inits = string.Join(", ", v.Lanes.Zip(parts, (lane, p) => $"{lane} = {p}f"));
-            return [$"_generatedState{index}.{f.Name} = new {f.Type.Trim()} {{ {inits} }};"];
-        }
-        return [$"_generatedState{index}.{f.Name} = {(CsType(model, f.Type) is "float" ? d + "f" : d)};"];
-    }
-
     public static string RenderEnums(ApiModel model, string ns, Convention convention)
     {
         var o = new List<string> { Header, $"namespace {ns};\n" };
@@ -517,7 +498,8 @@ public static class CSharpBackend
     /// plus a reinterpret cast between the two, where the only thing asserting the layouts
     /// agree is the sentence next to the cast.
     /// </summary>
-    public static string RenderStruct(ApiModel model, ApiStruct s, string ns, Convention convention)
+    public static string RenderStruct(ApiModel model, ApiStruct s, string ns,
+        IEnumerable<string> extraUsings, Convention convention)
     {
         var needsNumerics = s.Fields.Any(f => ValueFieldType(model, s, f, convention)
             is var t && (t.StartsWith("Vector", StringComparison.Ordinal)
@@ -528,10 +510,14 @@ public static class CSharpBackend
             .Select(x => (x.Field, Array: x.Array!.Value))
             .ToList();
 
+        var borrowsAType = s.Fields.Any(f => NamesForeignDeclaration(model, f));
+
         var o = new List<string> { Header };
         if (needsNumerics) o.Add("using System.Numerics;");
         if (inlineArrays.Count > 0) o.Add("using System.Runtime.CompilerServices;");
-        o.Add("using System.Runtime.InteropServices;\n");
+        o.Add("using System.Runtime.InteropServices;");
+        if (borrowsAType) foreach (var u in extraUsings) o.Add($"using {u};");
+        o.Add("");
         o.Add($"namespace {ns};\n");
         o.Add(s.Doc is not null
             ? XmlDoc("", s.Doc).TrimEnd()
@@ -638,6 +624,29 @@ public static class CSharpBackend
     }
 
     /// <summary>
+    /// Whether a field is spelled with a type some other domain declares. The domain
+    /// composing the type emits nothing for it -- the one that owns it already does -- so
+    /// the projection reaches it by name, and only a struct that actually names one needs
+    /// the namespaces the domain composes from.
+    /// </summary>
+    static bool NamesForeignDeclaration(ApiModel model, ApiField f)
+    {
+        var m = Regex.Match(f.Type.Trim(), @"^(.+?)\s*\[\d+\]$");
+        var t = StripQualifiers(m.Success ? m.Groups[1].Value : f.Type).Trim();
+        return model.Enums.Any(e => e.Name == t && e.External)
+            || model.Structs.Any(v => v.Name == t && v.External);
+    }
+
+    /// <summary>
+    /// Whether a struct is projected as a managed mirror occupying the same bytes.
+    /// <c>[node:]</c> answers this as much as <c>[value]</c> does: the node's backing state
+    /// is one of these structs, and a node whose state were the raw binding type would be
+    /// asserting a layout instead of naming one.
+    /// </summary>
+    public static bool IsValue(ApiStruct s) =>
+        !s.External && !s.IsVtable && (s.Has("value") || s.Has("node"));
+
+    /// <summary>
     /// The fixed-size array a <c>[value]</c> field describes, or null when it describes a
     /// single element. A managed struct cannot spell <c>T[8]</c> inline for a <c>T</c> that
     /// is itself a struct, so the arity moves into an <c>[InlineArray]</c> wrapper that
@@ -669,8 +678,8 @@ public static class CSharpBackend
     static string ValueTypeName(ApiModel model, string cType, Convention convention) =>
         NamedMatrixTypes.TryGetValue(cType.Trim(), out var mat) ? mat
         : NamedHandleTypes.TryGetValue(cType.Trim(), out var handle) ? handle
-        : model.Structs.Any(v => v.Name == cType.Trim() && v.Has("value") && !v.External)
-        || model.Enums.Any(e => e.Name == cType.Trim() && !e.External)
+        : model.Structs.Any(v => v.Name == cType.Trim() && IsValue(v))
+        || model.Enums.Any(e => e.Name == cType.Trim())
             ? Idioms.TypeName(cType.Trim(), convention)
             : CsType(model, cType);
 

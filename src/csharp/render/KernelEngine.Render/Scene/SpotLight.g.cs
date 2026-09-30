@@ -2,41 +2,34 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>Spot light node — emits a cone of light from this entity's world position.</summary>
-[GeneratedNodeComponent(typeof(ke_spot_light_component), "spot_light")]
+[GeneratedNodeComponent(typeof(SpotLightComponent), "spot_light")]
 public partial class SpotLight : Node3D
 {
     public SpotLight()
     {
-        _generatedState0.direction = new ke_vec3 { x = 0f, y = -1f, z = 0f };
-        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState0.intensity = 1f;
-        _generatedState0.range = 20f;
-        _generatedState0.inner_angle = 25f;
-        _generatedState0.outer_angle = 35f;
+        _generatedState0 = SpotLightComponent.Default;
     }
 
-    [NativeField("direction", Component = typeof(ke_spot_light_component))]
+    [NativeField("Direction", Component = typeof(SpotLightComponent))]
     public partial Vector3 Direction { get; set; }
 
     /// <summary>Linear RGB.</summary>
-    [NativeField("color", Component = typeof(ke_spot_light_component))]
+    [NativeField("Color", Component = typeof(SpotLightComponent))]
     public partial Vector3 Color { get; set; }
 
-    [NativeField("intensity", Component = typeof(ke_spot_light_component))]
+    [NativeField("Intensity", Component = typeof(SpotLightComponent))]
     public partial float Intensity { get; set; }
 
-    [NativeField("range", Component = typeof(ke_spot_light_component))]
+    [NativeField("Range", Component = typeof(SpotLightComponent))]
     public partial float Range { get; set; }
 
-    [NativeField("inner_angle", Component = typeof(ke_spot_light_component))]
+    [NativeField("InnerAngle", Component = typeof(SpotLightComponent))]
     public partial float InnerAngle { get; set; }
 
-    [NativeField("outer_angle", Component = typeof(ke_spot_light_component))]
+    [NativeField("OuterAngle", Component = typeof(SpotLightComponent))]
     public partial float OuterAngle { get; set; }
 }

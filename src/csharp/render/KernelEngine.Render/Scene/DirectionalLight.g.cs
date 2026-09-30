@@ -2,33 +2,28 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>Directional light node. Init properties feed the per-frame light state the renderer consumes.</summary>
-[GeneratedNodeComponent(typeof(ke_directional_light_component), "directional_light")]
+[GeneratedNodeComponent(typeof(DirectionalLightComponent), "directional_light")]
 public partial class DirectionalLight : Node3D
 {
     public DirectionalLight()
     {
-        _generatedState0.direction = new ke_vec3 { x = 0.2f, y = 1f, z = 0.5f };
-        _generatedState0.color = new ke_vec3 { x = 1f, y = 1f, z = 1f };
-        _generatedState0.intensity = 1f;
-        _generatedState0.ambient = new ke_vec3 { x = 0.2f, y = 0.2f, z = 0.2f };
+        _generatedState0 = DirectionalLightComponent.Default;
     }
 
-    [NativeField("direction", Component = typeof(ke_directional_light_component))]
+    [NativeField("Direction", Component = typeof(DirectionalLightComponent))]
     public partial Vector3 Direction { get; set; }
 
     /// <summary>Linear RGB.</summary>
-    [NativeField("color", Component = typeof(ke_directional_light_component))]
+    [NativeField("Color", Component = typeof(DirectionalLightComponent))]
     public partial Vector3 Color { get; set; }
 
-    [NativeField("intensity", Component = typeof(ke_directional_light_component))]
+    [NativeField("Intensity", Component = typeof(DirectionalLightComponent))]
     public partial float Intensity { get; set; }
 
-    [NativeField("ambient", Component = typeof(ke_directional_light_component))]
+    [NativeField("Ambient", Component = typeof(DirectionalLightComponent))]
     public partial Vector3 Ambient { get; set; }
 }

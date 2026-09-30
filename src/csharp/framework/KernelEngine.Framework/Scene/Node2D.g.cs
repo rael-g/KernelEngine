@@ -2,31 +2,30 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
 
 /// <summary>An entity's authored 2D pose, read and written as one unit.</summary>
-[GeneratedNodeComponent(typeof(ke_transform2d_component), "transform2d")]
+[GeneratedNodeComponent(typeof(Transform2dComponent), "transform2d")]
 public partial class Node2D : Node
 {
     public Node2D()
     {
-        _generatedState0.scale = new ke_vec2 { x = 1f, y = 1f };
+        _generatedState0 = Transform2dComponent.Default;
     }
 
-    [NativeField("position", Component = typeof(ke_transform2d_component))]
+    [NativeField("Position", Component = typeof(Transform2dComponent))]
     public partial Vector2 Position { get; set; }
 
     /// <summary>Radians, CCW positive; a scene authors degrees.</summary>
-    [NativeField("rotation", Component = typeof(ke_transform2d_component))]
+    [NativeField("Rotation", Component = typeof(Transform2dComponent))]
     public partial float Rotation { get; set; }
 
-    [NativeField("scale", Component = typeof(ke_transform2d_component))]
+    [NativeField("Scale", Component = typeof(Transform2dComponent))]
     public partial Vector2 Scale { get; set; }
 
     /// <summary>Where the plane sits along Z.</summary>
-    [NativeField("depth", Component = typeof(ke_transform2d_component))]
+    [NativeField("Depth", Component = typeof(Transform2dComponent))]
     public partial float Depth { get; set; }
 }

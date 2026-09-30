@@ -23,6 +23,9 @@ extern "C"
 #define KE_UI_FONT_FAILED ((ke_ui_font_handle){ UINT32_MAX })
 #endif
 
+    /// [value]
+    /// One shaped glyph: the screen-space rectangle it draws to and the atlas
+    /// rectangle it samples from.
     typedef struct ke_label_glyph_quad
     {
         float dst_x, dst_y, dst_w, dst_h;

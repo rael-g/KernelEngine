@@ -2,54 +2,47 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>A textured quad in the plane, resolved into geometry and a material by the "render.sprite2d.resolve" system.</summary>
-[GeneratedNodeComponent(typeof(ke_sprite2d_component), "sprite2d")]
+[GeneratedNodeComponent(typeof(Sprite2dComponent), "sprite2d")]
 public partial class Sprite2D : Node2D
 {
     public Sprite2D()
     {
-        _generatedState0.region = new ke_vec4 { x = 0f, y = 0f, z = 1f, w = 1f };
-        _generatedState0.size = new ke_vec2 { x = 1f, y = 1f };
-        _generatedState0.pivot = new ke_vec2 { x = 0.5f, y = 0.5f };
-        _generatedState0.color = new ke_vec4 { x = 1f, y = 1f, z = 1f, w = 1f };
-        _generatedState0.alpha_mode = 0;
-        _generatedState0.alpha_cutoff = 0.5f;
+        _generatedState0 = Sprite2dComponent.Default;
     }
 
     /// <summary>Image to sample. Empty draws the plain tinted quad.</summary>
-    [NativeField("texture", Component = typeof(ke_sprite2d_component))]
+    [NativeField("Texture", Component = typeof(Sprite2dComponent))]
     public partial string Texture { get; set; }
 
-    [NativeField("region", Component = typeof(ke_sprite2d_component))]
+    [NativeField("Region", Component = typeof(Sprite2dComponent))]
     public partial Vector4 Region { get; set; }
 
-    [NativeField("size", Component = typeof(ke_sprite2d_component))]
+    [NativeField("Size", Component = typeof(Sprite2dComponent))]
     public partial Vector2 Size { get; set; }
 
-    [NativeField("pivot", Component = typeof(ke_sprite2d_component))]
+    [NativeField("Pivot", Component = typeof(Sprite2dComponent))]
     public partial Vector2 Pivot { get; set; }
 
-    [NativeField("flip_h", Component = typeof(ke_sprite2d_component))]
+    [NativeField("FlipH", Component = typeof(Sprite2dComponent))]
     public partial bool FlipH { get; set; }
 
-    [NativeField("flip_v", Component = typeof(ke_sprite2d_component))]
+    [NativeField("FlipV", Component = typeof(Sprite2dComponent))]
     public partial bool FlipV { get; set; }
 
-    [NativeField("color", Component = typeof(ke_sprite2d_component))]
+    [NativeField("Color", Component = typeof(Sprite2dComponent))]
     public partial Vector4 Color { get; set; }
 
     /// <summary>ke_alpha_mode.</summary>
-    [NativeField("alpha_mode", Component = typeof(ke_sprite2d_component))]
+    [NativeField("AlphaMode", Component = typeof(Sprite2dComponent))]
     public partial uint AlphaMode { get; set; }
 
-    [NativeField("alpha_cutoff", Component = typeof(ke_sprite2d_component))]
+    [NativeField("AlphaCutoff", Component = typeof(Sprite2dComponent))]
     public partial float AlphaCutoff { get; set; }
 
-    [NativeField("attached", Component = typeof(ke_sprite2d_component))]
+    [NativeField("Attached", Component = typeof(Sprite2dComponent))]
     public partial bool Attached { get; set; }
 }

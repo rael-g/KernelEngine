@@ -2,39 +2,33 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.</summary>
-[GeneratedNodeComponent(typeof(ke_camera_component), "camera")]
+[GeneratedNodeComponent(typeof(CameraComponent), "camera")]
 public partial class Camera : Node3D
 {
     public Camera()
     {
-        _generatedState0.fov = 60f;
-        _generatedState0.near_plane = 0.1f;
-        _generatedState0.far_plane = 1000f;
-        _generatedState0.orthographic_size = 5f;
-        _generatedState0.cull_mask = 4294967295;
+        _generatedState0 = CameraComponent.Default;
     }
 
-    [NativeField("fov", Component = typeof(ke_camera_component))]
+    [NativeField("Fov", Component = typeof(CameraComponent))]
     public partial float Fov { get; set; }
 
-    [NativeField("near_plane", Component = typeof(ke_camera_component))]
+    [NativeField("NearPlane", Component = typeof(CameraComponent))]
     public partial float NearPlane { get; set; }
 
-    [NativeField("far_plane", Component = typeof(ke_camera_component))]
+    [NativeField("FarPlane", Component = typeof(CameraComponent))]
     public partial float FarPlane { get; set; }
 
-    [NativeField("orthographic_size", Component = typeof(ke_camera_component))]
+    [NativeField("OrthographicSize", Component = typeof(CameraComponent))]
     public partial float OrthographicSize { get; set; }
 
-    [NativeField("orthographic", Component = typeof(ke_camera_component))]
+    [NativeField("Orthographic", Component = typeof(CameraComponent))]
     public partial bool Orthographic { get; set; }
 
-    [NativeField("cull_mask", Component = typeof(ke_camera_component))]
+    [NativeField("CullMask", Component = typeof(CameraComponent))]
     public partial uint CullMask { get; set; }
 }

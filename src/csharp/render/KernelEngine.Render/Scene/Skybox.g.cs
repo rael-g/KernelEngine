@@ -2,19 +2,17 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.</summary>
-[GeneratedNodeComponent(typeof(ke_skybox_component), "skybox")]
+[GeneratedNodeComponent(typeof(SkyboxComponent), "skybox")]
 public partial class Skybox : Node3D
 {
     public Skybox()
     {
     }
 
-    [NativeField("cubemap", Component = typeof(ke_skybox_component))]
+    [NativeField("Cubemap", Component = typeof(SkyboxComponent))]
     public partial KernelEngine.Render.TextureHandle CubemapHandle { get; set; }
 }

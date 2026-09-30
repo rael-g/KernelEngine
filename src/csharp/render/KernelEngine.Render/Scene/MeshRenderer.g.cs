@@ -2,51 +2,43 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using System.Numerics;
-using KernelEngine.Common.Native;
-using KernelEngine.Render.Native;
 
 namespace KernelEngine.Framework;
 
 /// <summary>Renders a mesh with a material. `mesh`/`material` double as output: the native "render.mesh.resolve" system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig) fills them whenever `primitive` names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles just writes them and leaves `primitive` empty — the resolve system only acts where a handle is still invalid, so the two paths never conflict.</summary>
-[GeneratedNodeComponent(typeof(ke_mesh_component), "mesh")]
+[GeneratedNodeComponent(typeof(MeshComponent), "mesh")]
 public partial class MeshRenderer : Node3D
 {
     public MeshRenderer()
     {
-        _generatedState0.base_color = new ke_vec4 { x = 1f, y = 1f, z = 1f, w = 1f };
-        _generatedState0.roughness = 1f;
-        _generatedState0.alpha_mode = 0;
-        _generatedState0.alpha_cutoff = 0.5f;
-        _generatedState0.ior = 1.5f;
-        _generatedState0.distortion_strength = 0.05f;
-        _generatedState0.layers = 1;
+        _generatedState0 = MeshComponent.Default;
     }
 
-    [NativeField("mesh", Component = typeof(ke_mesh_component))]
+    [NativeField("Mesh", Component = typeof(MeshComponent))]
     public partial KernelEngine.Render.MeshHandle MeshHandle { get; set; }
 
-    [NativeField("material", Component = typeof(ke_mesh_component))]
+    [NativeField("Material", Component = typeof(MeshComponent))]
     public partial KernelEngine.Render.MaterialHandle MaterialHandle { get; set; }
 
-    [NativeField("base_color", Component = typeof(ke_mesh_component))]
+    [NativeField("BaseColor", Component = typeof(MeshComponent))]
     public partial Vector4 Color { get; set; }
 
-    [NativeField("roughness", Component = typeof(ke_mesh_component))]
+    [NativeField("Roughness", Component = typeof(MeshComponent))]
     public partial float Roughness { get; set; }
 
     /// <summary>ke_alpha_mode.</summary>
-    [NativeField("alpha_mode", Component = typeof(ke_mesh_component))]
+    [NativeField("AlphaMode", Component = typeof(MeshComponent))]
     public partial uint AlphaMode { get; set; }
 
-    [NativeField("alpha_cutoff", Component = typeof(ke_mesh_component))]
+    [NativeField("AlphaCutoff", Component = typeof(MeshComponent))]
     public partial float AlphaCutoff { get; set; }
 
-    [NativeField("ior", Component = typeof(ke_mesh_component))]
+    [NativeField("Ior", Component = typeof(MeshComponent))]
     public partial float Ior { get; set; }
 
-    [NativeField("distortion_strength", Component = typeof(ke_mesh_component))]
+    [NativeField("DistortionStrength", Component = typeof(MeshComponent))]
     public partial float DistortionStrength { get; set; }
 
-    [NativeField("layers", Component = typeof(ke_mesh_component))]
+    [NativeField("Layers", Component = typeof(MeshComponent))]
     public partial uint Layers { get; set; }
 }

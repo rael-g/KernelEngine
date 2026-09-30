@@ -204,8 +204,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
             var fieldName = isNative ? declaredFieldName : p.Name;
             var fieldSymbol = backingTypeSymbol?.GetMembers(fieldName).OfType<IFieldSymbol>().FirstOrDefault();
-            var isFixedBuffer = fieldSymbol is not null && fieldSymbol.Type.Name.EndsWith("_e__FixedBuffer");
-
             if (p.Type.SpecialType == SpecialType.System_String && !isNative)
             {
                 needsUtf8Helpers = true;
@@ -229,7 +227,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 continue;
             }
 
-            if (p.Type.SpecialType == SpecialType.System_String && isFixedBuffer)
+            if (p.Type.SpecialType == SpecialType.System_String && fieldSymbol is not null
+                && fieldSymbol.Type.SpecialType != SpecialType.System_String)
             {
                 needsUtf8Helpers = true;
                 sb.AppendLine($"    public partial string {p.Name}");
@@ -252,10 +251,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var arity = isNative && isFixedBuffer ? VectorArity(p.Type) : null;
-            var coercion = arity is null && fieldSymbol is not null ? CoercionFor(p.Type, fieldSymbol.Type) : null;
+            var coercion = fieldSymbol is not null ? CoercionFor(p.Type, fieldSymbol.Type) : null;
 
-            if (arity is null && fieldSymbol is not null && coercion is null
+            if (fieldSymbol is not null && coercion is null
                 && !SymbolEqualityComparer.Default.Equals(p.Type, fieldSymbol.Type))
             {
                 spc.ReportDiagnostic(Diagnostic.Create(NoCoercionRule, p.Locations.FirstOrDefault(),
@@ -268,21 +266,16 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine("        get");
             sb.AppendLine("        {");
             sb.AppendLine($"            ref var s = ref {slot.Current}(out _);");
-            sb.AppendLine(arity is int rn
-                ? $"            return new(" + string.Join(", ", Enumerable.Range(0, rn).Select(i => $"s.{fieldName}[{i}]")) + ");"
-                : coercion is not null
-                    ? $"            return {coercion.Value.read("s." + fieldName)};"
-                    : $"            return s.{fieldName};");
+            sb.AppendLine(coercion is not null
+                ? $"            return {coercion.Value.read("s." + fieldName)};"
+                : $"            return s.{fieldName};");
             sb.AppendLine("        }");
             if (writes)
             {
                 sb.AppendLine("        set");
                 sb.AppendLine("        {");
                 sb.AppendLine($"            ref var s = ref {slot.Current}(out var live);");
-                if (arity is int wn)
-                    foreach (var i in Enumerable.Range(0, wn))
-                        sb.AppendLine($"            s.{fieldName}[{i}] = value.{VectorLanes[i]};");
-                else if (coercion is not null)
+                if (coercion is not null)
                     sb.AppendLine($"            s.{fieldName} = {coercion.Value.write("value")};");
                 else
                     sb.AppendLine($"            s.{fieldName} = value;");
@@ -527,51 +520,19 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         return false;
     }
 
-    static readonly string[] VectorLanes = ["X", "Y", "Z", "W"];
-
-    static int? VectorArity(ITypeSymbol type)
-    {
-        if (type.ContainingNamespace?.ToDisplayString() != "System.Numerics") return null;
-        return type.Name switch { "Vector2" => 2, "Vector3" => 3, "Vector4" => 4, _ => null };
-    }
-
-    static readonly Dictionary<string, string> NativeVectorNames = new()
-    {
-        ["Vector2"] = "ke_vec2", ["Vector3"] = "ke_vec3", ["Vector4"] = "ke_vec4", ["Quaternion"] = "ke_quat",
-    };
-
-    static readonly Dictionary<string, string> NativeHandleNames = new()
-    {
-        ["MeshHandle"] = "ke_mesh_handle", ["MaterialHandle"] = "ke_material_handle",
-        ["TextureHandle"] = "ke_texture_handle", ["FontHandle"] = "ke_ui_font_handle",
-    };
-
+    /// <summary>
+    /// How a property's type is read out of and written into the field backing it, or null
+    /// when the two are the same type and no conversion is involved. What is left here is
+    /// only a difference in how a value is <em>spelled</em> -- a truth the ABI carries as a
+    /// byte, an enum a binding widened. A difference in <em>layout</em> has no answer at this
+    /// level: a reinterpreting cast checks size and not order, so it would pass a struct
+    /// whose fields moved. The backing state is the component's own projection, generated
+    /// from the same declaration as the property, so there is no layout left to bridge.
+    /// </summary>
     static (Func<string, string> read, Func<string, string> write)? CoercionFor(ITypeSymbol propertyType, ITypeSymbol fieldType)
     {
         if (propertyType.SpecialType == SpecialType.System_Boolean && fieldType.SpecialType == SpecialType.System_Byte)
             return (expr => $"{expr} != 0", expr => $"(byte)({expr} ? 1 : 0)");
-        if (propertyType.TypeKind == TypeKind.Enum && fieldType.TypeKind == TypeKind.Enum)
-        {
-            var pn = propertyType.ToDisplayString();
-            var fn = fieldType.ToDisplayString();
-            return (expr => $"({pn}){expr}", expr => $"({fn}){expr}");
-        }
-        if (NativeHandleNames.TryGetValue(propertyType.Name, out var nativeHandle) && fieldType.Name == nativeHandle)
-        {
-            var pn = propertyType.ToDisplayString();
-            var fn = fieldType.ToDisplayString();
-            return (expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{fn}, {pn}>({expr})",
-                    expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{pn}, {fn}>({expr})");
-        }
-        if (propertyType.ContainingNamespace?.ToDisplayString() == "System.Numerics"
-            && NativeVectorNames.TryGetValue(propertyType.Name, out var nativeName)
-            && fieldType.Name == nativeName)
-        {
-            var propName = propertyType.ToDisplayString();
-            var fieldName = fieldType.ToDisplayString();
-            return (expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{fieldName}, {propName}>({expr})",
-                    expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{propName}, {fieldName}>({expr})");
-        }
         return null;
     }
 
