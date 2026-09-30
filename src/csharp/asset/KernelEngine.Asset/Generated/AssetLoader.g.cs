@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Asset.Native;
+using KernelEngine.Scheduler;
 
 namespace KernelEngine.Asset;
 
@@ -95,6 +96,56 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
     internal void FreeModel(ModelData* data)
     {
         Handle->free_model(Handle, (ke_model_data*)data);
+    }
+
+    /// <summary>Asynchronously loads a 3D model, calling on a scheduler thread once the load has finished or failed.</summary>
+    /// <param name="scheduler">Non-null task scheduler.</param>
+    /// <param name="path">File path (copied internally; caller may free after return).</param>
+    /// <returns>The loaded model; NULL when the load failed.</returns>
+    public Task<Model> LoadModelAsync(INativeScheduler scheduler, string path)
+    {
+        var source = new TaskCompletionSource<Model>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = GCHandle.Alloc(new LoadModelAsyncCompletion { Owner = this, Source = source });
+        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        fixed (byte* pathPtr = pathBytes)
+        {
+            try
+            {
+                Handle->load_model_async(Handle, scheduler.Native, (sbyte*)pathPtr, (delegate* unmanaged[Cdecl]<ke_error*, ke_model_data*, void*, void>)&LoadModelAsyncOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(completion));
+            }
+            catch
+            {
+                completion.Free();
+                throw;
+            }
+        }
+        return source.Task;
+    }
+
+    /// <summary>What one operation in flight answers when it finishes.</summary>
+    private sealed class LoadModelAsyncCompletion
+    {
+        public required AssetLoader Owner;
+        public required TaskCompletionSource<Model> Source;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void LoadModelAsyncOnCompleteTrampoline(ke_error* arg0, ke_model_data* arg1, void* ctx)
+    {
+        var pending = GCHandle.FromIntPtr((nint)ctx);
+        if (pending.Target is not LoadModelAsyncCompletion state) return;
+        pending.Free();
+        try
+        {
+            if (arg0 != null || arg1 == null)
+                state.Source.TrySetException(KernelError.FromNative(arg0, "load_model_async"));
+            else
+                state.Source.TrySetResult(new Model(state.Owner, (ModelData*)arg1));
+        }
+        catch (Exception ex)
+        {
+            state.Source.TrySetException(ex);
+        }
     }
 
     /// <summary>Releases the native assetloader.</summary>

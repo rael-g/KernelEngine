@@ -2,6 +2,7 @@
 // Derived from ke_api.json. Do not edit; edit the C header instead.
 
 using KernelEngine.Common;
+using KernelEngine.Scheduler;
 
 namespace KernelEngine.Asset;
 
@@ -12,4 +13,9 @@ public interface IAssetLoader : IDisposable
     /// <param name="path">Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     Model LoadModel(string path);
+    /// <summary>Asynchronously loads a 3D model, calling on a scheduler thread once the load has finished or failed.</summary>
+    /// <param name="scheduler">Non-null task scheduler.</param>
+    /// <param name="path">File path (copied internally; caller may free after return).</param>
+    /// <returns>The loaded model; NULL when the load failed.</returns>
+    Task<Model> LoadModelAsync(INativeScheduler scheduler, string path);
 }

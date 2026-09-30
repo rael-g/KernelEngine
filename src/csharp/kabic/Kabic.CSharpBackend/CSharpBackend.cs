@@ -1155,11 +1155,16 @@ public static class CSharpBackend
         var domainIface = vtable.Has("interface") ? "I" + typeName : null;
         var decls = domainIface is null ? null : new List<MemberDecl>();
 
+        var contractNamesForeignProjections = vtable.Slots
+            .Any(s => s.Params.Any(p => p.Has("provider")));
+
         var contract = domainIface is null ? null : new List<string> { Header };
         if (contract is not null)
         {
             if (HasVectorParams(vtable)) contract.Add("using System.Numerics;");
             contract.Add("using KernelEngine.Common;");
+            if (contractNamesForeignProjections)
+                foreach (var u in extraUsings) contract.Add($"using {u};");
             contract.Add("");
             contract.Add($"namespace {ns};");
             contract.Add("");
@@ -1323,7 +1328,7 @@ public static class CSharpBackend
         foreach (var cs in slots)
         {
             if (!Projected(cs)) continue;
-            if (cs.PublicParams.Any(p => !p.Has("closure")
+            if (cs.PublicParams.Any(p => !p.Has("closure") && !p.Has("completion")
                     && classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
             {
                 RenderCallbackMethod(o, decls, vtable, cs, classified, typeName, convention);
@@ -1546,7 +1551,7 @@ public static class CSharpBackend
         var slot = cs.Slot;
         var scope = cs.PublicParams;
         var pairs = new List<CallbackPair>();
-        foreach (var fn in scope.Where(p => p.Has("closure")))
+        foreach (var fn in scope.Where(p => p.Has("closure") && !p.Has("completion")))
         {
             var ctxName = fn.TagValue("closure")
                 ?? throw new InvalidOperationException(
@@ -1624,6 +1629,121 @@ public static class CSharpBackend
         slot.Name.EndsWith("_" + fn.Name, StringComparison.Ordinal) || slot.Name == fn.Name
             ? $"{Idioms.Pascal(slot.Name)}Trampoline"
             : $"{Idioms.Pascal(slot.Name)}{Idioms.Pascal(fn.Name!)}Trampoline";
+
+    /// <summary>
+    /// Whether a lane receives a failure rather than reporting one. The engine carries every
+    /// failure as a <c>ke_error</c>, and the direction is the pointer depth: a lane written
+    /// through (<c>ke_error**</c>) is where a callback says it failed, while one handed the
+    /// error itself (<c>const ke_error*</c>) is where a callback is told that something else
+    /// did. Nothing but the depth distinguishes them, so nothing else decides.
+    /// </summary>
+    static bool ReceivesFailure(string type) =>
+        type.Replace("const ", "").Replace(" ", "") == "ke_error*";
+
+    /// <summary>
+    /// A callback the provider calls exactly once, after the call that took it has already
+    /// returned, to say how the operation that call started ended. It is the operation's
+    /// answer rather than a handler the caller supplies, which is why the caller never
+    /// passes it: the managed spelling of an answer that arrives later is a <c>Task</c>,
+    /// and a caller handed one has nothing left to register.
+    /// </summary>
+    internal sealed record Completion(ApiParam Fn, ApiParam Ctx, ApiCallback Callback,
+        int CtxLane, int ErrorLane, ApiParam? Result, int ResultLane,
+        string? ResultType, OwnedProjection? Owned, string StateType, string Trampoline)
+    {
+        /// <summary>The source the call keeps and the trampoline answers.</summary>
+        public string SourceType => ResultType is null
+            ? "TaskCompletionSource" : $"TaskCompletionSource<{ResultType}>";
+
+        /// <summary>What the call hands back in place of the answer it does not have yet.</summary>
+        public string TaskType => ResultType is null ? "Task" : $"Task<{ResultType}>";
+
+        /// <summary>Whether the trampoline has to reach the provider to build its answer.</summary>
+        public bool NeedsOwner => Owned is not null;
+    }
+
+    /// <summary>
+    /// The one completion a slot declares, read off the parameter tagged
+    /// <c>[completion:&lt;context&gt;]</c>.
+    /// </summary>
+    static Completion? CompletionOf(ApiModel model, ClassifiedSlot cs, Convention convention,
+        OwnedProjection? owned)
+    {
+        var slot = cs.Slot;
+        var fn = slot.Params.FirstOrDefault(p => p.Has("completion"));
+        if (fn is null) return null;
+
+        var ctxName = fn.TagValue("completion")
+            ?? throw new InvalidOperationException(
+                $"{slot.Name}.{fn.Name}: [completion] must name the context parameter it travels"
+                + " with, as [completion:<name>]");
+        var ctx = slot.Params.FirstOrDefault(p => p.Name == ctxName)
+            ?? throw new InvalidOperationException(
+                $"{slot.Name}.{fn.Name}: [completion:{ctxName}] names no parameter of this slot");
+
+        var callback = model.CallbackOf(fn.Type)
+            ?? throw new InvalidOperationException(
+                $"{slot.Name}.{fn.Name}: [completion] needs a function-pointer typedef, but"
+                + $" {fn.Type.Trim()} is not one");
+
+        var ctxLane = callback.Lanes.Select((l, i) => (l, i)).Where(x => x.l.Has("context"))
+            .Select(x => (int?)x.i).FirstOrDefault()
+            ?? throw new InvalidOperationException(
+                $"{slot.Name}.{fn.Name}: [completion:{ctxName}] hands the context to {callback.Name},"
+                + " which declares no lane to receive it — the typedef has to mark it [context]");
+
+        var errorLane = callback.Lanes.Select((l, i) => (l, i))
+            .Where(x => ReceivesFailure(x.l.Type)).Select(x => (int?)x.i).FirstOrDefault()
+            ?? throw new InvalidOperationException(
+                $"{slot.Name}.{fn.Name}: a completion is how the operation says it ended, and it can"
+                + $" only say it failed through a lane handed the error itself; {callback.Name}"
+                + " declares no const ke_error* lane");
+
+        if (callback.Returns.Trim() != "void")
+            throw new InvalidOperationException(
+                $"{slot.Name}.{fn.Name}: {callback.Name} returns {callback.Returns.Trim()}, and a"
+                + " completion runs after the call it answers has returned -- there is nobody left"
+                + " to read it");
+
+        if (slot.Returns.Trim() != "void" && !CTypes.IsPointer(slot.Returns))
+            throw new InvalidOperationException(
+                $"{slot.Name}: the Task the completion projects to is the one thing a caller waits"
+                + $" on, so the slot's own {slot.Returns.Trim()} is dropped -- and a value is not"
+                + " something this form may drop. Only a handle to the work is.");
+
+        var results = Enumerable.Range(0, callback.Lanes.Count)
+            .Where(i => i != ctxLane && i != errorLane).ToList();
+        if (results.Count > 1)
+            throw new InvalidOperationException(
+                $"{slot.Name}.{fn.Name}: {callback.Name} carries {results.Count} values besides the"
+                + " failure, and a Task answers with one");
+
+        var resultLane = results.Count == 0 ? -1 : results[0];
+        var result = resultLane < 0 ? null : callback.Lanes[resultLane];
+        string? resultType = null;
+        OwnedProjection? resultOwned = null;
+        if (result is not null)
+        {
+            if (owned is not null && owned.Answers(result.Type))
+            {
+                resultOwned = owned;
+                resultType = owned.TypeName;
+            }
+            else
+            {
+                resultType = ManagedLane(model, result, "");
+                if (resultType.Contains('*', StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        $"{slot.Name}.{fn.Name}: {callback.Name} answers with {result.Type.Trim()}, and"
+                        + " a Task cannot answer with a pointer -- whoever owns that memory has to say"
+                        + " so with [releases:<name>] so there is an object to hand over instead");
+            }
+        }
+
+        return new Completion(fn, ctx, callback, ctxLane, errorLane, result, resultLane,
+            resultType, resultOwned, $"{Idioms.Pascal(slot.Name)}Completion",
+            TrampolineName(slot, fn));
+    }
 
     /// <summary>The field that keeps a retained closure reachable for as long as the engine holds it.</summary>
     /// <summary>
@@ -1778,9 +1898,9 @@ public static class CSharpBackend
     /// has no common type between a null literal and a function pointer, so the typed
     /// branch has to say what it is.
     /// </summary>
-    static string NativeFnPtr(ApiModel model, CallbackPair pair) =>
-        $"delegate* unmanaged[Cdecl]<{string.Join(", ", pair.Callback.Lanes.Select(l => BlittableLane(model, l.Type)))}"
-        + $", {BlittableLane(model, pair.Callback.Returns)}>";
+    static string NativeFnPtr(ApiModel model, ApiCallback callback) =>
+        $"delegate* unmanaged[Cdecl]<{string.Join(", ", callback.Lanes.Select(l => BlittableLane(model, l.Type)))}"
+        + $", {BlittableLane(model, callback.Returns)}>";
 
     /// <summary>
     /// The delegate a projected closure asks the caller for. Declared beside the class
@@ -1890,6 +2010,73 @@ public static class CSharpBackend
     }
 
     /// <summary>
+    /// What one pending operation has to keep reachable until its completion fires: the
+    /// source that answers, and -- where the answer is memory the provider owns -- the
+    /// provider that will be asked to take it back.
+    /// </summary>
+    static void RenderCompletionState(List<string> o, Completion completion, string owner)
+    {
+        o.Add("    /// <summary>What one operation in flight answers when it finishes.</summary>");
+        o.Add($"    private sealed class {completion.StateType}");
+        o.Add("    {");
+        if (completion.NeedsOwner) o.Add($"        public required {owner} Owner;");
+        o.Add($"        public required {completion.SourceType} Source;");
+        o.Add("    }");
+        o.Add("");
+    }
+
+    /// <summary>
+    /// The unmanaged entry point the provider calls when the operation finishes. It owns
+    /// the handle the call allocated -- the completion fires exactly once, so freeing it
+    /// here is what stops a pending operation from leaking one root per call. Nothing is
+    /// allowed to leave it: an exception crossing a native frame tears the process down,
+    /// and one that stayed behind would leave the Task pending forever, so every path
+    /// ends by answering the source.
+    /// </summary>
+    static void RenderCompletionTrampoline(ApiModel model, List<string> o, Completion completion,
+        ApiSlot slot)
+    {
+        var lanes = completion.Callback.Lanes;
+        var ps = lanes.Select((l, i) => i == completion.CtxLane
+            ? "void* ctx"
+            : $"{BlittableLane(model, l.Type)} arg{i}");
+        var err = $"arg{completion.ErrorLane}";
+
+        string Answer()
+        {
+            if (completion.Result is null) return "state.Source.TrySetResult();";
+            var value = completion.Owned is not null
+                ? $"new {completion.Owned.TypeName}(state.Owner, ({completion.Owned.View})arg{completion.ResultLane})"
+                : $"arg{completion.ResultLane}";
+            return $"state.Source.TrySetResult({value});";
+        }
+
+        var failed = completion.Owned is not null
+            ? $"{err} != null || arg{completion.ResultLane} == null"
+            : $"{err} != null";
+
+        o.Add("    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]");
+        o.Add($"    private static void {completion.Trampoline}({string.Join(", ", ps)})");
+        o.Add("    {");
+        o.Add("        var pending = GCHandle.FromIntPtr((nint)ctx);");
+        o.Add($"        if (pending.Target is not {completion.StateType} state) return;");
+        o.Add("        pending.Free();");
+        o.Add("        try");
+        o.Add("        {");
+        o.Add($"            if ({failed})");
+        o.Add($"                state.Source.TrySetException(KernelError.FromNative({err}, \"{slot.Name}\"));");
+        o.Add("            else");
+        o.Add($"                {Answer()}");
+        o.Add("        }");
+        o.Add("        catch (Exception ex)");
+        o.Add("        {");
+        o.Add("            state.Source.TrySetException(ex);");
+        o.Add("        }");
+        o.Add("    }");
+        o.Add("");
+    }
+
+    /// <summary>
     /// One public member as the provider class declares it: the documentation block and the
     /// signature, with no <c>public</c> keyword and no body. The domain interface is rendered
     /// from these, so a signature the class emits and the signature the interface promises are
@@ -1933,6 +2120,7 @@ public static class CSharpBackend
         var lanes = VectorLanes(slot.Params);
         var callbacks = CallbackPairs(model, cs);
         var groups = ClosureGroups(model, slot, callbacks, owner, ownerDrains);
+        var completion = CompletionOf(model, cs, convention, owned);
 
         if (callbacks.Count > 0 && cs.Shape is not SlotShape.Fallible)
             throw new InvalidOperationException(
@@ -1995,6 +2183,45 @@ public static class CSharpBackend
             return parts.Select(x => x.Param.Has("default")
                 ? $"{x.Text} = {DefaultLiteral(model, cs, x.Param, slot)}"
                 : x.Text);
+        }
+
+        if (completion is not null)
+        {
+            if (cs.Shape is not SlotShape.Plain)
+                throw new InvalidOperationException(
+                    $"{slot.Name}: the completion is where this operation reports how it ended, so the"
+                    + $" call that starts it has nothing left to report -- got {cs.Shape}");
+
+            var ins = cs.PublicParams.Where(p => p != completion.Fn && p != completion.Ctx).ToList();
+            var inits = string.Join(", ", new[] { completion.NeedsOwner ? "Owner = this" : null,
+                "Source = source" }.Where(x => x is not null));
+
+            Declare(o, decls, XmlDoc("    ", slot.Doc, DocParams(ins), completion.Result?.Doc).TrimEnd(),
+                $"{completion.TaskType} {name}({Sig(ins)})");
+            o.Add("    {");
+            o.Add($"        var source = new {completion.SourceType}"
+                + "(TaskCreationOptions.RunContinuationsAsynchronously);");
+            o.Add($"        var completion = GCHandle.Alloc(new {completion.StateType} {{ {inits} }});");
+            var (cPro, cDepth) = Utf8Prologue(ins, new string(' ', 8));
+            o.AddRange(cPro);
+            var cInd = new string(' ', 8 + cDepth * 4);
+            o.Add($"{cInd}try");
+            o.Add($"{cInd}{{");
+            o.Add($"{cInd}    Handle->{slot.Name}(Handle"
+                + string.Concat(NativeParams().Select(p => ", " + CallArg(p))) + ");");
+            o.Add($"{cInd}}}");
+            o.Add($"{cInd}catch");
+            o.Add($"{cInd}{{");
+            o.Add($"{cInd}    completion.Free();");
+            o.Add($"{cInd}    throw;");
+            o.Add($"{cInd}}}");
+            for (var d = cDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
+            o.Add("        return source.Task;");
+            o.Add("    }");
+            o.Add("");
+            RenderCompletionState(o, completion, owner);
+            RenderCompletionTrampoline(model, o, completion, slot);
+            return;
         }
 
         switch (cs.Shape)
@@ -2375,7 +2602,11 @@ public static class CSharpBackend
 
         string CallArg(ApiParam p) =>
             callbacks.FirstOrDefault(c => c.Fn == p) is { } fnOf
-                ? $"{Idioms.Ident(p.Name!)} is null ? null : ({NativeFnPtr(model, fnOf)})&{fnOf.Trampoline}"
+                ? $"{Idioms.Ident(p.Name!)} is null ? null : ({NativeFnPtr(model, fnOf.Callback)})&{fnOf.Trampoline}"
+            : completion is not null && completion.Fn == p
+                ? $"({NativeFnPtr(model, completion.Callback)})&{completion.Trampoline}"
+            : completion is not null && completion.Ctx == p
+                ? "(void*)GCHandle.ToIntPtr(completion)"
             : groups.FirstOrDefault(g => g.Ctx == p) is { } ctxOf
                 ? $"(void*)GCHandle.ToIntPtr({ctxOf.Handle})"
             : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSeq

@@ -1,6 +1,5 @@
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Scheduler;
 using KernelEngine.Logger;
 
 namespace KernelEngine.Asset.Assimp;
@@ -24,8 +23,7 @@ public static class ServiceCollectionExtensions
                 ke_error* err = null;
                 var handle = Native.NativeMethods.asset_loader_assimp_create(&@params, &err);
                 if (handle.@ref == null) throw KernelError.FromNative(err, "asset_loader_assimp_create");
-                var scheduler = sp.GetRequiredService<IScheduler>();
-                return new AssetLoader(handle, scheduler);
+                return new AssetLoader(handle);
             }
         });
 

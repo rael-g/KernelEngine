@@ -260,7 +260,7 @@
       "namespace": "KernelEngine.Asset",
       "nativeNamespace": "KernelEngine.Asset.Native",
       "outDir": "src/csharp/asset/KernelEngine.Asset/Generated",
-      "usings": []
+      "usings": [ "KernelEngine.Scheduler" ]
     },
     {
       "_comment": "The data a loader answers with, described where it is declared rather than in one plugin's binding project, so every plugin answering with it reads one projection instead of one per binding.",

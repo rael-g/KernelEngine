@@ -272,13 +272,15 @@
           "name": "load_model_async",
           "returns": "ke_task *",
           "tags": [],
-          "doc": "Asynchronously loads a 3D model using Returns a ke_task* that can be waited on; is invoked on the scheduler thread when the load finishes (or fails).",
-          "return_doc": null,
+          "doc": "Asynchronously loads a 3D model, calling on a scheduler thread once the load has finished or failed.",
+          "return_doc": "A ke_task* that can be waited on.",
           "params": [
             {
               "name": "scheduler",
               "type": "ke_scheduler *",
-              "tags": [],
+              "tags": [
+                "provider"
+              ],
               "doc": "Non-null task scheduler."
             },
             {
@@ -293,8 +295,7 @@
               "name": "on_complete",
               "type": "ke_load_model_complete_func",
               "tags": [
-                "raw_callback",
-                "closure:user_data"
+                "completion:user_data"
               ],
               "doc": "Callback invoked with the result; must not be NULL."
             },
@@ -353,7 +354,7 @@
           "tags": [
             "optional"
           ],
-          "doc": "Loaded model data (valid only when error == NULL); NULL on failure."
+          "doc": "The loaded model; NULL when the load failed."
         },
         {
           "name": "user_data",

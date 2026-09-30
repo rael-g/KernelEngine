@@ -653,6 +653,69 @@ Expect("owned memory handed out with no failure channel is refused",
     structs: [ViewJson("ke_probe_bundle")],
     throws: "has no failure channel");
 
+// An operation that answers later. What tells a completion apart from a handler the caller
+// supplies is the direction of its error channel: this lane is handed the ke_error, so it is
+// being told that something failed rather than reporting that it did -- which makes the
+// callback the operation's answer, and an answer that arrives later is a Task. The caller
+// never passes the callback or its context, because there is nothing left to register.
+Expect("a callback handed the failure is the operation's answer, and answers as a Task",
+    Vtable("ke_probe",
+        Slot("open_async", "ke_task *", Param("self", "ke_probe *", "self"),
+            Param("path", "const char *", "utf8"),
+            Param("on_done", "ke_probe_done_func", "completion:user_data"),
+            Param("user_data", "void *")),
+        Slot("close", "void", "releases:Bundle", Param("self", "ke_probe *", "self"),
+            Param("bundle", "ke_probe_bundle *"))),
+    contains: ["public Task<Bundle> OpenAsync(ke_probe* self, string path)",
+               "var source = new TaskCompletionSource<Bundle>(TaskCreationOptions.RunContinuationsAsynchronously);",
+               "var completion = GCHandle.Alloc(new OpenAsyncCompletion { Owner = this, Source = source });",
+               "(void*)GCHandle.ToIntPtr(completion)",
+               "completion.Free();",
+               "return source.Task;",
+               "private sealed class OpenAsyncCompletion",
+               "private static void OpenAsyncOnDoneTrampoline(ke_error* arg0, ke_probe_bundle* arg1, void* ctx)",
+               "if (arg0 != null || arg1 == null)",
+               "state.Source.TrySetException(KernelError.FromNative(arg0, \"open_async\"));",
+               "state.Source.TrySetResult(new Bundle(state.Owner, (ProbeBundle*)arg1));"],
+    absent: ["ke_probe_done_func on_done", "void* user_data", "ke_task* OpenAsync"],
+    structs: [ViewJson("ke_probe_bundle")],
+    aliases: new() { ["ke_probe_done_func"] = "void (*)(const ke_error *, ke_probe_bundle *, void *)" },
+    callbacks: [Callback("ke_probe_done_func", "void",
+        Param("error", "const ke_error *"), Param("bundle", "ke_probe_bundle *"),
+        Param("user_data", "void *", "context"))]);
+
+// The same operation, with nobody claiming the memory it answers with. A Task's answer is a
+// managed value and a pointer cannot be one, so there is no shape to project until some slot
+// says it takes that pointer back -- which is the same thing that makes it an object at all.
+Expect("an answer nothing claims ownership of is refused, not handed over as a pointer",
+    Vtable("ke_probe",
+        Slot("open_async", "ke_task *", Param("self", "ke_probe *", "self"),
+            Param("on_done", "ke_probe_done_func", "completion:user_data"),
+            Param("user_data", "void *"))),
+    contains: [], absent: [],
+    structs: [ViewJson("ke_probe_bundle")],
+    aliases: new() { ["ke_probe_done_func"] = "void (*)(const ke_error *, ke_probe_bundle *, void *)" },
+    callbacks: [Callback("ke_probe_done_func", "void",
+        Param("error", "const ke_error *"), Param("bundle", "ke_probe_bundle *"),
+        Param("user_data", "void *", "context"))],
+    throws: "a Task cannot answer with a pointer");
+
+// The same operation, also reporting failure through the call that starts it. Two channels
+// for one failure means a caller has to read both and reconcile them, and the completion is
+// the one that can speak about an operation that had not started failing yet when the call
+// returned -- so the second channel is a contradiction, not a convenience.
+Expect("an operation that answers later is refused a second failure channel",
+    Vtable("ke_probe",
+        Slot("open_async", "void", Param("self", "ke_probe *", "self"),
+            Param("on_done", "ke_probe_done_func", "completion:user_data"),
+            Param("user_data", "void *"),
+            Param("out_error", "ke_error **"))),
+    contains: [], absent: [],
+    aliases: new() { ["ke_probe_done_func"] = "void (*)(const ke_error *, void *)" },
+    callbacks: [Callback("ke_probe_done_func", "void",
+        Param("error", "const ke_error *"), Param("user_data", "void *", "context"))],
+    throws: "has nothing left to report");
+
 // A slot that needs another domain's vtable to do its work. The pointer is what the ABI
 // takes and the one thing a game-facing signature must not name -- and the caller already
 // holds the projection carrying it, so asking for the projection and opening it at the call
