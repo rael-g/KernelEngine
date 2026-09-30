@@ -184,6 +184,20 @@ Expect("a type nothing describes is declared opaque so its pointer is legal",
     absent: ["pub const ke_error = opaque", "pub const ke_error_type = opaque"],
     providers: ["ke_probe"]);
 
+// The same undescribed name by value is not a handle. A layout this domain cannot see
+// is a defect in the description, so the module goes on naming the symbol nothing
+// declares and stops compiling -- which is the signal. Inventing an opaque here would
+// trade a refusal to build for a field the caller can never reach.
+Expect("an undescribed type reached by value is not made opaque",
+    m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [
+        new ApiField("held", "ke_probe_kind", [], null),
+        new ApiField("addressed", "ke_probe_body *", [], null),
+    ], [])),
+    contains: ["held: ke_probe_kind,",
+               "pub const ke_probe_body = opaque {};",
+               "addressed: *ke_probe_body,"],
+    absent: ["pub const ke_probe_kind = opaque {};"]);
+
 if (failures.Count > 0)
 {
     foreach (var f in failures) Console.Error.WriteLine($"  {f}");
