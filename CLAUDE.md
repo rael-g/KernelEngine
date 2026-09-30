@@ -63,7 +63,7 @@ Layer 2 — plugins             src/zig/<domain>/<plugin>/               every i
 Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-stable vtables, headers only
 ```
 
-The split between layers 1 and 2 is physical and total: **`src/c/` contains no implementation and `src/zig/` contains no public API.** A domain's contract directory holds headers and nothing else — `src/c/window/` is exactly one file, `window.h`.
+**`src/c/` contains no implementation** — a domain's contract directory holds headers and nothing else; `src/c/window/` is exactly one file, `window.h`. **`src/zig/` contains no contract** — it holds implementations and, in each plugin's `include/`, only the factory header that creates them.
 
 ### Layer 1 — C contracts (`src/c/<domain>/`)
 
