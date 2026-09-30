@@ -131,6 +131,40 @@ Expect("a parameter shadowing a method of the same projection is renamed",
     absent: ["pub fn attach(self: Probe, parent: u64)"],
     providers: ["ke_probe"]);
 
+// A handler the caller supplies travels as the C pair it already is: a function pointer
+// and the state it reaches its own data through. Zig closes over nothing at runtime, so
+// the state stays the caller's memory and the projection retains nothing -- and the
+// context lane, being how the state comes back, is not something the handler is asked
+// for. Where the typedef declares a ke_error** lane the handler reports through Zig's
+// own error union, which is what that lane is the C spelling of.
+Expect("a supplied handler is a trampoline over the caller's own state",
+    m =>
+    {
+        m.Callbacks.Add(new ApiCallback("ke_probe_apply_fn", "_Bool", null, [
+            P("ctx", "void *", "context"),
+            P("name", "const char *", "utf8"),
+            P("out_error", "ke_error **"),
+        ]));
+        m.Structs.Add(Vtable("ke_probe",
+            Slot("register_apply", "_Bool",
+                P("apply", "ke_probe_apply_fn", "closure:ctx", "retained"),
+                P("ctx", "void *"),
+                P("out_error", "ke_error **"))));
+        m.Structs.Add(Handle("ke_probe"));
+    },
+    contains: [
+        "pub fn registerApply(self: Probe, ctx: anytype, comptime apply: "
+            + "fn (@TypeOf(ctx), [:0]const u8) Error!void) Error!void {",
+        "const ApplyTrampoline = struct {",
+        "fn call(ctx_lane: ?*anyopaque, name: [*:0]const u8, _: ?*?*abi.ke_error) callconv(.c) bool {",
+        "apply(@ptrCast(@alignCast(ctx_lane.?)), std.mem.span(name)) catch return false;",
+        "return true;",
+        "self.ref.register_apply(self.ref, ApplyTrampoline.call, @ptrCast(ctx), &err)",
+        "const std = @import(\"std\");",
+    ],
+    absent: ["@TypeOf(ctx), ?*anyopaque", "out_error: ?*?*abi.ke_error"],
+    providers: ["ke_probe"]);
+
 if (failures.Count > 0)
 {
     foreach (var f in failures) Console.Error.WriteLine($"  {f}");
