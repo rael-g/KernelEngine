@@ -9,7 +9,7 @@ extern "C"
 {
 #endif
 
-    /// @brief Raw CPU-side mesh data returned by ke_asset_loader::load_model.
+    /// [view] Raw CPU-side mesh data returned by ke_asset_loader::load_model.
     ///        Vertices are ready to pass directly to ke_render::create_mesh.
     typedef struct ke_mesh_data
     {
@@ -21,7 +21,7 @@ extern "C"
         char       name[64];
     } ke_mesh_data;
 
-    /// @brief Raw CPU-side material data returned by ke_asset_loader::load_model.
+    /// [view] Raw CPU-side material data returned by ke_asset_loader::load_model.
     ///        Pass to ke_render::create_material after uploading textures.
     typedef struct ke_material_data
     {
@@ -33,16 +33,17 @@ extern "C"
         char    name[64];
     } ke_material_data;
 
-    /// @brief Decoded RGBA8 texture data returned by ke_asset_loader::load_model.
+    /// [view] Decoded RGBA8 texture data returned by ke_asset_loader::load_model.
     typedef struct ke_texture_data
     {
-        uint8_t  *pixels; ///< RGBA8, row-major, width * height * 4 bytes
+        uint8_t  *pixels;     ///< [array_of:byte_count] RGBA8 samples, row-major
+        uint32_t  byte_count; ///< Bytes pixels reaches: width * height * 4
         uint32_t  width;
         uint32_t  height;
         char      path[256]; ///< Source path; empty for embedded textures
     } ke_texture_data;
 
-    /// @brief Complete model data returned by ke_asset_loader::load_model.
+    /// [view] Complete model data returned by ke_asset_loader::load_model.
     ///        Owned by the loader; free with ke_asset_loader::free_model.
     typedef struct ke_model_data
     {

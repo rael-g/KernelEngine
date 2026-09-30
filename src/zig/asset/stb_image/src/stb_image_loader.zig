@@ -69,6 +69,7 @@ fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c
     @memcpy(pixels, @as([*]const u8, @ptrCast(raw))[0..pixel_bytes]);
 
     data.pixels = pixels.ptr;
+    data.byte_count = @intCast(pixel_bytes);
     data.width = @intCast(w);
     data.height = @intCast(h);
 
@@ -85,8 +86,7 @@ fn freeImage(self: ?*c.ke_image_loader, data: [*c]c.ke_texture_data) callconv(.c
     if (self == null or data == null) return;
     const d: *c.ke_texture_data = @ptrCast(data);
     if (d.pixels != null) {
-        const pixel_bytes: usize = @as(usize, d.width) * @as(usize, d.height) * 4;
-        gpa.free(@as([*]u8, @ptrCast(d.pixels))[0..pixel_bytes]);
+        gpa.free(@as([*]u8, @ptrCast(d.pixels))[0..d.byte_count]);
     }
     gpa.destroy(d);
 }

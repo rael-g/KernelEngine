@@ -574,6 +574,38 @@ ExpectStructSpans("a counted pointer field naming a length the struct lacks is r
     contains: [], absent: [],
     throws: "names a length field the struct does not declare");
 
+// A struct nobody in managed code owns, read as a projection rather than mirrored as
+// bytes. Every field is private: a pointer and its count are one sequence, and a fixed
+// char array read as its bytes is text spelled as storage. The element is named after the
+// projection of what the pointer reaches, not after the ABI spelling -- the two occupy the
+// same bytes, so a reading that reinterpreted one as the other would assert a layout the
+// compiler was never shown.
+ExpectView("a view hands out its counted pointer, its text and its scalars, and keeps its fields private",
+    ViewStruct("ke_probe_bundle",
+        ("vertices", "ke_vertex *", "array_of:vertex_count"),
+        ("vertex_count", "uint32_t", ""),
+        ("material_index", "int32_t", ""),
+        ("name", "char [64]", "")),
+    contains: ["public unsafe partial struct ProbeBundle",
+               "private readonly Vertex* vertices;",
+               "private readonly uint vertex_count;",
+               "private fixed sbyte name[64];",
+               "public readonly ReadOnlySpan<Vertex> Vertices => vertices == null ? default"
+               + " : new ReadOnlySpan<Vertex>(vertices, (int)vertex_count);",
+               "public readonly int MaterialIndex => material_index;",
+               "fixed (sbyte* p = name) return Marshal.PtrToStringUTF8((nint)p) ?? \"\";"],
+    absent: ["public readonly uint VertexCount", "ReadOnlySpan<ke_vertex>", "ke_vertex*",
+             "MemoryMarshal", "Unsafe.As"]);
+
+// The same form with nothing bounding the pointer. A view exists to read memory it does
+// not own, and a pointer with no extent is the one reading nobody can make safely -- so it
+// is refused at the declaration rather than handed out as a bare pointer for a caller to
+// guess the length of.
+ExpectView("a view field reaching somewhere with no extent is refused",
+    ViewStruct("ke_probe_bundle", ("pixels", "uint8_t *", "")),
+    contains: [], absent: [],
+    throws: "has to name the count bounding it");
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.
@@ -855,6 +887,54 @@ void ExpectStructSpans(string what, ApiStruct s, string[] contains, string[] abs
         if (emitted.Contains(needle, StringComparison.Ordinal))
             failures.Add($"{what}: expected NOT to find \"{needle}\"");
 }
+
+/// <summary>
+/// A struct read as a projection of memory it does not own. The model carries the
+/// <c>[value]</c> declaration the counted pointer reaches, because the element a view hands
+/// out is that declaration's projection -- a fixture without it would check the one spelling
+/// the form exists to stop emitting.
+/// </summary>
+void ExpectView(string what, ApiStruct s, string[] contains, string[] absent, string? throws = null)
+{
+    checks++;
+    var model = new ApiModel();
+    model.Structs.Add(s);
+    model.Structs.Add(new ApiStruct("ke_vertex", null, ["value"],
+        [new ApiField("x", "float", [], null)], []) { External = true });
+
+    string emitted;
+    try
+    {
+        emitted = CSharpBackend.RenderView(model, s, "Probe", ["Probe.Common"],
+            Convention.KernelEngine);
+    }
+    catch (Exception ex)
+    {
+        if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+        else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+            failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+        return;
+    }
+    if (throws is not null)
+    {
+        failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+        return;
+    }
+    if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+
+    foreach (var needle in contains)
+        if (!emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected to find \"{needle}\"");
+
+    foreach (var needle in absent)
+        if (emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected NOT to find \"{needle}\"");
+}
+
+static ApiStruct ViewStruct(string name, params (string Name, string Type, string Tags)[] fields) =>
+    new(name, null, ["view"],
+        fields.Select(f => new ApiField(f.Name, f.Type,
+            f.Tags is "" ? [] : f.Tags.Split(','), null)).ToList(), []);
 
 static ApiStruct CountedStruct(string name, params (string Name, string Type, string Tags)[] fields) =>
     new(name, null, [],

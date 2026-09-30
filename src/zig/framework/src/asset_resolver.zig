@@ -633,6 +633,7 @@ fn fakeLoadImage(
     fake_loader_texture.width = 2;
     fake_loader_texture.height = 2;
     fake_loader_texture.pixels = &fake_loader_pixels;
+    fake_loader_texture.byte_count = fake_loader_pixels.len;
     return &fake_loader_texture;
 }
 

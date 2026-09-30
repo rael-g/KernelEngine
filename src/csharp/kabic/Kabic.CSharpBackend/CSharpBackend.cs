@@ -624,6 +624,160 @@ public static class CSharpBackend
     }
 
     /// <summary>
+    /// Whether a struct is projected as a reading of memory someone else owns.
+    /// <c>[value]</c> answers a different question and refuses this one on purpose: it
+    /// describes data a caller holds, so a pointer field there would make the lifetime of
+    /// what it reaches someone else's question. A <c>[view]</c> never owns its bytes, so a
+    /// pointer is exactly what it is built to read -- bounded by the count the header
+    /// already names, and reached only through the sequence it stands for.
+    /// </summary>
+    public static bool IsView(ApiStruct s) => !s.External && !s.IsVtable && s.Has("view");
+
+    /// <summary>
+    /// The element a <c>[view]</c> hands out for a pointer field. A projection occupies the
+    /// same bytes as the declaration it stands for, so the pointer is declared as reaching
+    /// the projection rather than the ABI spelling: the sequence then needs no cast, and a
+    /// reading that would otherwise reinterpret one type as another stops asserting a layout
+    /// the compiler was never shown.
+    /// </summary>
+    static string ViewElement(ApiModel model, string cType, Convention convention) =>
+        model.Structs.Any(v => v.Name == cType.Trim() && !v.IsVtable
+            && (v.Has("value") || v.Has("node") || v.Has("view")))
+            ? Idioms.TypeName(cType.Trim(), convention)
+            : ValueTypeName(model, cType, convention);
+
+    /// <summary>
+    /// Whether a field of a <c>[view]</c> is read as a type some other domain declares,
+    /// pointer or not. A counted pointer is the one shape where the element is named after
+    /// dereferencing, so asking the field's own spelling would miss exactly the case the
+    /// projection exists to compose.
+    /// </summary>
+    static bool ViewNamesForeignDeclaration(ApiModel model, ApiField f)
+    {
+        if (NamesForeignDeclaration(model, f)) return true;
+        if (!CTypes.IsPointer(f.Type)) return false;
+        var element = StripQualifiers(CTypes.Deref(f.Type)).Trim();
+        return model.Structs.Any(v => v.Name == element && v.External);
+    }
+
+    /// <summary>
+    /// Emits the projection a <c>[view]</c> struct is read through. Every field is private:
+    /// a pointer and the count bounding it are one sequence, and a caller given the pair
+    /// re-derives bounds the declaration had already stated, while a fixed char array read
+    /// as its bytes is text spelled as storage. The struct still occupies the bytes the ABI
+    /// lays out, which is what lets a sequence of these stand directly on native memory.
+    /// </summary>
+    public static string RenderView(ApiModel model, ApiStruct s, string ns,
+        IEnumerable<string> extraUsings, Convention convention)
+    {
+        var counts = s.Fields.Where(f => f.Has("array_of"))
+            .Select(f => f.TagValue("array_of")).ToHashSet();
+
+        var o = new List<string> { Header };
+        o.Add("using System.Runtime.InteropServices;");
+        if (s.Fields.Any(f => ViewNamesForeignDeclaration(model, f)))
+            foreach (var u in extraUsings) o.Add($"using {u};");
+        o.Add("");
+        o.Add($"namespace {ns};\n");
+        o.Add(s.Doc is not null
+            ? XmlDoc("", s.Doc).TrimEnd()
+            : $"/// <summary>Reads <c>{s.Name}</c>.</summary>");
+        o.Add("[StructLayout(LayoutKind.Sequential)]");
+        o.Add($"public unsafe partial struct {Idioms.TypeName(s.Name, convention)}");
+        o.Add("{");
+
+        foreach (var f in s.Fields) o.Add($"    {ViewField(model, s, f, convention)}");
+
+        foreach (var f in s.Fields)
+        {
+            if (counts.Contains(f.Name)) continue;
+            o.Add("");
+            if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
+            foreach (var line in ViewAccessor(model, s, f, convention)) o.Add($"    {line}");
+        }
+
+        o.Add("}");
+        o.Add("");
+        return string.Join('\n', o);
+    }
+
+    /// <summary>
+    /// One field of a <c>[view]</c> as it is stored. A fixed char array stays the bytes the
+    /// ABI reads it from rather than becoming a reference of another size, so the text is
+    /// read through the storage instead of replacing it.
+    /// </summary>
+    static string ViewField(ApiModel model, ApiStruct s, ApiField f, Convention convention)
+    {
+        if (CTypes.FixedArray(f.Type) is { } arr)
+        {
+            var element = Idioms.CsPrimitive(StripQualifiers(arr.Element));
+            if (element is "sbyte" or "byte" or "short" or "ushort" or "int" or "uint"
+                or "long" or "ulong" or "float" or "double")
+                return $"private fixed {element} {f.Name}[{arr.Extent}];";
+            throw new InvalidOperationException(
+                $"{s.Name}.{f.Name}: a [view] reads an inline array through the bytes it occupies,"
+                + $" and {arr.Element.Trim()} is not a type those bytes can be spelled as.");
+        }
+
+        if (!CTypes.IsPointer(f.Type))
+            return $"private readonly {ValueTypeName(model, f.Type, convention)} {f.Name};";
+
+        if (!f.Has("array_of"))
+            throw new InvalidOperationException(
+                $"{s.Name}.{f.Name}: a [view] reads a pointer as the sequence it bounds, so the"
+                + " field has to name the count bounding it with [array_of:<field>]. A pointer"
+                + " with no extent is a reading nobody can make safely.");
+
+        return $"private readonly {ViewElement(model, StripQualifiers(CTypes.Deref(f.Type)), convention)}"
+            + $"* {f.Name};";
+    }
+
+    /// <summary>
+    /// The reading one field of a <c>[view]</c> is surfaced as. A counted pointer answers
+    /// with the sequence it bounds, a fixed char array with the text its bytes spell, and
+    /// anything else with itself.
+    /// </summary>
+    static IEnumerable<string> ViewAccessor(ApiModel model, ApiStruct s, ApiField f,
+        Convention convention)
+    {
+        var name = Idioms.Pascal(f.Name);
+
+        if (f.Has("array_of"))
+        {
+            var countName = f.TagValue("array_of");
+            var count = s.Fields.FirstOrDefault(x => x.Name == countName)
+                ?? throw new InvalidOperationException(
+                    $"{s.Name}.{f.Name}: [array_of:{countName}] names a length field the struct"
+                    + " does not declare");
+            var element = ViewElement(model, StripQualifiers(CTypes.Deref(f.Type)), convention);
+            return [$"public readonly ReadOnlySpan<{element}> {name} => {f.Name} == null"
+                + $" ? default : new ReadOnlySpan<{element}>({f.Name}, (int){count.Name});"];
+        }
+
+        if (CTypes.FixedArray(f.Type) is { } arr)
+        {
+            var element = Idioms.CsPrimitive(StripQualifiers(arr.Element));
+            if (element is "sbyte")
+                return
+                [
+                    $"public readonly string {name}",
+                    "{",
+                    $"    get {{ fixed (sbyte* p = {f.Name}) return Marshal.PtrToStringUTF8((nint)p) ?? \"\"; }}",
+                    "}",
+                ];
+            return
+            [
+                $"public readonly ReadOnlySpan<{element}> {name}",
+                "{",
+                $"    get {{ fixed ({element}* p = {f.Name}) return new ReadOnlySpan<{element}>(p, {arr.Extent}); }}",
+                "}",
+            ];
+        }
+
+        return [$"public readonly {ValueTypeName(model, f.Type, convention)} {name} => {f.Name};"];
+    }
+
+    /// <summary>
     /// Whether a field is spelled with a type some other domain declares. The domain
     /// composing the type emits nothing for it -- the one that owns it already does -- so
     /// the projection reaches it by name, and only a struct that actually names one needs

@@ -61,8 +61,16 @@ foreach (var value in model.Structs.Where(CSharpBackend.IsValue))
         CSharpBackend.RenderStruct(model, value, ns, extraUsings, convention));
 }
 
+foreach (var view in model.Structs.Where(CSharpBackend.IsView))
+{
+    Directory.CreateDirectory(contractDir);
+    File.WriteAllText(Path.Combine(contractDir, $"{Idioms.TypeName(view.Name, convention)}.g.cs"),
+        CSharpBackend.RenderView(model, view, ns, extraUsings, convention));
+}
+
 foreach (var counted in model.Structs.Where(s => !s.External && !s.IsVtable
     && !convention.IsParamsType(s.Name)
+    && !CSharpBackend.IsView(s)
     && s.Fields.Any(f => f.Has("array_of"))))
     File.WriteAllText(Path.Combine(outDir, $"{counted.Name}.Spans.g.cs"),
         CSharpBackend.RenderStructSpans(model, counted, nativeNs, convention));

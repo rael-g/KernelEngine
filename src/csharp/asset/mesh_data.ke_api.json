@@ -2,9 +2,93 @@
   "enums": [],
   "structs": [
     {
+      "name": "ke_vertex",
+      "doc": "Per-vertex data expected by ke_render::create_mesh.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "nx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "ny",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "nz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "u",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "v",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "tx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "ty",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tw",
+          "type": "float",
+          "tags": [],
+          "doc": "Bitangent sign: \u002B1 or -1 (bitangent = cross(N,T)*tw)"
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_mesh_data",
       "doc": "Raw CPU-side mesh data returned by ke_asset_loader::load_model. Vertices are ready to pass directly to ke_render::create_mesh.",
-      "tags": [],
+      "tags": [
+        "view"
+      ],
       "fields": [
         {
           "name": "vertices",
@@ -51,7 +135,9 @@
     {
       "name": "ke_material_data",
       "doc": "Raw CPU-side material data returned by ke_asset_loader::load_model. Pass to ke_render::create_material after uploading textures.",
-      "tags": [],
+      "tags": [
+        "view"
+      ],
       "fields": [
         {
           "name": "base_color_r",
@@ -112,13 +198,23 @@
     {
       "name": "ke_texture_data",
       "doc": "Decoded RGBA8 texture data returned by ke_asset_loader::load_model.",
-      "tags": [],
+      "tags": [
+        "view"
+      ],
       "fields": [
         {
           "name": "pixels",
           "type": "uint8_t *",
+          "tags": [
+            "array_of:byte_count"
+          ],
+          "doc": "RGBA8 samples, row-major"
+        },
+        {
+          "name": "byte_count",
+          "type": "uint32_t",
           "tags": [],
-          "doc": "RGBA8, row-major, width * height * 4 bytes"
+          "doc": "Bytes pixels reaches: width * height * 4"
         },
         {
           "name": "width",
@@ -143,7 +239,9 @@
     {
       "name": "ke_model_data",
       "doc": "Complete model data returned by ke_asset_loader::load_model. Owned by the loader; free with ke_asset_loader::free_model.",
-      "tags": [],
+      "tags": [
+        "view"
+      ],
       "fields": [
         {
           "name": "meshes",
