@@ -1,0 +1,88 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_image_loader",
+      "doc": "ABI-stable vtable for decoding 2D images (PNG/JPG/...) from disk into RGBA8. Concrete implementations are provided as separate plugins (e.g., stb_image); async dispatch is the caller\u0027s responsibility (C# side wraps with Task.Run on a worker), so this contract stays minimal.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load_image",
+          "returns": "ke_texture_data *",
+          "tags": [],
+          "doc": "Loads an image from path into a newly allocated ke_texture_data (RGBA8). The caller owns the result and must release it with free_image.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Image file path to decode."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_image_loader *"
+        },
+        {
+          "name": "free_image",
+          "returns": "void",
+          "tags": [],
+          "doc": "Frees a ke_texture_data previously returned by load_image.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "data",
+              "type": "ke_texture_data *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_image_loader *"
+        }
+      ]
+    },
+    {
+      "name": "ke_image_loader_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_image_loader *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_image_loader *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {}
+}

@@ -1,0 +1,145 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_scene_loader",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load",
+          "returns": "_Bool",
+          "tags": [
+            "drains"
+          ],
+          "doc": "Loads the scene at path, instantiating every entity it declares. This is where a script factory that refused an entity is answered for.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Path to the scene file."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_loader *"
+        },
+        {
+          "name": "register_script_factory",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Registers the factory consulted for every entity that declares a type. Replaces any factory registered before it.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "factory",
+              "type": "ke_script_factory_func",
+              "tags": [
+                "closure:ctx",
+                "retained"
+              ],
+              "doc": "Consulted once per typed entity."
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": "Forwarded to factory unchanged."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_loader *"
+        }
+      ]
+    },
+    {
+      "name": "ke_scene_loader_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_scene_loader *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scene_loader *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_script_factory_func",
+      "returns": "_Bool",
+      "doc": "Builds and binds the script an entity\u0027s declared type names.",
+      "lanes": [
+        {
+          "name": "ctx",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_script_factory."
+        },
+        {
+          "name": "entity",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": "The entity the script is bound to."
+        },
+        {
+          "name": "type_name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Qualified node type name, as the scene file spells it."
+        },
+        {
+          "name": "out_error",
+          "type": "ke_error **",
+          "tags": [],
+          "doc": "Set when the factory rejects the entity; the load fails with it."
+        }
+      ]
+    }
+  ],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t",
+    "ke_script_factory_func": "_Bool (*)(void *, ke_entity, const char *, ke_error **)"
+  }
+}

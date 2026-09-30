@@ -1,4 +1,4 @@
-using KernelEngine.Audio.MiniAudio.Native;
+﻿using KernelEngine.Audio.MiniAudio.Native;
 using KernelEngine.Common.Native;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Logger;
@@ -8,7 +8,9 @@ namespace KernelEngine.Audio.MiniAudio;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers a miniaudio-backed <see cref="IAudio"/> singleton.
+    /// Registers a miniaudio-backed <see cref="IAudio"/> singleton and the audio
+    /// domain's own node types, so a scene naming <c>AudioPlayer</c> resolves without
+    /// each game repeating the registration.
     /// </summary>
     public static IServiceCollection AddMiniAudio(this IServiceCollection services)
     {
@@ -28,6 +30,8 @@ public static class ServiceCollectionExtensions
                 return new KernelEngine.Audio.Audio(handle);
             }
         });
+        KernelEngine.Framework.AudioComponentsNodeTypes.AddAudioComponentsNodeTypes(services);
+        services.AddAudioScene();
         return services;
     }
 }

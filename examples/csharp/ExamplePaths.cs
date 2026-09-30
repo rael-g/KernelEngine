@@ -66,7 +66,7 @@ internal static class ExamplePaths
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
         {
-            return null; // fc-match not installed (Windows, macOS, or a minimal container)
+            return null;
         }
     }
 

@@ -1,0 +1,326 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_signal_delivery",
+      "doc": "One delivery of one emission to one connected target. The payload points into the bus\u0027s frame storage and is valid until the frame is cleared; a consumer that needs it longer copies it.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "source",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": "Entity that emitted."
+        },
+        {
+          "name": "target",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": "Entity connected to it."
+        },
+        {
+          "name": "signal_id",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Which signal, as resolved by signal_id()."
+        },
+        {
+          "name": "handler_id",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Handler selector the connection recorded."
+        },
+        {
+          "name": "payload",
+          "type": "const void *",
+          "tags": [],
+          "doc": "Emission payload, borrowed for the frame."
+        },
+        {
+          "name": "payload_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Payload length in bytes."
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_signal_bus",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "signal_id",
+          "returns": "_Bool",
+          "tags": [
+            "interns"
+          ],
+          "doc": "Resolves a signal by name, registering it on first use. The payload size is part of the identity, not metadata: two languages naming the same signal with different payload layouts would otherwise alias one id and read each other\u0027s bytes at the wrong stride. A second registration under a different size fails instead.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8",
+                "type_name"
+              ],
+              "doc": null
+            },
+            {
+              "name": "payload_size",
+              "type": "uint32_t",
+              "tags": [
+                "type_size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_signal_bus *"
+        },
+        {
+          "name": "signal_lookup",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Resolves a signal by name without registering it, so a caller that did not author the name can tell an existing signal from a typo. A scene file is exactly that caller: signal_id would happily invent the signal its author misspelled, and the connection would then never fire.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_signal_bus *"
+        },
+        {
+          "name": "connect",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Wires one source entity\u0027s signal to one target entity, tagged with a handler selector the receiving language interprets. Connecting the same quadruple twice is a no-op rather than a duplicate delivery.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "source",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "signal_id",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "target",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "handler_id",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_signal_bus *"
+        },
+        {
+          "name": "disconnect",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Removes a connection previously made by connect(). Returns false when no such connection exists.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "source",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "signal_id",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "target",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "handler_id",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_signal_bus *"
+        },
+        {
+          "name": "forget_entity",
+          "returns": "void",
+          "tags": [],
+          "doc": "Drops every connection naming this entity as source or target, so a destroyed node cannot be delivered to or emit through a stale wire.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_signal_bus *"
+        },
+        {
+          "name": "emit",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Queues one emission for this frame. The payload is copied into frame storage, so the caller\u0027s buffer need not outlive the call.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "source",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "signal_id",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "payload",
+              "type": "const void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "payload_size",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_signal_bus *"
+        },
+        {
+          "name": "deliveries",
+          "returns": "const ke_signal_delivery *",
+          "tags": [],
+          "doc": "Joins this frame\u0027s emissions against the connection table and returns the resulting deliveries. Idempotent within a frame: calling it twice returns the same list rather than duplicating it.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "array_of:out_count"
+          ],
+          "receiver": "struct ke_signal_bus *"
+        },
+        {
+          "name": "clear_frame",
+          "returns": "void",
+          "tags": [],
+          "doc": "Discards this frame\u0027s emissions and deliveries. Connections survive.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_signal_bus *"
+        }
+      ]
+    },
+    {
+      "name": "ke_signal_bus_handle",
+      "doc": "Owner wrapper: destroy releases the connection table and frame storage.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_signal_bus *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_signal_bus *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t"
+  }
+}

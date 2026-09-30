@@ -1,14 +1,6 @@
 const std = @import("std");
 
-// Build the ke_physics_2d_box2d shared library (Zig 0.16 API) — the Box2D v3
-// backed 2D physics world. v3 exposes a C API, so this module is Zig end to
-// end. No ke_common LINK — the common headers are @cImport'd for the ke_error
-// layout only and errors translate at the export seam via the shared Zig
-// kerror utility.
-
 pub fn build(b: *std.Build) void {
-    // Plain native target: pinning the abi would make Zig treat this as a cross
-    // build and stop searching the host's system library paths.
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -16,8 +8,6 @@ pub fn build(b: *std.Build) void {
     const ke_physics = b.option([]const u8, "ke-physics-include", "kernel_engine/physics include dir") orelse @panic("-Dke-physics-include required");
     const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const box2d_include = b.option([]const u8, "box2d-include", "Box2D headers dir") orelse @panic("-Dbox2d-include required");
-    // The full path, not a directory + name: vcpkg decorates the debug build
-    // as libbox2dd, so the library name is not stable across configurations.
     const box2d_lib = b.option([]const u8, "box2d-lib", "absolute path to the Box2D library") orelse @panic("-Dbox2d-lib required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
@@ -52,4 +42,26 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/box2d_physics.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    inline for (.{ ke_common, ke_physics, ke_logger, box2d_include }) |inc| {
+        test_mod.addIncludePath(.{ .cwd_relative = inc });
+    }
+    test_mod.addIncludePath(b.path("include"));
+    test_mod.addObjectFile(.{ .cwd_relative = box2d_lib });
+    test_mod.addImport("kerror", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = kerror_src },
+        .target = target,
+        .optimize = optimize,
+    }));
+    test_mod.addCMacro("KE_PHYSICS_BOX2D_EXPORT", "");
+
+    const unit_tests = b.addTest(.{ .root_module = test_mod });
+    const run_tests = b.addRunArtifact(unit_tests);
+    b.step("test", "Run the Box2D physics unit tests").dependOn(&run_tests.step);
 }

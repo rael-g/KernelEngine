@@ -10,6 +10,19 @@
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Audio.Abstractions\KernelEngine.Audio.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
+    <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" /> <!-- Node, for AudioPlayer -->
+    <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Declared before the import: the copy items are built from @(NativeDep) at the
+         point NativeDependencies.targets is evaluated. -->
+    <NativeDep Include="ke_audio_module" />
+  </ItemGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
 
 </Project>

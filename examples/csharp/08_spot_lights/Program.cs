@@ -13,16 +13,10 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 08_spot_lights — three colored spot lights orbiting above a floor + grid of
-// cubes. Each spot's direction tracks the origin so the cones sweep across the
-// floor and cubes. Render v2 (webgpu): the forward pass accumulates each
-// SpotLightComponent (position from its transform, direction explicit) with
-// distance × cone falloff.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 08 Spot Lights"))
@@ -36,8 +30,8 @@ var services = new ServiceCollection()
 
         tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
 
-        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 5f, 15f) };
+        var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
+        cam.Position = new Vector3(0f, 5f, 15f);
 
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
         var cubeMesh  = KernelEngine.Render.MeshPrimitives.Cube(resources);
@@ -46,13 +40,13 @@ var services = new ServiceCollection()
         var cubeMat  = resources.CreateMaterial("cube", new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(30f, 1f, 30f) };
+        floor.Scale = new Vector3(30f, 1f, 30f);
 
         for (int x = -4; x <= 4; x += 4)
         for (int z = -4; z <= 4; z += 4)
         {
             var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
-            n.LocalTransform = n.LocalTransform with { Position = new Vector3(x, 1f, z) };
+            n.Position = new Vector3(x, 1f, z);
         }
 
         (Vector3 color, float offset)[] spots =
@@ -68,8 +62,8 @@ var services = new ServiceCollection()
                 Color         = color,
                 Intensity     = 25f,
                 Range         = 60f,
-                InnerAngleDeg = 12f,
-                OuterAngleDeg = 25f,
+                InnerAngle = 12f,
+                OuterAngle = 25f,
                 Offset        = offset,
             }, $"Spot_{color}");
         }
@@ -92,11 +86,9 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[08_spot_lights] Exited cleanly.");
-
-// ── Orbiting spot light — position circles, direction points at the origin ───
 
 sealed class OrbitingSpot : SpotLight
 {
@@ -104,12 +96,14 @@ sealed class OrbitingSpot : SpotLight
 
     private float _time;
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         _time += view.DeltaTime;
         float x = MathF.Cos(_time + Offset) * 8f;
         float z = MathF.Sin(_time + Offset) * 8f;
-        LocalTransform = LocalTransform with { Position = new Vector3(x, 10f, z) };
-        Direction = Vector3.Normalize(-LocalTransform.Position);
+        Position = new Vector3(x, 10f, z);
+        Direction = Vector3.Normalize(-Position);
     }
 }

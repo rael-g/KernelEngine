@@ -1,6 +1,3 @@
-// The flecs plugin's own heap. Backs the query cache arrays only — flecs
-// itself manages its archetype storage behind its own os_api allocator hooks
-// (left at their defaults; only log_ and abort_ are overridden).
 
 const std = @import("std");
 

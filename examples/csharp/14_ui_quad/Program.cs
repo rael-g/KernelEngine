@@ -12,18 +12,15 @@ using KernelEngine.Scheduler;
 using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Native;
 using KernelEngine.Text;
-
-// 14_ui_quad — UI overlay smoke test: one flat-color rectangle + three
-// stb_truetype-backed Labels positioned via anchor + offset. Validates the
-// render-v2 UI pass (screen-space quads composited after tonemap) and the
-// Label / glyph atlas pipeline end-to-end.
 
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddTextStbTrueType()
-    .Add<IEcs, FlecsEcs>()
+    .AddAssetResolver()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 14 UI Quad"))
@@ -44,7 +41,8 @@ var services = new ServiceCollection()
         tree.AddNode(new Label
         {
             Text   = "Top-left, anchor (0,0)",
-            Font   = font,
+            Font     = fontPath,
+            FontSize = 48f,
             Color  = new Vector4(1f, 0.6f, 0.3f, 1f),
             Anchor = new Vector2(0f, 0f),
             Offset = new Vector2(20, 20),
@@ -53,7 +51,8 @@ var services = new ServiceCollection()
         tree.AddNode(new Label
         {
             Text   = "Top center, anchor (0.5, 0)",
-            Font   = font,
+            Font     = fontPath,
+            FontSize = 48f,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.5f, 0f),
             Offset = new Vector2(0, 80),
@@ -62,13 +61,14 @@ var services = new ServiceCollection()
         tree.AddNode(new Label
         {
             Text   = "Bottom-right (1,1)",
-            Font   = font,
+            Font     = fontPath,
+            FontSize = 48f,
             Color  = new Vector4(0.3f, 0.7f, 1f, 1f),
             Anchor = new Vector2(1f, 1f),
             Offset = new Vector2(-20, -20),
         }, "BottomRight");
 
-        tree.AddNode(new BackgroundQuad(resources), "BackgroundQuad");
+        tree.AddNode(new BackgroundQuad(), "BackgroundQuad");
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -89,25 +89,31 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[14_ui_quad] Exited cleanly.");
 
-// ── Solid-color background quad, queued every frame via IRenderResources.UiQuad ──
-
 sealed class BackgroundQuad : Node
 {
-    private readonly IRenderResources _resources;
+    private uint _quadCid;
 
-    public BackgroundQuad(IRenderResources resources) => _resources = resources;
+    protected override void OnBind(ScriptHost scriptHost) =>
+        _quadCid = scriptHost.RegisterComponent<ke_ui_quad_component>("ui_quad");
 
-    protected override void OnBind(NodeWorld nodeWorld) { /* nothing to materialize — this node only carries behavior */ }
+    protected override bool HasBehavior => true;
 
     protected override void OnUpdate(in View view)
     {
-        _resources.UiQuad(TextureHandle.None,
-            dstX: 360, dstY: 220, dstW: 240, dstH: 100,
-            u0: 0, v0: 0, u1: 1, v1: 1,
-            premultipliedColor: new Vector4(0.20f * 0.5f, 0.85f * 0.5f, 0.30f * 0.5f, 0.5f));
+        var quad = new ke_ui_quad_component
+        {
+            texture_bits = TextureHandle.None.Value,
+            dst_x = 360, dst_y = 220, dst_w = 240, dst_h = 100,
+            u0 = 0, v0 = 0, u1 = 1, v1 = 1,
+        };
+        quad.color[0] = 0.20f * 0.5f;
+        quad.color[1] = 0.85f * 0.5f;
+        quad.color[2] = 0.30f * 0.5f;
+        quad.color[3] = 0.5f;
+        Attach(in view, _quadCid, in quad);
     }
 }

@@ -1,24 +1,10 @@
-// ke_common — the engine's error vocabulary: the generic type singletons, the
-// thread-local slot a failing callee fills, and the fatal path.
-//
-// Nothing here allocates. Everything an error needs lives in static storage:
-// the type singletons are constants and the slots are a thread-local ring. An
-// error that has to outlive the call producing it is built as a program-lifetime
-// constant by the code that raises it, not copied onto a heap.
 
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
-    // The fatal path reports through libc rather than Zig's std IO: it must
-    // work when everything else is already broken, and it is the one place the
-    // evolving std writer API buys nothing over fputs.
     @cInclude("stdio.h");
 });
 
@@ -41,12 +27,6 @@ const slot_count = 2;
 /// allocated — a failing path must not depend on the allocator to report itself.
 const message_max = 512;
 
-// -- generic type singletons -------------------------------------------------
-//
-// Exported as data symbols, so `&KE_ERROR_NOT_FOUND` from C keeps working. The
-// names come from the shared list the Zig error seam also reads: callers match
-// by name, and the two sets of instances must agree byte for byte.
-
 export const KE_ERROR_GENERAL: c.ke_error_type = .{ .name = names.general, .parent = null };
 export const KE_ERROR_NOT_FOUND: c.ke_error_type = .{ .name = names.not_found, .parent = null };
 export const KE_ERROR_IO: c.ke_error_type = .{ .name = names.io, .parent = null };
@@ -55,8 +35,6 @@ export const KE_ERROR_INVALID_ARGUMENT: c.ke_error_type = .{ .name = names.inval
 export const KE_ERROR_NOT_INITIALIZED: c.ke_error_type = .{ .name = names.not_initialized, .parent = null };
 export const KE_ERROR_NOT_SUPPORTED: c.ke_error_type = .{ .name = names.not_supported, .parent = null };
 export const KE_ERROR_ALREADY_EXISTS: c.ke_error_type = .{ .name = names.already_exists, .parent = null };
-
-// -- type matching -----------------------------------------------------------
 
 export fn ke_error_is(err_in: ?*const c.ke_error, type_in: ?*const c.ke_error_type) callconv(.c) bool {
     const err = err_in orelse return false;
@@ -68,8 +46,6 @@ export fn ke_error_is(err_in: ?*const c.ke_error, type_in: ?*const c.ke_error_ty
     }
     return false;
 }
-
-// -- thread-local slots ------------------------------------------------------
 
 threadlocal var slots: [slot_count]c.ke_error = std.mem.zeroes([slot_count]c.ke_error);
 threadlocal var messages: [slot_count][message_max]u8 = std.mem.zeroes([slot_count][message_max]u8);
@@ -108,12 +84,9 @@ export fn ke_error_set(
 }
 
 export fn ke_error_last() callconv(.c) ?*const c.ke_error {
-    // next_slot already advanced past the last write; the filled one is the other.
     const last = 1 - next_slot;
     return if (slots[last].type != null) &slots[last] else null;
 }
-
-// -- fatal -------------------------------------------------------------------
 
 /// `stderr` is a plain extern global on glibc but a macro expanding to a
 /// function call on the Windows UCRT (`__acrt_iob_func(2)`) — referencing

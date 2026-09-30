@@ -5,13 +5,6 @@ namespace KernelEngine.Runtime;
 /// <summary>
 /// A pluggable unit of engine functionality registered with the runtime.
 /// </summary>
-/// <remarks>
-/// Maps 1:1 to the C ABI <c>ke_runtime_module_params</c> at the
-/// <see cref="OnLoad"/> boundary — the runtime never sees this interface;
-/// it sees an opaque user_data pointer + an on_load callback. Configure
-/// is C#-only sugar for participating in <see cref="IServiceCollection"/>;
-/// other language bindings provide their own dependency-wiring story.
-/// </remarks>
 public interface IRuntimeModule
 {
     /// <summary>
@@ -45,18 +38,10 @@ public interface IRuntimeModule
     void OnLoad(IRuntime runtime, IServiceProvider services);
 
     /// <summary>
-    /// Symmetric teardown hook. Called once during <c>runtime.UnloadModules</c>
-    /// in REVERSE registration order — last-loaded module unloads first. Use
-    /// this to release resources that <see cref="OnLoad"/> acquired, especially
-    /// those with thread affinity (e.g. dispatch the release to the worker the
-    /// resource was created on).
+    /// Symmetric teardown hook. The runtime calls it as it is disposed, in reverse
+    /// registration order, so a module unloads before anything it was loaded after.
+    /// A module owning a thread-affine native handle dispatches the release to the
+    /// worker that created it; this call arrives on the disposing thread.
     /// </summary>
-    /// <remarks>
-    /// Default is a no-op so modules without teardown needs don't pay the
-    /// ceremony. Modules that own thread-affine native handles (renderer
-    /// destroy on bgfx-init thread, audio device close on its mixer thread,
-    /// etc.) MUST override to dispatch their disposal to the right worker —
-    /// the runtime calls OnUnload on the main thread.
-    /// </remarks>
     void OnUnload(IRuntime runtime, IServiceProvider services) { }
 }

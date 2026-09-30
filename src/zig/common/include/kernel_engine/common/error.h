@@ -63,13 +63,10 @@ KE_COMMON_API bool ke_error_is(const ke_error* err, const ke_error_type* type);
 /// no error has been set yet. Valid until the next ke_error_set() call on this thread.
 KE_COMMON_API const ke_error* ke_error_last(void);
 
-/// An error that must outlive the call producing it — an async completion runs
-/// after its originating frame is gone — is built as a program-lifetime constant
-/// rather than copied onto the heap. There is deliberately no heap-owned error:
-/// this vocabulary allocates nothing at all.
-
-/// Low-level: fill a thread-local error slot and write to *out_error if non-NULL.
-/// Prefer the KE_ERROR_SET / KE_ERROR_WRAP macros which inject __FILE__ and __LINE__.
+/// Low-level: copies @p message into the calling thread's error slot, fills that slot,
+/// and writes its address to *out_error when out_error is non-NULL. @p message and
+/// @p file need only outlive this call; the slot owns the copy. Prefer the
+/// KE_ERROR_SET / KE_ERROR_WRAP macros, which inject __FILE__ and __LINE__.
 KE_COMMON_API void ke_error_set(ke_error** out_error, const ke_error_type* type,
                                 const char* message, const char* file, uint32_t line,
                                 const ke_error* cause);
@@ -100,4 +97,4 @@ KE_COMMON_API _Noreturn void ke_error_fatal(const ke_error* err);
 }
 #endif
 
-#endif // KERNEL_ENGINE_COMMON_ERROR_H_
+#endif

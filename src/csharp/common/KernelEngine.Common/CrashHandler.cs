@@ -37,49 +37,27 @@ public static class CrashHandler
             _registered = true;
         }
 
-        // Route abort() through Windows Error Reporting so it surfaces as an
-        // SEH exception (caught below) instead of silently terminating.
         if (OperatingSystem.IsWindows())
         {
-            // (1) Kill every Windows-level error dialog. SEM_NOGPFAULTERRORBOX
-            // covers GPF + Watson; SEM_FAILCRITICALERRORS covers missing-DLL
-            // popups; SEM_NOOPENFILEERRORBOX covers file open dialogs. Combined,
-            // no native crash can ever block on a modal dialog again.
             try { SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX); }
-            catch { /* non-fatal */ }
+            catch {  }
 
-            // (2) Silence the CRT's own "abnormal program termination" message
-            // AND its WER call. Done on BOTH release (ucrtbase) and debug
-            // (ucrtbased) CRTs — each has independent state, and native plugins
-            // compiled in Debug link to ucrtbased while C# itself uses ucrtbase.
             try { _set_abort_behavior_release(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT); } catch { }
             try { _set_abort_behavior_debug  (0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT); } catch { }
 
-            // (3) Debug builds load ucrtbased.dll, whose default behavior on
-            // abort()/assert is the modal "Debug Error! Program: ... abort()
-            // has been called [Abort][Retry][Ignore]" dialog. Redirecting every
-            // report category to FILE (stderr) bypasses the dialog entirely so
-            // our signal handler can run instead. ucrtbased only exists in
-            // debug, hence the try/catch.
             try
             {
                 _CrtSetReportMode(_CRT_WARN,   _CRTDBG_MODE_FILE);
                 _CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE);
                 _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
             }
-            catch { /* release build — ucrtbased not loaded, fine */ }
+            catch {  }
 
             unsafe
             {
                 delegate* unmanaged[Stdcall]<IntPtr, int> fp = &SehFilter;
                 SetUnhandledExceptionFilter((IntPtr)fp);
 
-                // Defense in depth: hook SIGABRT directly on BOTH CRTs. Each
-                // CRT has its own signal table — abort() in ucrtbased only
-                // dispatches handlers registered through ucrtbased's signal(),
-                // and vice versa. The CRT runs the handler before any default
-                // abort behavior, so even if everything else fails we still
-                // print the [FATAL] line.
                 delegate* unmanaged[Cdecl]<int, void> sfp = &OnSigAbrt;
                 try { signal_release(SIGABRT, (IntPtr)sfp); } catch { }
                 try { signal_debug  (SIGABRT, (IntPtr)sfp); } catch { }
@@ -99,10 +77,8 @@ public static class CrashHandler
             Console.Error.WriteLine(ex?.ToString() ?? e.ExceptionObject?.ToString() ?? "(unknown)");
             Console.Error.Flush();
         }
-        catch { /* never let the handler itself crash */ }
+        catch {  }
     }
-
-    // ── SEH catch (Windows) ─────────────────────────────────────────────────
 
     private const uint _CALL_REPORTFAULT = 2;
     private const uint _WRITE_ABORT_MSG  = 1;
@@ -123,10 +99,6 @@ public static class CrashHandler
     [DllImport("ucrtbased.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int _CrtSetReportMode(int reportType, int reportMode);
 
-    // ucrtbase.dll is the Universal CRT used by every MSVC-compiled binary in
-    // this engine (bgfx, flecs, our plugins). Registering against the legacy
-    // msvcrt.dll would set handlers on a CRT instance nobody links against, so
-    // abort()/raise() from native code would still terminate silently.
     [DllImport("ucrtbase.dll", EntryPoint = "_set_abort_behavior", CallingConvention = CallingConvention.Cdecl)]
     private static extern uint _set_abort_behavior_release(uint flags, uint mask);
 
@@ -159,8 +131,8 @@ public static class CrashHandler
             Console.Error.WriteLine(Environment.StackTrace);
             Console.Error.Flush();
         }
-        catch { /* never let the handler itself crash */ }
-        Environment.Exit(134); // 128 + SIGABRT, conventional shell exit code
+        catch {  }
+        Environment.Exit(134);
     }
 
     [DllImport("kernel32.dll")]
@@ -185,11 +157,8 @@ public static class CrashHandler
     {
         int code = Marshal.ReadInt32(Marshal.ReadIntPtr(exceptionInfo));
 
-        // 0xE0434352 ('MCR\E0') is the CLR's own managed-exception SEH code —
-        // let it through so the CLR can unwind it.
         if (code == unchecked((int)0xE0434352)) return 0;
 
-        // Friendly names for the codes the user is most likely to hit.
         string name = code switch
         {
             unchecked((int)0x80000003) => "STATUS_BREAKPOINT (bgfx debug assert / int3)",
@@ -197,7 +166,6 @@ public static class CrashHandler
             unchecked((int)0xC00000FD) => "STATUS_STACK_OVERFLOW",
             unchecked((int)0x40010005) => "DBG_CONTROL_C",
             unchecked((int)0x40010008) => "DBG_TERMINATE_THREAD",
-            // abort() routed through _CALL_REPORTFAULT raises this:
             unchecked((int)0xC0000409) => "STATUS_STACK_BUFFER_OVERRUN / __fastfail (abort/__debugbreak)",
             _ => $"0x{code:X8}"
         };
@@ -209,7 +177,6 @@ public static class CrashHandler
         {
             using var fs = new FileStream(dumpPath, FileMode.Create, FileAccess.Write, FileShare.None);
 
-            // MiniDumpNormal + WithHandleData + WithUnloadedModules + WithThreadInfo
             uint dumpType = 0x00000000 | 0x00000004 | 0x00000020 | 0x00001000;
 
             var exceptionPointers = Marshal.AllocHGlobal(Marshal.SizeOf<MINIDUMP_EXCEPTION_INFORMATION>());

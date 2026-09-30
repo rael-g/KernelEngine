@@ -29,21 +29,15 @@ public static class ProgramCsSync
         File.WriteAllText(programCsPath, root.NormalizeWhitespace(elasticTrivia: true).ToFullString());
     }
 
-    // ── usings ──────────────────────────────────────────────────────────────
-
     private static CompilationUnitSyntax SyncUsings(CompilationUnitSyntax root, IReadOnlyList<ModuleSpec> modules)
     {
-        // What the manifest's modules need, plus the always-required DI extension namespace.
         var required = modules.Select(m => m.Using)
                               .Append("Microsoft.Extensions.DependencyInjection")
                               .Distinct(StringComparer.Ordinal)
                               .ToHashSet(StringComparer.Ordinal);
 
-        // We only manage `KernelEngine.*` usings — anything else (System.*, Microsoft.*, the user's
-        // own helper namespaces) is left untouched so user-authored code keeps compiling.
         static bool IsKernelEngine(string ns) => ns.StartsWith("KernelEngine.", StringComparison.Ordinal);
 
-        // Drop KernelEngine.* usings that are no longer needed.
         var toRemove = root.Usings
             .Where(u => IsKernelEngine(u.Name?.ToString() ?? "") &&
                         !required.Contains(u.Name!.ToString()))
@@ -51,7 +45,6 @@ public static class ProgramCsSync
         if (toRemove.Length > 0)
             root = root.RemoveNodes(toRemove, SyntaxRemoveOptions.KeepNoTrivia)!;
 
-        // Add missing required ones.
         var existing = root.Usings.Select(u => u.Name?.ToString() ?? "").ToHashSet(StringComparer.Ordinal);
         var toAdd = required.Where(ns => !existing.Contains(ns))
                             .Select(ns => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(ns)))
@@ -62,12 +55,8 @@ public static class ProgramCsSync
         return root;
     }
 
-    // ── services chain ──────────────────────────────────────────────────────
-
     private static CompilationUnitSyntax SyncServicesChain(CompilationUnitSyntax root, IReadOnlyList<ModuleSpec> modules)
     {
-        // Find the top-level statement that initializes `services` from a `new ServiceCollection()`
-        // chain. The most common shape is `var services = new ServiceCollection()....;`.
         var initializer = root.DescendantNodes()
             .OfType<LocalDeclarationStatementSyntax>()
             .FirstOrDefault(d => d.Declaration.Variables.Any(v => v.Identifier.Text == "services"
@@ -77,7 +66,6 @@ public static class ProgramCsSync
 
         if (initializer is null)
         {
-            // No existing services declaration — inject one at the start of the global statements.
             var declStmt = SyntaxFactory.ParseStatement($"var services = {chainExpr};")
                                           .WithLeadingTrivia(SyntaxFactory.LineFeed);
             return root.WithMembers(root.Members.Insert(0, SyntaxFactory.GlobalStatement(declStmt)));
@@ -98,16 +86,10 @@ public static class ProgramCsSync
         return "new ServiceCollection()" + Environment.NewLine + "    " + calls;
     }
 
-    // ── template ────────────────────────────────────────────────────────────
-
     internal static string ScaffoldTemplate() => """
         using Microsoft.Extensions.DependencyInjection;
 
         var services = new ServiceCollection();
 
-        // ke add module <id>  — wire engine modules above (e.g. KernelEngine.Kernel).
-        // Once the Framework is in scope, the bootstrap is:
-        //   using var app = new Application();
-        //   app.Run(services);
         """;
 }

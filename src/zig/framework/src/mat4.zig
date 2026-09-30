@@ -1,11 +1,3 @@
-// Zig ports of the matrix helpers that live as `static inline` in
-// kernel_engine/common/math.h.
-//
-// translate-c cannot lower those bodies (nested array indexing inside the
-// index expression), and being `static inline` they export no symbol to link
-// against — so Zig callers need their own copy. Any change to the C originals
-// must be mirrored here; the shared regression is scene-tree transform
-// propagation, which compares against hand-computed matrices.
 
 const c = @import("c.zig").c;
 
@@ -54,4 +46,64 @@ pub fn fromTransform(
         r20 * scale.z, r21 * scale.z, r22 * scale.z, 0.0,
         pos.x,         pos.y,         pos.z,         1.0,
     };
+}
+
+/// Composes a 2D pose into a row-major affine matrix, rotating about Z.
+pub fn fromTransform2d(
+    out: *c.ke_mat4,
+    pos: *const c.ke_vec2,
+    rotation: f32,
+    scale: *const c.ke_vec2,
+    depth: f32,
+) void {
+    const cs = @cos(rotation);
+    const sn = @sin(rotation);
+
+    out.m = .{
+        cs * scale.x,  sn * scale.x, 0.0,   0.0,
+        -sn * scale.y, cs * scale.y, 0.0,   0.0,
+        0.0,           0.0,          1.0,   0.0,
+        pos.x,         pos.y,        depth, 1.0,
+    };
+}
+
+const std = @import("std");
+
+test "a 2d pose lands in the same row-major layout a 3d one produces" {
+    var m: c.ke_mat4 = undefined;
+    const pos = c.ke_vec2{ .x = 3.0, .y = 4.0 };
+    const scale = c.ke_vec2{ .x = 1.0, .y = 1.0 };
+    fromTransform2d(&m, &pos, 0.0, &scale, 7.0);
+
+    try std.testing.expectEqual(@as(f32, 3.0), m.m[12]);
+    try std.testing.expectEqual(@as(f32, 4.0), m.m[13]);
+    try std.testing.expectEqual(@as(f32, 7.0), m.m[14]);
+    try std.testing.expectEqual(@as(f32, 1.0), m.m[15]);
+}
+
+test "a quarter turn in 2d maps x onto y, the same sense a z quaternion does" {
+    const half = @sqrt(2.0) / 2.0;
+    var flat: c.ke_mat4 = undefined;
+    const pos2 = c.ke_vec2{ .x = 0.0, .y = 0.0 };
+    const scale2 = c.ke_vec2{ .x = 1.0, .y = 1.0 };
+    fromTransform2d(&flat, &pos2, std.math.pi / 2.0, &scale2, 0.0);
+
+    var spatial: c.ke_mat4 = undefined;
+    const pos3 = c.ke_vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
+    const rot = c.ke_quat{ .x = 0.0, .y = 0.0, .z = half, .w = half };
+    const scale3 = c.ke_vec3{ .x = 1.0, .y = 1.0, .z = 1.0 };
+    fromTransform(&spatial, &pos3, &rot, &scale3);
+
+    for (0..16) |i| try std.testing.expectApproxEqAbs(spatial.m[i], flat.m[i], 1e-6);
+}
+
+test "2d scale reaches only the plane, leaving depth unscaled" {
+    var m: c.ke_mat4 = undefined;
+    const pos = c.ke_vec2{ .x = 0.0, .y = 0.0 };
+    const scale = c.ke_vec2{ .x = 2.0, .y = 3.0 };
+    fromTransform2d(&m, &pos, 0.0, &scale, 0.0);
+
+    try std.testing.expectEqual(@as(f32, 2.0), m.m[0]);
+    try std.testing.expectEqual(@as(f32, 3.0), m.m[5]);
+    try std.testing.expectEqual(@as(f32, 1.0), m.m[10]);
 }

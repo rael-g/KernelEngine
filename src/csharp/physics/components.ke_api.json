@@ -1,0 +1,789 @@
+{
+  "enums": [
+    {
+      "name": "ke_body_type_2d",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_BODY_TYPE_STATIC",
+          "value": 0,
+          "doc": "Never moves; infinite mass. Floors, walls."
+        },
+        {
+          "name": "KE_BODY_TYPE_KINEMATIC",
+          "value": 1,
+          "doc": "Moved by code (set_position/set_velocity), unaffected by forces."
+        },
+        {
+          "name": "KE_BODY_TYPE_DYNAMIC",
+          "value": 2,
+          "doc": "Driven by forces, collisions, gravity."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_shape_kind_2d",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_SHAPE_KIND_2D_BOX",
+          "value": 0,
+          "doc": "Axis-aligned box, sized by half_extents."
+        },
+        {
+          "name": "KE_SHAPE_KIND_2D_CIRCLE",
+          "value": 1,
+          "doc": "Circle centered on the node, sized by radius."
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_collision_filter_2d",
+      "doc": "Which of the 32 collision layers a fixture occupies, and which it tests against. Two fixtures touch only when each one\u0027s layer bit is set in the other\u0027s mask, so a mask written on one side alone never produces a contact.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "layer",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mask",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_body_state_2d",
+      "doc": "Snapshot of a body\u0027s pose \u002B motion at a point in time. Position is the body\u0027s local origin in world space; angle is in radians.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "angle",
+          "type": "float",
+          "tags": [],
+          "doc": "radians, CCW positive"
+        },
+        {
+          "name": "velocity_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "velocity_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "angular_velocity",
+          "type": "float",
+          "tags": [],
+          "doc": "radians per second"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform_component",
+      "doc": "An entity\u0027s authored 3D pose.",
+      "tags": [
+        "node:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [
+            "default:0 0 0 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform2d_component",
+      "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
+      "tags": [
+        "node:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive; a scene authors degrees."
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "depth",
+          "type": "float",
+          "tags": [],
+          "doc": "Where the plane sits along Z."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_world_transform_component",
+      "doc": "An entity\u0027s place in world space, composed down the hierarchy. Written by the hierarchy alone.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "matrix",
+          "type": "ke_mat4",
+          "tags": [
+            "output"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_body2d_component",
+      "doc": "A 2D rigid body. Pose and motion are stored here because the simulation owns them between ticks; the node\u0027s own transform2d is written back from this component each tick by the physics plugin\u0027s own system, so what a script reads and what the hierarchy composes are the same two dimensions the body moves in. The same system creates and destroys the underlying body by reconciling this component against the world, so the entity is the identity and a script never acquires, threads, or releases a handle.",
+      "tags": [
+        "node:Body2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "type",
+          "type": "ke_body_type_2d",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "angle",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive."
+        },
+        {
+          "name": "velocity",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "angular_velocity",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians per second, CCW positive."
+        },
+        {
+          "name": "gravity_scale",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "fixed_rotation",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "Keeps the body\u0027s angle fixed against every torque, including contacts. What anything that must stay upright sets \u2014 characters, projectiles."
+        },
+        {
+          "name": "body",
+          "type": "ke_body_2d",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "The plugin\u0027s body for this entity, assigned when it reconciles the component. Authoring it would name a body the world does not own."
+        }
+      ]
+    },
+    {
+      "name": "ke_collider2d_component",
+      "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. Named for what it holds \u2014 a kind, extents, density, friction, restitution \u2014 rather than for a shape it is not. It is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin\u0027s own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.",
+      "tags": [
+        "node:Collider2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "kind",
+          "type": "ke_shape_kind_2d",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "half_extents",
+          "type": "ke_vec2",
+          "tags": [
+            "default:0.5 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "density",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "friction",
+          "type": "float",
+          "tags": [
+            "default:0.3"
+          ],
+          "doc": null
+        },
+        {
+          "name": "restitution",
+          "type": "float",
+          "tags": [],
+          "doc": "Bounciness. 0 absorbs the impact, 1 returns all of it."
+        },
+        {
+          "name": "layer",
+          "type": "uint32_t",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "mask",
+          "type": "uint32_t",
+          "tags": [
+            "default:4294967295"
+          ],
+          "doc": null
+        },
+        {
+          "name": "attached",
+          "type": "_Bool",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Whether the fixture has been attached to its body. Set by the plugin once the ancestor body exists; authoring it would claim a fixture the world does not have."
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_physics_2d",
+      "doc": "ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins (Box2D for now). Not thread-safe \u2014 call all methods on the same thread (typically ke.sim).",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "set_gravity",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets world gravity (m/s^2). Default is (0, -9.81).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "x",
+              "type": "float",
+              "tags": [
+                "vector2:gravity"
+              ],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "step",
+          "returns": "void",
+          "tags": [],
+          "doc": "Advances the simulation by dt seconds. Variable steps are accepted, but deterministic replay requires the caller to supply a fixed one.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "dt",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "create_body",
+          "returns": "ke_body_2d",
+          "tags": [],
+          "doc": "Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_body_type_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "x",
+              "type": "float",
+              "tags": [
+                "vector2:position"
+              ],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "destroy_body",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "add_box_fixture",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin. The offset is what lets one body carry several shapes in different places \u2014 a character\u0027s feet and torso, a paddle\u0027s rounded ends.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "half_w",
+              "type": "float",
+              "tags": [
+                "vector2:half_extents"
+              ],
+              "doc": null
+            },
+            {
+              "name": "half_h",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset_x",
+              "type": "float",
+              "tags": [
+                "vector2:offset"
+              ],
+              "doc": null
+            },
+            {
+              "name": "offset_y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset_angle",
+              "type": "float",
+              "tags": [],
+              "doc": "Radians, CCW positive, about the offset center."
+            },
+            {
+              "name": "density",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "friction",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "restitution",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "filter",
+              "type": "const ke_collision_filter_2d *",
+              "tags": [
+                "opt"
+              ],
+              "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "add_circle_fixture",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Attaches a circle fixture at the given offset from the body origin.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "radius",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset_x",
+              "type": "float",
+              "tags": [
+                "vector2:offset"
+              ],
+              "doc": null
+            },
+            {
+              "name": "offset_y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "density",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "friction",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "restitution",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "filter",
+              "type": "const ke_collision_filter_2d *",
+              "tags": [
+                "opt"
+              ],
+              "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "get_body_state",
+          "returns": "void",
+          "tags": [],
+          "doc": "Reads the body\u0027s current pose and motion.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "ke_body_state_2d *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives position, angle, and velocities."
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "set_body_position",
+          "returns": "void",
+          "tags": [],
+          "doc": "Teleports the body. Skips collision response \u2014 prefer apply_impulse for dynamic moves.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "x",
+              "type": "float",
+              "tags": [
+                "vector2:position"
+              ],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "angle",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "set_body_velocity",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets linear velocity directly (m/s).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "vx",
+              "type": "float",
+              "tags": [
+                "vector2:velocity"
+              ],
+              "doc": null
+            },
+            {
+              "name": "vy",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "apply_impulse",
+          "returns": "void",
+          "tags": [],
+          "doc": "Applies a linear impulse (kg*m/s) at the body center.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "impulse_x",
+              "type": "float",
+              "tags": [
+                "vector2:impulse"
+              ],
+              "doc": null
+            },
+            {
+              "name": "impulse_y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "set_body_fixed_rotation",
+          "returns": "void",
+          "tags": [],
+          "doc": "Locks or unlocks the body\u0027s rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked. Needed by anything that must stay upright \u2014 characters, projectiles, and any box whose collisions would otherwise set it spinning.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "fixed",
+              "type": "_Bool",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "set_body_gravity_scale",
+          "returns": "void",
+          "tags": [],
+          "doc": "Scales world gravity for this body alone. 1 leaves it at the world\u0027s value, 0 makes the body weightless, and a negative value makes it fall upward. What a floating pickup or a balloon sets, rather than each such body needing its own world.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "scale",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_physics_2d_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_physics_2d *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_physics_2d *"
+        }
+      ],
+      "external": true
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {
+    "ke_body_2d": "uint32_t"
+  }
+}

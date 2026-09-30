@@ -1,0 +1,1069 @@
+namespace Kabic.Zig;
+
+using Kabic;
+using System.Text;
+
+/// <summary>
+/// kabic's Zig backend: renders a domain as a Zig module — the ABI declared in Zig
+/// rather than imported from the header, and a projection over it whose signatures
+/// are Zig's own (error unions, optionals, slices, sentinel-terminated strings).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Declares the ABI instead of reaching for <c>@cImport</c> on purpose. Importing
+/// the header is what makes a Zig consumer feel it is calling a C library: every
+/// pointer arrives as <c>[*c]</c>, which is both nullable and many-item, so the
+/// compiler stops distinguishing "one value" from "an array" and stops catching a
+/// missing null check. A declared ABI says which of the two each pointer is, and
+/// the projection above it can then be total rather than defensive.
+/// </para>
+/// <para>
+/// Emits no <c>comptime</c> machinery. The projection is one wrapper struct per
+/// vtable with plain methods, which is the shape a C programmer reading Zig would
+/// write. Whether a richer rendering is worth it is a question for after the
+/// signatures are right, not before.
+/// </para>
+/// </remarks>
+public sealed class ZigBackend
+{
+    readonly ApiModel model;
+    readonly ClassifiedModel classified;
+    readonly Convention convention;
+    readonly IReadOnlyDictionary<string, ForeignType> foreign;
+    readonly SortedDictionary<string, string> imported = [];
+    readonly SortedSet<string> opaque = [];
+    readonly Dictionary<string, BagForm> bags = [];
+    readonly SortedSet<string> unprojected = [];
+
+    ZigBackend(ApiModel model, ClassifiedModel classified, Convention convention,
+        IReadOnlyDictionary<string, ForeignType> foreign)
+    {
+        this.model = model;
+        this.classified = classified;
+        this.convention = convention;
+        this.foreign = foreign;
+    }
+
+    /// <summary>
+    /// Renders one domain. <paramref name="foreign"/> says where a type this domain
+    /// composes but does not declare is reachable from: the domain that owns a type
+    /// emits it, this one imports it. Zig has no ambient namespace for such a name to
+    /// resolve in, so a domain rendered without the map spells a symbol its module
+    /// never declares.
+    /// </summary>
+    public static string Render(ApiModel model, ClassifiedModel classified, Convention convention,
+        IReadOnlyDictionary<string, ForeignType>? foreign = null) =>
+        new ZigBackend(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>())
+            .Render();
+
+    string Render()
+    {
+        var sb = new StringBuilder();
+        var abi = new StringBuilder();
+
+        foreach (var (alias, target) in model.TypeAliases)
+        {
+            var prim = Idioms.Primitive(target);
+            if (prim is not null) sb.AppendLine($"pub const {Idioms.TypeName(alias, convention)} = {prim};");
+        }
+        sb.AppendLine();
+
+        foreach (var e in model.Enums.Where(e => !e.External)) RenderEnum(sb, e);
+
+        sb.AppendLine(Preamble);
+
+        sb.AppendLine("/// The ABI as the header declares it. Nothing above this line is a C name and");
+        sb.AppendLine("/// nothing below it is meant to be called by hand.");
+        foreach (var c in model.Callbacks)
+            abi.AppendLine($"    pub const {c.Name} = ?*const fn ({string.Join(", ", c.Lanes.Select(l =>
+                $"{Idioms.Ident(l.Name ?? "_")}: {AbiType(l.Type, l, "")}"))}) "
+                + $"callconv(.c) {AbiType(c.Returns, null, "")};");
+        if (model.Callbacks.Count > 0) abi.AppendLine();
+        foreach (var s in model.Structs.Where(s => !s.External))
+        {
+            abi.AppendLine($"    pub const {s.Name} = extern struct {{");
+            foreach (var f in s.Fields)
+                abi.AppendLine($"        {Idioms.Ident(f.Name)}: {AbiType(f.Type, AsParam(f), "")},");
+            foreach (var slot in s.Slots)
+                abi.AppendLine($"        {Idioms.Ident(slot.Name)}: *const fn ({SlotAbiParams(s, slot)})"
+                    + $" callconv(.c) {AbiReturn(slot, "")},");
+            abi.AppendLine("    };");
+            abi.AppendLine();
+        }
+        foreach (var f in model.Functions)
+            abi.AppendLine($"    pub extern fn {f.Name}({string.Join(", ", f.Params.Select(p =>
+                $"{Idioms.Ident(p.Name ?? "_")}: {AbiType(p.Type, p, "")}"))}) "
+                + $"callconv(.c) {AbiType(f.Returns, null, "")};");
+
+        var projections = new StringBuilder();
+        foreach (var v in classified.Providers)
+            RenderProvider(projections, v);
+        foreach (var v in Lent)
+            RenderProvider(projections, v, owned: false);
+
+        var bagTypes = new StringBuilder();
+        foreach (var b in bags.Values) RenderBag(bagTypes, b);
+
+        sb.AppendLine("pub const abi = struct {");
+        sb.AppendLine(AbiPreamble);
+        sb.Append(AbiErrorTypes);
+        foreach (var name in opaque)
+        {
+            sb.AppendLine("    /// No domain describes this type, so the only thing known about it here is");
+            sb.AppendLine("    /// that its address travels. A field of it that ought to be reachable means");
+            sb.AppendLine("    /// the header declaring it is missing from this domain's description.");
+            sb.AppendLine($"    pub const {name} = opaque {{}};");
+        }
+        if (opaque.Count > 0) sb.AppendLine();
+        sb.Append(abi);
+        sb.AppendLine("};");
+        sb.AppendLine();
+        sb.Append(bagTypes);
+        sb.Append(projections);
+
+        var head = new StringBuilder();
+        head.AppendLine("//! <auto-generated/> Derived from ke_api.json. Do not edit; edit the C header instead.");
+        if (unprojected.Count > 0)
+        {
+            head.AppendLine("//!");
+            head.AppendLine("//! The description does not yet say how these cross, so they are reachable only");
+            head.AppendLine("//! through the abi block by hand:");
+            foreach (var m in unprojected) head.AppendLine($"//! - {m}");
+        }
+        head.AppendLine();
+        foreach (var (module, path) in imported)
+            head.AppendLine($"const {module} = @import(\"{path}\");");
+        if (imported.Count > 0) head.AppendLine();
+        return head.Append(sb).ToString();
+    }
+
+    /// <summary>
+    /// One C enum as a Zig enum. A member whose C initialiser names a sibling is not a
+    /// case of its own: it is a second name for one that already exists, so it is
+    /// rendered as a declaration rather than a field. Zig refuses two fields sharing a
+    /// tag value, so the alternative is not a duplicated case but no output at all --
+    /// and emitting the C initialiser verbatim would name a symbol the Zig module does
+    /// not declare.
+    /// </summary>
+    void RenderEnum(StringBuilder sb, ApiEnum e)
+    {
+        if (e.Doc is not null) foreach (var line in DocLines(e.Doc)) sb.AppendLine(line);
+        sb.AppendLine($"pub const {Idioms.TypeName(e.Name, convention)} = enum(u32) {{");
+        foreach (var v in e.Values.Where(v => v.IsInt))
+        {
+            if (v.Doc is not null) foreach (var line in DocLines(v.Doc, "    ")) sb.AppendLine(line);
+            sb.AppendLine($"    {Idioms.EnumMember(v.Name, e.Name)} = {v.RawValue},");
+        }
+        foreach (var v in e.Values.Where(v => !v.IsInt))
+        {
+            if (v.Doc is not null) foreach (var line in DocLines(v.Doc, "    ")) sb.AppendLine(line);
+            sb.AppendLine($"    pub const {Idioms.EnumMember(v.Name, e.Name)}: @This() = "
+                + $".{Idioms.EnumMember(v.RawValue, e.Name)};");
+        }
+        sb.AppendLine("};");
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// The kinds the error hierarchy names, paired with the singleton each is reached by.
+    /// One list because three functions have to agree about it: the set a caller catches,
+    /// the reading of a failure the engine reported, and the writing of one the caller's
+    /// own handler raised. Kept apart, a kind added to one of them is a kind the other two
+    /// silently flatten to <c>General</c>.
+    /// </summary>
+    static readonly (string Kind, string Singleton)[] ErrorKinds = [
+        ("NotFound", "KE_ERROR_NOT_FOUND"),
+        ("Io", "KE_ERROR_IO"),
+        ("OutOfMemory", "KE_ERROR_OUT_OF_MEMORY"),
+        ("InvalidArgument", "KE_ERROR_INVALID_ARGUMENT"),
+        ("NotInitialized", "KE_ERROR_NOT_INITIALIZED"),
+        ("NotSupported", "KE_ERROR_NOT_SUPPORTED"),
+        ("AlreadyExists", "KE_ERROR_ALREADY_EXISTS"),
+    ];
+
+    /// <summary>
+    /// The error vocabulary every module opens with: the set, the thread-local carrying
+    /// what a Zig error set cannot, and the three crossings between the two spellings.
+    /// </summary>
+    static string Preamble
+    {
+        get
+        {
+            var sb = new StringBuilder(PreambleHead);
+            sb.AppendLine("pub const Error = error{");
+            sb.AppendLine("    General,");
+            foreach (var (kind, _) in ErrorKinds) sb.AppendLine($"    {kind},");
+            sb.AppendLine("};");
+            sb.AppendLine();
+
+            sb.AppendLine("fn raise(err: ?*const abi.ke_error) Error {");
+            sb.AppendLine("    last_error = err;");
+            foreach (var (kind, singleton) in ErrorKinds)
+                sb.AppendLine($"    if (abi.ke_error_is(err, &abi.{singleton})) return Error.{kind};");
+            sb.AppendLine("    return Error.General;");
+            sb.AppendLine("}");
+            sb.AppendLine();
+
+            sb.AppendLine(ErrorTypeDoc);
+            sb.AppendLine("fn errorType(e: Error) *const abi.ke_error_type {");
+            sb.AppendLine("    return switch (e) {");
+            foreach (var (kind, singleton) in ErrorKinds)
+                sb.AppendLine($"        Error.{kind} => &abi.{singleton},");
+            sb.AppendLine("        else => &abi.KE_ERROR_GENERAL,");
+            sb.AppendLine("    };");
+            sb.AppendLine("}");
+            sb.AppendLine();
+
+            sb.AppendLine(ErrorFromDoc);
+            sb.AppendLine("fn errorFrom(t: ?*const abi.ke_error_type) ?Error {");
+            sb.AppendLine("    const named = t orelse return null;");
+            foreach (var (kind, singleton) in ErrorKinds)
+                sb.AppendLine($"    if (named == &abi.{singleton}) return Error.{kind};");
+            sb.AppendLine("    return Error.General;");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            return sb.ToString();
+        }
+    }
+
+    const string ErrorTypeDoc = """
+        /// The singleton a Zig error is reported to the engine as. A handler the engine
+        /// calls has to name its failure in the vocabulary the ABI reads, and a type is
+        /// the only half of a failure that outlives the thread that raised it.
+        """;
+
+    const string ErrorFromDoc = """
+        /// The Zig error a reported type names. Compared by address, because the types are
+        /// immortal singletons and there is nothing else to compare; a kind this module
+        /// does not name -- including a subtype of one it does -- reads as General, since
+        /// narrowing it would mean walking a parent chain the caller cannot act on.
+        """;
+
+    const string PreambleHead = """
+        /// The failure a fallible call reported. A Zig error set carries a kind and
+        /// nothing else, so the message, the source location and the cause chain the
+        /// native side filled in have to be readable somewhere; thread-local for the
+        /// same reason the native slot is, which is that two threads failing at once
+        /// are two failures.
+        pub threadlocal var last_error: ?*const abi.ke_error = null;
+
+        """;
+
+    /// <summary>
+    /// The types <see cref="AbiPreamble"/> declares by hand. They reach a description as
+    /// names no domain owns, so without this the error channel itself would be taken for
+    /// a type nobody describes.
+    /// </summary>
+    static readonly HashSet<string> AbiPreambleTypes = ["ke_error", "ke_error_type"];
+
+    const string AbiPreamble = """
+            pub const ke_error_type = extern struct {
+                name: ?[*:0]const u8,
+                parent: ?*const ke_error_type,
+            };
+
+            pub const ke_error = extern struct {
+                @"type": ?*const ke_error_type,
+                message: ?[*:0]const u8,
+                file: ?[*:0]const u8,
+                line: u32,
+                cause: ?*const ke_error,
+            };
+
+            pub extern fn ke_error_is(err: ?*const ke_error, @"type": *const ke_error_type) callconv(.c) bool;
+
+        """;
+
+    /// <summary>
+    /// The singletons the projection reaches, declared from the one list that also builds
+    /// the error set. <c>KE_ERROR_GENERAL</c> is not among the kinds, because it is what a
+    /// failure reads as when no kind matched rather than a kind a caller catches by name.
+    /// </summary>
+    static string AbiErrorTypes =>
+        string.Concat(ErrorKinds.Select(k => k.Singleton).Prepend("KE_ERROR_GENERAL")
+            .Select(s => $"    pub extern const {s}: ke_error_type;\n")) + "\n";
+
+    /// <summary>
+    /// The slot's parameters with its receiver put back. The receiver is not always
+    /// the struct that declares the slot -- an owner wrapper's <c>destroy</c> takes
+    /// the value the wrapper holds -- so it is read from the description rather than
+    /// assumed, because a declaration naming the wrong pointer type still compiles.
+    /// </summary>
+    string SlotAbiParams(ApiStruct owner, ApiSlot slot)
+    {
+        var receiver = slot.Receiver is { } declared
+            ? AbiType(declared, null, "")
+            : $"*{owner.Name}";
+        return string.Join(", ", new[] { $"self: {receiver}" }
+            .Concat(slot.Params.Select(p =>
+                $"{Idioms.Ident(p.Name ?? "_")}: {AbiType(p.Type, p, "")}")));
+    }
+
+    string AbiReturn(ApiSlot slot, string q) =>
+        slot.ReturnTagValue("array_of") is not null
+            ? $"?[*]const {AbiType(CTypes.Deref(slot.Returns), null, q)}"
+            : AbiType(slot.Returns, null, q);
+
+    /// <summary>
+    /// The Zig spelling of a C type. Every pointer answers two questions C leaves
+    /// open — may it be null, and does it reach one value or many — and the answers
+    /// come from the tags, which is the whole reason this is not <c>@cImport</c>.
+    /// A fixed extent moves to the front, where Zig writes it, and the element type
+    /// goes on through the same mapping: an extent left as a C declarator suffix
+    /// would take the whole spelling off the primitive table with it.
+    /// </summary>
+    string AbiType(string cType, ApiParam? p, string q)
+    {
+        if (CTypes.FixedArray(cType) is { } arr)
+            return $"[{arr.Extent}]{AbiType(arr.Element, p, q)}";
+
+        var t = Idioms.Base(cType);
+        var isConst = cType.Contains("const ");
+        var depth = t.Count(ch => ch == '*');
+        var bare = t.TrimEnd('*', ' ').Trim();
+
+        if (depth == 0) return Named(bare, q);
+        if (bare is "void") return depth == 1 ? "?*anyopaque" : "*?*anyopaque";
+        if (bare is "char" && depth == 1) return "[*:0]const u8";
+
+        var inner = Pointee(bare, q);
+        var cv = isConst ? "const " : "";
+        if (depth == 2) return $"?*?*{cv}{inner}";
+        if (p is not null && p.Has("array_of")) return $"[*]{cv}{inner}";
+        return p is not null && (p.Has("optional") || IsOutcome(p))
+            ? $"?*{cv}{inner}" : $"*{cv}{inner}";
+    }
+
+    /// <summary>
+    /// The type a pointer points at. A name no domain describes is a C type forward
+    /// declared and never defined -- a handle the header hands out and the caller only
+    /// ever holds the address of. Zig says that with <c>opaque</c>, and saying it is
+    /// what makes the pointer legal: spelling the bare name instead leaves the module
+    /// naming a symbol nothing declares. Only reachable behind a pointer, because a
+    /// value of a layout this domain cannot see is a defect in the description rather
+    /// than a type to invent.
+    /// </summary>
+    string Pointee(string bare, string q)
+    {
+        var named = Named(bare, q);
+        if (named == q + bare && !AbiPreambleTypes.Contains(bare)
+            && !DeclaredHere(bare) && !model.Structs.Any(s => s.Name == bare))
+            opaque.Add(bare);
+        return named;
+    }
+
+    string Named(string bare, string q)
+    {
+        if (Idioms.Primitive(bare) is { } prim && !model.TypeAliases.ContainsKey(bare)) return prim;
+        if (!DeclaredHere(bare) && foreign.TryGetValue(bare, out var owner))
+        {
+            var binding = Bind(owner.Module);
+            imported[binding] = owner.ImportPath;
+            return owner.IsStruct
+                ? $"{binding}.abi.{bare}"
+                : $"{binding}.{Idioms.TypeName(bare, convention)}";
+        }
+        if (model.TypeAliases.TryGetValue(bare, out var target) && Idioms.Primitive(target) is not null)
+            return Idioms.TypeName(bare, convention);
+        if (model.Enums.Any(e => e.Name == bare)) return Idioms.TypeName(bare, convention);
+        if (model.Structs.Any(s => s.Name == bare)) return q + bare;
+        return Idioms.Primitive(bare) ?? q + bare;
+    }
+
+    /// <summary>
+    /// The name an imported module is bound to. A domain reached for one of its types is
+    /// named after itself, unless this module already declares that name -- a vtable with
+    /// an <c>ecs</c> slot projects a method of that name, and a reference to <c>ecs</c>
+    /// inside the projection would then reach two declarations at once, which Zig refuses
+    /// rather than resolves.
+    /// </summary>
+    string Bind(string module) =>
+        LocalNames.Contains(module) ? module + "_domain" : module;
+
+    /// <summary>
+    /// Every name this module puts in scope around a call into the ABI: its own top-level
+    /// declarations, the methods of its projections, and those methods' parameters. All of
+    /// them see a top-level binding, so all of them can shadow one -- and a parameter is
+    /// the case worth renaming the import for rather than the other way round, because the
+    /// parameter's name is the header's own word for it and the binding's is invented.
+    /// </summary>
+    HashSet<string> LocalNames => localNames ??= [
+        .. model.TypeAliases.Keys.Select(a => Idioms.TypeName(a, convention)),
+        .. model.Enums.Select(e => Idioms.TypeName(e.Name, convention)),
+        .. classified.Providers.Select(v => Idioms.TypeName(v.Name, convention)),
+        .. classified.Providers.SelectMany(v => classified.SlotsByVtable[v.Name])
+            .Select(cs => Idioms.Camel(cs.Slot.Name)),
+        .. classified.Providers.SelectMany(v => classified.SlotsByVtable[v.Name])
+            .SelectMany(cs => cs.Slot.Params).Where(p => p.Name is not null)
+            .Select(p => Idioms.Ident(p.Name!)),
+    ];
+
+    HashSet<string>? localNames;
+
+    /// <summary>
+    /// Whether this domain declares the type itself. A type reaching the model marked
+    /// external, or reaching it only as the spelling of a field, is declared by some
+    /// other domain -- which is exactly the case an import answers.
+    /// </summary>
+    bool DeclaredHere(string bare) =>
+        model.Structs.Any(s => s.Name == bare && !s.External)
+        || model.Enums.Any(e => e.Name == bare && !e.External)
+        || model.TypeAliases.ContainsKey(bare);
+
+    /// <summary>The Zig type a projected value reads as, outside the ABI block.</summary>
+    string PubType(string cType, ApiParam? p) =>
+        AbiType(cType, p, "abi.");
+
+    /// <summary>
+    /// Whether the parameter is the engine handing the caller one of its own objects. The
+    /// two tags name the same thing from two sides -- the contract being called back into,
+    /// or a second one the call is running inside -- and both mean the same to a target
+    /// language: what arrives is an object, not an address.
+    /// </summary>
+    static bool IsEngineObject(ApiParam p) => p.Has("ctx") || p.Has("self");
+
+    static string BareOf(string cType) => Idioms.Base(cType).TrimEnd('*', ' ').Trim();
+
+    /// <summary>
+    /// The vtables this domain projects only because a call lends one out. A vtable with
+    /// neither an owner wrapper nor a factory is not a provider a caller can hold, so
+    /// nothing else would project it -- and without a projection the object the engine
+    /// lends would reach the caller as the raw pointer the whole backend exists to avoid.
+    /// </summary>
+    IEnumerable<ApiStruct> Lent =>
+        model.Structs.SelectMany(s => s.Slots).SelectMany(s => s.Params)
+            .Concat(model.Callbacks.SelectMany(c => c.Lanes))
+            .Where(IsEngineObject)
+            .Select(p => BareOf(p.Type))
+            .Distinct()
+            .Select(bare => model.Structs.FirstOrDefault(s =>
+                s.Name == bare && !s.External && s.IsVtable))
+            .OfType<ApiStruct>()
+            .Where(v => !classified.Providers.Contains(v) && !classified.Callbacks.Contains(v));
+
+    /// <summary>
+    /// The projection an engine object crosses as, or <see langword="null"/> when the
+    /// parameter is not one. The projection belongs to whichever domain declares the
+    /// vtable, so a domain merely receiving one reaches for it through an import rather
+    /// than declaring a second projection of the same contract -- and it takes the tag's
+    /// word for what arrives, because a type another domain owns reaches this one as a
+    /// name with no slots on it, which is indistinguishable here from plain data.
+    /// </summary>
+    string? LentType(ApiParam p)
+    {
+        if (!IsEngineObject(p)) return null;
+        var bare = BareOf(p.Type);
+        if (DeclaredHere(bare))
+            return model.Structs.Any(s => s.Name == bare && s.IsVtable)
+                ? Idioms.TypeName(bare, convention) : null;
+        if (!foreign.TryGetValue(bare, out var owner)) return null;
+        var binding = Bind(owner.Module);
+        imported[binding] = owner.ImportPath;
+        return $"{binding}.{Idioms.TypeName(bare, convention)}";
+    }
+
+    /// <summary>
+    /// One vtable as a projection. <paramref name="owned"/> says whether a caller can come
+    /// to hold it: a vtable with an owner wrapper is created and torn down, while one that
+    /// only ever arrives as a parameter of a call has no lifetime of its own to offer --
+    /// declaring <c>init</c> and <c>deinit</c> on it would name an owner wrapper the
+    /// domain does not have, and invite a caller to destroy what the engine is lending.
+    /// </summary>
+    void RenderProvider(StringBuilder sb, ApiStruct v, bool owned = true)
+    {
+        var name = Idioms.TypeName(v.Name, convention);
+        if (v.Doc is not null) foreach (var line in DocLines(v.Doc)) sb.AppendLine(line);
+        sb.AppendLine($"pub const {name} = struct {{");
+        sb.AppendLine($"    ref: *abi.{v.Name},");
+        if (owned)
+        {
+            sb.AppendLine($"    destroy: ?*const fn (self: *abi.{v.Name}) callconv(.c) void,");
+            sb.AppendLine();
+            sb.AppendLine($"    pub fn init(handle: abi.{convention.HandleTypeFor(v.Name)}) {name} {{");
+            sb.AppendLine("        return .{ .ref = handle.ref, .destroy = handle.destroy };");
+            sb.AppendLine("    }");
+        }
+        sb.AppendLine();
+        sb.AppendLine(owned
+            ? "    /// Wraps a native pointer owned elsewhere. Deinit does not destroy it."
+            : "    /// Wraps the pointer the engine handed over. Nothing here owns it: the call it"
+              + "\n    /// arrived in is the whole of its lifetime.");
+        sb.AppendLine($"    pub fn borrow(ref: *abi.{v.Name}) {name} {{");
+        sb.AppendLine(owned
+            ? "        return .{ .ref = ref, .destroy = null };"
+            : "        return .{ .ref = ref };");
+        sb.AppendLine("    }");
+        if (owned)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    pub fn deinit(self: *{name}) void {{");
+            sb.AppendLine("        if (self.destroy) |d| d(self.ref);");
+            sb.AppendLine("        self.destroy = null;");
+            sb.AppendLine("    }");
+        }
+
+        var declared = classified.SlotsByVtable[v.Name]
+            .Select(cs => Idioms.Camel(cs.Slot.Name)).ToHashSet();
+        declared.UnionWith(["init", "borrow", "deinit", "ref", "destroy"]);
+
+        foreach (var cs in classified.SlotsByVtable[v.Name])
+        {
+            var method = new StringBuilder();
+            try { RenderSlot(method, cs, name, declared); }
+            catch (NotSupportedException e) { unprojected.Add(e.Message); continue; }
+            sb.AppendLine();
+            sb.Append(method);
+        }
+        sb.AppendLine("};");
+        sb.AppendLine();
+    }
+
+    record Reading(string Name, string Type, string Expr);
+
+    /// <summary>
+    /// One slot as a method on the projection. <paramref name="declared"/> is what the
+    /// projection struct already declares: Zig refuses a parameter that shadows an
+    /// outer declaration, and a vtable with both a <c>parent</c> slot and a
+    /// <c>parent</c> parameter is not a mistake in the header -- the two names live in
+    /// different scopes in C, and only the projection puts them in the same one.
+    /// </summary>
+    void RenderSlot(StringBuilder sb, ClassifiedSlot cs, string owner, IReadOnlySet<string> declared)
+    {
+        string Arg(ApiParam p) =>
+            Idioms.Ident(declared.Contains(p.Name!) ? p.Name! + "_arg" : p.Name!);
+
+        var slot = cs.Slot;
+        if (cs.Blobs.Count > 0
+            || slot.Params.Any(p => (model.CallbackOf(p.Type) is not null || p.Has("callback"))
+                && !p.Has("closure") && !IsConsumer(p) && p != cs.ExpandedParam))
+            throw new NotSupportedException(
+                $"{slot.Name}: this backend renders no raw callback and no opaque payload yet.");
+
+        var bag = cs.ExpandedParam is null ? null : Bag(cs);
+        if (bag is not null) bags[bag.TypeName] = bag;
+
+        var closures = slot.Params.Where(p => p.Has("closure"))
+            .Select(p => Closure($"{slot.Name}.{p.Name}", slot.Params, p))
+            .Concat(bag?.Closures ?? []).ToList();
+        var closureOf = closures.ToDictionary(c => c.Fn);
+        var stateOf = closures.Select(c => c.State).ToHashSet();
+
+        var consumers = slot.Params.Where(IsConsumer).Select(p => Consumer(slot, p)).ToList();
+        var consumerOf = consumers.ToDictionary(c => c.Param);
+        var paramNames = slot.Params.Where(p => p.Name is not null).Select(Arg).ToHashSet();
+        string FieldArg(ApiField f) => Idioms.Ident(
+            paramNames.Contains(Idioms.Ident(f.Name)) || declared.Contains(f.Name) ? f.Name + "_arg" : f.Name);
+
+        var outs = (cs.Shape switch
+        {
+            SlotShape.Try or SlotShape.TupleOutParams => cs.OutParams,
+            SlotShape.ReturnsOutParam => [cs.OutParam!],
+            _ => cs.TrailingOuts,
+        }).Where(p => !IsWritableSpan(p)).ToList();
+        var errParam = cs.Fallible ? slot.Params[^1] : null;
+        var counts = cs.Sequences.Select(s => s.Count).ToHashSet();
+
+        var sig = bag is null
+            ? cs.PublicParams.Where(p => !p.Has("out") || IsWritableSpan(p)).ToList()
+            : slot.Params.Where(p => !convention.IsErrorOutParam(p)).ToList();
+        var body = new List<string>();
+        var args = new List<string> { "self.ref" };
+
+        foreach (var p in slot.Params)
+        {
+            if (p == errParam) { args.Add("&err"); continue; }
+            if (closureOf.TryGetValue(p, out var fnOf)) { args.Add($"{TrampolineName(fnOf)}.call"); continue; }
+            if (stateOf.Contains(p)) { args.Add($"@ptrCast({Arg(p)})"); continue; }
+            if (consumerOf.TryGetValue(p, out var cons)) { args.Add(ConsumerValue(cons)); continue; }
+            if (LentType(p) is not null) { args.Add($"{Arg(p)}.ref"); continue; }
+            if (p == bag?.Param) { args.Add($"&{BagValue(bag)}"); continue; }
+            if (counts.Contains(p)) { args.Add($"@intCast({Arg(cs.Sequences.First(s => s.Count == p).Seq)}.len)"); continue; }
+            if (p == cs.ReturnCount) { args.Add("&count"); continue; }
+            if (p.Has("array_of")) { args.Add($"{Arg(p)}.ptr"); continue; }
+            if (p.Has("out")) { args.Add("&" + Local(p)); continue; }
+            if (p.Has("utf8")) { args.Add($"{Arg(p)}.ptr"); continue; }
+            args.Add(Arg(p));
+        }
+
+        var taken = slot.Params.Concat(bag?.Bag.Fields.Select(AsParam) ?? [])
+            .Where(p => p.Name is not null).Select(Arg)
+            .Append("self").Concat(declared).ToHashSet();
+        foreach (var c in closures) body.AddRange(TrampolineLines(c, Arg(c.Fn), taken));
+        foreach (var c in consumers) body.AddRange(ConsumerLines(c, Arg(c.Param), taken, FieldArg));
+        if (bag is not null) body.AddRange(BagLines(bag, Arg(bag.Param), Arg));
+
+        foreach (var p in outs)
+            body.Add($"var {Local(p)}: "
+                + $"{PubType(CTypes.Deref(p.Type), null)} = undefined;");
+        if (cs.ReturnCount is not null) body.Add("var count: u32 = 0;");
+        if (cs.Fallible) body.Add("var err: ?*abi.ke_error = null;");
+
+        var call = $"self.ref.{Idioms.Ident(slot.Name)}({string.Join(", ", args)})";
+
+        var readings = outs.Select(p => new Reading(WrittenName(p),
+            PubType(CTypes.Deref(p.Type), null),
+            Local(p))).ToList();
+
+        var returnIsFailureLane = convention.SignalsFailureByReturn(slot.Returns)
+            && (cs.Fallible || cs.Shape is SlotShape.Try);
+        var carriesReturn = slot.Returns.Trim() is not "void" && !returnIsFailureLane;
+        string? valueType = null;
+        if (cs.ReturnCount is not null)
+            valueType = $"[]const {PubType(CTypes.Deref(slot.Returns), null)}";
+        else if (carriesReturn)
+            valueType = PubType(slot.Returns, null);
+
+        var items = (valueType is null ? readings : readings.Prepend(new Reading("value", valueType, "result"))).ToList();
+        var inner = items.Count switch
+        {
+            0 => "void",
+            1 => items[0].Type,
+            _ => "struct { " + string.Join(", ", items.Select(i => $"{Idioms.Ident(i.Name)}: {i.Type}")) + " }",
+        };
+        var ret = cs.Shape is SlotShape.Try ? $"?{inner}" : cs.Fallible ? $"Error!{inner}" : inner;
+
+        string Compose() => items.Count switch
+        {
+            0 => "return;",
+            1 => $"return {items[0].Expr};",
+            _ => "return .{ " + string.Join(", ", items.Select(i => $".{Idioms.Ident(i.Name)} = {i.Expr}")) + " };",
+        };
+
+        if (cs.ReturnCount is not null)
+        {
+            body.Add($"const front = {call} orelse return &.{{}};");
+            body.Add("return front[0..count];");
+        }
+        else if (cs.Shape is SlotShape.Try)
+        {
+            body.Add($"if (!{call}) return null;");
+            body.Add(Compose());
+        }
+        else if (cs.Fallible && convention.SignalsFailureByReturn(slot.Returns))
+        {
+            body.Add($"if (!{call}) return raise(err);");
+            body.Add(Compose());
+        }
+        else if (carriesReturn)
+        {
+            body.Add($"const result = {call};");
+            if (cs.Fallible) body.Add("if (err != null) return raise(err);");
+            body.Add(Compose());
+        }
+        else
+        {
+            body.Add($"{call};");
+            body.Add(Compose());
+        }
+
+        if (slot.Doc is not null) foreach (var line in DocLines(slot.Doc, "    ")) sb.AppendLine(line);
+        var sigText = string.Join(", ", new[] { $"self: {owner}" }
+            .Concat(sig.Where(p => !stateOf.Contains(p)).SelectMany(p =>
+                closureOf.TryGetValue(p, out var c)
+                    ? new[] { $"{Arg(c.State)}: anytype", $"comptime {Arg(p)}: {HandlerType(c, Arg(c.State))}" }
+                    : consumerOf.TryGetValue(p, out var cf)
+                    ? new[] { $"{Arg(p)}: anytype" }
+                        .Concat(cf.Plain.Select(f => $"{FieldArg(f)}: {PubType(f.Type, null)}")).ToArray()
+                    : p == bag?.Param
+                    ? bag.Closures.SelectMany(c => new[]
+                        {
+                            $"{Arg(c.State)}: anytype",
+                            $"comptime {Arg(c.Fn)}: {(Optional(c) ? "?" : "")}{HandlerType(c, Arg(c.State))}",
+                        })
+                        .Distinct().Append($"{Arg(p)}: {bag.TypeName}").ToArray()
+                    : [$"{Arg(p)}: {SigType(p)}"])));
+        sb.AppendLine($"    pub fn {Idioms.Camel(slot.Name)}({sigText}) {ret} {{");
+        foreach (var line in body) sb.AppendLine($"        {line}");
+        sb.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// A handler the caller supplies, the state it reaches its own data through, and the
+    /// lanes of the typedef that says how the engine will call it.
+    /// </summary>
+    record ClosureForm(ApiParam Fn, ApiParam State, ApiCallback Callback,
+        ApiParam ContextLane, ApiParam? ErrorLane, ReportKind Report,
+        IReadOnlyList<ApiParam> OutcomeLanes);
+
+    /// <summary>
+    /// How a handler tells the engine it failed. The two spellings are not
+    /// interchangeable: a <c>ke_error</c> points into the failing thread's own storage and
+    /// there is no exported way to mint one, so that channel can only carry the fact of a
+    /// failure and the kind is lost; a <c>ke_error_type</c> is an immortal singleton, so
+    /// that one carries the kind whole.
+    /// </summary>
+    enum ReportKind { None, Fact, Kind }
+
+    static string Norm(string t) => t.Replace(" ", "");
+
+    static ReportKind ReportOf(ApiParam lane) => Norm(lane.Type) switch
+    {
+        "ke_error**" => ReportKind.Fact,
+        "constke_error_type**" => ReportKind.Kind,
+        _ => ReportKind.None,
+    };
+
+    /// <summary>
+    /// Whether the lane tells the handler that something already failed. That is the
+    /// opposite direction from a report channel, and it reads as an optional error rather
+    /// than one, because the engine calls the handler on success too.
+    /// </summary>
+    static bool IsOutcome(ApiParam lane) =>
+        Norm(lane.Type) is "constke_error*" or "constke_error_type*";
+
+    /// <summary>
+    /// The closure a <c>[closure:&lt;state&gt;]</c> parameter declares. Which lane carries
+    /// the caller's own pointer back is the typedef's own statement, because a lane typed
+    /// <c>void*</c> says nothing about what travels in it. <paramref name="scope"/> is
+    /// where the named state is looked for, which is the slot's own parameters for a
+    /// handler passed directly and the bag's fields for one passed inside a bag.
+    /// </summary>
+    ClosureForm Closure(string where, IReadOnlyList<ApiParam> scope, ApiParam fn)
+    {
+        var stateName = fn.TagValue("closure")
+            ?? throw new NotSupportedException(
+                $"{where}: [closure] must name the state parameter, as [closure:<name>]");
+        var state = scope.FirstOrDefault(p => p.Name == stateName)
+            ?? throw new NotSupportedException(
+                $"{where}: [closure:{stateName}] names nothing alongside it");
+        var callback = model.CallbackOf(fn.Type)
+            ?? throw new NotSupportedException(
+                $"{where}: [closure] needs a function-pointer typedef, and {fn.Type.Trim()} is not one");
+        var context = callback.Lanes.FirstOrDefault(l => l.Has("context"))
+            ?? throw new NotSupportedException(
+                $"{where}: {callback.Name} declares no [context] lane for the state to return in");
+        foreach (var lane in callback.Lanes.Where(IsEngineObject).Where(l => LentType(l) is null))
+            throw new NotSupportedException(
+                $"{where}: {callback.Name} hands the handler {lane.Type.Trim()}, and no domain"
+                + " describes that as a vtable this one can reach a projection of");
+        var report = callback.Lanes.FirstOrDefault(l => ReportOf(l) is not ReportKind.None);
+        return new ClosureForm(fn, state, callback, context, report,
+            report is null ? ReportKind.None : ReportOf(report),
+            callback.Lanes.Where(IsOutcome).ToList());
+    }
+
+    /// <summary>
+    /// The function the caller writes. The context lane is gone -- the state arrives
+    /// typed, so there is nothing to cast back -- a lane the typedef declares as a report
+    /// channel becomes Zig's own error union, and a lane naming a failure that already
+    /// happened becomes an optional error. Nothing in the signature spells
+    /// <c>ke_error</c>, which is the point: both spellings are the ABI's way of saying
+    /// something Zig already has a way of saying.
+    /// </summary>
+    string HandlerType(ClosureForm c, string stateArg)
+    {
+        var lanes = c.Callback.Lanes
+            .Where(l => l != c.ContextLane && l != c.ErrorLane)
+            .Select(HandlerLaneType)
+            .Prepend($"@TypeOf({stateArg})");
+        var ret = c.Report is not ReportKind.None ? "Error!void"
+            : c.Callback.Returns.Trim() is "void" ? "void"
+            : PubType(c.Callback.Returns, null);
+        return $"fn ({string.Join(", ", lanes)}) {ret}";
+    }
+
+    string HandlerLaneType(ApiParam lane) =>
+        LentType(lane) ?? (IsOutcome(lane) ? "?Error"
+        : lane.Has("utf8") ? "[:0]const u8"
+        : PubType(lane.Type, lane));
+
+    static string TrampolineName(ClosureForm c) => Idioms.Pascal(c.Fn.Name!) + "Trampoline";
+
+    /// <summary>
+    /// A value crossing into the caller's own code. The two spellings a failure arrives
+    /// in become Zig's own, and a C string becomes a slice, so the same lane reads the
+    /// same way whether the caller supplied one function or a whole vtable.
+    /// </summary>
+    string HandedExpr(ApiParam lane, string name) =>
+        LentType(lane) is { } lent ? $"{lent}.borrow({name})"
+        : IsOutcome(lane) ? OutcomeExpr(lane, name)
+        : lane.Has("utf8") ? Within("std", $"std.mem.span({name})")
+        : name;
+
+    /// <summary>
+    /// A vtable the caller implements instead of receives, the field its own state
+    /// reaches every slot through, and the plain fields it also carries. The state field
+    /// is found by its type rather than its name: an untyped pointer is the only field a
+    /// slot can read its implementer back out of.
+    /// </summary>
+    record ConsumerForm(ApiParam Param, ApiStruct Vtable, ApiField State,
+        IReadOnlyList<ApiField> Plain);
+
+    bool IsConsumer(ApiParam p) => classified.Callbacks.Any(c => c.Name == p.Type.Trim());
+
+    /// <summary>
+    /// The vtable a <c>[callback]</c> parameter asks the caller to implement. Two shapes
+    /// are refused rather than approximated: a vtable with no single untyped field has
+    /// nowhere to put the caller, and a slot of it that reports failure would need the
+    /// caller's method to be fallible, which nothing here yet says how to read.
+    /// </summary>
+    ConsumerForm Consumer(ApiSlot slot, ApiParam p)
+    {
+        var where = $"{slot.Name}.{p.Name}";
+        var vtable = classified.Callbacks.First(c => c.Name == p.Type.Trim());
+        var state = vtable.Fields.Where(f => Norm(f.Type) is "void*").ToList();
+        if (state.Count != 1)
+            throw new NotSupportedException(
+                $"{where}: {vtable.Name} declares {state.Count} untyped fields, and an implementer"
+                + " reaches its own state through exactly one of them");
+        if (vtable.Slots.Any(s => convention.IsFallible(s.Returns, s.Params)
+                || s.Params.Any(l => ReportOf(l) is not ReportKind.None)))
+            throw new NotSupportedException(
+                $"{where}: a slot of {vtable.Name} reports failure, which this backend does not"
+                + " project yet");
+        return new ConsumerForm(p, vtable, state[0],
+            vtable.Fields.Where(f => f != state[0]).ToList());
+    }
+
+    /// <summary>
+    /// A parameter bag the call passes by reference, split into the parts a Zig caller
+    /// states differently. A handler and the state it reaches its own data through cannot
+    /// be struct fields -- one is comptime and the other is typed by what the caller
+    /// passed -- while everything else is exactly what a Zig struct with field defaults
+    /// already says, including the count beside each span, which comes off the span.
+    /// </summary>
+    record BagForm(ApiParam Param, ApiStruct Bag, string TypeName,
+        IReadOnlyList<ClosureForm> Closures, IReadOnlyList<ApiParam> Fields,
+        IReadOnlyDictionary<ApiParam, ApiParam> CountOf);
+
+    static ApiParam AsParam(ApiField f) => new(f.Name, f.Type, f.Tags, f.Doc);
+
+    BagForm Bag(ClassifiedSlot cs)
+    {
+        var slot = cs.Slot;
+        var bag = cs.ExpandedStruct!;
+        var all = bag.Fields.Select(AsParam).ToList();
+        var closures = all.Where(p => p.Has("closure"))
+            .Select(p => Closure($"{slot.Name}.{bag.Name}.{p.Name}", all, p)).ToList();
+        var spoken = closures.Select(c => c.Fn).Concat(closures.Select(c => c.State)).ToHashSet();
+        var countOf = new Dictionary<ApiParam, ApiParam>();
+        foreach (var p in all.Where(p => p.Has("array_of")))
+        {
+            var named = p.TagValue("array_of");
+            countOf[p] = all.FirstOrDefault(c => c.Name == named)
+                ?? throw new NotSupportedException(
+                    $"{slot.Name}.{bag.Name}.{p.Name}: [array_of:{named}] names no field beside it");
+            spoken.Add(countOf[p]);
+        }
+        return new BagForm(cs.ExpandedParam!, bag, Idioms.TypeName(bag.Name, convention),
+            closures, all.Where(p => !spoken.Contains(p)).ToList(), countOf);
+    }
+
+    /// <summary>
+    /// The default a bag field carries when the caller leaves it out. The header states it
+    /// per field, and Zig is the one target language that can say it where the field is
+    /// declared rather than at every call -- so a field with no stated default is one the
+    /// caller must fill, which is the header's statement and not this backend's.
+    /// </summary>
+    static string? FieldDefault(ApiParam p) => p.TagValue("default") switch
+    {
+        null => null,
+        "empty" => "&.{}",
+        var v => v,
+    };
+
+    /// <summary>
+    /// The projected type a bag reads as. Declared at the module's top level rather than
+    /// inside the projection, because a caller names it to build a value before the call
+    /// and the defaults are what make that value short.
+    /// </summary>
+    void RenderBag(StringBuilder sb, BagForm b)
+    {
+        if (b.Bag.Doc is not null) foreach (var line in DocLines(b.Bag.Doc)) sb.AppendLine(line);
+        sb.AppendLine($"pub const {b.TypeName} = struct {{");
+        foreach (var f in b.Fields)
+        {
+            if (f.Doc is not null) foreach (var line in DocLines(f.Doc, "    ")) sb.AppendLine(line);
+            var d = FieldDefault(f) is { } v ? $" = {v}" : "";
+            sb.AppendLine($"    {Idioms.Ident(f.Name!)}: {SigType(f)}{d},");
+        }
+        sb.AppendLine("};");
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// The bag value the call is handed, built from the projected one. Every field the
+    /// caller did not state is a field the ABI still needs a value in, and each of the
+    /// three that are not plain data has one place it comes from: a span's count off the
+    /// span, a handler's entry point off its trampoline, and the state off the pointer the
+    /// caller passed.
+    /// </summary>
+    IEnumerable<string> BagLines(BagForm b, string arg, Func<ApiParam, string> name)
+    {
+        string Field(ApiParam f)
+        {
+            var read = $"{arg}.{Idioms.Ident(f.Name!)}";
+            if (b.Closures.FirstOrDefault(c => c.Fn.Name == f.Name) is { } fn)
+                return Optional(fn) ? $"if ({name(fn.Fn)} == null) null else {TrampolineName(fn)}.call"
+                    : $"{TrampolineName(fn)}.call";
+            if (b.Closures.FirstOrDefault(c => c.State.Name == f.Name) is { } st)
+                return $"@ptrCast({name(st.State)})";
+            if (b.CountOf.FirstOrDefault(kv => kv.Value.Name == f.Name).Key is { } counted)
+                return $"@intCast({arg}.{Idioms.Ident(counted.Name!)}.len)";
+            if (f.Has("utf8") || f.Has("array_of")) return $"{read}.ptr";
+            return read;
+        }
+
+        yield return $"const {BagValue(b)} = abi.{b.Bag.Name}{{";
+        foreach (var f in b.Bag.Fields.Select(AsParam))
+            yield return $"    .{Idioms.Ident(f.Name!)} = {Field(f)},";
+        yield return "};";
+    }
+
+    /// <summary>
+    /// Whether the header says a handler may be left out. A bag field stating a default of
+    /// none is the one handler a caller can decline to supply, so it reads as an optional
+    /// function and the ABI slot gets null -- there being nothing for a trampoline to call.
+    /// </summary>
+    static bool Optional(ClosureForm c) => c.Fn.TagValue("default") == "none";
+
+    static string BagValue(BagForm b) => Idioms.Ident(b.Param.Name! + "_native");
+
+    static string ConsumerType(ConsumerForm c) => Idioms.Pascal(c.Param.Name!) + "Vtable";
+
+    static string ConsumerValue(ConsumerForm c) => Idioms.Ident(c.Param.Name! + "_native");
+
+    /// <summary>
+    /// The vtable value handed to the engine, filled from a type the caller wrote. Zig
+    /// needs no interface declared for this: each slot becomes a method looked up on the
+    /// caller's own type, so a missing or mistyped one is named by the compiler rather
+    /// than by a check invented here. Nothing is retained -- the state is the pointer the
+    /// caller already holds, and outliving the registration is their statement to make.
+    /// </summary>
+    IEnumerable<string> ConsumerLines(ConsumerForm c, string arg, IReadOnlySet<string> taken,
+        Func<ApiField, string> fieldArg)
+    {
+        string Lane(string n) => Idioms.Ident(taken.Contains(n) ? n + "_lane" : n);
+        var self = Lane("self");
+        var state = Idioms.Ident(c.State.Name);
+
+        yield return $"const {ConsumerType(c)} = struct {{";
+        yield return $"    const Target = @TypeOf({arg});";
+        foreach (var s in c.Vtable.Slots)
+        {
+            var receiver = s.Receiver is { } r ? AbiType(r, null, "abi.") : $"*abi.{c.Vtable.Name}";
+            var ps = new[] { $"{self}: {receiver}" }
+                .Concat(s.Params.Select(l => $"{Lane(l.Name!)}: {PubType(l.Type, l)}"));
+            var handed = s.Params.Select(l => HandedExpr(l, Lane(l.Name!)));
+            var target = $"@as(Target, @ptrCast(@alignCast({self}.{state}.?)))";
+            yield return $"    fn {Idioms.Camel(s.Name)}({string.Join(", ", ps)})"
+                + $" callconv(.c) {PubType(s.Returns, null)} {{";
+            yield return $"        return {target}.{Idioms.Camel(s.Name)}({string.Join(", ", handed)});";
+            yield return "    }";
+        }
+        yield return "};";
+        yield return $"const {ConsumerValue(c)} = abi.{c.Vtable.Name}{{";
+        yield return $"    .{state} = @ptrCast({arg}),";
+        foreach (var f in c.Plain) yield return $"    .{Idioms.Ident(f.Name)} = {fieldArg(f)},";
+        foreach (var s in c.Vtable.Slots)
+            yield return $"    .{Idioms.Ident(s.Name)} = {ConsumerType(c)}.{Idioms.Camel(s.Name)},";
+        yield return "};";
+    }
+
+    /// <summary>
+    /// The optional error an outcome lane reads as. A <c>ke_error</c> goes through the
+    /// same reading a fallible call uses, so the message and the cause chain stay
+    /// reachable; a <c>ke_error_type</c> has no such storage to record, which is the whole
+    /// reason the ABI chose it for a failure that outlives its thread.
+    /// </summary>
+    static string OutcomeExpr(ApiParam lane, string name) =>
+        Norm(lane.Type) is "constke_error*"
+            ? $"if ({name}) |failed| raise(failed) else null"
+            : $"errorFrom({name})";
+
+    /// <summary>
+    /// The C entry point the engine is handed. Zig closes over nothing at runtime, so
+    /// the state travels the same <c>void*</c> lane C uses and comes back a typed
+    /// pointer -- which is why nothing here has to be retained: the memory is the
+    /// caller's, and outliving the call is their statement to make, not a table's.
+    /// <paramref name="taken"/> is what the method around it already names: a lane and a
+    /// parameter may share a name in C, where they are two prototypes, and the trampoline
+    /// is the one place that nests one inside the other.
+    /// </summary>
+    IEnumerable<string> TrampolineLines(ClosureForm c, string handler, IReadOnlySet<string> taken)
+    {
+        string Lane(ApiParam l) => l == c.ErrorLane && c.Report is ReportKind.Fact ? "_"
+            : Idioms.Ident(taken.Contains(l.Name!) ? l.Name! + "_lane" : l.Name!);
+        var ps = c.Callback.Lanes.Select(l => $"{Lane(l)}: {PubType(l.Type, l)}");
+        var ctx = $"@ptrCast(@alignCast({Lane(c.ContextLane)}.?))";
+        var handed = c.Callback.Lanes.Where(l => l != c.ContextLane && l != c.ErrorLane)
+            .Select(l => HandedExpr(l, Lane(l)));
+        var named = Optional(c) ? handler + ".?" : handler;
+        var call = $"{named}({string.Join(", ", new[] { ctx }.Concat(handed))})";
+        var ret = PubType(c.Callback.Returns, null);
+
+        yield return $"const {TrampolineName(c)} = struct {{";
+        yield return $"    fn call({string.Join(", ", ps)}) callconv(.c) {ret} {{";
+        if (c.Report is ReportKind.Kind)
+        {
+            yield return $"        {call} catch |e| {{";
+            yield return $"            if ({Lane(c.ErrorLane!)}) |slot| slot.* = errorType(e);";
+            if (ret is not "void") yield return "            return false;";
+            yield return "        };";
+            if (ret is not "void") yield return "        return true;";
+        }
+        else if (c.Report is ReportKind.Fact)
+        {
+            yield return $"        {call} catch return false;";
+            yield return "        return true;";
+        }
+        else if (c.Callback.Returns.Trim() is "void") yield return $"        {call};";
+        else yield return $"        return {call};";
+        yield return "    }";
+        yield return "};";
+    }
+
+    /// <summary>
+    /// Records that the module reaches <paramref name="module"/>, and gives back the
+    /// expression unchanged. An import Zig never sees used is a compile error, so the
+    /// only place that can say a module is needed is the one that spells it.
+    /// </summary>
+    string Within(string module, string expr)
+    {
+        imported[module] = module;
+        return expr;
+    }
+
+    /// <summary>
+    /// How a supplied parameter is spelled in the projection. A counted pointer is
+    /// one slice, a utf8 string is one sentinel-terminated slice, and in both cases
+    /// the length the ABI takes separately comes off the value itself.
+    /// </summary>
+    string SigType(ApiParam p)
+    {
+        if (LentType(p) is { } lent) return lent;
+        if (p.Has("utf8")) return "[:0]const u8";
+        if (p.Has("array_of"))
+            return (IsWritableSpan(p) ? "[]" : "[]const ") + PubType(CTypes.Deref(p.Type), null);
+        return PubType(p.Type, p);
+    }
+
+    /// <summary>
+    /// Whether a parameter is a buffer the caller allocates and the callee fills. It
+    /// is written back, like any <c>[out]</c>, and it is also counted, which is what
+    /// says the count is the caller's -- so there is nothing here to declare a local
+    /// for and take the address of: the value already is the memory, and the span
+    /// carries the capacity the ABI asks for separately.
+    /// </summary>
+    static bool IsWritableSpan(ApiParam p) => p.Has("out") && p.Has("array_of");
+
+    /// <summary>The local a written-back parameter's address is taken from.</summary>
+    static string Local(ApiParam p) => Idioms.Ident(WrittenName(p) + "_out");
+
+    static string WrittenName(ApiParam p) =>
+        p.Name!.StartsWith("out_", StringComparison.Ordinal) && p.Name!.Length > 4
+            ? p.Name!["out_".Length..] : p.Name!;
+
+    static IEnumerable<string> DocLines(string doc, string indent = "")
+    {
+        var words = doc.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var line = new StringBuilder();
+        foreach (var w in words)
+        {
+            if (line.Length > 0 && line.Length + w.Length > 76) { yield return $"{indent}/// {line}"; line.Clear(); }
+            if (line.Length > 0) line.Append(' ');
+            line.Append(w);
+        }
+        if (line.Length > 0) yield return $"{indent}/// {line}";
+    }
+}

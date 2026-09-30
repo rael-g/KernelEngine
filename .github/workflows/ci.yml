@@ -1,0 +1,110 @@
+name: build and test
+
+# The gates existed before this file did, and nothing ran them: the drift checks,
+# the coverage check and the three test suites all had to be remembered by hand.
+# A gate nobody runs is a gate that goes stale, so this runs them on every push
+# and pull request, in the order a person would.
+#
+# On both platforms, because "backend-agnostic" and "no platform favoritism" are
+# claims this repository makes and only a second target keeps honest. The build
+# already carries a triplet for each (vcpkg-triplets/x64-{linux,windows}-zig);
+# what has never been checked is that both still pass.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    strategy:
+      # Neither platform's failure hides the other's: a break is almost always on
+      # one of them, and knowing which is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            exe: ''
+          - os: windows-latest
+            exe: '.exe'
+
+    runs-on: ${{ matrix.os }}
+
+    # One shell on both platforms, so a path or a binary name never differs by
+    # runner rather than by intent.
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # X11 and GL headers only: vcpkg builds glfw3 from source, and it looks for
+      # the windowing system's own development headers, which no port provides.
+      # Windows ships its equivalents with the SDK the runner already has.
+      - name: Install windowing system headers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xorg-dev libgl1-mesa-dev libglu1-mesa-dev pkg-config
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Speed only, never correctness: the build fetches vcpkg into .cache and
+      # installs the ports into vcpkg_installed_zig by itself, so a cache miss
+      # costs minutes rather than failing. Both directories are derived from the
+      # manifest and the triplet, which is what the key follows.
+      - name: Restore vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache
+            vcpkg_installed_zig
+          key: vcpkg-${{ matrix.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
+
+      - name: Build native
+        run: zig build --prefix build/native
+
+      # Every native test is a Zig test inside the file it covers, so the whole
+      # native suite is one step and it cannot go stale: a plugin does not compile
+      # until it answers whether it has tests, and the test invocation reuses the
+      # library build's own flags.
+      - name: Native tests
+        run: zig build test --prefix build/native
+
+      - name: Managed tests
+        run: dotnet test KernelEngine.slnx
+
+      # Every gate, on one platform. None of them reads a compiler or a linker:
+      # they compare generated text against the headers it came from, so the
+      # answer cannot differ by runner, and one differing would itself be the
+      # news. The two shapes gates pass --no-cache because a cached build of the
+      # generator answers about the wrong generator.
+      - name: Gates
+        if: runner.os == 'Linux'
+        run: |
+          dotnet run scripts/check_api_coverage.cs
+          dotnet run scripts/check_api_drift.cs
+          dotnet run scripts/check_component_fields.cs
+          dotnet run scripts/check_generator_contract.cs
+          dotnet run --no-cache scripts/check_generator_shapes.cs
+          dotnet run scripts/check_managed_handwritten.cs
+          dotnet run scripts/check_out_params.cs
+          dotnet run scripts/check_reconstruction.cs
+          dotnet run --no-cache scripts/check_zig_shapes.cs
+
+      # scripts/check_bindings_drift.cs is deliberately NOT run here. It compares
+      # timestamps, and a fresh checkout writes every file at once in no
+      # meaningful order, so it reports drift that regenerating does not change a
+      # byte of. It becomes a CI step once it compares content, the way the gates
+      # above already do.

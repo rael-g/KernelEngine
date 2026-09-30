@@ -33,5 +33,5 @@ public sealed class FontData : IDisposable
         Ascent      = ascent;
     }
 
-    public void Dispose() { /* nothing to release today; placeholder for future pooling */ }
+    public void Dispose() {  }
 }

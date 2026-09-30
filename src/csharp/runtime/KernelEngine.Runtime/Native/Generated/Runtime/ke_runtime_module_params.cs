@@ -9,9 +9,9 @@ public unsafe partial struct ke_runtime_module_params
 
     public void* user_data;
 
-    [NativeTypeName("bool (*)(ke_runtime *, void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_runtime*, void*, ke_error**, bool> on_load;
+    [NativeTypeName("ke_module_load_fn")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, void*, KernelEngine.Common.Native.ke_error**, bool> on_load;
 
-    [NativeTypeName("void (*)(ke_runtime *, void *)")]
+    [NativeTypeName("ke_module_unload_fn")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, void*, void> on_unload;
 }

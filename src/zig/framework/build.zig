@@ -1,20 +1,9 @@
 const std = @import("std");
 
-// Build the ke_framework shared library (Zig 0.16 API) — the engine's
-// opinionated composition layer (world, scene tree, scene loader, asset
-// resolver, input actions).
-//
-// The module is Zig end to end. The only C left is vendored tomlc99, which Zig
-// compiles itself, so nothing built by another toolchain is linked *into* this
-// module; errors go through the shared Zig kerror seam rather than ke_common.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
 
-    // The single shared tomlc99 copy lives under src/zig/common. The root
-    // build.zig threads its absolute path in; a standalone `zig build` here
-    // defaults to the in-tree location relative to this plugin.
     const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "path to the shared vendored tomlc99 dir") orelse
         b.pathJoin(&.{ b.build_root.path.?, "..", "common", "third_party", "tomlc99" });
 
@@ -27,7 +16,11 @@ pub fn build(b: *std.Build) void {
     const ke_text = b.option([]const u8, "ke-text-include", "kernel_engine/text include dir") orelse @panic("-Dke-text-include required");
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
     const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
+    const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_runtime library") orelse @panic("-Dke-lib-dir required");
+    const ke_audio = b.option([]const u8, "ke-audio-include", "kernel_engine/audio include dir, read by the tests for its generated field table");
+    const ke_physics = b.option([]const u8, "ke-physics-include", "kernel_engine/physics include dir, read by the tests for its generated field table");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/framework_root.zig"),
@@ -35,10 +28,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler }) |inc| {
+    inline for (.{ ke_common, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
+    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_runtime", .{});
     addTomlc99(b, mod, tomlc99_dir);
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);
@@ -55,6 +50,33 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+
+    const test_step = b.step("test", "Run unit tests");
+    {
+        const test_mod = b.createModule(.{
+            .root_source_file = b.path("src/framework_root.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        inline for (.{ ke_common, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
+            test_mod.addIncludePath(.{ .cwd_relative = inc });
+        }
+        if (ke_audio) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
+        if (ke_physics) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
+        test_mod.addIncludePath(b.path("include"));
+        test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+        test_mod.linkSystemLibrary("ke_runtime", .{});
+        addTomlc99(b, test_mod, tomlc99_dir);
+        test_mod.addImport("kerror", b.createModule(.{
+            .root_source_file = .{ .cwd_relative = kerror_src },
+            .target = target,
+            .optimize = optimize,
+        }));
+
+        const unit_tests = b.addTest(.{ .root_module = test_mod });
+        test_step.dependOn(&b.addRunArtifact(unit_tests).step);
+    }
 }
 
 /// Wires the shared vendored tomlc99 into `mod`: its include dir plus

@@ -1,0 +1,69 @@
+[scene]
+name    = "Main"
+version = 2
+
+[[entity]]
+name = "Ambient"
+type = "ambient_light"
+[entity.ambient_light]
+color = [1.0, 1.0, 1.0]
+
+[[entity]]
+name = "Camera"
+type = "camera"
+[entity.transform]
+position = [0.0, 0.0, 10.0]
+[entity.camera]
+orthographic      = true
+orthographic_size = 5.0
+near_plane        = 0.1
+far_plane         = 100.0
+
+# Walls — each entity composes Wall.scene.toml (scale [16, 0.5, 1] from subscene).
+[[entity]]
+name  = "WallTop"
+scene = "res://scenes/Wall.scene.toml"
+[entity.transform2d]
+position = [0.0, 4.5]
+
+[[entity]]
+name  = "WallBottom"
+scene = "res://scenes/Wall.scene.toml"
+[entity.transform2d]
+position = [0.0, -4.5]
+
+# Paddles — position and move_action come from here; type from Paddle.scene.toml.
+[[entity]]
+name  = "PaddleLeft"
+scene = "res://scenes/Paddle.scene.toml"
+[entity.transform2d]
+position = [-7.5, 0.0]
+[entity.paddle]
+move_action = "PaddleLeftMove"
+
+[[entity]]
+name  = "PaddleRight"
+scene = "res://scenes/Paddle.scene.toml"
+[entity.transform2d]
+position = [7.5, 0.0]
+[entity.paddle]
+move_action = "PaddleRightMove"
+
+[[entity]]
+name  = "Ball"
+scene = "res://scenes/Ball.scene.toml"
+
+[[entity.connect]]
+signal = "GoalScored"
+target = "Scoreboard"
+
+[[entity.connect]]
+signal = "BallLaunched"
+target = "Scoreboard"
+
+[[entity]]
+name = "Scoreboard"
+type = "pong.scoreboard"
+[entity.scoreboard]
+font_path = ""
+font_size = 56.0

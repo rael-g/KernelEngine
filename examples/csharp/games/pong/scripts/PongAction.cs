@@ -6,8 +6,8 @@ namespace Pong;
 /// </summary>
 public enum PongAction
 {
-    PaddleLeftMove,   // Axis1D
-    PaddleRightMove,  // Axis1D
-    Launch,           // Button
-    Quit,             // Button
+    PaddleLeftMove,
+    PaddleRightMove,
+    Launch,
+    Quit,
 }

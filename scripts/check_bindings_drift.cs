@@ -1,10 +1,5 @@
 #!/usr/bin/env dotnet run
 
-// Detects when a C header changed but the generated C# bindings were never
-// regenerated: compares each header's mtime against its .rsp's Generated/*.cs
-// mtimes. Run after editing any kernel_engine/*.h to catch a forgotten
-// `dotnet run scripts/generate_bindings.cs`.
-
 using System.Runtime.CompilerServices;
 
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
@@ -58,7 +53,6 @@ foreach (var rsp in rspFiles)
     }
     var oldestGenTime = genFiles.Min(File.GetLastWriteTimeUtc);
 
-    // 1-second buffer for filesystem precision.
     if (newestHeaderTime > oldestGenTime + TimeSpan.FromSeconds(1))
     {
         var relHeader = Path.GetRelativePath(rootDir, newestHeaderName);
@@ -77,8 +71,6 @@ if (driftDetected)
 Console.WriteLine("[OK] All bindings are up to date.");
 return 0;
 
-// Parses an .rsp file to find input headers (--file) and the output directory
-// (--output, relative to the .rsp's own folder — same resolution ClangSharp uses).
 static (List<string> Headers, string OutputDir) GetRspInfo(string rspPath)
 {
     var rspDir = Path.GetDirectoryName(rspPath)!;

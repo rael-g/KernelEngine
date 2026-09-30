@@ -1,32 +1,10 @@
 #!/usr/bin/env dotnet run
 
-// KernelEngine Coverage.
-//
-// Runs the managed (C#) test suite under coverlet, then feeds it through
-// ReportGenerator and prints a structured summary.
-//
-// Usage:
-//     dotnet run scripts/coverage.cs            # full pipeline
-//     dotnet run scripts/coverage.cs clean      # wipe build/coverage/
-//     dotnet run scripts/coverage.cs report     # re-emit summary from cached data
-//
-// Everything lives under build/coverage/. The script never writes outside it.
-//
-// C# only. There is no native coverage story: Zig's own compiler has no
-// source-coverage instrumentation, and DWARF-based tools (kcov) can't fill
-// that gap either — Zig 0.16 emits a line-table extended opcode `libdw`
-// (which kcov depends on) doesn't decode, so kcov silently reports 0% for
-// any Zig binary regardless of what actually ran. This affects `zig build
-// test` targets the same way it affects the two legacy GTest suites
-// (tests/c/kernel, tests/integration/cpp) — neither produces real coverage
-// data today, so this script no longer tries to build or run them.
-
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 
-// Report formatting (percentages) must not vary with the host's locale.
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
 var action = args.Length > 0 ? args[0] : "run";
@@ -54,7 +32,6 @@ static class Coverage
 
     static string Norm(string p) => p.Replace('\\', '/');
 
-    // src/csharp/<project>/... -> <project>
     static string ModuleFor(string path)
     {
         var parts = Norm(path).Split('/');
@@ -62,8 +39,6 @@ static class Coverage
     }
 
     static string Short(string module) => module.Split('/') is { Length: > 0 } parts ? parts[^1] : module;
-
-    // ── Subprocess helper ────────────────────────────────────────────────────
 
     static int Run(IReadOnlyList<string> cmd, bool check = true, string? cwd = null)
     {
@@ -88,8 +63,6 @@ static class Coverage
         Console.WriteLine(new string('-', 70));
     }
 
-    // ── Phase 1: managed tests ───────────────────────────────────────────────
-
     static void RunManagedTests()
     {
         Banner("[1/2] Run managed (C#) tests");
@@ -104,8 +77,6 @@ static class Coverage
             "DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura",
         ], check: false);
     }
-
-    // ── Phase 2: report ──────────────────────────────────────────────────────
 
     static void BuildReport()
     {
@@ -131,8 +102,6 @@ static class Coverage
             "-classfilters:-*NativeMethods*;-*NativeAnnotation*;-*NativeTypeName*",
         ], check: false);
     }
-
-    // ── Structured summary ───────────────────────────────────────────────────
 
     class Counts
     {
@@ -207,8 +176,6 @@ static class Coverage
         Console.WriteLine();
         Console.WriteLine(text);
     }
-
-    // ── Subcommands ──────────────────────────────────────────────────────────
 
     public static void CmdClean()
     {

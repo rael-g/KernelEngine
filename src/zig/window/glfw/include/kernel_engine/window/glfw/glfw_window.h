@@ -1,6 +1,3 @@
-// ke_window_glfw_create — factory for the GLFW-backed window (the only export
-// this plugin has; everything else it offers is reached through the ke_window
-// vtable the factory returns).
 
 #pragma once
 
@@ -25,15 +22,15 @@ extern "C" {
 #endif
 
 typedef struct ke_window_glfw_params {
-    struct ke_logger *logger;
-    struct ke_input  *input;
-    const char       *title;
+    struct ke_logger *logger; /**< [borrowed,nullable] Optional logger. */
+    struct ke_input  *input;  /**< [borrowed,nullable] Optional input sink target. */
+    const char       *title;  /**< [borrowed,utf8] Window title. */
     int32_t           width;
     int32_t           height;
     bool              fullscreen;
 } ke_window_glfw_params;
 
-/// Creates a GLFW-backed window. Returns a handle whose `ref` is NULL on failure.
+/** Creates a GLFW-backed window. Returns a handle whose `ref` is NULL on failure. */
 KE_WINDOW_API ke_window_handle ke_window_glfw_create(const ke_window_glfw_params *params, ke_error **out_error);
 
 #ifdef __cplusplus

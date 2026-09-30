@@ -9,19 +9,19 @@ extern "C"
 {
 #endif
 
-    /// @brief Raw CPU-side mesh data returned by ke_asset_loader::load_model.
+    /// [view] Raw CPU-side mesh data returned by ke_asset_loader::load_model.
     ///        Vertices are ready to pass directly to ke_render::create_mesh.
     typedef struct ke_mesh_data
     {
-        ke_vertex *vertices;   ///< Array of vertices with pos, normal, UV, tangent
+        ke_vertex *vertices;   ///< [array_of:vertex_count] Vertices with pos, normal, UV, tangent
         uint32_t   vertex_count;
-        uint16_t  *indices;    ///< Triangle list indices (max 65535 vertices per mesh)
+        uint16_t  *indices;    ///< [array_of:index_count] Triangle list indices (max 65535 vertices per mesh)
         uint32_t   index_count;
         int32_t    material_index; ///< Index into ke_model_data::materials; -1 = none
         char       name[64];
     } ke_mesh_data;
 
-    /// @brief Raw CPU-side material data returned by ke_asset_loader::load_model.
+    /// [view] Raw CPU-side material data returned by ke_asset_loader::load_model.
     ///        Pass to ke_render::create_material after uploading textures.
     typedef struct ke_material_data
     {
@@ -33,24 +33,25 @@ extern "C"
         char    name[64];
     } ke_material_data;
 
-    /// @brief Decoded RGBA8 texture data returned by ke_asset_loader::load_model.
+    /// [view] Decoded RGBA8 texture data returned by ke_asset_loader::load_model.
     typedef struct ke_texture_data
     {
-        uint8_t  *pixels; ///< RGBA8, row-major, width * height * 4 bytes
+        uint8_t  *pixels;     ///< [array_of:byte_count] RGBA8 samples, row-major
+        uint32_t  byte_count; ///< Bytes pixels reaches: width * height * 4
         uint32_t  width;
         uint32_t  height;
         char      path[256]; ///< Source path; empty for embedded textures
     } ke_texture_data;
 
-    /// @brief Complete model data returned by ke_asset_loader::load_model.
+    /// [view] Complete model data returned by ke_asset_loader::load_model.
     ///        Owned by the loader; free with ke_asset_loader::free_model.
     typedef struct ke_model_data
     {
-        ke_mesh_data     *meshes;
+        ke_mesh_data     *meshes;    ///< [array_of:mesh_count] Meshes the model is drawn from
         uint32_t          mesh_count;
-        ke_material_data *materials;
+        ke_material_data *materials; ///< [array_of:material_count] Materials the meshes index into
         uint32_t          material_count;
-        ke_texture_data  *textures;
+        ke_texture_data  *textures;  ///< [array_of:texture_count] Textures the materials index into
         uint32_t          texture_count;
     } ke_model_data;
 
@@ -58,4 +59,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ASSET_MESH_DATA_H_
+#endif

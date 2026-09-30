@@ -1,16 +1,6 @@
 const std = @import("std");
 
-// Build the ke_audio_miniaudio shared library (Zig 0.16 API).
-// A standalone plugin: plays sounds via the vendored miniaudio.h (vcpkg),
-// dedups through ke_resource_cache_default (a real DLL, like ke_common).
-// Allocates through Zig's own allocator (std.heap.c_allocator).
-
 pub fn build(b: *std.Build) void {
-    // GNU ABI (Zig's Windows default), matching every other Zig plugin. Safe
-    // because nothing MSVC-built is linked into this module: the only C is
-    // miniaudio's header-only implementation, which Zig compiles itself;
-    // ke_common / ke_resource_cache_default are consumed across plain C-ABI DLL
-    // boundaries (ABI-neutral).
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
 
@@ -33,15 +23,9 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_self, miniaudio_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    // miniaudio is header-only: this is the one translation unit that compiles
-    // the implementation. @cImport only ever sees the declarations.
-    // -fno-sanitize=undefined: miniaudio (like most battle-tested C) does
-    // pointer arithmetic the Debug UBSan flags as UB; it is not our code to fix.
     mod.addCSourceFile(.{ .file = b.path("src/miniaudio_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
     mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
     mod.linkSystemLibrary("ke_resource_cache_default", .{});
-    // miniaudio uses the OS audio APIs; on Windows that's WASAPI/DSound and
-    // brings in winmm — same as the C++ plugin's IF(WIN32) link.
     if (target.result.os.tag == .windows) {
         mod.linkSystemLibrary("winmm", .{});
     }
@@ -59,4 +43,31 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/miniaudio_audio.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_self, miniaudio_include }) |inc| {
+        test_mod.addIncludePath(.{ .cwd_relative = inc });
+    }
+    test_mod.addCSourceFile(.{ .file = b.path("src/miniaudio_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
+    test_mod.addRPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
+    test_mod.linkSystemLibrary("ke_resource_cache_default", .{});
+    if (target.result.os.tag == .windows) {
+        test_mod.linkSystemLibrary("winmm", .{});
+    }
+    test_mod.addImport("kerror", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = kerror_src },
+        .target = target,
+        .optimize = optimize,
+    }));
+    test_mod.addCMacro("KE_AUDIO_MINIAUDIO_EXPORT", "");
+
+    const unit_tests = b.addTest(.{ .root_module = test_mod });
+    const run_tests = b.addRunArtifact(unit_tests);
+    b.step("test", "Run the miniaudio audio unit tests").dependOn(&run_tests.step);
 }

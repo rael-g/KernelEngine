@@ -1,8 +1,3 @@
-// Spawns the abort_probe helper as a subprocess and checks that a genuine
-// flecs internal assertion ends it cleanly: nonzero exit, a readable
-// "FATAL: [ke.ecs.flecs.fatal] ..." message on stderr, no OS crash dialog.
-// Kept out of ecs_flecs.zig's own tests because this one needs process
-// isolation (see abort_probe.zig for why).
 
 const std = @import("std");
 const testing = std.testing;

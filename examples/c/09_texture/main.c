@@ -52,8 +52,6 @@ int main(void)
 
     ke_error *err = NULL;
 
-    // ── Window ───────────────────────────────────────────────────────────────
-
     ke_window_glfw_params wp = {
         .logger     = NULL,
         .input      = NULL,
@@ -66,8 +64,6 @@ int main(void)
     if (!win.ref) die("window create failed", err);
     if (!win.ref->on_initialize(win.ref, &err)) die("window init failed", err);
 
-    // ── GPU device ────────────────────────────────────────────────────────────
-
     ke_gpu_device_webgpu_params dp = {
         .logger            = NULL,
         .window            = win.ref,
@@ -79,8 +75,6 @@ int main(void)
     const ke_gpu_surface_ext *surf_ext =
         (const ke_gpu_surface_ext *)gpu.ref->query_extension(gpu.ref, KE_GPU_SURFACE_EXT_NAME);
     if (!surf_ext) die("surface extension not available", NULL);
-
-    // ── Checkerboard texture ──────────────────────────────────────────────────
 
     static uint8_t pixels[TEX_SIZE * TEX_SIZE * 4];
     make_checkerboard(pixels, TEX_SIZE, 8);
@@ -111,8 +105,6 @@ int main(void)
     ke_gpu_texture_view tex_view = gpu.ref->create_texture_view(gpu.ref, tex, &tvp);
     if (tex_view == KE_GPU_INVALID_HANDLE) die("texture view creation failed", NULL);
 
-    // ── Sampler ───────────────────────────────────────────────────────────────
-
     ke_gpu_sampler_params sp = {
         .address_mode_u = KE_GPU_ADDRESS_MODE_REPEAT,
         .address_mode_v = KE_GPU_ADDRESS_MODE_REPEAT,
@@ -127,9 +119,6 @@ int main(void)
     };
     ke_gpu_sampler sampler = gpu.ref->create_sampler(gpu.ref, &sp);
     if (sampler == KE_GPU_INVALID_HANDLE) die("sampler creation failed", NULL);
-
-    // ── Bind group layout: sampler2D at binding 0 ─────────────────────────────
-    // WebGPU separates texture and sampler into two bindings.
 
     ke_gpu_bind_group_layout_entry bgl_entries[2] = {
         { .binding = 0, .visibility = KE_GPU_SHADER_STAGE_FRAGMENT, .type = KE_GPU_BINDING_TYPE_TEXTURE },
@@ -147,8 +136,6 @@ int main(void)
     ke_gpu_bind_group bg = gpu.ref->create_bind_group(gpu.ref, &bg_params, &err);
     if (bg == KE_GPU_INVALID_HANDLE) die("bind group creation failed", err);
 
-    // ── Geometry ──────────────────────────────────────────────────────────────
-
     ke_gpu_buffer vbo = gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
         .initial_data = vertices, .size = sizeof(vertices),
         .usage = KE_GPU_BUFFER_USAGE_VERTEX,
@@ -160,16 +147,12 @@ int main(void)
     }, &err);
     if (ibo == KE_GPU_INVALID_HANDLE) die("index buffer creation failed", err);
 
-    // ── Shaders ───────────────────────────────────────────────────────────────
-
     ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
         .code = tex_vert_spv, .byte_size = sizeof(tex_vert_spv), .entry_point = "main",
     }, &err);
     ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
         .code = tex_frag_spv, .byte_size = sizeof(tex_frag_spv), .entry_point = "main",
     }, &err);
-
-    // ── Pipeline ─────────────────────────────────────────────────────────────
 
     ke_gpu_vertex_attribute attrs[] = {
         { .shader_location = 0, .format = KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = 0 },
@@ -200,8 +183,6 @@ int main(void)
     gpu.ref->destroy_shader_module(gpu.ref, fs);
 
     ke_gpu_queue q = gpu.ref->get_default_queue(gpu.ref);
-
-    // ── Loop ──────────────────────────────────────────────────────────────────
 
     printf("Rendering textured quad. Close the window to exit.\n");
 
@@ -239,8 +220,6 @@ int main(void)
         gpu.ref->queue_present(gpu.ref, q);
         gpu.ref->destroy_texture_view(gpu.ref, view);
     }
-
-    // ── Cleanup ───────────────────────────────────────────────────────────────
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
     gpu.ref->destroy_bind_group(gpu.ref, bg);

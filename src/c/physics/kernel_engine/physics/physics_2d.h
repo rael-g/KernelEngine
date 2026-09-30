@@ -12,77 +12,139 @@ extern "C"
 
 #define KE_ID_PHYSICS_2D "ke_physics_2d"
 
-    /// @brief Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as "invalid".
+    /** Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as "invalid". */
     typedef uint32_t ke_body_2d;
 #define KE_BODY_2D_INVALID ((ke_body_2d)0)
 
     typedef enum ke_body_type_2d
     {
-        KE_BODY_TYPE_STATIC    = 0, ///< Never moves; infinite mass. Floors, walls.
-        KE_BODY_TYPE_KINEMATIC = 1, ///< Moved by code (set_position/set_velocity), unaffected by forces.
-        KE_BODY_TYPE_DYNAMIC   = 2, ///< Driven by forces, collisions, gravity.
+        KE_BODY_TYPE_STATIC    = 0, /**< Never moves; infinite mass. Floors, walls. */
+        KE_BODY_TYPE_KINEMATIC = 1, /**< Moved by code (set_position/set_velocity), unaffected by forces. */
+        KE_BODY_TYPE_DYNAMIC   = 2, /**< Driven by forces, collisions, gravity. */
     } ke_body_type_2d;
 
-    /// @brief Snapshot of a body's pose + motion at a point in time. Position is the body's
-    ///        local origin in world space; angle is in radians.
+    /**
+     * Which of the 32 collision layers a fixture occupies, and which it tests
+     * against. Two fixtures touch only when each one's layer bit is set in the
+     * other's mask, so a mask written on one side alone never produces a contact.
+     */
+    typedef struct ke_collision_filter_2d
+    {
+        uint32_t layer;
+        uint32_t mask;
+    } ke_collision_filter_2d;
+
+    /**
+     * Snapshot of a body's pose + motion at a point in time. Position is the body's local
+     * origin in world space; angle is in radians.
+     */
     typedef struct ke_body_state_2d
     {
         float x, y;
-        float angle;             ///< radians, CCW positive
+        float angle;             /**< radians, CCW positive */
         float velocity_x;
         float velocity_y;
-        float angular_velocity;  ///< radians per second
+        float angular_velocity;  /**< radians per second */
     } ke_body_state_2d;
 
-    /// @brief ABI-stable vtable for a 2D rigid-body physics world. One instance == one world;
-    ///        a game wanting multiple worlds creates multiple instances. Concrete implementations
-    ///        come from plugins (Box2D for now). Not thread-safe — call all methods on the same
-    ///        thread (typically ke.sim).
+    /**
+     * ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a
+     * game wanting multiple worlds creates multiple instances. Concrete implementations
+     * come from plugins (Box2D for now). Not thread-safe — call all methods on the same
+     * thread (typically ke.sim).
+     */
     typedef struct ke_physics_2d
     {
         void *handle;
 
-        /// @brief Sets world gravity (m/s^2). Default is (0, -9.81).
+        /**
+         * Sets world gravity (m/s^2). Default is (0, -9.81).
+         * @param x [vector2:gravity]
+         */
         void (*set_gravity)(struct ke_physics_2d *self, float x, float y);
 
-        /// @brief Advances the simulation by @p dt seconds. Variable time steps are accepted but
-        ///        deterministic replay (chapter 14 §5.1) needs a fixed step from the caller.
+        /**
+         * Advances the simulation by dt seconds. Variable steps are accepted, but
+         * deterministic replay requires the caller to supply a fixed one.
+         */
         void (*step)(struct ke_physics_2d *self, float dt);
 
-        /// @brief Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.
+        /**
+         * Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.
+         * @param x [vector2:position]
+         */
         ke_body_2d (*create_body)(struct ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_error **out_error);
 
-        /// @brief Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID.
+        /** Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID. */
         void (*destroy_body)(struct ke_physics_2d *self, ke_body_2d body);
 
-        /// @brief Attaches an axis-aligned box fixture (half-extents from body origin).
+        /**
+         * Attaches a box fixture, sized by its half-extents and placed at the given offset
+         * from the body origin. The offset is what lets one body carry several shapes in
+         * different places — a character's feet and torso, a paddle's rounded ends.
+         * @param half_w [vector2:half_extents]
+         * @param offset_x [vector2:offset]
+         * @param offset_angle Radians, CCW positive, about the offset center.
+         * @param filter [opt] Layers the fixture occupies and tests against. NULL
+         *               leaves it colliding with everything.
+         */
         bool (*add_box_fixture)(struct ke_physics_2d *self, ke_body_2d body,
                                 float half_w, float half_h,
-                                float density, float friction, float restitution, ke_error **out_error);
+                                float offset_x, float offset_y, float offset_angle,
+                                float density, float friction, float restitution,
+                                const ke_collision_filter_2d *filter, ke_error **out_error);
 
-        /// @brief Attaches a circle fixture centered at the body origin.
+        /**
+         * Attaches a circle fixture at the given offset from the body origin.
+         * @param offset_x [vector2:offset]
+         * @param filter [opt] Layers the fixture occupies and tests against. NULL
+         *               leaves it colliding with everything.
+         */
         bool (*add_circle_fixture)(struct ke_physics_2d *self, ke_body_2d body,
                                    float radius,
-                                   float density, float friction, float restitution, ke_error **out_error);
+                                   float offset_x, float offset_y,
+                                   float density, float friction, float restitution,
+                                   const ke_collision_filter_2d *filter, ke_error **out_error);
 
-        /// @brief Reads the body's current pose and motion into @p out.
+        /**
+         * Reads the body's current pose and motion.
+         * @param out [out] Receives position, angle, and velocities.
+         */
         void (*get_body_state)(struct ke_physics_2d *self, ke_body_2d body, ke_body_state_2d *out);
 
-        /// @brief Teleports the body. Skips collision response — prefer apply_impulse for dynamic moves.
+        /**
+         * Teleports the body. Skips collision response — prefer apply_impulse for dynamic moves.
+         * @param x [vector2:position]
+         */
         void (*set_body_position)(struct ke_physics_2d *self, ke_body_2d body, float x, float y, float angle);
 
-        /// @brief Sets linear velocity directly (m/s).
+        /**
+         * Sets linear velocity directly (m/s).
+         * @param vx [vector2:velocity]
+         */
         void (*set_body_velocity)(struct ke_physics_2d *self, ke_body_2d body, float vx, float vy);
 
-        /// @brief Applies a linear impulse (kg*m/s) at the body center.
+        /**
+         * Applies a linear impulse (kg*m/s) at the body center.
+         * @param impulse_x [vector2:impulse]
+         */
         void (*apply_impulse)(struct ke_physics_2d *self, ke_body_2d body, float impulse_x, float impulse_y);
 
-        /// @brief Locks or unlocks the body's rotation. A locked body keeps its current
-        ///        angle and ignores every torque, including the one a contact imparts.
-        ///        Bodies start unlocked. Needed by anything that must stay upright —
-        ///        characters, projectiles, and any box whose collisions would otherwise
-        ///        set it spinning.
+        /**
+         * Locks or unlocks the body's rotation. A locked body keeps its current angle and
+         * ignores every torque, including the one a contact imparts. Bodies start unlocked.
+         * Needed by anything that must stay upright — characters, projectiles, and any box
+         * whose collisions would otherwise set it spinning.
+         */
         void (*set_body_fixed_rotation)(struct ke_physics_2d *self, ke_body_2d body, bool fixed);
+
+        /**
+         * Scales world gravity for this body alone. 1 leaves it at the world's value, 0
+         * makes the body weightless, and a negative value makes it fall upward. What a
+         * floating pickup or a balloon sets, rather than each such body needing its own
+         * world.
+         */
+        void (*set_body_gravity_scale)(struct ke_physics_2d *self, ke_body_2d body, float scale);
 
     } ke_physics_2d;
 
@@ -96,4 +158,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
+#endif

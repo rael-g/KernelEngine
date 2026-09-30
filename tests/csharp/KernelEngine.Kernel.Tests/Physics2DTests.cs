@@ -44,14 +44,14 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe bool MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float d, float f, float r, ke_error** out_error)
+    private static unsafe bool MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float ox, float oy, float oa, float d, float f, float r, ke_collision_filter_2d* filter, ke_error** out_error)
     {
         LastBodyId = id;
         return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe bool MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float d, float f, float r, ke_error** out_error)
+    private static unsafe bool MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float ox, float oy, float d, float f, float r, ke_collision_filter_2d* filter, ke_error** out_error)
     {
         LastBodyId = id;
         return true;
@@ -123,7 +123,7 @@ public class Physics2DTests
     public unsafe void SetGravity_CallsNative()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.SetGravity(new Vector2(0, -10));
         Assert.Equal(0, LastGravity.X);
         Assert.Equal(-10, LastGravity.Y);
@@ -134,7 +134,7 @@ public class Physics2DTests
     public unsafe void Step_CallsNative()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.Step(0.016f);
         Assert.Equal(0.016f, LastDeltaTime);
         NativeMemory.Free(h.@ref);
@@ -144,7 +144,7 @@ public class Physics2DTests
     public unsafe void CreateBody_MarshalsTypeCorrectly()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.CreateBody(BodyType2D.Dynamic, Vector2.Zero);
         Assert.Equal(ke_body_type_2d.KE_BODY_TYPE_DYNAMIC, LastBodyType);
         NativeMemory.Free(h.@ref);
@@ -154,7 +154,7 @@ public class Physics2DTests
     public unsafe void CreateBody_MarshalsPositionXCorrectly()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.CreateBody(BodyType2D.Static, new Vector2(1, 0));
         Assert.Equal(1, LastPosition.X);
         NativeMemory.Free(h.@ref);
@@ -164,7 +164,7 @@ public class Physics2DTests
     public unsafe void CreateBody_MarshalsPositionYCorrectly()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.CreateBody(BodyType2D.Static, new Vector2(0, 2));
         Assert.Equal(2, LastPosition.Y);
         NativeMemory.Free(h.@ref);
@@ -174,7 +174,7 @@ public class Physics2DTests
     public unsafe void CreateBody_ReturnsHandleFromNative()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         var handle = physics.CreateBody(BodyType2D.Static, Vector2.Zero);
         Assert.Equal(42u, handle.Value);
         NativeMemory.Free(h.@ref);
@@ -184,7 +184,7 @@ public class Physics2DTests
     public unsafe void CreateBody_ReturnsNone_WhenNativeFails()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         LastResult = false;
         var handle = physics.CreateBody(BodyType2D.Dynamic, new Vector2(1, 2));
         Assert.Equal(BodyHandle2D.None, handle);
@@ -196,7 +196,7 @@ public class Physics2DTests
     public unsafe void DestroyBody_CallsNative()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.DestroyBody(new BodyHandle2D(123));
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
@@ -206,7 +206,7 @@ public class Physics2DTests
     public unsafe void AddBoxFixture_CallsNative()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.AddBoxFixture(new BodyHandle2D(123), new Vector2(1, 1));
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
@@ -216,7 +216,7 @@ public class Physics2DTests
     public unsafe void AddCircleFixture_CallsNative()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.AddCircleFixture(new BodyHandle2D(123), 1.0f);
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
@@ -226,7 +226,7 @@ public class Physics2DTests
     public unsafe void GetBodyState_CallsNativeWithCorrectId()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.GetBodyState(new BodyHandle2D(123));
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
@@ -236,7 +236,7 @@ public class Physics2DTests
     public unsafe void GetBodyState_ReturnsCorrectPositionX()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         var state = physics.GetBodyState(new BodyHandle2D(1));
         Assert.Equal(10, state.Position.X);
         NativeMemory.Free(h.@ref);
@@ -246,7 +246,7 @@ public class Physics2DTests
     public unsafe void GetBodyState_ReturnsCorrectPositionY()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         var state = physics.GetBodyState(new BodyHandle2D(1));
         Assert.Equal(20, state.Position.Y);
         NativeMemory.Free(h.@ref);
@@ -256,7 +256,7 @@ public class Physics2DTests
     public unsafe void GetBodyState_ReturnsCorrectAngle()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         var state = physics.GetBodyState(new BodyHandle2D(1));
         Assert.Equal(0.5f, state.Angle);
         NativeMemory.Free(h.@ref);
@@ -266,7 +266,7 @@ public class Physics2DTests
     public unsafe void SetBodyPosition_CallsNativeWithCorrectId()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.SetBodyPosition(new BodyHandle2D(123), Vector2.Zero, 0);
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
@@ -276,7 +276,7 @@ public class Physics2DTests
     public unsafe void SetBodyPosition_MarshalsPositionCorrectly()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.SetBodyPosition(new BodyHandle2D(1), new Vector2(1, 2), 0);
         Assert.Equal(1, LastPosition.X);
         Assert.Equal(2, LastPosition.Y);
@@ -287,7 +287,7 @@ public class Physics2DTests
     public unsafe void SetBodyPosition_MarshalsAngleCorrectly()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.SetBodyPosition(new BodyHandle2D(1), Vector2.Zero, 0.5f);
         Assert.Equal(0.5f, LastAngle);
         NativeMemory.Free(h.@ref);
@@ -297,7 +297,7 @@ public class Physics2DTests
     public unsafe void SetBodyVelocity_CallsNativeWithCorrectId()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.SetBodyVelocity(new BodyHandle2D(123), Vector2.Zero);
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
@@ -307,7 +307,7 @@ public class Physics2DTests
     public unsafe void SetBodyVelocity_MarshalsVelocityCorrectly()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.SetBodyVelocity(new BodyHandle2D(1), new Vector2(1, 2));
         Assert.Equal(1, LastVelocity.X);
         Assert.Equal(2, LastVelocity.Y);
@@ -318,7 +318,7 @@ public class Physics2DTests
     public unsafe void ApplyImpulse_CallsNativeWithCorrectId()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.ApplyImpulse(new BodyHandle2D(123), Vector2.Zero);
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
@@ -328,7 +328,7 @@ public class Physics2DTests
     public unsafe void ApplyImpulse_MarshalsImpulseCorrectly()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         physics.ApplyImpulse(new BodyHandle2D(1), new Vector2(1, 2));
         Assert.Equal(1, LastImpulse.X);
         Assert.Equal(2, LastImpulse.Y);
@@ -339,7 +339,7 @@ public class Physics2DTests
     public unsafe void Dispose_CallsDestroy()
     {
         var h = CreateMockHandle();
-        var physics = new Physics2D(h);
+        IPhysics2D physics = new Physics2D(h);
         DestroyCalled = false;
         physics.Dispose();
         Assert.True(DestroyCalled);

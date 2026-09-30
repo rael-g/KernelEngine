@@ -21,21 +21,18 @@ extern "C" {
 
 typedef struct ke_system_ctx ke_system_ctx;
 
-// A deferred structural operation, run serially at the wave barrier (main
-// thread, after the wave's parallel bodies have all returned) where entity
-// creation/destruction and archetype moves are legal. `user` points to the
-// copied payload the caller passed to defer. `ecs` is the live world.
+/// A structural operation run serially at the wave barrier. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world.
 typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
 
-// ABI-stable vtable — the system body's operations on its own context. Callers
-// invoke these through the ke_system_ctx they receive (ctx->reserve(ctx), ...),
-// so a consumer needs only this header, never a link to ke_runtime. `handle`
-// is runtime-private. The free ke_system_ctx_* functions below are thin
-// wrappers over these slots, kept for callers loaded at runtime (C#) or already
-// linking ke_runtime (Zig render passes).
+/// The operations a system body may perform on its own context, invoked through
+/// the ke_system_ctx it receives. `handle` is runtime-private. The free
+/// ke_system_ctx_* functions below wrap these slots.
 struct ke_system_ctx {
     void *handle;
 
+    /// @param out_count [out]
+    /// @return [array_of:out_count]
     const ke_ecs_segment *(*view)(ke_system_ctx *self, uint32_t query_index, size_t *out_count);
     ke_entity (*reserve)(ke_system_ctx *self);
     bool (*defer)(ke_system_ctx *self, ke_defer_fn fn, const void *user, size_t user_size);
@@ -43,11 +40,15 @@ struct ke_system_ctx {
     bool (*attach)(ke_system_ctx *self, ke_entity entity, ke_component_id cid, const void *data, size_t size);
     bool (*detach)(ke_system_ctx *self, ke_entity entity, ke_component_id cid);
     bool (*despawn)(ke_system_ctx *self, ke_entity entity);
+    /// @param out_index [out]
+    /// @param out_count [out]
+    void (*slice)(ke_system_ctx *self, uint32_t *out_index, uint32_t *out_count);
 };
 
 KE_RUNTIME_API uint32_t ke_system_ctx_defer_applied_count(void);
 KE_RUNTIME_API void     ke_system_ctx_reset_defer_applied(void);
 
+/// @param out_wave_count [out]
 KE_RUNTIME_API void ke_runtime_debug_compute_waves(const ke_runtime_system_params *systems,
                                                      uint32_t                        system_count,
                                                      uint32_t                       *out_wave_assignments,
@@ -61,37 +62,57 @@ KE_RUNTIME_API void ke_runtime_debug_compute_waves(const ke_runtime_system_param
 /// single-threaded before the wave, because an ECS iterator allocates from
 /// storage shared across the wave's parallel systems. Returns NULL for an
 /// out-of-range index or a system that declared no queries.
+/// @param ctx [ctx]
+/// @param out_count [out]
+/// @return [array_of:out_count]
 KE_RUNTIME_API const ke_ecs_segment *ke_system_ctx_view(ke_system_ctx *ctx,
                                                           uint32_t query_index,
                                                           size_t *out_count);
 
-// Reserve a real, usable entity id immediately (routes to ke_ecs->entity_reserve).
-// Safe to call inside a system body during a parallel wave. Unlike spawn (whose
-// id is only assigned at the wave barrier), the returned id is valid at once and
-// can be referenced — used as a parent, stored, or given components via attach
-// (applied at the barrier). This is the entry point for structural creation that
-// needs the id synchronously (e.g. scene-tree node creation from a system).
+/// Reports which share of its entity set this body call owns: *out_index in
+/// [0, *out_count). A system that did not declare per_entity always gets index 0
+/// of count 1, so a body written against this reads the whole set without asking
+/// whether it was sliced. A context of zero reports index 0 of count 1, which is
+/// what a caller outside a system needs to read its whole set unconditionally.
+/// @param ctx [ctx]
+/// @param out_index [out]
+/// @param out_count [out]
+KE_RUNTIME_API void ke_system_ctx_slice(ke_system_ctx *ctx, uint32_t *out_index, uint32_t *out_count);
+
+/// Reserves an entity id usable immediately, callable during a parallel wave.
+/// The id may be referenced at once; components given via attach land at the
+/// wave barrier. A context of zero reserves nothing and answers KE_ENTITY_INVALID.
+/// @param ctx [ctx]
 KE_RUNTIME_API ke_entity ke_system_ctx_reserve(ke_system_ctx *ctx);
 
-// Enqueue an arbitrary structural mutation to run at the wave barrier. The engine
-// copies `user_size` bytes of `user` into an internal arena, so the caller's
-// buffer need not outlive this call. This is the generic escape valve a builder
-// (e.g. the scene tree) uses to perform read-modify-write structural work — such
-// as creating a node and linking it into its parent's child list — that the fixed
-// spawn/attach/despawn verbs cannot express, while still honoring the "no
-// structural change inside a wave" rule. Returns false on OOM.
+/// Enqueues a structural mutation to run at the wave barrier, for work the fixed
+/// spawn/attach/despawn verbs cannot express. `user_size` bytes of `user` are
+/// copied, so the caller's buffer need not outlive the call. False on OOM.
+/// @param ctx [ctx]
 KE_RUNTIME_API bool ke_system_ctx_defer(ke_system_ctx *ctx, ke_defer_fn fn,
                                           const void *user, size_t user_size);
 
+/// @param ctx [ctx]
 KE_RUNTIME_API ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx);
+
+/// Deferred-attaches `size` bytes of `data` as component `cid` of `entity`, applied
+/// at the wave barrier. The bytes are copied, so the caller's buffer need not
+/// outlive the call. False for a context of zero, which is the caller's signal to
+/// use its immediate path instead.
+/// @param ctx [ctx]
+/// @param data [bytes_of:size]
 KE_RUNTIME_API bool     ke_system_ctx_attach(ke_system_ctx *ctx, ke_entity entity,
                                                ke_component_id cid, const void *data, size_t size);
+
+/// @param ctx [ctx]
 KE_RUNTIME_API bool     ke_system_ctx_detach(ke_system_ctx *ctx, ke_entity entity,
                                                ke_component_id cid);
+
+/// @param ctx [ctx]
 KE_RUNTIME_API bool     ke_system_ctx_despawn(ke_system_ctx *ctx, ke_entity entity);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // KERNEL_ENGINE_RUNTIME_SYSTEM_CTX_H_
+#endif

@@ -6,9 +6,8 @@ using KernelEngine.Ecs;
 namespace Pong;
 
 /// <summary>
-/// Wires Pong-specific node types and registers the "paddle" ECS component
-/// with its scene-loader apply callback so <c>[entity.components.paddle]</c>
-/// in scene files populates <see cref="PaddleComponent"/> correctly.
+/// Wires Pong-specific node types and the scene-file surface of the components
+/// generated for them.
 /// </summary>
 public sealed class PongModule : IRuntimeModule
 {
@@ -18,12 +17,11 @@ public sealed class PongModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
-        services.AddNodeType<Wall>("Pong.Wall");
-        services.AddNodeType<Paddle>("Pong.Paddle");
-        services.AddNodeType<Ball>("Pong.Ball");
-        services.AddNodeType<Scoreboard>("Pong.Scoreboard");
-        services.AddNodeType<PhysicsDriver>("Pong.PhysicsDriver");
-        services.AddNodeType<MenuController>("Pong.MenuController");
+        services.AddNodeType<Wall>();
+        services.AddNodeType<Paddle>();
+        services.AddNodeType<Ball>();
+        services.AddNodeType<Scoreboard>();
+        services.AddNodeType<MenuController>();
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
@@ -31,14 +29,8 @@ public sealed class PongModule : IRuntimeModule
         var ecs   = services.GetRequiredService<IEcsRegistry>();
         var world = services.GetRequiredService<World>();
 
-        var paddleCid = ecs.RegisterComponent<PaddleComponent>("paddle");
-        world.RegisterComponentApply(paddleCid, static (ref PaddleComponent comp, in VariantReader reader) =>
-        {
-            if (reader.TryGetString("move_action", out var val) &&
-                Enum.TryParse<PongAction>(val, ignoreCase: true, out var action))
-            {
-                comp.MoveAction = action;
-            }
-        });
+        Paddle.RegisterSceneApply(world, ecs);
+
+        Scoreboard.RegisterSceneApply(world, ecs);
     }
 }

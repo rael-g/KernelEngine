@@ -27,6 +27,7 @@ public static class ServiceCollectionExtensions
                 return new ImageLoader(handle);
             }
         });
+        services.AddSingleton<INativeImageLoader>(sp => (ImageLoader)sp.GetRequiredService<IImageLoader>());
         return services;
     }
 }

@@ -13,16 +13,6 @@ using KernelEngine.Logger;
 using KernelEngine.Audio;
 using KernelEngine.Input;
 
-// 15_audio_test — kernel ke_audio → miniaudio plugin → IAudio C# wrapper.
-// Two short sine WAVs are generated to %TEMP% at startup (no committed binary
-// assets). Click the window to focus, then:
-//   • Space  → play the 440 Hz beep
-//   • L      → toggle a 220 Hz looping bass
-//   • Escape → quit
-//
-// Edge detection is done in OnUpdate by tracking the previous frame's key
-// state, since the new Framework doesn't yet ship an OnInput event hook.
-
 var beepPath = WriteSineWav(440, durationMs: 150);
 var bassPath = WriteSineWav(220, durationMs: 500);
 
@@ -31,7 +21,7 @@ var services = new ServiceCollection()
     .AddConsoleSink()
     .AddInput()
     .AddMiniAudio()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(640, 200, "KernelEngine — 15 Audio Test (click window, then Space)"))
@@ -68,11 +58,9 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[15_audio_test] Exited cleanly.");
-
-// ── Synthesizes a short 16-bit mono PCM sine WAV with a 10 ms env fade ───────
 
 static string WriteSineWav(int frequency, int durationMs)
 {
@@ -87,12 +75,12 @@ static string WriteSineWav(int frequency, int durationMs)
     w.Write(36 + dataSize);
     w.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
     w.Write(16);
-    w.Write((short)1);          // PCM
-    w.Write((short)1);          // mono
+    w.Write((short)1);
+    w.Write((short)1);
     w.Write(sampleRate);
-    w.Write(sampleRate * 2);    // byte rate
-    w.Write((short)2);          // block align
-    w.Write((short)16);         // bits per sample
+    w.Write(sampleRate * 2);
+    w.Write((short)2);
+    w.Write((short)16);
     w.Write(System.Text.Encoding.ASCII.GetBytes("data"));
     w.Write(dataSize);
 
@@ -106,8 +94,6 @@ static string WriteSineWav(int frequency, int durationMs)
     }
     return path;
 }
-
-// ── AudioController node — polls keys + edge-detects key-down ────────────────
 
 sealed class AudioController : Node
 {
@@ -131,7 +117,7 @@ sealed class AudioController : Node
         _bass  = bass;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld) { /* nothing to materialize — this node only carries behavior */ }
+    protected override bool HasBehavior => true;
 
     protected override void OnUpdate(in View view)
     {

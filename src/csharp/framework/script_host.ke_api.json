@@ -1,0 +1,418 @@
+{
+  "enums": [
+    {
+      "name": "ke_script_reach",
+      "doc": "How far one instance\u0027s behaviour reaches, which is what decides whether the runtime may run a type\u0027s instances as concurrent slices.",
+      "values": [
+        {
+          "name": "KE_SCRIPT_REACH_SELF",
+          "value": 0,
+          "doc": "Touches only the entity it is bound to. Two instances are two entities, so their work cannot overlap."
+        },
+        {
+          "name": "KE_SCRIPT_REACH_ANY",
+          "value": 1,
+          "doc": "Reaches entities it was not handed \u2014 a borrow, a lookup by name, a query. Anything unproven belongs here: over-declaring costs parallelism, while under-declaring corrupts memory."
+        }
+      ]
+    },
+    {
+      "name": "ke_script_resolve",
+      "doc": "Why a resolve answered the way it did. Without it \u0022no node answers\u0022 and \u0022two nodes answer\u0022 arrive as the same invalid entity, and a binding runtime can only tell its author the borrow found nothing \u2014 sending them to look for a node that is there twice.",
+      "values": [
+        {
+          "name": "KE_SCRIPT_RESOLVE_FOUND",
+          "value": 0,
+          "doc": "Exactly one entity answered, and it is the one returned."
+        },
+        {
+          "name": "KE_SCRIPT_RESOLVE_NONE",
+          "value": 1,
+          "doc": "Nothing answered. The borrow names a node that is not there."
+        },
+        {
+          "name": "KE_SCRIPT_RESOLVE_AMBIGUOUS",
+          "value": 2,
+          "doc": "More than one answered, so none was returned. Naming the borrow settles it."
+        }
+      ]
+    },
+    {
+      "name": "ke_script_borrow",
+      "doc": "Where a borrow looks for the node it names. One question asked three ways rather than three questions: a borrow is always \u0022an instance of this type, optionally by this name\u0022, and only the region searched differs.",
+      "values": [
+        {
+          "name": "KE_SCRIPT_BORROW_DESCENDANT",
+          "value": 0,
+          "doc": "Below the borrower, depth-first. A node reaches a grandchild it names without every level in between forwarding it."
+        },
+        {
+          "name": "KE_SCRIPT_BORROW_ANCESTOR",
+          "value": 1,
+          "doc": "The nearest above the borrower. An ancestor chain has one node per level, so this is the one reach that can never answer ambiguous."
+        },
+        {
+          "name": "KE_SCRIPT_BORROW_ANYWHERE",
+          "value": 2,
+          "doc": "Anywhere the type is bound, ignoring the borrower\u0027s position. What a node reporting to a sibling subsystem needs, and the reason this is asked here rather than by a binding walking every node it knows about."
+        }
+      ],
+      "tags": [
+        "borrow_kinds"
+      ]
+    }
+  ],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_script_host",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "register_type",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Registers a script type under \u0060name\u0060, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails when it does not \u2014 two languages naming one type differently would otherwise disagree about what a node in a scene file is.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "components",
+              "type": "const ke_component_id *",
+              "tags": [
+                "array_of:component_count"
+              ],
+              "doc": null
+            },
+            {
+              "name": "component_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "reach",
+              "type": "ke_script_reach",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "ke_script_type_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "type_lookup",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Resolves a type by name without registering it, so a scene naming a type nobody declared fails instead of inventing an empty one.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "ke_script_type_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "type_components",
+          "returns": "const ke_component_id *",
+          "tags": [],
+          "doc": "The components a registered type\u0027s instances carry, in registration order. This is what a host turns into the type\u0027s query and access list, so it is read back rather than re-derived by each binding.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "array_of:out_count"
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "type_reach",
+          "returns": "ke_script_reach",
+          "tags": [],
+          "doc": "How far the registered type\u0027s behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id, because refusing to parallelise something unknown is the safe direction.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "bind",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Binds \u0060instance\u0060 to \u0060entity\u0060 as an instance of \u0060type\u0060. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it silently, since the previous binding\u0027s owner would then never learn its object was dropped.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "instance",
+              "type": "void *",
+              "tags": [
+                "rooted:entity"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "unbind",
+          "returns": "void",
+          "tags": [
+            "unroots:entity"
+          ],
+          "doc": "Drops the binding for \u0060entity\u0060, if any. The instance itself is the binding runtime\u0027s to release.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "instance_of",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "The instance bound to \u0060entity\u0060. False when none is, which is the normal answer rather than a failure: an entity a scene made without a script, or one another runtime owns, matches the same queries.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_type",
+              "type": "ke_script_type_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_instance",
+              "type": "void **",
+              "tags": [
+                "out",
+                "rooted"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "instance_count",
+          "returns": "uint32_t",
+          "tags": [],
+          "doc": "How many entities are currently bound as instances of \u0060type\u0060. What lets a host tell \u0022this type had nothing to do\u0022 apart from \u0022this type\u0027s query stopped matching\u0022, which are indistinguishable from inside the body.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "instances",
+          "returns": "const ke_entity *",
+          "tags": [],
+          "doc": "The entities bound as instances of \u0060type\u0060, in binding order. What lets a binding runtime drive a type\u0027s instances without keeping a parallel list of its own \u2014 the list that only its own language can see, and that drifts from the bindings the moment anything else unbinds one. The slice belongs to the host and is invalidated by the next bind or unbind of that type, which is the same tick\u0027s structural change a caller already defers to the wave barrier.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "array_of:out_count"
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "resolve",
+          "returns": "ke_entity",
+          "tags": [
+            "borrows"
+          ],
+          "doc": "The entity \u0060owner\u0060 borrows: an instance of \u0060type\u0060 found within \u0060reach\u0060. \u0060name\u0060 narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. \u0060out_why\u0060 says which of the two an invalid answer was, and may be NULL.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "owner",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "reach",
+              "type": "ke_script_borrow",
+              "tags": [
+                "enum:ke_script_borrow"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_why",
+              "type": "ke_script_resolve *",
+              "tags": [
+                "out",
+                "enum:ke_script_resolve"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        }
+      ]
+    },
+    {
+      "name": "ke_script_host_handle",
+      "doc": "Owner wrapper: destroy releases the type table and the bindings. The instances are not touched \u2014 this host never owned them.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_script_host *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_script_host *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t",
+    "ke_script_type_id": "uint32_t"
+  }
+}

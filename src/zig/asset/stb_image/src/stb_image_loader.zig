@@ -1,20 +1,11 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so the statically
-// linked C/C++ dependency's initializers actually run. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const gpa = std.heap.c_allocator;
 
-// Declarations only — the implementation is compiled as C from
-// stb_image_impl.c (see build.zig); translate-c cannot reliably lower
-// stb_image's JPEG decoder, so @cImport never sees STB_IMAGE_IMPLEMENTATION.
 const stb = @cImport({
     @cInclude("stb_image.h");
 });
@@ -24,7 +15,6 @@ const c = @cImport({
     @cInclude("kernel_engine/logger/logger.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
 
 const State = struct {
@@ -55,7 +45,6 @@ fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c
     var w: c_int = 0;
     var h: c_int = 0;
     var channels: c_int = 0;
-    // Force RGBA8 — matches ke_texture_data's contract (4 bytes/pixel, row-major).
     const raw = stb.stbi_load(path, &w, &h, &channels, 4);
     if (raw == null) {
         logWarn(state.logger, stb.stbi_failure_reason());
@@ -80,6 +69,7 @@ fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c
     @memcpy(pixels, @as([*]const u8, @ptrCast(raw))[0..pixel_bytes]);
 
     data.pixels = pixels.ptr;
+    data.byte_count = @intCast(pixel_bytes);
     data.width = @intCast(w);
     data.height = @intCast(h);
 
@@ -96,8 +86,7 @@ fn freeImage(self: ?*c.ke_image_loader, data: [*c]c.ke_texture_data) callconv(.c
     if (self == null or data == null) return;
     const d: *c.ke_texture_data = @ptrCast(data);
     if (d.pixels != null) {
-        const pixel_bytes: usize = @as(usize, d.width) * @as(usize, d.height) * 4;
-        gpa.free(@as([*]u8, @ptrCast(d.pixels))[0..pixel_bytes]);
+        gpa.free(@as([*]u8, @ptrCast(d.pixels))[0..d.byte_count]);
     }
     gpa.destroy(d);
 }
@@ -128,4 +117,86 @@ export fn ke_image_loader_stb_create(
     loader.free_image = &freeImage;
 
     return .{ .ref = loader, .destroy = &destroy };
+}
+
+const testing = std.testing;
+
+const testing_libc = @cImport({
+    @cInclude("stdio.h");
+});
+
+fn createLoader() c.ke_image_loader_handle {
+    var params = std.mem.zeroes(c.ke_image_loader_stb_params);
+    return ke_image_loader_stb_create(&params, null);
+}
+
+test "creating the loader wires up a handle with every vtable slot filled" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref.*.handle != null);
+    try testing.expect(h.destroy != null);
+    try testing.expect(h.ref.*.load_image != null);
+}
+
+test "creating the loader with null params returns a null handle" {
+    const h = ke_image_loader_stb_create(null, null);
+    try testing.expect(h.ref == null);
+}
+
+test "loading an image with a null loader or a null path fails" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref.*.load_image.?(null, "path", null) == null);
+    try testing.expect(h.ref.*.load_image.?(h.ref, null, null) == null);
+}
+
+test "freeing a null image is a no-op" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.free_image.?(h.ref, null);
+    h.ref.*.free_image.?(null, null);
+}
+
+test "loading a one pixel targa yields its dimensions and pixels" {
+    const tga = [_]u8{
+        0,   0,   2,  0,   0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0,
+        255, 128, 64, 255,
+    };
+
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var dir_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const dir_len = try tmp.dir.realPath(testing.io, &dir_buf);
+    const dir_path = dir_buf[0..dir_len];
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(&path_buf, "{s}/test_image.tga", .{dir_path});
+
+    const fp = testing_libc.fopen(path.ptr, "wb") orelse return error.FixtureWriteFailed;
+    const written = testing_libc.fwrite(&tga, 1, tga.len, fp);
+    _ = testing_libc.fclose(fp);
+    try testing.expectEqual(@as(usize, tga.len), written);
+
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+
+    const data = h.ref.*.load_image.?(h.ref, path.ptr, null);
+    try testing.expect(data != null);
+    defer h.ref.*.free_image.?(h.ref, data);
+
+    try testing.expectEqual(@as(u32, 1), data.*.width);
+    try testing.expectEqual(@as(u32, 1), data.*.height);
+    try testing.expect(data.*.pixels != null);
+}
+
+test "destroying a null loader is a no-op" {
+    destroy(null);
 }

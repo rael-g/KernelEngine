@@ -1,49 +1,17 @@
 const std = @import("std");
 
-// The engine's build orchestrator, replacing CMake. vcpkg (manifest mode,
-// vcpkg.json + vcpkg-configuration.json at repo root) is invoked directly —
-// no CMake toolchain file involved, confirmed to work standalone. Every
-// engine plugin already builds itself via its own build.zig (a leftover of
-// the CMake-driven "zig build" custom commands); this file's job is purely
-// to invoke each one, in dependency order, with a shared --prefix so every
-// .so converges into one output/lib directory and every consumer needs only
-// one rpath entry to find them all.
-//
-// Scope note: this currently wires the non-render plugin chain (everything
-// through ke_framework/ke_window_glfw/asset+audio+text backends/box2d) plus
-// one example end to end. The render pipeline (ke_gpu_device_webgpu + the 11
-// render/* modules, which also drive Slang/GLSL shader generation) and the
-// remaining examples/tests are follow-up work — see docs/RuntimeArchitectureV2.md
-// for what's tracked.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const debug = optimize == .Debug;
 
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
-    // Forwarded only to the two GTest suites (system clang++-built): they're
-    // the only native binaries whose linker (system, not Zig's own) can
-    // handle Clang's profiling-runtime relocations. See tests/c/kernel/build.zig.
-    const coverage = b.option(bool, "coverage", "instrument the GTest suites for Clang source-based coverage") orelse false;
 
-    // vcpkg dependencies build with `zig cc`/`zig c++`
-    // (vcpkg-triplets/x64-{windows,linux}-zig.cmake) instead of the system
-    // toolchain — no Visual Studio/SDK or system C/C++ toolchain required.
     const triplet = switch (target.result.os.tag) {
         .windows => "x64-windows-zig",
         else => "x64-linux-zig",
     };
 
-    // ── vcpkg (fetched, not a system dependency) ─────────────────────────────
-    // vcpkg itself is a small orchestrator binary (microsoft/vcpkg-tool) plus
-    // the scripts/triplets it needs to run standalone (the "standalone
-    // bundle" release asset) — fetched the same way wgpu-native/Slang are.
-    // Port recipes and the C/C++ library sources they build are resolved by
-    // vcpkg itself at install time via its git registry (vcpkg-configuration.json),
-    // same as any vcpkg install; that isn't something a build-time fetch can
-    // shortcut. `-Dvcpkg-root=`/`$VCPKG_ROOT` still override this for anyone
-    // who already has vcpkg installed.
     const vcpkg_tool_version = "2026-07-13";
     const vcpkg_dir_default = b.pathJoin(&.{ root, ".cache", b.fmt("vcpkg-{s}", .{vcpkg_tool_version}) });
     const vcpkg_root = b.option([]const u8, "vcpkg-root", "path to the vcpkg checkout") orelse
@@ -62,7 +30,6 @@ pub fn build(b: *std.Build) void {
         ),
     });
 
-    // ── vcpkg (manifest mode) ────────────────────────────────────────────────
     const vcpkg_installed = b.pathJoin(&.{ root, "vcpkg_installed_zig" });
     const vcpkg_overlay_triplets = b.pathJoin(&.{ root, "vcpkg-triplets" });
     var vcpkg_install_args: std.ArrayList([]const u8) = .empty;
@@ -81,29 +48,16 @@ pub fn build(b: *std.Build) void {
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
     const vcpkg_lib_release = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
     const vcpkg_lib = if (debug) b.pathJoin(&.{ vcpkg_installed, triplet, "debug", "lib" }) else vcpkg_lib_release;
-    // gtest/gmock's *_main archives live one level down, under manual-link —
-    // needed once tests join this build.
-    // const vcpkg_manual_link = b.pathJoin(&.{ vcpkg_lib, "manual-link" });
 
-    // ── shared paths ─────────────────────────────────────────────────────────
     const src_c = b.pathJoin(&.{ root, "src/c" });
     const src_zig = b.pathJoin(&.{ root, "src/zig" });
     const kerror_src = b.pathJoin(&.{ src_zig, "common/kerror.zig" });
-    // Single shared tomlc99 copy, consumed by every plugin that parses TOML
-    // (ke_framework, ke_configuration_toml).
     const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
-    // Absolute, always: each plugin's `zig build` runs with its OWN directory
-    // as cwd, so a relative --prefix here would resolve against the wrong
-    // place there.
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
     else
         b.pathJoin(&.{ root, b.install_prefix });
 
-    // ── Slang toolchain (fetched, not a system dependency) ──────────────────
-    // slangc is a standalone shader-slang/slang release — no Vulkan SDK
-    // linkage — fetched the same way wgpu-native is: a direct release archive
-    // download, cached under .cache/, no system package or PATH entry needed.
     const slang_version = "2025.17.2";
     const slang_url_name = switch (target.result.os.tag) {
         .windows => b.fmt("slang-{s}-windows-x86_64", .{slang_version}),
@@ -130,16 +84,17 @@ pub fn build(b: *std.Build) void {
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
         .slangc_exe = slangc_exe,
         .slang_step = &slang_fetch.step,
+        .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
+        .test_step = b.step("test", "Run every plugin's own Zig tests"),
     };
 
-    // ── kernel built-ins ─────────────────────────────────────────────────────
-    const common = ctx.plugin("ke_common", "src/zig/common", &.{}, &.{});
+    const common = ctx.plugin("ke_common", "src/zig/common", &.{}, &.{}, .has_tests);
 
     const logger_simple = ctx.plugin("ke_logger_simple", "src/zig/logger/simple", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const ecs_flecs = ctx.plugin("ke_ecs_flecs", "src/zig/ecs/flecs", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -147,19 +102,19 @@ pub fn build(b: *std.Build) void {
         argF(b, "flecs-include", vcpkg_include),
         argF(b, "flecs-lib", b.pathJoin(&.{ vcpkg_lib, "libflecs_static.a" })),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const input_default = ctx.plugin("ke_input_default", "src/zig/input/default", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-input-include", b.pathJoin(&.{ src_c, "input" })),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const resource_cache_default = ctx.plugin("ke_resource_cache_default", "src/zig/resource_cache/default", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-resource-cache-include", b.pathJoin(&.{ src_c, "resource_cache" })),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const scheduler_enki = ctx.plugin("ke_scheduler_enki", "src/zig/scheduler/enki", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -167,7 +122,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "enki-include", b.pathJoin(&.{ vcpkg_include, "enkiTS" })),
         argF(b, "enki-lib", vcpkg_lib),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const runtime = ctx.plugin("ke_runtime", "src/zig/runtime", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -175,7 +130,8 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+        argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
+    }, &.{}, .has_tests);
 
     const framework = ctx.plugin("ke_framework", "src/zig/framework", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -185,11 +141,15 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
         argF(b, "ke-asset-include", b.pathJoin(&.{ src_c, "asset" })),
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
+        argF(b, "ke-audio-include", b.pathJoin(&.{ src_c, "audio" })),
+        argF(b, "ke-physics-include", b.pathJoin(&.{ src_c, "physics" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "kerror-src", kerror_src),
         argF(b, "tomlc99-dir", tomlc99_dir),
-    }, &.{});
+        argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
+    }, &.{&runtime.step}, .has_tests);
 
     const window_glfw = ctx.plugin("ke_window_glfw", "src/zig/window/glfw", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -199,7 +159,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "glfw-include", vcpkg_include),
         argF(b, "glfw-lib", vcpkg_lib),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const asset_stb_image = ctx.plugin("ke_asset_stb_image", "src/zig/asset/stb_image", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -209,7 +169,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "asset/stb_image/include" })),
         argF(b, "stb-include", vcpkg_include),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const audio_miniaudio = ctx.plugin("ke_audio_miniaudio", "src/zig/audio/miniaudio", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -220,7 +180,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "miniaudio-include", vcpkg_include),
         argF(b, "ke-resource-cache-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
         argF(b, "kerror-src", kerror_src),
-    }, &.{&resource_cache_default.step});
+    }, &.{&resource_cache_default.step}, .has_tests);
 
     const text_stb_truetype = ctx.plugin("ke_text_stb_truetype", "src/zig/text/stb_truetype", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -229,7 +189,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "text/stb_truetype/include" })),
         argF(b, "stb-include", vcpkg_include),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const physics_box2d = ctx.plugin("ke_physics_2d_box2d", "src/zig/physics/box2d", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -238,11 +198,8 @@ pub fn build(b: *std.Build) void {
         argF(b, "box2d-include", vcpkg_include),
         argF(b, "box2d-lib", b.pathJoin(&.{ vcpkg_lib, if (debug) "libbox2dd.a" else "libbox2d.a" })),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
-    // vcpkg's zlib/minizip ports name their static archives "z"/"minizip" on
-    // x64-linux but "zs"/"minizips" under our x64-windows-zig triplet (port
-    // CMakeLists quirk, not something this build controls).
     const is_windows = target.result.os.tag == .windows;
     const assimp_libs = b.fmt("{s}|{s}|{s}|{s}|{s}|{s}", .{
         b.pathJoin(&.{ vcpkg_lib, if (debug) "libassimpd.a" else "libassimp.a" }),
@@ -265,27 +222,21 @@ pub fn build(b: *std.Build) void {
         argF(b, "assimp-libs", assimp_libs),
         argF(b, "stb-include", vcpkg_include),
         argF(b, "kerror-src", kerror_src),
-    }, &.{});
+    }, &.{}, .has_tests);
 
     const configuration = ctx.plugin("ke_configuration", "src/zig/configuration", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-config-include", b.pathJoin(&.{ src_c, "configuration" })),
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
-    }, &.{&common.step});
+    }, &.{&common.step}, .has_tests);
 
     const configuration_toml = ctx.plugin("ke_configuration_toml", "src/zig/configuration/toml", &.{
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-config-include", b.pathJoin(&.{ src_c, "configuration" })),
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
         argF(b, "tomlc99-dir", tomlc99_dir),
-    }, &.{&common.step});
+    }, &.{&common.step}, .has_tests);
 
-    // ── WebGPU backend ───────────────────────────────────────────────────────
-    // CMake fetched this through eliemichel/WebGPU-distribution, a wrapper
-    // repo whose only job (for our config) is to download the same prebuilt
-    // wgpu-native release archive this fetches directly — cutting out a git
-    // clone of a whole wrapper project to reach one URL its own CMake was
-    // going to build anyway.
     const wgpu_version = "v24.0.3.1";
     const wgpu_url_name = switch (target.result.os.tag) {
         .windows => "wgpu-windows-x86_64-msvc-release",
@@ -316,20 +267,25 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
         argF(b, "wgpu-include", wgpu_include),
         argF(b, "wgpu-lib", wgpu_lib_dir),
-    }, &.{ &common.step, &wgpu_fetch.step });
+    }, &.{ &common.step, &wgpu_fetch.step }, .has_tests);
 
-    // wgpu-native is linked dynamically: every consumer needs its .so beside
-    // them at runtime. Copied into the shared lib dir once, here, rather than
-    // every consumer computing its own rpath into the .cache tree.
     const wgpu_copy = b.addSystemCommand(&.{
-        "cp", "-f",
-        b.pathJoin(&.{ wgpu_lib_dir, wgpu_native_filename }),
-        b.pathJoin(&.{ ctx.prefix, "lib", wgpu_native_filename }),
+        "cp",                                                 "-f",
+        b.pathJoin(&.{ wgpu_lib_dir, wgpu_native_filename }), b.pathJoin(&.{ ctx.prefix, "lib", wgpu_native_filename }),
     });
     wgpu_copy.step.dependOn(&gpu_device_webgpu.step);
 
-    // ── render pipeline: 6 standalone passes (plain slang, no material system) ─
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
+
+    const view_space = ctx.plugin("ke_view_space", "src/zig/view/space", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "view/space/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+        argF(b, "kerror-src", kerror_src),
+    }, &.{&common.step}, .has_tests);
+
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
 
@@ -343,7 +299,30 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/tonemap/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step });
+    }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step }, .no_tests);
+
+    const physics_body2d = ctx.plugin("ke_physics_body2d", "src/zig/physics/body2d", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
+        argF(b, "ke-physics-include", b.pathJoin(&.{ src_c, "physics" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "physics/body2d/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &runtime.step }, .no_tests);
+
+    const audio_module = ctx.plugin("ke_audio_module", "src/zig/audio/module", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
+        argF(b, "ke-audio-include", b.pathJoin(&.{ src_c, "audio" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "audio/module/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+    }, &.{ &common.step, &runtime.step }, .no_tests);
 
     const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
@@ -353,9 +332,10 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &skybox_vs.step, &skybox_fs.step });
+    }, &.{ &common.step, &runtime.step, &skybox_vs.step, &skybox_fs.step }, .no_tests);
 
     const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
@@ -364,9 +344,11 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
+        argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &ui_vs.step, &ui_fs.step });
+    }, &.{ &common.step, &runtime.step, &ui_vs.step, &ui_fs.step }, .no_tests);
 
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
@@ -376,9 +358,10 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/shadow/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &shadow_vs.step, &shadow_fs.step });
+    }, &.{ &common.step, &runtime.step, &shadow_vs.step, &shadow_fs.step }, .no_tests);
 
     const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{});
     const cluster = ctx.plugin("ke_render_cluster", "src/zig/render/cluster", &.{
@@ -387,10 +370,11 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/cluster/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &cluster_cs.step });
+    }, &.{ &common.step, &runtime.step, &cluster_cs.step }, .no_tests);
 
     const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
     const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
@@ -401,19 +385,12 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step });
+    }, &.{ &common.step, &runtime.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .no_tests);
 
-    // ── render pipeline: material-system passes (gbuffer, forward) ──────────
-    // Every authored material × this pass, the cartesian product each pass
-    // would otherwise have to hardcode. Mirrors cmake/CompileMaterialShaders.cmake's
-    // ke_compile_material_shaders: glob every KE_MATERIALS_DIRS directory
-    // (engine defaults + a downstream example's own materials tree, proving a
-    // game can author materials without touching engine source), generate a
-    // per-(material,pass) wrapper via generate_material_wrapper.cs, then
-    // compile it the same way any other pass shader compiles.
     const materials_dirs = [_][]const u8{
         b.pathJoin(&.{ shader_lib_dir, "materials" }),
         b.pathJoin(&.{ root, "examples/csharp/03_pbr_directional/materials" }),
@@ -433,9 +410,10 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/gbuffer/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step });
+    }, &.{ &common.step, &runtime.step }, .has_tests);
     for (gbuffer_material_shaders) |s| gbuffer.step.dependOn(&s.step);
 
     const forward_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };
@@ -452,18 +430,13 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/forward/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step });
+    }, &.{ &common.step, &runtime.step }, .has_tests);
     for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
 
-    // ke_render_service: the forward-renderer aggregator. Its @embedFile of the
-    // magenta fallback shader means those two WGSL files must exist on disk
-    // BEFORE core's own `zig build` starts — a harder ordering constraint than
-    // a normal link dependency, so the compile steps are threaded into core's
-    // deps explicitly rather than relying on the shared shaders_out directory
-    // existing by coincidence.
     const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
     const magenta_slang = b.pathJoin(&.{ src_zig, "render/service/shaders/magenta.slang" });
     const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{});
@@ -477,9 +450,33 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
         argF(b, "ke-resource-cache-include", b.pathJoin(&.{ src_c, "resource_cache" })),
+        argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/service/include" })),
+        argF(b, "ke-lib-dir", lib_dir),
+        argF(b, "magenta-vs-wgsl", magenta_vs_wgsl),
+        argF(b, "magenta-fs-wgsl", magenta_fs_wgsl),
+    }, &.{
+        &common.step,     &resource_cache_default.step, &runtime.step,
+        &magenta_vs.step, &magenta_fs.step,
+    }, .has_tests);
+
+    const render_module = ctx.plugin("ke_render_module", "src/zig/render/module", &.{
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
+        argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
+        argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
+        argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
+        argF(b, "ke-asset-include", b.pathJoin(&.{ src_c, "asset" })),
+        argF(b, "ke-service-include", b.pathJoin(&.{ src_zig, "render/service/include" })),
+        argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/module/include" })),
+        argF(b, "ke-view-space-include", b.pathJoin(&.{ src_zig, "view/space/include" })),
         argF(b, "ke-tonemap-include", b.pathJoin(&.{ src_zig, "render/tonemap/include" })),
         argF(b, "ke-skybox-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
         argF(b, "ke-ui-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
@@ -489,42 +486,32 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-deferred-lighting-include", b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" })),
         argF(b, "ke-forward-include", b.pathJoin(&.{ src_zig, "render/forward/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-        argF(b, "magenta-vs-wgsl", magenta_vs_wgsl),
-        argF(b, "magenta-fs-wgsl", magenta_fs_wgsl),
+        argF(b, "kerror-src", kerror_src),
     }, &.{
-        &common.step,           &resource_cache_default.step, &runtime.step,
-        &tonemap.step,          &skybox.step,                 &ui.step,
-        &gbuffer.step,          &shadow.step,                 &cluster.step,
+        &common.step,            &runtime.step, &render_service.step, &view_space.step,
+        &tonemap.step,           &skybox.step,  &ui.step,
+        &gbuffer.step,           &shadow.step,  &cluster.step,
         &deferred_lighting.step, &forward.step,
-        &magenta_vs.step,       &magenta_fs.step,
-    });
+    }, .has_tests);
 
-    // Every plugin is an independent `zig build` process invocation, not a
-    // real Zig module dependency — nothing here transitively pulls the others
-    // in, so the default install step must list every one explicitly (unlike
-    // a normal Zig dependency graph, where depending on the leaf would do it).
     const all_plugins = [_]*std.Build.Step.Run{
-        common,          logger_simple,     ecs_flecs,           input_default,
-        resource_cache_default, scheduler_enki, runtime,         framework,
-        window_glfw,     asset_stb_image,   audio_miniaudio,     text_stb_truetype,
-        physics_box2d,   asset_assimp,      configuration,       configuration_toml,
-        tonemap,         skybox,            ui,                  shadow,
-        cluster,         deferred_lighting, gpu_device_webgpu,   gbuffer,
-        forward,         render_service,
+        render_module,     common,                 logger_simple,      ecs_flecs,
+        input_default,     resource_cache_default, scheduler_enki,     runtime,
+        framework,         window_glfw,            asset_stb_image,    audio_miniaudio,
+        text_stb_truetype, physics_box2d,          physics_body2d,     asset_assimp,
+        configuration,     audio_module,           configuration_toml, tonemap,
+        skybox,            ui,                     shadow,             cluster,
+        deferred_lighting, gpu_device_webgpu,      gbuffer,            forward,
+        render_service,
     };
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
+    b.getInstallStep().dependOn(ctx.plugins_step);
+    ctx.plugins_step.dependOn(&wgpu_copy.step);
 
-    // Windows has no rpath equivalent: a consumer .exe in bin/ won't find its
-    // dependency .dlls sitting in a sibling lib/ the way a Linux binary finds
-    // its .so via -rpath. Every plugin still installs to lib/ (matching Linux,
-    // and matching where the .lib import libraries the link step needs live),
-    // so the fix is a straight copy of the built .dlls into bin/ once, here —
-    // matching the "C# expects native libraries at build/native/bin/" contract
-    // CLAUDE.md already documents for the managed side.
     if (target.result.os.tag == .windows) {
         const copy_dlls_to_bin = b.addSystemCommand(&.{
-            "sh", "-c",
+            "sh",                                                                                 "-c",
             b.fmt("cp -f '{s}'/*.dll '{s}'/", .{ lib_dir, b.pathJoin(&.{ ctx.prefix, "bin" }) }),
         });
         for (all_plugins) |p| copy_dlls_to_bin.step.dependOn(&p.step);
@@ -533,149 +520,6 @@ pub fn build(b: *std.Build) void {
         b.getInstallStep().dependOn(&copy_dlls_to_bin.step);
     }
 
-    // ── GTest suites (system C++ compiler — Zig's own libc++ is ABI-incompatible
-    // with vcpkg's libstdc++-built GTest archives) ──────────────────────────────
-    const gtest_include = vcpkg_include;
-    const gtest_a = b.pathJoin(&.{ vcpkg_lib, "libgtest.a" });
-    const gtest_main_a = b.pathJoin(&.{ vcpkg_lib, "manual-link", "libgtest_main.a" });
-    const gmock_a = b.pathJoin(&.{ vcpkg_lib, "libgmock.a" });
-    const tests_c_kernel = b.pathJoin(&.{ root, "tests/c/kernel" });
-    const tests_integration_cpp = b.pathJoin(&.{ root, "tests/integration/cpp" });
-
-    const kernel_test_sources = [_][]const u8{
-        "test_input.cpp",         "test_logger.cpp",       "test_asset_resolver.cpp",
-        "test_resource_cache.cpp", "test_scene_tree.cpp",  "test_input_actions.cpp",
-        "test_scene_loader.cpp",
-    };
-    var kernel_test_sources_abs: [kernel_test_sources.len][]const u8 = undefined;
-    for (kernel_test_sources, 0..) |s, i| kernel_test_sources_abs[i] = b.pathJoin(&.{ tests_c_kernel, s });
-
-    const test_ke_kernel = ctx.testBinary("test_ke_kernel", "tests/c/kernel", std.mem.concat(b.allocator, []const u8, &.{
-        &.{
-        b.fmt("-Dcoverage={}", .{coverage}),
-        argF(b, "sources", joinPaths(b, &kernel_test_sources_abs)),
-        argF(b, "include-dirs", joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "logger" }),
-            b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_c, "spatial" }),
-            b.pathJoin(&.{ src_c, "scheduler" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "input" }),
-            b.pathJoin(&.{ src_c, "asset" }),
-            b.pathJoin(&.{ src_c, "resource_cache" }),
-            b.pathJoin(&.{ src_c, "text" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "runtime" }),
-            b.pathJoin(&.{ src_zig, "framework/include" }),
-            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
-            gtest_include,
-        })),
-        argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_resource_cache_default") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
-            gtest_main_a,
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
-            gtest_a,
-        })),
-        argF(b, "rpaths", lib_dir),
-        argF(b, "output", b.pathJoin(&.{ ctx.prefix, "bin", exeFileName(b, target, "test_ke_kernel") })),
-        },
-        testCxxArgs(b, target, root),
-    }) catch @panic("OOM"), &.{
-        &logger_simple.step, &input_default.step, &resource_cache_default.step, &framework.step,
-        &runtime.step,       &ecs_flecs.step,      &scheduler_enki.step,        &common.step,
-    });
-
-    const integration_test_sources = [_][]const u8{
-        "test_world.cpp",           "test_factories.cpp",        "test_window_glfw.cpp",
-        "test_asset_loader.cpp",    "test_stb_image_loader.cpp", "test_enki_scheduler.cpp",
-        "test_miniaudio_audio.cpp", "test_box2d_physics.cpp",    "test_stb_font.cpp",
-        "test_runtime.cpp",         "test_ecs_parallel_reads.cpp",
-    };
-    var integration_test_sources_abs: [integration_test_sources.len][]const u8 = undefined;
-    for (integration_test_sources, 0..) |s, i| integration_test_sources_abs[i] = b.pathJoin(&.{ tests_integration_cpp, s });
-
-    const test_integration_cpp = ctx.testBinary("test_integration_cpp", "tests/integration/cpp", std.mem.concat(b.allocator, []const u8, &.{
-        &.{
-        b.fmt("-Dcoverage={}", .{coverage}),
-        argF(b, "sources", joinPaths(b, &integration_test_sources_abs)),
-        argF(b, "include-dirs", joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "spatial" }),
-            b.pathJoin(&.{ src_c, "scheduler" }),
-            b.pathJoin(&.{ src_c, "physics" }),
-            b.pathJoin(&.{ src_c, "logger" }),
-            b.pathJoin(&.{ src_c, "input" }),
-            b.pathJoin(&.{ src_c, "resource_cache" }),
-            b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
-            b.pathJoin(&.{ src_zig, "audio/miniaudio/include" }),
-            b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
-            b.pathJoin(&.{ src_zig, "text/stb_truetype/include" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "asset/assimp/include" }),
-            b.pathJoin(&.{ src_c, "asset" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "text" }),
-            b.pathJoin(&.{ src_zig, "asset/stb_image/include" }),
-            b.pathJoin(&.{ src_c, "audio" }),
-            b.pathJoin(&.{ src_c, "runtime" }),
-            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "framework/include" }),
-            gtest_include,
-        })),
-        argF(b, "libs", joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_asset_assimp") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_asset_stb_image") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_audio_miniaudio") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_text_stb_truetype") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_resource_cache_default") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),
-            gtest_main_a,
-            gmock_a,
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
-            gtest_a,
-        })),
-        argF(b, "rpaths", lib_dir),
-        argF(b, "output", b.pathJoin(&.{ ctx.prefix, "bin", exeFileName(b, target, "test_integration_cpp") })),
-        },
-        testCxxArgs(b, target, root),
-    }) catch @panic("OOM"), &.{
-        &window_glfw.step,       &asset_assimp.step,          &asset_stb_image.step,
-        &scheduler_enki.step,    &audio_miniaudio.step,       &physics_box2d.step,
-        &text_stb_truetype.step, &logger_simple.step,         &input_default.step,
-        &resource_cache_default.step, &runtime.step,          &ecs_flecs.step,
-        &framework.step,         &common.step,
-    });
-
-    const test_step = b.step("test", "Build the two GTest suites (system C++ compiler)");
-    test_step.dependOn(&test_ke_kernel.step);
-    test_step.dependOn(&test_integration_cpp.step);
-    b.getInstallStep().dependOn(&test_ke_kernel.step);
-    b.getInstallStep().dependOn(&test_integration_cpp.step);
-
-    // ── C examples ───────────────────────────────────────────────────────────
-    // Every example's own build.zig hardcodes exe name "demo" installed to its
-    // own prefix's bin/ — fine in isolation, but a shared --prefix across all
-    // of them would make every later example overwrite the previous one's
-    // binary. Each example instead builds into its own private sub-prefix,
-    // then gets copied into the shared bin/ under its own c_demo_NN name —
-    // the same two-path pattern CMake used to dodge the IMPORTED_LOCATION
-    // collision bug, applied here to dodge an install-path collision instead.
     const demo01 = ctx.example("c_demo_01", "examples/c/01_minimal_log", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "logger" }),
@@ -687,13 +531,8 @@ pub fn build(b: *std.Build) void {
     const demo_step = b.step("demo01", "Build examples/c/01_minimal_log with zero CMake involved");
     demo_step.dependOn(&demo01.step);
 
-    // ── remaining C examples ────────────────────────────────────────────────
     const examples_gen = b.pathJoin(&.{ ctx.prefix, "gen", "examples" });
 
-    // glslangValidator (unlike compile_slang.cs) never creates its own output
-    // directory — it just fails with "Failed to open file" the first time
-    // zig-out doesn't exist yet, so every glslang-driven example's shader dir
-    // is created up front, mirroring CMake's file(MAKE_DIRECTORY ...) calls.
     {
         var threaded: std.Io.Threaded = .init(b.allocator, .{});
         defer threaded.deinit();
@@ -711,6 +550,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
         })),
         argF(b, "libs", b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") })),
     }, &.{&gpu_device_webgpu.step});
@@ -724,6 +564,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
@@ -741,6 +582,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
@@ -759,6 +601,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
@@ -776,6 +619,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
@@ -793,6 +637,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
@@ -812,6 +657,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
         })),
@@ -820,12 +666,14 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &ecs_flecs.step, ctx.slang_step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &render_module.step, &ecs_flecs.step, ctx.slang_step });
 
     const demo13 = ctx.example("c_demo_13", "examples/c/13_runtime_clear", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "scheduler" }),
@@ -833,23 +681,31 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
+            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/shadow/include" }),
+            b.pathJoin(&.{ src_zig, "render/ui/include" }),
+            b.pathJoin(&.{ src_c, "text" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_c, "asset" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         })),
     }, &.{
-        &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_service.step,
-        &ecs_flecs.step,  &scheduler_enki.step, &runtime.step,
+        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 
     const demo14 = ctx.example("c_demo_14", "examples/c/14_forward_mesh", &.{
@@ -860,26 +716,34 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "scheduler" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
+            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/shadow/include" }),
+            b.pathJoin(&.{ src_zig, "render/ui/include" }),
+            b.pathJoin(&.{ src_c, "text" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_c, "asset" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         })),
         "-Dlink-m=true",
     }, &.{
-        &common.step,     &window_glfw.step, &gpu_device_webgpu.step, &render_service.step,
-        &ecs_flecs.step,  &scheduler_enki.step, &runtime.step,
+        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 
     const all_examples = [_]*std.Build.Step.Run{
@@ -888,6 +752,8 @@ pub fn build(b: *std.Build) void {
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
 }
 
+const Tests = enum { has_tests, no_tests };
+
 const Ctx = struct {
     b: *std.Build,
     root: []const u8,
@@ -895,18 +761,11 @@ const Ctx = struct {
     prefix: []const u8,
     release_flag: []const u8,
     vcpkg_step: *std.Build.Step,
-    // Forwarded to every sub-`zig build` invocation. Some plugins pin
-    // `.default_target = .{ .abi = .gnu }` themselves (ke_common and other
-    // "pure-logic" built-ins); most don't, including every example and test
-    // binary. Left unset, Zig's native-target resolution picks the msvc ABI
-    // on Windows even with no MSVC installed — a mix of gnu-ABI plugin DLLs
-    // and an msvc-ABI host .exe fails to load at runtime (STATUS_DLL_NOT_FOUND
-    // on a UCRT forwarder). Forcing the same target everywhere, from the one
-    // place that already knows the triplet story, is simpler than auditing
-    // every sub-build.zig for a consistent default.
     target_arg: []const u8,
     slangc_exe: []const u8,
     slang_step: *std.Build.Step,
+    plugins_step: *std.Build.Step,
+    test_step: *std.Build.Step,
 
     /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs,
     /// mirroring cmake/CompileSlangShader.cmake's ke_compile_slang_shader.
@@ -926,10 +785,10 @@ const Ctx = struct {
             "cs";
         const out_file = b.pathJoin(&.{ out_dir, b.fmt("{s}.{s}.wgsl", .{ name, suffix }) });
         const run = b.addSystemCommand(&.{
-            "dotnet",  "run",    b.pathJoin(&.{ ctx.root, "scripts/compile_slang.cs" }),
-            "--slangc", ctx.slangc_exe,
-            "--raw",    "--target",                                                 "wgsl",
-            "--entry",  entry,                                                      "--stage", stage,
+            "dotnet",   "run",          b.pathJoin(&.{ ctx.root, "scripts/compile_slang.cs" }),
+            "--slangc", ctx.slangc_exe, "--raw",
+            "--target", "wgsl",         "--entry",
+            entry,      "--stage",      stage,
         });
         run.step.dependOn(ctx.slang_step);
         for (includes) |inc| run.addArgs(&.{ "--include", inc });
@@ -978,10 +837,9 @@ const Ctx = struct {
                 const wrapper = b.pathJoin(&.{ gen_dir, b.fmt("{s}.slang", .{combined_name}) });
 
                 const gen_wrapper = b.addSystemCommand(&.{
-                    "dotnet",     "run", b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.cs" }),
-                    "--material", material_path,
-                    "--template", template,
-                    "--output",   wrapper,
+                    "dotnet",     "run",         b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.cs" }),
+                    "--material", material_path, "--template",
+                    template,     "--output",    wrapper,
                 });
                 gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
 
@@ -1004,16 +862,33 @@ const Ctx = struct {
     /// SAME shared prefix makes them all land in one directory — no
     /// zig-out-then-copy indirection needed (that dance existed only to work
     /// around a CMake quirk, not a Zig one).
-    fn plugin(ctx: *Ctx, name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step) *std.Build.Step.Run {
+    fn plugin(ctx: *Ctx, name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step, tests: Tests) *std.Build.Step.Run {
         const b = ctx.b;
+        const cwd = b.pathJoin(&.{ b.build_root.path.?, dir });
         const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
-        run.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.build_root.path.?, dir }) });
+        run.setCwd(.{ .cwd_relative = cwd });
         run.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| run.step.dependOn(d);
         run.setName(b.fmt("build {s} (Zig)", .{name}));
+        ctx.plugins_step.dependOn(&run.step);
+
+        switch (tests) {
+            .no_tests => {},
+            .has_tests => {
+                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix });
+                t.addArgs(extra_args);
+                t.addArg(ctx.release_flag);
+                if (ctx.target_arg.len != 0) t.addArg(ctx.target_arg);
+                t.setCwd(.{ .cwd_relative = cwd });
+                t.has_side_effects = true;
+                t.step.dependOn(ctx.plugins_step);
+                t.setName(b.fmt("test {s} (Zig)", .{name}));
+                ctx.test_step.dependOn(&t.step);
+            },
+        }
         return run;
     }
 
@@ -1039,29 +914,12 @@ const Ctx = struct {
         run.setName(b.fmt("build {s} (Zig)", .{demo_name}));
 
         const copy = b.addSystemCommand(&.{
-            "install", "-Dm755",
-            b.pathJoin(&.{ own_prefix, "bin", "demo" }),
-            b.pathJoin(&.{ ctx.prefix, "bin", demo_name }),
+            "install",                                   "-Dm755",
+            b.pathJoin(&.{ own_prefix, "bin", "demo" }), b.pathJoin(&.{ ctx.prefix, "bin", demo_name }),
         });
         copy.step.dependOn(&run.step);
         copy.setName(b.fmt("install {s}", .{demo_name}));
         return copy;
-    }
-
-    /// Invokes a GTest suite's own build.zig, which shells out to the SYSTEM
-    /// C++ compiler directly (not `zig build`'s usual target/prefix machinery
-    /// — Zig's bundled libc++ is ABI-incompatible with vcpkg's libstdc++-built
-    /// GTest archives). No --prefix/--release forwarded: the suite's build.zig
-    /// declares no such options, it just writes straight to -Doutput.
-    fn testBinary(ctx: *Ctx, name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step) *std.Build.Step.Run {
-        const b = ctx.b;
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build" });
-        run.addArgs(extra_args);
-        run.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.build_root.path.?, dir }) });
-        run.step.dependOn(ctx.vcpkg_step);
-        for (deps) |d| run.step.dependOn(d);
-        run.setName(b.fmt("build {s} (system C++)", .{name}));
-        return run;
     }
 };
 
@@ -1088,13 +946,6 @@ fn libFileName(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8
 /// tolerates the missing extension).
 fn exeFileName(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) []const u8 {
     return if (target.result.os.tag == .windows) b.fmt("{s}.exe", .{name}) else name;
-}
-
-/// Compiler for the two GTest suites' link step: must match vcpkg's GTest,
-/// built with `zig c++` (vcpkg-triplets/x64-{windows,linux}-zig.cmake).
-fn testCxxArgs(b: *std.Build, target: std.Build.ResolvedTarget, root: []const u8) []const []const u8 {
-    const shim = if (target.result.os.tag == .windows) "zig-cxx.cmd" else "zig-cxx.sh";
-    return &.{argF(b, "cxx", b.pathJoin(&.{ root, "vcpkg-triplets", shim }))};
 }
 
 fn argF(b: *std.Build, comptime name: []const u8, value: []const u8) []const u8 {

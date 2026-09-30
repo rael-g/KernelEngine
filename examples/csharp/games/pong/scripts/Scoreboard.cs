@@ -10,7 +10,7 @@ namespace Pong;
 /// font is loaded once in <see cref="OnBind"/> (which runs on the render
 /// worker) and shared across the three labels.
 /// </summary>
-public sealed class Scoreboard : Node
+public sealed partial class Scoreboard : Node
 {
     private readonly IFontLoader     _fontLoader;
     private readonly IRenderResources _resources;
@@ -20,9 +20,12 @@ public sealed class Scoreboard : Node
     private Label? _right;
     private Label? _hint;
 
-    /// <summary>Set by SceneLoader from <c>[entity.properties] FontPath</c>.</summary>
-    public string FontPath { get; set; } = "";
-    public float  FontSize { get; set; } = 48f;
+    /// <summary>Font the scoreboard draws with. Empty falls back to the system font.</summary>
+    [NodeText(256)]
+    public partial string FontPath { get; set; }
+
+    /// <summary>Size in pixels the font is rasterized at.</summary>
+    public partial float FontSize { get; set; }
 
     public int Left  { get; private set; }
     public int Right { get; private set; }
@@ -32,41 +35,53 @@ public sealed class Scoreboard : Node
     {
         _fontLoader = fontLoader;
         _resources  = resources;
+        FontSize    = 48f;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld)
+    protected override void OnBind(ScriptHost scriptHost)
     {
-        var path = string.IsNullOrEmpty(FontPath)
-            ? ExamplePaths.SystemFont
-            : FontPath;
+        var path = string.IsNullOrEmpty(FontPath) ? ExamplePaths.SystemFont : FontPath;
         _font = Font.Load(_resources, _fontLoader, path, pixelSize: FontSize);
 
-        _left  = nodeWorld.AddNode(new Label
+        _left  = AddChild(new Label
         {
             Text   = "0",
-            Font   = _font,
+            Font     = path,
+            FontSize = FontSize,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.30f, 0f),
             Offset = new Vector2(0f, 60f),
-        }, "ScoreLeft", parent: this);
+        }, "ScoreLeft");
 
-        _right = nodeWorld.AddNode(new Label
+        _right = AddChild(new Label
         {
             Text   = "0",
-            Font   = _font,
+            Font     = path,
+            FontSize = FontSize,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.70f, 0f),
             Offset = new Vector2(0f, 60f),
-        }, "ScoreRight", parent: this);
+        }, "ScoreRight");
 
-        _hint  = nodeWorld.AddNode(new Label
+        _hint  = AddChild(new Label
         {
             Text   = "",
-            Font   = _font,
+            Font     = path,
+            FontSize = FontSize,
             Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
             Anchor = new Vector2(0.5f, 1f),
             Offset = new Vector2(0f, -80f),
-        }, "ScoreHint", parent: this);
+        }, "ScoreHint");
+    }
+
+    /// <summary>Clears the launch hint once play actually starts.</summary>
+    void On(in BallLaunched e) => HideHint();
+
+    /// <summary>Reacts to the ball's goal signal: records the point and re-arms the hint.</summary>
+    void On(in GoalScored e)
+    {
+        RecordGoal(e.LeftScored);
+        ShowHint("Press Space to launch");
     }
 
     public void RecordGoal(bool leftScored)

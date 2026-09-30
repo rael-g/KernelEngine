@@ -2,25 +2,9 @@ const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
 
-// Zig 0.16 moved file IO behind std.Io (needs an Io instance to construct;
-// std.posix.read explicitly refuses Windows in this version, and the only
-// Windows file-open primitive left in std lives inside Io.Threaded itself, so
-// there is no lighter std-native path on this platform). libc is already
-// linked and version-stable — same choice configuration_toml.zig made for the
-// same reason.
 const libc = @cImport({
     @cInclude("stdio.h");
 });
-
-// ke_render_service::load_shader — resolves a shader by logical name + stage to a
-// device-ready module, without the caller ever naming a path or a format. The
-// core asks the device for its accepted language (WGSL/SPIR-V/MSL/DXIL), maps
-// that to a file extension, and reads "<shader_dir>/<name>.<stage>.<ext>" — a
-// file ke_compile_slang_shader (CMake) already produced at build time. This
-// loads a build-time artifact; it never invokes a shader compiler, so the
-// PSO-affecting shader set stays statically derivable (§6 doctrine) even
-// though the read happens at runtime. Deduped by resolved path through the
-// core's shader cache, same shape as mesh/texture/material.
 
 fn extForLanguage(lang: c.ke_gpu_shader_language) []const u8 {
     return switch (lang) {
@@ -32,8 +16,6 @@ fn extForLanguage(lang: c.ke_gpu_shader_language) []const u8 {
     };
 }
 
-// `stage` is a bitmask type at the ABI level, but a shader module is always
-// exactly one stage — a combination is a caller error, not a valid request.
 fn stageSuffix(stage: c.ke_gpu_shader_stage) ?[]const u8 {
     return switch (stage) {
         c.KE_GPU_SHADER_STAGE_VERTEX => "vs",
@@ -105,8 +87,6 @@ pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke
     return module;
 }
 
-// ke_resource_cache destroy_fn: fires at refcount zero (never, in practice — no
-// pass releases a shader) and at cache teardown, for every shader still resident.
 pub fn destroyShaderResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     const st: *rc.CoreState = @alignCast(@ptrCast(ctx));
     if (st.shader_store.remove(handle)) |module| {

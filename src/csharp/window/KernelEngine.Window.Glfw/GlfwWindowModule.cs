@@ -45,10 +45,6 @@ public sealed class GlfwWindowModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        // PreUpdate is the canonical phase for OS event pump: by the time any
-        // Update / FixedUpdate system runs, input + close events are already
-        // consumed. The window reference is captured into the system closure
-        // so the runtime callback doesn't need to know about the container.
         var window = services.GetRequiredService<IWindow>();
         runtime.RegisterSystem("Glfw.PollEvents", RuntimePhase.PreUpdate, (_, _) =>
         {

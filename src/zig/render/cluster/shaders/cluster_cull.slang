@@ -1,15 +1,16 @@
-// Cluster light culling — one thread per cluster builds the cluster's view-space
-// AABB (inline, from the froxel index + projection) and tests each light's
-// bounding sphere against it, writing the per-cluster light index list the
-// forward pass reads. Translated from the legacy bgfx cs_light_cull (bounds were
-// a precomputed buffer there; here they are derived in-shader). The view is
-// left-handed (camera looks +Z), so a point in front has view-space z in
-// [near, far] (positive). Froxel grid: numX×numY screen tiles × numZ
-// exponential depth slices (Olsson 2012).
+// Cluster light culling — one thread per cluster builds the cluster's froxel AABB
+// (inline, from the froxel index + projection) and tests each light's bounding
+// sphere against it, writing the per-cluster light index list the forward pass
+// reads. Froxel grid: numX×numY screen tiles × numZ exponential depth slices
+// (Olsson 2012).
+//
+// The froxel is built in depth: a visible point sits at [near, far], positive.
+// A view-space z becomes that depth through params.counts.z, which the engine's
+// view space supplies, so this shader never assumes which way the camera faces.
 
 struct ClusterParams {
     float4   grid;   // x=numX, y=numY, z=numZ, w=maxLightsPerCluster
-    float4   counts; // x=pointCount, y=spotCount
+    float4   counts; // x=pointCount, y=spotCount, z=depthFromViewZ
     float4   proj;   // x=tan(fovY/2), y=aspect, z=near, w=far
     float4x4 view;   // world → view
 };
@@ -77,11 +78,14 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
         amax = max(amax, v);
     }
 
+    float depth_from_view_z = params.counts.z;
+
     uint point_total = (uint)params.counts.x;
     uint pc = 0u;
     for (uint pi = 0u; pi < point_total && pc < max_lights; pi++) {
         float4 pr = point_lights[pi].pos_radius;
         float3 vp = mul(params.view, float4(pr.xyz, 1.0)).xyz;
+        vp.z *= depth_from_view_z;
         if (sphere_hits_aabb(vp, pr.w, amin, amax)) {
             point_indices[ci * max_lights + pc] = pi;
             pc++;
@@ -94,6 +98,7 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
     for (uint si = 0u; si < spot_total && sc < max_lights; si++) {
         float4 pr = spot_lights[si].pos_range; // xyz = pos, w = range
         float3 vp = mul(params.view, float4(pr.xyz, 1.0)).xyz;
+        vp.z *= depth_from_view_z;
         if (sphere_hits_aabb(vp, pr.w, amin, amax)) {
             spot_indices[ci * max_lights + sc] = si;
             sc++;

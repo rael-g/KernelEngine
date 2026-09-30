@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using LuaSpike;
 
-// ── Thread name (World.Update asserts ke.sim) ─────────────────────────────────
-
 const int WarmupFrames    = 10;
 const int BenchmarkFrames = 1000;
 var scriptPath = Path.Combine(AppContext.BaseDirectory, "scripts", "paddle.lua");
@@ -11,8 +9,6 @@ Console.WriteLine("=== Tier S — Lua spike ===");
 Console.WriteLine($"Script : {scriptPath}");
 Console.WriteLine($"Frames : {BenchmarkFrames} (+ {WarmupFrames} warmup)");
 Console.WriteLine();
-
-// ── Phase 1: C# ScriptBridge baseline ────────────────────────────────────────
 
 Console.WriteLine("--- Phase 1: C# ScriptBridge baseline ---");
 using (var allocator = new MallocAllocator())
@@ -26,10 +22,8 @@ using (var world = new World(allocator))
         onStart:  () => startCount++,
         onUpdate: _ => updateCount++);
 
-    // Warmup
     for (int i = 0; i < WarmupFrames; i++) world.Update();
 
-    // Reset counters after warmup
     startCount  = 0;
     updateCount = 0;
 
@@ -47,8 +41,6 @@ using (var world = new World(allocator))
 
 Console.WriteLine();
 
-// ── Phase 2: Lua binding via ke_script_component ──────────────────────────────
-
 Console.WriteLine("--- Phase 2: Lua script via ke_script_component ---");
 Console.WriteLine("(first 3 frames verbose, then silent benchmark)");
 Console.WriteLine();
@@ -60,20 +52,17 @@ using (var world = new World(allocator))
 
     LuaScriptBridge.Register(world.Registry, world.ScriptComponentId, entity, scriptPath);
 
-    // 3 verbose frames (Lua prints to stdout)
     for (int i = 0; i < 3; i++) world.Update();
 
     Console.WriteLine();
     Console.WriteLine("--- silent benchmark ---");
 
-    // Swap to a silent Lua state for fair timing
     LuaScriptBridge.Unregister(entity);
     entity = world.Registry.CreateEntity();
 
     var silentScript = Path.Combine(AppContext.BaseDirectory, "scripts", "paddle_silent.lua");
     if (!File.Exists(silentScript))
     {
-        // Generate a no-print version inline
         File.WriteAllText(silentScript,
             "local t = 0.0\n" +
             "function on_awake(e) end\n" +
@@ -85,7 +74,6 @@ using (var world = new World(allocator))
 
     LuaScriptBridge.Register(world.Registry, world.ScriptComponentId, entity, silentScript);
 
-    // Warmup
     for (int i = 0; i < WarmupFrames; i++) world.Update();
 
     var sw = Stopwatch.StartNew();

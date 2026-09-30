@@ -73,7 +73,7 @@ public class AudioTests
     public unsafe void LoadSound_CallsNative()
     {
         var h = CreateMockHandle();
-        var audio = new Audio(h);
+        IAudio audio = new Audio(h);
         LastPath = null;
 
         var handle = audio.LoadSound("test.wav");
@@ -87,7 +87,7 @@ public class AudioTests
     public unsafe void LoadSound_ReturnsNone_WhenNativeFails()
     {
         var h = CreateMockHandle();
-        var audio = new Audio(h);
+        IAudio audio = new Audio(h);
         LastResult = false;
 
         var handle = audio.LoadSound("test.wav");
@@ -101,7 +101,7 @@ public class AudioTests
     public unsafe void UnloadSound_CallsNative()
     {
         var h = CreateMockHandle();
-        var audio = new Audio(h);
+        IAudio audio = new Audio(h);
         LastSoundId = 0;
 
         audio.UnloadSound(new SoundHandle(123));
@@ -114,7 +114,7 @@ public class AudioTests
     public unsafe void Play_CallsNative()
     {
         var h = CreateMockHandle();
-        var audio = new Audio(h);
+        IAudio audio = new Audio(h);
         LastSoundId = 0;
 
         audio.Play(new SoundHandle(123), 0.5f, true);
@@ -129,7 +129,7 @@ public class AudioTests
     public unsafe void Stop_CallsNative()
     {
         var h = CreateMockHandle();
-        var audio = new Audio(h);
+        IAudio audio = new Audio(h);
         LastSoundId = 0;
 
         audio.Stop(new SoundHandle(123));
@@ -142,7 +142,7 @@ public class AudioTests
     public unsafe void SetMasterVolume_CallsNative()
     {
         var h = CreateMockHandle();
-        var audio = new Audio(h);
+        IAudio audio = new Audio(h);
 
         audio.SetMasterVolume(0.8f);
 
@@ -154,13 +154,11 @@ public class AudioTests
     public unsafe void Dispose_CallsDestroy()
     {
         var h = CreateMockHandle();
-        var audio = new Audio(h);
+        IAudio audio = new Audio(h);
         DestroyCalled = false;
 
         audio.Dispose();
 
         Assert.True(DestroyCalled);
-        // Note: MockDestroy does not free memory; handle.@ref was freed by the destroy fn.
-        // If MockDestroy doesn't free, we must not double-free here.
     }
 }

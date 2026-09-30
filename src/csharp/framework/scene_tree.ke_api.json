@@ -1,0 +1,220 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_scene_tree",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "root",
+          "returns": "ke_entity",
+          "tags": [
+            "property"
+          ],
+          "doc": "The tree\u0027s root entity. Valid for the whole lifetime of the tree.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "create_node",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "Creates a node attached under \u0060parent\u0060, or under the root when \u0060parent\u0060 is KE_ENTITY_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "parent",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "ctx",
+              "type": "ke_system_ctx *",
+              "tags": [
+                "ctx"
+              ],
+              "doc": "The system context the call is running inside, which defers the structural change to the wave barrier. Null creates the node immediately."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "destroy_node",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "ctx",
+              "type": "ke_system_ctx *",
+              "tags": [
+                "ctx"
+              ],
+              "doc": "The system context the call is running inside, which defers the teardown to the wave barrier. Null destroys the node immediately."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "destroy_all",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "find_node",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name_or_path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "parent",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The entity \u0060entity\u0060 hangs from, or KE_ENTITY_INVALID when it is a root.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "first_child",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The first of \u0060entity\u0060\u0027s children, or KE_ENTITY_INVALID when it has none. Paired with next_sibling this walks the child list a step at a time, which is the shape parenthood already has: it is an intrusive list, so answering with an array would mean building one on every call, and a caller after just the first child would pay for all of them.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "next_sibling",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The next child of \u0060entity\u0060\u0027s parent, or KE_ENTITY_INVALID at the end of the list. Children come back in the order they were added.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "propagate_transforms",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_scene_tree *"
+        }
+      ]
+    },
+    {
+      "name": "ke_scene_tree_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_scene_tree *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scene_tree *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t"
+  }
+}

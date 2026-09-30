@@ -5,9 +5,11 @@
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/service/render_service.h>
-#include <kernel_engine/render/service/render_module_create.h>
+#include <kernel_engine/render/module/render_module_create.h>
 #include <kernel_engine/render/components.h>
+#include <kernel_engine/render/component_fields.h>
 #include <kernel_engine/spatial/transform.h>
+#include <kernel_engine/spatial/component_fields.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/scheduler/scheduler.h>
@@ -35,18 +37,14 @@ static double now_seconds(void)
 #endif
 }
 
-// Interleaved position(3) + normal(3) + uv(2) + tangent(3), unit cube centred
-// at the origin. The tangent (+U direction per face) and uv matter for the
-// vertex stride the forward pipeline expects (11 floats); this example uses the
-// white material, so the values are not otherwise visible.
 typedef struct { float px, py, pz, nx, ny, nz, u, v, tx, ty, tz; } vtx;
 static const vtx cube[] = {
-    {-0.5f,-0.5f, 0.5f, 0,0, 1, 0,1, 1,0,0},{ 0.5f,-0.5f, 0.5f, 0,0, 1, 1,1, 1,0,0},{ 0.5f, 0.5f, 0.5f, 0,0, 1, 1,0, 1,0,0},{-0.5f, 0.5f, 0.5f, 0,0, 1, 0,0, 1,0,0}, // +Z
-    { 0.5f,-0.5f,-0.5f, 0,0,-1, 0,1,-1,0,0},{-0.5f,-0.5f,-0.5f, 0,0,-1, 1,1,-1,0,0},{-0.5f, 0.5f,-0.5f, 0,0,-1, 1,0,-1,0,0},{ 0.5f, 0.5f,-0.5f, 0,0,-1, 0,0,-1,0,0}, // -Z
-    { 0.5f,-0.5f, 0.5f, 1,0, 0, 0,1, 0,0,-1},{ 0.5f,-0.5f,-0.5f, 1,0, 0, 1,1, 0,0,-1},{ 0.5f, 0.5f,-0.5f, 1,0, 0, 1,0, 0,0,-1},{ 0.5f, 0.5f, 0.5f, 1,0, 0, 0,0, 0,0,-1}, // +X
-    {-0.5f,-0.5f,-0.5f,-1,0, 0, 0,1, 0,0,1},{-0.5f,-0.5f, 0.5f,-1,0, 0, 1,1, 0,0,1},{-0.5f, 0.5f, 0.5f,-1,0, 0, 1,0, 0,0,1},{-0.5f, 0.5f,-0.5f,-1,0, 0, 0,0, 0,0,1}, // -X
-    {-0.5f, 0.5f, 0.5f, 0,1, 0, 0,1, 1,0,0},{ 0.5f, 0.5f, 0.5f, 0,1, 0, 1,1, 1,0,0},{ 0.5f, 0.5f,-0.5f, 0,1, 0, 1,0, 1,0,0},{-0.5f, 0.5f,-0.5f, 0,1, 0, 0,0, 1,0,0}, // +Y
-    {-0.5f,-0.5f,-0.5f, 0,-1,0, 0,1, 1,0,0},{ 0.5f,-0.5f,-0.5f, 0,-1,0, 1,1, 1,0,0},{ 0.5f,-0.5f, 0.5f, 0,-1,0, 1,0, 1,0,0},{-0.5f,-0.5f, 0.5f, 0,-1,0, 0,0, 1,0,0}, // -Y
+    {-0.5f,-0.5f, 0.5f, 0,0, 1, 0,1, 1,0,0},{ 0.5f,-0.5f, 0.5f, 0,0, 1, 1,1, 1,0,0},{ 0.5f, 0.5f, 0.5f, 0,0, 1, 1,0, 1,0,0},{-0.5f, 0.5f, 0.5f, 0,0, 1, 0,0, 1,0,0},
+    { 0.5f,-0.5f,-0.5f, 0,0,-1, 0,1,-1,0,0},{-0.5f,-0.5f,-0.5f, 0,0,-1, 1,1,-1,0,0},{-0.5f, 0.5f,-0.5f, 0,0,-1, 1,0,-1,0,0},{ 0.5f, 0.5f,-0.5f, 0,0,-1, 0,0,-1,0,0},
+    { 0.5f,-0.5f, 0.5f, 1,0, 0, 0,1, 0,0,-1},{ 0.5f,-0.5f,-0.5f, 1,0, 0, 1,1, 0,0,-1},{ 0.5f, 0.5f,-0.5f, 1,0, 0, 1,0, 0,0,-1},{ 0.5f, 0.5f, 0.5f, 1,0, 0, 0,0, 0,0,-1},
+    {-0.5f,-0.5f,-0.5f,-1,0, 0, 0,1, 0,0,1},{-0.5f,-0.5f, 0.5f,-1,0, 0, 1,1, 0,0,1},{-0.5f, 0.5f, 0.5f,-1,0, 0, 1,0, 0,0,1},{-0.5f, 0.5f,-0.5f,-1,0, 0, 0,0, 0,0,1},
+    {-0.5f, 0.5f, 0.5f, 0,1, 0, 0,1, 1,0,0},{ 0.5f, 0.5f, 0.5f, 0,1, 0, 1,1, 1,0,0},{ 0.5f, 0.5f,-0.5f, 0,1, 0, 1,0, 1,0,0},{-0.5f, 0.5f,-0.5f, 0,1, 0, 0,0, 1,0,0},
+    {-0.5f,-0.5f,-0.5f, 0,-1,0, 0,1, 1,0,0},{ 0.5f,-0.5f,-0.5f, 0,-1,0, 1,1, 1,0,0},{ 0.5f,-0.5f, 0.5f, 0,-1,0, 1,0, 1,0,0},{-0.5f,-0.5f, 0.5f, 0,-1,0, 0,0, 1,0,0},
 };
 static const uint16_t cube_idx[] = {
      0, 1, 2,  0, 2, 3,   4, 5, 6,  4, 6, 7,   8, 9,10,  8,10,11,
@@ -70,7 +68,7 @@ int main(void)
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
 
-    ke_ecs_flecs_params ep = { .reserved = 0 };
+    ke_ecs_flecs_params ep = { .world_id_base = 0 };
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
 
@@ -81,11 +79,10 @@ int main(void)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);
     if (!rt.ref) die("runtime", err);
 
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, 1, NULL, NULL, NULL, "shaders", &err);
+    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
     if (!render.ref) die("render module", err);
     ke_render_service *core = ke_render_module_core(render.ref);
 
-    // ── Upload the cube + populate the scene (camera + one mesh entity) ──────
     ke_mesh_handle cube_h = core->upload_mesh(core, "example:cube", cube, sizeof(cube), cube_idx,
                                               sizeof(cube_idx) / sizeof(cube_idx[0]), &err);
     if (!ke_mesh_is_valid(cube_h)) die("upload_mesh", err);
@@ -95,34 +92,40 @@ int main(void)
                                                     KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, NULL, &err);
     if (!ke_material_is_valid(mat)) die("create_material", err);
 
-    ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component));
-    ke_component_id camera_cid    = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_CAMERA,    sizeof(ke_camera_component));
-    ke_component_id mesh_cid      = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_MESH,      sizeof(ke_mesh_component));
-    ke_component_id light_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, sizeof(ke_directional_light_component));
+    ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields), NULL);
+    ke_component_id world_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_WORLD_TRANSFORM, sizeof(ke_world_transform_component), NULL, 0, NULL);
+    ke_component_id camera_cid    = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_CAMERA,    sizeof(ke_camera_component), KE_COMPONENT_FIELDS(ke_camera_component_fields), NULL);
+    ke_component_id mesh_cid      = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_MESH,      sizeof(ke_mesh_component), KE_COMPONENT_FIELDS(ke_mesh_component_fields), NULL);
+    ke_component_id light_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, sizeof(ke_directional_light_component), KE_COMPONENT_FIELDS(ke_directional_light_component_fields), NULL);
 
     const ke_mat4 identity = { .m = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 } };
 
     ke_entity cam = ecs.ref->entity_create(ecs.ref);
     ke_transform_component *cam_t = ecs.ref->component_add(ecs.ref, cam, transform_cid);
-    *cam_t = (ke_transform_component){ .position = { 1.5f, 1.5f, -3.0f }, .world_matrix = identity };
+    *cam_t = (ke_transform_component){ .position = { 1.5f, 1.5f, -3.0f }, .scale = { 1.0f, 1.0f, 1.0f } };
+    ke_world_transform_component *cam_w = ecs.ref->component_add(ecs.ref, cam, world_cid);
+    *cam_w = (ke_world_transform_component){ .matrix = identity };
+    cam_w->matrix.m[12] = 1.5f;
+    cam_w->matrix.m[13] = 1.5f;
+    cam_w->matrix.m[14] = -3.0f;
     ke_camera_component *cam_c = ecs.ref->component_add(ecs.ref, cam, camera_cid);
-    *cam_c = (ke_camera_component){ .fov = 60.0f, .near_plane = 0.1f, .far_plane = 100.0f };
+    *cam_c = (ke_camera_component){ .fov = 60.0f, .near_plane = 0.1f, .far_plane = 100.0f, .cull_mask = UINT32_MAX };
 
     ke_entity ent = ecs.ref->entity_create(ecs.ref);
     ke_transform_component *ent_t = ecs.ref->component_add(ecs.ref, ent, transform_cid);
-    *ent_t = (ke_transform_component){ .world_matrix = identity };
+    *ent_t = (ke_transform_component){ .scale = { 1.0f, 1.0f, 1.0f } };
+    ke_world_transform_component *ent_w = ecs.ref->component_add(ecs.ref, ent, world_cid);
+    *ent_w = (ke_world_transform_component){ .matrix = identity };
     ke_mesh_component *ent_m = ecs.ref->component_add(ecs.ref, ent, mesh_cid);
-    *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat };
+    *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat, .layers = 1 };
 
-    // Shading keeps the directional term switched off until a light entity
-    // exists, so without this the cube resolves to black.
     ke_entity sun = ecs.ref->entity_create(ecs.ref);
     ke_directional_light_component *sun_l = ecs.ref->component_add(ecs.ref, sun, light_cid);
     *sun_l = (ke_directional_light_component){
-        .dir_x = -0.4f, .dir_y = -1.0f, .dir_z = -0.3f,
-        .r = 1.0f, .g = 1.0f, .b = 1.0f,
+        .direction = { -0.4f, -1.0f, -0.3f },
+        .color = { 1.0f, 1.0f, 1.0f },
         .intensity = 3.0f,
-        .ambient_r = 0.03f, .ambient_g = 0.03f, .ambient_b = 0.04f,
+        .ambient = { 0.03f, 0.03f, 0.04f },
     };
 
     printf("Drawing a lit cube. Close the window to exit.\n");

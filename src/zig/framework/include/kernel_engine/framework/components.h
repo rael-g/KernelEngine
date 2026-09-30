@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_FRAMEWORK_COMPONENTS_H_
 
 #include <kernel_engine/ecs/ecs.h>
-#include <kernel_engine/render/components.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -13,6 +12,7 @@ extern "C"
     {
         ke_entity parent;
         ke_entity first_child;
+        ke_entity last_child;
         ke_entity next_sibling;
         ke_entity prev_sibling;
     } ke_hierarchy_component;
@@ -29,4 +29,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_COMPONENTS_H_
+#endif

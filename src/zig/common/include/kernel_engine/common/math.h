@@ -16,6 +16,7 @@ extern "C"
 
     typedef struct ke_mat4 { float m[16]; } ke_mat4;
 
+    /** [value] Spatial transform: where a thing is, how it is turned, and how big it is. */
     typedef struct ke_transform
     {
         ke_vec3 position;
@@ -62,4 +63,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_COMMON_MATH_H_
+#endif

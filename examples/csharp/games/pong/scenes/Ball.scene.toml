@@ -1,0 +1,40 @@
+[scene]
+name    = "Ball"
+version = 2
+
+[[entity]]
+name = "Root"
+type = "pong.ball"
+
+[[entity]]
+name   = "Shape"
+parent = "Root"
+type   = "collider2d"
+[entity.collider2d]
+half_extents = [0.18, 0.18]
+restitution  = 1.0
+friction     = 0.0
+
+[[entity]]
+name   = "Visual"
+parent = "Root"
+type   = "sprite2d"
+[entity.sprite2d]
+size  = [0.36, 0.36]
+color = [0.95, 0.95, 0.95, 1.0]
+
+[[entity]]
+name   = "HitSound"
+parent = "Root"
+type   = "audio_player"
+[entity.audio_player]
+path   = "assets/sounds/hit.wav"
+volume = 0.5
+
+[[entity]]
+name   = "ScoreSound"
+parent = "Root"
+type   = "audio_player"
+[entity.audio_player]
+path   = "assets/sounds/score.wav"
+volume = 0.6

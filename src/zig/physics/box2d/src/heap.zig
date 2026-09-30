@@ -1,5 +1,3 @@
-// The box2d plugin's own heap. Only the body table lives here — Box2D itself
-// manages its own internal memory behind the C API.
 
 const std = @import("std");
 

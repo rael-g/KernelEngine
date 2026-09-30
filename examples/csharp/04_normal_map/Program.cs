@@ -13,15 +13,10 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 04_normal_map — two quads side by side; the right one carries a procedural
-// ripple normal map, the left has the same material without it. Render v2
-// (webgpu): tangent-space normal mapping in the forward pass perturbs the PBR
-// lighting (watch the specular highlight under the static directional light).
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 04 Normal Map"))
@@ -33,8 +28,6 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Example: 04_normal_map");
         Console.WriteLine("[KernelEngine] Features: normal_map, tbn, tangent_space, pbr_ggx");
 
-        // Procedural ripple normal map (128×128) — each texel encodes a unit
-        // normal in tangent space, mapped to RGB via N = (n + 1) / 2.
         const uint w = 128, h = 128;
         var pixels = new byte[w * h * 4];
         for (int y = 0; y < h; y++)
@@ -60,16 +53,16 @@ var services = new ServiceCollection()
             new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },
             "Sun");
 
-        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 3f) };
+        var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
+        cam.Position = new Vector3(0f, 0f, 3f);
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
 
         var left = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = matPlain }, "PlainQuad");
-        left.LocalTransform = left.LocalTransform with { Position = new Vector3(-1.2f, 0f, 0f) };
+        left.Position = new Vector3(-1.2f, 0f, 0f);
 
         var right = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = matNormal }, "NormalQuad");
-        right.LocalTransform = right.LocalTransform with { Position = new Vector3(1.2f, 0f, 0f) };
+        right.Position = new Vector3(1.2f, 0f, 0f);
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -89,6 +82,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[04_normal_map] Exited cleanly.");

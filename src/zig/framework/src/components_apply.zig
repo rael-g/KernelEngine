@@ -1,34 +1,32 @@
-// Per-component apply callbacks for the framework's component vocabulary.
-// Each one translates a variant-table entry list into the matching component's
-// raw memory. Game code can register apply callbacks for its own components
-// via world->register_component_apply.
-//
-// Conventions:
-//   - Field name matching is case-sensitive and exact ("color" != "Color").
-//   - Type mismatches are silently skipped (loader semantics: unknown <-> ignore).
-//   - Vec arrays from TOML come pre-converted to KE_VARIANT_VEC2/VEC3/VEC4 by
-//     the scene_loader's toml->variant pass. A 3-element array becomes VEC3;
-//     applies decide whether they want VEC3 or VEC4.
 
 const std = @import("std");
 
 const c = @import("c.zig").c;
 
+const E = @import("kerror").Errors(c);
+
 const pi: f32 = 3.14159265358979323846;
 
 /// Entries arrive as a C pointer + count; the callbacks only ever read them.
-fn entries(e: [*c]const c.ke_variant_table_entry, n: u32) []const c.ke_variant_table_entry {
+fn entries(e: [*c]c.ke_variant_table_entry, n: u32) []c.ke_variant_table_entry {
     if (n == 0) return &.{};
     return e[0..n];
 }
 
-fn keyIs(entry: *const c.ke_variant_table_entry, name: []const u8) bool {
+/// Marks the entry as taken on a match: asking whether a key is yours and being
+/// told yes is what claiming it means, and the loader reads that back to find the
+/// keys nothing in the engine wanted.
+fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     if (entry.key == null) return false;
-    return std.mem.eql(u8, std.mem.span(entry.key), name);
+    if (!std.mem.eql(u8, std.mem.span(entry.key), name)) return false;
+    entry.consumed = true;
+    return true;
 }
 
-// Euler ZYX intrinsic, degrees in -> quaternion. Matches C# SceneLoader's
-// CreateFromYawPitchRoll(yaw=y, pitch=x, roll=z).
+fn isNumber(v: *const c.ke_variant) bool {
+    return v.type == c.KE_VARIANT_FLOAT or v.type == c.KE_VARIANT_INT;
+}
+
 fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     const k = pi / 180.0 * 0.5;
     const x = dx * k;
@@ -48,196 +46,137 @@ fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     };
 }
 
-fn asFloat(v: *const c.ke_variant) ?f32 {
-    return switch (v.type) {
-        c.KE_VARIANT_FLOAT => @floatCast(v.unnamed_0.f),
-        c.KE_VARIANT_INT => @floatFromInt(v.unnamed_0.i),
-        else => null,
-    };
+/// A 2D pose stores radians, and a scene authors degrees — the same unit it
+/// authors 3D rotation in. A description maps a key to storage and cannot say
+/// "and convert", so the conversion lands here.
+pub export fn ke_framework_apply_transform2d(
+    _: ?*anyopaque,
+    ptr: ?*anyopaque,
+    e: [*c]c.ke_variant_table_entry,
+    n: u32,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const t: *c.ke_transform2d_component = @ptrCast(@alignCast(ptr));
+    for (entries(e, n)) |*entry| {
+        if (!keyIs(entry, "rotation")) continue;
+        if (!isNumber(&entry.value)) {
+            E.fail(out_error, .invalid_argument, "transform2d rotation needs a number of degrees", @src());
+            return false;
+        }
+        t.rotation = t.rotation * (pi / 180.0);
+    }
+    return true;
 }
 
-// -- transform ---------------------------------------------------------------
-
-pub export fn ke_framework_apply_transform(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
+/// Two corrections the table cannot make:
+///
+/// `rotation_euler` is three angles standing for the same quaternion `rotation`
+/// holds — a description maps a key to storage and cannot say "and convert".
+///
+/// A 2D `scale` widens to z=0 through the generic path, which is the right fill
+/// for a position and collapses an object flat here. A scale authored in 2D
+/// means "leave depth alone", so z returns to 1.
+pub export fn ke_framework_apply_transform(
+    _: ?*anyopaque,
+    ptr: ?*anyopaque,
+    e: [*c]c.ke_variant_table_entry,
+    n: u32,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
     const t: *c.ke_transform_component = @ptrCast(@alignCast(ptr));
     for (entries(e, n)) |*entry| {
         const v = &entry.value;
-        if (keyIs(entry, "position")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                t.position = v.unnamed_0.v3;
-            } else if (v.type == c.KE_VARIANT_VEC2) {
-                t.position = .{ .x = v.unnamed_0.v2.x, .y = v.unnamed_0.v2.y, .z = 0 };
+        if (keyIs(entry, "rotation_euler")) {
+            if (v.type != c.KE_VARIANT_VEC3) {
+                E.fail(out_error, .invalid_argument, "rotation_euler needs three angles in degrees", @src());
+                return false;
             }
-        } else if (keyIs(entry, "scale")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                t.scale = v.unnamed_0.v3;
-            } else if (v.type == c.KE_VARIANT_VEC2) {
-                t.scale = .{ .x = v.unnamed_0.v2.x, .y = v.unnamed_0.v2.y, .z = 1 };
-            }
-        } else if (keyIs(entry, "rotation")) {
-            if (v.type == c.KE_VARIANT_VEC4) {
-                t.rotation = .{ .x = v.unnamed_0.v4.x, .y = v.unnamed_0.v4.y, .z = v.unnamed_0.v4.z, .w = v.unnamed_0.v4.w };
-            } else if (v.type == c.KE_VARIANT_QUAT) {
-                t.rotation = v.unnamed_0.q;
-            }
-        } else if (keyIs(entry, "rotation_euler")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                t.rotation = eulerDegToQuat(v.unnamed_0.v3.x, v.unnamed_0.v3.y, v.unnamed_0.v3.z);
-            }
+            t.rotation = eulerDegToQuat(v.unnamed_0.v3.x, v.unnamed_0.v3.y, v.unnamed_0.v3.z);
+        } else if (keyIs(entry, "scale") and v.type == c.KE_VARIANT_VEC2) {
+            t.scale.z = 1;
         }
     }
+    return true;
 }
 
-// -- camera ------------------------------------------------------------------
+const testing = std.testing;
 
-pub export fn ke_framework_apply_camera(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
-    const cam: *c.ke_camera_component = @ptrCast(@alignCast(ptr));
-    for (entries(e, n)) |*entry| {
-        const v = &entry.value;
-        if (keyIs(entry, "fov")) {
-            if (asFloat(v)) |f| cam.fov = f;
-        } else if (keyIs(entry, "fov_degrees")) {
-            // Convenient alias: scene file says degrees, component stores radians.
-            if (asFloat(v)) |f| cam.fov = f * (pi / 180.0);
-        } else if (keyIs(entry, "near_plane")) {
-            if (asFloat(v)) |f| cam.near_plane = f;
-        } else if (keyIs(entry, "far_plane")) {
-            if (asFloat(v)) |f| cam.far_plane = f;
-        } else if (keyIs(entry, "orthographic_size")) {
-            if (asFloat(v)) |f| cam.orthographic_size = f;
-        } else if (keyIs(entry, "orthographic")) {
-            if (v.type == c.KE_VARIANT_BOOL) {
-                cam.orthographic = if (v.unnamed_0.b) 1 else 0;
-            } else if (v.type == c.KE_VARIANT_INT) {
-                cam.orthographic = if (v.unnamed_0.i != 0) 1 else 0;
-            }
-        }
-    }
+fn keyed(key: [*c]const u8, value: c.ke_variant) c.ke_variant_table_entry {
+    var e = std.mem.zeroes(c.ke_variant_table_entry);
+    e.key = key;
+    e.value = value;
+    return e;
 }
 
-// -- mesh --------------------------------------------------------------------
-
-pub export fn ke_framework_apply_mesh(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
-    const m: *c.ke_mesh_component = @ptrCast(@alignCast(ptr));
-    for (entries(e, n)) |*entry| {
-        const v = &entry.value;
-        if (keyIs(entry, "primitive") and v.type == c.KE_VARIANT_STRING and v.unnamed_0.s != null) {
-            const src = std.mem.span(v.unnamed_0.s);
-            const len = @min(src.len, m.primitive.len - 1);
-            @memcpy(m.primitive[0..len], src[0..len]);
-            m.primitive[len] = 0;
-        }
-        // Color is a material property (base-color factor), not a mesh-component
-        // field — scene-file material specification is a future loader feature.
-    }
+fn vFloat(f: f64) c.ke_variant {
+    return .{ .type = c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = f } };
 }
 
-// -- directional light -------------------------------------------------------
-
-pub export fn ke_framework_apply_directional_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
-    const l: *c.ke_directional_light_component = @ptrCast(@alignCast(ptr));
-    for (entries(e, n)) |*entry| {
-        const v = &entry.value;
-        if (keyIs(entry, "direction")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                l.dir_x = v.unnamed_0.v3.x;
-                l.dir_y = v.unnamed_0.v3.y;
-                l.dir_z = v.unnamed_0.v3.z;
-            }
-        } else if (keyIs(entry, "color")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                l.r = v.unnamed_0.v3.x;
-                l.g = v.unnamed_0.v3.y;
-                l.b = v.unnamed_0.v3.z;
-            }
-        } else if (keyIs(entry, "ambient")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                l.ambient_r = v.unnamed_0.v3.x;
-                l.ambient_g = v.unnamed_0.v3.y;
-                l.ambient_b = v.unnamed_0.v3.z;
-            }
-        } else if (keyIs(entry, "intensity")) {
-            if (asFloat(v)) |f| l.intensity = f;
-        } else if (keyIs(entry, "dir_x")) {
-            if (asFloat(v)) |f| l.dir_x = f;
-        } else if (keyIs(entry, "dir_y")) {
-            if (asFloat(v)) |f| l.dir_y = f;
-        } else if (keyIs(entry, "dir_z")) {
-            if (asFloat(v)) |f| l.dir_z = f;
-        } else if (keyIs(entry, "r")) {
-            if (asFloat(v)) |f| l.r = f;
-        } else if (keyIs(entry, "g")) {
-            if (asFloat(v)) |f| l.g = f;
-        } else if (keyIs(entry, "b")) {
-            if (asFloat(v)) |f| l.b = f;
-        }
-    }
+fn vVec3(x: f32, y: f32, z: f32) c.ke_variant {
+    return .{ .type = c.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = x, .y = y, .z = z } } };
 }
 
-// -- point light -------------------------------------------------------------
-
-pub export fn ke_framework_apply_point_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
-    const l: *c.ke_point_light_component = @ptrCast(@alignCast(ptr));
-    for (entries(e, n)) |*entry| {
-        const v = &entry.value;
-        if (keyIs(entry, "color")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                l.r = v.unnamed_0.v3.x;
-                l.g = v.unnamed_0.v3.y;
-                l.b = v.unnamed_0.v3.z;
-            }
-        } else if (keyIs(entry, "radius")) {
-            if (asFloat(v)) |f| l.radius = f;
-        } else if (keyIs(entry, "intensity")) {
-            if (asFloat(v)) |f| l.intensity = f;
-        } else if (keyIs(entry, "r")) {
-            if (asFloat(v)) |f| l.r = f;
-        } else if (keyIs(entry, "g")) {
-            if (asFloat(v)) |f| l.g = f;
-        } else if (keyIs(entry, "b")) {
-            if (asFloat(v)) |f| l.b = f;
-        }
-    }
+fn vVec2(x: f32, y: f32) c.ke_variant {
+    return .{ .type = c.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = x, .y = y } } };
 }
 
-// -- spot light --------------------------------------------------------------
+fn vString(s: [*c]const u8) c.ke_variant {
+    return .{ .type = c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = s } };
+}
 
-pub export fn ke_framework_apply_spot_light(ptr: ?*anyopaque, e: [*c]const c.ke_variant_table_entry, n: u32) callconv(.c) void {
-    const l: *c.ke_spot_light_component = @ptrCast(@alignCast(ptr));
-    for (entries(e, n)) |*entry| {
-        const v = &entry.value;
-        if (keyIs(entry, "direction")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                l.dir_x = v.unnamed_0.v3.x;
-                l.dir_y = v.unnamed_0.v3.y;
-                l.dir_z = v.unnamed_0.v3.z;
-            }
-        } else if (keyIs(entry, "color")) {
-            if (v.type == c.KE_VARIANT_VEC3) {
-                l.r = v.unnamed_0.v3.x;
-                l.g = v.unnamed_0.v3.y;
-                l.b = v.unnamed_0.v3.z;
-            }
-        } else if (keyIs(entry, "inner_angle")) {
-            if (asFloat(v)) |f| l.inner_angle = f;
-        } else if (keyIs(entry, "outer_angle")) {
-            if (asFloat(v)) |f| l.outer_angle = f;
-        } else if (keyIs(entry, "range")) {
-            if (asFloat(v)) |f| l.range = f;
-        } else if (keyIs(entry, "intensity")) {
-            if (asFloat(v)) |f| l.intensity = f;
-        } else if (keyIs(entry, "dir_x")) {
-            if (asFloat(v)) |f| l.dir_x = f;
-        } else if (keyIs(entry, "dir_y")) {
-            if (asFloat(v)) |f| l.dir_y = f;
-        } else if (keyIs(entry, "dir_z")) {
-            if (asFloat(v)) |f| l.dir_z = f;
-        } else if (keyIs(entry, "r")) {
-            if (asFloat(v)) |f| l.r = f;
-        } else if (keyIs(entry, "g")) {
-            if (asFloat(v)) |f| l.g = f;
-        } else if (keyIs(entry, "b")) {
-            if (asFloat(v)) |f| l.b = f;
-        }
-    }
+test "a 2D rotation authored in degrees is turned into the radians the pose stores" {
+    var t = std.mem.zeroes(c.ke_transform2d_component);
+    t.rotation = 180;
+    var list = [_]c.ke_variant_table_entry{keyed("rotation", vFloat(180))};
+    try testing.expect(ke_framework_apply_transform2d(null, &t, &list, @intCast(list.len), null));
+    try testing.expectApproxEqAbs(@as(f32, pi), t.rotation, 1e-6);
+    try testing.expect(list[0].consumed);
+}
+
+test "a 2D rotation authored as a string fails rather than scaling whatever was there" {
+    var t = std.mem.zeroes(c.ke_transform2d_component);
+    t.rotation = 90;
+    var list = [_]c.ke_variant_table_entry{keyed("rotation", vString("sideways"))};
+    try testing.expect(!ke_framework_apply_transform2d(null, &t, &list, @intCast(list.len), null));
+    try testing.expectEqual(@as(f32, 90), t.rotation);
+}
+
+test "a key the 2D pose does not claim is left for the generic table" {
+    var t = std.mem.zeroes(c.ke_transform2d_component);
+    var list = [_]c.ke_variant_table_entry{keyed("position", vVec2(1, 2))};
+    try testing.expect(ke_framework_apply_transform2d(null, &t, &list, @intCast(list.len), null));
+    try testing.expect(!list[0].consumed);
+}
+
+test "three euler angles become the quaternion the transform stores" {
+    var t = std.mem.zeroes(c.ke_transform_component);
+    var list = [_]c.ke_variant_table_entry{keyed("rotation_euler", vVec3(0, 90, 0))};
+    try testing.expect(ke_framework_apply_transform(null, &t, &list, @intCast(list.len), null));
+    const half_sqrt2: f32 = @sqrt(2.0) / 2.0;
+    try testing.expectApproxEqAbs(half_sqrt2, t.rotation.y, 1e-6);
+    try testing.expectApproxEqAbs(half_sqrt2, t.rotation.w, 1e-6);
+}
+
+test "euler angles authored as anything but three numbers fail the load" {
+    var t = std.mem.zeroes(c.ke_transform_component);
+    t.rotation = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
+    var list = [_]c.ke_variant_table_entry{keyed("rotation_euler", vFloat(90))};
+    try testing.expect(!ke_framework_apply_transform(null, &t, &list, @intCast(list.len), null));
+    try testing.expectEqual(@as(f32, 1), t.rotation.w);
+}
+
+test "a scale authored in two dimensions leaves depth alone instead of flattening it" {
+    var t = std.mem.zeroes(c.ke_transform_component);
+    t.scale = .{ .x = 2, .y = 3, .z = 0 };
+    var list = [_]c.ke_variant_table_entry{keyed("scale", vVec2(2, 3))};
+    try testing.expect(ke_framework_apply_transform(null, &t, &list, @intCast(list.len), null));
+    try testing.expectEqual(@as(f32, 1), t.scale.z);
+}
+
+test "a scale authored in three dimensions is left exactly as the table wrote it" {
+    var t = std.mem.zeroes(c.ke_transform_component);
+    t.scale = .{ .x = 2, .y = 3, .z = 4 };
+    var list = [_]c.ke_variant_table_entry{keyed("scale", vVec3(2, 3, 4))};
+    try testing.expect(ke_framework_apply_transform(null, &t, &list, @intCast(list.len), null));
+    try testing.expectEqual(@as(f32, 4), t.scale.z);
 }

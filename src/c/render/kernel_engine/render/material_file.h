@@ -27,4 +27,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_MATERIAL_FILE_H_
+#endif

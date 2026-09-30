@@ -13,20 +13,13 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 01_window_scene — a single orange quad spinning on the screen under a fixed
-// directional light. Smallest possible scene that exercises window + renderer
-// + framework + a scripted node behavior. The render passes read the scene's ECS
-// components directly.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Window/Tree"))
-    // Render module before the scene module: its OnLoad creates the render core
-    // (so mesh upload works) before the scene setup callback runs.
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.15f, 0.15f, 0.15f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
@@ -42,8 +35,8 @@ var services = new ServiceCollection()
             Intensity = 2f,
         }, "Sun");
 
-        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 5f) };
+        var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
+        cam.Position = new Vector3(0f, 0f, 5f);
 
         var quad   = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var orange = resources.CreateMaterial("orange", new Vector4(1f, 0.5f, 0f, 1f));
@@ -79,24 +72,21 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[01_window_scene] Exited cleanly.");
-
-// â”€â”€ A MeshRenderer that spins around Y at 90 deg/s â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 sealed class SpinningQuad : MeshRenderer
 {
     private float _angle;
+
+    protected override bool HasBehavior => true;
 
     protected override void OnUpdate(in View view)
     {
         _angle += 90f * view.DeltaTime;
         if (_angle >= 360f) _angle -= 360f;
 
-        LocalTransform = LocalTransform with
-        {
-            Rotation = Quaternion.CreateFromYawPitchRoll(_angle * MathF.PI / 180f, 0f, 0f),
-        };
+        Rotation = Quaternion.CreateFromYawPitchRoll(_angle * MathF.PI / 180f, 0f, 0f);
     }
 }

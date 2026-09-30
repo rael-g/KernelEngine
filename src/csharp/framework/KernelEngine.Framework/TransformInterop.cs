@@ -1,14 +1,14 @@
 ﻿using System.Runtime.CompilerServices;
 using KernelEngine.Common.Native;
-using KernelEngine.Ecs;
+using KernelEngine.Common;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Internal helpers that reinterpret-cast between the managed <see cref="Transform"/> struct
-/// (defined in KernelEngine.Kernel.Abstractions, pure managed) and the native <c>ke_transform</c>
-/// struct (defined in the auto-generated bindings). Layout is identical by construction; this
-/// class just makes the reinterpretation explicit at any callsite that has to cross the boundary.
+/// Reinterprets between the two spellings of <c>ke_transform</c>: the one kabic emits for
+/// game code, in managed math types, and the one ClangSharp emits for the P/Invoke surface.
+/// Both are generated from the same declaration, so a field added there reaches both or
+/// neither; this makes the crossing explicit at the callsites that have to make it.
 /// </summary>
 public static class TransformInterop
 {

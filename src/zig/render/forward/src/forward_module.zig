@@ -1,125 +1,109 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-// Transparent-forward pass — the other half of the deferred+forward hybrid.
-// Only BLEND materials reach it (the gbuffer plugin skips them; a G-buffer
-// holds one surface per pixel, so N-layer order-dependent blending cannot be
-// represented there). Depth-tests LEQUAL against the G-buffer's "depth"
-// without writing it, and blends into "hdr" after skybox.
-//
-// Shares set 0 (frame + shadow/ibl gap-filling) and set 3 (cluster light
-// lists) with the deferred-lighting plugin — same shading library, same
-// hooks. Adds one more: refraction_feature reads "hdr_opaque", a same-frame
-// snapshot of "hdr" taken (via a raw encoder copy, before this pass's own
-// render pass opens) so a refracting fragment can sample what's already been
-// shaded behind it without a read/write hazard against the target it also
-// writes.
-//
-// Owns its own material (set 1, per-mesh) + object (set 2, per-draw) binding,
-// mirroring the gbuffer plugin — this pass draws real geometry, not a
-// fullscreen triangle like deferred-lighting/skybox/tonemap.
-
 const gpa = std.heap.c_allocator;
 
 const MAX_DRAWS = 512;
-const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
+const UNIFORM_STRIDE = 256;
 
-// Set 2 — per-object transform. Matches forward_common.slang's PerObject.
 const PerObject = extern struct {
     mvp: [16]f32,
     model: [16]f32,
 };
 
-// Matches transparent_forward.slang's PerFrame.
 const PerFrame = extern struct {
     camera_pos: [4]f32,
     light_dir: [4]f32,
     light_color: [4]f32,
     ambient: [4]f32,
-    shadow_params: [4]f32, // z = directional active
-    viewport: [4]f32, // x=w, y=h
+    shadow_params: [4]f32,
+    viewport: [4]f32,
     view: [16]f32,
 };
 
-
-// One transparent draw, collected while iterating the mesh query, then sorted
-// back-to-front before recording. ke_ecs has no ordered iteration (query_resolve
-// returns archetype segments in storage order), so the pass builds and sorts
-// its own list rather than relying on iteration order.
 const Draw = struct {
     mesh: *const c.ke_mesh_component,
-    transform: *const c.ke_transform_component,
+    world: *const c.ke_world_transform_component,
     view_depth: f32,
 };
 
+/// Orders by ascending view depth, which is farthest first under a right-handed
+/// view space.
 fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
-    return a.view_depth > b.view_depth; // back-to-front: farthest drawn first
+    return a.view_depth < b.view_depth;
+}
+
+/// The draws this camera owes the transparent pass, farthest first: meshes whose
+/// layers the cull_mask names and whose material blends. Returns how many of
+/// `out` were filled.
+fn collectDraws(
+    core: *c.ke_render_service,
+    cam: *const c.ke_camera_component,
+    view: zm.Mat,
+    segs: [*]const c.ke_ecs_segment,
+    seg_count: usize,
+    out: []Draw,
+) u32 {
+    var count: u32 = 0;
+    var s: usize = 0;
+    while (s < seg_count and count < out.len) : (s += 1) {
+        const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        var i: usize = 0;
+        while (i < segs[s].count and count < out.len) : (i += 1) {
+            if (meshes[i].layers & cam.cull_mask == 0) continue;
+            if (core.material_alpha_mode.?(core, meshes[i].material) != c.KE_ALPHA_MODE_BLEND) continue;
+            const wm = wts[i].matrix.m;
+            const wp = zm.f32x4(wm[12], wm[13], wm[14], 1.0);
+            const view_pos = zm.mul(wp, view);
+            out[count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]), .view_depth = view_pos[2] };
+            count += 1;
+        }
+    }
+    std.sort.pdq(Draw, out[0..count], {}, drawFartherFirst);
+    return count;
 }
 
 const ForwardModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
+    view_space: *c.ke_view_space = undefined,
     logger: ?*c.ke_logger = null,
 
-    // When false, bindings 7-8 are forced to the engine's default black cubemap
-    // regardless of any skybox — the shader still samples it, but IBL is 0.
     ibl_enabled: bool = true,
 
     mesh_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
     light_cid: c.ke_component_id = undefined,
     ambient_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    // Pipeline params shared by every material this pass draws: identical bind-
-    // group/vertex/target/blend layout, differing only in the two shader
-    // modules, filled per-draw from the material's shader name (see
-    // resolvePipeline). Not a resolved handle — re-queried via
-    // get_or_create_pipeline every record(): §6 Mechanism 1 upgrades a fresh
-    // miss's magenta fallback to the real compiled PSO asynchronously; a handle
-    // cached once at setup would freeze on the fallback and never see the
-    // upgrade. attrs/vbl held here (not setup-locals) so vertex_buffers stays a
-    // stable pointer for the PSO key's lifetime.
     pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
-    frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
-    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // set 0, rebuilt on env change
+    frame_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 2
+    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
 
     draws: [MAX_DRAWS]Draw = undefined,
 
-    writes: [2][*c]const u8 = undefined, // hdr (blend), depth (LEQUAL test, no write)
-    reads: [1][*c]const u8 = undefined, // shadow_map (conditional)
+    writes: [2][*c]const u8 = undefined,
+    reads: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
-    // WRITE hdr, hdr_opaque (2) + READ depth, mesh, transform, camera, light,
-    // ambient, skybox, frame_cid, cluster_lights (9) + 1 conditional
-    // (shadow_map) = 12 max.
     access: [12]c.ke_component_access = undefined,
     access_count: u32 = 0,
-    // Resolved single-threaded by the runtime before the wave dispatches; the
-    // body then reads plain memory via ke_system_ctx_view and touches the ECS
-    // not at all.
-    queries: [5]c.ke_query_decl = undefined, // [camera,transform], [skybox], [dir_light], [ambient], [mesh,transform]
+    queries: [5]c.ke_query_decl = undefined,
 
-    // Fills pipeline_template's two shader modules from the material's authored
-    // shader name, resolving "<shader>.forward" for each stage. Returns false
-    // (draw skipped) if either stage fails to load. Called per draw; load_shader
-    // is a cache hit after the first resolve of a given material.
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
         var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
         const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
@@ -134,45 +118,13 @@ const ForwardModule = struct {
 };
 
 const PASS_NAME = "forward";
-// The engine default material shader — the name ke_render_service resolves an
-// unknown/none material to. Duplicated here (not imported) per the plugin
-// decoupling precedent, only to warm a PSO at setup before any scene material.
 const DEFAULT_MATERIAL_SHADER = "standard";
-// A "<shader>.<pass>" qualified name — the shader-name bound plus the suffix.
 const MAX_SHADER_QUALIFIED = 128;
 
-// orthographic_size is the half-height of the view volume; width follows from aspect.
-fn makeProjection(ndc: c.ke_ndc_convention, cam: *const c.ke_camera_component, aspect: f32) zm.Mat {
-    var p = if (cam.orthographic != 0) ortho: {
-        const h = cam.orthographic_size * 2.0;
-        const w = h * aspect;
-        break :ortho if (ndc.z_zero_to_one != 0)
-            zm.orthographicLh(w, h, cam.near_plane, cam.far_plane)
-        else
-            zm.orthographicLhGl(w, h, cam.near_plane, cam.far_plane);
-    } else persp: {
-        const fovy = cam.fov * @as(f32, std.math.pi / 180.0);
-        break :persp if (ndc.z_zero_to_one != 0)
-            zm.perspectiveFovLh(fovy, aspect, cam.near_plane, cam.far_plane)
-        else
-            zm.perspectiveFovLhGl(fovy, aspect, cam.near_plane, cam.far_plane);
-    };
-    if (ndc.y_flip != 0) p[1][1] = -p[1][1];
-    return p;
-}
-
-fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
-    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const q = cam_tc.rotation;
-    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
-    else blk: {
-        const m = cam_tc.world_matrix.m;
-        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-        const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToLh(eye, fwd, up);
-    };
-    return view;
+fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
+    var out: c.ke_mat4 = undefined;
+    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
+    return zm.loadMat(&out.m);
 }
 
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
@@ -188,11 +140,6 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-// Set 0 — frame UBO + refraction source (1-2) + shadow (4-6) + ibl (7-8). The
-// refraction/shadow/ibl bindings are stable views set once here (and whenever
-// the bound environment changes), not per-frame transient ones — unlike the
-// deferred-lighting plugin's set-1 gbuffer bind group, nothing here changes
-// size or identity across frames.
 fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const dev = fwd.device;
     const core = fwd.core;
@@ -202,9 +149,6 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const hdr_opaque_view = core.*.resource_view.?(core, "hdr_opaque");
     const smp = core.*.sampler.?(core);
 
-    // Shadow's outputs are looked up by name, not through a pointer to the
-    // shadow plugin — an invalid view IS the "off" signal (see the
-    // deferred-lighting plugin for the same pattern).
     const shadow_view_raw = core.*.resource_view.?(core, "shadow_map");
     const shadow_tex_view = if (shadow_view_raw != c.KE_GPU_INVALID_HANDLE) shadow_view_raw else white_view;
     const shadow_lvp_buf = core.*.resource_buffer.?(core, "shadow_lvp");
@@ -231,42 +175,36 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame bind group");
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const fwd = moduleOf(user);
     const core = fwd.core;
 
-    // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
-    // No camera: deferred-lighting already cleared/shaded hdr (or left it
-    // cleared); this pass composites on top, so there is nothing to do.
-    if (cam_segc == 0 or cam_segs[0].count == 0) return;
+    if (cam_segc == 0 or cam_segs[0].count == 0) return true;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
+    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, ctx, &fwd.io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
 
-    // Snapshot "hdr" into "hdr_opaque" before this pass's own render pass opens
-    // (a copy cannot be issued once a render pass is active) — the refraction
-    // hook samples this, never the target this pass is itself writing into.
     const enc = pc.*.encoder.?(pc);
     const hdr_tex = core.*.resource_texture.?(core, "hdr");
     const hdr_opaque_tex = core.*.resource_texture.?(core, "hdr_opaque");
     enc.*.copy_texture_to_texture.?(enc, hdr_tex, hdr_opaque_tex, bw, bh);
 
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
-    const view = cameraView(cam_tc);
-    const proj = makeProjection(fwd.ndc, cam, aspect);
+    const view = cameraView(fwd.view_space, cam_wt);
+    var proj_m: c.ke_mat4 = undefined;
+    c.ke_camera_projection(cam, aspect, fwd.view_space, &fwd.ndc, &proj_m);
+    const proj = zm.loadMat(&proj_m.m);
     const view_proj = zm.mul(view, proj);
 
-    // Environment cubemap from the first skybox entity (default black otherwise);
-    // rebuild set 0 only when the bound environment changes. View 1 = [skybox].
     var sky_segc: usize = 0;
     const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
@@ -279,9 +217,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
 
     var frame: PerFrame = .{
-        .camera_pos = .{ cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0 },
-        // Zero until a directional_light entity supplies the real values; the
-        // shader ignores these while shadow_params.z stays clear.
+        .camera_pos = .{ cam_wt.matrix.m[12], cam_wt.matrix.m[13], cam_wt.matrix.m[14], 1.0 },
         .light_dir = .{ 0.0, 0.0, 0.0, 0.0 },
         .light_color = .{ 0.0, 0.0, 0.0, 0.0 },
         .ambient = .{ 0.0, 0.0, 0.0, 0.0 },
@@ -291,47 +227,26 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     };
     zm.storeMat(frame.view[0..], view);
 
-    // View 2 = [directional_light]; present → enable the directional term and
-    // seed the scene ambient from it.
     var li_segc: usize = 0;
     const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
         const d: *const c.ke_directional_light_component = @ptrCast(@alignCast(li_segs[0].columns[0]));
-        frame.light_dir = .{ d.dir_x, d.dir_y, d.dir_z, 0.0 };
-        frame.light_color = .{ d.r, d.g, d.b, d.intensity };
-        frame.ambient = .{ d.ambient_r, d.ambient_g, d.ambient_b, 0.0 };
+        frame.light_dir = .{ d.direction.x, d.direction.y, d.direction.z, 0.0 };
+        frame.light_color = .{ d.color.x, d.color.y, d.color.z, d.intensity };
+        frame.ambient = .{ d.ambient.x, d.ambient.y, d.ambient.z, 0.0 };
         frame.shadow_params[2] = 1.0;
     }
-    // View 3 = [AmbientLight]; a standalone ambient overrides the directional's.
     var am_segc: usize = 0;
     const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
         const al: *const c.ke_ambient_light_component = @ptrCast(@alignCast(am_segs[0].columns[0]));
-        frame.ambient = .{ al.r, al.g, al.b, 0.0 };
+        frame.ambient = .{ al.color.x, al.color.y, al.color.z, 0.0 };
     }
     core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
-    // View 4 = [mesh, transform]. Collect only BLEND materials — the gbuffer
-    // plugin already drew everything else. Compute each draw's view-space
-    // depth so they can be sorted back-to-front before recording (blending is
-    // not commutative; ke_ecs has no ordered iteration to rely on instead).
-    var draw_count: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 4, &segc);
-    var s: usize = 0;
-    while (s < segc and draw_count < MAX_DRAWS) : (s += 1) {
-        const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
-        var i: usize = 0;
-        while (i < segs[s].count and draw_count < MAX_DRAWS) : (i += 1) {
-            if (core.*.material_alpha_mode.?(core, meshes[i].material) != c.KE_ALPHA_MODE_BLEND) continue;
-            const wp = zm.f32x4(tcs[i].position.x, tcs[i].position.y, tcs[i].position.z, 1.0);
-            const view_pos = zm.mul(wp, view);
-            fwd.draws[draw_count] = .{ .mesh = @ptrCast(&meshes[i]), .transform = @ptrCast(&tcs[i]), .view_depth = view_pos[2] };
-            draw_count += 1;
-        }
-    }
-    std.sort.pdq(Draw, fwd.draws[0..draw_count], {}, drawFartherFirst);
+    const draw_count = collectDraws(core, cam, view, segs, segc, fwd.draws[0..MAX_DRAWS]);
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_bind_group.?(rp, 0, fwd.frame_bind_group, null, 0);
@@ -345,14 +260,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         var idx_count: u32 = 0;
         if (core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count) == 0) continue;
 
-        // Per-draw PSO by the material's authored shader ("<shader>.forward").
-        // load_shader + get_or_create_pipeline both dedup, so a repeated
-        // material is a cache hit. A material whose shader fails to resolve is
-        // skipped (already logged by load_shader).
         if (!fwd.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
         rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &fwd.pipeline_template));
 
-        const model = zm.loadMat(draw.transform.world_matrix.m[0..]);
+        const model = zm.loadMat(draw.world.matrix.m[0..]);
         const mvp = zm.mul(model, view_proj);
         var u: PerObject = undefined;
         zm.storeMat(u.mvp[0..], mvp);
@@ -361,29 +272,31 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
         core.*.upload.?(core, fwd.obj_uniform, offset, &u, @sizeOf(PerObject));
 
         const mat_bg = core.*.material_bind_group.?(core, draw.mesh.material);
-        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0); // set 1: per-material
-        rp.*.set_bind_group.?(rp, 2, fwd.obj_bind_group, &offset, 1); // set 2: per-object
+        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
+        rp.*.set_bind_group.?(rp, 2, fwd.obj_bind_group, &offset, 1);
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
 fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, logger: ?*c.ke_logger, ibl_enabled: bool,
-         mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
+         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, logger: ?*c.ke_logger, ibl_enabled: bool,
+         mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
          light_cid: c.ke_component_id, ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
          frame_cid: c.ke_component_id,
          out_error: [*c][*c]c.ke_error) bool {
     fwd.core = core;
     fwd.device = dev;
     fwd.ndc = ndc;
+    fwd.view_space = view_space;
     fwd.logger = logger;
     fwd.ibl_enabled = ibl_enabled;
     fwd.mesh_cid = mesh_cid;
-    fwd.transform_cid = transform_cid;
+    fwd.world_transform_cid = world_transform_cid;
     fwd.camera_cid = camera_cid;
     fwd.light_cid = light_cid;
     fwd.ambient_cid = ambient_cid;
@@ -406,8 +319,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entries = &frame_bgl_entries,
     });
 
-    // Set 2 — per-object transform ring (dynamic offset, vertex stage). Same
-    // shape as the gbuffer plugin's.
     const obj_bgl_entry = c.ke_gpu_bind_group_layout_entry{
         .binding = 0,
         .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
@@ -433,9 +344,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .attributes = &fwd.attrs,
     };
 
-    // Template shared by every material: layout, blend, depth, target —
-    // everything but the two shader modules, which resolvePipeline() fills per
-    // draw from the material's shader name.
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
@@ -444,9 +352,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &fwd.vbl;
-    // Standard alpha blend: the surface's own alpha weighs its shading against
-    // whatever is already in "hdr" (skybox + opaque, composited by deferred-
-    // lighting + skybox before this pass runs).
     pp.blend_state.blend_enabled = 1;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_SRC_ALPHA;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -455,24 +360,18 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.blend_state.dst_alpha = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     pp.blend_state.alpha_op = c.KE_GPU_BLEND_OP_ADD;
     pp.blend_state.write_mask = 0x0F;
-    // LEQUAL, no write: tests against the G-buffer's depth (already populated
-    // by the gbuffer plugin) without occluding surfaces this pass draws later
-    // — depth ordering among transparents is handled by the back-to-front
-    // sort, not by the depth buffer.
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
     pp.bind_group_layouts[0] = fwd.frame_bgl;
-    pp.bind_group_layouts[1] = core.*.material_layout.?(core); // set 1: per-material
-    pp.bind_group_layouts[2] = fwd.obj_bgl; // set 2: per-object
-    pp.bind_group_layouts[3] = core.*.resource_bind_group_layout.?(core, "cluster_lights"); // set 3: cluster light lists
+    pp.bind_group_layouts[1] = core.*.material_layout.?(core);
+    pp.bind_group_layouts[2] = fwd.obj_bgl;
+    pp.bind_group_layouts[3] = core.*.resource_bind_group_layout.?(core, "cluster_lights");
     pp.bind_group_layout_count = 4;
-    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR
+    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     pp.color_target_count = 1;
     fwd.pipeline_template = pp;
 
-    // Warm the default material's PSO so a pipeline exists before the first draw
-    // resolves it. Any material a scene actually uses is resolved on demand.
     if (!fwd.resolvePipeline(DEFAULT_MATERIAL_SHADER)) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "transparent-forward: default material shader failed to load", @src().file, @intCast(@src().line), null);
         return false;
@@ -513,8 +412,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, out_error);
     if (fwd.obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
-    // Snapshot target for refraction_feature.slang — same format/sizing as
-    // "hdr" (declared by the deferred-lighting plugin), copied afresh each frame.
     const hdr_opaque_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "hdr_opaque",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
@@ -525,18 +422,10 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     rebuildFrameBindGroup(fwd);
 
-    // Shadow's presence is read from the named-resource table, not a pointer
-    // to the shadow plugin (see the deferred-lighting plugin for the same
-    // pattern).
     const shadow_map_cid = core.*.cid.?(core, "shadow_map");
     const shadow_enabled = shadow_map_cid != c.KE_COMPONENT_INVALID;
-    // "light_clusters" (not "cluster_lights") is the scheduling ordering tag —
-    // cull WRITEs it, this pass READs it; the actual light data crosses
-    // through the "cluster_lights" bind group looked up separately below.
     const cluster_lights_cid = core.*.cid.?(core, "light_clusters");
 
-    // "hdr" LOADs (composites over skybox's output); "depth" also LOADs, tested
-    // read-only (io.load governs both — see pass_recording.zig's ctxBeginRender).
     fwd.writes = .{ "hdr", "depth" };
     fwd.reads = .{"shadow_map"};
     fwd.io = std.mem.zeroes(c.ke_render_pass_io);
@@ -545,19 +434,18 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.io.reads = @ptrCast(&fwd.reads);
     fwd.io.reads_count = if (shadow_enabled) 1 else 0;
     fwd.io.load = 1;
-    fwd.io.cmd_slot = 6; // after skybox (5), before tonemap (7)
+    fwd.io.cmd_slot = 6;
 
     var ac: u32 = 0;
     fwd.access[ac] = .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE };
     ac += 1;
     fwd.access[ac] = .{ .cid = hdr_opaque_cid, .access = c.KE_ACCESS_WRITE };
     ac += 1;
-    // READ, not WRITE: this pass tests depth but never writes it (depth_write_enabled=0).
     fwd.access[ac] = .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ };
     ac += 1;
     fwd.access[ac] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
-    fwd.access[ac] = .{ .cid = transform_cid, .access = c.KE_ACCESS_READ };
+    fwd.access[ac] = .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
     fwd.access[ac] = .{ .cid = camera_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
@@ -580,7 +468,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const rd = c.KE_ACCESS_READ;
     fwd.queries = std.mem.zeroes([5]c.ke_query_decl);
     fwd.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    fwd.queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
+    fwd.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     fwd.queries[0].term_count = 2;
     fwd.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
     fwd.queries[1].term_count = 1;
@@ -589,7 +477,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.queries[3].terms[0] = .{ .cid = ambient_cid, .access = rd };
     fwd.queries[3].term_count = 1;
     fwd.queries[4].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    fwd.queries[4].terms[1] = .{ .cid = transform_cid, .access = rd };
+    fwd.queries[4].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     fwd.queries[4].term_count = 2;
     return true;
 }
@@ -603,9 +491,9 @@ fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
 }
 
 export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
+                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
                                     logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
-                                    mesh_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                    mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, light_cid: c.ke_component_id,
                                     ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
                                     frame_cid: c.ke_component_id,
@@ -614,11 +502,12 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
+    const vs = view_space orelse return empty;
 
     const fwd = gpa.create(ForwardModule) catch return empty;
     fwd.* = .{};
-    if (!setup(fwd, dev, core_ref, ndc, logger, ibl_enabled != 0,
-               mesh_cid, transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
+    if (!setup(fwd, dev, core_ref, ndc, vs, logger, ibl_enabled != 0,
+               mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
         gpa.destroy(fwd);
         return empty;
@@ -637,4 +526,159 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(fwd), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+/// Reports every material as blending except handle 0.
+fn blendUnlessZero(_: [*c]c.ke_render_service, m: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
+    return if (m.bits == 0) c.KE_ALPHA_MODE_OPAQUE else c.KE_ALPHA_MODE_BLEND;
+}
+
+fn blendingService() c.ke_render_service {
+    var svc = std.mem.zeroes(c.ke_render_service);
+    svc.material_alpha_mode = blendUnlessZero;
+    return svc;
+}
+
+fn cameraSeeing(mask: u32) c.ke_camera_component {
+    var cam = std.mem.zeroes(c.ke_camera_component);
+    cam.cull_mask = mask;
+    return cam;
+}
+
+fn meshOn(layers: u32) c.ke_mesh_component {
+    var m = std.mem.zeroes(c.ke_mesh_component);
+    m.layers = layers;
+    m.material = .{ .bits = 7 };
+    return m;
+}
+
+fn transformAt(z: f32) c.ke_world_transform_component {
+    var wt = std.mem.zeroes(c.ke_world_transform_component);
+    wt.matrix.m[14] = z;
+    return wt;
+}
+
+fn oneSegment(meshes: []const c.ke_mesh_component, wts: []const c.ke_world_transform_component) c.ke_ecs_segment {
+    var seg = std.mem.zeroes(c.ke_ecs_segment);
+    seg.columns[0] = @constCast(@ptrCast(meshes.ptr));
+    seg.columns[1] = @constCast(@ptrCast(wts.ptr));
+    seg.count = meshes.len;
+    return seg;
+}
+
+test "a mesh on a layer the camera's cull_mask omits is not drawn" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b001);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2), transformAt(-3) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 1), n);
+    try testing.expectEqual(@as(u32, 0b001), out[0].mesh.layers);
+}
+
+test "a camera whose mask names several layers draws a mesh on any one of them" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b101);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2), transformAt(-3) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 2), n);
+}
+
+test "a mesh sharing one bit of a multi layer mask is drawn once, not once per bit" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b111);
+    const meshes = [_]c.ke_mesh_component{meshOn(0b111)};
+    const wts = [_]c.ke_world_transform_component{transformAt(-1)};
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 1), n);
+}
+
+test "a camera that names no layer draws nothing, even with meshes in front of it" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 0), n);
+}
+
+test "an opaque mesh the camera can see still stays out of the transparent pass" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b001);
+    var opaque_mesh = meshOn(0b001);
+    opaque_mesh.material = .{ .bits = 0 };
+    const meshes = [_]c.ke_mesh_component{ opaque_mesh, meshOn(0b001) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 1), n);
+    try testing.expectEqual(@as(u32, 7), out[0].mesh.material.bits);
+}
+
+test "the culled draws come back farthest first, so blending composites back to front" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b111);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-2), transformAt(-9), transformAt(-5) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    const eye_at_origin = zm.lookAtRh(zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 0, -1, 1), zm.f32x4(0, 1, 0, 0));
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, eye_at_origin, &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 3), n);
+    try testing.expectEqual(@as(u32, 0b010), out[0].mesh.layers);
+    try testing.expectEqual(@as(u32, 0b100), out[1].mesh.layers);
+    try testing.expectEqual(@as(u32, 0b001), out[2].mesh.layers);
+}
+
+test "collection stops at the caller's capacity instead of writing past it" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b001);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b001), meshOn(0b001) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(-1), transformAt(-2), transformAt(-3) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    var out: [2]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 2), n);
+}
+
+test "meshes are gathered across every segment the query returned" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b001);
+    const a_meshes = [_]c.ke_mesh_component{meshOn(0b001)};
+    const a_wts = [_]c.ke_world_transform_component{transformAt(-1)};
+    const b_meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010) };
+    const b_wts = [_]c.ke_world_transform_component{ transformAt(-2), transformAt(-3) };
+    const segs = [_]c.ke_ecs_segment{ oneSegment(&a_meshes, &a_wts), oneSegment(&b_meshes, &b_wts) };
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 2), n);
 }

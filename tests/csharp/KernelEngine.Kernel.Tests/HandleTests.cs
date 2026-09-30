@@ -12,9 +12,19 @@ public class HandleTests
     }
 
     [Fact]
-    public void MeshHandle_None_HasMaxValue()
+    public void MeshHandle_None_IsAllBitsZero()
     {
-        Assert.Equal(uint.MaxValue, MeshHandle.None.Value);
+        Assert.Equal(0u, MeshHandle.None.Value);
+    }
+
+    [Fact]
+    public void DefaultConstructedHandleIsNotValid()
+    {
+        Assert.False(default(MeshHandle).IsValid);
+        Assert.False(default(TextureHandle).IsValid);
+        Assert.False(default(MaterialHandle).IsValid);
+        Assert.False(default(ShadowMapHandle).IsValid);
+        Assert.False(default(FontHandle).IsValid);
     }
 
     [Fact]

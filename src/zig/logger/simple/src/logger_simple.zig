@@ -1,9 +1,6 @@
 const std = @import("std");
+const testing = std.testing;
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const gpa = std.heap.c_allocator;
@@ -11,9 +8,9 @@ const gpa = std.heap.c_allocator;
 const c = @cImport({
     @cInclude("kernel_engine/logger/logger.h");
     @cInclude("kernel_engine/logger/log_level.h");
+    @cInclude("stdio.h");
 });
 
-// Zig-native error translation at the C-ABI seam (no ke_common link).
 const E = @import("kerror").Errors(c);
 
 const MAX_SINKS = 8;
@@ -70,6 +67,39 @@ fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c
     return true;
 }
 
+fn consoleSinkWrite(stream: *c.FILE, event: *const c.ke_log_event) void {
+    const label = ke_log_level_to_string(event.level);
+    const tag: [*c]const u8 = if (event.tag != null) event.tag else "";
+    const message: [*c]const u8 = if (event.message != null) event.message else "";
+    _ = c.fprintf(stream, "[%s] %s: %s\n", label, tag, message);
+    _ = c.fflush(stream);
+}
+
+fn consoleSinkLog(self: ?*c.ke_logger_sink, event: [*c]const c.ke_log_event) callconv(.c) void {
+    _ = self;
+    if (event == null) return;
+    if (c.stderr) |stream| consoleSinkWrite(stream, &event.*);
+}
+
+fn consoleSinkFlush(self: ?*c.ke_logger_sink) callconv(.c) void {
+    _ = self;
+    _ = c.fflush(c.stderr);
+}
+
+fn consoleSinkDestroy(self: ?*c.ke_logger_sink) callconv(.c) void {
+    _ = self;
+}
+
+export fn ke_console_sink_create() callconv(.c) c.ke_logger_sink {
+    return .{
+        .handle = null,
+        .min_level = c.KE_LOG_LEVEL_TRACE,
+        .log = &consoleSinkLog,
+        .flush = &consoleSinkFlush,
+        .destroy = &consoleSinkDestroy,
+    };
+}
+
 export fn ke_log_level_to_string(level: i32) callconv(.c) [*c]const u8 {
     return switch (level) {
         c.KE_LOG_LEVEL_TRACE => "TRACE",
@@ -102,4 +132,204 @@ export fn ke_logger_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_logg
     logger.add_sink = &loggerAddSink;
 
     return .{ .ref = logger, .destroy = &loggerDestroy };
+}
+
+fn countingSinkLog(self: ?*c.ke_logger_sink, event: [*c]const c.ke_log_event) callconv(.c) void {
+    if (self == null or event == null) return;
+    const p: *i32 = @ptrCast(@alignCast(self.?.handle.?));
+    p.* += 1;
+}
+
+fn countingSinkDestroy(self: ?*c.ke_logger_sink) callconv(.c) void {
+    if (self == null) return;
+    const p: *i32 = @ptrCast(@alignCast(self.?.handle.?));
+    p.* += 1;
+}
+
+test "create returns a usable handle" {
+    const h = ke_logger_create(null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+}
+
+test "destroy tolerates a null logger" {
+    const h = ke_logger_create(null);
+    const destroy_fn = h.destroy.?;
+    destroy_fn(null);
+    destroy_fn(h.ref);
+}
+
+test "destroy works when sinks are attached" {
+    const h = ke_logger_create(null);
+    defer h.destroy.?(h.ref);
+
+    var sink = std.mem.zeroes(c.ke_logger_sink);
+    sink.min_level = c.KE_LOG_LEVEL_TRACE;
+    sink.log = &consoleSinkLog;
+    sink.destroy = &consoleSinkDestroy;
+
+    const result = h.ref.*.add_sink.?(h.ref, sink, null);
+    try testing.expect(result);
+}
+
+test "log tolerates a null self" {
+    var ev = std.mem.zeroes(c.ke_log_event);
+    ev.level = c.KE_LOG_LEVEL_INFO;
+    ev.tag = "TEST";
+    ev.message = "Message";
+
+    const logger = ke_logger_create(null);
+    defer logger.destroy.?(logger.ref);
+
+    logger.ref.*.log.?(null, &ev);
+}
+
+test "log tolerates a null event" {
+    const logger = ke_logger_create(null);
+    defer logger.destroy.?(logger.ref);
+
+    logger.ref.*.log.?(logger.ref, null);
+}
+
+test "add_sink on a null self returns false" {
+    const h = ke_logger_create(null);
+    defer h.destroy.?(h.ref);
+    var sink = std.mem.zeroes(c.ke_logger_sink);
+    sink.min_level = c.KE_LOG_LEVEL_TRACE;
+    sink.log = &consoleSinkLog;
+
+    const result = h.ref.*.add_sink.?(null, sink, null);
+    try testing.expect(!result);
+}
+
+test "a sink whose minimum level is met receives the event" {
+    var counter: i32 = 0;
+
+    var sink = std.mem.zeroes(c.ke_logger_sink);
+    sink.handle = &counter;
+    sink.min_level = c.KE_LOG_LEVEL_INFO;
+    sink.log = &countingSinkLog;
+
+    const logger = ke_logger_create(null);
+    defer logger.destroy.?(logger.ref);
+
+    const result = logger.ref.*.add_sink.?(logger.ref, sink, null);
+    try testing.expect(result);
+
+    var ev = std.mem.zeroes(c.ke_log_event);
+    ev.level = c.KE_LOG_LEVEL_INFO;
+    ev.tag = "TEST";
+    ev.message = "Message";
+
+    logger.ref.*.log.?(logger.ref, &ev);
+
+    try testing.expectEqual(@as(i32, 1), counter);
+}
+
+test "a sink whose minimum level is above the event is not called" {
+    var counter: i32 = 0;
+
+    var sink = std.mem.zeroes(c.ke_logger_sink);
+    sink.handle = &counter;
+    sink.min_level = c.KE_LOG_LEVEL_ERROR;
+    sink.log = &countingSinkLog;
+
+    const logger = ke_logger_create(null);
+    defer logger.destroy.?(logger.ref);
+
+    const result = logger.ref.*.add_sink.?(logger.ref, sink, null);
+    try testing.expect(result);
+
+    var ev = std.mem.zeroes(c.ke_log_event);
+    ev.level = c.KE_LOG_LEVEL_INFO;
+    ev.tag = "TEST";
+    ev.message = "Message";
+
+    logger.ref.*.log.?(logger.ref, &ev);
+
+    try testing.expectEqual(@as(i32, 0), counter);
+}
+
+test "a sink with a null log fn is skipped" {
+    var sink = std.mem.zeroes(c.ke_logger_sink);
+    sink.min_level = c.KE_LOG_LEVEL_TRACE;
+    sink.log = null;
+
+    const logger = ke_logger_create(null);
+    defer logger.destroy.?(logger.ref);
+
+    const result = logger.ref.*.add_sink.?(logger.ref, sink, null);
+    try testing.expect(result);
+
+    var ev = std.mem.zeroes(c.ke_log_event);
+    ev.level = c.KE_LOG_LEVEL_INFO;
+    ev.tag = "TEST";
+    ev.message = "Message";
+
+    logger.ref.*.log.?(logger.ref, &ev);
+}
+
+fn expectConsoleSinkWrites(expected: []const u8, event: *const c.ke_log_event) !void {
+    const stream = c.tmpfile() orelse return error.TmpFileUnavailable;
+    defer _ = c.fclose(stream);
+
+    consoleSinkWrite(stream, event);
+
+    if (c.fseek(stream, 0, c.SEEK_SET) != 0) return error.SeekFailed;
+    var buffer: [256]u8 = undefined;
+    const read = c.fread(&buffer, 1, buffer.len, stream);
+    try testing.expectEqualStrings(expected, buffer[0..read]);
+}
+
+test "the console sink writes the level, tag and message of an event" {
+    var ev = std.mem.zeroes(c.ke_log_event);
+    ev.level = c.KE_LOG_LEVEL_INFO;
+    ev.tag = "TEST";
+    ev.message = "Message";
+
+    try expectConsoleSinkWrites("[INFO] TEST: Message\n", &ev);
+}
+
+test "the console sink tolerates a null tag and message" {
+    var ev = std.mem.zeroes(c.ke_log_event);
+    ev.level = c.KE_LOG_LEVEL_INFO;
+    ev.tag = null;
+    ev.message = null;
+
+    try expectConsoleSinkWrites("[INFO] : \n", &ev);
+}
+
+test "the console sink ignores an event it has no pointer to" {
+    const sink = ke_console_sink_create();
+    sink.log.?(null, null);
+}
+
+test "destroy calls each sink destroy fn" {
+    var counter: i32 = 0;
+
+    var sink = std.mem.zeroes(c.ke_logger_sink);
+    sink.handle = &counter;
+    sink.min_level = c.KE_LOG_LEVEL_TRACE;
+    sink.log = &consoleSinkLog;
+    sink.destroy = &countingSinkDestroy;
+
+    const logger = ke_logger_create(null);
+    const result = logger.ref.*.add_sink.?(logger.ref, sink, null);
+    try testing.expect(result);
+
+    logger.destroy.?(logger.ref);
+
+    try testing.expectEqual(@as(i32, 1), counter);
+}
+
+test "ke_log_level_to_string(KE_LOG_LEVEL_INFO) is INFO" {
+    try testing.expectEqualStrings("INFO", std.mem.span(ke_log_level_to_string(c.KE_LOG_LEVEL_INFO)));
+}
+
+test "ke_log_level_to_string(-1) is UNKNOWN" {
+    try testing.expectEqualStrings("UNKNOWN", std.mem.span(ke_log_level_to_string(-1)));
+}
+
+test "ke_log_level_to_string(6) is UNKNOWN" {
+    try testing.expectEqualStrings("UNKNOWN", std.mem.span(ke_log_level_to_string(6)));
 }

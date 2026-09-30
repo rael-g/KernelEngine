@@ -1,5 +1,6 @@
 using System.Numerics;
 using KernelEngine.Ecs;
+using KernelEngine.Framework;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
@@ -11,17 +12,12 @@ using KernelEngine.Window.Glfw;
 using KernelEngine.Logger;
 using Microsoft.Extensions.DependencyInjection;
 
-// Render v2 (webgpu) first 3D scene: a lit cube drawn by the render core's
-// forward pass. The host uploads the mesh and populates Camera + Mesh + Transform
-// components; the forward pass (a KE_PHASE_RENDER system installed by the module)
-// reads them and draws. No render calls in the loop — only runtime.Tick.
-
 var render = new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir);
 
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1024, 640, "KernelEngine — 18 Webgpu Mesh (v2)"))
@@ -30,41 +26,42 @@ var services = new ServiceCollection()
 using var sp = services.BuildServiceProvider();
 var window  = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
-var ecs     = sp.GetRequiredService<IEcs>();
+var ecs     = sp.GetRequiredService<INativeEcs>();
 
 runtime.LoadModules(sp);
 
-// ── Upload the cube + material, populate the scene (camera + one mesh entity) ─
 var cube   = MeshPrimitives.Cube(render);
 var orange = render.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
 
 EcsRegistry reg;
-unsafe { reg = new EcsRegistry(((INativeEcs)ecs).Native); }
+unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
-var transformCid = reg.RegisterComponent<TransformComponent>("transform");
+var transformCid = reg.RegisterComponent<TransformComponent>(TransformComponent.Name);
+var worldCid     = reg.RegisterComponent<WorldTransformComponent>(WorldTransformComponent.Name);
 var cameraCid    = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
 var meshCid      = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
-var lightCid     = reg.RegisterComponent<DirectionalLight>("directional_light");
+var lightCid     = reg.RegisterComponent<DirectionalLightComponent>(DirectionalLightComponent.Name);
 
 var cam = reg.CreateEntity();
 ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];
-camT = TransformComponent.Identity;
+camT = TransformComponent.Default;
 camT.Position = new Vector3(1.5f, 1.5f, -3.0f);
+ref var camW = ref reg.AddComponent<WorldTransformComponent>(cam, worldCid)[0];
+camW.Matrix = Matrix4x4.CreateTranslation(camT.Position);
 ref var camC = ref reg.AddComponent<CameraComponent>(cam, cameraCid)[0];
-camC = new CameraComponent { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 100.0f };
+camC = CameraComponent.Default with { FarPlane = 100.0f };
 
 var ent = reg.CreateEntity();
 ref var entT = ref reg.AddComponent<TransformComponent>(ent, transformCid)[0];
-entT = TransformComponent.Identity;
-entT.WorldMatrix = Matrix4x4.Identity;
+entT = TransformComponent.Default;
+ref var entW = ref reg.AddComponent<WorldTransformComponent>(ent, worldCid)[0];
+entW.Matrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
-entM = new MeshComponent { Mesh = cube, Material = orange };
+entM = MeshComponent.Default with { Mesh = cube, Material = orange };
 
-// Shading keeps the directional term switched off until a light entity
-// exists, so without this the cube resolves to black.
 var sun = reg.CreateEntity();
-ref var sunL = ref reg.AddComponent<DirectionalLight>(sun, lightCid)[0];
-sunL = new DirectionalLight
+ref var sunL = ref reg.AddComponent<DirectionalLightComponent>(sun, lightCid)[0];
+sunL = DirectionalLightComponent.Default with
 {
     Direction = new Vector3(-0.4f, -1.0f, -0.3f),
     Color     = Vector3.One,
@@ -84,17 +81,3 @@ while (!window.ShouldClose())
 }
 
 Console.WriteLine("[18_webgpu_mesh] Exited cleanly.");
-
-/// <summary>
-/// Directional light as the render layer reads it. Declared here rather than
-/// pulled from the framework layer so this sample stays on the raw ECS +
-/// render-core path it is meant to demonstrate; the field order must match the
-/// engine's directional_light component.
-/// </summary>
-struct DirectionalLight
-{
-    public Vector3 Direction;
-    public Vector3 Color;
-    public float   Intensity;
-    public Vector3 Ambient;
-}

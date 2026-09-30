@@ -232,26 +232,7 @@ Framework ships: `NodeBehavior` base class + three canonical examples (`Timer`, 
 
 ### 5.5 Phase 4 — Node fields as components
 
-Every declared non-`[Local]` field on a `Node` or `NodeBehavior` subclass becomes part of an auto-generated `<ClassName>_Data` component. Codegen rewrites field accesses to route through the View. The dev's experience is Unity-like (declare fields, use them as fields); the runtime sees ECS data.
-
-```csharp
-public partial class Paddle : Node {
-    public float Speed = 5f;
-    public Color Color = Color.Red;
-    [Local] private List<EnemyTarget> _nearbyEnemies; // stays on heap, disables parallelism
-
-    public override void OnUpdate(in View view) {
-        view.Transform.Position.X += Speed * view.DeltaTime;
-        view.Material.Tint = Color;
-    }
-}
-```
-
-Consequences that ride for free: uniform serialization (save/load = serialize the world), hot reload (state in ECS, not C# heap), networking (replicate `Paddle_Data`), determinism (no hidden heap state), editor inspection (reads `Paddle_Data` directly).
-
-Non-POD field without `[Local]` → build error `KE0042`.
-
-**Estimated**: 3-4 sessions.
+**Superseded 2026-08-01.** This section's original "declare a field, the runtime sees ECS data" design is not implementable — Roslyn source generators are additive-only and cannot intercept a field's backing storage. The live design (partial-property generator, shared between `kabic`-generated and hand-written node types) is tracked in [`ScriptingArchitectureV3.md`](ScriptingArchitectureV3.md) §7.12, which is the current source of truth for this mechanism; this document is historical for Framework V2 and is not being updated further as that design evolves.
 
 ### 5.6 Phase 5 — Roslyn analyzer + AOT enforcement
 

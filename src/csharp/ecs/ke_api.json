@@ -1,0 +1,430 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_component_field",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "offset",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "default_value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
+        }
+      ]
+    },
+    {
+      "name": "ke_component_meta",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "cid",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "fields",
+          "type": "const ke_component_field *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "field_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_ecs_segment",
+      "doc": "One archetype\u0027s slice of a query match: the matched entities, plus one column base pointer per query term in the order query_register received them, each aligned 1:1 with \u0060entities\u0060. A tag term\u0027s column is NULL. Pointers stay valid until the next structural change.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "entities",
+          "type": "const ke_entity *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": "The entities this segment matched."
+        },
+        {
+          "name": "columns",
+          "type": "void *[8]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "count",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_ecs",
+      "doc": "Entity lifetime plus component storage: the engine\u0027s ECS contract.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "entity_create",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "Creates a fresh entity with no components. Structural; single-threaded.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys an entity and all its components. Structural; single-threaded.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_register",
+          "returns": "ke_component_id",
+          "tags": [],
+          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same layout as its first registration. With \u0060fields\u0060 the two are compared field by field; without it, only \u0060element_size\u0060 is compared, which a same-size field swap or a reordering satisfies.",
+          "return_doc": "The component\u0027s id, or 0 on error.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "Unique component name."
+            },
+            {
+              "name": "element_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Bytes per entity; 0 registers a tag (no storage)."
+            },
+            {
+              "name": "fields",
+              "type": "const ke_component_field *",
+              "tags": [
+                "borrowed",
+                "optional"
+              ],
+              "doc": "The type\u0027s field layout, normally its generated field table. Must outlive the ecs. NULL registers the size alone."
+            },
+            {
+              "name": "field_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": "Entries in \u0060fields\u0060; 0 when \u0060fields\u0060 is NULL."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [
+                "out",
+                "optional"
+              ],
+              "doc": "Set when the layout conflicts with the name\u0027s prior registration, naming the field that disagrees."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_lookup",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Looks up a previously registered component by name.",
+          "return_doc": "false if no component of that name is registered.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "Component name to find."
+            },
+            {
+              "name": "out_meta",
+              "type": "ke_component_meta *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id, size, and field metadata."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_add",
+          "returns": "void *",
+          "tags": [],
+          "doc": "Attaches a component to an entity, returning its zero-initialized storage. Structural; single-threaded. Returns NULL for an unknown entity or cid.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_remove",
+          "returns": "void",
+          "tags": [],
+          "doc": "Detaches a component from an entity. Structural; single-threaded.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_get",
+          "returns": "void *",
+          "tags": [],
+          "doc": "Returns an entity\u0027s component storage, or NULL if it doesn\u0027t have that component.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_size",
+          "returns": "size_t",
+          "tags": [],
+          "doc": "Byte size of a registered component\u0027s element; 0 for a tag or unknown cid.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "query_register",
+          "returns": "ke_query_id",
+          "tags": [],
+          "doc": "Registers a query over a component tuple (entities matching ALL cids).",
+          "return_doc": "KE_QUERY_INVALID on failure.",
+          "params": [
+            {
+              "name": "cids",
+              "type": "const ke_component_id *",
+              "tags": [
+                "borrowed",
+                "array_of:cid_count"
+              ],
+              "doc": "Component tuple to match."
+            },
+            {
+              "name": "cid_count",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Number of components in the tuple."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "query_resolve",
+          "returns": "void",
+          "tags": [
+            "raw"
+          ],
+          "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "query",
+              "type": "ke_query_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_segments",
+              "type": "ke_ecs_segment *",
+              "tags": [
+                "out",
+                "array_of:max_segments"
+              ],
+              "doc": "Receives the matched segments."
+            },
+            {
+              "name": "max_segments",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Capacity of out_segments."
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives how many segments were written."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_reserve",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, which the runtime does at the wave barrier. An implementation may not satisfy this by forwarding to entity_create: the contract is concurrent callability, and a backend whose id allocator walks shared state must keep a separate one for this.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_materialize",
+          "returns": "void",
+          "tags": [],
+          "doc": "Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        }
+      ]
+    },
+    {
+      "name": "ke_ecs_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_ecs *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t",
+    "ke_query_id": "uint64_t"
+  }
+}

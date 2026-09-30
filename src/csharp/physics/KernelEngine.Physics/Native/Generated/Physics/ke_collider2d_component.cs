@@ -1,0 +1,27 @@
+using KernelEngine.Common.Native;
+
+namespace KernelEngine.Physics.Native;
+
+public partial struct ke_collider2d_component
+{
+    public ke_shape_kind_2d kind;
+
+    [NativeTypeName("ke_vec2")]
+    public KernelEngine.Common.Native.ke_vec2 half_extents;
+
+    public float radius;
+
+    public float density;
+
+    public float friction;
+
+    public float restitution;
+
+    [NativeTypeName("uint32_t")]
+    public uint layer;
+
+    [NativeTypeName("uint32_t")]
+    public uint mask;
+
+    public bool attached;
+}

@@ -15,17 +15,13 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Asset;
 
-// 12_asset_loading — loads assets/Box.gltf via the Assimp plugin and places it
-// in a lit scene. Exercises the IRenderResources overload of AddModel so
-// textures, materials and meshes flow through the render-v2 upload path.
-
 string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
 
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddAssimpAssetLoader()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 12 Asset Loading"))
@@ -40,8 +36,8 @@ var services = new ServiceCollection()
 
         tree.AddNode(new AmbientLight { Color = new(0.05f, 0.05f, 0.05f) }, "Ambient");
 
-        var cam = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 2f, 5f) };
+        var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
+        cam.Position = new Vector3(0f, 2f, 5f);
 
         tree.AddNode(new DirectionalLight
         {
@@ -53,8 +49,8 @@ var services = new ServiceCollection()
         Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
         var loader = sp.GetRequiredService<IAssetLoader>();
         using var model = loader.LoadModel(modelPath);
-        Console.WriteLine($"[KernelEngine] Model loaded: {model.Meshes.Count} sub-meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
-        var nodes = tree.AddModel(model, resources, rootName: "Box");
+        Console.WriteLine($"[KernelEngine] Model loaded: {model.Data.Meshes.Length} sub-meshes, {model.Data.Materials.Length} mats, {model.Data.Textures.Length} textures");
+        var nodes = tree.AddModel(model.Data, resources, rootName: "Box");
         Console.WriteLine($"[KernelEngine] Added {nodes.Count} mesh nodes to the scene.");
     }));
 
@@ -76,6 +72,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[12_asset_loading] Exited cleanly.");

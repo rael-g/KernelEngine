@@ -17,11 +17,6 @@ using KernelEngine.Logger;
 using KernelEngine.Audio;
 using KernelEngine.Input;
 
-// Pong — driven by Project + actions.input + scenes/Main.scene. Program.cs
-// just wires the engine modules and points the scene loader at Main.scene;
-// everything visible — the field layout, the scripts, the input bindings —
-// lives in the data files.
-
 var services = new ServiceCollection()
     .AddProjectConfig()
     .AddLogger()
@@ -30,16 +25,18 @@ var services = new ServiceCollection()
     .AddBox2D()
     .AddMiniAudio()
     .AddTextStbTrueType()
+    .AddAssetResolver()
     .AddInputActions<PongAction>()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneNodesModule(_ => { })) // scene entities come entirely from Main.scene
+    .Add<IRuntimeModule>(new SceneNodesModule(_ => { }))
+    .Add<IRuntimeModule>(new KernelEngine.Physics.Body2DModule())
     .Add<IRuntimeModule>(new PongModule())
-    .Add<IRuntimeModule>(new SceneRouterModule(sceneModuleDependency: typeof(SceneNodesModule)));  // initial scene comes from Project's default_scene
+    .Add<IRuntimeModule>(new SceneRouterModule(sceneModuleDependency: typeof(SceneNodesModule)));
 
 using var sp = services.BuildServiceProvider();
 var window  = sp.GetRequiredService<IWindow>();
@@ -56,4 +53,4 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();

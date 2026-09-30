@@ -1,0 +1,157 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_audio",
+      "doc": "Audio playback. Concrete implementations ship as separate plugins (miniaudio, FMOD, ...). Every slot is safe to call from ke.sim \u2014 backends marshal internally to their own audio thread.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load_sound",
+          "returns": "ke_audio_sound",
+          "tags": [],
+          "doc": "Loads a sound for repeated playback; the backend autodetects the format.",
+          "return_doc": "KE_AUDIO_SOUND_INVALID on error.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "Filesystem path to the audio file."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "unload_sound",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases a previously loaded sound; safe on KE_AUDIO_SOUND_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "sound",
+              "type": "ke_audio_sound",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "play",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Plays a sound, restarting it from the beginning if already playing.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "sound",
+              "type": "ke_audio_sound",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "volume",
+              "type": "float",
+              "tags": [],
+              "doc": "Playback volume in 0..1."
+            },
+            {
+              "name": "loop",
+              "type": "ke_bool",
+              "tags": [],
+              "doc": "Non-zero to restart the sound when it ends."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "stop",
+          "returns": "void",
+          "tags": [],
+          "doc": "Stops a playing sound; no-op when it is not playing.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "sound",
+              "type": "ke_audio_sound",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "set_master_volume",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets a global multiplier applied on top of per-sound volumes (0..1).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "volume",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        }
+      ]
+    },
+    {
+      "name": "ke_audio_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_audio *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_audio *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {
+    "ke_audio_sound": "uint32_t"
+  }
+}

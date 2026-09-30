@@ -1,0 +1,312 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_transform_component",
+      "doc": "An entity\u0027s authored 3D pose.",
+      "tags": [
+        "node:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [
+            "default:0 0 0 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform2d_component",
+      "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
+      "tags": [
+        "node:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive; a scene authors degrees."
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "depth",
+          "type": "float",
+          "tags": [],
+          "doc": "Where the plane sits along Z."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_world_transform_component",
+      "doc": "An entity\u0027s place in world space, composed down the hierarchy. Written by the hierarchy alone.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "matrix",
+          "type": "ke_mat4",
+          "tags": [
+            "output"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ui_font_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_label_glyph_quad",
+      "doc": "One shaped glyph: the screen-space rectangle it draws to and the atlas rectangle it samples from.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "dst_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_h",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_ui_quad_component",
+      "doc": "A single screen-space UI quad. Producers \u2014 Label\u0027s text shaping, a game script attaching one directly \u2014 write it; the \u0022render.ui\u0022 pass reads it through a declared query, the same sim-writes/render-reads split every other render component uses. A quad of zero size is skipped, which is how a pooled slot hides itself.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "texture_bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Full generational texture handle bits; UINT32_MAX = the built-in white."
+        },
+        {
+          "name": "dst_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_h",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": "Premultiplied alpha RGBA."
+        }
+      ]
+    },
+    {
+      "name": "ke_label_component",
+      "doc": "A screen-space text label. Text/anchor/offset/color/font are the caller\u0027s input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick by the \u0022render.ui.labels\u0022 system and read by \u0022render.ui\u0022 (KE_PHASE_RENDER) to draw them \u2014 the same sim-writes/render-reads split every other render component uses, so there is no per-glyph entity, no CPU-side accumulator, no pool to grow or reuse.",
+      "tags": [
+        "node:Label",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "font",
+          "type": "char[128]",
+          "tags": [],
+          "doc": "Font file to draw with, baked by the \u0022render.label.resolve\u0022 system."
+        },
+        {
+          "name": "font_size",
+          "type": "float",
+          "tags": [
+            "default:32"
+          ],
+          "doc": null
+        },
+        {
+          "name": "font_handle",
+          "type": "ke_ui_font_handle",
+          "tags": [
+            "idiom",
+            "name:font_handle"
+          ],
+          "doc": "Resolved from \u0060font\u0060."
+        },
+        {
+          "name": "anchor",
+          "type": "float[2]",
+          "tags": [],
+          "doc": "Anchor in normalized [0..1] of the backbuffer. (0,0) = top-left, (1,1) = bottom-right."
+        },
+        {
+          "name": "offset",
+          "type": "float[2]",
+          "tags": [],
+          "doc": "Pixel offset applied AFTER anchor positioning."
+        },
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "text",
+          "type": "char[256]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "glyph_count",
+          "type": "uint32_t",
+          "tags": [
+            "idiom",
+            "output"
+          ],
+          "doc": "Written by \u0022render.ui.labels\u0022; a node authoring it would have the value overwritten on the next tick."
+        },
+        {
+          "name": "glyphs",
+          "type": "ke_label_glyph_quad[256]",
+          "tags": [
+            "idiom",
+            "output"
+          ],
+          "doc": "Shaped output, see glyph_count."
+        }
+      ]
+    }
+  ],
+  "vtables": [],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {}
+}

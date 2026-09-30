@@ -1,10 +1,5 @@
 const std = @import("std");
 
-// Build the ke_input_default shared library (Zig 0.16 API) — a kernel built-in
-// (keyboard/mouse state + event queue). Pure logic: no third-party C, no vcpkg
-// lib. Allocates through Zig's own allocator; ke_common is consumed across a
-// plain C-ABI DLL boundary (ABI-neutral).
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
@@ -37,4 +32,24 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/input_default.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    inline for (.{ ke_common, ke_input }) |inc| {
+        test_mod.addIncludePath(.{ .cwd_relative = inc });
+    }
+    test_mod.addImport("kerror", b.createModule(.{
+        .root_source_file = .{ .cwd_relative = kerror_src },
+        .target = target,
+        .optimize = optimize,
+    }));
+    test_mod.addCMacro("KE_INPUT_EXPORT", "");
+
+    const unit_tests = b.addTest(.{ .root_module = test_mod });
+    const run_tests = b.addRunArtifact(unit_tests);
+    b.step("test", "Run the default input unit tests").dependOn(&run_tests.step);
 }

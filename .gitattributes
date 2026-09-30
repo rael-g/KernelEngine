@@ -43,6 +43,21 @@
 # as line-ending-only diffs.
 *.cs text=auto eol=lf
 
+# Native/build sources — same reasoning as .cs above: force LF so a file
+# touched from a different-OS toolchain never shows up as a whole-file diff.
+*.h    text eol=lf
+*.c    text eol=lf
+*.hpp  text eol=lf
+*.cpp  text eol=lf
+*.zig  text eol=lf
+*.zon  text eol=lf
+*.rsp  text eol=lf
+*.slang text eol=lf
+
+# Catch-all: any other text file not covered above still gets normalized,
+# just without a forced eol (lets git auto-detect per the cloning machine).
+* text=auto
+
 # Other common large binaries
 *.zip filter=lfs diff=lfs merge=lfs -text
 *.rar filter=lfs diff=lfs merge=lfs -text

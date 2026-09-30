@@ -6,68 +6,86 @@ using KernelEngine.Runtime;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Creates the native <c>ke_world</c> aggregator and registers the ECS registry +
-/// component registry as <see cref="IEcsRegistry"/> and <see cref="IComponentRegistry"/>
-/// so Toolkit's scene modules can resolve them without a direct
-/// dependency on this assembly.
+/// Creates the native <c>ke_world</c> aggregator and registers the ECS registry as
+/// <see cref="IEcsRegistry"/> so the scene modules can resolve it without a direct
+/// dependency on this assembly. Add it before any scene module, which needs the
+/// interface to already be in DI.
 /// </summary>
-/// <remarks>
-/// Add this module before any scene module. It must run first so the
-/// interfaces are in DI before the scene infrastructure tries to resolve them.
-/// </remarks>
+/// <param name="MaxSignals">Distinct signal types. Zero keeps the native default.</param>
+/// <param name="MaxConnections">Live source-to-target connections. Zero keeps the native default.</param>
+/// <param name="MaxEvents">Signals raised within one frame. Zero keeps the native default.</param>
+/// <param name="MaxDeliveries">Deliveries queued within one frame. Zero keeps the native default.</param>
+/// <param name="PayloadCapacity">Bytes of signal payload per frame. Zero keeps the native default.</param>
+public readonly record struct SignalBusCapacities(uint MaxSignals = 0, uint MaxConnections = 0,
+    uint MaxEvents = 0, uint MaxDeliveries = 0, uint PayloadCapacity = 0);
+
 public sealed class FrameworkModule : IRuntimeModule
 {
+    private readonly SignalBusCapacities _signalCapacities;
+
+    /// <summary>Uses the native signal-bus capacities.</summary>
+    public FrameworkModule() { }
+
+    /// <summary>
+    /// Sizes the signal bus for a scene whose connection or event count exceeds what the
+    /// native defaults size for.
+    /// </summary>
+    public FrameworkModule(SignalBusCapacities signalCapacities) => _signalCapacities = signalCapacities;
+
     public string Name => "Framework";
 
     public void Configure(IServiceCollection services)
     {
-        // IEcsRegistry is registered first because World's constructor borrows it.
         services.AddSingleton<IEcsRegistry>(sp =>
         {
-            var flecsEcs = (FlecsEcs)sp.GetRequiredService<IEcs>();
-            unsafe { return new EcsRegistry(((INativeEcs)flecsEcs).Native); }
+            var flecsEcs = sp.GetRequiredService<INativeEcs>();
+            unsafe { return EcsRegistry.Borrow(flecsEcs.Native); }
+        });
+
+        services.AddSingleton<SignalBus>(_ =>
+        {
+            unsafe
+            {
+                ke_signal_bus_params sp = default;
+                sp.max_signals      = _signalCapacities.MaxSignals;
+                sp.max_connections  = _signalCapacities.MaxConnections;
+                sp.max_events       = _signalCapacities.MaxEvents;
+                sp.max_deliveries   = _signalCapacities.MaxDeliveries;
+                sp.payload_capacity = _signalCapacities.PayloadCapacity;
+                var h = KernelEngine.Framework.Native.NativeMethods.signal_bus_create(&sp, null);
+                if (h.@ref == null) throw new InvalidOperationException("signal_bus_create failed");
+                return new SignalBus(h);
+            }
         });
 
         services.AddSingleton<World>(sp =>
         {
-            var flecsEcs  = (FlecsEcs)sp.GetRequiredService<IEcs>();
+            var flecsEcs  = sp.GetRequiredService<INativeEcs>();
             var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
             var ecs       = sp.GetRequiredService<IEcsRegistry>();
             var runtime   = sp.GetRequiredService<IRuntime>();
             unsafe
             {
-                var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(((INativeEcs)flecsEcs).Native, null);
+                var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
+                    flecsEcs.Native, ((INativeRuntime)rtRuntime).Native, null);
                 if (tree.@ref == null) throw new InvalidOperationException("scene_tree_create failed");
 
                 ke_world_params p = default;
-                p.ecs        = ((INativeEcs)flecsEcs).Native;
+                p.ecs        = flecsEcs.Native;
                 p.runtime    = ((INativeRuntime)rtRuntime).Native;
                 p.scene_tree = tree.@ref;
+                p.signal_bus = ((INativeSignalBus)sp.GetRequiredService<SignalBus>()).Native;
+                p.logger     = sp.GetService<KernelEngine.Logger.INativeLogger>() is { } lg ? lg.Native : null;
                 var w = KernelEngine.Framework.Native.NativeMethods.world_create(&p, null);
                 if (w.@ref == null) throw new InvalidOperationException("world_create failed");
                 return new World(w, tree, ecs, runtime);
             }
         });
 
-        services.AddSingleton<ComponentRegistry>(sp =>
-        {
-            // World (and its scene_tree) must be fully initialized before ComponentRegistry
-            // so that kernel components like "transform" are registered at their native C
-            // sizes (104 bytes) before this registry re-registers them at framework sizes
-            // (40 bytes). If scene_tree runs second, flecs stores transform at 40 bytes
-            // and C writes of ke_transform_component (104 bytes) corrupt adjacent heap.
-            // This guarantee must live in the factory so it holds no matter which
-            // consumer resolves ComponentRegistry first.
-            _ = sp.GetRequiredService<World>();
-            return new ComponentRegistry(sp.GetRequiredService<IEcsRegistry>());
-        });
-
-        services.AddSingleton<IComponentRegistry>(sp => sp.GetRequiredService<ComponentRegistry>());
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         _ = services.GetRequiredService<World>();
-        _ = services.GetRequiredService<ComponentRegistry>();
     }
 }

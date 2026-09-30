@@ -1,15 +1,5 @@
 const std = @import("std");
 
-// Build the ke_configuration_toml shared library (Zig 0.16 API). Compiles the
-// shared vendored tomlc99 (src/zig/common/third_party/tomlc99/toml.c) and
-// consumes it via @cImport.
-//
-// Standalone / `zig build test`:
-//   zig build \
-//     -Dke-common-include=/path/to/src/zig/common/include \
-//     -Dke-config-include=/path/to/src/c/configuration \
-//     -Dke-lib-dir=/path/to/dir/with/ke_common/import/lib
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -18,12 +8,9 @@ pub fn build(b: *std.Build) void {
     const ke_config = b.option([]const u8, "ke-config-include", "Path to kernel_engine/configuration include dir") orelse @panic("-Dke-config-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "Dir containing ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
-    // Single shared tomlc99 copy under src/zig/common. Root build.zig threads
-    // its absolute path in; standalone defaults to the in-tree location.
     const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "path to the shared vendored tomlc99 dir") orelse
         b.pathJoin(&.{ b.build_root.path.?, "..", "..", "common", "third_party", "tomlc99" });
 
-    // ── Shared library ─────────────────────────────────────────────────────
     const mod = b.createModule(.{
         .root_source_file = b.path("src/configuration_toml.zig"),
         .target = target,
@@ -48,7 +35,6 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install.step);
 
-    // ── Tests ──────────────────────────────────────────────────────────────
     const test_mod = b.createModule(.{
         .root_source_file = b.path("src/configuration_toml.zig"),
         .target = target,

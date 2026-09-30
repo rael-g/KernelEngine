@@ -98,14 +98,13 @@ public interface IRenderResources
     bool TryGetMaterial(string key, out MaterialHandle handle);
 
     /// <summary>
-    /// Queues a screen-space UI quad for this frame, drawn after tonemap so it
-    /// composites over the rendered scene. <paramref name="dstX"/>/<paramref name="dstY"/>
-    /// are pixel coordinates (top-left origin); <paramref name="texture"/> defaults to
-    /// a built-in white pixel, so a flat-color quad just needs a color and no texture.
-    /// UV selects a sub-region of the texture (glyph atlas lookup for text). Color is
-    /// premultiplied alpha. Call from a render-phase system, before the frame's UI
-    /// pass runs.
+    /// Registers a font's glyph table with the UI overlay pass, deduped by
+    /// <paramref name="key"/> (same convention as <see cref="UploadTexture"/>).
+    /// Queuing a UI quad no longer goes through this interface — attach a
+    /// <c>ke_ui_quad_component</c> ("ui_quad") to an entity via
+    /// <c>ScriptHost</c>/<c>SystemCtx.Attach</c> instead; the "render.ui"
+    /// pass reads it through a declared ECS query.
     /// </summary>
-    void UiQuad(TextureHandle texture, float dstX, float dstY, float dstW, float dstH,
-               float u0, float v0, float u1, float v1, Vector4 premultipliedColor);
+    FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,
+                        float lineHeight, float ascent);
 }

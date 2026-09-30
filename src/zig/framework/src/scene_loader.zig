@@ -1,23 +1,9 @@
-// ke_scene_loader impl, tomlc99 backed.
-//
-// Walks a `.scene.toml` file:
-//   [[entity]] entries -> tree.create_node + transform/components apply +
-//   script factory dispatch + properties bag.
-//
-// [entity.components.X] uses the world's apply registry: look the cid up by
-// name, add the component, build a variant-table entry list from the TOML
-// table, call the registered apply_fn. Components without a registered apply
-// are silently skipped.
-//
-// scene_properties lifetime: every per-entity allocation (strings + entries)
-// comes from the loader's arena and is freed at loader destroy. The arena is
-// conceptually owned by the world (it outlives the entity); parking it in the
-// loader gives the same end behavior with a simpler ownership graph.
-
 const std = @import("std");
 
 const c = @import("c.zig").c;
 const heap = @import("heap.zig");
+const world_impl = @import("world.zig");
+const fields_apply = @import("component_fields_apply.zig");
 
 const E = @import("kerror").Errors(c);
 
@@ -27,14 +13,6 @@ const path_max = 512;
 const resolved_path_max = 1024;
 
 const res_prefix = "res://";
-
-// -- arena -------------------------------------------------------------------
-//
-// Backs scene_properties components and the variant entries they point at.
-// Nothing here is ever freed individually — the whole arena goes at once when
-// the loader is destroyed — so std.heap.ArenaAllocator over the plugin heap is
-// the exact shape this needs, with none of a chunk allocator's bookkeeping
-// hand-rolled again.
 
 const Arena = struct {
     inner: std.heap.ArenaAllocator,
@@ -67,8 +45,6 @@ const State = struct {
     script_factory: c.ke_script_factory_func,
     script_ctx: ?*anyopaque,
 
-    scene_properties_cid: c.ke_component_id,
-
     arena: Arena,
 };
 
@@ -87,8 +63,6 @@ fn treeOf(world: *c.ke_world) ?*c.ke_scene_tree {
     const t = world.scene_tree.?(world);
     return if (t == null) null else t;
 }
-
-// -- variant construction ----------------------------------------------------
 
 fn variantNull() c.ke_variant {
     return .{ .type = c.KE_VARIANT_NULL, .unnamed_0 = .{ .i = 0 } };
@@ -117,8 +91,6 @@ fn variantVec4(x: f32, y: f32, z: f32, w: f32) c.ke_variant {
 fn variantTable(t: *const c.ke_variant_table) c.ke_variant {
     return .{ .type = c.KE_VARIANT_TABLE, .unnamed_0 = .{ .t = t } };
 }
-
-// -- TOML -> variant ---------------------------------------------------------
 
 /// Numeric arrays become vec2/vec3/vec4 by element count; anything else is null.
 fn variantFromArray(arr: *c.toml_array_t) c.ke_variant {
@@ -182,8 +154,6 @@ fn readVarIn(s: *State, tbl: *c.toml_table_t, key: [*c]const u8) c.ke_variant {
     return variantNull();
 }
 
-// -- path resolution ---------------------------------------------------------
-
 fn pathDirname(path: []const u8, out: []u8) []const u8 {
     const idx = std.mem.lastIndexOfAny(u8, path, "/\\") orelse {
         out[0] = '.';
@@ -229,15 +199,73 @@ fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8, out: []u8
     writeJoined(out, &.{ base_dir, "/", ref });
 }
 
-// -- script dispatch ---------------------------------------------------------
+const type_name_max = 128;
 
-fn dispatchScript(s: *State, entity: c.ke_entity, type_name: [*c]const u8) void {
-    // The factory reports its own success; a script that fails to bind must not
-    // abort the rest of the scene load.
-    if (s.script_factory) |factory| _ = factory(s.script_ctx, entity, type_name, null);
+/// Rewrites a node type name into the one spelling the engine resolves by:
+/// `+` becomes `.`, and each word boundary inside an identifier becomes `_`,
+/// so `Pong.Ball`, `Pong+Ball` and `pong.ball` all name the same type. Returns
+/// null when the result would not fit, leaving the caller to reject the name
+/// rather than dispatch a truncated one.
+fn normalizeTypeName(name: [*c]const u8, out: *[type_name_max]u8) ?[*:0]const u8 {
+    if (name == null) return null;
+    const src = std.mem.sliceTo(name, 0);
+    var len: usize = 0;
+
+    for (src, 0..) |ch, i| {
+        if (ch == '+') {
+            if (len + 1 >= out.len) return null;
+            out[len] = '.';
+            len += 1;
+            continue;
+        }
+        if (std.ascii.isUpper(ch)) {
+            const raw_prev: u8 = if (i > 0) src[i - 1] else '.';
+            const prev: u8 = if (raw_prev == '+') '.' else raw_prev;
+            const next_is_lower = i + 1 < src.len and std.ascii.isLower(src[i + 1]);
+            const starts_word = prev != '.' and prev != '_' and !std.ascii.isDigit(prev) and
+                (!std.ascii.isUpper(prev) or next_is_lower);
+            if (starts_word) {
+                if (len + 1 >= out.len) return null;
+                out[len] = '_';
+                len += 1;
+            }
+            if (len + 1 >= out.len) return null;
+            out[len] = std.ascii.toLower(ch);
+            len += 1;
+            continue;
+        }
+        if (len + 1 >= out.len) return null;
+        out[len] = ch;
+        len += 1;
+    }
+
+    out[len] = 0;
+    return @ptrCast(out);
 }
 
-// -- properties bag ----------------------------------------------------------
+fn dispatchScript(
+    s: *State,
+    entity: c.ke_entity,
+    type_name: [*c]const u8,
+    out_error: [*c][*c]c.ke_error,
+) bool {
+    const factory = s.script_factory orelse return true;
+    var buf: [type_name_max]u8 = undefined;
+    const resolved = normalizeTypeName(type_name, &buf) orelse {
+        E.fail(out_error, .invalid_argument, "entity type name is longer than the loader accepts", @src());
+        return false;
+    };
+
+    var factory_error: [*c]c.ke_error = null;
+    if (factory(s.script_ctx, entity, resolved, &factory_error)) return true;
+
+    if (factory_error != null) {
+        if (out_error != null) out_error.* = factory_error;
+    } else {
+        E.fail(out_error, .general, "script factory rejected the entity type", @src());
+    }
+    return false;
+}
 
 fn tableEntryCount(tbl: *c.toml_table_t) usize {
     return @intCast(c.toml_table_nkval(tbl) + c.toml_table_narr(tbl) + c.toml_table_ntab(tbl));
@@ -261,77 +289,206 @@ fn buildEntries(s: *State, tbl: *c.toml_table_t) ?[]c.ke_variant_table_entry {
     return entries[0..count];
 }
 
-fn attachProperties(s: *State, entity: c.ke_entity, props_tbl: *c.toml_table_t) void {
-    const world = s.world;
-    const e = ecsOf(world) orelse return;
-
-    const entries = buildEntries(s, props_tbl) orelse return;
-
-    const comp = e.component_add.?(e, entity, s.scene_properties_cid) orelse return;
-    const bag: *c.ke_scene_properties = @ptrCast(@alignCast(comp));
-    bag.entries = entries.ptr;
-    bag.count = @intCast(entries.len);
+fn log(world: *c.ke_world, level: c_int, comptime fmt: []const u8, args: anytype) void {
+    const lg = world_impl.loggerOf(world) orelse return;
+    var buf: [256]u8 = undefined;
+    const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch return;
+    var ev = c.ke_log_event{ .level = level, .tag = "scene.loader", .message = msg.ptr };
+    if (lg.log) |f| f(lg, &ev);
 }
 
-// -- components application via apply registry -------------------------------
+fn warn(world: *c.ke_world, comptime fmt: []const u8, args: anytype) void {
+    log(world, c.KE_LOG_LEVEL_WARNING, fmt, args);
+}
+
+/// Reports a structural fault and fails the load.
+fn structural(
+    world: *c.ke_world,
+    out_error: [*c][*c]c.ke_error,
+    comptime fmt: []const u8,
+    args: anytype,
+) void {
+    var buf: [256]u8 = undefined;
+    const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch "scene is not loadable";
+    log(world, c.KE_LOG_LEVEL_ERROR, "{s}", .{msg});
+    E.fail(out_error, .invalid_argument, msg, @src());
+}
 
 fn applyComponentBlock(
     s: *State,
     entity: c.ke_entity,
     comp_name: [*c]const u8,
     comp_tbl: *c.toml_table_t,
-) void {
+    out_error: [*c][*c]c.ke_error,
+) bool {
     const world = s.world;
-    const e = ecsOf(world) orelse return;
+    const e = ecsOf(world) orelse {
+        structural(world, out_error, "world has no ecs", .{});
+        return false;
+    };
 
     var meta: c.ke_component_meta = undefined;
-    if (!e.component_lookup.?(e, comp_name, &meta, null)) return; // unknown component; skip
+    if (!e.component_lookup.?(e, comp_name, &meta, null)) {
+        structural(world, out_error, "scene names component '{s}', which no module registered", .{comp_name});
+        return false;
+    }
 
-    const comp = e.component_add.?(e, entity, meta.cid) orelse return;
+    var field_count: u32 = 0;
+    const fields = world.get_component_fields.?(world, meta.cid, &field_count);
+    var apply_ctx: ?*anyopaque = null;
+    const apply_fn = world.get_component_apply.?(world, meta.cid, &apply_ctx);
+    if (fields == null and apply_fn == null) {
+        structural(world, out_error, "component '{s}' has no field mapping registered", .{comp_name});
+        return false;
+    }
 
-    // No apply registered means no field mapping is defined for this component.
-    const apply_fn = world.get_component_apply.?(world, meta.cid) orelse return;
+    const existing = e.component_get.?(e, entity, meta.cid);
+    const comp = e.component_add.?(e, entity, meta.cid) orelse {
+        structural(world, out_error, "component '{s}' could not be added to the entity", .{comp_name});
+        return false;
+    };
+    if (existing == null) {
+        const bytes: [*]u8 = @ptrCast(comp);
+        @memset(bytes[0..meta.size], 0);
+        if (fields) |f| fields_apply.seedDefaults(comp, f, field_count);
+    }
 
-    // Entries come from the arena rather than a fixed stack buffer, so a
-    // component block with many fields is applied whole instead of truncated.
-    const entries = buildEntries(s, comp_tbl) orelse return;
-    apply_fn(comp, entries.ptr, @intCast(entries.len));
+    const entries = buildEntries(s, comp_tbl) orelse {
+        structural(world, out_error, "component '{s}' block could not be read", .{comp_name});
+        return false;
+    };
+
+    if (fields != null)
+        fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count);
+    if (apply_fn) |f| {
+        var apply_error: [*c]c.ke_error = null;
+        if (!f(apply_ctx, comp, entries.ptr, @intCast(entries.len), &apply_error)) {
+            if (apply_error != null) {
+                if (out_error != null) out_error.* = apply_error;
+            } else {
+                structural(world, out_error, "component '{s}' was given a value it cannot hold", .{comp_name});
+            }
+            return false;
+        }
+    }
+
+    for (entries) |*entry| {
+        if (entry.consumed) continue;
+        structural(world, out_error, "component '{s}' has no field '{s}'", .{ comp_name, entry.key });
+        return false;
+    }
+    return true;
 }
 
-/// [entity.transform] is sugar for [entity.components.transform].
-fn applyTransformBlock(s: *State, entity: c.ke_entity, xform_tbl: *c.toml_table_t) void {
-    applyComponentBlock(s, entity, c.KE_COMPONENT_NAME_TRANSFORM, xform_tbl);
+/// A connection is authored as an array of tables, so a plain table by that name
+/// only ever reaches here written in the singular. Wiring is not something a file
+/// may ask for and not get, so the spelling is corrected rather than skipped.
+fn reservedBlockMiswritten(key: [*c]const u8) bool {
+    return std.mem.eql(u8, std.mem.span(key), "connect");
 }
 
-/// A subscene's outer [[entity]] block may carry a [transform] override. It is
-/// applied BEFORE dispatch_script so OnBind sees the final position/rotation/
-/// scale; the remaining outer overrides are applied afterwards.
-fn applyOuterTransformEarly(s: *State, entity: c.ke_entity, outer: ?*c.toml_table_t) void {
-    const o = outer orelse return;
-    if (c.toml_table_in(o, "transform")) |xt| applyTransformBlock(s, entity, xt);
+/// A retired block shape, and what to write instead.
+fn retiredBlock(key: [*c]const u8) ?[]const u8 {
+    const k = std.mem.span(key);
+    if (std.mem.eql(u8, k, "components")) return "write [entity.<component>] directly";
+    if (std.mem.eql(u8, k, "properties")) return "write the component the value belongs to";
+    return null;
 }
 
-fn applyComponentsSection(s: *State, entity: c.ke_entity, comps: *c.toml_table_t) void {
+/// Components the scene tree owns, which a scene may not author.
+fn internalComponent(key: [*c]const u8) bool {
+    const k = std.mem.span(key);
+    return std.mem.eql(u8, k, c.KE_COMPONENT_NAME_NAME) or
+        std.mem.eql(u8, k, c.KE_COMPONENT_NAME_HIERARCHY);
+}
+
+/// Applies every `[entity.<component_name>]` block on one table.
+fn applyComponentBlocks(
+    s: *State,
+    entity: c.ke_entity,
+    tbl: *c.toml_table_t,
+    out_error: [*c][*c]c.ke_error,
+) bool {
     var i: c_int = 0;
     while (true) : (i += 1) {
-        const cn = c.toml_key_in(comps, i) orelse break;
-        if (c.toml_table_in(comps, cn)) |ct| applyComponentBlock(s, entity, cn, ct);
+        const key = c.toml_key_in(tbl, i) orelse break;
+        const block = c.toml_table_in(tbl, key) orelse continue;
+        if (retiredBlock(key)) |advice| {
+            structural(s.world, out_error, "[entity.{s}] is no longer read; {s}", .{ key, advice });
+            return false;
+        }
+        if (reservedBlockMiswritten(key)) {
+            structural(s.world, out_error, "[entity.connect] declares nothing; a connection is written [[entity.connect]]", .{});
+            return false;
+        }
+        if (internalComponent(key)) {
+            structural(s.world, out_error, "component '{s}' is the scene tree's own and cannot be authored", .{key});
+            return false;
+        }
+        if (!applyComponentBlock(s, entity, key, block, out_error)) return false;
     }
+    return true;
 }
 
-fn applyOuterOverrides(s: *State, entity: c.ke_entity, outer: *c.toml_table_t) void {
-    // [entity.transform] was already applied by applyOuterTransformEarly; doing
-    // it again here would be a redundant write.
-    if (c.toml_table_in(outer, "properties")) |props| attachProperties(s, entity, props);
-    const type_d = c.toml_string_in(outer, "type");
-    if (type_d.ok != 0) {
-        dispatchScript(s, entity, type_d.u.s);
-        std.c.free(type_d.u.s);
-    }
-    if (c.toml_table_in(outer, "components")) |comps| applyComponentsSection(s, entity, comps);
-}
+/// Wires the `[[entity.connect]]` blocks one entity declares.
+///
+/// Resolved in a pass after every entity in the file exists, because a listener
+/// is as often declared below the emitter as above it, and requiring one order
+/// would make the wiring depend on file layout rather than on what it says.
+/// Wires the connect blocks one entity declares. A connection that resolves to
+/// nothing fails the load.
+fn applyConnections(
+    s: *State,
+    source: c.ke_entity,
+    entity_tbl: *c.toml_table_t,
+    names: *const NameMap,
+    out_error: [*c][*c]c.ke_error,
+) bool {
+    const arr = c.toml_array_in(entity_tbl, "connect") orelse return true;
+    const world = s.world;
 
-// -- entity processing -------------------------------------------------------
+    const bus = world_impl.signalBusOf(world) orelse {
+        structural(world, out_error, "scene declares signal connections but the world has no signal bus", .{});
+        return false;
+    };
+
+    const n = c.toml_array_nelem(arr);
+    var i: c_int = 0;
+    while (i < n) : (i += 1) {
+        const t = c.toml_table_at(arr, i) orelse continue;
+
+        const signal_d = c.toml_string_in(t, "signal");
+        defer if (signal_d.ok != 0) std.c.free(signal_d.u.s);
+        const target_d = c.toml_string_in(t, "target");
+        defer if (target_d.ok != 0) std.c.free(target_d.u.s);
+
+        if (signal_d.ok == 0 or target_d.ok == 0) {
+            structural(world, out_error, "a connect block needs both a signal and a target", .{});
+            return false;
+        }
+
+        const target = names.get(std.mem.span(target_d.u.s)) orelse {
+            structural(world, out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
+            return false;
+        };
+
+        var handler: u32 = 0;
+        const handler_d = c.toml_int_in(t, "handler");
+        if (handler_d.ok != 0) handler = @intCast(handler_d.u.i);
+
+        var signal_id: u32 = 0;
+        if (!bus.signal_lookup.?(bus, signal_d.u.s, &signal_id)) {
+            structural(world, out_error, "connects the signal '{s}', which no node type declares", .{signal_d.u.s});
+            return false;
+        }
+        if (!bus.connect.?(bus, source, signal_id, target, handler, null)) {
+            structural(world, out_error, "could not connect signal '{s}'", .{signal_d.u.s});
+            return false;
+        }
+        log(world, c.KE_LOG_LEVEL_INFO, "connected '{s}' from entity {d} to entity {d}", .{ signal_d.u.s, source, target });
+    }
+    return true;
+}
 
 /// Name -> entity map for resolving `parent = "..."` back-references within one
 /// scene file. Grows on demand: a scene may declare any number of named
@@ -357,8 +514,6 @@ const NameMap = struct {
             self.items = buf.ptr;
             self.capacity = cap;
         }
-        // The name lives in the arena: the TOML datum it came from is freed by
-        // the caller as soon as the entity is processed.
         const owned = self.arena.dupeZ(name) orelse return;
         self.items.?[self.count] = .{ .name = owned, .entity = entity };
         self.count += 1;
@@ -422,7 +577,6 @@ fn processEntity(
         };
     }
 
-    // A `scene = "..."` reference splices another scene file in under `parent`.
     const scene_ref = c.toml_string_in(args.entity_tbl, "scene");
     if (scene_ref.ok != 0) {
         var resolved: [resolved_path_max]u8 = undefined;
@@ -451,20 +605,26 @@ fn processEntity(
         return false;
     }
 
-    if (c.toml_table_in(args.entity_tbl, "transform")) |xt| applyTransformBlock(s, entity, xt);
-
-    // The outer override must land before dispatch_script so OnBind sees it.
-    applyOuterTransformEarly(s, entity, args.override_outer);
+    if (!applyComponentBlocks(s, entity, args.entity_tbl, out_error)) return false;
+    if (args.override_outer) |outer| {
+        if (!applyComponentBlocks(s, entity, outer, out_error)) return false;
+    }
 
     const type_d = c.toml_string_in(args.entity_tbl, "type");
     if (type_d.ok != 0) {
-        dispatchScript(s, entity, type_d.u.s);
+        const dispatched = dispatchScript(s, entity, type_d.u.s, out_error);
         std.c.free(type_d.u.s);
+        if (!dispatched) return false;
     }
 
-    if (c.toml_table_in(args.entity_tbl, "properties")) |props| attachProperties(s, entity, props);
-    if (c.toml_table_in(args.entity_tbl, "components")) |comps| applyComponentsSection(s, entity, comps);
-    if (args.override_outer) |outer| applyOuterOverrides(s, entity, outer);
+    if (args.override_outer) |outer| {
+        const outer_type = c.toml_string_in(outer, "type");
+        if (outer_type.ok != 0) {
+            const dispatched = dispatchScript(s, entity, outer_type.u.s, out_error);
+            std.c.free(outer_type.u.s);
+            if (!dispatched) return false;
+        }
+    }
 
     if (name_d.ok != 0) args.names.put(name_d.u.s, entity);
     out_entity.* = entity;
@@ -485,9 +645,6 @@ fn loadSceneRecursive(
         return false;
     };
     var errbuf: [200]u8 = undefined;
-    // @alignCast: *std.c.FILE has alignment 1, but the toml.h cimport's
-    // [*c]FILE wants 8 on Windows; the pointer value is a valid FILE* either
-    // way, so assert the alignment across the seam.
     const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
     if (root == null) {
@@ -499,7 +656,6 @@ fn loadSceneRecursive(
     var base_buf: [path_max]u8 = undefined;
     const base_dir = pathDirname(std.mem.span(path), &base_buf);
 
-    // A scene with no [[entity]] array is valid and simply contributes nothing.
     const entities = c.toml_array_in(root, "entity") orelse {
         if (out_root) |r| r.* = c.KE_ENTITY_INVALID;
         return true;
@@ -510,14 +666,15 @@ fn loadSceneRecursive(
 
     var first_root: c.ke_entity = c.KE_ENTITY_INVALID;
     const n = c.toml_array_nelem(entities);
+
+    const created = s.arena.allocArray(c.ke_entity, @intCast(n));
+
     var is_first = true;
     var i: c_int = 0;
     while (i < n) : (i += 1) {
         const et = c.toml_table_at(entities, i) orelse continue;
         var ent: c.ke_entity = c.KE_ENTITY_INVALID;
 
-        // Only the first entity inherits the caller's attach point and name
-        // override — it is the subscene's root.
         const args: ProcessArgs = if (is_first) .{
             .base_dir = base_dir,
             .entity_tbl = et,
@@ -535,17 +692,24 @@ fn loadSceneRecursive(
         };
 
         if (!processEntity(s, args, &ent, out_error)) return false;
+        if (created) |slots| slots[@intCast(i)] = ent;
         if (is_first) {
             first_root = ent;
             is_first = false;
         }
     }
 
+    if (created) |slots| {
+        var j: c_int = 0;
+        while (j < n) : (j += 1) {
+            const et = c.toml_table_at(entities, j) orelse continue;
+            if (!applyConnections(s, slots[@intCast(j)], et, &names, out_error)) return false;
+        }
+    }
+
     if (out_root) |r| r.* = first_root;
     return true;
 }
-
-// -- vtable ------------------------------------------------------------------
 
 fn vtLoad(
     self_in: ?*c.ke_scene_loader,
@@ -591,8 +755,6 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-// -- factory -----------------------------------------------------------------
-
 export fn ke_scene_loader_create(
     world_in: ?*c.ke_world,
     project_root: [*c]const u8,
@@ -614,7 +776,6 @@ export fn ke_scene_loader_create(
         .project_root = [_]u8{0} ** path_max,
         .script_factory = null,
         .script_ctx = null,
-        .scene_properties_cid = 0,
         .arena = .init(),
     };
 
@@ -625,22 +786,1804 @@ export fn ke_scene_loader_create(
         s.project_root[n] = 0;
     }
 
-    // scene_properties has no apply callback: its layout (entries pointer +
-    // count) is populated wholesale by attachProperties, not field by field.
-    const e = ecsOf(world) orelse {
-        heap.gpa.destroy(s);
-        E.fail(out_error, .not_initialized, "world has no ecs", @src());
-        return null_handle;
-    };
-    var meta: c.ke_component_meta = undefined;
-    s.scene_properties_cid = if (e.component_lookup.?(e, c.KE_SCENE_PROPERTIES_COMPONENT_NAME, &meta, null))
-        meta.cid
-    else
-        e.component_register.?(e, c.KE_SCENE_PROPERTIES_COMPONENT_NAME, @sizeOf(c.ke_scene_properties));
-
     s.api.handle = s;
     s.api.load = vtLoad;
     s.api.register_script_factory = vtRegisterScriptFactory;
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
+}
+
+const testing = std.testing;
+
+const signal_bus_impl = @import("signal_bus.zig");
+
+const rc = @cImport({
+    @cInclude("kernel_engine/render/component_fields.h");
+    @cInclude("kernel_engine/render/ui/component_fields.h");
+    @cInclude("kernel_engine/audio/component_fields.h");
+    @cInclude("kernel_engine/physics/component_fields.h");
+});
+
+const fake_max_components = 32;
+const fake_max_entities = 128;
+
+const FakeComponent = struct {
+    name: []const u8,
+    size: usize,
+};
+
+const FakeEcs = struct {
+    vtable: c.ke_ecs,
+    arena: std.heap.ArenaAllocator,
+    components: [fake_max_components]FakeComponent,
+    component_count: usize,
+    alive: [fake_max_entities]bool,
+    storage: [fake_max_entities][fake_max_components]?[*]u8,
+    next_entity: c.ke_entity,
+};
+
+fn fakeEcsOf(self: ?*c.ke_ecs) *FakeEcs {
+    return @ptrCast(@alignCast(self.?.handle));
+}
+
+fn fakeSlot(f: *FakeEcs, entity: c.ke_entity, cid: c.ke_component_id) ?*?[*]u8 {
+    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return null;
+    const row = entity - 1;
+    if (!f.alive[row]) return null;
+    if (cid == 0 or cid > f.component_count) return null;
+    return &f.storage[row][cid - 1];
+}
+
+fn fakeEntityCreate(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
+    const f = fakeEcsOf(self);
+    if (f.next_entity >= fake_max_entities) return c.KE_ENTITY_INVALID;
+    f.next_entity += 1;
+    f.alive[f.next_entity - 1] = true;
+    return f.next_entity;
+}
+
+fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
+    const f = fakeEcsOf(self);
+    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return;
+    const row = entity - 1;
+    f.alive[row] = false;
+    for (&f.storage[row]) |*cell| cell.* = null;
+}
+
+fn fakeComponentRegister(
+    self: ?*c.ke_ecs,
+    name: [*c]const u8,
+    element_size: usize,
+    fields: [*c]const c.ke_component_field,
+    field_count: u32,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_component_id {
+    _ = fields;
+    _ = field_count;
+    _ = out_error;
+    const f = fakeEcsOf(self);
+    const wanted = std.mem.span(name);
+    for (f.components[0..f.component_count], 0..) |comp, i| {
+        if (std.mem.eql(u8, comp.name, wanted)) return @intCast(i + 1);
+    }
+    if (f.component_count >= fake_max_components) return 0;
+    f.components[f.component_count] = .{ .name = wanted, .size = element_size };
+    f.component_count += 1;
+    return @intCast(f.component_count);
+}
+
+fn fakeComponentLookup(
+    self: ?*c.ke_ecs,
+    name: [*c]const u8,
+    out_meta: [*c]c.ke_component_meta,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    _ = out_error;
+    const f = fakeEcsOf(self);
+    const wanted = std.mem.span(name);
+    for (f.components[0..f.component_count], 0..) |comp, i| {
+        if (!std.mem.eql(u8, comp.name, wanted)) continue;
+        if (out_meta != null) {
+            out_meta.* = .{
+                .cid = @intCast(i + 1),
+                .size = comp.size,
+                .fields = null,
+                .field_count = 0,
+            };
+        }
+        return true;
+    }
+    return false;
+}
+
+fn fakeComponentAdd(
+    self: ?*c.ke_ecs,
+    entity: c.ke_entity,
+    component: c.ke_component_id,
+) callconv(.c) ?*anyopaque {
+    const f = fakeEcsOf(self);
+    const slot = fakeSlot(f, entity, component) orelse return null;
+    if (slot.*) |existing| return existing;
+    const size = f.components[component - 1].size;
+    const block = f.arena.allocator().alignedAlloc(u8, .of(u64), @max(size, 1)) catch return null;
+    @memset(block, 0);
+    slot.* = block.ptr;
+    return block.ptr;
+}
+
+fn fakeComponentRemove(
+    self: ?*c.ke_ecs,
+    entity: c.ke_entity,
+    component: c.ke_component_id,
+) callconv(.c) void {
+    const f = fakeEcsOf(self);
+    const slot = fakeSlot(f, entity, component) orelse return;
+    slot.* = null;
+}
+
+fn fakeComponentGet(
+    self: ?*c.ke_ecs,
+    entity: c.ke_entity,
+    component: c.ke_component_id,
+) callconv(.c) ?*anyopaque {
+    const f = fakeEcsOf(self);
+    const slot = fakeSlot(f, entity, component) orelse return null;
+    return slot.*;
+}
+
+fn fakeComponentSize(self: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usize {
+    const f = fakeEcsOf(self);
+    if (cid == 0 or cid > f.component_count) return 0;
+    return f.components[cid - 1].size;
+}
+
+fn generatedFields(table: anytype) [*c]const c.ke_component_field {
+    return @ptrCast(@alignCast(table));
+}
+
+const DemoComponent = extern struct {
+    fov: f32,
+    mode: i32,
+};
+
+fn demoApply(
+    ctx: ?*anyopaque,
+    ptr: ?*anyopaque,
+    e: [*c]c.ke_variant_table_entry,
+    n: u32,
+    _: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    if (ctx) |seen| @as(*bool, @ptrCast(seen)).* = true;
+    const d: *DemoComponent = @ptrCast(@alignCast(ptr));
+    if (n == 0) return true;
+    for (e[0..n]) |*entry| {
+        if (entry.key == null) continue;
+        const key = std.mem.span(entry.key);
+        if (std.mem.eql(u8, key, "fov")) {
+            if (entry.value.type == c.KE_VARIANT_FLOAT) {
+                d.fov = @floatCast(entry.value.unnamed_0.f);
+            } else if (entry.value.type == c.KE_VARIANT_INT) {
+                d.fov = @floatFromInt(entry.value.unnamed_0.i);
+            }
+            entry.consumed = true;
+        } else if (std.mem.eql(u8, key, "mode") and entry.value.type == c.KE_VARIANT_INT) {
+            d.mode = @intCast(entry.value.unnamed_0.i);
+            entry.consumed = true;
+        }
+    }
+    return true;
+}
+
+const ScriptSpy = struct {
+    calls: i32 = 0,
+    last_type: [64]u8 = [_]u8{0} ** 64,
+    last_entity: c.ke_entity = c.KE_ENTITY_INVALID,
+};
+
+fn spyFactory(
+    ctx: ?*anyopaque,
+    entity: c.ke_entity,
+    type_name: [*c]const u8,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    _ = out_error;
+    const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
+    spy.calls += 1;
+    spy.last_entity = entity;
+    const name = std.mem.span(type_name);
+    const n = @min(name.len, spy.last_type.len - 1);
+    @memcpy(spy.last_type[0..n], name[0..n]);
+    spy.last_type[n] = 0;
+    return true;
+}
+
+const TempScene = struct {
+    tmp: std.testing.TmpDir,
+    path_buf: [std.fs.max_path_bytes]u8,
+
+    fn init() TempScene {
+        return .{ .tmp = std.testing.tmpDir(.{}), .path_buf = undefined };
+    }
+
+    fn put(self: *TempScene, name: []const u8, contents: []const u8) !void {
+        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = name, .data = contents });
+    }
+
+    fn cPath(self: *TempScene, name: []const u8) ![*:0]const u8 {
+        const full = try std.fmt.bufPrint(&self.path_buf, ".zig-cache/tmp/{s}/{s}", .{ self.tmp.sub_path, name });
+        self.path_buf[full.len] = 0;
+        return @ptrCast(&self.path_buf);
+    }
+
+    fn deinit(self: *TempScene) void {
+        self.tmp.cleanup();
+    }
+};
+
+const Fixture = struct {
+    ecs: FakeEcs,
+    runtime: c.ke_runtime,
+    tree_h: c.ke_scene_tree_handle,
+    bus_h: c.ke_signal_bus_handle,
+    world_h: c.ke_world_handle,
+    loader_h: c.ke_scene_loader_handle,
+
+    fn init(self: *Fixture) !void {
+        return self.initEx(true);
+    }
+
+    fn initEx(self: *Fixture, with_signal_bus: bool) !void {
+        self.ecs.arena = std.heap.ArenaAllocator.init(testing.allocator);
+        self.ecs.component_count = 0;
+        self.ecs.next_entity = 0;
+        @memset(&self.ecs.alive, false);
+        for (&self.ecs.storage) |*row| @memset(row, null);
+        self.ecs.vtable = std.mem.zeroes(c.ke_ecs);
+        self.ecs.vtable.handle = &self.ecs;
+        self.ecs.vtable.entity_create = fakeEntityCreate;
+        self.ecs.vtable.entity_destroy = fakeEntityDestroy;
+        self.ecs.vtable.component_register = fakeComponentRegister;
+        self.ecs.vtable.component_lookup = fakeComponentLookup;
+        self.ecs.vtable.component_add = fakeComponentAdd;
+        self.ecs.vtable.component_remove = fakeComponentRemove;
+        self.ecs.vtable.component_get = fakeComponentGet;
+        self.ecs.vtable.component_size = fakeComponentSize;
+
+        self.runtime = std.mem.zeroes(c.ke_runtime);
+
+        self.tree_h = c.ke_scene_tree_create(&self.ecs.vtable, null, null);
+        try testing.expect(self.tree_h.ref != null);
+
+        self.bus_h = std.mem.zeroes(c.ke_signal_bus_handle);
+        if (with_signal_bus) {
+            self.bus_h = signal_bus_impl.ke_signal_bus_create(null, null);
+            try testing.expect(self.bus_h.ref != null);
+        }
+
+        var params = std.mem.zeroes(c.ke_world_params);
+        params.ecs = &self.ecs.vtable;
+        params.runtime = &self.runtime;
+        params.scene_tree = self.tree_h.ref;
+        params.signal_bus = self.bus_h.ref;
+        self.world_h = c.ke_world_create(&params, null);
+        try testing.expect(self.world_h.ref != null);
+
+        self.describe(rc.KE_COMPONENT_NAME_CAMERA, @sizeOf(rc.ke_camera_component), generatedFields(&rc.ke_camera_component_fields), rc.ke_camera_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(rc.ke_directional_light_component), generatedFields(&rc.ke_directional_light_component_fields), rc.ke_directional_light_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(rc.ke_point_light_component), generatedFields(&rc.ke_point_light_component_fields), rc.ke_point_light_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(rc.ke_spot_light_component), generatedFields(&rc.ke_spot_light_component_fields), rc.ke_spot_light_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_MESH, @sizeOf(rc.ke_mesh_component), generatedFields(&rc.ke_mesh_component_fields), rc.ke_mesh_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_SPRITE2D, @sizeOf(rc.ke_sprite2d_component), generatedFields(&rc.ke_sprite2d_component_fields), rc.ke_sprite2d_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_LABEL, @sizeOf(rc.ke_label_component), generatedFields(&rc.ke_label_component_fields), rc.ke_label_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_AUDIO_PLAYER, @sizeOf(rc.ke_audio_player_component), generatedFields(&rc.ke_audio_player_component_fields), rc.ke_audio_player_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(rc.ke_collider2d_component), generatedFields(&rc.ke_collider2d_component_fields), rc.ke_collider2d_component_fields.len);
+
+        self.loader_h = ke_scene_loader_create(self.world_h.ref, null, null);
+        try testing.expect(self.loader_h.ref != null);
+    }
+
+    fn describe(
+        self: *Fixture,
+        name: [*c]const u8,
+        size: usize,
+        fields: [*c]const c.ke_component_field,
+        field_count: usize,
+    ) void {
+        const e = &self.ecs.vtable;
+        const cid = e.component_register.?(e, name, size, null, 0, null);
+        const w = self.world_h.ref.?;
+        _ = w.*.register_component_fields.?(w, cid, fields, @intCast(field_count), null);
+    }
+
+    fn deinit(self: *Fixture) void {
+        if (self.loader_h.destroy) |d| d(self.loader_h.ref);
+        if (self.world_h.destroy) |d| d(self.world_h.ref);
+        if (self.bus_h.destroy) |d| d(self.bus_h.ref);
+        if (self.tree_h.destroy) |d| d(self.tree_h.ref);
+        self.ecs.arena.deinit();
+    }
+
+    fn loader(self: *Fixture) *c.ke_scene_loader {
+        return self.loader_h.ref.?;
+    }
+
+    fn load(self: *Fixture, path: [*:0]const u8) bool {
+        const l = self.loader();
+        return l.load.?(l, path, null);
+    }
+
+    fn loadReporting(self: *Fixture, path: [*:0]const u8, out_error: *[*c]c.ke_error) bool {
+        const l = self.loader();
+        return l.load.?(l, path, out_error);
+    }
+
+    fn find(self: *Fixture, path: [*c]const u8) c.ke_entity {
+        const t = self.tree_h.ref.?;
+        return t.*.find_node.?(t, path, null);
+    }
+
+    fn comp(self: *Fixture, comptime T: type, name: [*c]const u8, entity: c.ke_entity) ?*T {
+        var meta: c.ke_component_meta = undefined;
+        if (!fakeComponentLookup(&self.ecs.vtable, name, &meta, null)) return null;
+        return @ptrCast(@alignCast(fakeComponentGet(&self.ecs.vtable, entity, meta.cid)));
+    }
+
+    fn bus(self: *Fixture) *c.ke_signal_bus {
+        return self.bus_h.ref.?;
+    }
+
+    fn declaredSignal(self: *Fixture, name: [*c]const u8) !u32 {
+        const b = self.bus();
+        var id: u32 = 0;
+        try testing.expect(b.signal_id.?(b, name, 0, &id, null));
+        return id;
+    }
+
+    fn emitFrom(self: *Fixture, source: c.ke_entity, signal: u32) !void {
+        const b = self.bus();
+        try testing.expect(b.emit.?(b, source, signal, null, 0, null));
+    }
+
+    fn delivered(self: *Fixture) []const c.ke_signal_delivery {
+        const b = self.bus();
+        var count: u32 = 0;
+        const list = b.deliveries.?(b, &count);
+        if (count == 0) return &.{};
+        return list[0..count];
+    }
+};
+
+test "a scene that declares no entity still loads" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml", "[scene]\nname = \"empty\"\n");
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a scene file that is not there fails the load" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    try testing.expect(!f.load("no_such_file_anywhere.scene.toml"));
+}
+
+test "a named entity reaches the tree" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Player"
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    try testing.expect(f.find("Player") != c.KE_ENTITY_INVALID);
+}
+
+test "parent names an entity declared earlier in the same file" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "World"
+        \\
+        \\[[entity]]
+        \\name = "Child"
+        \\parent = "World"
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    try testing.expect(f.find("World/Child") != c.KE_ENTITY_INVALID);
+}
+
+test "a transform position reaches the component" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "X"
+        \\[entity.transform]
+        \\position = [1.0, 2.0, 3.0]
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("X");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const t = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, e) orelse return error.MissingComponent;
+    try testing.expectEqual(@as(f32, 1.0), t.position.x);
+    try testing.expectEqual(@as(f32, 2.0), t.position.y);
+    try testing.expectEqual(@as(f32, 3.0), t.position.z);
+}
+
+test "a two dimensional rotation authored in degrees reaches the component as radians" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Flat"
+        \\[entity.transform2d]
+        \\position = [1.0, 2.0]
+        \\rotation = 90.0
+        \\scale    = [3.0, 4.0]
+        \\depth    = 5.0
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Flat");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const t = f.comp(c.ke_transform2d_component, c.KE_COMPONENT_NAME_TRANSFORM2D, e) orelse return error.MissingComponent;
+    try testing.expectEqual(@as(f32, 1.0), t.position.x);
+    try testing.expectEqual(@as(f32, 2.0), t.position.y);
+    try testing.expectApproxEqAbs(@as(f32, 1.57079633), t.rotation, 1e-5);
+    try testing.expectEqual(@as(f32, 3.0), t.scale.x);
+    try testing.expectEqual(@as(f32, 4.0), t.scale.y);
+    try testing.expectEqual(@as(f32, 5.0), t.depth);
+}
+
+test "a rotation authored as euler degrees reaches the component as a quaternion" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Turned"
+        \\[entity.transform]
+        \\rotation_euler = [0.0, 90.0, 0.0]
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Turned");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const t = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, e) orelse return error.MissingComponent;
+    try testing.expectApproxEqAbs(@as(f32, 0.0), t.rotation.x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 0.70710678), t.rotation.y, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), t.rotation.z, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 0.70710678), t.rotation.w, 1e-5);
+}
+
+test "a key only the domain callback knows is not reported as unknown" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Turned"
+        \\[entity.transform]
+        \\rotation_euler = [0.0, 90.0, 0.0]
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a value only the domain callback can judge fails the load when it rejects it" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Turned"
+        \\[entity.transform]
+        \\rotation_euler = "ninety"
+        \\
+    );
+
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "every sprite2d field the table describes reaches the component" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Coin"
+        \\[entity.sprite2d]
+        \\texture    = "res://atlas.png"
+        \\region     = [0.25, 0.5, 0.25, 0.5]
+        \\size       = [2.0, 3.0]
+        \\pivot      = [0.0, 1.0]
+        \\flip_h     = true
+        \\color      = [0.5, 0.6, 0.7, 0.8]
+        \\alpha_mode = 2
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Coin");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const sp = f.comp(rc.ke_sprite2d_component, rc.KE_COMPONENT_NAME_SPRITE2D, e) orelse return error.MissingComponent;
+    try testing.expectEqualStrings("res://atlas.png", std.mem.sliceTo(&sp.texture, 0));
+    try testing.expectEqual(@as(f32, 0.25), sp.region.x);
+    try testing.expectEqual(@as(f32, 0.5), sp.region.w);
+    try testing.expectEqual(@as(f32, 2.0), sp.size.x);
+    try testing.expectEqual(@as(f32, 1.0), sp.pivot.y);
+    try testing.expect(sp.flip_h != 0);
+    try testing.expect(sp.flip_v == 0);
+    try testing.expectEqual(@as(f32, 0.8), sp.color.w);
+    try testing.expectEqual(@as(u32, rc.KE_ALPHA_MODE_BLEND), sp.alpha_mode);
+    try testing.expect(sp.attached == 0);
+}
+
+test "a partial block leaves the header declared default standing" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Partial"
+        \\[entity.mesh]
+        \\color = [1.0, 0.0, 0.0, 1.0]
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Partial");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const m = f.comp(rc.ke_mesh_component, rc.KE_COMPONENT_NAME_MESH, e) orelse return error.MissingComponent;
+    try testing.expectEqual(@as(f32, 1.0), m.base_color.x);
+    try testing.expectEqual(@as(f32, 1.0), m.roughness);
+    try testing.expectEqual(@as(f32, 1.5), m.ior);
+    try testing.expectEqual(@as(f32, 0.5), m.alpha_cutoff);
+}
+
+test "a mesh is chosen by the name of its shape" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Crate"
+        \\[entity.mesh]
+        \\mesh = "cube"
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Crate");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const m = f.comp(rc.ke_mesh_component, rc.KE_COMPONENT_NAME_MESH, e) orelse return error.MissingComponent;
+    try testing.expectEqualStrings("cube", std.mem.sliceTo(&m.primitive, 0));
+}
+
+test "a camera keeps the planes it was authored with and the field table default for the rest" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Cam"
+        \\[entity.camera]
+        \\near_plane = 0.1
+        \\far_plane = 100.0
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Cam");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const cam = f.comp(rc.ke_camera_component, rc.KE_COMPONENT_NAME_CAMERA, e) orelse return error.MissingComponent;
+    try testing.expectEqual(@as(f32, 0.1), cam.near_plane);
+    try testing.expectEqual(@as(f32, 100.0), cam.far_plane);
+    try testing.expectEqual(@as(f32, 60.0), cam.fov);
+    try testing.expectEqual(@as(f32, 5.0), cam.orthographic_size);
+}
+
+test "every directional light field the table describes reaches the component" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "SunVec"
+        \\[entity.directional_light]
+        \\direction = [-0.4, -1.0, -0.3]
+        \\color = [1.0, 0.9, 0.8]
+        \\ambient = [0.03, 0.03, 0.04]
+        \\intensity = 3.0
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("SunVec");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const l = f.comp(rc.ke_directional_light_component, rc.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, e) orelse return error.MissingComponent;
+    try testing.expectApproxEqAbs(@as(f32, -0.4), l.direction.x, 1e-6);
+    try testing.expectEqual(@as(f32, -1.0), l.direction.y);
+    try testing.expectApproxEqAbs(@as(f32, -0.3), l.direction.z, 1e-6);
+    try testing.expectEqual(@as(f32, 1.0), l.color.x);
+    try testing.expectApproxEqAbs(@as(f32, 0.9), l.color.y, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.8), l.color.z, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.03), l.ambient.x, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.04), l.ambient.z, 1e-6);
+    try testing.expectEqual(@as(f32, 3.0), l.intensity);
+}
+
+test "every point light field the table describes reaches the component" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Bulb"
+        \\[entity.point_light]
+        \\color = [0.2, 0.4, 0.6]
+        \\radius = 12.5
+        \\intensity = 2.0
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Bulb");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const l = f.comp(rc.ke_point_light_component, rc.KE_COMPONENT_NAME_POINT_LIGHT, e) orelse return error.MissingComponent;
+    try testing.expectApproxEqAbs(@as(f32, 0.2), l.color.x, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.4), l.color.y, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.6), l.color.z, 1e-6);
+    try testing.expectEqual(@as(f32, 12.5), l.radius);
+    try testing.expectEqual(@as(f32, 2.0), l.intensity);
+}
+
+test "every spot light field the table describes reaches the component" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Lamp"
+        \\[entity.spot_light]
+        \\direction = [0.0, -1.0, 0.0]
+        \\color = [1.0, 0.5, 0.25]
+        \\inner_angle = 0.3
+        \\outer_angle = 0.6
+        \\range = 20.0
+        \\intensity = 4.0
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Lamp");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const l = f.comp(rc.ke_spot_light_component, rc.KE_COMPONENT_NAME_SPOT_LIGHT, e) orelse return error.MissingComponent;
+    try testing.expectEqual(@as(f32, -1.0), l.direction.y);
+    try testing.expectEqual(@as(f32, 1.0), l.color.x);
+    try testing.expectEqual(@as(f32, 0.5), l.color.y);
+    try testing.expectEqual(@as(f32, 0.25), l.color.z);
+    try testing.expectApproxEqAbs(@as(f32, 0.3), l.inner_angle, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.6), l.outer_angle, 1e-6);
+    try testing.expectEqual(@as(f32, 20.0), l.range);
+    try testing.expectEqual(@as(f32, 4.0), l.intensity);
+}
+
+test "a label names its font by path" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Title"
+        \\[entity.label]
+        \\text      = "Pong"
+        \\font      = "res://fonts/title.ttf"
+        \\font_size = 72.0
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Title");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const l = f.comp(rc.ke_label_component, rc.KE_COMPONENT_NAME_LABEL, e) orelse return error.MissingComponent;
+    try testing.expectEqualStrings("res://fonts/title.ttf", std.mem.sliceTo(&l.font, 0));
+    try testing.expectEqual(@as(f32, 72.0), l.font_size);
+    try testing.expectEqual(@as(u32, 0), l.font_handle.bits);
+}
+
+test "every label field the table describes reaches the component and its output stays empty" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Score"
+        \\[entity.label]
+        \\text = "0"
+        \\anchor = [0.3, 0.0]
+        \\offset = [0.0, 60.0]
+        \\color = [0.95, 0.95, 0.95, 1.0]
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Score");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const l = f.comp(rc.ke_label_component, rc.KE_COMPONENT_NAME_LABEL, e) orelse return error.MissingComponent;
+    try testing.expectEqualStrings("0", std.mem.sliceTo(&l.text, 0));
+    try testing.expectApproxEqAbs(@as(f32, 0.3), l.anchor[0], 1e-6);
+    try testing.expectEqual(@as(f32, 60.0), l.offset[1]);
+    try testing.expectEqual(@as(f32, 1.0), l.color[3]);
+    try testing.expectEqual(@as(u32, 0), l.glyph_count);
+}
+
+test "a referenced scene is spliced under the name that referenced it" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("sub.scene.toml",
+        \\[[entity]]
+        \\name = "Root"
+        \\
+        \\[[entity]]
+        \\name   = "Visual"
+        \\parent = "Root"
+        \\[entity.transform]
+        \\scale = [0.3, 1.8, 1.0]
+        \\
+    );
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Holder"
+        \\
+        \\[[entity]]
+        \\name  = "PaddleLeft"
+        \\scene = "sub.scene.toml"
+        \\[entity.transform]
+        \\position = [-7.5, 0.0, 0.0]
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const paddle = f.find("PaddleLeft");
+    try testing.expect(paddle != c.KE_ENTITY_INVALID);
+    const visual = f.find("Visual");
+    try testing.expect(visual != c.KE_ENTITY_INVALID);
+
+    const vh = f.comp(c.ke_hierarchy_component, c.KE_COMPONENT_NAME_HIERARCHY, visual) orelse return error.MissingComponent;
+    try testing.expectEqual(paddle, vh.parent);
+
+    const pt = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, paddle) orelse return error.MissingComponent;
+    try testing.expectEqual(@as(f32, -7.5), pt.position.x);
+
+    const vt = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, visual) orelse return error.MissingComponent;
+    try testing.expectApproxEqAbs(@as(f32, 0.3), vt.scale.x, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 1.8), vt.scale.y, 1e-6);
+}
+
+test "two instances of one subscene keep their own outer transform and overrides" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("sub.scene.toml",
+        \\[[entity]]
+        \\name = "Root"
+        \\
+    );
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Holder"
+        \\
+        \\[[entity]]
+        \\name = "Left"
+        \\scene = "sub.scene.toml"
+        \\[entity.transform]
+        \\position = [-7.5, 0.0, 0.0]
+        \\[entity.camera]
+        \\far_plane = 111.0
+        \\
+        \\[[entity]]
+        \\name = "Right"
+        \\scene = "sub.scene.toml"
+        \\[entity.transform]
+        \\position = [7.5, 0.0, 0.0]
+        \\[entity.camera]
+        \\far_plane = 222.0
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const left = f.find("Left");
+    const right = f.find("Right");
+    try testing.expect(left != c.KE_ENTITY_INVALID);
+    try testing.expect(right != c.KE_ENTITY_INVALID);
+
+    const lt = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, left) orelse return error.MissingComponent;
+    const lc = f.comp(rc.ke_camera_component, rc.KE_COMPONENT_NAME_CAMERA, left) orelse return error.MissingComponent;
+    const rt = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, right) orelse return error.MissingComponent;
+    const rcam = f.comp(rc.ke_camera_component, rc.KE_COMPONENT_NAME_CAMERA, right) orelse return error.MissingComponent;
+
+    try testing.expectEqual(@as(f32, -7.5), lt.position.x);
+    try testing.expectEqual(@as(f32, 111.0), lc.far_plane);
+    try testing.expectEqual(@as(f32, 7.5), rt.position.x);
+    try testing.expectEqual(@as(f32, 222.0), rcam.far_plane);
+}
+
+test "a component nobody registered fails the load" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Typo"
+        \\[entity.point_ligth]
+        \\radius = 42.0
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+}
+
+test "a field a known component does not have fails the load" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Typo"
+        \\[entity.point_light]
+        \\radius = 4.0
+        \\raidus = 9.0
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+}
+
+test "a component the scene tree owns cannot be authored" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Parent"
+        \\
+        \\[[entity]]
+        \\name   = "Child"
+        \\parent = "Parent"
+        \\[entity.hierarchy]
+        \\parent = 999
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+}
+
+test "the retired components nesting is refused rather than read" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Old"
+        \\[entity.components.point_light]
+        \\radius = 42.0
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+}
+
+test "the script factory receives the entity and the normalized type name" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var spy: ScriptSpy = .{};
+    const l = f.loader();
+    try testing.expect(l.register_script_factory.?(l, spyFactory, &spy, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Paddle"
+        \\type = "PaddleController"
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    try testing.expectEqual(@as(i32, 1), spy.calls);
+    try testing.expectEqualStrings("paddle_controller", std.mem.sliceTo(&spy.last_type, 0));
+    try testing.expectEqual(f.find("Paddle"), spy.last_entity);
+}
+
+fn rejectingFactory(
+    ctx: ?*anyopaque,
+    entity: c.ke_entity,
+    type_name: [*c]const u8,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    _ = entity;
+    _ = type_name;
+    _ = out_error;
+    const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
+    spy.calls += 1;
+    return false;
+}
+
+fn reportingFactory(
+    ctx: ?*anyopaque,
+    entity: c.ke_entity,
+    type_name: [*c]const u8,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    _ = entity;
+    _ = type_name;
+    const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
+    spy.calls += 1;
+    E.fail(out_error, .not_found, "no script is registered under that type", @src());
+    return false;
+}
+
+test "a factory that rejects an entity fails the load instead of being discarded" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var spy: ScriptSpy = .{};
+    const l = f.loader();
+    try testing.expect(l.register_script_factory.?(l, rejectingFactory, &spy, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Paddle"
+        \\type = "PaddleController"
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expectEqual(@as(i32, 1), spy.calls);
+    try testing.expect(err != null);
+}
+
+test "a factory's own error reaches the caller rather than being replaced" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var spy: ScriptSpy = .{};
+    const l = f.loader();
+    try testing.expect(l.register_script_factory.?(l, reportingFactory, &spy, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Paddle"
+        \\type = "PaddleController"
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+    try testing.expectEqualStrings(
+        "no script is registered under that type",
+        std.mem.span(err.*.message),
+    );
+    try testing.expectEqual(E.typeOf(.not_found), @as(*const c.ke_error_type, @ptrCast(err.*.type)));
+}
+
+fn normalizedName(name: [*c]const u8) []const u8 {
+    const buf = struct {
+        var storage: [type_name_max]u8 = undefined;
+    };
+    const out = normalizeTypeName(name, &buf.storage) orelse return "";
+    return std.mem.sliceTo(out, 0);
+}
+
+test "a type name is spelled the same way whichever casing a scene authored" {
+    try testing.expectEqualStrings("pong.ball", normalizedName("Pong.Ball"));
+    try testing.expectEqualStrings("pong.ball", normalizedName("Pong+Ball"));
+    try testing.expectEqualStrings("pong.ball", normalizedName("pong.ball"));
+}
+
+test "a run of capitals stays one word until a lowercase starts the next" {
+    try testing.expectEqualStrings("http_server", normalizedName("HTTPServer"));
+    try testing.expectEqualStrings("ui_label", normalizedName("UILabel"));
+    try testing.expectEqualStrings("id", normalizedName("ID"));
+}
+
+test "a digit does not split the word it belongs to" {
+    try testing.expectEqualStrings("sprite2d", normalizedName("Sprite2D"));
+    try testing.expectEqualStrings("node3d", normalizedName("Node3D"));
+    try testing.expectEqualStrings("collider2d", normalizedName("Collider2D"));
+}
+
+test "normalizing is idempotent, so a binding may apply it twice" {
+    try testing.expectEqualStrings("paddle_controller", normalizedName("paddle_controller"));
+    try testing.expectEqualStrings("pong.ball", normalizedName("pong.ball"));
+    try testing.expectEqualStrings("sprite2d", normalizedName("sprite2d"));
+}
+
+test "a type name too long to normalize is refused rather than truncated" {
+    var long: [type_name_max + 8]u8 = undefined;
+    @memset(&long, 'A');
+    long[long.len - 1] = 0;
+
+    var buf: [type_name_max]u8 = undefined;
+    try testing.expect(normalizeTypeName(@ptrCast(&long), &buf) == null);
+}
+
+test "a scene authoring a dotted type reaches the factory in snake case" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var spy: ScriptSpy = .{};
+    const l = f.loader();
+    try testing.expect(l.register_script_factory.?(l, spyFactory, &spy, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Ball"
+        \\type = "Pong.BallController"
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    try testing.expectEqualStrings("pong.ball_controller", std.mem.sliceTo(&spy.last_type, 0));
+}
+
+test "an entity naming a type is still created when no script factory is registered" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Lone"
+        \\type = "Whatever"
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    try testing.expect(f.find("Lone") != c.KE_ENTITY_INVALID);
+}
+
+test "a user component is applied through the callback its owner registered" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const e = &f.ecs.vtable;
+    const demo_cid = e.component_register.?(e, "demo", @sizeOf(DemoComponent), null, 0, null);
+    try testing.expect(demo_cid != 0);
+    const w = f.world_h.ref.?;
+    var saw_ctx = false;
+    try testing.expect(w.*.register_component_apply.?(w, demo_cid, demoApply, &saw_ctx, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Test"
+        \\[entity.demo]
+        \\fov = 1.5
+        \\mode = 7
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const entity = f.find("Test");
+    try testing.expect(entity != c.KE_ENTITY_INVALID);
+
+    const d: *DemoComponent = @ptrCast(@alignCast(fakeComponentGet(e, entity, demo_cid).?));
+    try testing.expectEqual(@as(f32, 1.5), d.fov);
+    try testing.expectEqual(@as(i32, 7), d.mode);
+    try testing.expect(saw_ctx);
+}
+
+fn rejectingApply(
+    _: ?*anyopaque,
+    _: ?*anyopaque,
+    e: [*c]c.ke_variant_table_entry,
+    n: u32,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    for (e[0..n]) |*entry| entry.consumed = true;
+    E.fail(out_error, .invalid_argument, "fov is measured in degrees, not in fathoms", @src());
+    return false;
+}
+
+test "the reason an apply callback rejects a value reaches the caller instead of a generic one" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const e = &f.ecs.vtable;
+    const demo_cid = e.component_register.?(e, "demo", @sizeOf(DemoComponent), null, 0, null);
+    try testing.expect(demo_cid != 0);
+    const w = f.world_h.ref.?;
+    try testing.expect(w.*.register_component_apply.?(w, demo_cid, rejectingApply, null, null));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Test"
+        \\[entity.demo]
+        \\fov = 1.5
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    const loader = f.loader_h.ref.?;
+    try testing.expect(!loader.*.load.?(loader, try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "fathoms") != null);
+}
+
+test "a loader is never created without a world" {
+    try testing.expect(ke_scene_loader_create(null, null, null).ref == null);
+}
+
+test "destroying a null loader is safe" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    f.loader_h.destroy.?(null);
+}
+
+test "an audio player keeps the path and volume the scene authored" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Hit"
+        \\[entity.audio_player]
+        \\path = "assets/sounds/hit.wav"
+        \\volume = 0.5
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Hit");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const a = f.comp(rc.ke_audio_player_component, rc.KE_COMPONENT_NAME_AUDIO_PLAYER, e) orelse return error.MissingComponent;
+    try testing.expectEqualStrings("assets/sounds/hit.wav", std.mem.sliceTo(&a.path, 0));
+    try testing.expectApproxEqAbs(@as(f32, 0.5), a.volume, 1e-6);
+}
+
+test "a collider keeps the extents and surface the scene authored" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Shape"
+        \\[entity.collider2d]
+        \\half_extents = [0.18, 0.18]
+        \\restitution = 1.0
+        \\friction = 0.0
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const e = f.find("Shape");
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+
+    const col = f.comp(rc.ke_collider2d_component, rc.KE_COMPONENT_NAME_COLLIDER2D, e) orelse return error.MissingComponent;
+    try testing.expectApproxEqAbs(@as(f32, 0.18), col.half_extents.x, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.18), col.half_extents.y, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), col.restitution, 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), col.friction, 1e-6);
+}
+
+test "a connection between two entities in the same scene reaches the bus" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "GoalScored"
+        \\target = "Listener"
+        \\handler = 7
+        \\
+        \\[[entity]]
+        \\name = "Listener"
+        \\
+    );
+
+    _ = try f.declaredSignal("GoalScored");
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const emitter = f.find("Emitter");
+    const listener = f.find("Listener");
+    try testing.expect(emitter != c.KE_ENTITY_INVALID);
+    try testing.expect(listener != c.KE_ENTITY_INVALID);
+
+    const sig = try f.declaredSignal("GoalScored");
+    try f.emitFrom(emitter, sig);
+
+    const list = f.delivered();
+    try testing.expectEqual(@as(usize, 1), list.len);
+    try testing.expectEqual(listener, list[0].target);
+    try testing.expectEqual(emitter, list[0].source);
+    try testing.expectEqual(@as(u32, 7), list[0].handler_id);
+}
+
+test "a connect block that names no handler wires handler zero" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Listener"
+        \\
+        \\[[entity]]
+        \\name = "Listener"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const sig = try f.declaredSignal("Poke");
+    try f.emitFrom(f.find("Emitter"), sig);
+
+    const list = f.delivered();
+    try testing.expectEqual(@as(usize, 1), list.len);
+    try testing.expectEqual(@as(u32, 0), list[0].handler_id);
+}
+
+test "a connection naming an entity the scene never declared fails the load" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Nobody"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a connect block missing its signal fails the load" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\target = "Emitter"
+        \\
+    );
+
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a connect block missing its target fails the load" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a connection naming a signal nobody declared fails the load" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "NeverDeclaredAnywhere"
+        \\target = "Emitter"
+        \\
+    );
+
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a misspelled signal name fails the load rather than wiring a signal nobody raises" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    _ = try f.declaredSignal("GoalScored");
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "GoalScorred"
+        \\target = "Emitter"
+        \\
+    );
+
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "looking a signal up does not bring it into being" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const b = f.bus();
+    var id: u32 = 0;
+    try testing.expect(!b.signal_lookup.?(b, "Absent", &id));
+    try testing.expect(!b.signal_lookup.?(b, "Absent", &id));
+
+    _ = try f.declaredSignal("Absent");
+    try testing.expect(b.signal_lookup.?(b, "Absent", &id));
+}
+
+test "the same connection declared twice delivers once" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Listener"
+        \\handler = 3
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Listener"
+        \\handler = 3
+        \\
+        \\[[entity]]
+        \\name = "Listener"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const sig = try f.declaredSignal("Poke");
+    try f.emitFrom(f.find("Emitter"), sig);
+    try testing.expectEqual(@as(usize, 1), f.delivered().len);
+}
+
+test "two connections of one signal that differ only by handler both deliver" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Listener"
+        \\handler = 1
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Listener"
+        \\handler = 2
+        \\
+        \\[[entity]]
+        \\name = "Listener"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const sig = try f.declaredSignal("Poke");
+    try f.emitFrom(f.find("Emitter"), sig);
+
+    const list = f.delivered();
+    try testing.expectEqual(@as(usize, 2), list.len);
+    try testing.expectEqual(@as(u32, 1), list[0].handler_id);
+    try testing.expectEqual(@as(u32, 2), list[1].handler_id);
+}
+
+test "a connection resolves a target declared later in the same file" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "First"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Last"
+        \\
+        \\[[entity]]
+        \\name = "Middle"
+        \\
+        \\[[entity]]
+        \\name = "Last"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const sig = try f.declaredSignal("Poke");
+    try f.emitFrom(f.find("First"), sig);
+
+    const list = f.delivered();
+    try testing.expectEqual(@as(usize, 1), list.len);
+    try testing.expectEqual(f.find("Last"), list[0].target);
+}
+
+test "an entity may connect a signal to itself" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Loop"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Loop"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const loop = f.find("Loop");
+    const sig = try f.declaredSignal("Poke");
+    try f.emitFrom(loop, sig);
+
+    const list = f.delivered();
+    try testing.expectEqual(@as(usize, 1), list.len);
+    try testing.expectEqual(loop, list[0].target);
+}
+
+test "a connection declared inside a subscene wires that instance's own entities" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("sub.scene.toml",
+        \\[[entity]]
+        \\name = "Root"
+        \\
+        \\[[entity]]
+        \\name = "Child"
+        \\parent = "Root"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Root"
+        \\
+    );
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Holder"
+        \\
+        \\[[entity]]
+        \\name = "Left"
+        \\scene = "sub.scene.toml"
+        \\
+        \\[[entity]]
+        \\name = "Right"
+        \\scene = "sub.scene.toml"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const left_child = f.find("Left/Child");
+    try testing.expect(left_child != c.KE_ENTITY_INVALID);
+
+    const sig = try f.declaredSignal("Poke");
+    try f.emitFrom(left_child, sig);
+
+    const list = f.delivered();
+    try testing.expectEqual(@as(usize, 1), list.len);
+    try testing.expectEqual(f.find("Left"), list[0].target);
+}
+
+test "a connection in the outer scene cannot name an entity inside a spliced subscene" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("sub.scene.toml",
+        \\[[entity]]
+        \\name = "Root"
+        \\
+        \\[[entity]]
+        \\name = "Child"
+        \\parent = "Root"
+        \\
+    );
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Holder"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Child"
+        \\
+        \\[[entity]]
+        \\name = "Left"
+        \\scene = "sub.scene.toml"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "an entity that splices a subscene connects from the subscene's root" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("sub.scene.toml",
+        \\[[entity]]
+        \\name = "Root"
+        \\
+    );
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Holder"
+        \\
+        \\[[entity]]
+        \\name = "Left"
+        \\scene = "sub.scene.toml"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Holder"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+
+    const left = f.find("Left");
+    try testing.expect(left != c.KE_ENTITY_INVALID);
+
+    const sig = try f.declaredSignal("Poke");
+    try f.emitFrom(left, sig);
+
+    const list = f.delivered();
+    try testing.expectEqual(@as(usize, 1), list.len);
+    try testing.expectEqual(f.find("Holder"), list[0].target);
+}
+
+test "a scene that declares a connection fails when the world has no signal bus" {
+    var f: Fixture = undefined;
+    try f.initEx(false);
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Emitter"
+        \\
+    );
+
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a scene without connections loads on a world that has no signal bus" {
+    var f: Fixture = undefined;
+    try f.initEx(false);
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a connect written as a single table instead of an array fails the load" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[entity.connect]
+        \\signal = "Poke"
+        \\target = "Nobody"
+        \\
+    );
+
+    _ = try f.declaredSignal("Poke");
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }

@@ -30,35 +30,39 @@ public sealed class MenuController : Node
         _resources  = resources;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld)
+    protected override void OnBind(ScriptHost scriptHost)
     {
         var fontPath = ExamplePaths.SystemFont;
         _font = Font.Load(_resources, _fontLoader, fontPath, pixelSize: 72f);
 
-        nodeWorld.AddNode(new Label
+        AddChild(new Label
         {
             Text   = "Pong",
-            Font   = _font,
+            Font     = fontPath,
+            FontSize = 72f,
             Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.5f, 0.0f),
             Offset = new Vector2(0f, 140f),
-        }, "Title", parent: this);
+        }, "Title");
 
-        nodeWorld.AddNode(new Label
+        AddChild(new Label
         {
             Text   = "Press Space to start",
-            Font   = _font,
+            Font     = fontPath,
+            FontSize = 72f,
             Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
             Anchor = new Vector2(0.5f, 1.0f),
             Offset = new Vector2(0f, -120f),
-        }, "Hint", parent: this);
+        }, "Hint");
     }
+
+    protected override bool HasBehavior => true;
 
     protected override void OnUpdate(in View view)
     {
         bool launch = _actions.IsPressed(PongAction.Launch, in view);
         bool quit   = _actions.IsPressed(PongAction.Quit,   in view);
-        if (launch && !_prevLaunch) _router.LoadScene("Main");
+        if (launch && !_prevLaunch) _router.LoadScene<Scenes.Main>();
         if (quit   && !_prevQuit)   Environment.Exit(0);
         _prevLaunch = launch;
         _prevQuit   = quit;

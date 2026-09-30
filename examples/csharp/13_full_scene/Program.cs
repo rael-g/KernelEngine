@@ -15,17 +15,13 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Asset;
 
-// 13_full_scene — ground plane, a loaded Box.gltf, directional + ambient light,
-// and 8 point lights orbiting the model. Exercises ACES tonemapping (built into
-// the render-v2 pipeline) and animated node behavior via OnUpdate.
-
 string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
 
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddAssimpAssetLoader()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 13 Full Scene"))
@@ -40,12 +36,13 @@ var services = new ServiceCollection()
 
         tree.AddNode(new AmbientLight { Color = new(0.02f, 0.02f, 0.02f) }, "Ambient");
 
-        var cam    = tree.AddNode(new Camera { Fov = 60f, Near = 0.1f, Far = 1000f }, "MainCamera");
+        var cam    = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "MainCamera");
         var eye    = new Vector3(8f, 8f, 15f);
         var target = new Vector3(0f, 2f, 0f);
         var lookRot = Quaternion.CreateFromRotationMatrix(
             Matrix4x4.CreateWorld(eye, Vector3.Normalize(target - eye), Vector3.UnitY));
-        cam.LocalTransform = cam.LocalTransform with { Position = eye, Rotation = lookRot };
+        cam.Position = eye;
+        cam.Rotation = lookRot;
 
         tree.AddNode(new DirectionalLight
         {
@@ -57,22 +54,19 @@ var services = new ServiceCollection()
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
         var floorMat  = resources.CreateMaterial("floor", new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
         var floor     = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with { Scale = new Vector3(50f, 1f, 50f) };
+        floor.Scale = new Vector3(50f, 1f, 50f);
 
         try
         {
             var loader = sp.GetRequiredService<IAssetLoader>();
             Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
             using var model = loader.LoadModel(modelPath);
-            Console.WriteLine($"[KernelEngine] Model: {model.Meshes.Count} meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
-            var meshNodes = tree.AddModel(model, resources, rootName: "CenterBox");
+            Console.WriteLine($"[KernelEngine] Model: {model.Data.Meshes.Length} meshes, {model.Data.Materials.Length} mats, {model.Data.Textures.Length} textures");
+            var meshNodes = tree.AddModel(model.Data, resources, rootName: "CenterBox");
             for (int i = 0; i < meshNodes.Count; i++)
             {
-                meshNodes[i].LocalTransform = meshNodes[i].LocalTransform with
-                {
-                    Position = new Vector3(0f, 2f, 0f),
-                    Scale    = new Vector3(2f),
-                };
+                meshNodes[i].Position = new Vector3(0f, 2f, 0f);
+                meshNodes[i].Scale    = new Vector3(2f);
             }
         }
         catch (Exception ex)
@@ -123,11 +117,9 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[13_full_scene] Exited cleanly.");
-
-// ── Orbiting point light — circles the origin at fixed height ────────────────
 
 sealed class OrbitingLight : PointLight
 {
@@ -137,11 +129,13 @@ sealed class OrbitingLight : PointLight
 
     private float _time;
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         _time += view.DeltaTime * Speed;
         float x = MathF.Cos(_time + Phase) * OrbitRadius;
         float z = MathF.Sin(_time + Phase) * OrbitRadius;
-        LocalTransform = LocalTransform with { Position = new Vector3(x, 3f, z) };
+        Position = new Vector3(x, 3f, z);
     }
 }

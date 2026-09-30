@@ -6,8 +6,6 @@ using Xunit;
 
 namespace KernelEngine.Runtime.Tests;
 
-// Covers the IRuntimeModule pattern: Configure runs at .Add time, OnLoad runs
-// at LoadModules time, topo-sort respects declared Dependencies.
 public class ModulePatternTests : IDisposable
 {
     private readonly EnkiScheduler _taskScheduler = new();
@@ -47,11 +45,9 @@ public class ModulePatternTests : IDisposable
         var module = new SimpleModule();
         var services = new ServiceCollection().Add<IRuntimeModule>(module);
 
-        // Configure ran at Add time, before BuildServiceProvider.
         Assert.True(module.ConfigureCalled);
         Assert.False(module.OnLoadCalled);
 
-        // Both the module and the contract it registered are resolvable.
         using var sp = services.BuildServiceProvider();
         Assert.Same(module, sp.GetRequiredService<IRuntimeModule>());
         Assert.IsType<TrackingService>(sp.GetRequiredService<ITrackingService>());
@@ -94,8 +90,8 @@ public class ModulePatternTests : IDisposable
     {
         var order = new List<string>();
         var services = new ServiceCollection()
-            .Add<IRuntimeModule>(new ModuleB(order))   // registered FIRST but depends on A
-            .Add<IRuntimeModule>(new ModuleA(order));  // registered SECOND
+            .Add<IRuntimeModule>(new ModuleB(order))
+            .Add<IRuntimeModule>(new ModuleA(order));
         using var sp = services.BuildServiceProvider();
 
         using var runtime = new Runtime(_ecs, _taskScheduler);
@@ -143,8 +139,6 @@ public class ModulePatternTests : IDisposable
     [Fact]
     public void Add_GenericContract_DiResolvesImpl()
     {
-        // Add<TContract, TImpl>() â€” the DI container constructs TImpl using
-        // services already registered. Here ImplWithDep needs ITrackingService.
         var services = new ServiceCollection()
             .AddSingleton<ITrackingService, TrackingService>()
             .Add<IService, ImplWithDep>();

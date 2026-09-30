@@ -1,13 +1,5 @@
 const std = @import("std");
 
-// Build the ke_common shared library (Zig 0.16 API) — the engine's error
-// vocabulary. Pure logic: no third-party C, no vcpkg lib, and no allocator
-// link (the heap-owned error copies go straight to libc malloc/free). The
-// public headers under include/ stay C; only the implementation is Zig.
-//
-// This library exports data symbols (the KE_ERROR_* type singletons) alongside
-// its functions, so C callers can keep taking their addresses.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
@@ -32,9 +24,6 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install.step);
 
-    // `zig build test` — guards the Windows DLL entry-point workaround this
-    // module owns (see kerror.zig's `_DllMainCRTStartup`). Kept out of the
-    // default step so the library build stays a pure compile.
     const test_step = b.step("test", "Run the ke_common tests");
     if (target.result.os.tag == .windows) addDllCrtInitTest(b, target, optimize, test_step);
 }

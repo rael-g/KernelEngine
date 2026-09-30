@@ -1,5 +1,3 @@
-// The render-core plugin's own heap. Deferred uploads are recorded lock-free
-// from any pass thread, so allocation here must be safe from any thread too.
 
 const std = @import("std");
 

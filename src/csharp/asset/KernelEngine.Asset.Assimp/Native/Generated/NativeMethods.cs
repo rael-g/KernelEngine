@@ -7,5 +7,5 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_asset_assimp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_loader_assimp_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_asset_loader_handle")]
-    public static extern KernelEngine.Asset.Native.ke_asset_loader_handle asset_loader_assimp_create([NativeTypeName("const ke_asset_loader_assimp_params *")] ke_asset_loader_assimp_params* @params, ke_error** out_error);
+    public static extern KernelEngine.Asset.Native.ke_asset_loader_handle asset_loader_assimp_create([NativeTypeName("const ke_asset_loader_assimp_params *")] ke_asset_loader_assimp_params* @params, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
 }

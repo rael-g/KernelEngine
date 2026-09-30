@@ -9,15 +9,10 @@ using KernelEngine.Scheduler;
 using KernelEngine.Window;
 using KernelEngine.Logger;
 
-// R3-mini / R4: window with a clear color, end-to-end via the runtime + module
-// pattern. No Application.cs. No Tree, no nodes, no scene. No manual render
-// calls in the host — render systems are pinned to a worker the render module
-// names "ke.render", scheduler dispatches them every tick.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Runtime Clear Color"))

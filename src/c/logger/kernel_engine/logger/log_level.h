@@ -27,4 +27,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_LOGGER_LOG_LEVEL_H_
+#endif

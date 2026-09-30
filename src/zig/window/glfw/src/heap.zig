@@ -1,6 +1,3 @@
-// The glfw window plugin's own heap. Single-instance allocations only (one
-// Core, one GlfwDevice per window), so no thread-safety pressure beyond what
-// the debug tracker gives for free.
 
 const std = @import("std");
 

@@ -20,14 +20,6 @@ extern "C"
 {
 #endif
 
-    // Reads the TOML file at `path` and populates `cfg` via its set_* slots:
-    // every `[section]` table becomes a section, each scalar key a typed value
-    // (dotted sub-tables flatten to dotted section names, e.g. `[a.b]` → "a.b").
-    // Arrays and timestamps are skipped for now.
-    //
-    // A missing file is NOT an error — returns true with `cfg` untouched, so the
-    // consumer's defaults apply (chapter 16 §2.4). A parse error or an IO error
-    // other than not-found returns false and sets out_error.
     KE_CONFIGURATION_TOML_API bool ke_configuration_toml_load(ke_configuration *cfg,
                                                               const char       *path,
                                                               ke_error        **out_error);

@@ -1,10 +1,5 @@
 const std = @import("std");
 
-// Builds this example via Zig's own C frontend, after compiling the Slang
-// shader to WGSL with scripts/compile_slang.cs — the same script CMake used
-// to invoke directly (as a Python script). See examples/c/01_minimal_log/build.zig
-// for why plain C doesn't need the system-compiler dance the GTest suites do.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});

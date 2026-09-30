@@ -1,16 +1,5 @@
 const std = @import("std");
 
-// Build the ke_gpu_device_webgpu shared library (Zig 0.16 API).
-//
-// When building through CMake the paths are passed automatically via
-// FetchContent (eliemichel/WebGPU-distribution). For standalone builds:
-//
-//   zig build \
-//     -Dke-common-include=/path/to/src/zig/common/include \
-//     -Dke-render-include=/path/to/src/c/render \
-//     -Dwgpu-include=/path/to/wgpu-native-release/include \
-//     -Dwgpu-lib=/path/to/wgpu-native-release/lib
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -23,7 +12,6 @@ pub fn build(b: *std.Build) void {
     const wgpu_inc   = b.option([]const u8, "wgpu-include",      "Path containing webgpu/webgpu.h")          orelse @panic("-Dwgpu-include required");
     const wgpu_lib   = b.option([]const u8, "wgpu-lib",          "Path containing wgpu_native DLL/lib")      orelse @panic("-Dwgpu-lib required");
 
-    // ── Shared library ─────────────────────────────────────────────────────
     const mod = b.createModule(.{
         .root_source_file = b.path("src/gpu_device_webgpu.zig"),
         .target = target,
@@ -40,8 +28,6 @@ pub fn build(b: *std.Build) void {
     mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
     mod.linkSystemLibrary("ke_common", .{});
     mod.linkSystemLibrary("wgpu_native", .{});
-    // The Xlib surface path opens the display itself, so Xlib is a direct
-    // dependency of this module rather than something wgpu-native provides.
     if (target.result.os.tag == .linux) {
         mod.linkSystemLibrary("X11", .{});
     }
@@ -58,7 +44,6 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install.step);
 
-    // ── Tests ──────────────────────────────────────────────────────────────
     const test_mod = b.createModule(.{
         .root_source_file = b.path("src/gpu_device_webgpu.zig"),
         .target = target,

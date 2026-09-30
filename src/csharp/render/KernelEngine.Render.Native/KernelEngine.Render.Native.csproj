@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The render domain's P/Invoke surface, alone in an assembly so that a consumer who
+    needs only the ABI does not have to take the wrappers with it. The framework's
+    asset resolver is exactly that consumer: it names ke_render_service to hand it
+    back, and nothing more — depending on the whole render assembly for that made
+    render unable to depend on framework in turn.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+  </ItemGroup>
+
+</Project>

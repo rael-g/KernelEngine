@@ -1,106 +1,81 @@
-﻿using System.Numerics;
+using System.Numerics;
 using KernelEngine.Framework;
 using KernelEngine.Physics;
 
 namespace Pong;
 
 /// <summary>
-/// The ball. Physics body + scoring logic. The visual is a Sprite2D child
-/// declared in Ball.scene; fixture comes from CollisionShape2D child;
-/// sounds come from AudioPlayer children (HitSound, ScoreSound).
+/// The ball. Composes <see cref="Body2D"/>, so its pose and motion are the physics
+/// component itself and the physics plugin's own system advances them — this script
+/// owns launch and scoring only. Visual, collider and sounds are children declared
+/// in Ball.scene.
 /// </summary>
-public sealed class Ball : Node, IPhysicsBody2D
+public sealed partial class Ball : Body2D
 {
-    const float InitialSpeed   = 6f;
     const float GoalLineMargin = 0.5f;
 
-    private readonly IPhysics2D                  _physics;
     private readonly IInputActionMap<PongAction> _actions;
     private readonly ISceneRouter                _router;
 
-    private BodyHandle2D  _body;
-    public BodyHandle2D   PhysicsBody => _body;
+    /// <summary>Speed the ball is launched at, in metres per second.</summary>
+    public partial float InitialSpeed { get; set; }
 
-    private AudioPlayer? _hitSound;
-    private AudioPlayer? _scoreSound;
-    private Scoreboard?  _board;
-    private Vector2      _lastVelocity;
-    private bool         _awaitingLaunch = true;
+    /// <summary>Velocity seen last tick, used to detect the bounce that plays a sound.</summary>
+    public partial Vector2 LastVelocity { get; set; }
 
-    public Ball(IPhysics2D physics, IInputActionMap<PongAction> actions, ISceneRouter router)
+    /// <summary>True while the ball waits at centre for the launch input.</summary>
+    public partial bool AwaitingLaunch { get; set; }
+
+    /// <summary>How many times the ball has been served, which decides serve direction.</summary>
+    public partial int Launches { get; set; }
+
+    public Ball(IInputActionMap<PongAction> actions, ISceneRouter router)
     {
-        _physics = physics;
-        _actions = actions;
-        _router  = router;
+        _actions       = actions;
+        _router        = router;
+        InitialSpeed   = 6f;
+        AwaitingLaunch = true;
+        Type           = BodyType2D.Dynamic;
+        FixedRotation  = true;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld)
+    void Update(in View view,
+        [NodeName("HitSound")]   Descendant<AudioPlayer> hit,
+        [NodeName("ScoreSound")] Descendant<AudioPlayer> sfx,
+        Emit<GoalScored> goal,
+        Emit<BallLaunched> launched)
     {
-        var pos = new Vector2(LocalTransform.Position.X, LocalTransform.Position.Y);
-        _body = _physics.CreateBody(BodyType2D.Dynamic, pos);
-        // A square ball that tumbles reads as a bug. Its box collider picks up
-        // spin from the two-point contact manifold even at zero friction, so the
-        // rotation is locked rather than left to the solver.
-        _physics.SetBodyFixedRotation(_body, true);
+        if (_actions.IsJustPressed(PongAction.Quit, in view)) _router.LoadScene<Scenes.Menu>();
+
+        if (_actions.IsJustPressed(PongAction.Launch, in view) && AwaitingLaunch) Launch(launched);
+        if (AwaitingLaunch) return;
+
+        if (Math.Sign(Velocity.X) != Math.Sign(LastVelocity.X) && LastVelocity.X != 0)
+            hit.Node?.Play();
+        LastVelocity = Velocity;
+
+        if (Position.X >  Field.HalfW + GoalLineMargin) Score(leftScored: true,  goal, sfx);
+        if (Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, goal, sfx);
     }
 
-    protected override void OnReady()
+    void Launch(Emit<BallLaunched> launched)
     {
-        _hitSound   = NodeWorld!.Find<AudioPlayer>("HitSound");
-        _scoreSound = NodeWorld!.Find<AudioPlayer>("ScoreSound");
-    }
-
-    protected override void OnUnbind() => _physics.DestroyBody(_body);
-
-    protected override void OnUpdate(in View view)
-    {
-        if (_board is null)
-        {
-            _board = NodeWorld!.Find<Scoreboard>("Scoreboard")
-                ?? throw new InvalidOperationException("Scene missing a 'Scoreboard' entity.");
-            _board.ShowHint("Press Space to launch");
-        }
-
-        var state = _physics.GetBodyState(_body);
-        LocalTransform = LocalTransform with
-        {
-            Position = new Vector3(state.Position.X, state.Position.Y, 0f),
-            Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, state.Angle),
-        };
-
-        if (_actions.IsJustPressed(PongAction.Quit,   in view)) _router.LoadScene("Menu");
-        if (_actions.IsJustPressed(PongAction.Launch, in view) && _awaitingLaunch) Launch();
-
-        if (_awaitingLaunch) return;
-
-        var vel = state.Velocity;
-        if (Math.Sign(vel.X) != Math.Sign(_lastVelocity.X) && _lastVelocity.X != 0)
-            _hitSound?.Play();
-        _lastVelocity = vel;
-
-        if (state.Position.X >  Field.HalfW + GoalLineMargin) Score(leftScored: true);
-        if (state.Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false);
-    }
-
-    void Launch()
-    {
-        _awaitingLaunch = false;
-        _board!.HideHint();
-        float dirX = _board.Total % 2 == 0 ? 1f : -1f;
+        AwaitingLaunch = false;
+        launched.Send(new BallLaunched());
+        float dirX = Launches % 2 == 0 ? 1f : -1f;
+        Launches++;
         float dirY = (Random.Shared.NextSingle() - 0.5f) * 0.6f;
-        var v = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
-        _physics.SetBodyVelocity(_body, v);
-        _lastVelocity = v;
+        Velocity     = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
+        LastVelocity = Velocity;
     }
 
-    void Score(bool leftScored)
+    void Score(bool leftScored, Emit<GoalScored> goal, Descendant<AudioPlayer> sfx)
     {
-        _board!.RecordGoal(leftScored);
-        _scoreSound?.Play();
-        _physics.SetBodyPosition(_body, Vector2.Zero);
-        _physics.SetBodyVelocity(_body, Vector2.Zero);
-        _lastVelocity   = Vector2.Zero;
-        _awaitingLaunch = true;
-        _board.ShowHint("Press Space to launch");
+        goal.Send(new GoalScored(leftScored));
+        sfx.Node?.Play();
+        Position       = Vector2.Zero;
+        Velocity       = Vector2.Zero;
+        LastVelocity   = Vector2.Zero;
+        AwaitingLaunch = true;
     }
 }

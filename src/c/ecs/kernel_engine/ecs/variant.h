@@ -43,10 +43,13 @@ extern "C"
         };
     } ke_variant;
 
+    /// One authored key and its value. Whoever accepts the key sets `consumed`;
+    /// the loader reports every entry left unclaimed.
     typedef struct ke_variant_table_entry
     {
         const char *key;
         ke_variant  value;
+        bool        consumed;
     } ke_variant_table_entry;
 
     typedef struct ke_variant_table
@@ -80,4 +83,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_ECS_VARIANT_H_
+#endif

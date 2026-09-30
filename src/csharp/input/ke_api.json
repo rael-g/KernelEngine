@@ -1,0 +1,1276 @@
+{
+  "enums": [
+    {
+      "name": "ke_input_action",
+      "doc": "Direction of a key or mouse-button transition, as reported to the ke_input sinks by a window backend.",
+      "values": [
+        {
+          "name": "KE_INPUT_ACTION_RELEASE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_INPUT_ACTION_PRESS",
+          "value": 1,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_input_event_kind",
+      "doc": "Discriminator for ke_input_event.",
+      "values": [
+        {
+          "name": "KE_INPUT_EVENT_NONE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_INPUT_EVENT_KEY_DOWN",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_INPUT_EVENT_KEY_UP",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_INPUT_EVENT_MOUSE_BUTTON_DOWN",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_INPUT_EVENT_MOUSE_BUTTON_UP",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_INPUT_EVENT_MOUSE_MOVE",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_INPUT_EVENT_MOUSE_SCROLL",
+          "value": 6,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_key",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_KEY_UNKNOWN",
+          "value": -1,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_SPACE",
+          "value": 32,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_APOSTROPHE",
+          "value": 39,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_COMMA",
+          "value": 44,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_MINUS",
+          "value": 45,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_PERIOD",
+          "value": 46,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_SLASH",
+          "value": 47,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_0",
+          "value": 48,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_1",
+          "value": 49,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_2",
+          "value": 50,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_3",
+          "value": 51,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_4",
+          "value": 52,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_5",
+          "value": 53,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_6",
+          "value": 54,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_7",
+          "value": 55,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_8",
+          "value": 56,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUMBER_9",
+          "value": 57,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_SEMICOLON",
+          "value": 59,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_EQUAL",
+          "value": 61,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_A",
+          "value": 65,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_B",
+          "value": 66,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_C",
+          "value": 67,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_D",
+          "value": 68,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_E",
+          "value": 69,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F",
+          "value": 70,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_G",
+          "value": 71,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_H",
+          "value": 72,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_I",
+          "value": 73,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_J",
+          "value": 74,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_K",
+          "value": 75,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_L",
+          "value": 76,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_M",
+          "value": 77,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_N",
+          "value": 78,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_O",
+          "value": 79,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_P",
+          "value": 80,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_Q",
+          "value": 81,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_R",
+          "value": 82,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_S",
+          "value": 83,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_T",
+          "value": 84,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_U",
+          "value": 85,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_V",
+          "value": 86,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_W",
+          "value": 87,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_X",
+          "value": 88,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_Y",
+          "value": 89,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_Z",
+          "value": 90,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_LEFT_BRACKET",
+          "value": 91,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_BACKSLASH",
+          "value": 92,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_RIGHT_BRACKET",
+          "value": 93,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_GRAVE_ACCENT",
+          "value": 96,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_WORLD_1",
+          "value": 161,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_WORLD_2",
+          "value": 162,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_ESCAPE",
+          "value": 256,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_ENTER",
+          "value": 257,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_TAB",
+          "value": 258,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_BACKSPACE",
+          "value": 259,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_INSERT",
+          "value": 260,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_DELETE",
+          "value": 261,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_RIGHT",
+          "value": 262,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_LEFT",
+          "value": 263,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_DOWN",
+          "value": 264,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_UP",
+          "value": 265,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_PAGE_UP",
+          "value": 266,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_PAGE_DOWN",
+          "value": 267,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_HOME",
+          "value": 268,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_END",
+          "value": 269,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_CAPS_LOCK",
+          "value": 280,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_SCROLL_LOCK",
+          "value": 281,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_NUM_LOCK",
+          "value": 282,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_PRINT_SCREEN",
+          "value": 283,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_PAUSE",
+          "value": 284,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F1",
+          "value": 290,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F2",
+          "value": 291,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F3",
+          "value": 292,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F4",
+          "value": 293,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F5",
+          "value": 294,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F6",
+          "value": 295,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F7",
+          "value": 296,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F8",
+          "value": 297,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F9",
+          "value": 298,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F10",
+          "value": 299,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F11",
+          "value": 300,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F12",
+          "value": 301,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F13",
+          "value": 302,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F14",
+          "value": 303,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F15",
+          "value": 304,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F16",
+          "value": 305,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F17",
+          "value": 306,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F18",
+          "value": 307,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F19",
+          "value": 308,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F20",
+          "value": 309,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F21",
+          "value": 310,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F22",
+          "value": 311,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F23",
+          "value": 312,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F24",
+          "value": 313,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_F25",
+          "value": 314,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_0",
+          "value": 320,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_1",
+          "value": 321,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_2",
+          "value": 322,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_3",
+          "value": 323,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_4",
+          "value": 324,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_5",
+          "value": 325,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_6",
+          "value": 326,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_7",
+          "value": 327,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_8",
+          "value": 328,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_9",
+          "value": 329,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_DECIMAL",
+          "value": 330,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_DIVIDE",
+          "value": 331,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_MULTIPLY",
+          "value": 332,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_SUBTRACT",
+          "value": 333,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_ADD",
+          "value": 334,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_ENTER",
+          "value": 335,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_KEYPAD_EQUAL",
+          "value": 336,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_SHIFT_LEFT",
+          "value": 340,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_CONTROL_LEFT",
+          "value": 341,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_ALT_LEFT",
+          "value": 342,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_SUPER_LEFT",
+          "value": 343,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_SHIFT_RIGHT",
+          "value": 344,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_CONTROL_RIGHT",
+          "value": 345,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_ALT_RIGHT",
+          "value": 346,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_SUPER_RIGHT",
+          "value": 347,
+          "doc": null
+        },
+        {
+          "name": "KE_KEY_MENU",
+          "value": 348,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_mouse_button",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_MOUSE_BUTTON_1",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_2",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_3",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_4",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_5",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_6",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_7",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_8",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_LEFT",
+          "value": "KE_MOUSE_BUTTON_1",
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_RIGHT",
+          "value": "KE_MOUSE_BUTTON_2",
+          "doc": null
+        },
+        {
+          "name": "KE_MOUSE_BUTTON_MIDDLE",
+          "value": "KE_MOUSE_BUTTON_3",
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_input_snapshot",
+      "doc": "Frozen snapshot of all input state for a single frame. Passed from ke.main to ke.sim so reads are consistent and thread-safe. The key fields are bitsets. Read them through the accessors below rather than indexing directly: the packing is a detail of this contract, and a caller that reimplements it silently breaks if the packing ever changes.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "keys_down",
+          "type": "uint64_t[8]",
+          "tags": [],
+          "doc": "Bitset of keys currently held down."
+        },
+        {
+          "name": "keys_pressed",
+          "type": "uint64_t[8]",
+          "tags": [],
+          "doc": "Bitset of keys that transitioned to down this frame."
+        },
+        {
+          "name": "keys_released",
+          "type": "uint64_t[8]",
+          "tags": [],
+          "doc": "Bitset of keys that transitioned to up this frame."
+        },
+        {
+          "name": "mouse_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mouse_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mouse_dx",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mouse_dy",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scroll_dx",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scroll_dy",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mouse_buttons_down",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mouse_buttons_pressed",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mouse_buttons_released",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_input_event",
+      "doc": "One discrete input event captured during ke.main\u0027s poll phase. Flat layout (no anonymous unions) for friction-free C# P/Invoke binding. Field interpretation depends on kind: - KEY_DOWN / KEY_UP: code = key code (GLFW codes) - MOUSE_BUTTON_DOWN/UP: code = button index - MOUSE_MOVE: x, y = absolute cursor position - MOUSE_SCROLL: x, y = scroll delta x, y",
+      "tags": [],
+      "fields": [
+        {
+          "name": "kind",
+          "type": "ke_input_event_kind",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "code",
+          "type": "int32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_input",
+      "doc": "Live keyboard and mouse state for one window.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "update",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Updates internal state, clearing this frame\u0027s pressed/released edges. Call once per tick, before any query.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "is_key_pressed",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true if the key transitioned to down during this tick.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_key"
+              ],
+              "doc": "Key to query. Out-of-range codes read as false."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "is_key_released",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true if the key transitioned to up during this tick.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_key"
+              ],
+              "doc": "Key to query. Out-of-range codes read as false."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "is_key_down",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true while the key is held down.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_key"
+              ],
+              "doc": "Key to query. Out-of-range codes read as false."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "get_snapshot",
+          "returns": "void",
+          "tags": [],
+          "doc": "Captures a frozen copy of the current state, safe to read from another thread while this instance keeps updating.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_snapshot",
+              "type": "ke_input_snapshot *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the snapshot."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "drain_events",
+          "returns": "uint32_t",
+          "tags": [
+            "raw"
+          ],
+          "doc": "Drains pending discrete events and clears the queue. Events beyond the buffer capacity are dropped. Must run on the same thread as the sinks below.",
+          "return_doc": "Number of events written.",
+          "params": [
+            {
+              "name": "out_buf",
+              "type": "ke_input_event *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives the drained events."
+            },
+            {
+              "name": "capacity",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": "Maximum number of events to write."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "on_key",
+          "returns": "void",
+          "tags": [
+            "sink"
+          ],
+          "doc": "Reports a key transition from the window backend.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_key"
+              ],
+              "doc": "Key that changed."
+            },
+            {
+              "name": "action",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_input_action"
+              ],
+              "doc": "Whether the key went down or up."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "on_mouse_move",
+          "returns": "void",
+          "tags": [
+            "sink"
+          ],
+          "doc": "Reports an absolute cursor position from the window backend.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "x",
+              "type": "float",
+              "tags": [],
+              "doc": "Cursor position on the horizontal axis, in pixels."
+            },
+            {
+              "name": "y",
+              "type": "float",
+              "tags": [],
+              "doc": "Cursor position on the vertical axis, in pixels."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "on_mouse_button",
+          "returns": "void",
+          "tags": [
+            "sink"
+          ],
+          "doc": "Reports a mouse-button transition from the window backend.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "button",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_mouse_button"
+              ],
+              "doc": "Button that changed."
+            },
+            {
+              "name": "action",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_input_action"
+              ],
+              "doc": "Whether the button went down or up."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "on_mouse_scroll",
+          "returns": "void",
+          "tags": [
+            "sink"
+          ],
+          "doc": "Reports a scroll-wheel delta from the window backend.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "dx",
+              "type": "float",
+              "tags": [],
+              "doc": "Horizontal scroll delta."
+            },
+            {
+              "name": "dy",
+              "type": "float",
+              "tags": [],
+              "doc": "Vertical scroll delta."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        }
+      ]
+    },
+    {
+      "name": "ke_input_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_input *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_input *"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "ke_input_snapshot_is_key_down",
+      "returns": "ke_bool",
+      "doc": "Returns true while the key is held down.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "snapshot",
+          "type": "const ke_input_snapshot *",
+          "tags": [
+            "borrowed"
+          ],
+          "doc": "Snapshot to read."
+        },
+        {
+          "name": "key",
+          "type": "int32_t",
+          "tags": [
+            "enum:ke_key"
+          ],
+          "doc": "Key to query. Out-of-range codes read as false."
+        }
+      ]
+    },
+    {
+      "name": "ke_input_snapshot_is_key_pressed",
+      "returns": "ke_bool",
+      "doc": "Returns true if the key transitioned to down during the snapshot\u0027s frame.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "snapshot",
+          "type": "const ke_input_snapshot *",
+          "tags": [
+            "borrowed"
+          ],
+          "doc": "Snapshot to read."
+        },
+        {
+          "name": "key",
+          "type": "int32_t",
+          "tags": [
+            "enum:ke_key"
+          ],
+          "doc": "Key to query. Out-of-range codes read as false."
+        }
+      ]
+    },
+    {
+      "name": "ke_input_snapshot_is_key_released",
+      "returns": "ke_bool",
+      "doc": "Returns true if the key transitioned to up during the snapshot\u0027s frame.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "snapshot",
+          "type": "const ke_input_snapshot *",
+          "tags": [
+            "borrowed"
+          ],
+          "doc": "Snapshot to read."
+        },
+        {
+          "name": "key",
+          "type": "int32_t",
+          "tags": [
+            "enum:ke_key"
+          ],
+          "doc": "Key to query. Out-of-range codes read as false."
+        }
+      ]
+    },
+    {
+      "name": "ke_input_snapshot_is_mouse_button_down",
+      "returns": "ke_bool",
+      "doc": "Returns true while the mouse button is held down.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "snapshot",
+          "type": "const ke_input_snapshot *",
+          "tags": [
+            "borrowed"
+          ],
+          "doc": "Snapshot to read."
+        },
+        {
+          "name": "button",
+          "type": "int32_t",
+          "tags": [
+            "enum:ke_mouse_button"
+          ],
+          "doc": "Button to query. Out-of-range indices read as false."
+        }
+      ]
+    },
+    {
+      "name": "ke_input_snapshot_is_mouse_button_pressed",
+      "returns": "ke_bool",
+      "doc": "Returns true if the mouse button transitioned to down during the snapshot\u0027s frame.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "snapshot",
+          "type": "const ke_input_snapshot *",
+          "tags": [
+            "borrowed"
+          ],
+          "doc": "Snapshot to read."
+        },
+        {
+          "name": "button",
+          "type": "int32_t",
+          "tags": [
+            "enum:ke_mouse_button"
+          ],
+          "doc": "Button to query. Out-of-range indices read as false."
+        }
+      ]
+    },
+    {
+      "name": "ke_input_snapshot_is_mouse_button_released",
+      "returns": "ke_bool",
+      "doc": "Returns true if the mouse button transitioned to up during the snapshot\u0027s frame.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "snapshot",
+          "type": "const ke_input_snapshot *",
+          "tags": [
+            "borrowed"
+          ],
+          "doc": "Snapshot to read."
+        },
+        {
+          "name": "button",
+          "type": "int32_t",
+          "tags": [
+            "enum:ke_mouse_button"
+          ],
+          "doc": "Button to query. Out-of-range indices read as false."
+        }
+      ]
+    },
+    {
+      "name": "ke_input_create",
+      "returns": "ke_input_handle",
+      "doc": "Creates an input system.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "logger",
+          "type": "struct ke_logger *",
+          "tags": [
+            "borrowed",
+            "nullable"
+          ],
+          "doc": "Optional logger; pass NULL to disable logging."
+        },
+        {
+          "name": "out_error",
+          "type": "ke_error **",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "callbacks": [],
+  "type_aliases": {}
+}

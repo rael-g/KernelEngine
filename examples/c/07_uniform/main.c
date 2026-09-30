@@ -39,8 +39,6 @@ int main(void)
 
     ke_error *err = NULL;
 
-    // ── Window ───────────────────────────────────────────────────────────────
-
     ke_window_glfw_params wp = {
         .logger     = NULL,
         .input      = NULL,
@@ -52,8 +50,6 @@ int main(void)
     ke_window_handle win = ke_window_glfw_create(&wp, &err);
     if (!win.ref) die("window create failed", err);
     if (!win.ref->on_initialize(win.ref, &err)) die("window init failed", err);
-
-    // ── GPU device ────────────────────────────────────────────────────────────
 
     ke_gpu_device_webgpu_params dp = {
         .logger            = NULL,
@@ -67,8 +63,6 @@ int main(void)
         (const ke_gpu_surface_ext *)gpu.ref->query_extension(gpu.ref, KE_GPU_SURFACE_EXT_NAME);
     if (!surf_ext) die("surface extension not available", NULL);
 
-    // ── Uniform buffer (float angle, padded to 16 bytes for WebGPU) ──────────
-
     float uniform_data[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     ke_gpu_buffer_params ubp = {
         .initial_data    = uniform_data,
@@ -78,8 +72,6 @@ int main(void)
     };
     ke_gpu_buffer ubo = gpu.ref->create_buffer(gpu.ref, &ubp, &err);
     if (ubo == KE_GPU_INVALID_HANDLE) die("uniform buffer creation failed", err);
-
-    // ── Bind group layout ─────────────────────────────────────────────────────
 
     ke_gpu_bind_group_layout_entry bgl_entry = {
         .binding           = 0,
@@ -93,8 +85,6 @@ int main(void)
     };
     ke_gpu_bind_group_layout bgl = gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params);
     if (bgl == KE_GPU_INVALID_HANDLE) die("bind group layout creation failed", NULL);
-
-    // ── Bind group ────────────────────────────────────────────────────────────
 
     ke_gpu_bind_group_entry bg_entry = {
         .binding      = 0,
@@ -110,8 +100,6 @@ int main(void)
     };
     ke_gpu_bind_group bg = gpu.ref->create_bind_group(gpu.ref, &bg_params, &err);
     if (bg == KE_GPU_INVALID_HANDLE) die("bind group creation failed", err);
-
-    // ── Shaders ───────────────────────────────────────────────────────────────
 
     ke_gpu_shader_module_params vsp = {
         .code        = rotate_vert_spv,
@@ -129,8 +117,6 @@ int main(void)
 
     if (vs == KE_GPU_INVALID_HANDLE) die("vertex shader creation failed", NULL);
     if (fs == KE_GPU_INVALID_HANDLE) die("fragment shader creation failed", NULL);
-
-    // ── Pipeline ─────────────────────────────────────────────────────────────
 
     ke_gpu_blend_state blend = {
         .blend_enabled = 0,
@@ -164,15 +150,12 @@ int main(void)
 
     ke_gpu_queue q = gpu.ref->get_default_queue(gpu.ref);
 
-    // ── Loop ──────────────────────────────────────────────────────────────────
-
     printf("Rendering rotating triangle. Close the window to exit.\n");
 
     while (!win.ref->should_close(win.ref))
     {
         win.ref->poll_events(win.ref, NULL);
 
-        // Update uniform (angle in radians, one revolution per second)
         float angle = (float)(fmod(elapsed_seconds(), 1.0) * 6.2831853);
         uniform_data[0] = angle;
         gpu.ref->write_buffer(gpu.ref, ubo, 0, uniform_data, sizeof(uniform_data));
@@ -209,8 +192,6 @@ int main(void)
         gpu.ref->queue_present(gpu.ref, q);
         gpu.ref->destroy_texture_view(gpu.ref, view);
     }
-
-    // ── Cleanup ───────────────────────────────────────────────────────────────
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
     gpu.ref->destroy_bind_group(gpu.ref, bg);

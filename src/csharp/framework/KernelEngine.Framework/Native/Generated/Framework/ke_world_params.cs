@@ -21,4 +21,7 @@ public unsafe partial struct ke_world_params
 
     [NativeTypeName("struct ke_logger *")]
     public KernelEngine.Logger.Native.ke_logger* logger;
+
+    [NativeTypeName("struct ke_signal_bus *")]
+    public ke_signal_bus* signal_bus;
 }

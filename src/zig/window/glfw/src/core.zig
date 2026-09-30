@@ -1,6 +1,3 @@
-// Backend-agnostic window controller: owns the ke_window vtable handed to the
-// engine, drives whatever device it was given, and forwards input events to
-// ke_input. Knows nothing about GLFW.
 
 const std = @import("std");
 
@@ -13,7 +10,7 @@ const E = @import("kerror").Errors(c);
 pub const Core = struct {
     api: c.ke_window,
     dev: ?device.Device,
-    input: ?*c.ke_input, // borrowed
+    input: ?*c.ke_input,
     initialized: bool,
 
     pub fn create(dev: device.Device, input: ?*c.ke_input) ?*Core {
@@ -65,12 +62,7 @@ pub const Core = struct {
         heap.gpa.destroy(self);
     }
 
-    // -- ke_window vtable ----------------------------------------------------
-
     fn onInitialize(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-        // The window is already live by the time the handle exists — the
-        // factory initializes it so a failure surfaces as a null handle rather
-        // than a half-built window. This slot stays for contract symmetry.
         if (from(self_in) == null) {
             E.fail(out_error, .invalid_argument, "invalid argument", @src());
             return false;
@@ -128,21 +120,19 @@ pub const Core = struct {
         return dev.getNativeHandle();
     }
 
-    // -- device events -> ke_input -------------------------------------------
-
     fn handleEvent(ctx: *anyopaque, ev: device.Event) void {
         const self: *Core = @ptrCast(@alignCast(ctx));
         const input = self.input orelse return;
         switch (ev.type) {
             .key_down, .key_up => {
-                const action: c_int = if (ev.type == .key_down) 1 else 0;
+                const action: c_int = if (ev.type == .key_down) c.KE_INPUT_ACTION_PRESS else c.KE_INPUT_ACTION_RELEASE;
                 if (input.on_key) |f| f(input, @intCast(ev.data.key.key_code), action);
             },
             .mouse_move => {
                 if (input.on_mouse_move) |f| f(input, ev.data.mouse_move.x, ev.data.mouse_move.y);
             },
             .mouse_button_down, .mouse_button_up => {
-                const action: c_int = if (ev.type == .mouse_button_down) 1 else 0;
+                const action: c_int = if (ev.type == .mouse_button_down) c.KE_INPUT_ACTION_PRESS else c.KE_INPUT_ACTION_RELEASE;
                 if (input.on_mouse_button) |f| f(input, @intCast(ev.data.mouse_button.button), action);
             },
             .mouse_scroll => {

@@ -16,14 +16,15 @@ vcpkg itself is fetched automatically (`.cache/vcpkg-<version>/`) — no manual 
 
 ```bash
 zig build --prefix build/native                     # configure + build + install, one step
+zig build test --prefix build/native                 # every plugin's own Zig tests
 build/native/bin/c_demo_01                           # run a C example (Linux name; c_demo_01.exe on Windows)
-build/native/bin/test_ke_kernel                      # native kernel/framework tests (GTest)
-build/native/bin/test_integration_cpp                # native integration tests (GTest)
 ```
 
-Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — no separate install step, and no build/CMake-preset directory split between "configure" and "install" locations. C# expects native libraries at `build/native/bin/`.
+Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — no separate install step, and no build/CMake-preset directory split between "configure" and "install" locations. Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
 
-**`test_ke_kernel` and `test_integration_cpp` (C++/GTest) are frozen — new tests are written in Zig, not C++.** They exist only because they predate the engine's move to Zig; keep them passing, but grow them only as a byproduct of touching that file for another reason, never to house new coverage. A new test for Zig-implemented engine logic belongs in that plugin's own `zig build test` (see any `src/zig/<plugin>/build.zig` for the pattern — `b.addTest` against the plugin's own source, run via `b.addRunArtifact`).
+**Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
+
+The root `test` step runs all of them. It cannot go stale: `Ctx.plugin` takes a required `.has_tests` / `.no_tests` argument, so a new plugin does not compile until that question is answered, and the test invocation reuses the same `-D` flag slice as the library build, so the two can never drift. Give a plugin a single test root that transitively imports its other files — a hand-written list of test roots lets a new test file go silently unrun, and lets two roots that import each other run the same test twice.
 
 ### Managed (.NET 10)
 
@@ -37,12 +38,13 @@ dotnet test KernelEngine.slnx
 ```bash
 dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
 dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings via ClangSharp
+dotnet run scripts/regenerate_api.cs  # regenerate every kabic domain (ke_api.json + C# + C field tables) from scripts/api_domains.json
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
 ```
 
 Shaders compile to `src/zig/render/service/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_service` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
 
-**Known debt — no native/Zig coverage story.** `scripts/coverage.cs` only measures C#. Zig's own compiler has no source-coverage instrumentation. DWARF-based tools don't fill the gap either: `kcov` (which works via `libdw`, compiler-agnostic in principle) was tried directly against a Zig-compiled binary and produces silent 0% coverage — Zig 0.16 emits a line-table extended opcode `libdw` doesn't decode, confirmed by comparing against an identical `gcc`/`zig cc`-compiled C binary (which `kcov` measures correctly) and by inspecting the raw DWARF with `readelf --debug-dump=decodedline`. This blocks coverage for both `zig build test` targets and the two legacy GTest suites equally, so there's no coverage-driven reason to keep writing new tests in C++.
+**Known debt — no native/Zig coverage story.** `scripts/coverage.cs` only measures C#. Zig's own compiler has no source-coverage instrumentation. DWARF-based tools don't fill the gap either: `kcov` (which works via `libdw`, compiler-agnostic in principle) was tried directly against a Zig-compiled binary and produces silent 0% coverage — Zig 0.16 emits a line-table extended opcode `libdw` doesn't decode, confirmed by comparing against an identical `gcc`/`zig cc`-compiled C binary (which `kcov` measures correctly) and by inspecting the raw DWARF with `readelf --debug-dump=decodedline`. So the only native coverage signal is reading the tests, not measuring them.
 
 ### Running examples after a native rebuild
 
@@ -149,9 +151,9 @@ ke.render — pinned render-thread work; WebGPU device/queue calls are made here
 
 `ke.main` from the older Application.cs model is folded into `ke.sim`. There is no separate input thread; GLFW poll runs at the top of each tick before the scheduler dispatches.
 
-**Sim ↔ render boundary**: per-component snapshot via double-buffered ECS storage (locked design — `docs/RuntimeArchitectureV2.md` §16). Components touched by render-phase systems get `KE_COMPONENT_DOUBLE_BUFFERED` set automatically (inferred from system access lists). Phase boundaries rotate the snapshot index; sim N+1 writes the live side while render N reads the snapshot side. No lock, no per-frame copy, no frame-packet object — the old `ke_frame_packet` extract path was deleted in C-phase 4 of the runtime arc.
+**Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not `docs/`'. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Pre-R6 transitional state**: snapshot mechanism is not yet wired (R6-R7). Sim and render run serially on the same world; render-phase systems just read live storage. Performance equivalent to the historical "1 thread for everything" model; correctness preserved. R6+ flips on pipelining transparently to render-side code.
+`docs/RuntimeArchitectureV2.md` §16 describes a per-component double-buffered snapshot. Treat it as a design under consideration, not as a description of the code.
 
 **Worker pool**: a single shared `ke_task_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly. Every parallel subsystem (asset loading, PSO compile, audio mixing, render dispatch) routes through the same pool. flecs is built without its pipeline addon, so flecs itself never spawns a thread.
 
@@ -188,7 +190,10 @@ ke.render — pinned render-thread work; WebGPU device/queue calls are made here
 
 2. **No `InternalsVisibleTo`.** See above. Use public `Native` pointers.
 
-3. **Search precedents before inventing.** The project is mature enough that almost every structural decision has an existing example. Before designing a new plugin layout, a new binding `.rsp`, a new plugin `build.zig`, a new vtable split — find the closest existing case in the repo. Match the established pattern; if it's genuinely wrong, propose changing the pattern explicitly rather than diverging in parallel.
+3. **Search precedents before inventing — but judge the precedent first.** The project is mature enough that almost every structural decision has an existing example. Before designing a new plugin layout, a new binding `.rsp`, a new plugin `build.zig`, a new vtable split — find the closest existing case in the repo. Match the established pattern; if it's genuinely wrong, propose changing the pattern explicitly rather than diverging in parallel.
+   - **Frequency is not endorsement.** A shape repeated across a hundred files is a precedent only if it was *decided*. Most of what exists here was written before the convention that now governs it, and the plan is deliberate: settle a convention, write all new code to it, and refactor the old separately — so that "old" shrinks instead of reproducing. Citing the old code as license to keep writing it defeats the entire plan.
+   - **These are never precedents**, no matter how many times they appear: a workaround, a gambiarra, dirty code, coupling, a shortcut, local convenience, and anything a rule in this file already forbids (comments in source, `assert`/`abort`, `InternalsVisibleTo`, magic numbers, C++ tests). Finding one means you found **debt**, not a pattern — name it, don't extend it.
+   - **The test is "was this chosen, and is it still what we'd choose?"**, not "does this already exist?". If the answer is no, the rule that forbids it wins over the precedent that shows it. If you can't tell, that is a question for the PO, not a licence to copy.
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
@@ -200,6 +205,11 @@ ke.render — pinned render-thread work; WebGPU device/queue calls are made here
 
 8. **No magic numbers — we are engine developers, not game developers.** A numeric constant is only allowed to stay a bare `const` when it is truly non-dynamic — implied by the algorithm itself, with no other value that would ever make sense (a 4x4 matrix, a quaternion's 4 components). Every other constant is a **game-tuning or workload-shape value**, and imposing it on the caller as a hardcoded ceiling is not our call to make. It must be a constructor parameter or params-struct field, with the current value kept only as the default for convenience. This applies especially to anything found to be a real limiting factor — a buffer size, a per-bucket cap, a grid resolution — where exceeding it produces a hard failure or visible artifact instead of graceful degradation. Stress tests exist to discover a *sane default*, not to justify a hardcoded ceiling; once a constant is shown to be limiting, promote it to a field rather than tuning the number in place. Don't flood constructors with parameters nobody sets — only promote what's actually been shown to matter.
 
+9. **The narrow, clean path always beats the wide, dirty one — and it pays back later, not immediately.** This project does not choose an architecture because it is easy today; it chooses the one that is *correct* even when the harder path costs more up front. The Zig migration (rewriting the native build orchestration end to end, unifying every plugin under one build system and one target-triplet model) and the vtable/`ke_result`-shaped C ABI headers were both expensive to do — and both are exactly why `kabic` could generate a real multi-language compiler pipeline on top of them without a second redesign, and why a future console port's cross-compilation story collapses to "one toolchain description, reused by every C/C++ codebase this project depends on" instead of N bespoke ones. Optimizing for what is easy to ship this week is what produces the workarounds this doctrine exists to prevent.
+   - A one-off workaround to unblock a local, narrow problem is fine and expected — not everything is a referendum on the architecture.
+   - But **never stay attached to the existing architecture out of sunk cost.** If a design is shown to be wrong, refactor it — all the way, including a full rewrite, if that is what correctness requires. This project has already done that once (the entire native side was rewritten from CMake/C++ to Zig on `zig-migration`) and treats it as a normal, available tool, not a last resort.
+   - When evaluating a new idea, the question is never "do we need this yet" (see rule 8's YAGNI note, which this generalizes) — it is "is this the right shape," independent of how much existing code would need to change to get there.
+
 ---
 
 ## Key documents
@@ -208,6 +218,9 @@ ke.render — pinned render-thread work; WebGPU device/queue calls are made here
 |---|---|
 | [`docs/RuntimeArchitectureV2.md`](docs/RuntimeArchitectureV2.md) | The runtime contract (scheduler + ECS + module/system lifecycle + phase enum). §15 = script safety model. §16 = sim/render pipelining via component snapshot. §17 = V1 merge arc — **§17.6 is the live execution log + current branch state + next phases**. |
 | [`docs/RenderArchitectureV2.md`](docs/RenderArchitectureV2.md) | The future renderer design (`ke_gpu_device` WebGPU-style ABI, Slang shaders, three-mechanism PSO management, render-graph integration). Reconciled with runtime V2 (§9 integration, §11 culling, §12 non-goals). |
+| [`docs/SceneFileFormat.md`](docs/SceneFileFormat.md) | The `.scene.toml` reference: the one `[entity.<component>]` shape, the four keys that are not components, the snake_case rule that spans header/file/binding, how a node type name is qualified and disambiguated, and what fails a load. A contract, not a design note. |
+| [`docs/NodeArchitectureV1.md`](docs/NodeArchitectureV1.md) | The node scripting paradigm. Why class inheritance stops being the composition mechanism; the layer assignment (identity=OOP, storage=data-oriented, behavior contract=functional, body=procedural); the one rule everything derives from (every access is a parameter, node types have no fields); what `kabic`'s IR must not contain for a non-OOP backend to render it. Design under discussion, not a description of code. |
+| [`docs/KabicZigBackend.md`](docs/KabicZigBackend.md) | What generating a second language out of the same descriptions proved about `kabic`: that no header changed shape for one language, which tags looked C#-shaped and are not, and the defects each backend found in the other's output. Also records the one thing it does **not** establish — the Zig backend is wired into no build, so its green gate measures the backend and not the product. |
 | [`docs/EngineRoadmap.md`](docs/EngineRoadmap.md) | Product roadmap (M1–M5). What the engine does at each milestone + recommended external libraries per feature category. Read first to understand strategic direction. |
 | [`docs/Kanban.md`](docs/Kanban.md) | Active and pending work. Architectural principles at top; cards with Why/What/Acceptance/Steps. |
 | [`docs/Reference/`](docs/Reference/) | Consolidated engine reference (arc42-style chapters). Older snapshot of the architecture; runtime/render details have moved into the V2 docs above as those settled. |

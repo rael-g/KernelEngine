@@ -1,11 +1,5 @@
 const std = @import("std");
 
-// Build the ke_runtime shared library (Zig 0.16 API) — the in-house scheduler
-// (system catalog + phase loop + parallel wave dispatch + defer queue + fixed
-// timestep). Pure logic over borrowed ke_ecs / ke_scheduler vtables; no vcpkg
-// lib. Allocates through libc malloc/free (size-agnostic, mirrors the raw
-// buffers the C impl owned); ke_common is consumed across a C-ABI DLL boundary.
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
@@ -16,6 +10,7 @@ pub fn build(b: *std.Build) void {
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
 
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_ecs_flecs and ke_scheduler_enki libraries, required by the test step");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/runtime.zig"),
@@ -40,4 +35,32 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
     b.getInstallStep().dependOn(&install.step);
+
+    const test_step = b.step("test", "Run unit tests");
+    if (ke_lib_dir) |lib_dir| {
+        const test_mod = b.createModule(.{
+            .root_source_file = b.path("src/runtime.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        inline for (.{ ke_common, ke_ecs, ke_scheduler, ke_runtime }) |inc| {
+            test_mod.addIncludePath(.{ .cwd_relative = inc });
+        }
+        test_mod.addImport("kerror", b.createModule(.{
+            .root_source_file = .{ .cwd_relative = kerror_src },
+            .target = target,
+            .optimize = optimize,
+        }));
+        test_mod.addCMacro("KE_RUNTIME_EXPORT", "");
+        test_mod.addLibraryPath(.{ .cwd_relative = lib_dir });
+        test_mod.addRPath(.{ .cwd_relative = lib_dir });
+        test_mod.linkSystemLibrary("ke_ecs_flecs", .{});
+        test_mod.linkSystemLibrary("ke_scheduler_enki", .{});
+
+        const unit_tests = b.addTest(.{ .root_module = test_mod });
+        test_step.dependOn(&b.addRunArtifact(unit_tests).step);
+    } else {
+        test_step.dependOn(&b.addFail("-Dke-lib-dir required to run the runtime tests").step);
+    }
 }

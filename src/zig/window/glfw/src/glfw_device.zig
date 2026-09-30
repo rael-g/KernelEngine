@@ -1,5 +1,3 @@
-// GLFW-backed window device. Owns the GLFW window and translates its callbacks
-// into the backend-agnostic Event vocabulary the core consumes.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -43,7 +41,6 @@ pub const GlfwDevice = struct {
         const self = from(ptr);
         if (c.glfwInit() == 0) return false;
 
-        // No GL context — the renderer owns the surface.
         c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
         const monitor = if (config.fullscreen) c.glfwGetPrimaryMonitor() else null;
         self.window = c.glfwCreateWindow(
@@ -106,10 +103,6 @@ pub const GlfwDevice = struct {
         const w = self.window orelse return null;
         return switch (builtin.os.tag) {
             .windows => @ptrCast(c.glfwGetWin32Window(w)),
-            // An X11 window is an integer id, not a pointer. It rides through
-            // the void* slot as an integer-sized value and the surface layer
-            // converts it back; handing over the GLFWwindow* instead would be
-            // misread as a window id.
             .linux => @ptrFromInt(@as(usize, @intCast(c.glfwGetX11Window(w)))),
             else => @ptrCast(w),
         };
@@ -118,8 +111,6 @@ pub const GlfwDevice = struct {
     fn destroy(ptr: *anyopaque) void {
         heap.gpa.destroy(from(ptr));
     }
-
-    // -- GLFW callbacks ------------------------------------------------------
 
     fn emit(window: ?*c.GLFWwindow, ev: device.Event) void {
         const self: *GlfwDevice = @ptrCast(@alignCast(c.glfwGetWindowUserPointer(window) orelse return));

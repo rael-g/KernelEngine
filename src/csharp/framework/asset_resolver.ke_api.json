@@ -1,0 +1,362 @@
+{
+  "enums": [],
+  "structs": [],
+  "vtables": [
+    {
+      "name": "ke_asset_resolver",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "resolve_texture",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Resolves an image path into freshly-decoded RGBA8 pixel data. Caller owns the result; release with free_texture. Returns KE_ERROR_NOT_FOUND when the file is missing or the extension is unsupported; KE_ERROR_INVALID_ARGUMENT when no image loader was injected at construction time.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "ke_texture_data **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the decoded texture data on success."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "free_texture",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "data",
+              "type": "ke_texture_data *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "resolve_mesh",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Resolves a mesh path. Two shapes are supported today: \u0022res://primitives/{quad|plane|cube|sphere}\u0022 -\u003E baked primitive via ke_mesh_shape_bake (additional model-file extensions land when an asset loader is injected; .gltf/.fbx/.obj are not yet routed). Caller owns the result; release with free_mesh.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "ke_mesh_shape_data *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the baked mesh vertex/index data on success."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "free_mesh",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "data",
+              "type": "ke_mesh_shape_data *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "resolve_material",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Parses a \u0060.material\u0060 TOML file into ke_material_spec. Texture fields stay as path strings \u2014 feed them back through resolve_texture to materialise.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "ke_material_spec *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the parsed material spec on success."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "resolve_font",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Resolves a font file path into a freshly-baked ke_font_data (atlas RGBA8 \u002B glyph metrics). Caller owns the result; release with free_font. Returns KE_ERROR_INVALID_ARGUMENT when no font loader was injected at construction time.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "pixel_size",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "first_codepoint",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "codepoint_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "atlas_size",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "ke_font_data **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the baked font atlas \u002B glyph metrics on success."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "free_font",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "data",
+              "type": "ke_font_data *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "resolve_texture_into",
+          "returns": "ke_texture_handle",
+          "tags": [],
+          "doc": "Resolves and uploads a texture, deduped by \u0060path\u0060. On a cache hit, nothing is decoded. KE_TEXTURE_NONE on failure (see resolve_texture\u0027s error cases; upload failure also reports via out_error).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "core",
+              "type": "ke_render_service *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The render service to upload into."
+            },
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "resolve_mesh_into",
+          "returns": "ke_mesh_handle",
+          "tags": [],
+          "doc": "Resolves and uploads a mesh, deduped by \u0060path\u0060. Today only the shapes under \u0022res://primitives/\u0022 that resolve_mesh understands; a broader path is a future-loader concern. KE_MESH_NONE on failure.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "core",
+              "type": "ke_render_service *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The render service to upload into."
+            },
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "resolve_material_into",
+          "returns": "ke_material_handle",
+          "tags": [],
+          "doc": "Resolves a \u0060.material\u0060 file, resolving/uploading its albedo and normal textures (each deduped by their own path) and creating the material, deduped by \u0060path\u0060. KE_MATERIAL_NONE on failure.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "core",
+              "type": "ke_render_service *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The render service to upload into."
+            },
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
+        }
+      ]
+    },
+    {
+      "name": "ke_asset_resolver_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_asset_resolver *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_asset_resolver *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t",
+    "ke_gpu_texture_aspect": "uint32_t",
+    "ke_gpu_texture_usage": "uint32_t",
+    "ke_gpu_buffer_usage": "uint32_t",
+    "ke_gpu_shader_stage": "uint32_t",
+    "ke_gpu_clear_value": "union ke_gpu_clear_value",
+    "ke_gpu_buffer": "uint64_t",
+    "ke_gpu_texture": "uint64_t",
+    "ke_gpu_texture_view": "uint64_t",
+    "ke_gpu_sampler": "uint64_t",
+    "ke_gpu_shader_module": "uint64_t",
+    "ke_gpu_pipeline": "uint64_t",
+    "ke_gpu_bind_group_layout": "uint64_t",
+    "ke_gpu_bind_group": "uint64_t",
+    "ke_gpu_queue": "uint64_t",
+    "ke_gpu_fence": "uint64_t"
+  }
+}

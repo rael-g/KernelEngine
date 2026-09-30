@@ -14,6 +14,11 @@
     <ProjectReference Include="..\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />
+    <ProjectReference Include="..\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" /> <!-- Node, for this domain's node types -->
+    <ProjectReference Include="..\..\text\KernelEngine.Text.Abstractions\KernelEngine.Text.Abstractions.csproj" /> <!-- IFontLoader, for Font/Label -->
+    <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

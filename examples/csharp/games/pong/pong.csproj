@@ -7,6 +7,12 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <RootNamespace>Pong</RootNamespace>
+    <!-- A game written against this engine is half generated: a node's ECS
+         accessors, its component, the scene names. Writing that to disk is how
+         someone reads what their own node turned into, instead of taking the
+         generator's word for it. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)GeneratedFiles</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,7 +22,12 @@
     <Content Include="actions.input">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="scenes/**/*.scene">
+    <!-- Also handed to the generator, which emits one type per scene so
+         LoadScene<T> can name them; it puts them under RootNamespace.Scenes,
+         which it can only read if the property is made compiler-visible. -->
+    <CompilerVisibleProperty Include="RootNamespace" />
+    <AdditionalFiles Include="scenes/**/*.scene.toml" />
+    <Content Include="scenes/**/*.scene.toml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="assets/**/*">
@@ -32,10 +43,14 @@
     <ProjectReference Include="..\..\..\..\src\csharp\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
-    <ProjectReference Include="..\..\..\..\src\csharp\toolkit\KernelEngine.Toolkit\KernelEngine.Toolkit.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\audio\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\csharp\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

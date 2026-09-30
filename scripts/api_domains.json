@@ -1,0 +1,903 @@
+{
+  "_comment": "Hand-authored manifest of domains migrated to the ke_api.json pipeline (ScriptingArchitectureV3 §8). Each entry drives extract_api.cs + generate_csharp.cs. Adding a domain here is what 'migrating it to Track 2/3' means mechanically. Analogous to a ClangSharp .rsp: an input config, never a derived artifact.",
+  "domains": [
+    {
+      "name": "input",
+      "headers": [
+        "src/c/input/kernel_engine/input/input.h",
+        "src/c/input/kernel_engine/input/snapshot.h",
+        "src/c/input/kernel_engine/input/event.h",
+        "src/c/input/kernel_engine/input/key.h"
+      ],
+      "includeDirs": [
+        "src/c/input",
+        "src/zig/common/include",
+        "src/c/ecs"
+      ],
+      "apiJson": "src/csharp/input/ke_api.json",
+      "namespace": "KernelEngine.Input",
+      "nativeNamespace": "KernelEngine.Input.Native",
+      "outDir": "src/csharp/input/KernelEngine.Input/Generated",
+      "abstractionsOutDir": "src/csharp/input/KernelEngine.Input.Abstractions/Generated",
+      "usings": [
+        "KernelEngine.Logger.Native"
+      ],
+      "library": "ke_input_default"
+    },
+    {
+      "name": "window",
+      "headers": [
+        "src/c/window/kernel_engine/window/window.h"
+      ],
+      "includeDirs": [
+        "src/c/window",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/window/ke_api.json",
+      "namespace": "KernelEngine.Window",
+      "nativeNamespace": "KernelEngine.Window.Native",
+      "outDir": "src/csharp/window/KernelEngine.Window/Generated",
+      "usings": []
+    },
+    {
+      "name": "logger",
+      "headers": [
+        "src/c/logger/kernel_engine/logger/logger.h",
+        "src/c/logger/kernel_engine/logger/log_level.h"
+      ],
+      "includeDirs": [
+        "src/c/logger",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/logger/ke_api.json",
+      "namespace": "KernelEngine.Logger",
+      "nativeNamespace": "KernelEngine.Logger.Native",
+      "outDir": "src/csharp/logger/KernelEngine.Logger/Generated",
+      "abstractionsOutDir": "src/csharp/logger/KernelEngine.Logger.Abstractions/Generated",
+      "usings": [],
+      "library": "ke_logger_simple"
+    },
+    {
+      "name": "scheduler",
+      "headers": [
+        "src/c/scheduler/kernel_engine/scheduler/scheduler.h"
+      ],
+      "includeDirs": [
+        "src/c/scheduler",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/scheduler/ke_api.json",
+      "namespace": "KernelEngine.Scheduler",
+      "nativeNamespace": "KernelEngine.Scheduler.Native",
+      "outDir": "src/csharp/scheduler/KernelEngine.Scheduler/Generated",
+      "usings": []
+    },
+    {
+      "_comment": "The scheduler contract. register_system's params carry queries + access_list, which the wave builder orders on; a hand-written IRuntime had omitted them, so every C#-registered system declared zero access and the wave builder saw zero conflicts. Generating the surface from the header is what keeps that from drifting again. system_ctx.h rides along because the execute callback's first parameter is a ke_system_ctx*.",
+      "name": "runtime",
+      "headers": [
+        "src/c/runtime/kernel_engine/runtime/runtime.h",
+        "src/c/runtime/kernel_engine/runtime/system_ctx.h",
+        "src/c/runtime/kernel_engine/runtime/runtime_create.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/c/runtime",
+        "src/c/ecs",
+        "src/c/scheduler",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/runtime/ke_api.json",
+      "namespace": "KernelEngine.Runtime",
+      "nativeNamespace": "KernelEngine.Runtime.Native",
+      "outDir": "src/csharp/runtime/KernelEngine.Runtime/Generated",
+      "abstractionsOutDir": "src/csharp/runtime/KernelEngine.Runtime.Abstractions/Generated",
+      "usings": [
+        "KernelEngine.Ecs.Native",
+        "KernelEngine.Scheduler.Native"
+      ],
+      "library": "ke_runtime"
+    },
+    {
+      "name": "ecs",
+      "headers": [
+        "src/c/ecs/kernel_engine/ecs/ke_ecs.h",
+        "src/c/ecs/kernel_engine/ecs/ecs.h",
+        "src/c/ecs/kernel_engine/ecs/component_field.h"
+      ],
+      "includeDirs": [
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/ecs/ke_api.json",
+      "namespace": "KernelEngine.Ecs",
+      "nativeNamespace": "KernelEngine.Ecs.Native",
+      "outDir": "src/csharp/ecs/KernelEngine.Ecs/Generated",
+      "usings": []
+    },
+    {
+      "name": "audio",
+      "headers": [
+        "src/c/audio/kernel_engine/audio/audio.h"
+      ],
+      "includeDirs": [
+        "src/c/audio",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/audio/ke_api.json",
+      "namespace": "KernelEngine.Audio",
+      "nativeNamespace": "KernelEngine.Audio.Native",
+      "outDir": "src/csharp/audio/KernelEngine.Audio/Generated",
+      "usings": []
+    },
+    {
+      "name": "physics",
+      "headers": [
+        "src/c/physics/kernel_engine/physics/physics_2d.h"
+      ],
+      "includeDirs": [
+        "src/c/physics",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/physics/ke_api.json",
+      "namespace": "KernelEngine.Physics",
+      "nativeNamespace": "KernelEngine.Physics.Native",
+      "outDir": "src/csharp/physics/KernelEngine.Physics/Generated",
+      "abstractionsOutDir": "src/csharp/physics/KernelEngine.Physics.Abstractions/Generated",
+      "usings": []
+    },
+    {
+      "_comment": "The physics domain's node surface. Node3D (spatial) and the body enums/handles physics_2d.h owns arrive via composeHeaders: this domain describes only the components, while the domains owning those types keep emitting them.",
+      "name": "physics_components",
+      "headers": [
+        "src/c/physics/kernel_engine/physics/components.h"
+      ],
+      "includeDirs": [
+        "src/c/physics",
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
+      "composeHeaders": [
+        "src/c/spatial/kernel_engine/spatial/transform.h",
+        "src/c/physics/kernel_engine/physics/physics_2d.h"
+      ],
+      "apiJson": "src/csharp/physics/components.ke_api.json",
+      "cOut": {
+        "file": "src/c/physics/kernel_engine/physics/component_fields.h",
+        "guard": "KERNEL_ENGINE_PHYSICS_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/physics/components.h"
+        ]
+      },
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Physics.Native",
+      "outDir": "src/csharp/physics/KernelEngine.Physics/Scene",
+      "usings": [
+        "KernelEngine.Physics"
+      ]
+    },
+    {
+      "_comment": "Audio's node surface. AudioPlayer used to exist only as a hand-written C# class reading an untyped property bag, so no other language could be one and no field had a type or a default; describing it here is what makes it a node in every language at once. Node3D arrives via composeHeaders, same as render_components.",
+      "name": "audio_components",
+      "headers": [
+        "src/c/audio/kernel_engine/audio/components.h"
+      ],
+      "includeDirs": [
+        "src/c/audio",
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
+      "composeHeaders": [
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ],
+      "apiJson": "src/csharp/audio/components.ke_api.json",
+      "cOut": {
+        "file": "src/c/audio/kernel_engine/audio/component_fields.h",
+        "guard": "KERNEL_ENGINE_AUDIO_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/audio/components.h"
+        ]
+      },
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Audio.Native",
+      "outDir": "src/csharp/audio/KernelEngine.Audio/Scene",
+      "usings": [
+        "KernelEngine.Audio"
+      ]
+    },
+    {
+      "name": "text",
+      "headers": [
+        "src/c/text/kernel_engine/text/font.h"
+      ],
+      "includeDirs": [
+        "src/c/text",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/text/ke_api.json",
+      "namespace": "KernelEngine.Text",
+      "nativeNamespace": "KernelEngine.Text.Native",
+      "outDir": "src/csharp/text/KernelEngine.Text/Generated",
+      "usings": []
+    },
+    {
+      "_comment": "auxHeaders are included purely so ke_render_service's own typedef'd primitives (ke_gpu_buffer et al.) and enum params (ke_alpha_mode) resolve to real C# types instead of an unresolvable bare name; only their TypedefDecls are extracted (see extract_api.cs --aux), so their own vtables/enums/functions never get described or re-emitted here, avoiding both noise and a duplicate/shadowing definition of bindings ClangSharp already generated elsewhere under their own literal names.",
+      "name": "render",
+      "headers": [
+        "src/c/render/kernel_engine/render/service/render_service.h"
+      ],
+      "auxHeaders": [
+        "src/c/render/kernel_engine/render/gpu/gpu_device.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/c/render",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/render/ke_api.json",
+      "namespace": "KernelEngine.Render",
+      "nativeNamespace": "KernelEngine.Render.Native",
+      "outDir": "src/csharp/render/KernelEngine.Render/Generated",
+      "usings": []
+    },
+    {
+      "name": "asset_loader",
+      "headers": [
+        "src/c/asset/kernel_engine/asset/asset_loader.h"
+      ],
+      "includeDirs": [
+        "src/c/asset",
+        "src/c/scheduler",
+        "src/c/render",
+        "src/zig/common/include"
+      ],
+      "composeHeaders": [ "src/c/asset/kernel_engine/asset/mesh_data.h" ],
+      "apiJson": "src/csharp/asset/asset_loader.ke_api.json",
+      "namespace": "KernelEngine.Asset",
+      "nativeNamespace": "KernelEngine.Asset.Native",
+      "outDir": "src/csharp/asset/KernelEngine.Asset/Generated",
+      "usings": [ "KernelEngine.Scheduler" ]
+    },
+    {
+      "_comment": "The data a loader answers with, described where it is declared rather than in one plugin's binding project, so every plugin answering with it reads one projection instead of one per binding.",
+      "name": "mesh_data",
+      "headers": [
+        "src/c/asset/kernel_engine/asset/mesh_data.h"
+      ],
+      "includeDirs": [
+        "src/c/asset",
+        "src/c/render",
+        "src/zig/common/include"
+      ],
+      "composeHeaders": [
+        "src/c/render/kernel_engine/render/mesh.h"
+      ],
+      "apiJson": "src/csharp/asset/mesh_data.ke_api.json",
+      "namespace": "KernelEngine.Asset",
+      "nativeNamespace": "KernelEngine.Asset.Native",
+      "outDir": "src/csharp/asset/KernelEngine.Asset/Generated",
+      "usings": [
+        "KernelEngine.Common"
+      ]
+    },
+    {
+      "name": "image_loader",
+      "headers": [
+        "src/c/asset/kernel_engine/asset/image_loader.h"
+      ],
+      "includeDirs": [
+        "src/c/asset",
+        "src/c/render",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/asset/image_loader.ke_api.json",
+      "namespace": "KernelEngine.Asset.StbImage",
+      "nativeNamespace": "KernelEngine.Asset.Native",
+      "outDir": "src/csharp/asset/KernelEngine.Asset.StbImage/Generated",
+      "usings": []
+    },
+    {
+      "_comment": "auxHeaders (same reason as render's) resolve ke_render_service's own cross-domain typedefs; the resolve_*_into slots' `core` param is tagged [opaque] so the generated method takes void* (matching the ClangSharp-generated ke_asset_resolver delegate field, which itself collapses ke_render_service* to void* since Framework never sees a concrete render backend's own struct).",
+      "name": "asset_resolver",
+      "headers": [
+        "src/c/asset/kernel_engine/asset/asset_resolver.h"
+      ],
+      "auxHeaders": [
+        "src/c/render/kernel_engine/render/gpu/gpu_device.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/c/asset",
+        "src/c/render",
+        "src/c/text",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/asset_resolver.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": [
+        "KernelEngine.Asset.Native",
+        "KernelEngine.Text.Native",
+        "KernelEngine.Render.Native"
+      ]
+    },
+    {
+      "_comment": "node3d.h in the ScriptingArchitectureV3 §7.14.4 sense: transform.h is [node:]-tagged (whole-struct mode — see CSharpBackend's [whole:] tag) to generate Node3D itself into Framework, not a domain-specific project, since every other assembly's node types (Render.Webgpu, Physics, Audio) inherit it.",
+      "name": "spatial",
+      "headers": [
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ],
+      "includeDirs": [
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/spatial.ke_api.json",
+      "cOut": {
+        "file": "src/c/spatial/kernel_engine/spatial/component_fields.h",
+        "guard": "KERNEL_ENGINE_SPATIAL_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/spatial/transform.h"
+        ]
+      },
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Common.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Scene",
+      "usings": [
+        "KernelEngine.Ecs"
+      ]
+    },
+    {
+      "name": "world",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/world.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/c/runtime",
+        "src/c/scheduler",
+        "src/c/logger",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/world.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": [
+        "KernelEngine.Ecs.Native",
+        "KernelEngine.Runtime.Native"
+      ]
+    },
+    {
+      "name": "scene_tree",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/scene_tree.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/c/render",
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/scene_tree.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": [
+        "KernelEngine.Runtime.Native"
+      ]
+    },
+    {
+      "name": "scene_loader",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/scene_loader.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/scene_loader.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": []
+    },
+    {
+      "_comment": "The signal bus. Emission is a frame's event, connection is durable data; the vtable is what lets a node in any language be either end of a wire.",
+      "name": "signal_bus",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/signal_bus.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/signal_bus.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": []
+    },
+    {
+      "_comment": "The entity-to-script binding. Every scripting runtime otherwise keeps this map itself, which is what makes a node authored in one language invisible to another.",
+      "name": "script_host",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/script_host.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/script_host.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": []
+    },
+    {
+      "_comment": "Not a separate native plugin — components.h lives inside src/c/render (no build.zig, no .so of its own), same as world/scene_tree/scene_loader/input_actions below are four manifest entries under one native 'framework' plugin. This entry is render's node-ergonomics header (ScriptingArchitectureV3 §7): a plain [node:]-tagged struct emits a node type (Camera/DirectionalLight/PointLight/SpotLight/AmbientLight). outDir points into render's own C# project: there is no 'toolkit' project — every domain hosts its own node types, physically, in its own project (this one for render's; physics/audio host their own node types the same way).",
+      "name": "render_components",
+      "headers": [
+        "src/c/render/kernel_engine/render/components.h"
+      ],
+      "includeDirs": [
+        "src/c/render",
+        "src/c/spatial",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/render/components.ke_api.json",
+      "cOut": {
+        "file": "src/c/render/kernel_engine/render/component_fields.h",
+        "guard": "KERNEL_ENGINE_RENDER_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/render/components.h"
+        ]
+      },
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Render.Native",
+      "outDir": "src/csharp/render/KernelEngine.Render/Scene",
+      "usings": [],
+      "composeHeaders": [
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ]
+    },
+    {
+      "_comment": "render/ui/components.h is the UI overlay pass's component vocabulary, split out of the plugin's own ui_create.h so the node surface (Label) generates from a contract header the same way render_components does — the factory header keeps only the vtable it creates.",
+      "name": "ui_components",
+      "headers": [
+        "src/c/render/kernel_engine/render/ui/components.h"
+      ],
+      "includeDirs": [
+        "src/c/render",
+        "src/zig/common/include",
+        "src/c/spatial"
+      ],
+      "apiJson": "src/csharp/render/ui_components.ke_api.json",
+      "cOut": {
+        "file": "src/c/render/kernel_engine/render/ui/component_fields.h",
+        "guard": "KERNEL_ENGINE_RENDER_UI_COMPONENT_FIELDS_H_",
+        "includes": [
+          "kernel_engine/render/ui/components.h"
+        ]
+      },
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Render.Native",
+      "outDir": "src/csharp/render/KernelEngine.Render/Scene",
+      "usings": [],
+      "composeHeaders": [
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ]
+    },
+    {
+      "name": "input_actions",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/input_actions.h"
+      ],
+      "includeDirs": [
+        "src/zig/framework/include",
+        "src/c/input",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/framework/input_actions.ke_api.json",
+      "namespace": "KernelEngine.Framework",
+      "nativeNamespace": "KernelEngine.Framework.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
+      "usings": [
+        "KernelEngine.Input.Native"
+      ]
+    },
+    {
+      "name": "mesh",
+      "headers": [
+        "src/c/render/kernel_engine/render/mesh.h"
+      ],
+      "includeDirs": [
+        "src/c/render",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/common/mesh.ke_api.json",
+      "namespace": "KernelEngine.Common",
+      "nativeNamespace": "KernelEngine.Common.Native",
+      "outDir": "src/csharp/common/KernelEngine.Common/Generated",
+      "usings": []
+    },
+    {
+      "name": "math",
+      "headers": [
+        "src/zig/common/include/kernel_engine/common/math.h"
+      ],
+      "includeDirs": [
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/common/math.ke_api.json",
+      "namespace": "KernelEngine.Common",
+      "nativeNamespace": "KernelEngine.Common.Native",
+      "outDir": "src/csharp/common/KernelEngine.Common/Generated",
+      "usings": []
+    }
+  ],
+  "bindings": [
+    {
+      "name": "Assimp",
+      "project": "src/csharp/asset/KernelEngine.Asset.Assimp",
+      "namespace": "KernelEngine.Asset.Assimp.Native",
+      "headers": [
+        "src/zig/asset/assimp/include/kernel_engine/asset/assimp/assimp_loader.h"
+      ],
+      "library": "ke_asset_assimp",
+      "output": "Generated/"
+    },
+    {
+      "name": "StbImage",
+      "project": "src/csharp/asset/KernelEngine.Asset.StbImage",
+      "namespace": "KernelEngine.Asset.StbImage.Native",
+      "headers": [
+        "src/zig/asset/stb_image/include/kernel_engine/asset/stb_image/stb_image_loader.h"
+      ],
+      "library": "ke_asset_stb_image",
+      "output": "Generated/"
+    },
+    {
+      "name": "Asset",
+      "project": "src/csharp/asset/KernelEngine.Asset",
+      "namespace": "KernelEngine.Asset.Native",
+      "headers": [
+        "src/c/asset/kernel_engine/asset/mesh_data.h",
+        "src/c/asset/kernel_engine/asset/mesh_shape.h",
+        "src/c/asset/kernel_engine/asset/image_loader.h",
+        "src/c/asset/kernel_engine/asset/asset_loader.h",
+        "src/c/asset/kernel_engine/asset/asset_resolver.h"
+      ],
+      "library": "ke_asset_assimp",
+      "output": "Generated/Asset/"
+    },
+    {
+      "name": "MiniAudio",
+      "project": "src/csharp/audio/KernelEngine.Audio.MiniAudio",
+      "namespace": "KernelEngine.Audio.MiniAudio.Native",
+      "headers": [
+        "src/zig/audio/miniaudio/include/kernel_engine/audio/miniaudio/miniaudio_audio.h"
+      ],
+      "library": "ke_audio_miniaudio",
+      "output": "Generated/"
+    },
+    {
+      "name": "Audio",
+      "project": "src/csharp/audio/KernelEngine.Audio",
+      "namespace": "KernelEngine.Audio.Native",
+      "headers": [
+        "src/c/audio/kernel_engine/audio/audio.h",
+        "src/c/audio/kernel_engine/audio/components.h"
+      ],
+      "library": "ke_audio_miniaudio",
+      "output": "Generated/Audio/"
+    },
+    {
+      "name": "AudioModule",
+      "project": "src/csharp/audio/KernelEngine.Audio",
+      "namespace": "KernelEngine.Audio.Native",
+      "headers": [
+        "src/zig/audio/module/include/kernel_engine/audio/module/audio_module.h"
+      ],
+      "library": "ke_audio_module",
+      "output": "Generated/AudioModule/"
+    },
+    {
+      "name": "Common",
+      "project": "src/csharp/common/KernelEngine.Common",
+      "namespace": "KernelEngine.Common.Native",
+      "headers": [
+        "src/zig/common/include/kernel_engine/common/types.h",
+        "src/zig/common/include/kernel_engine/common/error.h",
+        "src/zig/common/include/kernel_engine/common/math.h",
+        "src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h",
+        "src/c/spatial/kernel_engine/spatial/transform.h"
+      ],
+      "library": "ke_common",
+      "macroBindings": true,
+      "output": "Generated/"
+    },
+    {
+      "name": "Store",
+      "project": "src/csharp/configuration/KernelEngine.Configuration",
+      "namespace": "KernelEngine.Configuration.Native",
+      "headers": [
+        "src/c/configuration/kernel_engine/configuration/configuration.h",
+        "src/zig/configuration/include/kernel_engine/configuration/configuration_create.h"
+      ],
+      "library": "ke_configuration",
+      "output": "Generated/Store/"
+    },
+    {
+      "name": "Toml",
+      "project": "src/csharp/configuration/KernelEngine.Configuration",
+      "namespace": "KernelEngine.Configuration.Native",
+      "headers": [
+        "src/zig/configuration/toml/include/kernel_engine/configuration/toml/configuration_toml.h"
+      ],
+      "library": "ke_configuration_toml",
+      "output": "Generated/Toml/"
+    },
+    {
+      "name": "EcsFlecs",
+      "project": "src/csharp/ecs/KernelEngine.Ecs.Flecs",
+      "namespace": "KernelEngine.Ecs.Flecs.Native",
+      "headers": [
+        "src/zig/ecs/flecs/include/kernel_engine/ecs/ke_ecs_flecs.h"
+      ],
+      "library": "ke_ecs_flecs",
+      "additional": [
+        "-DKE_ECS_FLECS_STATIC"
+      ],
+      "macroBindings": true,
+      "output": "Generated/EcsFlecs/"
+    },
+    {
+      "name": "Ecs",
+      "project": "src/csharp/ecs/KernelEngine.Ecs",
+      "namespace": "KernelEngine.Ecs.Native",
+      "headers": [
+        "src/c/ecs/kernel_engine/ecs/variant.h",
+        "src/c/ecs/kernel_engine/ecs/component_field.h",
+        "src/c/ecs/kernel_engine/ecs/ecs.h",
+        "src/c/ecs/kernel_engine/ecs/ke_ecs.h"
+      ],
+      "library": "ke_ecs_flecs",
+      "output": "Generated/Ecs/"
+    },
+    {
+      "name": "Framework",
+      "project": "src/csharp/framework/KernelEngine.Framework",
+      "namespace": "KernelEngine.Framework.Native",
+      "headers": [
+        "src/zig/framework/include/kernel_engine/framework/components.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_tree.h",
+        "src/zig/framework/include/kernel_engine/framework/world.h",
+        "src/zig/framework/include/kernel_engine/framework/input_actions.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_loader.h",
+        "src/zig/framework/include/kernel_engine/framework/world_create.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h",
+        "src/zig/framework/include/kernel_engine/framework/input_actions_create.h",
+        "src/zig/framework/include/kernel_engine/framework/signal_bus.h",
+        "src/zig/framework/include/kernel_engine/framework/signal_bus_create.h",
+        "src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h",
+        "src/zig/framework/include/kernel_engine/framework/script_host.h",
+        "src/zig/framework/include/kernel_engine/framework/script_host_create.h"
+      ],
+      "library": "ke_framework",
+      "additional": [
+        "-DKE_FRAMEWORK_STATIC"
+      ],
+      "output": "Generated/Framework/"
+    },
+    {
+      "name": "Input",
+      "project": "src/csharp/input/KernelEngine.Input",
+      "namespace": "KernelEngine.Input.Native",
+      "headers": [
+        "src/c/input/kernel_engine/input/key.h",
+        "src/c/input/kernel_engine/input/snapshot.h",
+        "src/c/input/kernel_engine/input/event.h",
+        "src/c/input/kernel_engine/input/input.h"
+      ],
+      "library": "ke_input_default",
+      "output": "Generated/Input/"
+    },
+    {
+      "name": "Logger",
+      "project": "src/csharp/logger/KernelEngine.Logger",
+      "namespace": "KernelEngine.Logger.Native",
+      "headers": [
+        "src/c/logger/kernel_engine/logger/log_level.h",
+        "src/c/logger/kernel_engine/logger/logger.h"
+      ],
+      "library": "ke_logger_simple",
+      "output": "Generated/Logger/"
+    },
+    {
+      "name": "Box2D",
+      "project": "src/csharp/physics/KernelEngine.Physics.Box2D",
+      "namespace": "KernelEngine.Physics.Box2D.Native",
+      "headers": [
+        "src/zig/physics/box2d/include/kernel_engine/physics/box2d/box2d_physics.h"
+      ],
+      "library": "ke_physics_2d_box2d",
+      "output": "Generated/"
+    },
+    {
+      "name": "Body2DModule",
+      "project": "src/csharp/physics/KernelEngine.Physics",
+      "namespace": "KernelEngine.Physics.Native",
+      "headers": [
+        "src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h"
+      ],
+      "library": "ke_physics_body2d",
+      "output": "Generated/Body2DModule/"
+    },
+    {
+      "name": "Physics",
+      "project": "src/csharp/physics/KernelEngine.Physics",
+      "namespace": "KernelEngine.Physics.Native",
+      "headers": [
+        "src/c/physics/kernel_engine/physics/physics_2d.h",
+        "src/c/physics/kernel_engine/physics/components.h"
+      ],
+      "library": "ke_physics_box2d",
+      "output": "Generated/Physics/"
+    },
+    {
+      "name": "GpuDevice",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_create.h"
+      ],
+      "library": "ke_gpu_device_webgpu",
+      "output": "Generated/GpuDevice/"
+    },
+    {
+      "name": "RenderModule",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/shadow/include/kernel_engine/render/shadow/shadow_create.h",
+        "src/zig/render/module/include/kernel_engine/render/module/render_module_create.h",
+        "src/zig/render/ui/include/kernel_engine/render/ui/ui_create.h"
+      ],
+      "library": "ke_render_module",
+      "output": "Generated/RenderModule/"
+    },
+    {
+      "name": "Render",
+      "project": "src/csharp/render/KernelEngine.Render",
+      "namespace": "KernelEngine.Render.Native",
+      "headers": [
+        "src/c/render/kernel_engine/render/handles.h",
+        "src/c/render/kernel_engine/render/mesh.h",
+        "src/c/render/kernel_engine/render/material_file.h",
+        "src/c/render/kernel_engine/render/components.h",
+        "src/c/render/kernel_engine/render/ui/components.h",
+        "src/c/render/kernel_engine/render/service/render_service.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_device.h"
+      ],
+      "library": "ke_render_bgfx",
+      "output": "Generated/Render/"
+    },
+    {
+      "name": "Runtime",
+      "project": "src/csharp/runtime/KernelEngine.Runtime",
+      "namespace": "KernelEngine.Runtime.Native",
+      "headers": [
+        "src/c/runtime/kernel_engine/runtime/runtime.h",
+        "src/c/runtime/kernel_engine/runtime/system_ctx.h",
+        "src/c/runtime/kernel_engine/runtime/runtime_create.h"
+      ],
+      "library": "ke_runtime",
+      "additional": [
+        "-DKE_RUNTIME_STATIC"
+      ],
+      "output": "Generated/Runtime/"
+    },
+    {
+      "name": "Enki",
+      "project": "src/csharp/scheduler/KernelEngine.Scheduler.Enki",
+      "namespace": "KernelEngine.Scheduler.Enki.Native",
+      "headers": [
+        "src/zig/scheduler/enki/include/kernel_engine/scheduler/enki/enki_scheduler.h"
+      ],
+      "library": "ke_scheduler_enki",
+      "output": "Generated/"
+    },
+    {
+      "name": "Scheduler",
+      "project": "src/csharp/scheduler/KernelEngine.Scheduler",
+      "namespace": "KernelEngine.Scheduler.Native",
+      "headers": [
+        "src/c/scheduler/kernel_engine/scheduler/scheduler.h"
+      ],
+      "library": "ke_scheduler_enki",
+      "output": "Generated/Scheduler/"
+    },
+    {
+      "name": "StbTrueType",
+      "project": "src/csharp/text/KernelEngine.Text.StbTrueType",
+      "namespace": "KernelEngine.Text.StbTrueType.Native",
+      "headers": [
+        "src/zig/text/stb_truetype/include/kernel_engine/text/stb_truetype/stb_font.h"
+      ],
+      "library": "ke_text_stb_truetype",
+      "output": "Generated/"
+    },
+    {
+      "name": "Text",
+      "project": "src/csharp/text/KernelEngine.Text",
+      "namespace": "KernelEngine.Text.Native",
+      "headers": [
+        "src/c/text/kernel_engine/text/font.h"
+      ],
+      "library": "ke_text_stbtruetype",
+      "output": "Generated/Text/"
+    },
+    {
+      "name": "ViewSpace",
+      "project": "src/csharp/view/KernelEngine.View",
+      "namespace": "KernelEngine.View.Native",
+      "headers": [
+        "src/c/render/kernel_engine/render/gpu/ndc_convention.h",
+        "src/c/view/kernel_engine/view/view_space.h",
+        "src/zig/view/space/include/kernel_engine/view/space/view_space_rh_create.h",
+        "src/zig/view/space/include/kernel_engine/view/space/view_space_lh_create.h"
+      ],
+      "library": "ke_view_space",
+      "output": "Generated/ViewSpace/"
+    },
+    {
+      "name": "Glfw",
+      "project": "src/csharp/window/KernelEngine.Window.Glfw",
+      "namespace": "KernelEngine.Window.Glfw.Native",
+      "headers": [
+        "src/zig/window/glfw/include/kernel_engine/window/glfw/glfw_window.h"
+      ],
+      "library": "ke_window_glfw",
+      "output": "Generated/"
+    },
+    {
+      "name": "Window",
+      "project": "src/csharp/window/KernelEngine.Window",
+      "namespace": "KernelEngine.Window.Native",
+      "headers": [
+        "src/c/window/kernel_engine/window/window.h"
+      ],
+      "library": "ke_window_glfw",
+      "output": "Generated/Window/"
+    }
+  ]
+}

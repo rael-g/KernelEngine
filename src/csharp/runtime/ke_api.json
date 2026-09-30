@@ -1,0 +1,999 @@
+{
+  "enums": [
+    {
+      "name": "ke_phase",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_PHASE_STARTUP",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_PHASE_PRE_UPDATE",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_PHASE_FIXED_UPDATE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_PHASE_UPDATE",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_PHASE_POST_UPDATE",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_PHASE_RENDER",
+          "value": 5,
+          "doc": "Runs asynchronously against the next tick\u0027s sim phases. Its systems read extracted query results, never live storage, and may not mutate structure."
+        },
+        {
+          "name": "KE_PHASE_SHUTDOWN",
+          "value": 6,
+          "doc": "Runs asynchronously against the next tick\u0027s sim phases. Its systems read extracted query results, never live storage, and may not mutate structure."
+        }
+      ]
+    },
+    {
+      "name": "ke_access",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ACCESS_READ",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ACCESS_WRITE",
+          "value": 2,
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_component_access",
+      "doc": "One component a system touches, and how. The scheduler groups systems into parallel waves by comparing these: two systems conflict when they name the same component and at least one writes it, and conflicting systems are placed in different waves. A system that declares nothing conflicts with nothing, and is therefore free to run concurrently with everything.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "cid",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "access",
+          "type": "ke_access",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_query_decl",
+      "doc": "A query a system reads through: a tuple of components (matched together) with the access mode the scheduler uses to order waves. Resolved into archetype segments before the wave; the system body reads them via ke_system_ctx_view.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "terms",
+          "type": "ke_component_access[8]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "term_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_runtime_module_params",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the module in diagnostics."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded unchanged to both hooks."
+        },
+        {
+          "name": "on_load",
+          "type": "ke_module_load_fn",
+          "tags": [
+            "closure:user_data"
+          ],
+          "doc": "Registers the module\u0027s components and systems."
+        },
+        {
+          "name": "on_unload",
+          "type": "ke_module_unload_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return",
+            "teardown",
+            "default:none"
+          ],
+          "doc": "Releases what the load acquired. A module that acquired nothing leaves it out."
+        }
+      ]
+    },
+    {
+      "name": "ke_runtime_system_params",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the system in diagnostics and in the failure a body raises."
+        },
+        {
+          "name": "phase",
+          "type": "ke_phase",
+          "tags": [],
+          "doc": "Which phase of the tick the body runs in."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded unchanged to every call of the body."
+        },
+        {
+          "name": "execute",
+          "type": "ke_system_execute_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return"
+          ],
+          "doc": "The body itself."
+        },
+        {
+          "name": "queries",
+          "type": "const ke_query_decl *",
+          "tags": [
+            "array_of:query_count",
+            "default:empty"
+          ],
+          "doc": "Queries the system reads through. The runtime registers them, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view."
+        },
+        {
+          "name": "query_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "access_list",
+          "type": "const ke_component_access *",
+          "tags": [
+            "array_of:access_count",
+            "default:empty"
+          ],
+          "doc": "Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and entity-keyed reads via ke_system_ctx_get. Declaring nothing is not \u0022no opinion\u0022 -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage says so."
+        },
+        {
+          "name": "access_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "pinned_thread",
+          "type": "uint32_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "The worker the body must run on, or 0 to let any wave thread take it."
+        },
+        {
+          "name": "per_entity",
+          "type": "_Bool",
+          "tags": [
+            "default:false"
+          ],
+          "doc": "The body\u0027s work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set."
+        }
+      ]
+    },
+    {
+      "name": "ke_runtime_params",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "fixed_dt",
+          "type": "float",
+          "tags": [],
+          "doc": "Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60."
+        },
+        {
+          "name": "fixed_dt_max_accum",
+          "type": "float",
+          "tags": [],
+          "doc": "Largest catch-up budget a tick may accumulate, in seconds; excess is discarded. 0 selects 0.25."
+        },
+        {
+          "name": "max_systems_per_phase",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Most systems one phase may hold; registering past it fails. 0 selects 256."
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_runtime",
+      "doc": "Owns the simulation world, dispatches systems across the worker pool and drives the frame loop. Game code names this rather than the scheduler behind it, so what a module registers against says nothing about which runtime is carrying it.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "register_module",
+          "returns": "ke_module_id",
+          "tags": [],
+          "doc": "Loads a module into the runtime, running its load hook before returning.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_runtime_module_params *",
+              "tags": [
+                "expand"
+              ],
+              "doc": "What the module is called and the hooks it registers."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "register_system",
+          "returns": "ke_system_id",
+          "tags": [],
+          "doc": "Registers a system body against the phase and the component access it declares.",
+          "return_doc": "0 when the system was refused.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_runtime_system_params *",
+              "tags": [
+                "expand"
+              ],
+              "doc": "What the system is called, when it runs, and what it touches."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "tick",
+          "returns": "_Bool",
+          "tags": [
+            "drains"
+          ],
+          "doc": "Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body\u0027s error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.",
+          "return_doc": "false when a body of this tick failed.",
+          "params": [
+            {
+              "name": "dt",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "flush_render",
+          "returns": "_Bool",
+          "tags": [
+            "drains",
+            "name:Flush"
+          ],
+          "doc": "Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.",
+          "return_doc": "false when a body of the render phase failed.",
+          "params": [
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        }
+      ]
+    },
+    {
+      "name": "ke_runtime_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_runtime *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_runtime *"
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx",
+      "doc": "The operations a system body may perform on its own context, invoked through the ke_system_ctx it receives. \u0060handle\u0060 is runtime-private. The free ke_system_ctx_* functions below wrap these slots.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "view",
+          "returns": "const ke_ecs_segment *",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "query_index",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "array_of:out_count"
+          ],
+          "receiver": "ke_system_ctx *"
+        },
+        {
+          "name": "reserve",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_system_ctx *"
+        },
+        {
+          "name": "defer",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "fn",
+              "type": "ke_defer_fn",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user",
+              "type": "const void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_system_ctx *"
+        },
+        {
+          "name": "spawn",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_system_ctx *"
+        },
+        {
+          "name": "attach",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_system_ctx *"
+        },
+        {
+          "name": "detach",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_system_ctx *"
+        },
+        {
+          "name": "despawn",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_system_ctx *"
+        },
+        {
+          "name": "slice",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_index",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_system_ctx *"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "ke_system_ctx_defer_applied_count",
+      "returns": "uint32_t",
+      "doc": null,
+      "return_doc": null,
+      "params": []
+    },
+    {
+      "name": "ke_system_ctx_reset_defer_applied",
+      "returns": "void",
+      "doc": null,
+      "return_doc": null,
+      "params": []
+    },
+    {
+      "name": "ke_runtime_debug_compute_waves",
+      "returns": "void",
+      "doc": null,
+      "return_doc": null,
+      "params": [
+        {
+          "name": "systems",
+          "type": "const ke_runtime_system_params *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "system_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "out_wave_assignments",
+          "type": "uint32_t *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "out_wave_count",
+          "type": "uint32_t *",
+          "tags": [
+            "out"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx_view",
+      "returns": "const ke_ecs_segment *",
+      "doc": "The system body\u0027s only path to component memory. Returns the resolved archetype segments for the system\u0027s query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call \u2014 the segments were resolved single-threaded before the wave, because an ECS iterator allocates from storage shared across the wave\u0027s parallel systems. Returns NULL for an out-of-range index or a system that declared no queries.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": null
+        },
+        {
+          "name": "query_index",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "out_count",
+          "type": "size_t *",
+          "tags": [
+            "out"
+          ],
+          "doc": null
+        }
+      ],
+      "return_tags": [
+        "array_of:out_count"
+      ]
+    },
+    {
+      "name": "ke_system_ctx_slice",
+      "returns": "void",
+      "doc": "Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1, so a body written against this reads the whole set without asking whether it was sliced. A context of zero reports index 0 of count 1, which is what a caller outside a system needs to read its whole set unconditionally.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": null
+        },
+        {
+          "name": "out_index",
+          "type": "uint32_t *",
+          "tags": [
+            "out"
+          ],
+          "doc": null
+        },
+        {
+          "name": "out_count",
+          "type": "uint32_t *",
+          "tags": [
+            "out"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx_reserve",
+      "returns": "ke_entity",
+      "doc": "Reserves an entity id usable immediately, callable during a parallel wave. The id may be referenced at once; components given via attach land at the wave barrier. A context of zero reserves nothing and answers KE_ENTITY_INVALID.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx_defer",
+      "returns": "_Bool",
+      "doc": "Enqueues a structural mutation to run at the wave barrier, for work the fixed spawn/attach/despawn verbs cannot express. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call. False on OOM.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": null
+        },
+        {
+          "name": "fn",
+          "type": "ke_defer_fn",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "user",
+          "type": "const void *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "user_size",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx_spawn",
+      "returns": "ke_entity",
+      "doc": null,
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx_attach",
+      "returns": "_Bool",
+      "doc": "Deferred-attaches \u0060size\u0060 bytes of \u0060data\u0060 as component \u0060cid\u0060 of \u0060entity\u0060, applied at the wave barrier. The bytes are copied, so the caller\u0027s buffer need not outlive the call. False for a context of zero, which is the caller\u0027s signal to use its immediate path instead.",
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": null
+        },
+        {
+          "name": "entity",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "cid",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "data",
+          "type": "const void *",
+          "tags": [
+            "bytes_of:size"
+          ],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx_detach",
+      "returns": "_Bool",
+      "doc": null,
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": null
+        },
+        {
+          "name": "entity",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "cid",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_system_ctx_despawn",
+      "returns": "_Bool",
+      "doc": null,
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": null
+        },
+        {
+          "name": "entity",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_runtime_create",
+      "returns": "ke_runtime_handle",
+      "doc": null,
+      "return_doc": null,
+      "params": [
+        {
+          "name": "ecs",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scheduler",
+          "type": "ke_scheduler *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "params",
+          "type": "const ke_runtime_params *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "out_error",
+          "type": "ke_error **",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "callbacks": [
+    {
+      "name": "ke_module_load_fn",
+      "returns": "_Bool",
+      "doc": "Registers the module\u0027s components and systems against the runtime it is being loaded into. Runs inside register_module, before that call returns.",
+      "lanes": [
+        {
+          "name": "runtime",
+          "type": "ke_runtime *",
+          "tags": [
+            "self"
+          ],
+          "doc": "The runtime the module is being loaded into."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_module."
+        },
+        {
+          "name": "out_error",
+          "type": "ke_error **",
+          "tags": [],
+          "doc": "Set when the module cannot load; registration fails with it."
+        }
+      ]
+    },
+    {
+      "name": "ke_module_unload_fn",
+      "returns": "void",
+      "doc": "Releases whatever the matching load acquired, as the runtime is torn down.",
+      "lanes": [
+        {
+          "name": "runtime",
+          "type": "ke_runtime *",
+          "tags": [
+            "self"
+          ],
+          "doc": "The runtime the module was loaded into."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_module."
+        }
+      ]
+    },
+    {
+      "name": "ke_system_execute_fn",
+      "returns": "_Bool",
+      "doc": "One call of a system body. The runtime calls it once per tick the system\u0027s phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run \u2014 they were already dispatched \u2014 but no later phase of that tick starts.",
+      "lanes": [
+        {
+          "name": "ctx",
+          "type": "ke_system_ctx *",
+          "tags": [
+            "ctx"
+          ],
+          "doc": "The body\u0027s only doorway to component memory for this call. Opaque to a managed caller, which forwards it to the entry points that take one."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from register_system."
+        },
+        {
+          "name": "dt",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE."
+        },
+        {
+          "name": "out_error",
+          "type": "ke_error **",
+          "tags": [],
+          "doc": "Set when the body cannot finish its work; the tick fails with it."
+        }
+      ]
+    },
+    {
+      "name": "ke_defer_fn",
+      "returns": "void",
+      "doc": "A structural operation run serially at the wave barrier. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world.",
+      "lanes": [
+        {
+          "name": null,
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": null,
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t",
+    "ke_module_id": "uint64_t",
+    "ke_system_id": "uint64_t",
+    "ke_module_load_fn": "_Bool (*)(ke_runtime *, void *, ke_error **)",
+    "ke_module_unload_fn": "void (*)(ke_runtime *, void *)",
+    "ke_system_execute_fn": "_Bool (*)(ke_system_ctx *, void *, float, ke_error **)",
+    "ke_defer_fn": "void (*)(ke_ecs *, void *)"
+  }
+}

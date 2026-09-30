@@ -4,6 +4,7 @@
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/view/view_space.h>
 #include <kernel_engine/runtime/runtime.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -23,9 +24,6 @@ extern "C"
 {
 #endif
 
-    // Opaque — nothing outside this plugin calls into it; it registers its own
-    // render.skybox system into `runtime` at create time and does its work
-    // through the borrowed ke_render_service (reads "depth", writes "hdr").
     typedef struct ke_render_skybox ke_render_skybox;
 
     typedef struct ke_render_skybox_handle
@@ -34,15 +32,10 @@ extern "C"
         void (*destroy)(ke_render_skybox *self);
     } ke_render_skybox_handle;
 
-    // Creates the standalone skybox pass and registers it as a runtime system.
-    // `runtime`/`core`/`device` are borrowed. camera_cid/transform_cid/
-    // skybox_cid/frame_cid are cids the aggregator already registered (this
-    // plugin never touches ke_ecs directly, only the plain ids). Handle's ref
-    // is NULL on failure.
     KE_RENDER_SKYBOX_API ke_render_skybox_handle ke_render_skybox_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_ndc_convention ndc,
-        ke_component_id camera_cid, ke_component_id transform_cid,
+        ke_ndc_convention ndc, ke_view_space *view_space,
+        ke_component_id camera_cid, ke_component_id world_transform_cid,
         ke_component_id skybox_cid, ke_component_id frame_cid,
         ke_error **out_error);
 

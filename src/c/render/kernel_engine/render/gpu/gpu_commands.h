@@ -8,16 +8,6 @@ extern "C"
 {
 #endif
 
-// ══════════════════════════════════════════════════════════════════════════
-// L4 — Typed recording objects
-//
-// Each struct holds a raw backend handle and a device backref. Methods
-// route to the device's backing `rp_*` / `cp_*` / `encoder_*` slots,
-// adding type safety without touching the L3 interface.
-// ══════════════════════════════════════════════════════════════════════════
-
-// ── Render pass ───────────────────────────────────────────────────────────
-
 struct ke_gpu_render_pass
 {
     void              *handle;
@@ -45,8 +35,6 @@ struct ke_gpu_render_pass
     void (*end)(struct ke_gpu_render_pass *self);
 };
 
-// ── Compute pass ───────────────────────────────────────────────────────────
-
 struct ke_gpu_compute_pass
 {
     void          *handle;
@@ -62,8 +50,6 @@ struct ke_gpu_compute_pass
                               ke_gpu_buffer indirect_buf, size_t offset);
     void (*end)(struct ke_gpu_compute_pass *self);
 };
-
-// ── Command encoder ────────────────────────────────────────────────────────
 
 struct ke_gpu_command_encoder
 {
@@ -82,18 +68,12 @@ struct ke_gpu_command_encoder
                                    ke_gpu_texture dst,
                                    uint32_t dst_x, uint32_t dst_y, uint32_t dst_z,
                                    uint32_t width, uint32_t height);
-    // Whole-texture same-format copy (mip 0, layer 0, full extent). The scene-color
-    // snapshot a refraction pass reads must be a distinct texture from the one it
-    // writes — sampling and writing the same render target in one pass is not
-    // representable by the API. Must be issued outside an active render pass.
     void (*copy_texture_to_texture)(struct ke_gpu_command_encoder *self,
                                     ke_gpu_texture src, ke_gpu_texture dst,
                                     uint32_t width, uint32_t height);
     struct ke_gpu_command_buffer *(*finish)(struct ke_gpu_command_encoder *self);
     void (*destroy)(struct ke_gpu_command_encoder *self);
 };
-
-// ── Command buffer ─────────────────────────────────────────────────────────
 
 struct ke_gpu_command_buffer
 {
@@ -107,4 +87,4 @@ struct ke_gpu_command_buffer
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_GPU_COMMANDS_H_
+#endif

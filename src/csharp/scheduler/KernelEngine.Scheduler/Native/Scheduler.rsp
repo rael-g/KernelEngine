@@ -5,11 +5,9 @@ KernelEngine.Scheduler.Native
 --libraryPath
 ke_scheduler_enki
 --include-directory
-../../../../zig/common/include
---include-directory
-../../../../c/logger
---include-directory
 ../../../../c/scheduler
+--include-directory
+../../../../zig/common/include
 --file
 ../../../../c/scheduler/kernel_engine/scheduler/scheduler.h
 --traverse
@@ -20,12 +18,6 @@ NativeMethods
 ke_
 --with-using
 *=KernelEngine.Common.Native
---with-type
-ke_result=ke_result
-ke_bool=byte
---exclude
-ke_result
-ke_bool
 --config
 multi-file
 latest-codegen

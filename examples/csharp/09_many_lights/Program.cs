@@ -13,47 +13,20 @@ using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 
-// 09_many_lights — clustered-forward stress test. A long corridor (floor,
-// ceiling, two walls) with point lights spaced along its length, each
-// wobbling locally around a fixed anchor. The camera sits at the entrance
-// looking straight down the corridor, so the falloff of light density into
-// the distance is directly visible, and the froxel Z-slicing (depth-based
-// culling) has real depth to work with instead of a flat wall of geometry.
-//
-// LightCount is the whole point of this example: bump it to whatever the
-// stress test needs. The engine's own storage ceiling is generous (see
-// MAX_LIGHTS in render_module.zig) and a loud warning fires if it's ever
-// exceeded — the real limit this example is meant to discover is frame time,
-// not an artificial count picked in advance.
-// LIGHT_COUNT / CLASSIC_LIGHTING env vars let the same binary drive an
-// apples-to-apples clustered-vs-classic-forward comparison without editing
-// this file per run.
 int LightCount = int.TryParse(Environment.GetEnvironmentVariable("LIGHT_COUNT"), out var lc) ? lc : 10000;
 bool EnableShadows = Environment.GetEnvironmentVariable("ENABLE_SHADOWS") != "0";
 bool EnableIbl = Environment.GetEnvironmentVariable("ENABLE_IBL") != "0";
 const float CorridorWidth = 10f;
 const float CorridorHeight = 6f;
-// Fixed length (NOT scaled by LightCount) — a sane far plane keeps depth
-// precision intact at any light count. More lights just pack denser along the
-// same corridor, which is the actual point of a light stress test.
 const float CorridorLength = 300f;
 
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 09 Many Lights Stress Test"))
-    // Clustered-forward defaults (32x18x24 grid, 256 lights/froxel) are sized for
-    // typical scenes, not for 10k lights packed into one corridor — a caller
-    // running a denser scene than that raises these rather than accept the
-    // engine imposing a ceiling. Bumping grid_z shrinks every exponential depth
-    // slice (finer resolution far from the camera); raising max_lights_per_cluster
-    // gives an overloaded froxel more room before the cull silently drops the excess.
-    // Each froxel index buffer is gridX*gridY*gridZ*maxLightsPerCluster*4 bytes —
-    // stay well under the backend's max_*_buffer_binding_size limit (128MB on
-    // this WebGPU build) when raising these. 64/512 here is ~72MB.
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.005f, 0.005f, 0.008f, 1.0f),
         clusterGridZ: 64, maxLightsPerCluster: 512, enableShadows: EnableShadows, enableIbl: EnableIbl))
     .Add<IRuntimeModule>(new FrameworkModule())
@@ -65,11 +38,8 @@ var services = new ServiceCollection()
 
         tree.AddNode(new AmbientLight { Color = new(0.01f, 0.01f, 0.01f) }, "Ambient");
 
-        // Camera at the corridor entrance. Identity rotation looks at world
-        // origin (the entrance), which — standing on-axis just outside it —
-        // means looking straight down +Z, the corridor's length axis.
-        var cam = tree.AddNode(new Camera { Fov = 70f, Near = 0.1f, Far = CorridorLength + 50f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, -3f) };
+        var cam = tree.AddNode(new Camera { Fov = 70f, NearPlane = 0.1f, FarPlane = CorridorLength + 50f }, "Camera");
+        cam.Position = new Vector3(0f, 0f, -3f);
 
         var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
         var wallMat = resources.CreateMaterial("wall", new Vector4(0.6f, 0.6f, 0.65f, 1f), metallic: 0.1f, roughness: 0.7f);
@@ -78,21 +48,22 @@ var services = new ServiceCollection()
         float halfH = CorridorHeight / 2f;
         float halfL = CorridorLength / 2f;
 
-        // MeshPrimitives.Cube spans -0.5..0.5 (half-extent 0.5), so Scale must be
-        // the FULL desired size, not the half-extent, to get the intended bounds.
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with { Position = new Vector3(0f, -halfH, halfL), Scale = new Vector3(CorridorWidth, 1f, CorridorLength) };
+        floor.Position = new Vector3(0f, -halfH, halfL);
+        floor.Scale = new Vector3(CorridorWidth, 1f, CorridorLength);
 
         var ceiling = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "Ceiling");
-        ceiling.LocalTransform = ceiling.LocalTransform with { Position = new Vector3(0f, halfH, halfL), Scale = new Vector3(CorridorWidth, 1f, CorridorLength) };
+        ceiling.Position = new Vector3(0f, halfH, halfL);
+        ceiling.Scale = new Vector3(CorridorWidth, 1f, CorridorLength);
 
         var wallLeft = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "WallLeft");
-        wallLeft.LocalTransform = wallLeft.LocalTransform with { Position = new Vector3(-halfW, 0f, halfL), Scale = new Vector3(1f, CorridorHeight, CorridorLength) };
+        wallLeft.Position = new Vector3(-halfW, 0f, halfL);
+        wallLeft.Scale = new Vector3(1f, CorridorHeight, CorridorLength);
 
         var wallRight = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "WallRight");
-        wallRight.LocalTransform = wallRight.LocalTransform with { Position = new Vector3(halfW, 0f, halfL), Scale = new Vector3(1f, CorridorHeight, CorridorLength) };
+        wallRight.Position = new Vector3(halfW, 0f, halfL);
+        wallRight.Scale = new Vector3(1f, CorridorHeight, CorridorLength);
 
-        // Fixed-seed PRNG so the visual is deterministic across runs.
         var rand = new Random(42);
         for (int i = 0; i < LightCount; i++)
         {
@@ -141,11 +112,9 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[09_many_lights] Exited cleanly.");
-
-// ── Point light wobbling locally around a fixed corridor position ──────────
 
 sealed class CorridorLight : PointLight
 {
@@ -164,12 +133,14 @@ sealed class CorridorLight : PointLight
             (float)rand.NextDouble() * 100f);
     }
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         _time += view.DeltaTime * Speed;
         float dx = MathF.Sin(_time + _seed.X) * 0.8f;
         float dy = MathF.Cos(_time + _seed.Y) * 0.8f;
         float dz = MathF.Sin(_time * 0.7f + _seed.Z) * 0.5f;
-        LocalTransform = LocalTransform with { Position = _anchor + new Vector3(dx, dy, dz) };
+        Position = _anchor + new Vector3(dx, dy, dz);
     }
 }

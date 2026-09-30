@@ -1,21 +1,7 @@
-// ke_physics_2d backed by Box2D v3.
-//
-// Box2D v3 addresses bodies by value handle (b2BodyId: index + world +
-// generation) rather than by pointer, so the id table maps the engine's opaque
-// ke_body_2d onto that struct instead of onto a pointer. Everything else keeps
-// the behaviour the previous implementation settled on — see the notes at each
-// decision point.
-
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-// Windows: mingw's crtdll must own the DLL entry point so the statically
-// linked C/C++ dependency's initializers actually run. See kerror.zig.
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c.zig").c;
@@ -38,7 +24,7 @@ const Entry = struct {
 
 const State = struct {
     api: c.ke_physics_2d,
-    logger: ?*c.ke_logger, // borrowed; may be null
+    logger: ?*c.ke_logger,
     world: c.b2WorldId,
     bodies: ?[*]Entry,
     body_count: u32,
@@ -68,8 +54,6 @@ fn lookup(s: *State, id: c.ke_body_2d) ?c.b2BodyId {
     const entry = s.bodies.?[idx];
     return if (entry.live) entry.body else null;
 }
-
-// -- vtable ------------------------------------------------------------------
 
 fn setGravity(self_in: ?*c.ke_physics_2d, x: f32, y: f32) callconv(.c) void {
     const self = self_in orelse return;
@@ -130,7 +114,6 @@ fn createBody(
 
     s.bodies.?[s.body_count] = .{ .body = body, .live = true };
     s.body_count += 1;
-    // Bias by one: handle 0 is reserved as invalid.
     return @intCast(s.body_count);
 }
 
@@ -140,18 +123,25 @@ fn destroyBody(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d) callconv(.c) void {
     const s = stateOf(self);
     const body = lookup(s, id) orelse return;
     c.b2DestroyBody(body);
-    // The slot is retired rather than reused: handles already handed out must
-    // not silently start addressing a different body.
     s.bodies.?[id - 1].live = false;
 }
 
 /// Shared by the box and circle paths: v3 carries friction and restitution on
 /// the shape's surface material, with density left on the def itself.
-fn makeShapeDef(density: f32, friction: f32, restitution: f32) c.b2ShapeDef {
+fn makeShapeDef(
+    density: f32,
+    friction: f32,
+    restitution: f32,
+    filter: ?*const c.ke_collision_filter_2d,
+) c.b2ShapeDef {
     var def = c.b2DefaultShapeDef();
     def.density = density;
     def.material.friction = friction;
     def.material.restitution = restitution;
+    if (filter) |f| {
+        def.filter.categoryBits = f.layer;
+        def.filter.maskBits = f.mask;
+    }
     return def;
 }
 
@@ -160,9 +150,13 @@ fn addBoxFixture(
     id: c.ke_body_2d,
     half_w: f32,
     half_h: f32,
+    offset_x: f32,
+    offset_y: f32,
+    offset_angle: f32,
     density: f32,
     friction: f32,
     restitution: f32,
+    filter: ?*const c.ke_collision_filter_2d,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
     const self = self_in orelse {
@@ -178,8 +172,8 @@ fn addBoxFixture(
         return false;
     };
 
-    const def = makeShapeDef(density, friction, restitution);
-    const box = c.b2MakeBox(half_w, half_h);
+    const def = makeShapeDef(density, friction, restitution, filter);
+    const box = c.b2MakeOffsetBox(half_w, half_h, .{ .x = offset_x, .y = offset_y }, makeRot(offset_angle));
     _ = c.b2CreatePolygonShape(body, &def, &box);
     return true;
 }
@@ -188,9 +182,12 @@ fn addCircleFixture(
     self_in: ?*c.ke_physics_2d,
     id: c.ke_body_2d,
     radius: f32,
+    offset_x: f32,
+    offset_y: f32,
     density: f32,
     friction: f32,
     restitution: f32,
+    filter: ?*const c.ke_collision_filter_2d,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
     const self = self_in orelse {
@@ -206,17 +203,14 @@ fn addCircleFixture(
         return false;
     };
 
-    const def = makeShapeDef(density, friction, restitution);
-    // Centered on the body origin, matching the contract.
-    const circle = c.b2Circle{ .center = .{ .x = 0, .y = 0 }, .radius = radius };
+    const def = makeShapeDef(density, friction, restitution, filter);
+    const circle = c.b2Circle{ .center = .{ .x = offset_x, .y = offset_y }, .radius = radius };
     _ = c.b2CreateCircleShape(body, &def, &circle);
     return true;
 }
 
 fn getBodyState(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, out_in: ?*c.ke_body_state_2d) callconv(.c) void {
     const out = out_in orelse return;
-    // Zeroed up front so an unknown handle reads as a resting body at the
-    // origin rather than as uninitialised memory.
     out.* = std.mem.zeroes(c.ke_body_state_2d);
 
     const self = self_in orelse return;
@@ -227,7 +221,6 @@ fn getBodyState(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, out_in: ?*c.ke_bod
     const v = c.b2Body_GetLinearVelocity(body);
     out.x = p.x;
     out.y = p.y;
-    // v3 stores orientation as a cosine/sine pair; the contract wants radians.
     out.angle = rotAngle(c.b2Body_GetRotation(body));
     out.velocity_x = v.x;
     out.velocity_y = v.y;
@@ -252,7 +245,6 @@ fn applyImpulse(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, ix: f32, iy: f32) 
     const self = self_in orelse return;
     if (self.handle == null) return;
     const body = lookup(stateOf(self), id) orelse return;
-    // wake = true: an impulse aimed at a sleeping body is meant to move it.
     c.b2Body_ApplyLinearImpulseToCenter(body, .{ .x = ix, .y = iy }, true);
 }
 
@@ -263,11 +255,12 @@ fn setBodyFixedRotation(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, fixed: boo
     c.b2Body_SetFixedRotation(body, fixed);
 }
 
-// -- rotation helpers --------------------------------------------------------
-//
-// b2MakeRot / b2Rot_GetAngle are static inline in Box2D's headers, so they
-// export no symbol to link against and translate-c does not always lower them.
-// Reimplemented here against the same representation (a unit cosine/sine pair).
+fn setBodyGravityScale(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, scale: f32) callconv(.c) void {
+    const self = self_in orelse return;
+    if (self.handle == null) return;
+    const body = lookup(stateOf(self), id) orelse return;
+    c.b2Body_SetGravityScale(body, scale);
+}
 
 fn makeRot(radians: f32) c.b2Rot {
     return .{ .c = @cos(radians), .s = @sin(radians) };
@@ -277,20 +270,14 @@ fn rotAngle(q: c.b2Rot) f32 {
     return std.math.atan2(q.s, q.c);
 }
 
-// -- teardown ----------------------------------------------------------------
-
 fn destroy(self_in: ?*c.ke_physics_2d) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
-    // Destroying the world takes every body with it, so the table only needs
-    // its own storage released.
     c.b2DestroyWorld(s.world);
     if (s.bodies) |b| heap.gpa.free(b[0..s.body_capacity]);
     heap.gpa.destroy(s);
 }
-
-// -- factory -----------------------------------------------------------------
 
 export fn ke_physics_2d_box2d_create(
     params_in: ?*const c.ke_physics_2d_box2d_params,
@@ -317,9 +304,6 @@ export fn ke_physics_2d_box2d_create(
     };
 
     var world_def = c.b2DefaultWorldDef();
-    // The caller's gravity is used verbatim — zero means zero, which top-down
-    // games rely on. The managed AddBox2D() supplies (0, -9.81) as its default,
-    // so omitting it still yields Earth gravity.
     world_def.gravity = .{ .x = params.gravity_x, .y = params.gravity_y };
     s.world = c.b2CreateWorld(&world_def);
     if (!c.b2World_IsValid(s.world)) {
@@ -340,7 +324,256 @@ export fn ke_physics_2d_box2d_create(
     s.api.set_body_velocity = setBodyVelocity;
     s.api.apply_impulse = applyImpulse;
     s.api.set_body_fixed_rotation = setBodyFixedRotation;
+    s.api.set_body_gravity_scale = setBodyGravityScale;
 
     logInfo(s.logger, "Box2D physics world initialized");
     return .{ .ref = &s.api, .destroy = destroy };
+}
+
+const testing = std.testing;
+
+fn makeWorld(gravity_x: f32, gravity_y: f32) c.ke_physics_2d_handle {
+    var params = std.mem.zeroes(c.ke_physics_2d_box2d_params);
+    params.logger = null;
+    params.gravity_x = gravity_x;
+    params.gravity_y = gravity_y;
+    return ke_physics_2d_box2d_create(&params, null);
+}
+
+test "creating a world yields a usable vtable" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref != null);
+    try testing.expect(h.destroy != null);
+}
+
+test "setting gravity on a fresh world is accepted" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.set_gravity.?(h.ref, 0.0, -10.0);
+}
+
+test "stepping an empty world is accepted" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    h.ref.*.step.?(h.ref, 0.016);
+}
+
+test "creating a body returns a handle that is not the invalid sentinel" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(body != c.KE_BODY_2D_INVALID);
+}
+
+test "a box fixture attaches to an existing body" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, body, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.3, 0.1, null, null));
+}
+
+test "a circle fixture attaches to an existing body" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(h.ref.*.add_circle_fixture.?(h.ref, body, 1.0, 0.0, 0.0, 1.0, 0.3, 0.1, null, null));
+}
+
+test "a body reports the position it was created at" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 10.0, 20.0, null);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expectApproxEqAbs(@as(f32, 10.0), state.x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 20.0), state.y, 1e-5);
+}
+
+test "setting a body position moves it and sets its angle" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    h.ref.*.set_body_position.?(h.ref, body, 5.0, 5.0, 0.78);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expectApproxEqAbs(@as(f32, 5.0), state.x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 5.0), state.y, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 0.78), state.angle, 1e-5);
+}
+
+test "setting a body velocity is readable back before any step" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    h.ref.*.set_body_velocity.?(h.ref, body, 1.0, 2.0);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expectApproxEqAbs(@as(f32, 1.0), state.velocity_x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 2.0), state.velocity_y, 1e-5);
+}
+
+test "an impulse pushes a body along both axes it was applied on" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, body, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.3, 0.1, null, null));
+    h.ref.*.apply_impulse.?(h.ref, body, 10.0, 10.0);
+
+    h.ref.*.step.?(h.ref, 0.016);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expect(state.velocity_x > 0.0);
+    try testing.expect(state.velocity_y > 0.0);
+}
+
+test "destroying a body retires its handle" {
+    const h = makeWorld(0.0, -9.81);
+    defer h.destroy.?(h.ref);
+
+    const body = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    h.ref.*.destroy_body.?(h.ref, body);
+
+    var state = c.ke_body_state_2d{
+        .x = 42.0,
+        .y = 42.0,
+        .angle = 42.0,
+        .velocity_x = 42.0,
+        .velocity_y = 42.0,
+        .angular_velocity = 42.0,
+    };
+    h.ref.*.get_body_state.?(h.ref, body, &state);
+
+    try testing.expectApproxEqAbs(@as(f32, 0.0), state.x, 1e-5);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), state.y, 1e-5);
+}
+
+test "a rotation locked box never picks up spin when it bounces off a wall" {
+    const h = makeWorld(0.0, 0.0);
+    defer h.destroy.?(h.ref);
+
+    const wall = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_STATIC, 2.0, 0.0, null);
+    try testing.expect(wall != c.KE_BODY_2D_INVALID);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, wall, 0.25, 4.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null, null));
+
+    const ball = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(ball != c.KE_BODY_2D_INVALID);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, ball, 0.18, 0.18, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null, null));
+    h.ref.*.set_body_fixed_rotation.?(h.ref, ball, true);
+    h.ref.*.set_body_velocity.?(h.ref, ball, 6.0, 0.0);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    var i: usize = 0;
+    while (i < 120) : (i += 1) {
+        h.ref.*.step.?(h.ref, 1.0 / 60.0);
+        h.ref.*.get_body_state.?(h.ref, ball, &state);
+        try testing.expectApproxEqAbs(@as(f32, 0.0), state.angular_velocity, 1e-5);
+    }
+
+    try testing.expectApproxEqAbs(@as(f32, 0.0), state.angle, 1e-5);
+    try testing.expect(state.velocity_x < 0.0);
+}
+
+test "a frictionless circle hitting a wall head on does not start spinning" {
+    const h = makeWorld(0.0, 0.0);
+    defer h.destroy.?(h.ref);
+
+    const wall = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_STATIC, 2.0, 0.0, null);
+    try testing.expect(h.ref.*.add_box_fixture.?(h.ref, wall, 0.25, 4.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null, null));
+
+    const ball = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    try testing.expect(h.ref.*.add_circle_fixture.?(h.ref, ball, 0.18, 0.0, 0.0, 1.0, 0.0, 1.0, null, null));
+    h.ref.*.set_body_velocity.?(h.ref, ball, 6.0, 0.0);
+
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    var i: usize = 0;
+    while (i < 120) : (i += 1) {
+        h.ref.*.step.?(h.ref, 1.0 / 60.0);
+        h.ref.*.get_body_state.?(h.ref, ball, &state);
+        try testing.expectApproxEqAbs(@as(f32, 0.0), state.angular_velocity, 1e-3);
+    }
+}
+
+fn wallAndBall(h: c.ke_physics_2d_handle, wall_filter: ?*const c.ke_collision_filter_2d, ball_filter: ?*const c.ke_collision_filter_2d) c.ke_body_2d {
+    const wall = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_STATIC, 2.0, 0.0, null);
+    _ = h.ref.*.add_box_fixture.?(h.ref, wall, 0.25, 4.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, wall_filter, null);
+
+    const ball = h.ref.*.create_body.?(h.ref, c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0, null);
+    _ = h.ref.*.add_box_fixture.?(h.ref, ball, 0.18, 0.18, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, ball_filter, null);
+    h.ref.*.set_body_velocity.?(h.ref, ball, 6.0, 0.0);
+    return ball;
+}
+
+fn runPast(h: c.ke_physics_2d_handle, ball: c.ke_body_2d) c.ke_body_state_2d {
+    var state = std.mem.zeroes(c.ke_body_state_2d);
+    var i: usize = 0;
+    while (i < 120) : (i += 1) {
+        h.ref.*.step.?(h.ref, 1.0 / 60.0);
+    }
+    h.ref.*.get_body_state.?(h.ref, ball, &state);
+    return state;
+}
+
+test "a shape whose mask excludes the other's layer passes straight through it" {
+    const h = makeWorld(0.0, 0.0);
+    defer h.destroy.?(h.ref);
+
+    const wall_filter = c.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b10 };
+    const ball_filter = c.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b01 };
+    const ball = wallAndBall(h, &wall_filter, &ball_filter);
+
+    const state = runPast(h, ball);
+    try testing.expect(state.velocity_x > 0.0);
+    try testing.expect(state.x > 2.0);
+}
+
+test "the same pair collides once each mask names the other's layer" {
+    const h = makeWorld(0.0, 0.0);
+    defer h.destroy.?(h.ref);
+
+    const wall_filter = c.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b11 };
+    const ball_filter = c.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b11 };
+    const ball = wallAndBall(h, &wall_filter, &ball_filter);
+
+    const state = runPast(h, ball);
+    try testing.expect(state.velocity_x < 0.0);
+}
+
+test "clearing one side of the pair is enough to silence the contact" {
+    const h = makeWorld(0.0, 0.0);
+    defer h.destroy.?(h.ref);
+
+    const wall_filter = c.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b11 };
+    const ball_filter = c.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b01 };
+    const ball = wallAndBall(h, &wall_filter, &ball_filter);
+
+    const state = runPast(h, ball);
+    try testing.expect(state.x > 2.0);
+}
+
+test "a null filter leaves the fixture colliding with everything" {
+    const h = makeWorld(0.0, 0.0);
+    defer h.destroy.?(h.ref);
+
+    const ball = wallAndBall(h, null, null);
+    const state = runPast(h, ball);
+    try testing.expect(state.velocity_x < 0.0);
 }

@@ -72,14 +72,6 @@ public sealed class ProjectManifest
         File.WriteAllText(_path, Toml.FromModel(_root));
     }
 
-    // ── Generic config get/set ───────────────────────────────────────────────
-    //
-    // Path is dot-separated and addresses nested TOML tables: "runtime.window.width" → the
-    // `width` field inside `[runtime.window]`. The leaf is always a scalar (string, long,
-    // double, bool). Arrays and inline tables are not addressable by this path syntax yet —
-    // dedicated subverbs (`ke add inputbinding`, `ke set render.clear-color [...]`) will
-    // handle those when they ship.
-
     /// <summary>Reads the scalar at <paramref name="dotPath"/>; returns null when missing.</summary>
     public object? GetConfigValue(string dotPath)
     {

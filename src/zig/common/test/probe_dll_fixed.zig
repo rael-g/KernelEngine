@@ -1,7 +1,3 @@
-// Probe DLL *with* the mingw-entry-point workaround applied — the shape every
-// engine plugin that links C/C++ uses. Its counterpart is probe_dll_plain.zig.
-// See kerror.zig's `_DllMainCRTStartup` doc comment for what this works around,
-// and dll_crt_init_test.zig for what the pair proves.
 
 const std = @import("std");
 

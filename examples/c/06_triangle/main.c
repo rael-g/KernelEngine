@@ -25,8 +25,6 @@ int main(void)
 
     ke_error *err = NULL;
 
-    // ── Window ───────────────────────────────────────────────────────────────
-
     ke_window_glfw_params wp = {
         .logger     = NULL,
         .input      = NULL,
@@ -40,8 +38,6 @@ int main(void)
 
     if (!win.ref->on_initialize(win.ref, &err)) die("window init failed", err);
 
-    // ── GPU device (with surface) ─────────────────────────────────────────────
-
     ke_gpu_device_webgpu_params dp = {
         .logger            = NULL,
         .window            = win.ref,
@@ -50,13 +46,9 @@ int main(void)
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device create failed", err);
 
-    // ── Surface extension ─────────────────────────────────────────────────────
-
     const ke_gpu_surface_ext *surf_ext =
         (const ke_gpu_surface_ext *)gpu.ref->query_extension(gpu.ref, KE_GPU_SURFACE_EXT_NAME);
     if (!surf_ext) die("surface extension not available", NULL);
-
-    // ── Shaders ───────────────────────────────────────────────────────────────
 
     ke_gpu_shader_module_params vsp = {
         .code        = triangle_vert_spv,
@@ -74,8 +66,6 @@ int main(void)
 
     if (vs == KE_GPU_INVALID_HANDLE) die("vertex shader creation failed", NULL);
     if (fs == KE_GPU_INVALID_HANDLE) die("fragment shader creation failed", NULL);
-
-    // ── Pipeline ─────────────────────────────────────────────────────────────
 
     ke_gpu_blend_state blend = {
         .blend_enabled = 0,
@@ -108,8 +98,6 @@ int main(void)
 
     ke_gpu_queue q = gpu.ref->get_default_queue(gpu.ref);
 
-    // ── Loop ──────────────────────────────────────────────────────────────────
-
     printf("Rendering triangle. Close the window to exit.\n");
 
     while (!win.ref->should_close(win.ref))
@@ -117,7 +105,7 @@ int main(void)
         win.ref->poll_events(win.ref, NULL);
 
         ke_gpu_texture_view view = surf_ext->acquire_current_texture_view(surf_ext);
-        if (view == KE_GPU_INVALID_HANDLE) continue; // minimised or surface lost
+        if (view == KE_GPU_INVALID_HANDLE) continue;
 
         ke_gpu_clear_value clear = { .color = { 0.1f, 0.1f, 0.1f, 1.0f } };
         ke_gpu_color_attachment ca = {
@@ -147,8 +135,6 @@ int main(void)
         gpu.ref->queue_present(gpu.ref, q);
         gpu.ref->destroy_texture_view(gpu.ref, view);
     }
-
-    // ── Cleanup ───────────────────────────────────────────────────────────────
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
     gpu.destroy(gpu.ref);

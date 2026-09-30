@@ -15,13 +15,6 @@ using KernelEngine.Render;
 using KernelEngine.Physics;
 using KernelEngine.Input;
 
-// 16_physics_test — kernel ke_physics_2d → Box2D plugin → IPhysics2D. Camera
-// at +Z looking at origin flattens the 3D scene into a 2D side-view. Cubes
-// drop onto a static floor and bounce.
-//   • Space → spawn a cube at a random X
-//   • R     → destroy every spawned cube + reset
-//   • Esc   → quit
-
 const float FloorY     = -3f;
 const float FloorHalfW = 8f;
 const float FloorHalfH = 0.5f;
@@ -31,7 +24,7 @@ var services = new ServiceCollection()
     .AddConsoleSink()
     .AddInput()
     .AddBox2D()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 16 Physics Test (Space drops cube, R resets)"))
@@ -45,8 +38,8 @@ var services = new ServiceCollection()
 
         var physics = sp.GetRequiredService<IPhysics2D>();
 
-        var cam = tree.AddNode(new Camera { Fov = 50f, Near = 0.1f, Far = 100f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 14f) };
+        var cam = tree.AddNode(new Camera { Fov = 50f, NearPlane = 0.1f, FarPlane = 100f }, "Camera");
+        cam.Position = new Vector3(0f, 0f, 14f);
 
         tree.AddNode(new DirectionalLight
         {
@@ -60,11 +53,8 @@ var services = new ServiceCollection()
         var ballMat  = resources.CreateMaterial("ball", new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
-        floor.LocalTransform = floor.LocalTransform with
-        {
-            Position = new Vector3(0f, FloorY, 0f),
-            Scale    = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f),
-        };
+        floor.Position = new Vector3(0f, FloorY, 0f);
+        floor.Scale    = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f);
         var floorBody = physics.CreateBody(BodyType2D.Static, new Vector2(0f, FloorY));
         physics.AddBoxFixture(floorBody, new Vector2(FloorHalfW, FloorHalfH), friction: 0.5f);
 
@@ -89,11 +79,9 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[16_physics_test] Exited cleanly.");
-
-// ── PhysicsScene — drives the simulation + spawns/destroys balls on input ────
 
 sealed class PhysicsScene : Node
 {
@@ -104,7 +92,7 @@ sealed class PhysicsScene : Node
     private readonly IPhysics2D     _physics;
     private readonly MeshHandle     _ballMesh;
     private readonly MaterialHandle _ballMat;
-    private readonly List<(Node Node, BodyHandle2D Body)> _balls = new();
+    private readonly List<(MeshRenderer Node, BodyHandle2D Body)> _balls = new();
 
     private bool _prevSpace;
     private bool _prevR;
@@ -118,13 +106,12 @@ sealed class PhysicsScene : Node
         _ballMat  = ballMat;
     }
 
-    protected override void OnBind(NodeWorld nodeWorld) { }
+    protected override bool HasBehavior => true;
 
     protected override void OnUpdate(in View view)
     {
         if (!_initialDropped)
         {
-            // First-frame drop so something is happening before any input.
             Spawn(new Vector2(0f, 4f));
             _initialDropped = true;
         }
@@ -135,11 +122,8 @@ sealed class PhysicsScene : Node
         {
             var (node, body) = _balls[i];
             var s            = _physics.GetBodyState(body);
-            node.LocalTransform = node.LocalTransform with
-            {
-                Position = new Vector3(s.Position.X, s.Position.Y, 0f),
-                Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, s.Angle),
-            };
+            node.Position = new Vector3(s.Position.X, s.Position.Y, 0f);
+            node.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, s.Angle);
         }
 
         bool space = view.IsKeyDown(KeySpace);
@@ -155,7 +139,7 @@ sealed class PhysicsScene : Node
             for (int i = 0; i < _balls.Count; i++)
             {
                 _physics.DestroyBody(_balls[i].Body);
-                NodeWorld!.DestroyNode(_balls[i].Node);
+                _balls[i].Node.Destroy();
             }
             _balls.Clear();
         }
@@ -169,10 +153,10 @@ sealed class PhysicsScene : Node
 
     private void Spawn(Vector2 at)
     {
-        var node = NodeWorld!.AddNode(
+        var node = AddChild(
             new MeshRenderer { MeshHandle = _ballMesh, MaterialHandle = _ballMat },
             $"Ball_{_balls.Count}");
-        node.LocalTransform = node.LocalTransform with { Position = new Vector3(at.X, at.Y, 0f) };
+        node.Position = new Vector3(at.X, at.Y, 0f);
 
         var body = _physics.CreateBody(BodyType2D.Dynamic, at);
         _physics.AddBoxFixture(body, new Vector2(0.5f, 0.5f), density: 1f, friction: 0.3f, restitution: 0.5f);

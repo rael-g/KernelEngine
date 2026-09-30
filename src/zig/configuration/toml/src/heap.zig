@@ -1,4 +1,3 @@
-// The configuration-toml plugin's own heap.
 
 const std = @import("std");
 

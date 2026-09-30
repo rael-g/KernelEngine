@@ -1,0 +1,835 @@
+const std = @import("std");
+
+const c = @import("c.zig").c;
+const heap = @import("heap.zig");
+
+const E = @import("kerror").Errors(c);
+
+/// Longest script type name the host stores.
+const name_max = 96;
+
+/// Components one script type may declare. A type is a component set, and a set
+/// this wide already exceeds what a query can carry, so the ceiling is reached
+/// long after the one that actually binds.
+const components_max = 16;
+
+const default_max_types = 64;
+
+const ScriptType = struct {
+    name: [name_max]u8,
+    name_len: usize,
+    components: [components_max]c.ke_component_id,
+    component_count: u32,
+    reach: c.ke_script_reach,
+
+    /// The entities bound as this type, in binding order. Kept beside the bindings
+    /// rather than derived by sweeping the world: a host that must ask "which
+    /// entities are yours" every tick would pay a scan for an answer the bind call
+    /// already knew.
+    entities: std.ArrayList(c.ke_entity),
+};
+
+/// What an entity carries once a runtime binds an object to it. Living in the ECS
+/// rather than in a table beside it is what makes the lookup O(1) and what lets a
+/// query see which entities are scripted at all.
+const Binding = extern struct {
+    type_id: c.ke_script_type_id,
+    instance: ?*anyopaque,
+
+    /// Where this entity sits in its type's entity list, so unbinding costs the same
+    /// whether a type has three instances or thirty thousand.
+    slot: u32,
+};
+
+const binding_component = "script_instance";
+
+const State = struct {
+    api: c.ke_script_host,
+    ecs: *c.ke_ecs,
+    hierarchy_cid: c.ke_component_id,
+    name_cid: c.ke_component_id,
+
+    binding_cid: c.ke_component_id,
+
+    types: []ScriptType,
+    type_count: u32,
+};
+
+fn stateOf(self: *c.ke_script_host) *State {
+    return @ptrCast(@alignCast(self.handle));
+}
+
+fn orDefault(v: u32, d: u32) u32 {
+    return if (v == 0) d else v;
+}
+
+fn typeAt(s: *State, id: c.ke_script_type_id) ?*ScriptType {
+    if (id == c.KE_SCRIPT_TYPE_NONE or id > s.type_count) return null;
+    return &s.types[id - 1];
+}
+
+fn bindingOf(s: *State, entity: c.ke_entity) ?*Binding {
+    const raw = s.ecs.component_get.?(s.ecs, entity, s.binding_cid) orelse return null;
+    const b: *Binding = @ptrCast(@alignCast(raw));
+    return if (b.type_id == c.KE_SCRIPT_TYPE_NONE) null else b;
+}
+
+fn getHierarchy(s: *State, e: c.ke_entity) ?*c.ke_hierarchy_component {
+    return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.hierarchy_cid)));
+}
+
+fn getName(s: *State, e: c.ke_entity) []const u8 {
+    const raw = s.ecs.component_get.?(s.ecs, e, s.name_cid) orelse return &[_]u8{};
+    const comp: *const c.ke_name_component = @ptrCast(@alignCast(raw));
+    return std.mem.sliceTo(&comp.name, 0);
+}
+
+fn matches(s: *State, entity: c.ke_entity, type_id: c.ke_script_type_id, wanted: []const u8) bool {
+    const b = bindingOf(s, entity) orelse return false;
+    if (b.type_id != type_id) return false;
+    if (wanted.len == 0) return true;
+    return std.mem.eql(u8, getName(s, entity), wanted);
+}
+
+fn registerType(
+    self_in: ?*c.ke_script_host,
+    name_in: [*c]const u8,
+    components_in: [*c]const c.ke_component_id,
+    component_count: u32,
+    reach: c.ke_script_reach,
+    out_id: [*c]c.ke_script_type_id,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "script host is null", @src());
+        return false;
+    };
+    if (name_in == null or out_id == null) {
+        E.fail(out_error, .invalid_argument, "type name and out_id are required", @src());
+        return false;
+    }
+    const s = stateOf(self);
+    const name = std.mem.span(name_in);
+    if (name.len == 0 or name.len >= name_max) {
+        E.fail(out_error, .invalid_argument, "script type name is empty or too long", @src());
+        return false;
+    }
+    if (component_count > components_max) {
+        E.fail(out_error, .invalid_argument, "script type declares more components than a type may carry", @src());
+        return false;
+    }
+    if (component_count > 0 and components_in == null) {
+        E.fail(out_error, .invalid_argument, "component count is non-zero but no components were given", @src());
+        return false;
+    }
+
+    for (s.types[0..s.type_count], 0..) |*t, i| {
+        if (!std.mem.eql(u8, t.name[0..t.name_len], name)) continue;
+        if (t.component_count != component_count or t.reach != reach) {
+            E.fail(out_error, .already_exists, "script type already registered with a different description", @src());
+            return false;
+        }
+        for (0..component_count) |k| {
+            if (t.components[k] == components_in[k]) continue;
+            E.fail(out_error, .already_exists, "script type already registered with different components", @src());
+            return false;
+        }
+        out_id.* = @intCast(i + 1);
+        return true;
+    }
+
+    if (s.type_count == s.types.len) {
+        E.fail(out_error, .out_of_memory, "script type table is full", @src());
+        return false;
+    }
+
+    var t = ScriptType{
+        .name = undefined,
+        .name_len = name.len,
+        .components = undefined,
+        .component_count = component_count,
+        .reach = reach,
+        .entities = .empty,
+    };
+    @memcpy(t.name[0..name.len], name);
+    for (0..component_count) |k| t.components[k] = components_in[k];
+
+    s.types[s.type_count] = t;
+    s.type_count += 1;
+    out_id.* = s.type_count;
+    return true;
+}
+
+fn typeLookup(
+    self_in: ?*c.ke_script_host,
+    name_in: [*c]const u8,
+    out_id: [*c]c.ke_script_type_id,
+) callconv(.c) bool {
+    const self = self_in orelse return false;
+    if (name_in == null or out_id == null) return false;
+    const s = stateOf(self);
+    const name = std.mem.span(name_in);
+    for (s.types[0..s.type_count], 0..) |*t, i| {
+        if (!std.mem.eql(u8, t.name[0..t.name_len], name)) continue;
+        out_id.* = @intCast(i + 1);
+        return true;
+    }
+    return false;
+}
+
+fn typeComponents(
+    self_in: ?*c.ke_script_host,
+    type_id: c.ke_script_type_id,
+    out_count: [*c]u32,
+) callconv(.c) [*c]const c.ke_component_id {
+    const self = self_in orelse return null;
+    const s = stateOf(self);
+    const t = typeAt(s, type_id) orelse {
+        if (out_count != null) out_count.* = 0;
+        return null;
+    };
+    if (out_count != null) out_count.* = t.component_count;
+    return &t.components;
+}
+
+fn typeReach(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) callconv(.c) c.ke_script_reach {
+    const self = self_in orelse return c.KE_SCRIPT_REACH_ANY;
+    const s = stateOf(self);
+    const t = typeAt(s, type_id) orelse return c.KE_SCRIPT_REACH_ANY;
+    return t.reach;
+}
+
+fn bind(
+    self_in: ?*c.ke_script_host,
+    entity: c.ke_entity,
+    type_id: c.ke_script_type_id,
+    instance: ?*anyopaque,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "script host is null", @src());
+        return false;
+    };
+    const s = stateOf(self);
+    const t = typeAt(s, type_id) orelse {
+        E.fail(out_error, .not_found, "script type id was never registered", @src());
+        return false;
+    };
+    if (entity == c.KE_ENTITY_INVALID) {
+        E.fail(out_error, .invalid_argument, "cannot bind an instance to an invalid entity", @src());
+        return false;
+    }
+    if (bindingOf(s, entity) != null) {
+        E.fail(out_error, .already_exists, "entity already carries a script instance", @src());
+        return false;
+    }
+
+    const raw = s.ecs.component_add.?(s.ecs, entity, s.binding_cid) orelse {
+        E.fail(out_error, .out_of_memory, "could not attach the script instance component", @src());
+        return false;
+    };
+    t.entities.append(heap.gpa, entity) catch {
+        _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
+        E.fail(out_error, .out_of_memory, "could not record the instance in its type", @src());
+        return false;
+    };
+
+    const b: *Binding = @ptrCast(@alignCast(raw));
+    b.type_id = type_id;
+    b.instance = instance;
+    b.slot = @intCast(t.entities.items.len - 1);
+    return true;
+}
+
+fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) void {
+    const self = self_in orelse return;
+    const s = stateOf(self);
+    const b = bindingOf(s, entity) orelse return;
+    if (typeAt(s, b.type_id)) |t| {
+        if (b.slot < t.entities.items.len) {
+            const moved = t.entities.swapRemove(b.slot);
+            _ = moved;
+            if (b.slot < t.entities.items.len)
+                if (bindingOf(s, t.entities.items[b.slot])) |other| {
+                    other.slot = b.slot;
+                };
+        }
+    }
+    b.type_id = c.KE_SCRIPT_TYPE_NONE;
+    b.instance = null;
+    _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
+}
+
+fn instanceOf(
+    self_in: ?*c.ke_script_host,
+    entity: c.ke_entity,
+    out_type: [*c]c.ke_script_type_id,
+    out_instance: [*c]?*anyopaque,
+) callconv(.c) bool {
+    const self = self_in orelse return false;
+    const s = stateOf(self);
+    const b = bindingOf(s, entity) orelse return false;
+    if (out_type != null) out_type.* = b.type_id;
+    if (out_instance != null) out_instance.* = b.instance;
+    return true;
+}
+
+fn instanceCount(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) callconv(.c) u32 {
+    const self = self_in orelse return 0;
+    const s = stateOf(self);
+    const t = typeAt(s, type_id) orelse return 0;
+    return @intCast(t.entities.items.len);
+}
+
+fn instances(
+    self_in: ?*c.ke_script_host,
+    type_id: c.ke_script_type_id,
+    out_count: [*c]u32,
+) callconv(.c) [*c]const c.ke_entity {
+    const self = self_in orelse return null;
+    const s = stateOf(self);
+    const t = typeAt(s, type_id) orelse {
+        if (out_count != null) out_count.* = 0;
+        return null;
+    };
+    if (out_count != null) out_count.* = @intCast(t.entities.items.len);
+    return t.entities.items.ptr;
+}
+
+fn descendantOf(s: *State, parent: c.ke_entity, type_id: c.ke_script_type_id, wanted: []const u8, found: *c.ke_entity) bool {
+    const h = getHierarchy(s, parent) orelse return false;
+    var child = h.first_child;
+    while (child != c.KE_ENTITY_INVALID) {
+        if (matches(s, child, type_id, wanted)) {
+            if (found.* != c.KE_ENTITY_INVALID) return true;
+            found.* = child;
+        }
+        if (descendantOf(s, child, type_id, wanted, found)) return true;
+        child = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
+    }
+    return false;
+}
+
+fn why(out: [*c]c.ke_script_resolve, verdict: c.ke_script_resolve) void {
+    if (out != null) out.* = verdict;
+}
+
+fn anywhere(s: *State, type_id: c.ke_script_type_id, wanted: []const u8, found: *c.ke_entity) bool {
+    if (type_id == c.KE_SCRIPT_TYPE_NONE or type_id > s.type_count) return false;
+    for (s.types[type_id - 1].entities.items) |e| {
+        if (!matches(s, e, type_id, wanted)) continue;
+        if (found.* != c.KE_ENTITY_INVALID) return true;
+        found.* = e;
+    }
+    return false;
+}
+
+fn resolve(
+    self_in: ?*c.ke_script_host,
+    owner: c.ke_entity,
+    type_id: c.ke_script_type_id,
+    name_in: [*c]const u8,
+    reach: c.ke_script_borrow,
+    out_why: [*c]c.ke_script_resolve,
+) callconv(.c) c.ke_entity {
+    const self = self_in orelse {
+        why(out_why, c.KE_SCRIPT_RESOLVE_NONE);
+        return c.KE_ENTITY_INVALID;
+    };
+    const s = stateOf(self);
+    const wanted = if (name_in == null) &[_]u8{} else std.mem.span(name_in);
+
+    if (reach == c.KE_SCRIPT_BORROW_ANCESTOR) {
+        var cur = if (getHierarchy(s, owner)) |h| h.parent else c.KE_ENTITY_INVALID;
+        while (cur != c.KE_ENTITY_INVALID) {
+            if (matches(s, cur, type_id, wanted)) {
+                why(out_why, c.KE_SCRIPT_RESOLVE_FOUND);
+                return cur;
+            }
+            cur = if (getHierarchy(s, cur)) |h| h.parent else c.KE_ENTITY_INVALID;
+        }
+        why(out_why, c.KE_SCRIPT_RESOLVE_NONE);
+        return c.KE_ENTITY_INVALID;
+    }
+
+    var found: c.ke_entity = c.KE_ENTITY_INVALID;
+    const ambiguous = switch (reach) {
+        c.KE_SCRIPT_BORROW_ANYWHERE => anywhere(s, type_id, wanted, &found),
+        else => descendantOf(s, owner, type_id, wanted, &found),
+    };
+    if (ambiguous) {
+        why(out_why, c.KE_SCRIPT_RESOLVE_AMBIGUOUS);
+        return c.KE_ENTITY_INVALID;
+    }
+    why(out_why, if (found == c.KE_ENTITY_INVALID) c.KE_SCRIPT_RESOLVE_NONE else c.KE_SCRIPT_RESOLVE_FOUND);
+    return found;
+}
+
+fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
+    const self = self_in orelse return;
+    const s = stateOf(self);
+    for (s.types[0..s.type_count]) |*t| t.entities.deinit(heap.gpa);
+    heap.gpa.free(s.types);
+    heap.gpa.destroy(s);
+}
+
+pub export fn ke_script_host_create(
+    ecs_in: ?*c.ke_ecs,
+    params: [*c]const c.ke_script_host_params,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_script_host_handle {
+    const null_handle = std.mem.zeroes(c.ke_script_host_handle);
+
+    const ecs = ecs_in orelse {
+        E.fail(out_error, .invalid_argument, "script host requires an ecs", @src());
+        return null_handle;
+    };
+    if (ecs.component_lookup == null or ecs.component_get == null) {
+        E.fail(out_error, .invalid_argument, "ecs does not expose component lookup", @src());
+        return null_handle;
+    }
+
+    var hierarchy_meta: c.ke_component_meta = undefined;
+    var name_meta: c.ke_component_meta = undefined;
+    if (!ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta, null) or
+        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_NAME, &name_meta, null))
+    {
+        E.fail(out_error, .not_found, "hierarchy and name components are not registered; create a scene tree first", @src());
+        return null_handle;
+    }
+
+    const n_types = if (params != null) orDefault(params.*.max_types, default_max_types) else default_max_types;
+
+    const s = heap.gpa.create(State) catch {
+        E.fail(out_error, .out_of_memory, "script host allocation failed", @src());
+        return null_handle;
+    };
+
+    s.types = heap.gpa.alloc(ScriptType, n_types) catch {
+        E.fail(out_error, .out_of_memory, "script type table allocation failed", @src());
+        heap.gpa.destroy(s);
+        return null_handle;
+    };
+
+    s.ecs = ecs;
+    s.hierarchy_cid = hierarchy_meta.cid;
+    s.name_cid = name_meta.cid;
+    s.binding_cid = ecs.component_register.?(ecs, binding_component, @sizeOf(Binding), null, 0, null);
+    if (s.binding_cid == 0) {
+        E.fail(out_error, .invalid_argument, "could not register the script instance component", @src());
+        heap.gpa.free(s.types);
+        heap.gpa.destroy(s);
+        return null_handle;
+    }
+    s.type_count = 0;
+
+    s.api = .{
+        .handle = s,
+        .register_type = &registerType,
+        .type_lookup = &typeLookup,
+        .type_components = &typeComponents,
+        .type_reach = &typeReach,
+        .bind = &bind,
+        .unbind = &unbind,
+        .instance_of = &instanceOf,
+        .instance_count = &instanceCount,
+        .instances = &instances,
+        .resolve = &resolve,
+    };
+
+    return .{ .ref = &s.api, .destroy = &destroy };
+}
+
+const testing = std.testing;
+const scene_tree = @import("scene_tree.zig");
+
+const Harness = struct {
+    tree: scene_tree.Fixture,
+    handle: c.ke_script_host_handle,
+
+    fn init(self: *Harness) !void {
+        try self.tree.init();
+        self.handle = ke_script_host_create(&self.tree.ecs.vtable, null, null);
+        try testing.expect(self.handle.ref != null);
+    }
+
+    fn deinit(self: *Harness) void {
+        if (self.handle.destroy) |d| d(self.handle.ref);
+        self.tree.deinit();
+    }
+
+    fn host(self: *Harness) *c.ke_script_host {
+        return self.handle.ref;
+    }
+
+    fn declare(self: *Harness, name: [*c]const u8, reach: c.ke_script_reach) !c.ke_script_type_id {
+        var id: c.ke_script_type_id = c.KE_SCRIPT_TYPE_NONE;
+        const components = [_]c.ke_component_id{ 1, 2 };
+        try testing.expect(self.host().register_type.?(self.host(), name, &components, components.len, reach, &id, null));
+        return id;
+    }
+};
+
+test "a type registered twice under one name is the same type" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const first = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const again = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+
+    try testing.expectEqual(first, again);
+}
+
+test "a type re-registered with a different reach is refused" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    _ = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+
+    var id: c.ke_script_type_id = c.KE_SCRIPT_TYPE_NONE;
+    const components = [_]c.ke_component_id{ 1, 2 };
+    try testing.expect(!h.host().register_type.?(h.host(), "pong.paddle", &components, components.len, c.KE_SCRIPT_REACH_ANY, &id, null));
+}
+
+test "an unregistered type name resolves to nothing" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    var id: c.ke_script_type_id = 12345;
+    try testing.expect(!h.host().type_lookup.?(h.host(), "pong.nobody", &id));
+}
+
+test "an unknown type reaches anywhere, because refusing to parallelise it is the safe answer" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    try testing.expectEqual(@as(c.ke_script_reach, c.KE_SCRIPT_REACH_ANY), h.host().type_reach.?(h.host(), 9999));
+    try testing.expectEqual(@as(c.ke_script_reach, c.KE_SCRIPT_REACH_ANY), h.host().type_reach.?(h.host(), c.KE_SCRIPT_TYPE_NONE));
+}
+
+test "a type reports the components it was registered with" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+
+    var count: u32 = 0;
+    const comps = h.host().type_components.?(h.host(), id, &count);
+    try testing.expectEqual(@as(u32, 2), count);
+    try testing.expectEqual(@as(c.ke_component_id, 1), comps[0]);
+    try testing.expectEqual(@as(c.ke_component_id, 2), comps[1]);
+}
+
+test "an entity carries the instance it was bound to" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const e = h.tree.create("Left", 0);
+    var marker: u32 = 7;
+
+    try testing.expect(h.host().bind.?(h.host(), e, id, &marker, null));
+
+    var out_type: c.ke_script_type_id = c.KE_SCRIPT_TYPE_NONE;
+    var out_instance: ?*anyopaque = null;
+    try testing.expect(h.host().instance_of.?(h.host(), e, &out_type, &out_instance));
+    try testing.expectEqual(id, out_type);
+    try testing.expectEqual(@as(?*anyopaque, &marker), out_instance);
+}
+
+test "binding over an existing instance is refused rather than dropping it silently" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const e = h.tree.create("Left", 0);
+    var first: u32 = 1;
+    var second: u32 = 2;
+
+    try testing.expect(h.host().bind.?(h.host(), e, id, &first, null));
+    try testing.expect(!h.host().bind.?(h.host(), e, id, &second, null));
+
+    var out_instance: ?*anyopaque = null;
+    _ = h.host().instance_of.?(h.host(), e, null, &out_instance);
+    try testing.expectEqual(@as(?*anyopaque, &first), out_instance);
+}
+
+test "an entity nobody bound has no instance" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const e = h.tree.create("Scenery", 0);
+    try testing.expect(!h.host().instance_of.?(h.host(), e, null, null));
+}
+
+test "instance count follows bind and unbind" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const a = h.tree.create("Left", 0);
+    const b = h.tree.create("Right", 0);
+    var ma: u32 = 1;
+    var mb: u32 = 2;
+
+    try testing.expectEqual(@as(u32, 0), h.host().instance_count.?(h.host(), id));
+    try testing.expect(h.host().bind.?(h.host(), a, id, &ma, null));
+    try testing.expect(h.host().bind.?(h.host(), b, id, &mb, null));
+    try testing.expectEqual(@as(u32, 2), h.host().instance_count.?(h.host(), id));
+
+    h.host().unbind.?(h.host(), a);
+    try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
+    try testing.expect(!h.host().instance_of.?(h.host(), a, null, null));
+}
+
+test "a type lists the entities bound to it" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const a = h.tree.create("Left", 0);
+    const b = h.tree.create("Right", 0);
+    var ma: u32 = 1;
+    var mb: u32 = 2;
+    try testing.expect(h.host().bind.?(h.host(), a, id, &ma, null));
+    try testing.expect(h.host().bind.?(h.host(), b, id, &mb, null));
+
+    var count: u32 = 0;
+    const listed = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqual(@as(u32, 2), count);
+    try testing.expectEqual(a, listed[0]);
+    try testing.expectEqual(b, listed[1]);
+}
+
+test "unbinding one instance leaves every other one reachable" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    var entities: [4]c.ke_entity = undefined;
+    var marks = [_]u32{ 1, 2, 3, 4 };
+    for (&entities, 0..) |*e, i| {
+        e.* = h.tree.create("Node", 0);
+        try testing.expect(h.host().bind.?(h.host(), e.*, id, &marks[i], null));
+    }
+
+    h.host().unbind.?(h.host(), entities[0]);
+    h.host().unbind.?(h.host(), entities[2]);
+
+    var count: u32 = 0;
+    const listed = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqual(@as(u32, 2), count);
+
+    for (listed[0..count]) |e| {
+        try testing.expect(e != entities[0] and e != entities[2]);
+        try testing.expect(h.host().instance_of.?(h.host(), e, null, null));
+    }
+}
+
+test "the last instance unbound empties its type" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const only = h.tree.create("Only", 0);
+    var mark: u32 = 1;
+    try testing.expect(h.host().bind.?(h.host(), only, id, &mark, null));
+    h.host().unbind.?(h.host(), only);
+
+    var count: u32 = 1;
+    _ = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqual(@as(u32, 0), count);
+    try testing.expectEqual(@as(u32, 0), h.host().instance_count.?(h.host(), id));
+}
+
+test "a descendant of the wanted type is found through intermediate nodes" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    const holder = h.tree.create("Sounds", ball);
+    const hit = h.tree.create("HitSound", holder);
+    var marker: u32 = 1;
+    try testing.expect(h.host().bind.?(h.host(), hit, audio, &marker, null));
+
+    try testing.expectEqual(hit, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
+}
+
+test "a descendant named by the borrow is picked out of several of its type" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    const hit = h.tree.create("HitSound", ball);
+    const score = h.tree.create("ScoreSound", ball);
+    var m1: u32 = 1;
+    var m2: u32 = 2;
+    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
+    try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
+
+    try testing.expectEqual(score, h.host().resolve.?(h.host(), ball, audio, "ScoreSound", c.KE_SCRIPT_BORROW_DESCENDANT, null));
+}
+
+test "an unnamed borrow answered by two nodes resolves to nothing instead of guessing" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    const hit = h.tree.create("HitSound", ball);
+    const score = h.tree.create("ScoreSound", ball);
+    var m1: u32 = 1;
+    var m2: u32 = 2;
+    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
+    try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
+
+    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
+}
+
+test "an invalid answer says whether nothing matched or too much did" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_FOUND;
+
+    _ = h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, &verdict);
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_NONE), verdict);
+
+    const hit = h.tree.create("HitSound", ball);
+    var m1: u32 = 1;
+    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
+    try testing.expectEqual(hit, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, &verdict));
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_FOUND), verdict);
+
+    const score = h.tree.create("ScoreSound", ball);
+    var m2: u32 = 2;
+    try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
+    _ = h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, &verdict);
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_AMBIGUOUS), verdict);
+}
+
+test "an ancestor that is not there reads as none, never as ambiguous" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const field = try h.declare("pong.field", c.KE_SCRIPT_REACH_SELF);
+    const lonely = h.tree.create("Lonely", 0);
+    var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_AMBIGUOUS;
+
+    _ = h.host().resolve.?(h.host(), lonely, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, &verdict);
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_NONE), verdict);
+}
+
+test "a node of the wanted type outside the subtree is not a descendant" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    const elsewhere = h.tree.create("Music", 0);
+    var marker: u32 = 1;
+    try testing.expect(h.host().bind.?(h.host(), elsewhere, audio, &marker, null));
+
+    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
+}
+
+test "a borrow reaching anywhere finds a node the subtree does not contain" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    const elsewhere = h.tree.create("Music", 0);
+    var marker: u32 = 1;
+    try testing.expect(h.host().bind.?(h.host(), elsewhere, audio, &marker, null));
+
+    try testing.expectEqual(elsewhere, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_ANYWHERE, null));
+    try testing.expectEqual(elsewhere, h.host().resolve.?(h.host(), ball, audio, "Music", c.KE_SCRIPT_BORROW_ANYWHERE, null));
+}
+
+test "two nodes of one type anywhere are ambiguous until the borrow names one" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const audio = try h.declare("engine.audio_player", c.KE_SCRIPT_REACH_SELF);
+    const ball = h.tree.create("Ball", 0);
+    const music = h.tree.create("Music", 0);
+    const hit = h.tree.create("HitSound", 0);
+    var m1: u32 = 1;
+    var m2: u32 = 2;
+    try testing.expect(h.host().bind.?(h.host(), music, audio, &m1, null));
+    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m2, null));
+
+    var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_FOUND;
+    _ = h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_ANYWHERE, &verdict);
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_AMBIGUOUS), verdict);
+
+    try testing.expectEqual(hit, h.host().resolve.?(h.host(), ball, audio, "HitSound", c.KE_SCRIPT_BORROW_ANYWHERE, &verdict));
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_FOUND), verdict);
+}
+
+test "a borrow reaching anywhere does not see a type nobody registered" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const ball = h.tree.create("Ball", 0);
+    var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_FOUND;
+    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID),
+        h.host().resolve.?(h.host(), ball, c.KE_SCRIPT_TYPE_NONE, "", c.KE_SCRIPT_BORROW_ANYWHERE, &verdict));
+    try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_NONE), verdict);
+}
+
+test "the nearest ancestor of the wanted type wins over a further one" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const field = try h.declare("pong.field", c.KE_SCRIPT_REACH_ANY);
+    const outer = h.tree.create("Outer", 0);
+    const inner = h.tree.create("Inner", outer);
+    const leaf = h.tree.create("Leaf", inner);
+    var m1: u32 = 1;
+    var m2: u32 = 2;
+    try testing.expect(h.host().bind.?(h.host(), outer, field, &m1, null));
+    try testing.expect(h.host().bind.?(h.host(), inner, field, &m2, null));
+
+    try testing.expectEqual(inner, h.host().resolve.?(h.host(), leaf, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, null));
+}
+
+test "a node is not its own ancestor" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const field = try h.declare("pong.field", c.KE_SCRIPT_REACH_ANY);
+    const node = h.tree.create("Field", 0);
+    var marker: u32 = 1;
+    try testing.expect(h.host().bind.?(h.host(), node, field, &marker, null));
+
+    try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), node, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, null));
+}

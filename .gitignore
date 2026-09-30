@@ -22,6 +22,7 @@
 *.manifest
 *.res
 *.bin
+!assets/*.bin
 *.gcov
 
 # Build artifacts for C#

@@ -13,7 +13,7 @@ public static class MeshPrimitives
     /// <summary>Unit XY quad centered at the origin, facing +Z.</summary>
     public static MeshHandle Quad(IRenderResources resources)
     {
-        var t = new Vector3(1, 0, 0); // +U
+        var t = new Vector3(1, 0, 0);
         ReadOnlySpan<MeshVertex> verts = stackalloc MeshVertex[]
         {
             new(new(-0.5f, -0.5f, 0f), new(0, 0, 1), new(0, 1), t),
@@ -52,7 +52,7 @@ public static class MeshPrimitives
                          Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
         {
             int v = f * 4;
-            var t = Vector3.Normalize(p1 - p0); // +U direction
+            var t = Vector3.Normalize(p1 - p0);
             verts[v + 0] = new(p0, n, new(0, 1), t);
             verts[v + 1] = new(p1, n, new(1, 1), t);
             verts[v + 2] = new(p2, n, new(1, 0), t);
@@ -83,14 +83,14 @@ public static class MeshPrimitives
         int vi = 0;
         for (int r = 0; r <= rings; r++)
         {
-            float phi = MathF.PI * r / rings;          // 0 → π (top to bottom)
+            float phi = MathF.PI * r / rings;
             float y   = MathF.Cos(phi);
             float sinP = MathF.Sin(phi);
             for (int s = 0; s <= segments; s++)
             {
                 float theta = 2f * MathF.PI * s / segments;
                 var n = new Vector3(sinP * MathF.Cos(theta), y, sinP * MathF.Sin(theta));
-                var t = new Vector3(-MathF.Sin(theta), 0f, MathF.Cos(theta)); // +U = d/dTheta
+                var t = new Vector3(-MathF.Sin(theta), 0f, MathF.Cos(theta));
                 var uv = new Vector2((float)s / segments, (float)r / rings);
                 verts[vi++] = new(n * radius, n, uv, t);
             }

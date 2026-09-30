@@ -40,16 +40,13 @@ int main(void)
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
 
-    ke_ecs_flecs_params ep = { .reserved = 0 };
+    ke_ecs_flecs_params ep = { .world_id_base = 0 };
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
 
     ke_render_service_handle core = ke_render_service_create(gpu.ref, ecs.ref, "shaders", &err);
     if (!core.ref) die("render core", err);
 
-    // ── Triangle pipeline — engine-level setup via the device ────────────────
-    // The backend advertises its shader language; this build feeds it WGSL
-    // (slangc compiled triangle.slang -> WGSL). One module, two entry points.
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
 
     ke_gpu_shader_module shader = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
@@ -66,14 +63,13 @@ int main(void)
                          .src_alpha = KE_GPU_BLEND_FACTOR_ONE, .dst_alpha = KE_GPU_BLEND_FACTOR_ZERO,
                          .alpha_op = KE_GPU_BLEND_OP_ADD, .write_mask = 0x0F },
         .depth_stencil = { .depth_test_enabled = 0 },
-        .color_target_formats = { 0 }, // slot 0 = swapchain surface format
+        .color_target_formats = { 0 },
         .color_target_count = 1,
     };
     ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
     if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", NULL);
     gpu.ref->destroy_shader_module(gpu.ref, shader);
 
-    // ── Pass I/O: this pass writes the backbuffer ────────────────────────────
     const char *writes[] = { "backbuffer" };
     ke_render_pass_io io = { .reads = NULL, .reads_count = 0, .writes = writes, .writes_count = 1 };
 
@@ -82,7 +78,7 @@ int main(void)
     {
         win.ref->poll_events(win.ref, NULL);
 
-        if (!core.ref->begin_frame(core.ref, &err)) continue; // backbuffer not ready
+        if (!core.ref->begin_frame(core.ref, &err)) continue;
 
         ke_render_pass_ctx *pc = core.ref->begin_pass(core.ref, NULL, &io);
         ke_gpu_render_pass *rp = pc->begin_render(pc);

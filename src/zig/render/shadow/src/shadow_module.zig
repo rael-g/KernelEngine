@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
@@ -11,47 +7,47 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-// Shadow-depth pass — a standalone plugin: talks to the rest of the render
-// pipeline only through the borrowed ke_render_service/ke_runtime handles passed
-// to create() — it never sees another pass's private struct. It publishes its
-// outputs ("shadow_map" view, "shadow_lvp" buffer) through the named-resource
-// table; deferred/forward resolve them by name. When `enabled` is false,
-// create() still publishes the tiny "shadow_lvp" uniform (a shading shader
-// samples the shadow hook unconditionally; a neutral-default resource makes it
-// a no-op) but none of the expensive resources (shadow_map/shadow_depth render
-// targets, pipeline, per-draw buffers, the "render.shadow" system) exist.
-
-const SHADOW_RES = 1024; // shadow map resolution
-
-// Duplicated from render_module.zig rather than shared, matching the
-// decoupling precedent already established in cluster_feature.slang (its own
-// header comment: "Duplicated rather than shared via import to keep this
-// feature decoupled from the pass file").
 const MAX_DRAWS = 512;
-const UNIFORM_STRIDE = 256; // dynamic-offset alignment (>= minUniformBufferOffsetAlignment)
+const UNIFORM_STRIDE = 256;
 
-// Per-object model for the shadow pass (set 1).
+const default_params = c.ke_render_shadow_params{
+    .resolution = 1024,
+    .light_distance = 25.0,
+    .extent = 20.0,
+    .near_plane = 0.1,
+    .far_plane = 50.0,
+};
+
+/// Each unset field falls back to the default, so a caller may name only what it
+/// wants to change.
+fn paramsOr(params: [*c]const c.ke_render_shadow_params) c.ke_render_shadow_params {
+    const p = params orelse return default_params;
+    return .{
+        .resolution = if (p.*.resolution != 0) p.*.resolution else default_params.resolution,
+        .light_distance = if (p.*.light_distance != 0.0) p.*.light_distance else default_params.light_distance,
+        .extent = if (p.*.extent != 0.0) p.*.extent else default_params.extent,
+        .near_plane = if (p.*.near_plane != 0.0) p.*.near_plane else default_params.near_plane,
+        .far_plane = if (p.*.far_plane != 0.0) p.*.far_plane else default_params.far_plane,
+    };
+}
+
 const ShadowObj = extern struct { model: [16]f32 };
-
 
 const ShadowModule = struct {
     enabled: bool = false,
 
-    // Borrowed cross-cutting refs, captured once at setup so the system body
-    // never reaches into the parent ModuleState.
     core: *c.ke_render_service = undefined,
     ndc: c.ke_ndc_convention = undefined,
+    view_space: *c.ke_view_space = undefined,
+    params: c.ke_render_shadow_params = default_params,
     mesh_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     light_cid: c.ke_component_id = undefined,
     frame_cid: c.ke_component_id = undefined,
 
-    view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE, // the shadow map's view — read by the forward's set-0 binding 3/5
-    // Re-queried via core.get_or_create_pipeline every record() call — see
-    // forward_module.zig's ForwardModule.pipeline_params for why a handle
-    // cached once at setup can't observe the async real-PSO upgrade.
+    view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE,
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    lvp_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE, // set 0 (this pass) AND read by the forward's binding 4
+    lvp_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     lvp_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     obj_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
@@ -59,79 +55,63 @@ const ShadowModule = struct {
     writes: [2][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
-    // Resolved single-threaded by the runtime before the wave dispatches; the
-    // body then reads plain memory via ke_system_ctx_view and touches the ECS
-    // not at all. Index order here is the query_index the body passes to it.
-    queries: [2]c.ke_query_decl = undefined, // [directional_light], [mesh, transform]
+    queries: [2]c.ke_query_decl = undefined,
 };
 
-// Orthographic light view-proj; the light source sits opposite the travel
-// direction. Frustum extent 20, far plane 50.
-fn lightViewProj(ndc: c.ke_ndc_convention, ldir_in: zm.Vec) zm.Mat {
+fn lightViewProj(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, p: c.ke_render_shadow_params, ldir_in: zm.Vec) zm.Mat {
     const ldir = zm.normalize3(ldir_in);
-    const eye3 = ldir * zm.f32x4s(-25.0);
-    const eye = zm.f32x4(eye3[0], eye3[1], eye3[2], 1.0);
-    const up = if (@abs(ldir[1]) > 0.99) zm.f32x4(0, 0, 1, 0) else zm.f32x4(0, 1, 0, 0);
-    const lview = zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), up);
-    const lproj = makeOrtho(ndc, 20.0, 20.0, 0.1, 50.0);
-    return zm.mul(lview, lproj);
-}
-
-fn makeOrtho(ndc: c.ke_ndc_convention, w: f32, h: f32, near: f32, far: f32) zm.Mat {
-    var p = if (ndc.z_zero_to_one != 0)
-        zm.orthographicLh(w, h, near, far)
+    const eye3 = ldir * zm.f32x4s(-p.light_distance);
+    const eye = c.ke_vec3{ .x = eye3[0], .y = eye3[1], .z = eye3[2] };
+    const origin = c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
+    const up = if (@abs(ldir[1]) > 0.99)
+        c.ke_vec3{ .x = 0, .y = 0, .z = 1 }
     else
-        zm.orthographicLhGl(w, h, near, far);
-    if (ndc.y_flip != 0) p[1][1] = -p[1][1];
-    return p;
+        c.ke_vec3{ .x = 0, .y = 1, .z = 0 };
+
+    var view: c.ke_mat4 = undefined;
+    vs.look_at.?(vs, &eye, &origin, &up, &view);
+    var proj: c.ke_mat4 = undefined;
+    vs.orthographic.?(vs, p.extent, p.extent, p.near_plane, p.far_plane, &ndc, &proj);
+    return zm.mul(zm.loadMat(&view.m), zm.loadMat(&proj.m));
 }
 
-// View 0 = [directional_light]; the first match is the active sun. Null when
-// the scene declares no directional light — the caller skips the pass rather
-// than shadowing from an invented direction.
 fn lightDirOf(ctx: ?*c.ke_system_ctx) ?zm.Vec {
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 0, &segc);
     if (segc == 0 or segs[0].count == 0) return null;
     const dl: *const c.ke_directional_light_component = @ptrCast(@alignCast(segs[0].columns[0]));
-    return zm.f32x4(dl.dir_x, dl.dir_y, dl.dir_z, 0.0);
+    return zm.f32x4(dl.direction.x, dl.direction.y, dl.direction.z, 0.0);
 }
 
 inline fn moduleOf(user: ?*anyopaque) *ShadowModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const sh = moduleOf(user);
     const core = sh.core;
 
-    // No directional light means there is no directional shadow to render;
-    // the map keeps whatever the previous frame left and consumers gate on
-    // the same absence.
-    const light_dir = lightDirOf(ctx) orelse return;
+    const light_dir = lightDirOf(ctx) orelse return true;
 
-    const lvp = lightViewProj(sh.ndc, light_dir);
+    const lvp = lightViewProj(sh.view_space, sh.ndc, sh.params, light_dir);
     var lvp_arr: [16]f32 = undefined;
     zm.storeMat(lvp_arr[0..], lvp);
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);
 
     const pc = core.*.begin_pass.?(core, ctx, &sh.io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sh.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, sh.lvp_bg, null, 0);
 
-    // View 1 = [mesh, transform], columns aligned. Per-draw uniform writes are
-    // deferred by the core and replayed before the submit, so uploading inside
-    // the draw loop still lands ahead of the draws that read it.
     var draw_idx: u32 = 0;
     var segc: usize = 0;
     const segs = c.ke_system_ctx_view(ctx, 1, &segc);
     var s: usize = 0;
     while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
-        const tcs: [*c]const c.ke_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
+        const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
         while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
             var vbo: c.ke_gpu_buffer = 0;
@@ -140,7 +120,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
             if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
 
             var u: ShadowObj = undefined;
-            @memcpy(u.model[0..], tcs[i].world_matrix.m[0..16]);
+            @memcpy(u.model[0..], wts[i].matrix.m[0..16]);
             const offset: u32 = draw_idx * UNIFORM_STRIDE;
             core.*.upload.?(core, sh.obj_uniform, offset, &u, @sizeOf(ShadowObj));
 
@@ -153,29 +133,26 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
-// Allocates lvp_uniform unconditionally (tiny, 64 bytes — shadow_feature.slang's
-// neutral-default hook resource) and, only when `enabled`, the expensive
-// resources: the shadow_map/shadow_depth render targets, the shadow pipeline,
-// and the per-draw uniform ring.
 fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, enabled: bool, mesh_cid: c.ke_component_id,
-         transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
-         frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
+         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, enabled: bool, mesh_cid: c.ke_component_id,
+         world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
+         frame_cid: c.ke_component_id, params: [*c]const c.ke_render_shadow_params,
+         out_error: [*c][*c]c.ke_error) bool {
     sh.enabled = enabled;
     sh.core = core;
     sh.ndc = ndc;
+    sh.view_space = view_space;
+    sh.params = paramsOr(params);
     sh.mesh_cid = mesh_cid;
-    sh.transform_cid = transform_cid;
+    sh.world_transform_cid = world_transform_cid;
     sh.light_cid = light_cid;
     sh.frame_cid = frame_cid;
 
     sh.lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
     if (sh.lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    // Published under a name (not a *ShadowModule pointer) so any pass can bind
-    // it without knowing this module's private struct — the same contract
-    // "shadow_map" already uses for the shadow view below.
     _ = core.*.import_buffer.?(core, "shadow_lvp", sh.lvp_uniform, 64, null);
 
     if (!enabled) return true;
@@ -183,28 +160,26 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const shadow_map_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "shadow_map",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
-        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, // filterable; depth in .r
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
         .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
-        .width = SHADOW_RES,
-        .height = SHADOW_RES,
+        .width = sh.params.resolution,
+        .height = sh.params.resolution,
         .scale_x = 1.0,
         .scale_y = 1.0,
-        .clear_value = .{ 1.0, 1.0, 1.0, 1.0 }, // R=1 = far depth; alpha≠0 → override
+        .clear_value = .{ 1.0, 1.0, 1.0, 1.0 },
     }, null);
     const shadow_depth_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "shadow_depth",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
         .size_mode = c.KE_RENDER_SIZE_ABSOLUTE,
-        .width = SHADOW_RES,
-        .height = SHADOW_RES,
+        .width = sh.params.resolution,
+        .height = sh.params.resolution,
         .scale_x = 1.0,
         .scale_y = 1.0,
     }, null);
     sh.view = core.*.resource_view.?(core, "shadow_map");
 
-    // Neither the path nor the shader format is named here — core.load_shader
-    // resolves both. The core owns the result; this pass never destroys it.
     const sh_vs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (sh_vs == c.KE_GPU_INVALID_HANDLE) return false;
     const sh_fs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
@@ -256,24 +231,22 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sh.io = std.mem.zeroes(c.ke_render_pass_io);
     sh.io.writes = @ptrCast(&sh.writes);
     sh.io.writes_count = 2;
-    sh.io.cmd_slot = 1; // shadow pass → frame command slot 1 (before the opaque pass)
+    sh.io.cmd_slot = 1;
     sh.access = .{
         .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = shadow_depth_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = light_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = frame_cid, .access = c.KE_ACCESS_READ },
     };
 
-    // Data the body reads through resolved views. Index order is the
-    // query_index passed to ke_system_ctx_view.
     const rd = c.KE_ACCESS_READ;
     sh.queries = std.mem.zeroes([2]c.ke_query_decl);
     sh.queries[0].terms[0] = .{ .cid = light_cid, .access = rd };
     sh.queries[0].term_count = 1;
     sh.queries[1].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    sh.queries[1].terms[1] = .{ .cid = transform_cid, .access = rd };
+    sh.queries[1].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     sh.queries[1].term_count = 2;
     return true;
 }
@@ -284,35 +257,37 @@ fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
 }
 
 export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                   device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
+                                   device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
                                    enabled: c.ke_bool, mesh_cid: c.ke_component_id,
-                                   transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
+                                   world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
                                    frame_cid: c.ke_component_id,
+                                   params: [*c]const c.ke_render_shadow_params,
                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_shadow_handle {
     const empty = c.ke_render_shadow_handle{ .ref = null, .destroy = null };
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
+    const vs = view_space orelse return empty;
 
     const sh = gpa.create(ShadowModule) catch return empty;
     sh.* = .{};
-    if (!setup(sh, dev, core_ref, ndc, enabled != 0, mesh_cid, transform_cid, light_cid, frame_cid, out_error)) {
+    if (!setup(sh, dev, core_ref, ndc, vs, enabled != 0, mesh_cid, world_transform_cid, light_cid, frame_cid, params, out_error)) {
         gpa.destroy(sh);
         return empty;
     }
 
     if (sh.enabled) {
-        var params = std.mem.zeroes(c.ke_runtime_system_params);
-        params.name = "render.shadow";
-        params.phase = c.KE_PHASE_RENDER;
-        params.queries = &sh.queries;
-        params.query_count = sh.queries.len;
-        params.access_list = &sh.access;
-        params.access_count = sh.access.len;
-        params.pinned_thread = 0;
-        params.user_data = sh;
-        params.execute = system;
-        _ = rt.register_system.?(rt, &params, null);
+        var sys_params = std.mem.zeroes(c.ke_runtime_system_params);
+        sys_params.name = "render.shadow";
+        sys_params.phase = c.KE_PHASE_RENDER;
+        sys_params.queries = &sh.queries;
+        sys_params.query_count = sh.queries.len;
+        sys_params.access_list = &sh.access;
+        sys_params.access_count = sh.access.len;
+        sys_params.pinned_thread = 0;
+        sys_params.user_data = sh;
+        sys_params.execute = system;
+        _ = rt.register_system.?(rt, &sys_params, null);
     }
 
     return .{ .ref = @ptrCast(sh), .destroy = destroyHandle };

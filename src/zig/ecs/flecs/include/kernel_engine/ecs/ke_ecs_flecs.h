@@ -1,14 +1,9 @@
 ﻿#ifndef KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 #define KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 
-// ke_ecs_flecs — flecs-backed implementation of the ke_ecs contract.
-//
-// The flecs build linked by this plugin strips the pipeline / system / timer
-// addons. flecs is used as storage + queries + observers only; the scheduler
-// is the in-house ke_runtime (see kernel/runtime/runtime_create.h).
-
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <stdint.h>
 
 #ifndef KE_ECS_FLECS_API
 #  if defined(_WIN32) || defined(__CYGWIN__)
@@ -30,7 +25,11 @@ extern "C" {
 
 typedef struct ke_ecs_flecs_params
 {
-    int reserved;  // empty for the spike; expanded as the surface grows
+    /// First id the world's own allocator may issue. Ids below it form the pool
+    /// entity_reserve draws from, so this doubles as that pool's capacity — the
+    /// world's own side is unbounded. 0 takes the default. Raise it for a world
+    /// whose systems spawn heavily; entity_reserve returns 0 once it is spent.
+    uint32_t world_id_base;
 } ke_ecs_flecs_params;
 
 /// Creates a ke_ecs vtable backed by an internally-owned flecs world.
@@ -47,4 +46,4 @@ KE_ECS_FLECS_API ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *pa
 }
 #endif
 
-#endif  // KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
+#endif

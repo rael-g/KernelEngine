@@ -1,0 +1,23 @@
+[scene]
+name    = "Paddle"
+version = 2
+
+[[entity]]
+name = "Root"
+type = "pong.paddle"
+
+[[entity]]
+name   = "Shape"
+parent = "Root"
+type   = "collider2d"
+[entity.collider2d]
+half_extents = [0.15, 0.9]
+restitution  = 1.0
+
+[[entity]]
+name   = "Visual"
+parent = "Root"
+type   = "sprite2d"
+[entity.sprite2d]
+size  = [0.3, 1.8]
+color = [0.95, 0.95, 0.95, 1.0]

@@ -11,23 +11,29 @@ extern "C"
 {
 #endif
 
+    /** Builds and binds the script an entity's declared type names.
+     * @param ctx       [context] Opaque context forwarded from register_script_factory.
+     * @param entity    The entity the script is bound to.
+     * @param type_name [utf8] Qualified node type name, as the scene file spells it.
+     * @param out_error Set when the factory rejects the entity; the load fails with it.
+     * @return false when no script could be built for @p type_name. */
     typedef bool (*ke_script_factory_func)(void *ctx, ke_entity entity,
                                            const char *type_name, ke_error **out_error);
 
-    typedef struct ke_scene_properties
-    {
-        const ke_variant_table_entry *entries;
-        uint32_t                      count;
-    } ke_scene_properties;
-
-#define KE_SCENE_PROPERTIES_COMPONENT_NAME "scene_properties"
 
     typedef struct ke_scene_loader
     {
         void *handle;
 
+        /** [drains] Loads the scene at @p path, instantiating every entity it declares.
+         * This is where a script factory that refused an entity is answered for.
+         * @param path [utf8] Path to the scene file. */
         bool (*load)(struct ke_scene_loader *self, const char *path, ke_error **out_error);
 
+        /** Registers the factory consulted for every entity that declares a type.
+         * Replaces any factory registered before it.
+         * @param factory [closure:ctx,retained] Consulted once per typed entity.
+         * @param ctx     Forwarded to @p factory unchanged. */
         bool (*register_script_factory)(struct ke_scene_loader *self,
                                         ke_script_factory_func factory,
                                         void *ctx, ke_error **out_error);
@@ -44,4 +50,4 @@ extern "C"
 }
 #endif
 
-#endif // KERNEL_ENGINE_FRAMEWORK_SCENE_LOADER_H_
+#endif

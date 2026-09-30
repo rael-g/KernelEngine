@@ -1,9 +1,5 @@
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
@@ -11,113 +7,79 @@ const c = cimport.c;
 
 const gpa = std.heap.c_allocator;
 
-// Skybox — a standalone pass. Fullscreen triangle that fills the pixels the
-// geometry did not cover (G-buffer depth at far), sampling the environment
-// cubemap by the reconstructed view direction. Runs after deferred-lighting
-// (which shaded the covered pixels) and before tonemap, writing "hdr" with load
-// (composite, not clear). No depth attachment — it discards covered pixels by
-// texel-fetching the depth buffer.
-//
-// A standalone plugin: talks to the rest of the render pipeline only through
-// the borrowed ke_render_service/ke_runtime handles passed to create() — it never
-// sees another pass's private struct. "depth" is resolved by name (the
-// producing pass declares it before this one registers its own system).
-
-// Matches skybox.slang's SkyFrame.
 const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
 const SkyboxModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
+    view_space: *c.ke_view_space = undefined,
 
     camera_cid: c.ke_component_id = undefined,
-    transform_cid: c.ke_component_id = undefined,
+    world_transform_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
-    // Re-queried via core.get_or_create_pipeline every record() call — see
-    // forward_module.zig's ForwardModule.pipeline_params for why a handle
-    // cached once at setup can't observe the async real-PSO upgrade.
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE, // set 0
-    bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE, // rebuilt per frame (transient depth view)
+    bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
     writes: [1][*c]const u8 = undefined,
     reads: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
-    // Resolved single-threaded by the runtime before the wave dispatches; the
-    // body then reads plain memory via ke_system_ctx_view and touches the ECS
-    // not at all.
-    queries: [2]c.ke_query_decl = undefined, // [camera, transform], [skybox]
+    queries: [2]c.ke_query_decl = undefined,
 };
 
-fn cameraView(cam_tc: *const c.ke_transform_component) zm.Mat {
-    const eye = zm.f32x4(cam_tc.position.x, cam_tc.position.y, cam_tc.position.z, 1.0);
-    const q = cam_tc.rotation;
-    const view = if (@abs(q.x) < 1e-6 and @abs(q.y) < 1e-6 and @abs(q.z) < 1e-6)
-        zm.lookAtLh(eye, zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 1, 0, 0))
-    else blk: {
-        const m = cam_tc.world_matrix.m;
-        const fwd = zm.f32x4(-m[8], -m[9], -m[10], 0);
-        const up = zm.f32x4(m[4], m[5], m[6], 0);
-        break :blk zm.lookToLh(eye, fwd, up);
-    };
-    return view;
+fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
+    var out: c.ke_mat4 = undefined;
+    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
+    return zm.loadMat(&out.m);
 }
 
-fn makePerspective(ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
-    var p = if (ndc.z_zero_to_one != 0)
-        zm.perspectiveFovLh(fovy, aspect, near, far)
-    else
-        zm.perspectiveFovLhGl(fovy, aspect, near, far);
-    if (ndc.y_flip != 0) p[1][1] = -p[1][1];
-    return p;
+fn makePerspective(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
+    var out: c.ke_mat4 = undefined;
+    vs.perspective.?(vs, fovy, aspect, near, far, &ndc, &out);
+    return zm.loadMat(&out.m);
 }
 
 inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const sm = moduleOf(user);
     const core = sm.core;
     const dev = sm.device;
 
-    // View 0 = [camera, transform]; the first match is the active camera.
     var cam_segc: usize = 0;
     const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
-    if (cam_segc == 0 or cam_segs[0].count == 0) return; // no camera → deferred already cleared hdr
+    if (cam_segc == 0 or cam_segs[0].count == 0) return true;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_tc: *const c.ke_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
+    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, ctx, &sm.io);
-    if (pc == null) return;
+    if (pc == null) return true;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    // Rotation-only view (translation zeroed) × proj, inverted → clip-to-world
-    // direction so the cubemap stays centred on the camera (infinite background).
-    const view = cameraView(cam_tc);
+    const view = cameraView(sm.view_space, cam_wt);
     var vm: [16]f32 = undefined;
     zm.storeMat(vm[0..], view);
     vm[12] = 0;
     vm[13] = 0;
     vm[14] = 0;
     const fov_rad = cam.fov * @as(f32, std.math.pi / 180.0);
-    const proj = makePerspective(sm.ndc, fov_rad, aspect, cam.near_plane, cam.far_plane);
+    const proj = makePerspective(sm.view_space, sm.ndc, fov_rad, aspect, cam.near_plane, cam.far_plane);
     const sky_vp = zm.mul(zm.loadMat(vm[0..]), proj);
     var frame: SkyFrame = .{ .inv_sky_view_proj = undefined };
     zm.storeMat(frame.inv_sky_view_proj[0..], zm.inverse(sky_vp));
     core.*.upload.?(core, sm.frame_uniform, 0, &frame, @sizeOf(SkyFrame));
 
-    // Environment cubemap from the first skybox entity (default black otherwise).
-    // View 1 = [skybox].
     var sky_segc: usize = 0;
     const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
     const env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
@@ -144,25 +106,28 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) void {
     }, &err);
     if (sm.bind_group == c.KE_GPU_INVALID_HANDLE) {
         core.*.end_pass.?(core, pc);
-        return;
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox pass: bind group creation failed", @src().file, @intCast(@src().line), err);
+        return false;
     }
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sm.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, sm.bind_group, null, 0);
-    rp.*.draw.?(rp, 3, 1, 0, 0); // fullscreen triangle
+    rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
+    return true;
 }
 
 fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     sm.core = core;
     sm.device = dev;
     sm.ndc = ndc;
+    sm.view_space = view_space;
     sm.camera_cid = camera_cid;
-    sm.transform_cid = transform_cid;
+    sm.world_transform_cid = world_transform_cid;
     sm.skybox_cid = skybox_cid;
 
     const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
@@ -177,8 +142,6 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entries = &bgl_entries,
     });
 
-    // Neither the path nor the shader format is named here — core.load_shader
-    // resolves both. The core owns the result; this pass never destroys it.
     const sky_vs = core.*.load_shader.?(core, "skybox", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (sky_vs == c.KE_GPU_INVALID_HANDLE) return false;
     const sky_fs = core.*.load_shader.?(core, "skybox", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
@@ -193,12 +156,12 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     skp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     skp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     skp.blend_state.write_mask = 0x0F;
-    skp.depth_stencil.depth_test_enabled = 0; // no depth attachment; occlusion via texel-fetch discard
+    skp.depth_stencil.depth_test_enabled = 0;
     skp.depth_stencil.depth_write_enabled = 0;
     skp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     skp.bind_group_layouts[0] = sm.bgl;
     skp.bind_group_layout_count = 1;
-    skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT; // HDR intermediate
+    skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     skp.color_target_count = 1;
     sm.pipeline_params = skp;
     if (core.*.get_or_create_pipeline.?(core, &sm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
@@ -221,24 +184,22 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sm.io.writes_count = 1;
     sm.io.reads = @ptrCast(&sm.reads);
     sm.io.reads_count = 1;
-    sm.io.load = 1; // composite over deferred-lighting's output, don't clear
-    sm.io.cmd_slot = 5; // after deferred-lighting (4), before tonemap (6)
+    sm.io.load = 1;
+    sm.io.cmd_slot = 5;
 
     sm.access = .{
         .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE },
         .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ },
         .{ .cid = camera_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = transform_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = skybox_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = frame_cid, .access = c.KE_ACCESS_READ },
     };
 
-    // Data the body reads through resolved views. Index order is the
-    // query_index passed to ke_system_ctx_view.
     const rd = c.KE_ACCESS_READ;
     sm.queries = std.mem.zeroes([2]c.ke_query_decl);
     sm.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    sm.queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
+    sm.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
     sm.queries[0].term_count = 2;
     sm.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
     sm.queries[1].term_count = 1;
@@ -258,18 +219,19 @@ fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
 }
 
 export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                   device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
-                                   camera_cid: c.ke_component_id, transform_cid: c.ke_component_id,
+                                   device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
+                                   camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                    skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_skybox_handle {
     const empty = c.ke_render_skybox_handle{ .ref = null, .destroy = null };
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
+    const vs = view_space orelse return empty;
 
     const sm = gpa.create(SkyboxModule) catch return empty;
     sm.* = .{};
-    if (!setup(sm, dev, core_ref, ndc, camera_cid, transform_cid, skybox_cid, frame_cid, out_error)) {
+    if (!setup(sm, dev, core_ref, ndc, vs, camera_cid, world_transform_cid, skybox_cid, frame_cid, out_error)) {
         gpa.destroy(sm);
         return empty;
     }

@@ -14,17 +14,11 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Input;
 
-// 05_skybox_ibl — a procedural cubemap as both the visible skybox and the IBL
-// environment for a metallic quad. Render v2 (webgpu): the skybox is drawn in
-// the forward pass and the forward IBL samples the same cubemap (direct env
-// sampling; split-sum is deferred debt). A free-look camera (arrows = look,
-// WASD/Shift/Ctrl = move) flies around to see every face + the IBL response.
-
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
-    .Add<IEcs, FlecsEcs>()
+    .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 05 Skybox & IBL (FreeLook)"))
@@ -36,17 +30,16 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Example: 05_skybox_ibl");
         Console.WriteLine("[KernelEngine] Features: skybox_cubemap, ibl_env_map, pbr_ggx, freelook_camera");
 
-        // Procedural cubemap — one solid color per face (+X,-X,+Y,-Y,+Z,-Z).
         const uint faceSize = 64;
         var faces = new byte[faceSize * faceSize * 4 * 6];
         (byte R, byte G, byte B)[] colors =
         [
-            (255, 0,   0),   // +X Red
-            (0,   255, 255), // -X Cyan
-            (0,   255, 0),   // +Y Green
-            (255, 0,   255), // -Y Magenta
-            (0,   0,   255), // +Z Blue
-            (255, 255, 0),   // -Z Yellow
+            (255, 0,   0),
+            (0,   255, 255),
+            (0,   255, 0),
+            (255, 0,   255),
+            (0,   0,   255),
+            (255, 255, 0),
         ];
         for (int f = 0; f < 6; f++)
         {
@@ -73,8 +66,8 @@ var services = new ServiceCollection()
             Intensity = 1.5f,
         }, "Sun");
 
-        var cam = tree.AddNode(new FreeLook { Fov = 60f, Near = 0.1f, Far = 1000f }, "Camera");
-        cam.LocalTransform = cam.LocalTransform with { Position = new Vector3(0f, 0f, 4f) };
+        var cam = tree.AddNode(new FreeLook { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
+        cam.Position = new Vector3(0f, 0f, 4f);
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -94,11 +87,9 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.UnloadModules(sp);
+runtime.Dispose();
 
 Console.WriteLine("[05_skybox_ibl] Exited cleanly.");
-
-// ── FreeLook camera — arrows: look, WASD: move, Shift/Ctrl: fly ──────────────
 
 sealed class FreeLook : Camera
 {
@@ -108,17 +99,16 @@ sealed class FreeLook : Camera
     private float _pitch;
     private float _yaw;
 
+    protected override bool HasBehavior => true;
+
     protected override void OnUpdate(in View view)
     {
         float dt = view.DeltaTime;
 
-        // The engine's camera looks down local −Z with a left-handed view, so its
-        // right axis is −localX (cross(up, forward)). Yaw therefore increases to
-        // the right and the strafe axis is −UnitX — matching what the view shows.
-        if (view.IsKeyDown(262)) _yaw   += RotateDeg * dt; // Right arrow
-        if (view.IsKeyDown(263)) _yaw   -= RotateDeg * dt; // Left arrow
-        if (view.IsKeyDown(265)) _pitch += RotateDeg * dt; // Up arrow
-        if (view.IsKeyDown(264)) _pitch -= RotateDeg * dt; // Down arrow
+        if (view.IsKeyDown(262)) _yaw   += RotateDeg * dt;
+        if (view.IsKeyDown(263)) _yaw   -= RotateDeg * dt;
+        if (view.IsKeyDown(265)) _pitch += RotateDeg * dt;
+        if (view.IsKeyDown(264)) _pitch -= RotateDeg * dt;
         _pitch = Math.Clamp(_pitch, -89f, 89f);
 
         var rot     = Quaternion.CreateFromYawPitchRoll(_yaw * MathF.PI / 180f, _pitch * MathF.PI / 180f, 0f);
@@ -126,18 +116,15 @@ sealed class FreeLook : Camera
         var right   = Vector3.Transform(-Vector3.UnitX, rot);
 
         var move = Vector3.Zero;
-        if (view.IsKeyDown(87))  move += forward;        // W
-        if (view.IsKeyDown(83))  move -= forward;        // S
-        if (view.IsKeyDown(65))  move -= right;          // A
-        if (view.IsKeyDown(68))  move += right;          // D
-        if (view.IsKeyDown(340)) move += Vector3.UnitY;  // Left Shift
-        if (view.IsKeyDown(341)) move -= Vector3.UnitY;  // Left Ctrl
+        if (view.IsKeyDown(87))  move += forward;
+        if (view.IsKeyDown(83))  move -= forward;
+        if (view.IsKeyDown(65))  move -= right;
+        if (view.IsKeyDown(68))  move += right;
+        if (view.IsKeyDown(340)) move += Vector3.UnitY;
+        if (view.IsKeyDown(341)) move -= Vector3.UnitY;
         if (move != Vector3.Zero) move = Vector3.Normalize(move);
 
-        LocalTransform = LocalTransform with
-        {
-            Position = LocalTransform.Position + move * MoveSpeed * dt,
-            Rotation = rot,
-        };
+        Position += move * MoveSpeed * dt;
+        Rotation = rot;
     }
 }

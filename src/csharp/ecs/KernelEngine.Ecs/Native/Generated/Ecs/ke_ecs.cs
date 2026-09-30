@@ -12,11 +12,11 @@ public unsafe partial struct ke_ecs
     [NativeTypeName("void (*)(struct ke_ecs *, ke_entity)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, void> entity_destroy;
 
-    [NativeTypeName("ke_component_id (*)(struct ke_ecs *, const char *, size_t)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs*, sbyte*, nuint, uint> component_register;
+    [NativeTypeName("ke_component_id (*)(struct ke_ecs *, const char *, size_t, const ke_component_field *, uint32_t, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, sbyte*, nuint, ke_component_field*, uint, KernelEngine.Common.Native.ke_error**, uint> component_register;
 
     [NativeTypeName("bool (*)(struct ke_ecs *, const char *, ke_component_meta *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs*, sbyte*, ke_component_meta*, ke_error**, bool> component_lookup;
+    public delegate* unmanaged[Cdecl]<ke_ecs*, sbyte*, ke_component_meta*, KernelEngine.Common.Native.ke_error**, bool> component_lookup;
 
     [NativeTypeName("void *(*)(struct ke_ecs *, ke_entity, ke_component_id)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, uint, void*> component_add;
@@ -38,4 +38,7 @@ public unsafe partial struct ke_ecs
 
     [NativeTypeName("ke_entity (*)(struct ke_ecs *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, ulong> entity_reserve;
+
+    [NativeTypeName("void (*)(struct ke_ecs *, ke_entity)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, void> entity_materialize;
 }

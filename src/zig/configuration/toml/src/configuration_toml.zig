@@ -1,17 +1,6 @@
-// ke_configuration_toml — TOML loader for the ke_configuration store (Zig).
-//
-// Parses Project.toml via the vendored tomlc99 (third_party/tomlc99, consumed by
-// @cImport) and populates a caller-owned ke_configuration through its set_*
-// slots. The store stays format-agnostic; this module is the only place TOML is
-// known. No Zig-package TOML parser was 0.16-ready, so the proven C parser is
-// vendored and compiled by this module's build.zig (see the VENDOR.md).
 
 const std = @import("std");
 
-// This .so is dlopen'd by a foreign, non-Zig host alongside many sibling
-// plugins in one process. std.Thread's default 256 KiB threadlocal signal
-// stack exceeds glibc's small static-TLS surplus once enough plugins
-// accumulate, aborting with "cannot allocate memory in static TLS block".
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const toml = @cImport({
     @cInclude("stdio.h");
@@ -28,9 +17,6 @@ fn setErr(out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]c
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
 
-// Reads the scalar at `key` from `tab` and writes it into cfg[section][key].
-// tomlc99 is type-strict, so exactly one of the typed accessors reports ok.
-// Arrays and timestamps are skipped (returns true without writing).
 fn setScalar(cfg: [*c]ke.ke_configuration, section: [:0]const u8, key: [*c]const u8, tab: ?*toml.toml_table_t, out_error: ?*?*ke.ke_error) bool {
     const di = toml.toml_int_in(tab, key);
     if (di.ok != 0) return cfg.*.set_int.?(cfg, section.ptr, key, di.u.i, out_error);
@@ -46,12 +32,9 @@ fn setScalar(cfg: [*c]ke.ke_configuration, section: [:0]const u8, key: [*c]const
         defer std.c.free(ds.u.s);
         return cfg.*.set_string.?(cfg, section.ptr, key, ds.u.s, out_error);
     }
-    return true; // array / timestamp / unknown — skip
+    return true;
 }
 
-// Recursively walks a table. `section` is the dotted path built so far ("" at
-// the root). tomlc99's toml_key_in enumerates kval, then arr, then sub-table
-// keys; toml_table_in disambiguates a sub-table from a scalar.
 fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:0]const u8, out_error: ?*?*ke.ke_error) bool {
     const n = toml.toml_table_nkval(tab) + toml.toml_table_narr(tab) + toml.toml_table_ntab(tab);
     var i: c_int = 0;
@@ -73,7 +56,7 @@ fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:
             defer gpa.free(child);
             if (!walkTable(cfg, sub, child, out_error)) return false;
         } else if (toml.toml_array_in(tab, key) != null) {
-            continue; // arrays deferred
+            continue;
         } else {
             if (!setScalar(cfg, section, key, tab, out_error)) return false;
         }
@@ -86,11 +69,8 @@ export fn ke_configuration_toml_load(cfg: [*c]ke.ke_configuration, path: [*c]con
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
         return false;
     }
-    // Read via libc (fopen + toml_parse_file). Zig 0.16 moved file IO behind
-    // std.Io (needs an Io instance); libc is already linked and version-stable,
-    // so the loader stays free of that plumbing.
     const fp = toml.fopen(path, "r");
-    if (fp == null) return true; // absent/unreadable → defaults apply, not an error
+    if (fp == null) return true;
     defer _ = toml.fclose(fp);
 
     var errbuf: [256]u8 = undefined;
@@ -103,11 +83,6 @@ export fn ke_configuration_toml_load(cfg: [*c]ke.ke_configuration, path: [*c]con
 
     return walkTable(cfg, root, "", out_error);
 }
-
-// ── Native tests ────────────────────────────────────────────────────────────
-//
-// The loader is exercised against a mock ke_configuration that records each
-// set_* call, so these test parse + dispatch in isolation from the real store.
 
 const RecVal = union(enum) { int: i64, double: f64, boolean: bool, string: [:0]u8 };
 
@@ -177,9 +152,6 @@ fn findInt(section: []const u8, key: []const u8) ?i64 {
     return null;
 }
 
-// Writes `data` to a file in the cwd via libc; the loader reads the same
-// relative path. Using libc (not std.fs) keeps the tests off the 0.16 Io
-// plumbing, matching how the loader itself opens files.
 fn writeTemp(name: [*c]const u8, data: []const u8) void {
     const fp = toml.fopen(name, "w");
     if (fp == null) return;
@@ -206,7 +178,6 @@ test "loads typed scalars per section" {
 
     try std.testing.expectEqual(@as(?i64, 2048), findInt("shadow", "resolution"));
 
-    // Verify the other three landed with the right section/key/type/value.
     var seen_double = false;
     var seen_bool = false;
     var seen_string = false;

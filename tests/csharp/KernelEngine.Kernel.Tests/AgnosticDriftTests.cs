@@ -12,11 +12,9 @@ namespace EngineTests;
 /// </summary>
 public class AgnosticDriftTests(ITestOutputHelper output)
 {
-    // Symbols that must never appear in agnostic source code (not in comments).
     private static readonly string[] ForbiddenSymbols =
         ["bgfx::", "Vulkan", "Direct3D", "d3d", "glsl", "vulkan"];
 
-    // Directories (repo-relative, forward slashes) and file extensions to scan.
     private static readonly (string RelPath, string[] Extensions)[] ScannedDirs =
     [
         ("src/c/kernel",                         [".h", ".c"]),
@@ -24,7 +22,6 @@ public class AgnosticDriftTests(ITestOutputHelper output)
         ("src/csharp/KernelEngine.Kernel.Abstractions", [".cs"]),
     ];
 
-    // Subdirectory names that are always skipped (generated/build output).
     private static readonly string[] SkippedSubdirs = ["bin", "obj", "Generated"];
 
     [Fact]
@@ -74,9 +71,6 @@ public class AgnosticDriftTests(ITestOutputHelper output)
         return parts.Any(p => SkippedSubdirs.Contains(p, System.StringComparer.OrdinalIgnoreCase));
     }
 
-    // Returns the code portion of a line, stripping single-line and trailing inline comments.
-    // Handles whole-line comments (//…, ///…, *…, /*…) and trailing inline // comments.
-    // Note: does not handle // inside string literals, which do not appear in these source layers.
     private static string CodePortion(string line)
     {
         var t = line.TrimStart();
@@ -92,7 +86,8 @@ public class AgnosticDriftTests(ITestOutputHelper output)
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            var git = Path.Combine(dir.FullName, ".git");
+            if (Directory.Exists(git) || File.Exists(git))
                 return dir.FullName;
             dir = dir.Parent;
         }

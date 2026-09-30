@@ -33,4 +33,4 @@ typedef struct ke_gpu_surface_ext
 }
 #endif
 
-#endif // KERNEL_ENGINE_RENDER_GPU_SURFACE_EXT_H_
+#endif

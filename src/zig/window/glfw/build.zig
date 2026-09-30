@@ -1,16 +1,6 @@
 const std = @import("std");
 
-// Build the ke_window_glfw shared library (Zig 0.16 API) — the GLFW-backed
-// window plugin. Links GLFW (from vcpkg) plus the platform bits its native
-// handle accessors need; no ke_common LINK — the common headers are @cImport'd
-// for the ke_error layout only and errors translate at the export seam via the
-// shared Zig kerror utility.
-
 pub fn build(b: *std.Build) void {
-    // Plain native target, not the `.abi = .gnu` default the pure-logic
-    // built-ins use: pinning the abi makes Zig treat this as a cross build and
-    // stop searching the host's system library paths, where GLFW's platform
-    // dependencies (Xlib) live.
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -36,10 +26,6 @@ pub fn build(b: *std.Build) void {
     mod.addLibraryPath(.{ .cwd_relative = glfw_lib });
     mod.linkSystemLibrary("glfw3", .{});
 
-    // GLFW's X11 backend pulls the Xlib symbols its native-handle accessor and
-    // window creation need. On Windows, GLFW's win32/WGL backend needs its own
-    // set of system import libs — statically-linked glfw3 doesn't bundle these,
-    // the final link has to bring them in.
     if (target.result.os.tag == .linux) {
         mod.linkSystemLibrary("X11", .{});
     } else if (target.result.os.tag == .windows) {
@@ -68,9 +54,6 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install.step);
 
-    // `zig build test` — the core's behaviour against a fake device. Kept out
-    // of the default step so the library build stays a pure compile; ctest
-    // invokes this step directly.
     const test_mod = b.createModule(.{
         .root_source_file = b.path("src/tests.zig"),
         .target = target,

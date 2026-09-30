@@ -32,6 +32,7 @@ public static class TextStbTrueTypeServiceExtensions
                 return new FontLoader(handle);
             }
         });
+        services.AddSingleton<INativeFontLoader>(sp => (FontLoader)sp.GetRequiredService<IFontLoader>());
         return services;
     }
 }

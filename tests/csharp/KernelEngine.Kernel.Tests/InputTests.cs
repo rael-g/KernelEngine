@@ -15,7 +15,7 @@ public class InputTests
     [Fact]
     public void IsKeyDown_ReturnsFalse_ByDefault()
     {        using var input = new Input(null);
-        Assert.False(input.IsKeyDown(65));
+        Assert.False(input.IsKeyDown(Key.A));
     }
 
     [Fact]
@@ -24,7 +24,7 @@ public class InputTests
         using var input = new Input(null);
         var reader = input.CaptureSnapshot();
         Assert.NotNull(reader);
-        Assert.False(reader.IsKeyDown(65));
+        Assert.False(reader.IsKeyDown(Key.A));
     }
 
     [Fact]

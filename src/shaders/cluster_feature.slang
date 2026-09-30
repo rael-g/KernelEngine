@@ -78,6 +78,7 @@ float3 cluster_pbr_direct(float3 n, float3 v, float3 l, float3 albedo_c, float3 
 struct ClusterGrid {
     float4 cluster_grid;     // numX, numY, numZ, maxLightsPerCluster
     float4 cluster_viewport; // screen W, screen H, near, far
+    float4 view_space;       // x = depthFromViewZ
 };
 [[vk::binding(6, 3)]] ConstantBuffer<ClusterGrid> cluster;
 
@@ -89,7 +90,8 @@ uint cluster_index(float2 frag_xy, float view_z) {
     float far  = cluster.cluster_viewport.w;
     uint ix = (uint)clamp(frag_xy.x / cluster.cluster_viewport.x * (float)numX, 0.0, (float)(numX - 1u));
     uint iy = (uint)clamp(frag_xy.y / cluster.cluster_viewport.y * (float)numY, 0.0, (float)(numY - 1u));
-    float zs = (float)numZ * log(max(view_z, near) / near) / log(far / near);
+    float depth = view_z * cluster.view_space.x;
+    float zs = (float)numZ * log(max(depth, near) / near) / log(far / near);
     uint iz = (uint)clamp(zs, 0.0, (float)(numZ - 1u));
     return iz * numX * numY + iy * numX + ix;
 }

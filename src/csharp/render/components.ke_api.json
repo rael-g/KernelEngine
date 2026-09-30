@@ -1,0 +1,515 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_transform_component",
+      "doc": "An entity\u0027s authored 3D pose.",
+      "tags": [
+        "node:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [
+            "default:0 0 0 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform2d_component",
+      "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
+      "tags": [
+        "node:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive; a scene authors degrees."
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "depth",
+          "type": "float",
+          "tags": [],
+          "doc": "Where the plane sits along Z."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_world_transform_component",
+      "doc": "An entity\u0027s place in world space, composed down the hierarchy. Written by the hierarchy alone.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "matrix",
+          "type": "ke_mat4",
+          "tags": [
+            "output"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_camera_component",
+      "doc": "Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.",
+      "tags": [
+        "node:Camera",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "fov",
+          "type": "float",
+          "tags": [
+            "default:60"
+          ],
+          "doc": null
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [
+            "default:0.1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [
+            "default:1000"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic_size",
+          "type": "float",
+          "tags": [
+            "default:5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "cull_mask",
+          "type": "uint32_t",
+          "tags": [
+            "default:4294967295"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_directional_light_component",
+      "doc": "Directional light node. Init properties feed the per-frame light state the renderer consumes.",
+      "tags": [
+        "node:DirectionalLight",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.2 1 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ambient",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.2 0.2 0.2"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_point_light_component",
+      "doc": "Point light node \u2014 emits light in all directions from this entity\u0027s world position.",
+      "tags": [
+        "node:PointLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "tags": [
+            "default:10"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_spot_light_component",
+      "doc": "Spot light node \u2014 emits a cone of light from this entity\u0027s world position.",
+      "tags": [
+        "node:SpotLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0 -1 0"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "range",
+          "type": "float",
+          "tags": [
+            "default:20"
+          ],
+          "doc": null
+        },
+        {
+          "name": "inner_angle",
+          "type": "float",
+          "tags": [
+            "default:25"
+          ],
+          "doc": null
+        },
+        {
+          "name": "outer_angle",
+          "type": "float",
+          "tags": [
+            "default:35"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_ambient_light_component",
+      "doc": "Scene-wide ambient light node. First entity with this component wins.",
+      "tags": [
+        "node:AmbientLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.05 0.05 0.05"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_skybox_component",
+      "doc": "Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.",
+      "tags": [
+        "node:Skybox",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "cubemap",
+          "type": "ke_texture_handle",
+          "tags": [
+            "name:cubemap_handle"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_mesh_component",
+      "doc": "Renders a mesh with a material. \u0060mesh\u0060/\u0060material\u0060 double as output: the native \u0022render.mesh.resolve\u0022 system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig) fills them whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles just writes them and leaves \u0060primitive\u0060 empty \u2014 the resolve system only acts where a handle is still invalid, so the two paths never conflict.",
+      "tags": [
+        "node:MeshRenderer",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "mesh",
+          "type": "ke_mesh_handle",
+          "tags": [
+            "name:mesh_handle"
+          ],
+          "doc": null
+        },
+        {
+          "name": "material",
+          "type": "ke_material_handle",
+          "tags": [
+            "name:material_handle"
+          ],
+          "doc": null
+        },
+        {
+          "name": "primitive",
+          "type": "char[32]",
+          "tags": [
+            "idiom",
+            "name:mesh"
+          ],
+          "doc": "Resolved by the scene loader\u0027s property-apply path into \u0060mesh\u0060; a node authoring it directly would have the value overwritten."
+        },
+        {
+          "name": "base_color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1",
+            "name:color"
+          ],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "uint32_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "ke_alpha_mode."
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [
+            "default:1.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [
+            "default:0.05"
+          ],
+          "doc": null
+        },
+        {
+          "name": "layers",
+          "type": "uint32_t",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_sprite2d_component",
+      "doc": "A textured quad in the plane, resolved into geometry and a material by the \u0022render.sprite2d.resolve\u0022 system.",
+      "tags": [
+        "node:Sprite2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "texture",
+          "type": "char[128]",
+          "tags": [],
+          "doc": "Image to sample. Empty draws the plain tinted quad."
+        },
+        {
+          "name": "region",
+          "type": "ke_vec4",
+          "tags": [
+            "default:0 0 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "pivot",
+          "type": "ke_vec2",
+          "tags": [
+            "default:0.5 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_h",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_v",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "uint32_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "ke_alpha_mode."
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "texture_handle",
+          "type": "ke_texture_handle",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "The image resolved from \u0060texture\u0060, assigned by the resolve system."
+        },
+        {
+          "name": "attached",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {}
+}
