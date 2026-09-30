@@ -17,6 +17,7 @@ public partial class Sprite2D : Node2D
         _generatedState0.size = new ke_vec2 { x = 1f, y = 1f };
         _generatedState0.pivot = new ke_vec2 { x = 0.5f, y = 0.5f };
         _generatedState0.color = new ke_vec4 { x = 1f, y = 1f, z = 1f, w = 1f };
+        _generatedState0.alpha_mode = 0;
         _generatedState0.alpha_cutoff = 0.5f;
     }
 
@@ -42,7 +43,7 @@ public partial class Sprite2D : Node2D
     [NativeField("color", Component = typeof(ke_sprite2d_component))]
     public partial Vector4 Color { get; set; }
 
-    /// <summary>ke_alpha_mode. [default:0]</summary>
+    /// <summary>ke_alpha_mode.</summary>
     [NativeField("alpha_mode", Component = typeof(ke_sprite2d_component))]
     public partial uint AlphaMode { get; set; }
 

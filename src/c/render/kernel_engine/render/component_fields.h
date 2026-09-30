@@ -45,7 +45,7 @@ static const ke_component_field ke_mesh_component_fields[] = {
     { "mesh", KE_VARIANT_STRING, offsetof(ke_mesh_component, primitive), sizeof(((ke_mesh_component *)0)->primitive), { KE_VARIANT_NULL, { 0 } } },
     { "color", KE_VARIANT_VEC4, offsetof(ke_mesh_component, base_color), sizeof(((ke_mesh_component *)0)->base_color), { KE_VARIANT_VEC4, { .v4 = { 1.0f, 1.0f, 1.0f, 1.0f } } } },
     { "roughness", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, roughness), sizeof(((ke_mesh_component *)0)->roughness), { KE_VARIANT_FLOAT, { .f = 1.0 } } },
-    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_mesh_component, alpha_mode), sizeof(((ke_mesh_component *)0)->alpha_mode), { KE_VARIANT_NULL, { 0 } } },
+    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_mesh_component, alpha_mode), sizeof(((ke_mesh_component *)0)->alpha_mode), { KE_VARIANT_INT, { .i = 0 } } },
     { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, alpha_cutoff), sizeof(((ke_mesh_component *)0)->alpha_cutoff), { KE_VARIANT_FLOAT, { .f = 0.5 } } },
     { "ior", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, ior), sizeof(((ke_mesh_component *)0)->ior), { KE_VARIANT_FLOAT, { .f = 1.5 } } },
     { "distortion_strength", KE_VARIANT_FLOAT, offsetof(ke_mesh_component, distortion_strength), sizeof(((ke_mesh_component *)0)->distortion_strength), { KE_VARIANT_FLOAT, { .f = 0.05 } } },
@@ -60,7 +60,7 @@ static const ke_component_field ke_sprite2d_component_fields[] = {
     { "flip_h", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, flip_h), sizeof(((ke_sprite2d_component *)0)->flip_h), { KE_VARIANT_NULL, { 0 } } },
     { "flip_v", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, flip_v), sizeof(((ke_sprite2d_component *)0)->flip_v), { KE_VARIANT_NULL, { 0 } } },
     { "color", KE_VARIANT_VEC4, offsetof(ke_sprite2d_component, color), sizeof(((ke_sprite2d_component *)0)->color), { KE_VARIANT_VEC4, { .v4 = { 1.0f, 1.0f, 1.0f, 1.0f } } } },
-    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_sprite2d_component, alpha_mode), sizeof(((ke_sprite2d_component *)0)->alpha_mode), { KE_VARIANT_NULL, { 0 } } },
+    { "alpha_mode", KE_VARIANT_INT, offsetof(ke_sprite2d_component, alpha_mode), sizeof(((ke_sprite2d_component *)0)->alpha_mode), { KE_VARIANT_INT, { .i = 0 } } },
     { "alpha_cutoff", KE_VARIANT_FLOAT, offsetof(ke_sprite2d_component, alpha_cutoff), sizeof(((ke_sprite2d_component *)0)->alpha_cutoff), { KE_VARIANT_FLOAT, { .f = 0.5 } } },
     { "attached", KE_VARIANT_BOOL, offsetof(ke_sprite2d_component, attached), sizeof(((ke_sprite2d_component *)0)->attached), { KE_VARIANT_NULL, { 0 } } },
 };

@@ -11,7 +11,7 @@ extern "C"
 {
 #endif
 
-    /** [node:Camera,base:Node3D] Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera. */
+    /** [node:Camera,base:Node3D,value] Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera. */
     typedef struct ke_camera_component
     {
         float   fov; ///< [default:60]
@@ -24,7 +24,7 @@ extern "C"
         uint32_t cull_mask; ///< [default:4294967295]
     } ke_camera_component;
 
-    /** [node:DirectionalLight,base:Node3D] Directional light node. Init properties feed the per-frame light state the renderer consumes. */
+    /** [node:DirectionalLight,base:Node3D,value] Directional light node. Init properties feed the per-frame light state the renderer consumes. */
     typedef struct ke_directional_light_component
     {
         ke_vec3 direction; ///< [default:0.2 1 0.5]
@@ -67,7 +67,7 @@ extern "C"
         ke_texture_handle cubemap;
     } ke_skybox_component;
 
-    /// [node:MeshRenderer,base:Node3D]
+    /// [node:MeshRenderer,base:Node3D,value]
     /// Renders a mesh with a material. `mesh`/`material` double as output:
     /// the native "render.mesh.resolve" system (KE_PHASE_UPDATE,
     /// src/zig/render/service/src/mesh_resolve.zig) fills them whenever
@@ -87,7 +87,7 @@ extern "C"
 
         ke_vec4  base_color; ///< [default:1 1 1 1,name:color]
         float    roughness; ///< [default:1]
-        uint32_t alpha_mode; ///< ke_alpha_mode. [default:0]
+        uint32_t alpha_mode; ///< [default:0] ke_alpha_mode.
         float    alpha_cutoff; ///< [default:0.5]
         float    ior; ///< [default:1.5]
         float    distortion_strength; ///< [default:0.05]
@@ -114,7 +114,7 @@ extern "C"
         uint8_t  flip_v; ///< [bool]
         /// Multiplies the sampled image. Linear RGBA.
         ke_vec4  color; ///< [default:1 1 1 1]
-        uint32_t alpha_mode; ///< ke_alpha_mode. [default:0]
+        uint32_t alpha_mode; ///< [default:0] ke_alpha_mode.
         float    alpha_cutoff; ///< [default:0.5]
 
         /// [idiom] The image resolved from `texture`, assigned by the resolve system.

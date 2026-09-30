@@ -8,7 +8,7 @@ extern "C"
 {
 #endif
 
-    /// [node:Node3D]
+    /// [node:Node3D,value]
     /// An entity's authored 3D pose.
     typedef struct ke_transform_component
     {
@@ -31,6 +31,7 @@ extern "C"
 
 #define KE_COMPONENT_NAME_TRANSFORM_2D "transform2d"
 
+    /// [value]
     /// An entity's place in world space, composed down the hierarchy. Written by
     /// the hierarchy alone.
     typedef struct ke_world_transform_component

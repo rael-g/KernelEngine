@@ -15,6 +15,7 @@ public partial class MeshRenderer : Node3D
     {
         _generatedState0.base_color = new ke_vec4 { x = 1f, y = 1f, z = 1f, w = 1f };
         _generatedState0.roughness = 1f;
+        _generatedState0.alpha_mode = 0;
         _generatedState0.alpha_cutoff = 0.5f;
         _generatedState0.ior = 1.5f;
         _generatedState0.distortion_strength = 0.05f;
@@ -33,7 +34,7 @@ public partial class MeshRenderer : Node3D
     [NativeField("roughness", Component = typeof(ke_mesh_component))]
     public partial float Roughness { get; set; }
 
-    /// <summary>ke_alpha_mode. [default:0]</summary>
+    /// <summary>ke_alpha_mode.</summary>
     [NativeField("alpha_mode", Component = typeof(ke_mesh_component))]
     public partial uint AlphaMode { get; set; }
 

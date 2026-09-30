@@ -1,5 +1,6 @@
 using System.Numerics;
 using KernelEngine.Ecs;
+using KernelEngine.Framework;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
@@ -35,32 +36,32 @@ var orange = render.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0
 EcsRegistry reg;
 unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
-var transformCid = reg.RegisterComponent<TransformComponent>("transform");
-var worldCid     = reg.RegisterComponent<WorldTransformComponent>("world_transform");
-var cameraCid    = reg.RegisterComponent<Camera>("camera");
+var transformCid = reg.RegisterComponent<TransformComponent>(TransformComponent.Name);
+var worldCid     = reg.RegisterComponent<WorldTransformComponent>(WorldTransformComponent.Name);
+var cameraCid    = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
 var meshCid      = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
-var lightCid     = reg.RegisterComponent<DirectionalLight>("directional_light");
+var lightCid     = reg.RegisterComponent<DirectionalLightComponent>(DirectionalLightComponent.Name);
 
 var cam = reg.CreateEntity();
 ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];
-camT = TransformComponent.Identity;
+camT = TransformComponent.Default;
 camT.Position = new Vector3(1.5f, 1.5f, -3.0f);
 ref var camW = ref reg.AddComponent<WorldTransformComponent>(cam, worldCid)[0];
 camW.Matrix = Matrix4x4.CreateTranslation(camT.Position);
-ref var camC = ref reg.AddComponent<Camera>(cam, cameraCid)[0];
-camC = new Camera { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 100.0f, CullMask = uint.MaxValue };
+ref var camC = ref reg.AddComponent<CameraComponent>(cam, cameraCid)[0];
+camC = CameraComponent.Default with { FarPlane = 100.0f };
 
 var ent = reg.CreateEntity();
 ref var entT = ref reg.AddComponent<TransformComponent>(ent, transformCid)[0];
-entT = TransformComponent.Identity;
+entT = TransformComponent.Default;
 ref var entW = ref reg.AddComponent<WorldTransformComponent>(ent, worldCid)[0];
 entW.Matrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
 entM = MeshComponent.Default with { Mesh = cube, Material = orange };
 
 var sun = reg.CreateEntity();
-ref var sunL = ref reg.AddComponent<DirectionalLight>(sun, lightCid)[0];
-sunL = new DirectionalLight
+ref var sunL = ref reg.AddComponent<DirectionalLightComponent>(sun, lightCid)[0];
+sunL = DirectionalLightComponent.Default with
 {
     Direction = new Vector3(-0.4f, -1.0f, -0.3f),
     Color     = Vector3.One,
@@ -80,31 +81,3 @@ while (!window.ShouldClose())
 }
 
 Console.WriteLine("[18_webgpu_mesh] Exited cleanly.");
-
-/// <summary>
-/// Directional light as the render layer reads it. Declared here rather than
-/// pulled from the framework layer so this sample stays on the raw ECS +
-/// render-core path it is meant to demonstrate; the field order must match the
-/// engine's directional_light component.
-/// </summary>
-struct DirectionalLight
-{
-    public Vector3 Direction;
-    public Vector3 Color;
-    public float   Intensity;
-    public Vector3 Ambient;
-}
-
-/// <summary>
-/// Camera as the render layer reads it — same rationale as <see cref="DirectionalLight"/>
-/// above (raw ECS + render-core path, not the toolkit's generated node type).
-/// </summary>
-struct Camera
-{
-    public float Fov;
-    public float NearPlane;
-    public float FarPlane;
-    public float OrthographicSize;
-    public byte  Orthographic;
-    public uint  CullMask;
-}
