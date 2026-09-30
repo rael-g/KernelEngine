@@ -73,14 +73,14 @@ jobs:
           key: vcpkg-${{ matrix.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
 
       - name: Build native
-        run: zig build --prefix build/native
+        run: zig build --prefix build/native --cache-dir build/zig-cache
 
       # Every native test is a Zig test inside the file it covers, so the whole
       # native suite is one step and it cannot go stale: a plugin does not compile
       # until it answers whether it has tests, and the test invocation reuses the
       # library build's own flags.
       - name: Native tests
-        run: zig build test --prefix build/native
+        run: zig build test --prefix build/native --cache-dir build/zig-cache
 
       - name: Managed tests
         run: dotnet test KernelEngine.slnx

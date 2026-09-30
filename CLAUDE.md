@@ -15,10 +15,12 @@ The root `build.zig` is the only native build orchestrator: it resolves vcpkg di
 vcpkg itself is fetched automatically (`build/tools/vcpkg-<version>/`) — no manual install, no `VCPKG_ROOT` needed. Pass `-Dvcpkg-root=<path>` (or export `VCPKG_ROOT`) only to point at an existing vcpkg checkout instead.
 
 ```bash
-zig build --prefix build/native                     # configure + build + install, one step
-zig build test --prefix build/native                 # every plugin's own Zig tests
-build/native/bin/c_demo_01                           # run a C example (Linux name; c_demo_01.exe on Windows)
+zig build --prefix build/native --cache-dir build/zig-cache       # configure + build + install, one step
+zig build test --prefix build/native --cache-dir build/zig-cache  # every plugin's own Zig tests
+build/native/bin/c_demo_01                                        # run a C example (c_demo_01.exe on Windows)
 ```
+
+`--cache-dir` is not optional housekeeping: the root build passes it down to every sub-build, so omitting it scatters one cache per plugin directory. The `zig cc` wrappers in `vcpkg-triplets/` set `ZIG_LOCAL_CACHE_DIR` for the same reason — vcpkg's CMake runs them from the repo root, and `zig cc` caches into `$PWD/.zig-cache` unless told otherwise.
 
 Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native), `build/vcpkg-installed/` for the ports, `build/zig-cache/` for one shared cache across the root build and every sub-build. Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
 
