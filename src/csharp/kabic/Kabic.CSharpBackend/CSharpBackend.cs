@@ -631,8 +631,7 @@ public static class CSharpBackend
     /// </summary>
     static bool NamesForeignDeclaration(ApiModel model, ApiField f)
     {
-        var m = Regex.Match(f.Type.Trim(), @"^(.+?)\s*\[\d+\]$");
-        var t = StripQualifiers(m.Success ? m.Groups[1].Value : f.Type).Trim();
+        var t = StripQualifiers(CTypes.FixedArray(f.Type)?.Element ?? f.Type).Trim();
         return model.Enums.Any(e => e.Name == t && e.External)
             || model.Structs.Any(v => v.Name == t && v.External);
     }
@@ -656,17 +655,16 @@ public static class CSharpBackend
     static (string Buffer, string Element, int Arity)? ValueArray(ApiModel model, ApiStruct s, ApiField f,
         Convention convention)
     {
-        var m = Regex.Match(f.Type.Trim(), @"^(.+?)\s*\[(\d+)\]$");
-        if (!m.Success || VectorArity(f.Type) is not null) return null;
+        if (CTypes.FixedArray(f.Type) is not { } arr || VectorArity(f.Type) is not null) return null;
 
-        var element = m.Groups[1].Value.Trim();
+        var element = arr.Element;
         if (CTypes.IsPointer(element))
             throw new InvalidOperationException(
                 $"{s.Name}.{f.Name}: [value] describes data a caller holds, and an array of"
                 + " pointers makes the lifetime of what they reach someone else's question.");
 
         return ($"{Idioms.Pascal(f.Name)}Buffer", ValueTypeName(model, element, convention),
-            int.Parse(m.Groups[2].Value));
+            arr.Extent);
     }
 
     /// <summary>

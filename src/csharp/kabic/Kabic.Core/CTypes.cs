@@ -1,5 +1,7 @@
 namespace Kabic;
 
+using System.Text.RegularExpressions;
+
 /// Operations on a raw C type string (`"const ke_log_event *"`) that have
 /// nothing to do with any target language's naming or type-mapping
 /// conventions — every backend needs to know whether a type is a pointer and
@@ -16,6 +18,18 @@ public static class CTypes
     {
         var t = cType.Replace("const ", "").Replace("struct ", "").Trim();
         return t.TrimEnd('*', ' ') + new string('*', t.Count(c => c == '*'));
+    }
+
+    /// The element type and extent of a fixed-size array declarator
+    /// (`"float[16]"` -> `("float", 16)`, `"void *[8]"` -> `("void *", 8)`), or
+    /// null when the type declares a single value. The extent is part of the type
+    /// in C and in every language that mirrors the layout, so a backend that does
+    /// not ask this question emits the C declarator verbatim and the element type
+    /// never reaches its primitive mapping.
+    public static (string Element, int Extent)? FixedArray(string cType)
+    {
+        var m = Regex.Match(cType.Trim(), @"^(.+?)\s*\[(\d+)\]$");
+        return m.Success ? (m.Groups[1].Value.Trim(), int.Parse(m.Groups[2].Value)) : null;
     }
 
     /// Strips exactly ONE level of pointer-ness (`"ke_texture_data **"` ->
