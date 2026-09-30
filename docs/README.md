@@ -8,6 +8,10 @@ is in the code, and `CLAUDE.md`'s closing table says where to start looking.
 - [How this project's documentation is written](conventions/docs.md) — the rules every document
   here obeys, and the line between a contract and a moment.
 
+## Architecture
+
+- [How is the engine divided into layers, and where does each kind of file live?](architecture/layers.md)
+
 ## Not here, on purpose
 
 **Status, plans, logs, tasks and ideas are not versioned.** They live in `docs/kanban/`, which is
