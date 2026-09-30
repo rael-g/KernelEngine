@@ -72,6 +72,11 @@ public sealed class ZigBackend
         sb.AppendLine("/// nothing below it is meant to be called by hand.");
         sb.AppendLine("pub const abi = struct {");
         sb.AppendLine(AbiPreamble);
+        foreach (var c in model.Callbacks)
+            sb.AppendLine($"    pub const {c.Name} = ?*const fn ({string.Join(", ", c.Lanes.Select(l =>
+                $"{Idioms.Ident(l.Name ?? "_")}: {AbiType(l.Type, l, "")}"))}) "
+                + $"callconv(.c) {AbiType(c.Returns, null, "")};");
+        if (model.Callbacks.Count > 0) sb.AppendLine();
         foreach (var s in model.Structs.Where(s => !s.External))
         {
             sb.AppendLine($"    pub const {s.Name} = extern struct {{");
@@ -243,10 +248,11 @@ public sealed class ZigBackend
         if (Idioms.Primitive(bare) is { } prim && !model.TypeAliases.ContainsKey(bare)) return prim;
         if (!DeclaredHere(bare) && foreign.TryGetValue(bare, out var owner))
         {
-            imported[owner.Module] = owner.ImportPath;
+            var binding = Bind(owner.Module);
+            imported[binding] = owner.ImportPath;
             return owner.IsStruct
-                ? $"{owner.Module}.abi.{bare}"
-                : $"{owner.Module}.{Idioms.TypeName(bare, convention)}";
+                ? $"{binding}.abi.{bare}"
+                : $"{binding}.{Idioms.TypeName(bare, convention)}";
         }
         if (model.TypeAliases.TryGetValue(bare, out var target) && Idioms.Primitive(target) is not null)
             return Idioms.TypeName(bare, convention);
@@ -254,6 +260,30 @@ public sealed class ZigBackend
         if (model.Structs.Any(s => s.Name == bare)) return q + bare;
         return Idioms.Primitive(bare) ?? q + bare;
     }
+
+    /// <summary>
+    /// The name an imported module is bound to. A domain reached for one of its types is
+    /// named after itself, unless this module already declares that name -- a vtable with
+    /// an <c>ecs</c> slot projects a method of that name, and a reference to <c>ecs</c>
+    /// inside the projection would then reach two declarations at once, which Zig refuses
+    /// rather than resolves.
+    /// </summary>
+    string Bind(string module) =>
+        LocalNames.Contains(module) ? module + "_domain" : module;
+
+    /// <summary>
+    /// Every name this module declares, at its top level or as a method of a projection.
+    /// Both scopes see a top-level binding, so both can shadow one.
+    /// </summary>
+    HashSet<string> LocalNames => localNames ??= [
+        .. model.TypeAliases.Keys.Select(a => Idioms.TypeName(a, convention)),
+        .. model.Enums.Select(e => Idioms.TypeName(e.Name, convention)),
+        .. classified.Providers.Select(v => Idioms.TypeName(v.Name, convention)),
+        .. classified.Providers.SelectMany(v => classified.SlotsByVtable[v.Name])
+            .Select(cs => Idioms.Camel(cs.Slot.Name)),
+    ];
+
+    HashSet<string>? localNames;
 
     /// <summary>
     /// Whether this domain declares the type itself. A type reaching the model marked
@@ -320,9 +350,15 @@ public sealed class ZigBackend
 
         var slot = cs.Slot;
         if (cs.Blobs.Count > 0 || cs.ExpandedParam is not null
-            || slot.Params.Any(p => model.CallbackOf(p.Type) is not null || p.Has("callback")))
+            || slot.Params.Any(p => (model.CallbackOf(p.Type) is not null || p.Has("callback"))
+                && !p.Has("closure")))
             throw new NotSupportedException(
-                $"{slot.Name}: this backend renders no callback, no [expand] and no opaque payload yet.");
+                $"{slot.Name}: this backend renders no raw callback, no [expand] and no opaque payload yet.");
+
+        var closures = slot.Params.Where(p => p.Has("closure"))
+            .Select(p => Closure(slot, p)).ToList();
+        var closureOf = closures.ToDictionary(c => c.Fn);
+        var stateOf = closures.ToDictionary(c => c.State);
 
         var outs = (cs.Shape switch
         {
@@ -340,6 +376,8 @@ public sealed class ZigBackend
         foreach (var p in slot.Params)
         {
             if (p == errParam) { args.Add("&err"); continue; }
+            if (closureOf.TryGetValue(p, out var fnOf)) { args.Add($"{TrampolineName(fnOf)}.call"); continue; }
+            if (stateOf.ContainsKey(p)) { args.Add($"@ptrCast({Arg(p)})"); continue; }
             if (counts.Contains(p)) { args.Add($"@intCast({Arg(cs.Sequences.First(s => s.Count == p).Seq)}.len)"); continue; }
             if (p == cs.ReturnCount) { args.Add("&count"); continue; }
             if (p.Has("array_of")) { args.Add($"{Arg(p)}.ptr"); continue; }
@@ -347,6 +385,10 @@ public sealed class ZigBackend
             if (p.Has("utf8")) { args.Add($"{Arg(p)}.ptr"); continue; }
             args.Add(Arg(p));
         }
+
+        var taken = slot.Params.Where(p => p.Name is not null).Select(Arg)
+            .Append("self").Concat(declared).ToHashSet();
+        foreach (var c in closures) body.AddRange(TrampolineLines(c, Arg(c.Fn), taken));
 
         foreach (var p in outs)
             body.Add($"var {Local(p)}: "
@@ -414,10 +456,115 @@ public sealed class ZigBackend
 
         if (slot.Doc is not null) foreach (var line in DocLines(slot.Doc, "    ")) sb.AppendLine(line);
         var sigText = string.Join(", ", new[] { $"self: {owner}" }
-            .Concat(sig.Select(p => $"{Arg(p)}: {SigType(p)}")));
+            .Concat(sig.Where(p => !stateOf.ContainsKey(p)).SelectMany(p =>
+                closureOf.TryGetValue(p, out var c)
+                    ? new[] { $"{Arg(c.State)}: anytype", $"comptime {Arg(p)}: {HandlerType(c, Arg(c.State))}" }
+                    : [$"{Arg(p)}: {SigType(p)}"])));
         sb.AppendLine($"    pub fn {Idioms.Camel(slot.Name)}({sigText}) {ret} {{");
         foreach (var line in body) sb.AppendLine($"        {line}");
         sb.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// A handler the caller supplies, the state it reaches its own data through, and the
+    /// lanes of the typedef that says how the engine will call it.
+    /// </summary>
+    record ClosureForm(ApiParam Fn, ApiParam State, ApiCallback Callback,
+        ApiParam ContextLane, ApiParam? ErrorLane);
+
+    /// <summary>
+    /// The closure a <c>[closure:&lt;state&gt;]</c> parameter declares. Which lane carries
+    /// the caller's own pointer back is the typedef's own statement, because a lane typed
+    /// <c>void*</c> says nothing about what travels in it.
+    /// </summary>
+    ClosureForm Closure(ApiSlot slot, ApiParam fn)
+    {
+        var where = $"{slot.Name}.{fn.Name}";
+        var stateName = fn.TagValue("closure")
+            ?? throw new NotSupportedException(
+                $"{where}: [closure] must name the state parameter, as [closure:<name>]");
+        var state = slot.Params.FirstOrDefault(p => p.Name == stateName)
+            ?? throw new NotSupportedException(
+                $"{where}: [closure:{stateName}] names no parameter of this slot");
+        var callback = model.CallbackOf(fn.Type)
+            ?? throw new NotSupportedException(
+                $"{where}: [closure] needs a function-pointer typedef, and {fn.Type.Trim()} is not one");
+        var context = callback.Lanes.FirstOrDefault(l => l.Has("context"))
+            ?? throw new NotSupportedException(
+                $"{where}: {callback.Name} declares no [context] lane for the state to return in");
+        if (callback.Lanes.Any(l => l.Has("self") || l.Has("ctx")))
+            throw new NotSupportedException(
+                $"{where}: {callback.Name} hands the handler an engine object, which this backend"
+                + " does not project yet");
+        return new ClosureForm(fn, state, callback, context,
+            callback.Lanes.FirstOrDefault(l => l.Type.Replace(" ", "") == "ke_error**"));
+    }
+
+    /// <summary>
+    /// The function the caller writes. The context lane is gone -- the state arrives
+    /// typed, so there is nothing to cast back -- and where the typedef declares an error
+    /// channel the handler reports through Zig's own, since a lane holding a
+    /// <c>ke_error**</c> is the C spelling of exactly that.
+    /// </summary>
+    string HandlerType(ClosureForm c, string stateArg)
+    {
+        var lanes = c.Callback.Lanes
+            .Where(l => l != c.ContextLane && l != c.ErrorLane)
+            .Select(HandlerLaneType)
+            .Prepend($"@TypeOf({stateArg})");
+        var ret = c.ErrorLane is not null ? "Error!void"
+            : c.Callback.Returns.Trim() is "void" ? "void"
+            : PubType(c.Callback.Returns, null);
+        return $"fn ({string.Join(", ", lanes)}) {ret}";
+    }
+
+    string HandlerLaneType(ApiParam lane) =>
+        lane.Has("utf8") ? "[:0]const u8" : PubType(lane.Type, lane);
+
+    static string TrampolineName(ClosureForm c) => Idioms.Pascal(c.Fn.Name!) + "Trampoline";
+
+    /// <summary>
+    /// The C entry point the engine is handed. Zig closes over nothing at runtime, so
+    /// the state travels the same <c>void*</c> lane C uses and comes back a typed
+    /// pointer -- which is why nothing here has to be retained: the memory is the
+    /// caller's, and outliving the call is their statement to make, not a table's.
+    /// <paramref name="taken"/> is what the method around it already names: a lane and a
+    /// parameter may share a name in C, where they are two prototypes, and the trampoline
+    /// is the one place that nests one inside the other.
+    /// </summary>
+    IEnumerable<string> TrampolineLines(ClosureForm c, string handler, IReadOnlySet<string> taken)
+    {
+        string Lane(ApiParam l) => l == c.ErrorLane ? "_"
+            : Idioms.Ident(taken.Contains(l.Name!) ? l.Name! + "_lane" : l.Name!);
+        var ps = c.Callback.Lanes.Select(l => $"{Lane(l)}: {PubType(l.Type, l)}");
+        var ctx = $"@ptrCast(@alignCast({Lane(c.ContextLane)}.?))";
+        var handed = c.Callback.Lanes.Where(l => l != c.ContextLane && l != c.ErrorLane)
+            .Select(l => l.Has("utf8") ? Within("std", $"std.mem.span({Lane(l)})") : Lane(l));
+        var call = $"{handler}({string.Join(", ", new[] { ctx }.Concat(handed))})";
+
+        yield return $"const {TrampolineName(c)} = struct {{";
+        yield return $"    fn call({string.Join(", ", ps)}) callconv(.c) "
+            + $"{PubType(c.Callback.Returns, null)} {{";
+        if (c.ErrorLane is not null)
+        {
+            yield return $"        {call} catch return false;";
+            yield return "        return true;";
+        }
+        else if (c.Callback.Returns.Trim() is "void") yield return $"        {call};";
+        else yield return $"        return {call};";
+        yield return "    }";
+        yield return "};";
+    }
+
+    /// <summary>
+    /// Records that the module reaches <paramref name="module"/>, and gives back the
+    /// expression unchanged. An import Zig never sees used is a compile error, so the
+    /// only place that can say a module is needed is the one that spells it.
+    /// </summary>
+    string Within(string module, string expr)
+    {
+        imported[module] = module;
+        return expr;
     }
 
     /// <summary>
