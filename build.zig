@@ -12,8 +12,11 @@ pub fn build(b: *std.Build) void {
         else => "x64-linux-zig",
     };
 
+    const tools_dir = b.pathJoin(&.{ root, "build", "tools" });
+    const zig_cache_dir = b.pathJoin(&.{ root, "build", "zig-cache" });
+
     const vcpkg_tool_version = "2026-07-13";
-    const vcpkg_dir_default = b.pathJoin(&.{ root, ".cache", b.fmt("vcpkg-{s}", .{vcpkg_tool_version}) });
+    const vcpkg_dir_default = b.pathJoin(&.{ tools_dir, b.fmt("vcpkg-{s}", .{vcpkg_tool_version}) });
     const vcpkg_root = b.option([]const u8, "vcpkg-root", "path to the vcpkg checkout") orelse
         b.graph.environ_map.get("VCPKG_ROOT") orelse
         vcpkg_dir_default;
@@ -30,7 +33,7 @@ pub fn build(b: *std.Build) void {
         ),
     });
 
-    const vcpkg_installed = b.pathJoin(&.{ root, "vcpkg_installed_zig" });
+    const vcpkg_installed = b.pathJoin(&.{ root, "build", "vcpkg-installed" });
     const vcpkg_overlay_triplets = b.pathJoin(&.{ root, "vcpkg-triplets" });
     var vcpkg_install_args: std.ArrayList([]const u8) = .empty;
     vcpkg_install_args.appendSlice(b.allocator, &.{
@@ -63,7 +66,7 @@ pub fn build(b: *std.Build) void {
         .windows => b.fmt("slang-{s}-windows-x86_64", .{slang_version}),
         else => b.fmt("slang-{s}-linux-x86_64", .{slang_version}),
     };
-    const slang_dir = b.pathJoin(&.{ root, ".cache", slang_url_name });
+    const slang_dir = b.pathJoin(&.{ tools_dir, slang_url_name });
     const slang_zip = b.pathJoin(&.{ slang_dir, "slang.zip" });
     const slang_url = b.fmt("https://github.com/shader-slang/slang/releases/download/v{s}/{s}.zip", .{ slang_version, slang_url_name });
     const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (target.result.os.tag == .windows) "slangc.exe" else "slangc" });
@@ -79,6 +82,7 @@ pub fn build(b: *std.Build) void {
         .root = root,
         .zig_exe = b.graph.zig_exe,
         .prefix = absolute_prefix,
+        .cache_dir = zig_cache_dir,
         .release_flag = if (debug) "--release=off" else "--release=fast",
         .vcpkg_step = &vcpkg_install.step,
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
@@ -242,7 +246,7 @@ pub fn build(b: *std.Build) void {
         .windows => "wgpu-windows-x86_64-msvc-release",
         else => "wgpu-linux-x86_64-release",
     };
-    const wgpu_dir = b.pathJoin(&.{ root, ".cache", wgpu_url_name });
+    const wgpu_dir = b.pathJoin(&.{ tools_dir, wgpu_url_name });
     const wgpu_zip = b.pathJoin(&.{ wgpu_dir, "wgpu.zip" });
     const wgpu_url = b.fmt("https://github.com/gfx-rs/wgpu-native/releases/download/{s}/{s}.zip", .{ wgpu_version, wgpu_url_name });
     const wgpu_native_filename = switch (target.result.os.tag) {
@@ -528,7 +532,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "libs", b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") })),
     }, &.{&logger_simple.step});
 
-    const demo_step = b.step("demo01", "Build examples/c/01_minimal_log with zero CMake involved");
+    const demo_step = b.step("demo01", "Build examples/c/01_minimal_log");
     demo_step.dependOn(&demo01.step);
 
     const examples_gen = b.pathJoin(&.{ ctx.prefix, "gen", "examples" });
@@ -759,6 +763,9 @@ const Ctx = struct {
     root: []const u8,
     zig_exe: []const u8,
     prefix: []const u8,
+    /// Every sub-invocation is told to cache here, so one build tree holds one
+    /// cache instead of one per plugin directory.
+    cache_dir: []const u8,
     release_flag: []const u8,
     vcpkg_step: *std.Build.Step,
     target_arg: []const u8,
@@ -767,8 +774,7 @@ const Ctx = struct {
     plugins_step: *std.Build.Step,
     test_step: *std.Build.Step,
 
-    /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs,
-    /// mirroring cmake/CompileSlangShader.cmake's ke_compile_slang_shader.
+    /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs.
     /// Every render pass loads its shaders at runtime by logical name via
     /// ke_render_service::load_shader, so the output always lands in the one
     /// shared runtime shaders directory, never embedded in a plugin's own .so
@@ -797,12 +803,10 @@ const Ctx = struct {
         return run;
     }
 
-    /// Compiles every authored material × `pass`, mirroring
-    /// cmake/CompileMaterialShaders.cmake's ke_compile_material_shaders: glob
-    /// every materials directory (globbing happens right here, synchronously,
-    /// during graph construction — the same moment CMake's CONFIGURE_DEPENDS
-    /// glob ran), generate a wrapper binding each material into the pass's
-    /// entry points, then compile the wrapper like any other pass shader. The
+    /// Compiles every authored material × `pass`: glob every materials
+    /// directory (synchronously, during graph construction), generate a wrapper
+    /// binding each material into the pass's entry points, then compile the
+    /// wrapper like any other pass shader. The
     /// wrapper `import`s the material by module name, so every materials dir
     /// must be on the compile include path alongside the pass's own.
     fn materialShaders(
@@ -855,17 +859,14 @@ const Ctx = struct {
         return steps.toOwnedSlice(b.allocator) catch @panic("OOM");
     }
 
-    /// Invokes `zig build --prefix <shared prefix> <extra args>` in `dir`,
-    /// mirroring exactly what each plugin's CMakeLists.txt custom command used
-    /// to do. Every plugin's own build.zig already installs its .so to "lib"
-    /// under whatever --prefix it's given, so pointing every invocation at the
-    /// SAME shared prefix makes them all land in one directory — no
-    /// zig-out-then-copy indirection needed (that dance existed only to work
-    /// around a CMake quirk, not a Zig one).
+    /// Invokes `zig build --prefix <shared prefix> <extra args>` in `dir`.
+    /// Every plugin's own build.zig installs its .so to "lib" under whatever
+    /// --prefix it is given, so pointing every invocation at the same prefix
+    /// makes them all land in one directory.
     fn plugin(ctx: *Ctx, name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step, tests: Tests) *std.Build.Step.Run {
         const b = ctx.b;
         const cwd = b.pathJoin(&.{ b.build_root.path.?, dir });
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix, "--cache-dir", ctx.cache_dir });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
@@ -878,7 +879,7 @@ const Ctx = struct {
         switch (tests) {
             .no_tests => {},
             .has_tests => {
-                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix });
+                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix, "--cache-dir", ctx.cache_dir });
                 t.addArgs(extra_args);
                 t.addArg(ctx.release_flag);
                 if (ctx.target_arg.len != 0) t.addArg(ctx.target_arg);
@@ -894,17 +895,14 @@ const Ctx = struct {
 
     /// Like `plugin`, but for a C example: every example's own build.zig
     /// hardcodes its exe name to "demo" and installs to "bin" under whatever
-    /// --prefix it's given, so pointing several examples at the shared
-    /// engine prefix would make each one overwrite the last one's binary.
-    /// Each example instead gets its own private sub-prefix, then the
-    /// resulting "demo" binary is copied into the shared prefix's bin/ under
-    /// its own name — mirroring the exact two-path pattern CMake used to
-    /// dodge its IMPORTED_LOCATION collision bug, applied here to dodge an
-    /// install-path collision instead.
+    /// --prefix it is given, so pointing several examples at the shared engine
+    /// prefix would make each one overwrite the last one's binary. Each example
+    /// gets its own private sub-prefix instead, and the resulting "demo" binary
+    /// is copied into the shared prefix's bin/ under its own name.
     fn example(ctx: *Ctx, demo_name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step) *std.Build.Step.Run {
         const b = ctx.b;
         const own_prefix = b.pathJoin(&.{ ctx.prefix, "examples-out", demo_name });
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix, "--cache-dir", ctx.cache_dir });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);

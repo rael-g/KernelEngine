@@ -60,16 +60,16 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # Speed only, never correctness: the build fetches vcpkg into .cache and
-      # installs the ports into vcpkg_installed_zig by itself, so a cache miss
-      # costs minutes rather than failing. Both directories are derived from the
-      # manifest and the triplet, which is what the key follows.
+      # Speed only, never correctness: the build fetches vcpkg into build/tools
+      # and installs the ports into build/vcpkg-installed by itself, so a cache
+      # miss costs minutes rather than failing. Both directories are derived
+      # from the manifest and the triplet, which is what the key follows.
       - name: Restore vcpkg
         uses: actions/cache@v4
         with:
           path: |
-            .cache
-            vcpkg_installed_zig
+            build/tools
+            build/vcpkg-installed
           key: vcpkg-${{ matrix.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
 
       - name: Build native
