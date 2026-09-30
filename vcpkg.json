@@ -4,7 +4,6 @@
     "stb",
     "box2d",
     "assimp",
-    "gtest",
     "enkits",
     "miniaudio",
     "flecs"
