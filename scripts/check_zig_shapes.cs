@@ -272,6 +272,72 @@ Expect("a vtable the caller implements is filled from a type the compiler looks 
     absent: ["sink: abi.ke_probe_sink", "ProbeSink = struct"],
     providers: ["ke_probe"]);
 
+// A [ctx] or [self] parameter is the engine handing the caller one of its own objects, so
+// it crosses as that vtable's projection rather than as the pointer under it. The vtable
+// has no owner wrapper, which is exactly why nothing else would project it -- and why the
+// projection offers only borrow: a caller cannot come to hold what a call is lending.
+Expect("an engine object crosses as a projection with no lifetime of its own",
+    m =>
+    {
+        m.Structs.Add(Vtable("ke_probe_ctx", Slot("spawn", "u64")));
+        m.Structs.Add(Vtable("ke_probe",
+            Slot("attach", "bool", P("ctx", "ke_probe_ctx *", "ctx"), P("out_error", "ke_error **"))));
+        m.Structs.Add(Handle("ke_probe"));
+    },
+    contains: [
+        "pub const ProbeCtx = struct {",
+        "pub fn borrow(ref: *abi.ke_probe_ctx) ProbeCtx {",
+        "        return .{ .ref = ref };",
+        "pub fn attach(self: Probe, ctx: ProbeCtx) Error!void {",
+        "if (!self.ref.attach(self.ref, ctx.ref, &err)) return raise(err);",
+    ],
+    absent: [
+        "ctx: *abi.ke_probe_ctx)",
+        "pub fn init(handle: abi.ke_probe_ctx_handle)",
+        "pub fn deinit(self: *ProbeCtx)",
+    ],
+    providers: ["ke_probe"]);
+
+// A parameter bag becomes the one thing Zig already says better than C: a struct whose
+// fields carry the defaults the header states, so a caller states only what it means. The
+// handler and the state it reaches its own data through cannot be fields -- one is
+// comptime, the other typed by what was passed -- and a count comes off the span beside it.
+Expect("a parameter bag becomes a struct of defaults, with the handler and its state outside",
+    m =>
+    {
+        m.Callbacks.Add(new ApiCallback("ke_probe_run_fn", "void", null, [
+            P("data", "void *", "context"),
+        ]));
+        m.Structs.Add(new ApiStruct("ke_probe_params", null, [], [
+            new ApiField("name", "const char *", ["utf8"], null),
+            new ApiField("data", "void *", ["context"], null),
+            new ApiField("run", "ke_probe_run_fn", ["closure:data"], null),
+            new ApiField("terms", "const uint32_t *", ["array_of:term_count", "default:empty"], null),
+            new ApiField("term_count", "uint32_t", [], null),
+            new ApiField("pinned", "uint32_t", ["default:0"], null),
+        ], []));
+        m.Structs.Add(Vtable("ke_probe",
+            Slot("register", "bool",
+                P("p", "const ke_probe_params *", "expand"),
+                P("out_error", "ke_error **"))));
+        m.Structs.Add(Handle("ke_probe"));
+    },
+    contains: [
+        "pub const ProbeParams = struct {",
+        "    name: [:0]const u8,",
+        "    terms: []const u32 = &.{},\n    pinned: u32 = 0,\n};",
+        "pub fn register(self: Probe, data: anytype, comptime run: fn (@TypeOf(data)) void, "
+            + "p: ProbeParams) Error!void {",
+        "    .name = p.name.ptr,",
+        "    .data = @ptrCast(data),",
+        "    .run = RunTrampoline.call,",
+        "    .terms = p.terms.ptr,",
+        "    .term_count = @intCast(p.terms.len),",
+        "if (!self.ref.register(self.ref, &p_native, &err)) return raise(err);",
+    ],
+    absent: ["p: *const abi.ke_probe_params", "name: [*:0]const u8,\n    data:"],
+    providers: ["ke_probe"]);
+
 if (failures.Count > 0)
 {
     foreach (var f in failures) Console.Error.WriteLine($"  {f}");
