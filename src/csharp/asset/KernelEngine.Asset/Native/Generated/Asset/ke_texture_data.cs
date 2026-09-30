@@ -9,6 +9,9 @@ public unsafe partial struct ke_texture_data
     public byte* pixels;
 
     [NativeTypeName("uint32_t")]
+    public uint byte_count;
+
+    [NativeTypeName("uint32_t")]
     public uint width;
 
     [NativeTypeName("uint32_t")]
