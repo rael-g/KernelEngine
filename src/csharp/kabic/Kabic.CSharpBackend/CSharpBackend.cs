@@ -1043,9 +1043,7 @@ public static class CSharpBackend
 
         foreach (var cs in slots)
         {
-            if (cs.Slot.Has("sink") || cs.Slot.Has("lifecycle") || cs.Slot.Has("raw_callback")
-                || cs.Slot.Has("idiom") || cs.PublicParams.Any(p => p.Has("raw_callback")))
-                continue;
+            if (!Projected(cs)) continue;
             if (cs.PublicParams.Any(p => !p.Has("closure")
                     && classified.Callbacks.Any(c => c.Name == p.Type.Trim())))
             {
@@ -1453,7 +1451,7 @@ public static class CSharpBackend
         string owner)
     {
         var drains = Drains(model, slots);
-        return slots
+        return slots.Where(Projected)
             .SelectMany(s => ClosureGroups(model, s.Slot, CallbackPairs(model, s), owner, drains))
             .ToList();
     }
@@ -1471,9 +1469,24 @@ public static class CSharpBackend
                 .Any(p => p.Lifetime == ClosureLifetime.Retained && p.ErrorLane is not null);
     }
 
-    /// <summary>Every closure a vtable projects, across all its slots.</summary>
+    /// <summary>
+    /// Whether the slot gets a managed method at all. A slot whose shape has no
+    /// ABI-derivable managed answer, or whose name is already taken by a deliberately
+    /// different hand-written member, is left whole to the idiom layer.
+    /// </summary>
+    static bool Projected(ClassifiedSlot cs) =>
+        !cs.Slot.Has("sink") && !cs.Slot.Has("lifecycle") && !cs.Slot.Has("raw_callback")
+        && !cs.Slot.Has("idiom") && !cs.PublicParams.Any(p => p.Has("raw_callback"));
+
+    /// <summary>
+    /// Every closure a vtable projects. Only the slots that are projected count: a
+    /// typedef reached solely by a slot left to the idiom layer has no managed surface,
+    /// and declaring its delegate anyway puts a name in the namespace that nothing calls
+    /// -- which is how <c>ke_task_func</c> came to declare a <c>Task</c> next to the one
+    /// the framework already means by that word.
+    /// </summary>
     static IReadOnlyList<CallbackPair> VtableClosures(ApiModel model, IEnumerable<ClassifiedSlot> slots) =>
-        slots.SelectMany(s => CallbackPairs(model, s)).ToList();
+        slots.Where(Projected).SelectMany(s => CallbackPairs(model, s)).ToList();
 
     /// <summary>Lanes the delegate carries: everything but the context and the error channel.</summary>
     static IEnumerable<int> CarriedLanes(CallbackPair pair) =>
