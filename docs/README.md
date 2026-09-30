@@ -14,6 +14,7 @@ is in the code, and `CLAUDE.md`'s closing table says where to start looking.
 - [How does a call cross the C ABI, and how does a failure come back?](architecture/abi.md)
 - [How does one runtime tick run, and what may run at the same time?](architecture/runtime.md)
 - [Which threads exist, what runs on them, and how does work reach them?](architecture/threading.md)
+- [What does the ECS contract promise about threads and structural change, and how does the flecs plugin keep it?](architecture/ecs.md)
 
 ## Not here, on purpose
 
