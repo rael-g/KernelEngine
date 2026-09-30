@@ -46,8 +46,6 @@ extern "C"
         float    color[4]; ///< [default:1 1 1 1] Premultiplied alpha RGBA.
     } ke_ui_quad_component;
 
-#define KE_COMPONENT_NAME_UI_QUAD "ui_quad"
-
     /// [node:Label,base:Node3D]
     /// A screen-space text label. Text/anchor/offset/color/font are the caller's
     /// input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE
@@ -77,8 +75,6 @@ extern "C"
         /// [idiom,output] Shaped output, see glyph_count.
         ke_label_glyph_quad glyphs[KE_LABEL_MAX_GLYPHS];
     } ke_label_component;
-
-#define KE_COMPONENT_NAME_LABEL "label"
 
 #ifdef __cplusplus
 }

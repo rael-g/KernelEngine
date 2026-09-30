@@ -22,8 +22,6 @@ extern "C"
         float volume; ///< [default:1] Linear gain, 0..1.
     } ke_audio_player_component;
 
-#define KE_COMPONENT_NAME_AUDIO_PLAYER "audio_player"
-
 #ifdef __cplusplus
 }
 #endif

@@ -1073,10 +1073,10 @@ const Fixture = struct {
         self.describe(rc.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(rc.ke_point_light_component), generatedFields(&rc.ke_point_light_component_fields), rc.ke_point_light_component_fields.len);
         self.describe(rc.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(rc.ke_spot_light_component), generatedFields(&rc.ke_spot_light_component_fields), rc.ke_spot_light_component_fields.len);
         self.describe(rc.KE_COMPONENT_NAME_MESH, @sizeOf(rc.ke_mesh_component), generatedFields(&rc.ke_mesh_component_fields), rc.ke_mesh_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_SPRITE_2D, @sizeOf(rc.ke_sprite2d_component), generatedFields(&rc.ke_sprite2d_component_fields), rc.ke_sprite2d_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_SPRITE2D, @sizeOf(rc.ke_sprite2d_component), generatedFields(&rc.ke_sprite2d_component_fields), rc.ke_sprite2d_component_fields.len);
         self.describe(rc.KE_COMPONENT_NAME_LABEL, @sizeOf(rc.ke_label_component), generatedFields(&rc.ke_label_component_fields), rc.ke_label_component_fields.len);
         self.describe(rc.KE_COMPONENT_NAME_AUDIO_PLAYER, @sizeOf(rc.ke_audio_player_component), generatedFields(&rc.ke_audio_player_component_fields), rc.ke_audio_player_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_COLLIDER_2D, @sizeOf(rc.ke_collider2d_component), generatedFields(&rc.ke_collider2d_component_fields), rc.ke_collider2d_component_fields.len);
+        self.describe(rc.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(rc.ke_collider2d_component), generatedFields(&rc.ke_collider2d_component_fields), rc.ke_collider2d_component_fields.len);
 
         self.loader_h = ke_scene_loader_create(self.world_h.ref, null, null);
         try testing.expect(self.loader_h.ref != null);
@@ -1258,7 +1258,7 @@ test "a two dimensional rotation authored in degrees reaches the component as ra
     const e = f.find("Flat");
     try testing.expect(e != c.KE_ENTITY_INVALID);
 
-    const t = f.comp(c.ke_transform2d_component, c.KE_COMPONENT_NAME_TRANSFORM_2D, e) orelse return error.MissingComponent;
+    const t = f.comp(c.ke_transform2d_component, c.KE_COMPONENT_NAME_TRANSFORM2D, e) orelse return error.MissingComponent;
     try testing.expectEqual(@as(f32, 1.0), t.position.x);
     try testing.expectEqual(@as(f32, 2.0), t.position.y);
     try testing.expectApproxEqAbs(@as(f32, 1.57079633), t.rotation, 1e-5);
@@ -1354,7 +1354,7 @@ test "every sprite2d field the table describes reaches the component" {
     const e = f.find("Coin");
     try testing.expect(e != c.KE_ENTITY_INVALID);
 
-    const sp = f.comp(rc.ke_sprite2d_component, rc.KE_COMPONENT_NAME_SPRITE_2D, e) orelse return error.MissingComponent;
+    const sp = f.comp(rc.ke_sprite2d_component, rc.KE_COMPONENT_NAME_SPRITE2D, e) orelse return error.MissingComponent;
     try testing.expectEqualStrings("res://atlas.png", std.mem.sliceTo(&sp.texture, 0));
     try testing.expectEqual(@as(f32, 0.25), sp.region.x);
     try testing.expectEqual(@as(f32, 0.5), sp.region.w);
@@ -2099,7 +2099,7 @@ test "a collider keeps the extents and surface the scene authored" {
     const e = f.find("Shape");
     try testing.expect(e != c.KE_ENTITY_INVALID);
 
-    const col = f.comp(rc.ke_collider2d_component, rc.KE_COMPONENT_NAME_COLLIDER_2D, e) orelse return error.MissingComponent;
+    const col = f.comp(rc.ke_collider2d_component, rc.KE_COMPONENT_NAME_COLLIDER2D, e) orelse return error.MissingComponent;
     try testing.expectApproxEqAbs(@as(f32, 0.18), col.half_extents.x, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 0.18), col.half_extents.y, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 1.0), col.restitution, 1e-6);

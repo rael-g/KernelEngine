@@ -17,8 +17,6 @@ extern "C"
         ke_vec3 scale; ///< [default:1 1 1]
     } ke_transform_component;
 
-#define KE_COMPONENT_NAME_TRANSFORM "transform"
-
     /// [node:Node2D]
     /// An entity's authored 2D pose, read and written as one unit.
     typedef struct ke_transform2d_component
@@ -29,8 +27,6 @@ extern "C"
         float   depth; ///< Where the plane sits along Z.
     } ke_transform2d_component;
 
-#define KE_COMPONENT_NAME_TRANSFORM_2D "transform2d"
-
     /// [value]
     /// An entity's place in world space, composed down the hierarchy. Written by
     /// the hierarchy alone.
@@ -38,8 +34,6 @@ extern "C"
     {
         ke_mat4 matrix; ///< [output]
     } ke_world_transform_component;
-
-#define KE_COMPONENT_NAME_WORLD_TRANSFORM "world_transform"
 
 #ifdef __cplusplus
 }

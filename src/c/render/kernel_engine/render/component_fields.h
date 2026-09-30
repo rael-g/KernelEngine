@@ -6,6 +6,15 @@
 #include <kernel_engine/render/components.h>
 #include <stddef.h>
 
+#define KE_COMPONENT_NAME_CAMERA "camera"
+#define KE_COMPONENT_NAME_DIRECTIONAL_LIGHT "directional_light"
+#define KE_COMPONENT_NAME_POINT_LIGHT "point_light"
+#define KE_COMPONENT_NAME_SPOT_LIGHT "spot_light"
+#define KE_COMPONENT_NAME_AMBIENT_LIGHT "ambient_light"
+#define KE_COMPONENT_NAME_SKYBOX "skybox"
+#define KE_COMPONENT_NAME_MESH "mesh"
+#define KE_COMPONENT_NAME_SPRITE2D "sprite2d"
+
 static const ke_component_field ke_camera_component_fields[] = {
     { "fov", KE_VARIANT_FLOAT, offsetof(ke_camera_component, fov), sizeof(((ke_camera_component *)0)->fov), { KE_VARIANT_FLOAT, { .f = 60.0 } } },
     { "near_plane", KE_VARIANT_FLOAT, offsetof(ke_camera_component, near_plane), sizeof(((ke_camera_component *)0)->near_plane), { KE_VARIANT_FLOAT, { .f = 0.1 } } },

@@ -6,6 +6,10 @@
 #include <kernel_engine/spatial/transform.h>
 #include <stddef.h>
 
+#define KE_COMPONENT_NAME_TRANSFORM "transform"
+#define KE_COMPONENT_NAME_TRANSFORM2D "transform2d"
+#define KE_COMPONENT_NAME_WORLD_TRANSFORM "world_transform"
+
 static const ke_component_field ke_transform_component_fields[] = {
     { "position", KE_VARIANT_VEC3, offsetof(ke_transform_component, position), sizeof(((ke_transform_component *)0)->position), { KE_VARIANT_NULL, { 0 } } },
     { "rotation", KE_VARIANT_QUAT, offsetof(ke_transform_component, rotation), sizeof(((ke_transform_component *)0)->rotation), { KE_VARIANT_QUAT, { .q = { 0.0f, 0.0f, 0.0f, 1.0f } } } },

@@ -145,7 +145,7 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     const spot_light_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, c.ke_spot_light_component, &c.ke_spot_light_component_fields);
     const ambient_light_cid = registerComponent(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, c.ke_ambient_light_component, &c.ke_ambient_light_component_fields);
     _ = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component), null, 0, null);
-    const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE_2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
+    const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
 
     registerFields(w, mesh_cid, &c.ke_mesh_component_fields);
     registerFields(w, camera_cid, &c.ke_camera_component_fields);
@@ -284,7 +284,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         mesh_resolve_params.execute = mesh_resolve.system;
         _ = rt.register_system.?(rt, &mesh_resolve_params, null);
 
-        const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE_2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
+        const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
         st.sprite_resolve_state = .{ .core = st.core.ref, .mesh_cid = mesh_cid, .resolver = asset_resolver };
         st.sprite_resolve_queries = std.mem.zeroes([2]c.ke_query_decl);
         st.sprite_resolve_queries[0].terms[0] = .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE };

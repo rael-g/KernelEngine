@@ -124,15 +124,6 @@ extern "C"
         uint8_t           attached; ///< [bool]
     } ke_sprite2d_component;
 
-#define KE_COMPONENT_NAME_SPRITE_2D         "sprite2d"
-#define KE_COMPONENT_NAME_CAMERA            "camera"
-#define KE_COMPONENT_NAME_DIRECTIONAL_LIGHT "directional_light"
-#define KE_COMPONENT_NAME_POINT_LIGHT       "point_light"
-#define KE_COMPONENT_NAME_SPOT_LIGHT        "spot_light"
-#define KE_COMPONENT_NAME_AMBIENT_LIGHT     "ambient_light"
-#define KE_COMPONENT_NAME_SKYBOX            "skybox"
-#define KE_COMPONENT_NAME_MESH              "mesh"
-
 #ifdef __cplusplus
 }
 #endif

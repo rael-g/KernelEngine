@@ -38,8 +38,6 @@ extern "C"
         ke_body_2d      body;
     } ke_body2d_component;
 
-#define KE_COMPONENT_NAME_BODY_2D "body2d"
-
     typedef enum ke_shape_kind_2d
     {
         KE_SHAPE_KIND_2D_BOX    = 0, /**< Axis-aligned box, sized by half_extents. */
@@ -77,8 +75,6 @@ extern "C"
         /// the world does not have.
         bool             attached;
     } ke_collider2d_component;
-
-#define KE_COMPONENT_NAME_COLLIDER_2D "collider2d"
 
 #ifdef __cplusplus
 }

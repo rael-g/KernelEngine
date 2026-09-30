@@ -6,6 +6,9 @@
 #include <kernel_engine/render/ui/components.h>
 #include <stddef.h>
 
+#define KE_COMPONENT_NAME_UI_QUAD "ui_quad"
+#define KE_COMPONENT_NAME_LABEL "label"
+
 static const ke_component_field ke_ui_quad_component_fields[] = {
     { "texture_bits", KE_VARIANT_INT, offsetof(ke_ui_quad_component, texture_bits), sizeof(((ke_ui_quad_component *)0)->texture_bits), { KE_VARIANT_NULL, { 0 } } },
     { "dst_x", KE_VARIANT_FLOAT, offsetof(ke_ui_quad_component, dst_x), sizeof(((ke_ui_quad_component *)0)->dst_x), { KE_VARIANT_NULL, { 0 } } },

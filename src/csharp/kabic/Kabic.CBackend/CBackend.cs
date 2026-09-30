@@ -44,6 +44,14 @@ public static class CBackend
         sb.AppendLine("#include <stddef.h>");
         sb.AppendLine();
 
+        var named = Named(model, convention).ToList();
+        if (named.Count > 0)
+        {
+            foreach (var s in named)
+                sb.AppendLine($"#define {NameMacro(s, convention)} \"{convention.ComponentNameFor(s.Name)}\"");
+            sb.AppendLine();
+        }
+
         foreach (var s in Describable(model, convention))
         {
             var fields = s.Fields.Where(f => Describes(model, f)).ToList();
@@ -67,6 +75,20 @@ public static class CBackend
     /// struct a component happens to be built out of is not itself addressable
     /// by a scene file, which is what the component suffix tells them apart by.
     /// </summary>
+    /// <summary>
+    /// The component structs this domain names. Wider than <see cref="Describable"/>: a
+    /// component a scene file cannot author still has to be registered under a name, and
+    /// every language reaching it needs the same one. A component with no describable field
+    /// would otherwise have its name spelled by hand next to a struct that already implies
+    /// it.
+    /// </summary>
+    public static IEnumerable<ApiStruct> Named(ApiModel model, Convention convention) =>
+        model.Structs.Where(s => !s.IsVtable && !s.External && convention.IsComponentType(s.Name));
+
+    /// <summary>The macro a component's registered name is reached by from C and Zig.</summary>
+    public static string NameMacro(ApiStruct s, Convention convention) =>
+        $"KE_COMPONENT_NAME_{convention.ComponentNameFor(s.Name).ToUpperInvariant()}";
+
     public static IEnumerable<ApiStruct> Describable(ApiModel model, Convention convention) =>
         model.Structs.Where(s => !s.IsVtable
             && !s.External

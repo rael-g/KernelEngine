@@ -137,7 +137,7 @@ export fn ke_scene_hierarchy_create(
     var world_transform_meta: c.ke_component_meta = undefined;
     var hierarchy_meta: c.ke_component_meta = undefined;
     if (!ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM, &transform_meta, null) or
-        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM_2D, &transform2d_meta, null) or
+        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, &transform2d_meta, null) or
         !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, &world_transform_meta, null) or
         !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta, null))
     {

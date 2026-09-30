@@ -211,9 +211,9 @@ export fn ke_physics_body2d_module_create(
     const m = gpa.create(Module) catch return empty;
     m.* = .{ .physics = physics, .logger = pr.logger };
 
-    const body_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_BODY_2D, @sizeOf(c.ke_body2d_component), &c.ke_body2d_component_fields, c.ke_body2d_component_fields.len, null);
-    const transform_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM_2D, @sizeOf(c.ke_transform2d_component), &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len, null);
-    const collider_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_COLLIDER_2D, @sizeOf(c.ke_collider2d_component), &c.ke_collider2d_component_fields, c.ke_collider2d_component_fields.len, null);
+    const body_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_BODY2D, @sizeOf(c.ke_body2d_component), &c.ke_body2d_component_fields, c.ke_body2d_component_fields.len, null);
+    const transform_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, @sizeOf(c.ke_transform2d_component), &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len, null);
+    const collider_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(c.ke_collider2d_component), &c.ke_collider2d_component_fields, c.ke_collider2d_component_fields.len, null);
     const hierarchy_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, @sizeOf(c.ke_hierarchy_component), null, 0, null);
 
     const rd = c.KE_ACCESS_READ;
@@ -267,8 +267,8 @@ export fn ke_physics_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) 
     const e = ecs orelse return false;
     const w = world orelse return false;
 
-    const body_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_BODY_2D, @sizeOf(c.ke_body2d_component), &c.ke_body2d_component_fields, c.ke_body2d_component_fields.len, null);
-    const collider_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_COLLIDER_2D, @sizeOf(c.ke_collider2d_component), &c.ke_collider2d_component_fields, c.ke_collider2d_component_fields.len, null);
+    const body_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_BODY2D, @sizeOf(c.ke_body2d_component), &c.ke_body2d_component_fields, c.ke_body2d_component_fields.len, null);
+    const collider_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(c.ke_collider2d_component), &c.ke_collider2d_component_fields, c.ke_collider2d_component_fields.len, null);
 
     registerFields(w, body_cid, &c.ke_body2d_component_fields);
     registerFields(w, collider_cid, &c.ke_collider2d_component_fields);

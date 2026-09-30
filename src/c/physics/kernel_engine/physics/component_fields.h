@@ -6,6 +6,9 @@
 #include <kernel_engine/physics/components.h>
 #include <stddef.h>
 
+#define KE_COMPONENT_NAME_BODY2D "body2d"
+#define KE_COMPONENT_NAME_COLLIDER2D "collider2d"
+
 static const ke_component_field ke_body2d_component_fields[] = {
     { "type", KE_VARIANT_INT, offsetof(ke_body2d_component, type), sizeof(((ke_body2d_component *)0)->type), { KE_VARIANT_NULL, { 0 } } },
     { "position", KE_VARIANT_VEC2, offsetof(ke_body2d_component, position), sizeof(((ke_body2d_component *)0)->position), { KE_VARIANT_NULL, { 0 } } },
