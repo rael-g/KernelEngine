@@ -451,7 +451,7 @@ public sealed class ZigBackend
         var slot = cs.Slot;
         if (cs.Blobs.Count > 0 || cs.ExpandedParam is not null
             || slot.Params.Any(p => (model.CallbackOf(p.Type) is not null || p.Has("callback"))
-                && !p.Has("closure")))
+                && !p.Has("closure") && !IsConsumer(p)))
             throw new NotSupportedException(
                 $"{slot.Name}: this backend renders no raw callback, no [expand] and no opaque payload yet.");
 
@@ -459,6 +459,12 @@ public sealed class ZigBackend
             .Select(p => Closure(slot, p)).ToList();
         var closureOf = closures.ToDictionary(c => c.Fn);
         var stateOf = closures.ToDictionary(c => c.State);
+
+        var consumers = slot.Params.Where(IsConsumer).Select(p => Consumer(slot, p)).ToList();
+        var consumerOf = consumers.ToDictionary(c => c.Param);
+        var paramNames = slot.Params.Where(p => p.Name is not null).Select(Arg).ToHashSet();
+        string FieldArg(ApiField f) => Idioms.Ident(
+            paramNames.Contains(Idioms.Ident(f.Name)) || declared.Contains(f.Name) ? f.Name + "_arg" : f.Name);
 
         var outs = (cs.Shape switch
         {
@@ -478,6 +484,7 @@ public sealed class ZigBackend
             if (p == errParam) { args.Add("&err"); continue; }
             if (closureOf.TryGetValue(p, out var fnOf)) { args.Add($"{TrampolineName(fnOf)}.call"); continue; }
             if (stateOf.ContainsKey(p)) { args.Add($"@ptrCast({Arg(p)})"); continue; }
+            if (consumerOf.TryGetValue(p, out var cons)) { args.Add(ConsumerValue(cons)); continue; }
             if (counts.Contains(p)) { args.Add($"@intCast({Arg(cs.Sequences.First(s => s.Count == p).Seq)}.len)"); continue; }
             if (p == cs.ReturnCount) { args.Add("&count"); continue; }
             if (p.Has("array_of")) { args.Add($"{Arg(p)}.ptr"); continue; }
@@ -489,6 +496,7 @@ public sealed class ZigBackend
         var taken = slot.Params.Where(p => p.Name is not null).Select(Arg)
             .Append("self").Concat(declared).ToHashSet();
         foreach (var c in closures) body.AddRange(TrampolineLines(c, Arg(c.Fn), taken));
+        foreach (var c in consumers) body.AddRange(ConsumerLines(c, Arg(c.Param), taken, FieldArg));
 
         foreach (var p in outs)
             body.Add($"var {Local(p)}: "
@@ -559,6 +567,9 @@ public sealed class ZigBackend
             .Concat(sig.Where(p => !stateOf.ContainsKey(p)).SelectMany(p =>
                 closureOf.TryGetValue(p, out var c)
                     ? new[] { $"{Arg(c.State)}: anytype", $"comptime {Arg(p)}: {HandlerType(c, Arg(c.State))}" }
+                    : consumerOf.TryGetValue(p, out var cf)
+                    ? new[] { $"{Arg(p)}: anytype" }
+                        .Concat(cf.Plain.Select(f => $"{FieldArg(f)}: {PubType(f.Type, null)}")).ToArray()
                     : [$"{Arg(p)}: {SigType(p)}"])));
         sb.AppendLine($"    pub fn {Idioms.Camel(slot.Name)}({sigText}) {ret} {{");
         foreach (var line in body) sb.AppendLine($"        {line}");
@@ -657,6 +668,92 @@ public sealed class ZigBackend
     static string TrampolineName(ClosureForm c) => Idioms.Pascal(c.Fn.Name!) + "Trampoline";
 
     /// <summary>
+    /// A value crossing into the caller's own code. The two spellings a failure arrives
+    /// in become Zig's own, and a C string becomes a slice, so the same lane reads the
+    /// same way whether the caller supplied one function or a whole vtable.
+    /// </summary>
+    string HandedExpr(ApiParam lane, string name) =>
+        IsOutcome(lane) ? OutcomeExpr(lane, name)
+        : lane.Has("utf8") ? Within("std", $"std.mem.span({name})")
+        : name;
+
+    /// <summary>
+    /// A vtable the caller implements instead of receives, the field its own state
+    /// reaches every slot through, and the plain fields it also carries. The state field
+    /// is found by its type rather than its name: an untyped pointer is the only field a
+    /// slot can read its implementer back out of.
+    /// </summary>
+    record ConsumerForm(ApiParam Param, ApiStruct Vtable, ApiField State,
+        IReadOnlyList<ApiField> Plain);
+
+    bool IsConsumer(ApiParam p) => classified.Callbacks.Any(c => c.Name == p.Type.Trim());
+
+    /// <summary>
+    /// The vtable a <c>[callback]</c> parameter asks the caller to implement. Two shapes
+    /// are refused rather than approximated: a vtable with no single untyped field has
+    /// nowhere to put the caller, and a slot of it that reports failure would need the
+    /// caller's method to be fallible, which nothing here yet says how to read.
+    /// </summary>
+    ConsumerForm Consumer(ApiSlot slot, ApiParam p)
+    {
+        var where = $"{slot.Name}.{p.Name}";
+        var vtable = classified.Callbacks.First(c => c.Name == p.Type.Trim());
+        var state = vtable.Fields.Where(f => Norm(f.Type) is "void*").ToList();
+        if (state.Count != 1)
+            throw new NotSupportedException(
+                $"{where}: {vtable.Name} declares {state.Count} untyped fields, and an implementer"
+                + " reaches its own state through exactly one of them");
+        if (vtable.Slots.Any(s => convention.IsFallible(s.Returns, s.Params)
+                || s.Params.Any(l => ReportOf(l) is not ReportKind.None)))
+            throw new NotSupportedException(
+                $"{where}: a slot of {vtable.Name} reports failure, which this backend does not"
+                + " project yet");
+        return new ConsumerForm(p, vtable, state[0],
+            vtable.Fields.Where(f => f != state[0]).ToList());
+    }
+
+    static string ConsumerType(ConsumerForm c) => Idioms.Pascal(c.Param.Name!) + "Vtable";
+
+    static string ConsumerValue(ConsumerForm c) => Idioms.Ident(c.Param.Name! + "_native");
+
+    /// <summary>
+    /// The vtable value handed to the engine, filled from a type the caller wrote. Zig
+    /// needs no interface declared for this: each slot becomes a method looked up on the
+    /// caller's own type, so a missing or mistyped one is named by the compiler rather
+    /// than by a check invented here. Nothing is retained -- the state is the pointer the
+    /// caller already holds, and outliving the registration is their statement to make.
+    /// </summary>
+    IEnumerable<string> ConsumerLines(ConsumerForm c, string arg, IReadOnlySet<string> taken,
+        Func<ApiField, string> fieldArg)
+    {
+        string Lane(string n) => Idioms.Ident(taken.Contains(n) ? n + "_lane" : n);
+        var self = Lane("self");
+        var state = Idioms.Ident(c.State.Name);
+
+        yield return $"const {ConsumerType(c)} = struct {{";
+        yield return $"    const Target = @TypeOf({arg});";
+        foreach (var s in c.Vtable.Slots)
+        {
+            var receiver = s.Receiver is { } r ? AbiType(r, null, "abi.") : $"*abi.{c.Vtable.Name}";
+            var ps = new[] { $"{self}: {receiver}" }
+                .Concat(s.Params.Select(l => $"{Lane(l.Name!)}: {PubType(l.Type, l)}"));
+            var handed = s.Params.Select(l => HandedExpr(l, Lane(l.Name!)));
+            var target = $"@as(Target, @ptrCast(@alignCast({self}.{state}.?)))";
+            yield return $"    fn {Idioms.Camel(s.Name)}({string.Join(", ", ps)})"
+                + $" callconv(.c) {PubType(s.Returns, null)} {{";
+            yield return $"        return {target}.{Idioms.Camel(s.Name)}({string.Join(", ", handed)});";
+            yield return "    }";
+        }
+        yield return "};";
+        yield return $"const {ConsumerValue(c)} = abi.{c.Vtable.Name}{{";
+        yield return $"    .{state} = @ptrCast({arg}),";
+        foreach (var f in c.Plain) yield return $"    .{Idioms.Ident(f.Name)} = {fieldArg(f)},";
+        foreach (var s in c.Vtable.Slots)
+            yield return $"    .{Idioms.Ident(s.Name)} = {ConsumerType(c)}.{Idioms.Camel(s.Name)},";
+        yield return "};";
+    }
+
+    /// <summary>
     /// The optional error an outcome lane reads as. A <c>ke_error</c> goes through the
     /// same reading a fallible call uses, so the message and the cause chain stay
     /// reachable; a <c>ke_error_type</c> has no such storage to record, which is the whole
@@ -683,9 +780,7 @@ public sealed class ZigBackend
         var ps = c.Callback.Lanes.Select(l => $"{Lane(l)}: {PubType(l.Type, l)}");
         var ctx = $"@ptrCast(@alignCast({Lane(c.ContextLane)}.?))";
         var handed = c.Callback.Lanes.Where(l => l != c.ContextLane && l != c.ErrorLane)
-            .Select(l => IsOutcome(l) ? OutcomeExpr(l, Lane(l))
-                : l.Has("utf8") ? Within("std", $"std.mem.span({Lane(l)})")
-                : Lane(l));
+            .Select(l => HandedExpr(l, Lane(l)));
         var call = $"{handler}({string.Join(", ", new[] { ctx }.Concat(handed))})";
         var ret = PubType(c.Callback.Returns, null);
 
