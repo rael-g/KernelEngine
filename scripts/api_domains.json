@@ -262,6 +262,23 @@
       "usings": []
     },
     {
+      "_comment": "The data a loader answers with, described where it is declared rather than in one plugin's binding project: the spans kabic emits extend the struct ClangSharp generates, and a partial only reaches its other half inside the same assembly.",
+      "name": "mesh_data",
+      "headers": [
+        "src/c/asset/kernel_engine/asset/mesh_data.h"
+      ],
+      "includeDirs": [
+        "src/c/asset",
+        "src/c/render",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/asset/mesh_data.ke_api.json",
+      "namespace": "KernelEngine.Asset",
+      "nativeNamespace": "KernelEngine.Asset.Native",
+      "outDir": "src/csharp/asset/KernelEngine.Asset/Generated",
+      "usings": []
+    },
+    {
       "name": "image_loader",
       "headers": [
         "src/c/asset/kernel_engine/asset/image_loader.h"

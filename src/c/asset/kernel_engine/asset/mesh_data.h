@@ -13,9 +13,9 @@ extern "C"
     ///        Vertices are ready to pass directly to ke_render::create_mesh.
     typedef struct ke_mesh_data
     {
-        ke_vertex *vertices;   ///< Array of vertices with pos, normal, UV, tangent
+        ke_vertex *vertices;   ///< [array_of:vertex_count] Vertices with pos, normal, UV, tangent
         uint32_t   vertex_count;
-        uint16_t  *indices;    ///< Triangle list indices (max 65535 vertices per mesh)
+        uint16_t  *indices;    ///< [array_of:index_count] Triangle list indices (max 65535 vertices per mesh)
         uint32_t   index_count;
         int32_t    material_index; ///< Index into ke_model_data::materials; -1 = none
         char       name[64];
@@ -46,11 +46,11 @@ extern "C"
     ///        Owned by the loader; free with ke_asset_loader::free_model.
     typedef struct ke_model_data
     {
-        ke_mesh_data     *meshes;
+        ke_mesh_data     *meshes;    ///< [array_of:mesh_count] Meshes the model is drawn from
         uint32_t          mesh_count;
-        ke_material_data *materials;
+        ke_material_data *materials; ///< [array_of:material_count] Materials the meshes index into
         uint32_t          material_count;
-        ke_texture_data  *textures;
+        ke_texture_data  *textures;  ///< [array_of:texture_count] Textures the materials index into
         uint32_t          texture_count;
     } ke_model_data;
 
