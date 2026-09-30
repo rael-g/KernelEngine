@@ -386,8 +386,25 @@ public static class CSharpBackend
         return native == OutLocal(model, p, convention) + "*" ? $"&{local}" : $"({native})&{local}";
     }
 
+    /// <summary>
+    /// What a parameter carrying another domain's vtable is asked for as: the interface
+    /// that domain's own projection hands its pointer out through. The pointer is what
+    /// the ABI needs and the one thing a game-facing signature must not name, and a
+    /// caller already holding the projection should not have to open it to comply --
+    /// so the parameter asks for the projection and the call does the opening.
+    /// </summary>
+    static string ProviderInterface(ApiParam p, Convention convention)
+    {
+        if (!CTypes.IsPointer(p.Type))
+            throw new InvalidOperationException(
+                $"{p.Name}: [provider] names another domain's vtable, which reaches this one as a"
+                + $" pointer, and this parameter is {p.Type.Trim()}");
+        return "INative" + Idioms.TypeName(StripQualifiers(CTypes.Deref(p.Type)).Trim(), convention);
+    }
+
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
     {
+        if (p.Has("provider")) return ProviderInterface(p, convention);
         var tagEnum = p.TagValue("enum");
         if (tagEnum is not null)
         {
@@ -2373,6 +2390,7 @@ public static class CSharpBackend
             : cs.Sequences.FirstOrDefault(s => s.Count == p) is { } asCount
                 ? $"({CsType(model, asCount.Count.Type)}){Idioms.Ident(asCount.Seq.Name!)}.Length"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
+            : p.Has("provider") ? $"{Idioms.Ident(p.Name!)}.Native"
             : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
             : p.Has("ctx") ? $"({CTypes.Normalize(p.Type)}){Idioms.Ident(p.Name!)}"
             : p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"

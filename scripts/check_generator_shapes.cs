@@ -653,6 +653,18 @@ Expect("owned memory handed out with no failure channel is refused",
     structs: [ViewJson("ke_probe_bundle")],
     throws: "has no failure channel");
 
+// A slot that needs another domain's vtable to do its work. The pointer is what the ABI
+// takes and the one thing a game-facing signature must not name -- and the caller already
+// holds the projection carrying it, so asking for the projection and opening it at the call
+// is the only spelling that does not make every caller reach inside first.
+Expect("[provider] asks for another domain's projection, not the pointer inside it",
+    Vtable("ke_probe",
+        Slot("attach", "void", Param("self", "ke_probe *", "self"),
+            Param("scheduler", "ke_scheduler *", "provider"),
+            Param("out_error", "ke_error **"))),
+    contains: ["Attach(ke_probe* self, INativeScheduler scheduler)", "scheduler.Native"],
+    absent: ["ke_scheduler* scheduler", "ke_scheduler *scheduler"]);
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.
