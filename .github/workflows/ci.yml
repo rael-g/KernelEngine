@@ -75,30 +75,36 @@ jobs:
       - name: Build native
         run: zig build --prefix build/native
 
-      - name: Kernel and framework tests
-        run: build/native/bin/test_ke_kernel${{ matrix.exe }}
-
-      - name: Integration tests
-        run: build/native/bin/test_integration_cpp${{ matrix.exe }}
+      # Every native test is a Zig test inside the file it covers, so the whole
+      # native suite is one step and it cannot go stale: a plugin does not compile
+      # until it answers whether it has tests, and the test invocation reuses the
+      # library build's own flags.
+      - name: Native tests
+        run: zig build test --prefix build/native
 
       - name: Managed tests
         run: dotnet test KernelEngine.slnx
 
-      # Both gates regenerate into a temp directory and compare bytes, so they
-      # fail on a header edited without regenerating — the failure mode that
-      # leaves a scene silently dropping a field. Once is enough: the generated
-      # output does not depend on the platform, and it differing by one would
-      # itself be the news.
-      - name: Generated code is in step with the headers
+      # Every gate, on one platform. None of them reads a compiler or a linker:
+      # they compare generated text against the headers it came from, so the
+      # answer cannot differ by runner, and one differing would itself be the
+      # news. The two shapes gates pass --no-cache because a cached build of the
+      # generator answers about the wrong generator.
+      - name: Gates
         if: runner.os == 'Linux'
-        run: dotnet run scripts/check_api_drift.cs
-
-      - name: Every public header is described by some language
-        if: runner.os == 'Linux'
-        run: dotnet run scripts/check_api_coverage.cs
+        run: |
+          dotnet run scripts/check_api_coverage.cs
+          dotnet run scripts/check_api_drift.cs
+          dotnet run scripts/check_component_fields.cs
+          dotnet run scripts/check_generator_contract.cs
+          dotnet run --no-cache scripts/check_generator_shapes.cs
+          dotnet run scripts/check_managed_handwritten.cs
+          dotnet run scripts/check_out_params.cs
+          dotnet run scripts/check_reconstruction.cs
+          dotnet run --no-cache scripts/check_zig_shapes.cs
 
       # scripts/check_bindings_drift.cs is deliberately NOT run here. It compares
       # timestamps, and a fresh checkout writes every file at once in no
       # meaningful order, so it reports drift that regenerating does not change a
-      # byte of. It becomes a CI step once it compares content, the way the two
-      # gates above already do.
+      # byte of. It becomes a CI step once it compares content, the way the gates
+      # above already do.
