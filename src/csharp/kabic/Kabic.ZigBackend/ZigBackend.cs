@@ -99,6 +99,7 @@ public sealed class ZigBackend
 
         sb.AppendLine("pub const abi = struct {");
         sb.AppendLine(AbiPreamble);
+        sb.Append(AbiErrorTypes);
         foreach (var name in opaque)
         {
             sb.AppendLine("    /// No domain describes this type, so the only thing known about it here is");
@@ -148,36 +149,88 @@ public sealed class ZigBackend
         sb.AppendLine();
     }
 
-    const string Preamble = """
+    /// <summary>
+    /// The kinds the error hierarchy names, paired with the singleton each is reached by.
+    /// One list because three functions have to agree about it: the set a caller catches,
+    /// the reading of a failure the engine reported, and the writing of one the caller's
+    /// own handler raised. Kept apart, a kind added to one of them is a kind the other two
+    /// silently flatten to <c>General</c>.
+    /// </summary>
+    static readonly (string Kind, string Singleton)[] ErrorKinds = [
+        ("NotFound", "KE_ERROR_NOT_FOUND"),
+        ("Io", "KE_ERROR_IO"),
+        ("OutOfMemory", "KE_ERROR_OUT_OF_MEMORY"),
+        ("InvalidArgument", "KE_ERROR_INVALID_ARGUMENT"),
+        ("NotInitialized", "KE_ERROR_NOT_INITIALIZED"),
+        ("NotSupported", "KE_ERROR_NOT_SUPPORTED"),
+        ("AlreadyExists", "KE_ERROR_ALREADY_EXISTS"),
+    ];
+
+    /// <summary>
+    /// The error vocabulary every module opens with: the set, the thread-local carrying
+    /// what a Zig error set cannot, and the three crossings between the two spellings.
+    /// </summary>
+    static string Preamble
+    {
+        get
+        {
+            var sb = new StringBuilder(PreambleHead);
+            sb.AppendLine("pub const Error = error{");
+            sb.AppendLine("    General,");
+            foreach (var (kind, _) in ErrorKinds) sb.AppendLine($"    {kind},");
+            sb.AppendLine("};");
+            sb.AppendLine();
+
+            sb.AppendLine("fn raise(err: ?*const abi.ke_error) Error {");
+            sb.AppendLine("    last_error = err;");
+            foreach (var (kind, singleton) in ErrorKinds)
+                sb.AppendLine($"    if (abi.ke_error_is(err, &abi.{singleton})) return Error.{kind};");
+            sb.AppendLine("    return Error.General;");
+            sb.AppendLine("}");
+            sb.AppendLine();
+
+            sb.AppendLine(ErrorTypeDoc);
+            sb.AppendLine("fn errorType(e: Error) *const abi.ke_error_type {");
+            sb.AppendLine("    return switch (e) {");
+            foreach (var (kind, singleton) in ErrorKinds)
+                sb.AppendLine($"        Error.{kind} => &abi.{singleton},");
+            sb.AppendLine("        else => &abi.KE_ERROR_GENERAL,");
+            sb.AppendLine("    };");
+            sb.AppendLine("}");
+            sb.AppendLine();
+
+            sb.AppendLine(ErrorFromDoc);
+            sb.AppendLine("fn errorFrom(t: ?*const abi.ke_error_type) ?Error {");
+            sb.AppendLine("    const named = t orelse return null;");
+            foreach (var (kind, singleton) in ErrorKinds)
+                sb.AppendLine($"    if (named == &abi.{singleton}) return Error.{kind};");
+            sb.AppendLine("    return Error.General;");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            return sb.ToString();
+        }
+    }
+
+    const string ErrorTypeDoc = """
+        /// The singleton a Zig error is reported to the engine as. A handler the engine
+        /// calls has to name its failure in the vocabulary the ABI reads, and a type is
+        /// the only half of a failure that outlives the thread that raised it.
+        """;
+
+    const string ErrorFromDoc = """
+        /// The Zig error a reported type names. Compared by address, because the types are
+        /// immortal singletons and there is nothing else to compare; a kind this module
+        /// does not name -- including a subtype of one it does -- reads as General, since
+        /// narrowing it would mean walking a parent chain the caller cannot act on.
+        """;
+
+    const string PreambleHead = """
         /// The failure a fallible call reported. A Zig error set carries a kind and
         /// nothing else, so the message, the source location and the cause chain the
         /// native side filled in have to be readable somewhere; thread-local for the
         /// same reason the native slot is, which is that two threads failing at once
         /// are two failures.
         pub threadlocal var last_error: ?*const abi.ke_error = null;
-
-        pub const Error = error{
-            General,
-            NotFound,
-            Io,
-            OutOfMemory,
-            InvalidArgument,
-            NotInitialized,
-            NotSupported,
-            AlreadyExists,
-        };
-
-        fn raise(err: ?*const abi.ke_error) Error {
-            last_error = err;
-            if (abi.ke_error_is(err, &abi.KE_ERROR_NOT_FOUND)) return Error.NotFound;
-            if (abi.ke_error_is(err, &abi.KE_ERROR_IO)) return Error.Io;
-            if (abi.ke_error_is(err, &abi.KE_ERROR_OUT_OF_MEMORY)) return Error.OutOfMemory;
-            if (abi.ke_error_is(err, &abi.KE_ERROR_INVALID_ARGUMENT)) return Error.InvalidArgument;
-            if (abi.ke_error_is(err, &abi.KE_ERROR_NOT_INITIALIZED)) return Error.NotInitialized;
-            if (abi.ke_error_is(err, &abi.KE_ERROR_NOT_SUPPORTED)) return Error.NotSupported;
-            if (abi.ke_error_is(err, &abi.KE_ERROR_ALREADY_EXISTS)) return Error.AlreadyExists;
-            return Error.General;
-        }
 
         """;
 
@@ -204,15 +257,16 @@ public sealed class ZigBackend
 
             pub extern fn ke_error_is(err: ?*const ke_error, @"type": *const ke_error_type) callconv(.c) bool;
 
-            pub extern const KE_ERROR_NOT_FOUND: ke_error_type;
-            pub extern const KE_ERROR_IO: ke_error_type;
-            pub extern const KE_ERROR_OUT_OF_MEMORY: ke_error_type;
-            pub extern const KE_ERROR_INVALID_ARGUMENT: ke_error_type;
-            pub extern const KE_ERROR_NOT_INITIALIZED: ke_error_type;
-            pub extern const KE_ERROR_NOT_SUPPORTED: ke_error_type;
-            pub extern const KE_ERROR_ALREADY_EXISTS: ke_error_type;
-
         """;
+
+    /// <summary>
+    /// The singletons the projection reaches, declared from the one list that also builds
+    /// the error set. <c>KE_ERROR_GENERAL</c> is not among the kinds, because it is what a
+    /// failure reads as when no kind matched rather than a kind a caller catches by name.
+    /// </summary>
+    static string AbiErrorTypes =>
+        string.Concat(ErrorKinds.Select(k => k.Singleton).Prepend("KE_ERROR_GENERAL")
+            .Select(s => $"    pub extern const {s}: ke_error_type;\n")) + "\n";
 
     /// <summary>
     /// The slot's parameters with its receiver put back. The receiver is not always
@@ -261,7 +315,8 @@ public sealed class ZigBackend
         var cv = isConst ? "const " : "";
         if (depth == 2) return $"?*?*{cv}{inner}";
         if (p is not null && p.Has("array_of")) return $"[*]{cv}{inner}";
-        return p is not null && p.Has("optional") ? $"?*{cv}{inner}" : $"*{cv}{inner}";
+        return p is not null && (p.Has("optional") || IsOutcome(p))
+            ? $"?*{cv}{inner}" : $"*{cv}{inner}";
     }
 
     /// <summary>
@@ -311,8 +366,11 @@ public sealed class ZigBackend
         LocalNames.Contains(module) ? module + "_domain" : module;
 
     /// <summary>
-    /// Every name this module declares, at its top level or as a method of a projection.
-    /// Both scopes see a top-level binding, so both can shadow one.
+    /// Every name this module puts in scope around a call into the ABI: its own top-level
+    /// declarations, the methods of its projections, and those methods' parameters. All of
+    /// them see a top-level binding, so all of them can shadow one -- and a parameter is
+    /// the case worth renaming the import for rather than the other way round, because the
+    /// parameter's name is the header's own word for it and the binding's is invented.
     /// </summary>
     HashSet<string> LocalNames => localNames ??= [
         .. model.TypeAliases.Keys.Select(a => Idioms.TypeName(a, convention)),
@@ -320,6 +378,9 @@ public sealed class ZigBackend
         .. classified.Providers.Select(v => Idioms.TypeName(v.Name, convention)),
         .. classified.Providers.SelectMany(v => classified.SlotsByVtable[v.Name])
             .Select(cs => Idioms.Camel(cs.Slot.Name)),
+        .. classified.Providers.SelectMany(v => classified.SlotsByVtable[v.Name])
+            .SelectMany(cs => cs.Slot.Params).Where(p => p.Name is not null)
+            .Select(p => Idioms.Ident(p.Name!)),
     ];
 
     HashSet<string>? localNames;
@@ -509,7 +570,34 @@ public sealed class ZigBackend
     /// lanes of the typedef that says how the engine will call it.
     /// </summary>
     record ClosureForm(ApiParam Fn, ApiParam State, ApiCallback Callback,
-        ApiParam ContextLane, ApiParam? ErrorLane);
+        ApiParam ContextLane, ApiParam? ErrorLane, ReportKind Report,
+        IReadOnlyList<ApiParam> OutcomeLanes);
+
+    /// <summary>
+    /// How a handler tells the engine it failed. The two spellings are not
+    /// interchangeable: a <c>ke_error</c> points into the failing thread's own storage and
+    /// there is no exported way to mint one, so that channel can only carry the fact of a
+    /// failure and the kind is lost; a <c>ke_error_type</c> is an immortal singleton, so
+    /// that one carries the kind whole.
+    /// </summary>
+    enum ReportKind { None, Fact, Kind }
+
+    static string Norm(string t) => t.Replace(" ", "");
+
+    static ReportKind ReportOf(ApiParam lane) => Norm(lane.Type) switch
+    {
+        "ke_error**" => ReportKind.Fact,
+        "constke_error_type**" => ReportKind.Kind,
+        _ => ReportKind.None,
+    };
+
+    /// <summary>
+    /// Whether the lane tells the handler that something already failed. That is the
+    /// opposite direction from a report channel, and it reads as an optional error rather
+    /// than one, because the engine calls the handler on success too.
+    /// </summary>
+    static bool IsOutcome(ApiParam lane) =>
+        Norm(lane.Type) is "constke_error*" or "constke_error_type*";
 
     /// <summary>
     /// The closure a <c>[closure:&lt;state&gt;]</c> parameter declares. Which lane carries
@@ -535,15 +623,19 @@ public sealed class ZigBackend
             throw new NotSupportedException(
                 $"{where}: {callback.Name} hands the handler an engine object, which this backend"
                 + " does not project yet");
-        return new ClosureForm(fn, state, callback, context,
-            callback.Lanes.FirstOrDefault(l => l.Type.Replace(" ", "") == "ke_error**"));
+        var report = callback.Lanes.FirstOrDefault(l => ReportOf(l) is not ReportKind.None);
+        return new ClosureForm(fn, state, callback, context, report,
+            report is null ? ReportKind.None : ReportOf(report),
+            callback.Lanes.Where(IsOutcome).ToList());
     }
 
     /// <summary>
     /// The function the caller writes. The context lane is gone -- the state arrives
-    /// typed, so there is nothing to cast back -- and where the typedef declares an error
-    /// channel the handler reports through Zig's own, since a lane holding a
-    /// <c>ke_error**</c> is the C spelling of exactly that.
+    /// typed, so there is nothing to cast back -- a lane the typedef declares as a report
+    /// channel becomes Zig's own error union, and a lane naming a failure that already
+    /// happened becomes an optional error. Nothing in the signature spells
+    /// <c>ke_error</c>, which is the point: both spellings are the ABI's way of saying
+    /// something Zig already has a way of saying.
     /// </summary>
     string HandlerType(ClosureForm c, string stateArg)
     {
@@ -551,16 +643,29 @@ public sealed class ZigBackend
             .Where(l => l != c.ContextLane && l != c.ErrorLane)
             .Select(HandlerLaneType)
             .Prepend($"@TypeOf({stateArg})");
-        var ret = c.ErrorLane is not null ? "Error!void"
+        var ret = c.Report is not ReportKind.None ? "Error!void"
             : c.Callback.Returns.Trim() is "void" ? "void"
             : PubType(c.Callback.Returns, null);
         return $"fn ({string.Join(", ", lanes)}) {ret}";
     }
 
     string HandlerLaneType(ApiParam lane) =>
-        lane.Has("utf8") ? "[:0]const u8" : PubType(lane.Type, lane);
+        IsOutcome(lane) ? "?Error"
+        : lane.Has("utf8") ? "[:0]const u8"
+        : PubType(lane.Type, lane);
 
     static string TrampolineName(ClosureForm c) => Idioms.Pascal(c.Fn.Name!) + "Trampoline";
+
+    /// <summary>
+    /// The optional error an outcome lane reads as. A <c>ke_error</c> goes through the
+    /// same reading a fallible call uses, so the message and the cause chain stay
+    /// reachable; a <c>ke_error_type</c> has no such storage to record, which is the whole
+    /// reason the ABI chose it for a failure that outlives its thread.
+    /// </summary>
+    static string OutcomeExpr(ApiParam lane, string name) =>
+        Norm(lane.Type) is "constke_error*"
+            ? $"if ({name}) |failed| raise(failed) else null"
+            : $"errorFrom({name})";
 
     /// <summary>
     /// The C entry point the engine is handed. Zig closes over nothing at runtime, so
@@ -573,18 +678,28 @@ public sealed class ZigBackend
     /// </summary>
     IEnumerable<string> TrampolineLines(ClosureForm c, string handler, IReadOnlySet<string> taken)
     {
-        string Lane(ApiParam l) => l == c.ErrorLane ? "_"
+        string Lane(ApiParam l) => l == c.ErrorLane && c.Report is ReportKind.Fact ? "_"
             : Idioms.Ident(taken.Contains(l.Name!) ? l.Name! + "_lane" : l.Name!);
         var ps = c.Callback.Lanes.Select(l => $"{Lane(l)}: {PubType(l.Type, l)}");
         var ctx = $"@ptrCast(@alignCast({Lane(c.ContextLane)}.?))";
         var handed = c.Callback.Lanes.Where(l => l != c.ContextLane && l != c.ErrorLane)
-            .Select(l => l.Has("utf8") ? Within("std", $"std.mem.span({Lane(l)})") : Lane(l));
+            .Select(l => IsOutcome(l) ? OutcomeExpr(l, Lane(l))
+                : l.Has("utf8") ? Within("std", $"std.mem.span({Lane(l)})")
+                : Lane(l));
         var call = $"{handler}({string.Join(", ", new[] { ctx }.Concat(handed))})";
+        var ret = PubType(c.Callback.Returns, null);
 
         yield return $"const {TrampolineName(c)} = struct {{";
-        yield return $"    fn call({string.Join(", ", ps)}) callconv(.c) "
-            + $"{PubType(c.Callback.Returns, null)} {{";
-        if (c.ErrorLane is not null)
+        yield return $"    fn call({string.Join(", ", ps)}) callconv(.c) {ret} {{";
+        if (c.Report is ReportKind.Kind)
+        {
+            yield return $"        {call} catch |e| {{";
+            yield return $"            if ({Lane(c.ErrorLane!)}) |slot| slot.* = errorType(e);";
+            if (ret is not "void") yield return "            return false;";
+            yield return "        };";
+            if (ret is not "void") yield return "        return true;";
+        }
+        else if (c.Report is ReportKind.Fact)
         {
             yield return $"        {call} catch return false;";
             yield return "        return true;";
