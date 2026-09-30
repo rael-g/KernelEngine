@@ -18,6 +18,10 @@ is in the code, and `CLAUDE.md`'s closing table says where to start looking.
 - [What is the framework made of, and what does each piece depend on?](architecture/framework.md)
 - [How does a frame get from the ECS to the GPU?](architecture/render.md)
 
+## Formats
+
+- [What does a scene file say, and what does the loader do with it?](formats/scene-file.md)
+
 ## Not here, on purpose
 
 **Status, plans, logs, tasks and ideas are not versioned.** They live in `docs/kanban/`, which is
