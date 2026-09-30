@@ -198,6 +198,44 @@ Expect("an undescribed type reached by value is not made opaque",
                "addressed: *ke_probe_body,"],
     absent: ["pub const ke_probe_kind = opaque {};"]);
 
+// A failure crosses the ABI in two spellings and neither reaches the caller's signature.
+// A ke_error_type ** is the channel a handler reports through, so it becomes Zig's error
+// union and the trampoline writes the singleton the error names; a ke_error_type * is a
+// failure that already happened, so it becomes an optional error read the other way. The
+// lane is optional either way, because succeeding is what a null in it means.
+Expect("a failure crosses as an error union one way and an optional error the other",
+    m =>
+    {
+        m.Callbacks.Add(new ApiCallback("ke_probe_body_fn", "void", null, [
+            P("data", "void *", "context"),
+            P("out_failure", "const ke_error_type **"),
+        ]));
+        m.Callbacks.Add(new ApiCallback("ke_probe_done_fn", "void", null, [
+            P("data", "void *", "context"),
+            P("failure", "const ke_error_type *"),
+        ]));
+        m.Structs.Add(Vtable("ke_probe",
+            Slot("run", "void",
+                P("body", "ke_probe_body_fn", "closure:data"),
+                P("data", "void *"),
+                P("done", "ke_probe_done_fn", "closure:tail"),
+                P("tail", "void *"))));
+        m.Structs.Add(Handle("ke_probe"));
+    },
+    contains: [
+        "pub fn run(self: Probe, data: anytype, comptime body: fn (@TypeOf(data)) Error!void, "
+            + "tail: anytype, comptime done: fn (@TypeOf(tail), ?Error) void) void {",
+        "fn call(data_lane: ?*anyopaque, out_failure: ?*?*const abi.ke_error_type) callconv(.c) void {",
+        "body(@ptrCast(@alignCast(data_lane.?))) catch |e| {",
+        "if (out_failure) |slot| slot.* = errorType(e);",
+        "fn call(data_lane: ?*anyopaque, failure: ?*const abi.ke_error_type) callconv(.c) void {",
+        "done(@ptrCast(@alignCast(data_lane.?)), errorFrom(failure));",
+        "fn errorType(e: Error) *const abi.ke_error_type {",
+        "fn errorFrom(t: ?*const abi.ke_error_type) ?Error {",
+    ],
+    absent: ["?Error) Error!void", "failure: *const abi.ke_error_type"],
+    providers: ["ke_probe"]);
+
 if (failures.Count > 0)
 {
     foreach (var f in failures) Console.Error.WriteLine($"  {f}");
