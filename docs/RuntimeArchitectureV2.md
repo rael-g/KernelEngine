@@ -1745,12 +1745,27 @@ Or equivalent managed struct if declared on the C# side.
 | G3 — Pong becomes `PongModule` + paddle component via `[entity.components.paddle]` | ✅ Done | (pre-existing) |
 | G4 — Final cleanup (`NativeSceneLoader→SceneLoader`, grep Tomlyn/Tree, XML docs) | ✅ Done | pending commit |
 
-**Merge checklist:**
+**Merge checklist.** `.github/workflows/ci.yml` covers part of this on both platforms; the rest is
+run by hand, from inside the toolchain container. Each item says which it is, because an item
+nobody is told to run by hand and that CI does not run either is an item nobody runs.
 
-- [ ] G3 + G4 committed and build green
-- [ ] Visual validation: Pong renders and plays correctly (Pong is the only Toolkit validator; examples 01–16 are pre-Runtime-V2 and do not validate the new model)
-- [ ] `dotnet test KernelEngine.slnx` green
-- [ ] `ctest --preset win` ≥ 518/520 (2 pre-existing RuntimeSpike failures are acceptable)
-- [ ] Merge PR to `main`
+- [ ] *(CI)* `zig build`, `zig build test`, `dotnet test KernelEngine.slnx`, and every
+      `scripts/check_*.cs` gate except `check_bindings_drift` — that one compares timestamps, and a
+      fresh checkout writes every file at once, so it reports drift that regenerating does not
+      change a byte of. It becomes a CI step when it compares content instead.
+- [ ] *(by hand)* `check_bindings_drift`, in a working tree where the timestamps mean something
+- [ ] *(by hand)* Every commit builds **checked out alone** — verify the staged tree, not the
+      working tree. CI only ever sees the tip, so a commit that does not build alone passes CI and
+      still destroys a bisect.
+- [ ] *(by hand)* Visual validation from the host, in the background: an example that renders
+      actually renders. A headless pass proves nothing about a scene, and CI has no display.
 
-**Everything outside this branch** is documented and prioritized in [`docs/FrameworkArchitectureV2.md`](FrameworkArchitectureV2.md) — that is the scope of the next branch.
+**What "done" means for the description arc.** The goal is no hand-written managed code that has a
+declarable shape, and the number that measures it is `check_managed_handwritten`'s ceiling — it
+only ever moves down, and the gate fails in both directions so the progress cannot be given back.
+The remaining hand-written projections are the `*.Idiom.cs` files; each one names a form the
+backend does not emit yet, so that list *is* the backlog. The branch does not wait for it to reach
+its floor: a form lands whole (header tag, fixture, regeneration, hand-written consumer deleted) or
+it does not land, so there is never a half-migrated state holding a merge.
+
+**Everything outside this branch** is documented and prioritized in [`docs/FrameworkArchitectureV2.md`](FrameworkArchitectureV2.md) — that is the scope of the next branch. What the second backend established, and the one thing it did not, is in [`docs/KabicZigBackend.md`](KabicZigBackend.md).
