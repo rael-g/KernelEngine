@@ -7,7 +7,7 @@ using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Asset.Native;
 
-namespace KernelEngine.Asset.Assimp;
+namespace KernelEngine.Asset;
 
 /// <summary>Exposes the raw native assetloader pointer for cross-domain composition wiring.</summary>
 public unsafe interface INativeAssetLoader
@@ -15,8 +15,39 @@ public unsafe interface INativeAssetLoader
     ke_asset_loader* Native { get; }
 }
 
+/// <summary>
+/// Keeps the <see cref="AssetLoader"/>-owned memory behind one ModelData alive for as long
+/// as a caller holds it, and gives it back on dispose. Everything it says about itself is
+/// read through <see cref="Data"/>, which stays valid only until then.
+/// </summary>
+public unsafe sealed class Model : IDisposable
+{
+    private readonly AssetLoader _owner;
+    private ModelData* _native;
+
+    internal Model(AssetLoader owner, ModelData* native)
+    {
+        _owner = owner;
+        _native = native;
+    }
+
+    /// <summary>The reading of the memory this instance is keeping alive.</summary>
+    public ModelData Data => _native is null
+        ? throw new ObjectDisposedException(nameof(Model))
+        : *_native;
+
+    /// <summary>Gives the memory back to the assetloader that produced it.</summary>
+    public void Dispose()
+    {
+        if (_native is null) return;
+        var native = _native;
+        _native = null;
+        _owner.FreeModel(native);
+    }
+}
+
 /// <summary>ABI-stable vtable interface for loading 3D assets. Concrete implementations (e.g., Assimp) are provided as separate plugins.</summary>
-public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader
+public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAssetLoader
 {
     private ke_asset_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_asset_loader*, void> _destroy;
@@ -48,7 +79,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader
     /// <summary>Loads a 3D model from into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.</summary>
     /// <param name="path">Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ModelData* LoadModel(string path)
+    public Model LoadModel(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
@@ -56,12 +87,12 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader
             ke_error* err = null;
             var result = (ModelData*)Handle->load_model(Handle, (sbyte*)pathPtr, &err);
             if (result == null) throw KernelError.FromNative(err, "load_model");
-            return result;
+            return new Model(this, result);
         }
     }
 
     /// <summary>Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null is ignored.</summary>
-    public void FreeModel(ModelData* data)
+    internal void FreeModel(ModelData* data)
     {
         Handle->free_model(Handle, (ke_model_data*)data);
     }

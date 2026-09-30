@@ -5,7 +5,7 @@ using KernelEngine.Asset;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Helpers that upload a <see cref="ModelData"/> (read from an <see cref="IModel"/> an
+/// Helpers that upload a <see cref="ModelData"/> (read from a <see cref="Model"/> an
 /// <see cref="IAssetLoader"/> answered with) to the GPU and attach it to the scene as a
 /// flat collection of <see cref="MeshRenderer"/> nodes. Each sub-mesh becomes its own node
 /// named <c>{rootName}.{meshName}</c>.

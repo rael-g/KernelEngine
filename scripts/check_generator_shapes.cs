@@ -621,6 +621,38 @@ Expect("a slot hands out and takes back the projection of a [view], casting at t
     absent: ["ke_probe_bundle* Open", "ke_probe_bundle* bundle)"],
     structs: [ViewJson("ke_probe_bundle")]);
 
+// The same pair of slots, once the release slot says it is the release slot. A [view] says
+// how to read the memory and nothing about who frees it, and reading it as a value drops the
+// pointer the release needs -- so a caller handed the bare pointer has to carry it beside
+// the reading and remember to give it back. Naming the pairing is what turns that
+// bookkeeping into one object with one answer about when the memory goes, and it is why the
+// release stops being something a caller can reach at all.
+Expect("[releases] pairs a handed-out pointer with the object that gives it back",
+    Vtable("ke_probe",
+        Slot("open", "ke_probe_bundle *", Param("self", "ke_probe *", "self"),
+            Param("out_error", "ke_error **")),
+        Slot("close", "void", "releases:Bundle", Param("self", "ke_probe *", "self"),
+            Param("bundle", "ke_probe_bundle *"))),
+    contains: ["public unsafe sealed class Bundle : IDisposable",
+               "public ProbeBundle Data => _native is null",
+               "_owner.Close(native);",
+               "public Bundle Open(", "return new Bundle(this, result);",
+               "internal void Close(ke_probe* self, ProbeBundle* bundle)"],
+    absent: ["public void Close(", "ProbeBundle* Open("],
+    structs: [ViewJson("ke_probe_bundle")]);
+
+// A slot answering with owned memory and no way to say why it answered with nothing. The
+// engine reports every failure through ke_error, so a bare null is a failure with the reason
+// discarded -- and the caller of a generated projection has no second channel to consult.
+Expect("owned memory handed out with no failure channel is refused",
+    Vtable("ke_probe",
+        Slot("open", "ke_probe_bundle *", Param("self", "ke_probe *", "self")),
+        Slot("close", "void", "releases:Bundle", Param("self", "ke_probe *", "self"),
+            Param("bundle", "ke_probe_bundle *"))),
+    contains: [], absent: [],
+    structs: [ViewJson("ke_probe_bundle")],
+    throws: "has no failure channel");
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.

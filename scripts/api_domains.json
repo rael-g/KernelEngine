@@ -257,9 +257,9 @@
       ],
       "composeHeaders": [ "src/c/asset/kernel_engine/asset/mesh_data.h" ],
       "apiJson": "src/csharp/asset/asset_loader.ke_api.json",
-      "namespace": "KernelEngine.Asset.Assimp",
+      "namespace": "KernelEngine.Asset",
       "nativeNamespace": "KernelEngine.Asset.Native",
-      "outDir": "src/csharp/asset/KernelEngine.Asset.Assimp/Generated",
+      "outDir": "src/csharp/asset/KernelEngine.Asset/Generated",
       "usings": []
     },
     {

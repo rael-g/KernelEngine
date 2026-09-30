@@ -3,18 +3,17 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Scheduler;
 
-namespace KernelEngine.Asset.Assimp;
+namespace KernelEngine.Asset;
 
 /// <summary>
-/// The parts of <see cref="AssetLoader"/> that express the native surface in C# terms
-/// rather than mirroring it: the <see cref="IModel"/> projection over a raw
-/// <c>ke_model_data*</c>, and the <c>Task</c>-returning async load — <c>load_model_async</c>
+/// The part of <see cref="AssetLoader"/> that expresses the native surface in C# terms
+/// rather than mirroring it: the <c>Task</c>-returning async load. <c>load_model_async</c>
 /// takes a bare C function pointer (<c>[raw_callback]</c>), so there is no ABI-derivable
-/// answer for what the managed async surface should look like; this is entirely
-/// hand-written, like every other <c>[raw_callback]</c> slot in this codebase.
-/// Everything that is a direct image of the C ABI is generated in <c>Generated/AssetLoader.g.cs</c>.
+/// answer for what the managed async surface should look like; this is written by hand,
+/// like every other <c>[raw_callback]</c> slot in this codebase. Everything that is a
+/// direct image of the C ABI is generated in <c>Generated/AssetLoader.g.cs</c>.
 /// </summary>
-public unsafe partial class AssetLoader : IAssetLoader
+public unsafe partial class AssetLoader
 {
     private readonly INativeScheduler _scheduler;
 
@@ -24,14 +23,14 @@ public unsafe partial class AssetLoader : IAssetLoader
         _scheduler = scheduler;
     }
 
-    /// <inheritdoc/>
-    IModel IAssetLoader.LoadModel(string path) => new Model(this, LoadModel(path));
-
-    /// <inheritdoc/>
-    public Task<IModel> LoadModelAsync(string path)
+    /// <summary>
+    /// Loads a model asynchronously on the engine's task scheduler.
+    /// Caller disposes the returned <see cref="Model"/>.
+    /// </summary>
+    public Task<Model> LoadModelAsync(string path)
     {
         var native = ((INativeAssetLoader)this).Native;
-        var tcs = new TaskCompletionSource<IModel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<Model>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var state = (this, tcs);
         var stateHandle = GCHandle.Alloc(state);
@@ -57,7 +56,7 @@ public unsafe partial class AssetLoader : IAssetLoader
         void* userData)
     {
         var handle = GCHandle.FromIntPtr((IntPtr)userData);
-        var (loader, tcs) = ((AssetLoader, TaskCompletionSource<IModel>))handle.Target!;
+        var (loader, tcs) = ((AssetLoader, TaskCompletionSource<Model>))handle.Target!;
         handle.Free();
 
         if (error == null && data != null)

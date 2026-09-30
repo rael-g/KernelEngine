@@ -214,7 +214,9 @@
     {
       "name": "ke_asset_loader",
       "doc": "ABI-stable vtable interface for loading 3D assets. Concrete implementations (e.g., Assimp) are provided as separate plugins.",
-      "tags": [],
+      "tags": [
+        "interface"
+      ],
       "fields": [
         {
           "name": "handle",
@@ -251,7 +253,9 @@
         {
           "name": "free_model",
           "returns": "void",
-          "tags": [],
+          "tags": [
+            "releases:Model"
+          ],
           "doc": "Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null is ignored.",
           "return_doc": null,
           "params": [

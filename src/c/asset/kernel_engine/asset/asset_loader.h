@@ -19,7 +19,7 @@ extern "C"
                                                 struct ke_model_data *data,
                                                 void *user_data);
 
-    /** ABI-stable vtable interface for loading 3D assets.
+    /** [interface] ABI-stable vtable interface for loading 3D assets.
      * Concrete implementations (e.g., Assimp) are provided as separate plugins. */
     typedef struct ke_asset_loader
     {
@@ -32,7 +32,7 @@ extern "C"
                                      const char *path,
                                      ke_error **out_error);
 
-        /** Frees a ke_model_data previously returned by load_model or the async variant.
+        /** [releases:Model] Frees a ke_model_data previously returned by load_model or the async variant.
          * The model must be given back to the same loader that produced it. A loader
          * owns its memory, so a foreign or hand-built ke_model_data is not a valid
          * argument. A null @p data is ignored. */

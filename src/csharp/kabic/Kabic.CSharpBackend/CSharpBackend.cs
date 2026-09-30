@@ -211,6 +211,92 @@ public static class CSharpBackend
     }
 
     /// <summary>
+    /// A pointer the provider hands out and later takes back, projected as the object that
+    /// answers when it is given back. A <c>[view]</c> alone says how to read the memory, not
+    /// who releases it, and reading it as a value loses the pointer the release slot needs --
+    /// so a caller handed the bare pointer has to keep it beside the reading and remember to
+    /// pass it back, which is the bookkeeping this form exists to stop being written. The
+    /// release slot is the one thing that names the pairing, so it carries the tag.
+    /// </summary>
+    internal sealed record OwnedProjection(string TypeName, string Element, string View,
+        ApiSlot Release, ApiParam Released)
+    {
+        /// <summary>Whether a slot answers with the pointer this projection owns.</summary>
+        public bool Answers(string cType) =>
+            CTypes.IsPointer(cType) && StripQualifiers(CTypes.Deref(cType)).Trim() == Element;
+    }
+
+    /// <summary>
+    /// The one owned projection a vtable declares, read off the slot tagged
+    /// <c>[releases:&lt;name&gt;]</c>.
+    /// </summary>
+    static OwnedProjection? OwnedOf(ApiModel model, ApiStruct vtable, Convention convention)
+    {
+        var release = vtable.Slots.FirstOrDefault(s => s.Has("releases"));
+        if (release is null) return null;
+
+        var typeName = release.TagValue("releases")
+            ?? throw new InvalidOperationException(
+                $"{release.Name}: [releases] must name the projection that owns what this slot takes"
+                + " back, as [releases:<name>]");
+
+        var released = release.Params.Where(p => !p.Has("self")).ToList();
+        if (released.Count != 1)
+            throw new InvalidOperationException(
+                $"{release.Name}: [releases:{typeName}] releases the one pointer this slot takes back,"
+                + $" and it takes {released.Count} parameter(s) besides the provider itself");
+
+        var view = PointerToView(model, released[0].Type, convention)
+            ?? throw new InvalidOperationException(
+                $"{release.Name}: [releases:{typeName}] hands back {released[0].Type.Trim()}, and a"
+                + " projection can only own memory some struct declares how to read -- the pointee"
+                + " has to be tagged [view]");
+
+        return new OwnedProjection(typeName, StripQualifiers(CTypes.Deref(released[0].Type)).Trim(),
+            view, release, released[0]);
+    }
+
+    /// <summary>
+    /// The object a provider hands out instead of the pointer it owns: the reading the
+    /// <c>[view]</c> gives, and the one answer about when the memory goes back.
+    /// </summary>
+    static void RenderOwned(List<string> o, OwnedProjection owned, string ownerType, string releaseName)
+    {
+        var view = owned.View.TrimEnd('*');
+        o.Add("/// <summary>");
+        o.Add($"/// Keeps the <see cref=\"{ownerType}\"/>-owned memory behind one {view} alive for as long");
+        o.Add("/// as a caller holds it, and gives it back on dispose. Everything it says about itself is");
+        o.Add($"/// read through <see cref=\"Data\"/>, which stays valid only until then.");
+        o.Add("/// </summary>");
+        o.Add($"public unsafe sealed class {owned.TypeName} : IDisposable");
+        o.Add("{");
+        o.Add($"    private readonly {ownerType} _owner;");
+        o.Add($"    private {owned.View} _native;");
+        o.Add("");
+        o.Add($"    internal {owned.TypeName}({ownerType} owner, {owned.View} native)");
+        o.Add("    {");
+        o.Add("        _owner = owner;");
+        o.Add("        _native = native;");
+        o.Add("    }");
+        o.Add("");
+        o.Add("    /// <summary>The reading of the memory this instance is keeping alive.</summary>");
+        o.Add($"    public {view} Data => _native is null");
+        o.Add($"        ? throw new ObjectDisposedException(nameof({owned.TypeName}))");
+        o.Add("        : *_native;");
+        o.Add("");
+        o.Add($"    /// <summary>Gives the memory back to the {ownerType.ToLowerInvariant()} that produced it.</summary>");
+        o.Add("    public void Dispose()");
+        o.Add("    {");
+        o.Add("        if (_native is null) return;");
+        o.Add("        var native = _native;");
+        o.Add("        _native = null;");
+        o.Add($"        _owner.{releaseName}(native);");
+        o.Add("    }");
+        o.Add("}");
+        o.Add("");
+    }
+
+    /// <summary>
     /// What to call a parameter the callee writes. A leading <c>out_</c> is how C marks the
     /// direction, and the projection already marks it -- as <c>out</c>, as a tuple element,
     /// or by returning it -- so carrying the prefix across would spell it twice.
@@ -1067,6 +1153,10 @@ public static class CSharpBackend
         foreach (var cb in closures.DistinctBy(c => c.Delegate))
             RenderClosureDelegate(model, contract ?? o, cb, domainIface ?? typeName);
 
+        var owned = OwnedOf(model, vtable, convention);
+        if (owned is not null)
+            RenderOwned(o, owned, typeName, SlotName(owned.Release));
+
         o.Add(XmlDoc("", vtable.Doc).TrimEnd());
         o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}"
             + (domainIface is null ? "" : $", {domainIface}"));
@@ -1222,7 +1312,7 @@ public static class CSharpBackend
                 RenderCallbackMethod(o, decls, vtable, cs, classified, typeName, convention);
                 continue;
             }
-            RenderSlotMethod(model, o, decls, cs, convention, typeName, Drains(model, slots));
+            RenderSlotMethod(model, o, decls, cs, convention, typeName, Drains(model, slots), owned);
         }
 
         foreach (var slot in vtable.Slots.Where(s => s.Has("interns")))
@@ -1803,19 +1893,26 @@ public static class CSharpBackend
     static string PointerModifier(IEnumerable<string> signatures) =>
         signatures.Any(s => s.Contains('*', StringComparison.Ordinal)) ? "unsafe " : "";
 
-    static void Declare(List<string> o, List<MemberDecl>? decls, string doc, string decl, bool property = false)
+    static void Declare(List<string> o, List<MemberDecl>? decls, string doc, string decl,
+        bool property = false, string access = "public")
     {
         o.Add(doc);
-        o.Add($"    public {decl}");
-        decls?.Add(new MemberDecl(doc, decl, property));
+        o.Add($"    {access} {decl}");
+        if (access == "public") decls?.Add(new MemberDecl(doc, decl, property));
     }
 
+    /// <summary>What a slot is called where the provider projects it.</summary>
+    static string SlotName(ApiSlot slot) =>
+        (slot.TagValue("name") ?? Idioms.Pascal(slot.Name)) + (slot.Has("raw") ? "Raw" : "");
+
     static void RenderSlotMethod(ApiModel model, List<string> o, List<MemberDecl>? decls,
-        ClassifiedSlot cs, Convention convention, string owner, bool ownerDrains)
+        ClassifiedSlot cs, Convention convention, string owner, bool ownerDrains,
+        OwnedProjection? owned = null)
     {
         var slot = cs.Slot;
-        var name = (slot.TagValue("name") ?? Idioms.Pascal(slot.Name))
-            + (slot.Has("raw") ? "Raw" : "");
+        var name = SlotName(slot);
+        var access = owned is not null && owned.Release == slot ? "internal" : "public";
+        var ownedReturn = owned is not null && owned.Answers(slot.Returns) ? owned : null;
         var lanes = VectorLanes(slot.Params);
         var callbacks = CallbackPairs(model, cs);
         var groups = ClosureGroups(model, slot, callbacks, owner, ownerDrains);
@@ -2000,7 +2097,9 @@ public static class CSharpBackend
             {
                 var args = cs.PublicParams;
                 var byReturn = convention.SignalsFailureByReturn(slot.Returns);
-                var retType = byReturn ? "void" : ReturnType(model, slot.Returns, convention);
+                var retType = byReturn ? "void"
+                    : ownedReturn is not null ? ownedReturn.TypeName
+                    : ReturnType(model, slot.Returns, convention);
                 var sig = Sig(args);
                 var bagLocal = cs.ExpandedParam is null ? null : Idioms.Ident(cs.ExpandedParam.Name!);
                 var call = string.Concat(NativeParams()
@@ -2169,13 +2268,13 @@ public static class CSharpBackend
                 }
                 else
                 {
-                    o.Add($"{fInd}var result = {ReturnCast(model, slot.Returns, convention)}"
+                    o.Add($"{fInd}var result = {(ownedReturn is not null ? $"({ownedReturn.View})" : ReturnCast(model, slot.Returns, convention))}"
                         + $"Handle->{slot.Name}(Handle{call}, &err);");
                     if (CTypes.IsPointer(slot.Returns))
                         o.Add($"{fInd}if (result == null) throw KernelError.FromNative(err, \"{slot.Name}\");");
                     else
                         o.Add($"{fInd}if (err != null) throw KernelError.FromNative(err, \"{slot.Name}\");");
-                    o.Add($"{fInd}return result;");
+                    o.Add($"{fInd}return {(ownedReturn is null ? "result" : $"new {ownedReturn.TypeName}(this, result)")};");
                 }
                 for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
                 o.Add("    }");
@@ -2188,6 +2287,11 @@ public static class CSharpBackend
                 var sig = Sig(args);
                 var call = string.Concat(NativeParams().Select(p => ", " + CallArg(p)));
                 var spanElement = cs.ReturnCount is null ? null : ReturnElement(model, slot, convention);
+                if (ownedReturn is not null)
+                    throw new InvalidOperationException(
+                        $"{slot.Name}: answers with the memory [releases:{ownedReturn.TypeName}] owns, and"
+                        + " has no failure channel -- so a caller handed nothing back is never told why."
+                        + " The slot needs a ke_error** parameter.");
                 var retType = spanElement is not null ? $"ReadOnlySpan<{spanElement}>"
                     : slot.Returns == "ke_bool" ? "bool"
                     : ReturnType(model, slot.Returns, convention);
@@ -2202,7 +2306,7 @@ public static class CSharpBackend
                     XmlDoc("    ", slot.Doc, args.Select(p =>
                         (Idioms.Ident(cs.TrailingOuts.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)),
                         slot.ReturnDoc).TrimEnd(),
-                    $"{retType} {name}{generics}({sig}){constraints}");
+                    $"{retType} {name}{generics}({sig}){constraints}", access: access);
                 o.Add("    {");
                 var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
                 var (pSeq, pSeqDepth) = SequencePrologue(model, cs.Sequences,
