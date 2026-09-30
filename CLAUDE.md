@@ -130,18 +130,11 @@ A service locator is forbidden: injection happens in the orchestration area, nev
 
 ## Threading model
 
-Two named workers exposed by the scheduler:
-
-```
-ke.sim    — runtime tick loop; runs every sim system + the window/input poll
-ke.render — pinned render-thread work; WebGPU device/queue calls are made here only
-```
-
-`ke.main` from the older Application.cs model is folded into `ke.sim`. There is no separate input thread; GLFW poll runs at the top of each tick before the scheduler dispatches.
+There is one worker pool, behind `ke_scheduler`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it unless it asks to be pinned to an index. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md); read the pinning there before assuming any thread affinity.
 
 **Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Worker pool**: a single shared `ke_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly. Every parallel subsystem (asset loading, PSO compile, audio mixing, render dispatch) routes through the same pool. flecs is built without its pipeline addon, so flecs itself never spawns a thread.
+**Worker pool**: a single shared `ke_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly, and every parallel subsystem routes through the same pool. The flecs plugin asks flecs for no threads (`ecs_init()` only).
 
 ---
 
