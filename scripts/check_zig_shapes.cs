@@ -165,6 +165,25 @@ Expect("a supplied handler is a trampoline over the caller's own state",
     absent: ["@TypeOf(ctx), ?*anyopaque", "out_error: ?*?*abi.ke_error"],
     providers: ["ke_probe"]);
 
+// A name no domain describes, reached only through a pointer, is a C type forward
+// declared and never defined -- the header hands out its address and nothing else. Zig
+// says that with opaque, and saying it is what makes the pointer legal: the bare name
+// alone leaves the module naming a symbol nothing declares. The types the ABI preamble
+// writes by hand are not among them, or the error channel itself would be invented.
+Expect("a type nothing describes is declared opaque so its pointer is legal",
+    m =>
+    {
+        m.Structs.Add(Vtable("ke_probe",
+            Slot("spawn", "ke_task *", P("out_error", "ke_error **")),
+            Slot("cancel", "void", P("task", "ke_task *"))));
+        m.Structs.Add(Handle("ke_probe"));
+    },
+    contains: ["pub const ke_task = opaque {};",
+               "pub fn spawn(self: Probe) Error!*abi.ke_task {",
+               "pub fn cancel(self: Probe, task: *abi.ke_task) void {"],
+    absent: ["pub const ke_error = opaque", "pub const ke_error_type = opaque"],
+    providers: ["ke_probe"]);
+
 if (failures.Count > 0)
 {
     foreach (var f in failures) Console.Error.WriteLine($"  {f}");
