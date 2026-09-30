@@ -12,6 +12,7 @@ is in the code, and `CLAUDE.md`'s closing table says where to start looking.
 
 - [How is the engine divided into layers, and where does each kind of file live?](architecture/layers.md)
 - [How does a call cross the C ABI, and how does a failure come back?](architecture/abi.md)
+- [How does one runtime tick run, and what may run at the same time?](architecture/runtime.md)
 
 ## Not here, on purpose
 
