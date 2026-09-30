@@ -43,9 +43,12 @@ public static class DocParser
         (List<string> Tags, string Doc) SplitTags(List<string> chunks)
         {
             var raw = string.Join(' ', chunks).Trim();
-            var m = TagBlock.Match(raw);
-            var tags = m.Success ? m.Groups[1].Value.Split(',').Select(t => t.Trim()).ToList() : [];
-            if (m.Success) raw = TagBlock.Replace(raw, "", 1);
+            var tags = new List<string>();
+            while (TagBlock.Match(raw) is { Success: true } m)
+            {
+                tags.AddRange(m.Groups[1].Value.Split(',').Select(t => t.Trim()));
+                raw = TagBlock.Replace(raw, "", 1);
+            }
             return (tags, string.Join(' ', raw.Split(' ', StringSplitOptions.RemoveEmptyEntries)));
         }
 
