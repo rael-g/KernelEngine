@@ -26,7 +26,8 @@
               "name": "func",
               "type": "ke_task_func",
               "tags": [
-                "raw_callback"
+                "raw_callback",
+                "closure:data"
               ],
               "doc": "Entry point invoked on a worker thread."
             },
@@ -52,7 +53,8 @@
               "name": "func",
               "type": "ke_task_func",
               "tags": [
-                "raw_callback"
+                "raw_callback",
+                "closure:data"
               ],
               "doc": "Entry point invoked on a worker thread."
             },
@@ -68,7 +70,8 @@
               "name": "on_complete",
               "type": "ke_task_on_complete_func",
               "tags": [
-                "raw_callback"
+                "raw_callback",
+                "closure:user_data"
               ],
               "doc": "Invoked after func returns."
             },
@@ -138,7 +141,8 @@
               "name": "func",
               "type": "ke_task_func",
               "tags": [
-                "raw_callback"
+                "raw_callback",
+                "closure:data"
               ],
               "doc": "Entry point invoked on that worker thread."
             },
@@ -200,6 +204,7 @@
           "name": "data",
           "type": "void *",
           "tags": [
+            "context",
             "borrowed"
           ],
           "doc": "Opaque context handed to the dispatch call."
@@ -218,16 +223,18 @@
       "doc": "Run once the task body has returned, on the same worker thread.",
       "lanes": [
         {
-          "name": null,
+          "name": "task",
           "type": "ke_task *",
           "tags": [],
-          "doc": null
+          "doc": "The task that finished."
         },
         {
-          "name": null,
+          "name": "user_data",
           "type": "void *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context handed to the dispatch call."
         },
         {
           "name": "failure",

@@ -13,8 +13,8 @@ extern "C"
     /** Completion callback for ke_asset_loader::load_model_async.
      * @param error     NULL on success; pointer to a ke_error on failure (valid until the next
      *                  failing call on this thread — copy what you need before returning).
-     * @param data      Loaded model data (valid only when error == NULL); NULL on failure.
-     * @param user_data Opaque pointer forwarded from load_model_async. */
+     * @param data      [optional] Loaded model data (valid only when error == NULL); NULL on failure.
+     * @param user_data [context] Opaque pointer forwarded from load_model_async. */
     typedef void (*ke_load_model_complete_func)(const ke_error *error,
                                                 struct ke_model_data *data,
                                                 void *user_data);
@@ -43,7 +43,7 @@ extern "C"
          * scheduler thread when the load finishes (or fails).
          * @param scheduler  Non-null task scheduler.
          * @param path [utf8] File path (copied internally; caller may free after return).
-         * @param on_complete [raw_callback] Callback invoked with the result; must not be NULL.
+         * @param on_complete [raw_callback] [closure:user_data] Callback invoked with the result; must not be NULL.
          * @param user_data  Forwarded unchanged to @p on_complete. */
         ke_task *(*load_model_async)(struct ke_asset_loader *self,
                                      ke_scheduler *scheduler,

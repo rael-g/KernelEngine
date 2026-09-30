@@ -22,13 +22,15 @@ extern "C"
      * outlives the thread that ran it, so only the type can make the trip. The caller of
      * wait() mints a ke_error from it on its own thread.
      *
-     * @param data        [borrowed] Opaque context handed to the dispatch call.
+     * @param data        [context] [borrowed] Opaque context handed to the dispatch call.
      * @param out_failure Receives the type the body failed with. Left untouched on success.
      */
     typedef void (*ke_task_func)(void *data, const ke_error_type **out_failure);
 
     /**
      * Run once the task body has returned, on the same worker thread.
+     * @param task      The task that finished.
+     * @param user_data [context] Opaque context handed to the dispatch call.
      * @param failure The type the body failed with, or NULL when it succeeded.
      */
     typedef void (*ke_task_on_complete_func)(ke_task *task, void *user_data, const ke_error_type *failure);
@@ -40,16 +42,16 @@ extern "C"
 
         /**
          * Schedules a fire-and-forget task.
-         * @param func [raw_callback] Entry point invoked on a worker thread.
+         * @param func [raw_callback] [closure:data] Entry point invoked on a worker thread.
          * @param data [borrowed] Opaque context passed to func unchanged.
          */
         ke_task *(*dispatch)(struct ke_scheduler *self, ke_task_func func, void *data);
 
         /**
          * Schedules a task and a completion callback run once it finishes.
-         * @param func [raw_callback] Entry point invoked on a worker thread.
+         * @param func [raw_callback] [closure:data] Entry point invoked on a worker thread.
          * @param data [borrowed] Opaque context passed to func unchanged.
-         * @param on_complete [raw_callback] Invoked after func returns.
+         * @param on_complete [raw_callback] [closure:user_data] Invoked after func returns.
          * @param user_data [borrowed] Opaque context passed to on_complete unchanged.
          */
         ke_task *(*dispatch_on_complete)(struct ke_scheduler *self,
@@ -74,7 +76,7 @@ extern "C"
         /**
          * Schedules a fire-and-forget task on one specific worker thread.
          * @param thread_num Index of the worker to run on.
-         * @param func [raw_callback] Entry point invoked on that worker thread.
+         * @param func [raw_callback] [closure:data] Entry point invoked on that worker thread.
          * @param data [borrowed] Opaque context passed to func unchanged.
          */
         ke_task *(*dispatch_pinned)(struct ke_scheduler *self,

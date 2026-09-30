@@ -80,7 +80,8 @@
               "name": "on_complete",
               "type": "ke_load_model_complete_func",
               "tags": [
-                "raw_callback"
+                "raw_callback",
+                "closure:user_data"
               ],
               "doc": "Callback invoked with the result; must not be NULL."
             },
@@ -136,13 +137,17 @@
         {
           "name": "data",
           "type": "struct ke_model_data *",
-          "tags": [],
+          "tags": [
+            "optional"
+          ],
           "doc": "Loaded model data (valid only when error == NULL); NULL on failure."
         },
         {
           "name": "user_data",
           "type": "void *",
-          "tags": [],
+          "tags": [
+            "context"
+          ],
           "doc": "Opaque pointer forwarded from load_model_async."
         }
       ]
