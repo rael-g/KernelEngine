@@ -49,8 +49,8 @@ var services = new ServiceCollection()
         Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
         var loader = sp.GetRequiredService<IAssetLoader>();
         using var model = loader.LoadModel(modelPath);
-        Console.WriteLine($"[KernelEngine] Model loaded: {model.Meshes.Count} sub-meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
-        var nodes = tree.AddModel(model, resources, rootName: "Box");
+        Console.WriteLine($"[KernelEngine] Model loaded: {model.Data.Meshes.Length} sub-meshes, {model.Data.Materials.Length} mats, {model.Data.Textures.Length} textures");
+        var nodes = tree.AddModel(model.Data, resources, rootName: "Box");
         Console.WriteLine($"[KernelEngine] Added {nodes.Count} mesh nodes to the scene.");
     }));
 

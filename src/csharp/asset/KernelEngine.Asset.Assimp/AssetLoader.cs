@@ -1,139 +1,33 @@
-﻿using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using KernelEngine.Common.Native;
-using KernelEngine.Common;
-using KernelEngine.Logger;
-using KernelEngine.Scheduler;
-
 namespace KernelEngine.Asset.Assimp;
 
 /// <summary>
-/// Managed view over a single mesh from a loaded <see cref="ModelData"/>.
-/// Memory is owned by the native loader; valid only while the parent <see cref="ModelData"/> is alive.
+/// Keeps loader-owned model memory alive for as long as a caller holds it, and gives it
+/// back to the loader that produced it on dispose. What the model says about itself is the
+/// loader's own bytes, read through <see cref="ModelData"/>; this type adds nothing to that
+/// reading and exists only to answer when the bytes are released.
 /// </summary>
-internal sealed unsafe class MeshData : IModelMesh
+internal sealed unsafe class Model : IModel
 {
-    private readonly ke_vertex* _vertices;
-    private readonly ushort*    _indices;
-    private readonly uint       _vertexCount;
-    private readonly uint       _indexCount;
+    private readonly AssetLoader _loader;
+    private ModelData* _native;
 
-    public int MaterialIndex { get; }
-    public string Name { get; }
-
-    /// <summary>
-    /// Vertices exposed as <see cref="Vertex"/>. Both spellings are generated from the same
-    /// declaration of <c>ke_vertex</c>, so a field added there reaches this cast on both
-    /// sides or on neither.
-    /// </summary>
-    public ReadOnlySpan<Vertex> Vertices =>
-        MemoryMarshal.Cast<ke_vertex, Vertex>(new ReadOnlySpan<ke_vertex>(_vertices, (int)_vertexCount));
-
-    public ReadOnlySpan<ushort> Indices => new(_indices, (int)_indexCount);
-
-    internal MeshData(ke_mesh_data* native)
-    {
-        _vertices     = native->vertices;
-        _indices      = native->indices;
-        _vertexCount  = native->vertex_count;
-        _indexCount   = native->index_count;
-        MaterialIndex = native->material_index;
-        Name = Marshal.PtrToStringAnsi((nint)Unsafe.AsPointer(ref native->name.e0)) ?? string.Empty;
-    }
-}
-
-/// <summary>
-/// Managed view over a single material from a loaded <see cref="ModelData"/>.
-/// </summary>
-internal sealed class MaterialData : IModelMaterial
-{
-    public Vector4 BaseColor { get; }
-    public float Metallic { get; }
-    public float Roughness { get; }
-    public int AlbedoTextureIndex { get; }
-    public int NormalMapTextureIndex { get; }
-    public string Name { get; }
-
-    internal unsafe MaterialData(ke_material_data* native)
-    {
-        BaseColor             = new Vector4(native->base_color_r, native->base_color_g,
-                                            native->base_color_b, native->base_color_a);
-        Metallic              = native->metallic;
-        Roughness             = native->roughness;
-        AlbedoTextureIndex    = native->albedo_texture_index;
-        NormalMapTextureIndex = native->normal_map_texture_index;
-        Name = Marshal.PtrToStringAnsi((nint)Unsafe.AsPointer(ref native->name.e0)) ?? string.Empty;
-    }
-}
-
-/// <summary>
-/// Managed view over a single decoded RGBA8 texture from a loaded <see cref="ModelData"/>.
-/// Memory is owned by the native loader; valid only while the parent <see cref="ModelData"/> is alive.
-/// </summary>
-internal sealed unsafe class TextureData : IModelTexture
-{
-    private readonly byte* _pixels;
-    private readonly uint  _pixelByteCount;
-
-    public uint Width { get; }
-    public uint Height { get; }
-    public string Path { get; }
-
-    public ReadOnlySpan<byte> Pixels => new(_pixels, (int)_pixelByteCount);
-
-    internal unsafe TextureData(ke_texture_data* native)
-    {
-        _pixels = native->pixels;
-        Width   = native->width;
-        Height  = native->height;
-        _pixelByteCount = Width * Height * 4;
-        Path = Marshal.PtrToStringAnsi((nint)Unsafe.AsPointer(ref native->path.e0)) ?? string.Empty;
-    }
-}
-
-/// <summary>
-/// Owns the native <c>ke_model_data</c> returned by the Assimp loader.
-/// Disposing frees all native mesh, material, and texture memory.
-/// </summary>
-internal sealed unsafe class ModelData : IModel
-{
-    private ke_asset_loader* _loader;
-    private ke_model_data*   _native;
-
-    public IReadOnlyList<IModelMesh> Meshes { get; }
-    public IReadOnlyList<IModelMaterial> Materials { get; }
-    public IReadOnlyList<IModelTexture> Textures { get; }
-
-    internal ModelData(ke_asset_loader* loader, ke_model_data* native)
+    internal Model(AssetLoader loader, ModelData* native)
     {
         _loader = loader;
         _native = native;
-
-        var meshes = new IModelMesh[native->mesh_count];
-        for (uint i = 0; i < native->mesh_count; i++)
-            meshes[i] = new MeshData(&native->meshes[i]);
-        Meshes = meshes;
-
-        var materials = new IModelMaterial[native->material_count];
-        for (uint i = 0; i < native->material_count; i++)
-            materials[i] = new MaterialData(&native->materials[i]);
-        Materials = materials;
-
-        var textures = new IModelTexture[native->texture_count];
-        for (uint i = 0; i < native->texture_count; i++)
-            textures[i] = new TextureData(&native->textures[i]);
-        Textures = textures;
     }
 
+    /// <inheritdoc/>
+    public ModelData Data => _native is null
+        ? throw new ObjectDisposedException(nameof(Model))
+        : *_native;
+
+    /// <inheritdoc/>
     public void Dispose()
     {
-        if (_loader != null && _native != null)
-        {
-            _loader->free_model(_loader, _native);
-            _loader = null;
-            _native = null;
-        }
+        if (_native is null) return;
+        var native = _native;
+        _native = null;
+        _loader.FreeModel(native);
     }
 }
-

@@ -5,10 +5,10 @@ using KernelEngine.Asset;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Helpers that upload an <see cref="IModel"/> (returned by an
-/// <see cref="IAssetLoader"/>) to the GPU and attach it to the scene as a
-/// flat collection of <see cref="MeshRenderer"/> nodes. Each sub-mesh becomes
-/// its own node named <c>{rootName}.{meshName}</c>.
+/// Helpers that upload a <see cref="ModelData"/> (read from an <see cref="IModel"/> an
+/// <see cref="IAssetLoader"/> answered with) to the GPU and attach it to the scene as a
+/// flat collection of <see cref="MeshRenderer"/> nodes. Each sub-mesh becomes its own node
+/// named <c>{rootName}.{meshName}</c>.
 /// </summary>
 public static class ModelExtensions
 {
@@ -21,31 +21,35 @@ public static class ModelExtensions
     /// </summary>
     public static IReadOnlyList<MeshRenderer> AddModel(
         this ScriptHost scriptHost,
-        IModel model,
+        ModelData model,
         IRenderResources resources,
         string rootName = "Model")
     {
-        var textures = new TextureHandle[model.Textures.Count];
-        for (int i = 0; i < model.Textures.Count; i++)
+        var sourceTextures = model.Textures;
+        var textures = new TextureHandle[sourceTextures.Length];
+        for (int i = 0; i < sourceTextures.Length; i++)
         {
-            var tex = model.Textures[i];
+            var tex = sourceTextures[i];
             var texKey = string.IsNullOrEmpty(tex.Path) ? $"{rootName}#tex{i}" : tex.Path;
             textures[i] = resources.UploadTexture(texKey, tex.Width, tex.Height, tex.Pixels);
         }
 
-        var materials = new MaterialHandle[model.Materials.Count];
-        for (int i = 0; i < model.Materials.Count; i++)
+        var sourceMaterials = model.Materials;
+        var materials = new MaterialHandle[sourceMaterials.Length];
+        for (int i = 0; i < sourceMaterials.Length; i++)
         {
-            var m      = model.Materials[i];
-            var albedo = m.AlbedoTextureIndex    >= 0 ? textures[m.AlbedoTextureIndex]    : default;
-            var normal = m.NormalMapTextureIndex >= 0 ? (TextureHandle?)textures[m.NormalMapTextureIndex] : null;
-            materials[i] = resources.CreateMaterial($"{rootName}#mat{i}", m.BaseColor, m.Metallic, m.Roughness, albedo, normal);
+            var m         = sourceMaterials[i];
+            var albedo    = m.AlbedoTextureIndex    >= 0 ? textures[m.AlbedoTextureIndex]    : default;
+            var normal    = m.NormalMapTextureIndex >= 0 ? (TextureHandle?)textures[m.NormalMapTextureIndex] : null;
+            var baseColor = new Vector4(m.BaseColorR, m.BaseColorG, m.BaseColorB, m.BaseColorA);
+            materials[i] = resources.CreateMaterial($"{rootName}#mat{i}", baseColor, m.Metallic, m.Roughness, albedo, normal);
         }
 
-        var nodes = new List<MeshRenderer>(model.Meshes.Count);
-        for (int i = 0; i < model.Meshes.Count; i++)
+        var sourceMeshes = model.Meshes;
+        var nodes = new List<MeshRenderer>(sourceMeshes.Length);
+        for (int i = 0; i < sourceMeshes.Length; i++)
         {
-            var src  = model.Meshes[i];
+            var src  = sourceMeshes[i];
             var raw  = src.Vertices;
             var converted = new MeshVertex[raw.Length];
             for (int j = 0; j < raw.Length; j++)

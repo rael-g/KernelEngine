@@ -48,22 +48,22 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader
     /// <summary>Loads a 3D model from into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.</summary>
     /// <param name="path">Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).</param>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ke_model_data* LoadModel(string path)
+    public ModelData* LoadModel(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
             ke_error* err = null;
-            var result = Handle->load_model(Handle, (sbyte*)pathPtr, &err);
+            var result = (ModelData*)Handle->load_model(Handle, (sbyte*)pathPtr, &err);
             if (result == null) throw KernelError.FromNative(err, "load_model");
             return result;
         }
     }
 
     /// <summary>Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null is ignored.</summary>
-    public void FreeModel(ke_model_data* data)
+    public void FreeModel(ModelData* data)
     {
-        Handle->free_model(Handle, data);
+        Handle->free_model(Handle, (ke_model_data*)data);
     }
 
     /// <summary>Releases the native assetloader.</summary>

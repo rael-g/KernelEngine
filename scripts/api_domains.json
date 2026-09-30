@@ -255,6 +255,7 @@
         "src/c/render",
         "src/zig/common/include"
       ],
+      "composeHeaders": [ "src/c/asset/kernel_engine/asset/mesh_data.h" ],
       "apiJson": "src/csharp/asset/asset_loader.ke_api.json",
       "namespace": "KernelEngine.Asset.Assimp",
       "nativeNamespace": "KernelEngine.Asset.Native",

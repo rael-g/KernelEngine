@@ -181,7 +181,7 @@ public static class CSharpBackend
     static string ReturnType(ApiModel model, string cType, Convention convention) =>
         model.Enums.Any(e => e.Name == cType.Trim())
             ? Idioms.TypeName(cType.Trim(), convention)
-            : CsType(model, cType);
+            : PointerToView(model, cType, convention) ?? CsType(model, cType);
 
     /// <summary>
     /// The cast carrying the ABI's answer into what <see cref="ReturnType"/> spells, or
@@ -190,7 +190,25 @@ public static class CSharpBackend
     static string ReturnCast(ApiModel model, string cType, Convention convention) =>
         model.Enums.Any(e => e.Name == cType.Trim())
             ? $"({Idioms.TypeName(cType.Trim(), convention)})"
+            : PointerToView(model, cType, convention) is { } view ? $"({view})"
             : "";
+
+    /// <summary>
+    /// The projection a pointer reaches, where what it points at is declared a
+    /// <c>[view]</c> -- or nothing, for any other pointee. A view and the declaration it
+    /// stands for occupy the same bytes, because both are laid out sequentially from the one
+    /// field list the header gives; so naming the projection at the boundary is what lets a
+    /// caller hold the reading instead of reinterpreting the ABI spelling itself, which is
+    /// the cast a view exists to stop being written.
+    /// </summary>
+    static string? PointerToView(ApiModel model, string cType, Convention convention)
+    {
+        if (!CTypes.IsPointer(cType)) return null;
+        var element = StripQualifiers(CTypes.Deref(cType)).Trim();
+        return model.Structs.Any(s => s.Name == element && !s.IsVtable && s.Has("view"))
+            ? Idioms.TypeName(element, convention) + "*"
+            : null;
+    }
 
     /// <summary>
     /// What to call a parameter the callee writes. A leading <c>out_</c> is how C marks the
@@ -296,7 +314,7 @@ public static class CSharpBackend
         if (p.Has("ctx")) return "nint";
         if (model.Enums.Any(e => e.Name == p.Type.Trim()))
             return Idioms.TypeName(p.Type.Trim(), convention);
-        return CsType(model, p.Type);
+        return PointerToView(model, p.Type, convention) ?? CsType(model, p.Type);
     }
 
     /// <summary>
@@ -2258,6 +2276,8 @@ public static class CSharpBackend
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") && CTypes.IsPointer(p.Type) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"
+            : PointerToView(model, p.Type, convention) is not null
+                ? $"({NativePointerType(model, p.Type)}){Idioms.Ident(p.Name!)}"
             : UntypedPointer(p.Type) is string cast ? $"({cast}){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!);
     }

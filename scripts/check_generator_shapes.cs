@@ -606,6 +606,21 @@ ExpectView("a view field reaching somewhere with no extent is refused",
     contains: [], absent: [],
     throws: "has to name the count bounding it");
 
+// The same projection reached through a slot rather than a field. A view and the
+// declaration it stands for occupy the same bytes, so the boundary names the projection on
+// both sides -- handing one out and taking one back -- and the ABI spelling survives only
+// as the cast the generated body makes. Without this the caller holds the C name and has to
+// reinterpret it, which is the reading the form exists to stop being written by hand.
+Expect("a slot hands out and takes back the projection of a [view], casting at the ABI",
+    Vtable("ke_probe",
+        Slot("open", "ke_probe_bundle *", Param("self", "ke_probe *", "self")),
+        Slot("close", "void", Param("self", "ke_probe *", "self"),
+            Param("bundle", "ke_probe_bundle *"))),
+    contains: ["public ProbeBundle* Open(", "return (ProbeBundle*)Handle->open(",
+               "ProbeBundle* bundle)", "(ke_probe_bundle*)bundle"],
+    absent: ["ke_probe_bundle* Open", "ke_probe_bundle* bundle)"],
+    structs: [ViewJson("ke_probe_bundle")]);
+
 // An enum that names where a borrow looks: one wrapper per value, each carrying the
 // reach it resolves with. What stops a projection from keeping its own list of borrow
 // type names, which is a copy of this enum that nothing makes it update.
@@ -990,6 +1005,21 @@ static JsonObject Vtable(string name, params object[] rest)
         ["slots"] = slots,
     };
 }
+
+/// <summary>
+/// A struct declared as the reading of memory it does not own, as the description carries
+/// it. Only the tag matters to a slot boundary: what the projection hands out is the field
+/// fixtures' question, while a slot only has to name the projection instead of the C type.
+/// </summary>
+static JsonObject ViewJson(string name) => new()
+{
+    ["name"] = name,
+    ["doc"] = null,
+    ["tags"] = new JsonArray((JsonNode)"view"),
+    ["fields"] = new JsonArray(new JsonObject
+        { ["name"] = "count", ["type"] = "uint32_t", ["tags"] = new JsonArray(), ["doc"] = null }),
+    ["slots"] = new JsonArray(),
+};
 
 static JsonObject Slot(string name, string returns, params object[] rest)
 {

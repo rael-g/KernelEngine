@@ -61,8 +61,8 @@ var services = new ServiceCollection()
             var loader = sp.GetRequiredService<IAssetLoader>();
             Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
             using var model = loader.LoadModel(modelPath);
-            Console.WriteLine($"[KernelEngine] Model: {model.Meshes.Count} meshes, {model.Materials.Count} mats, {model.Textures.Count} textures");
-            var meshNodes = tree.AddModel(model, resources, rootName: "CenterBox");
+            Console.WriteLine($"[KernelEngine] Model: {model.Data.Meshes.Length} meshes, {model.Data.Materials.Length} mats, {model.Data.Textures.Length} textures");
+            var meshNodes = tree.AddModel(model.Data, resources, rootName: "CenterBox");
             for (int i = 0; i < meshNodes.Count; i++)
             {
                 meshNodes[i].Position = new Vector3(0f, 2f, 0f);

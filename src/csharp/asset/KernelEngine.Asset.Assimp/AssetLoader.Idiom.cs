@@ -25,11 +25,7 @@ public unsafe partial class AssetLoader : IAssetLoader
     }
 
     /// <inheritdoc/>
-    IModel IAssetLoader.LoadModel(string path)
-    {
-        var data = LoadModel(path);
-        return new ModelData((ke_asset_loader*)((INativeAssetLoader)this).Native, data);
-    }
+    IModel IAssetLoader.LoadModel(string path) => new Model(this, LoadModel(path));
 
     /// <inheritdoc/>
     public Task<IModel> LoadModelAsync(string path)
@@ -37,7 +33,7 @@ public unsafe partial class AssetLoader : IAssetLoader
         var native = ((INativeAssetLoader)this).Native;
         var tcs = new TaskCompletionSource<IModel>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var state = ((nint)native, tcs);
+        var state = (this, tcs);
         var stateHandle = GCHandle.Alloc(state);
 
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -61,11 +57,11 @@ public unsafe partial class AssetLoader : IAssetLoader
         void* userData)
     {
         var handle = GCHandle.FromIntPtr((IntPtr)userData);
-        var (loaderPtr, tcs) = ((nint, TaskCompletionSource<IModel>))handle.Target!;
+        var (loader, tcs) = ((AssetLoader, TaskCompletionSource<IModel>))handle.Target!;
         handle.Free();
 
         if (error == null && data != null)
-            tcs.TrySetResult(new ModelData((ke_asset_loader*)loaderPtr, data));
+            tcs.TrySetResult(new Model(loader, (ModelData*)data));
         else
             tcs.TrySetException(KernelError.FromNative(error, "load_model_async"));
     }

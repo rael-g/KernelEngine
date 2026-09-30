@@ -1,6 +1,215 @@
 {
   "enums": [],
-  "structs": [],
+  "structs": [
+    {
+      "name": "ke_mesh_data",
+      "doc": "Raw CPU-side mesh data returned by ke_asset_loader::load_model. Vertices are ready to pass directly to ke_render::create_mesh.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "vertices",
+          "type": "ke_vertex *",
+          "tags": [
+            "array_of:vertex_count"
+          ],
+          "doc": "Vertices with pos, normal, UV, tangent"
+        },
+        {
+          "name": "vertex_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "indices",
+          "type": "uint16_t *",
+          "tags": [
+            "array_of:index_count"
+          ],
+          "doc": "Triangle list indices (max 65535 vertices per mesh)"
+        },
+        {
+          "name": "index_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "material_index",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "Index into ke_model_data::materials; -1 = none"
+        },
+        {
+          "name": "name",
+          "type": "char[64]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_data",
+      "doc": "Raw CPU-side material data returned by ke_asset_loader::load_model. Pass to ke_render::create_material after uploading textures.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "base_color_r",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_color_g",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_color_b",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_color_a",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "metallic",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "albedo_texture_index",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "Index into ke_model_data::textures; -1 = none"
+        },
+        {
+          "name": "normal_map_texture_index",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "Index into ke_model_data::textures; -1 = none"
+        },
+        {
+          "name": "name",
+          "type": "char[64]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_texture_data",
+      "doc": "Decoded RGBA8 texture data returned by ke_asset_loader::load_model.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "pixels",
+          "type": "uint8_t *",
+          "tags": [
+            "array_of:byte_count"
+          ],
+          "doc": "RGBA8 samples, row-major"
+        },
+        {
+          "name": "byte_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Bytes pixels reaches: width * height * 4"
+        },
+        {
+          "name": "width",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "height",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": "Source path; empty for embedded textures"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_model_data",
+      "doc": "Complete model data returned by ke_asset_loader::load_model. Owned by the loader; free with ke_asset_loader::free_model.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "meshes",
+          "type": "ke_mesh_data *",
+          "tags": [
+            "array_of:mesh_count"
+          ],
+          "doc": "Meshes the model is drawn from"
+        },
+        {
+          "name": "mesh_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "materials",
+          "type": "ke_material_data *",
+          "tags": [
+            "array_of:material_count"
+          ],
+          "doc": "Materials the meshes index into"
+        },
+        {
+          "name": "material_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "textures",
+          "type": "ke_texture_data *",
+          "tags": [
+            "array_of:texture_count"
+          ],
+          "doc": "Textures the materials index into"
+        },
+        {
+          "name": "texture_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    }
+  ],
   "vtables": [
     {
       "name": "ke_asset_loader",
