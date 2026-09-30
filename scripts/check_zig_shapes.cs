@@ -236,6 +236,42 @@ Expect("a failure crosses as an error union one way and an optional error the ot
     absent: ["?Error) Error!void", "failure: *const abi.ke_error_type"],
     providers: ["ke_probe"]);
 
+// A vtable the caller implements needs no interface declared for it: each slot becomes a
+// method looked up on the caller's own type, so a missing or mistyped one is named by the
+// Zig compiler. The state field is found by its type, and the plain fields the vtable also
+// carries become parameters, so nothing about the value is left for the caller to fill.
+Expect("a vtable the caller implements is filled from a type the compiler looks methods up on",
+    m =>
+    {
+        m.Structs.Add(new ApiStruct("ke_probe_sink", null, [], [
+            new ApiField("handle", "void *", [], null),
+            new ApiField("min_level", "int32_t", [], null),
+        ], [
+            new ApiSlot("write", "void", [], null, null, [P("text", "const char *", "utf8")])
+                { Receiver = "ke_probe_sink *" },
+            new ApiSlot("destroy", "void", [], null, null, []) { Receiver = "ke_probe_sink *" },
+        ]));
+        m.Structs.Add(Vtable("ke_probe",
+            Slot("add_sink", "bool",
+                P("sink", "ke_probe_sink", "callback"),
+                P("out_error", "ke_error **"))));
+        m.Structs.Add(Handle("ke_probe"));
+    },
+    contains: [
+        "pub fn addSink(self: Probe, sink: anytype, min_level: i32) Error!void {",
+        "const Target = @TypeOf(sink);",
+        "fn write(self_lane: *abi.ke_probe_sink, text: [*:0]const u8) callconv(.c) void {",
+        "return @as(Target, @ptrCast(@alignCast(self_lane.handle.?))).write(std.mem.span(text));",
+        "const sink_native = abi.ke_probe_sink{",
+        "    .handle = @ptrCast(sink),",
+        "    .min_level = min_level,",
+        "    .write = SinkVtable.write,",
+        "    .destroy = SinkVtable.destroy,",
+        "if (!self.ref.add_sink(self.ref, sink_native, &err)) return raise(err);",
+    ],
+    absent: ["sink: abi.ke_probe_sink", "ProbeSink = struct"],
+    providers: ["ke_probe"]);
+
 if (failures.Count > 0)
 {
     foreach (var f in failures) Console.Error.WriteLine($"  {f}");
