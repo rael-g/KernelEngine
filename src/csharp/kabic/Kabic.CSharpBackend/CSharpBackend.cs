@@ -433,6 +433,17 @@ public static class CSharpBackend
         ["ke_quat"] = ("Quaternion", ["x", "y", "z", "w"]),
     };
 
+    /// <summary>
+    /// C matrix types whose managed counterpart occupies the same bytes. The mapping is
+    /// stated here rather than left to the generic path because the field would otherwise
+    /// name the ABI struct, and a caller composing a transform would be doing matrix
+    /// arithmetic against a type that has none.
+    /// </summary>
+    static readonly Dictionary<string, string> NamedMatrixTypes = new()
+    {
+        ["ke_mat4"] = "Matrix4x4",
+    };
+
     static readonly Dictionary<string, string> NamedHandleTypes = new()
     {
         ["ke_mesh_handle"] = "KernelEngine.Render.MeshHandle",
@@ -508,8 +519,9 @@ public static class CSharpBackend
     /// </summary>
     public static string RenderStruct(ApiModel model, ApiStruct s, string ns, Convention convention)
     {
-        var needsNumerics = s.Fields.Any(f => ValueFieldType(model, s, f, convention).StartsWith("Vector", StringComparison.Ordinal)
-            || ValueFieldType(model, s, f, convention) == "Quaternion");
+        var needsNumerics = s.Fields.Any(f => ValueFieldType(model, s, f, convention)
+            is var t && (t.StartsWith("Vector", StringComparison.Ordinal)
+                || t is "Quaternion" or "Matrix4x4"));
         var inlineArrays = s.Fields
             .Select(f => (Field: f, Array: ValueArray(model, s, f, convention)))
             .Where(x => x.Array is not null)
@@ -527,6 +539,14 @@ public static class CSharpBackend
         o.Add("[StructLayout(LayoutKind.Sequential)]");
         o.Add($"public partial struct {Idioms.TypeName(s.Name, convention)}");
         o.Add("{");
+        if (convention.IsComponentType(s.Name))
+        {
+            o.Add("    /// <summary>The name this component is registered under, which is its only"
+                + " identity across languages. Derived from the struct the ABI declares, so a caller"
+                + " naming the component and the storage holding it cannot come to disagree.</summary>");
+            o.Add($"    public const string Name = \"{convention.ComponentNameFor(s.Name)}\";");
+            o.Add("");
+        }
         foreach (var (f, array) in inlineArrays)
         {
             o.Add($"    /// <summary>Elements <c>{Idioms.Pascal(f.Name)}</c> has room for, as the ABI"
@@ -540,6 +560,21 @@ public static class CSharpBackend
             if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
             o.Add($"    public {ValueFieldType(model, s, f, convention)} {Idioms.Pascal(f.Name)};");
         }
+
+        var seeded = s.Fields.Where(f => f.TagValue("default") is not null).ToList();
+        if (seeded.Count > 0)
+        {
+            var typeName = Idioms.TypeName(s.Name, convention);
+            o.Add("");
+            o.Add($"    /// <summary>The value every <c>[default:]</c> field of <c>{s.Name}</c> declares."
+                + " A zero-initialized instance is not the same thing: zero is a value the ABI reads as"
+                + " itself, so a field whose neutral value is not zero has to be seeded.</summary>");
+            o.Add($"    public static {typeName} Default => new()");
+            o.Add("    {");
+            foreach (var f in seeded) o.Add($"        {ValueDefault(model, s, f, convention)}");
+            o.Add("    };");
+        }
+
         foreach (var (f, array) in inlineArrays)
         {
             o.Add("");
@@ -613,7 +648,7 @@ public static class CSharpBackend
         Convention convention)
     {
         var m = Regex.Match(f.Type.Trim(), @"^(.+?)\s*\[(\d+)\]$");
-        if (!m.Success || IsCharArray(f.Type) || VectorArity(f.Type) is not null) return null;
+        if (!m.Success || VectorArity(f.Type) is not null) return null;
 
         var element = m.Groups[1].Value.Trim();
         if (CTypes.IsPointer(element))
@@ -632,7 +667,9 @@ public static class CSharpBackend
     /// type whose fields are the other.
     /// </summary>
     static string ValueTypeName(ApiModel model, string cType, Convention convention) =>
-        model.Structs.Any(v => v.Name == cType.Trim() && v.Has("value") && !v.External)
+        NamedMatrixTypes.TryGetValue(cType.Trim(), out var mat) ? mat
+        : NamedHandleTypes.TryGetValue(cType.Trim(), out var handle) ? handle
+        : model.Structs.Any(v => v.Name == cType.Trim() && v.Has("value") && !v.External)
         || model.Enums.Any(e => e.Name == cType.Trim() && !e.External)
             ? Idioms.TypeName(cType.Trim(), convention)
             : CsType(model, cType);
@@ -641,8 +678,9 @@ public static class CSharpBackend
     /// The type one field of a <c>[value]</c> struct takes. Every answer here has to occupy
     /// the same bytes as the field it stands for, because the struct is handed to native code
     /// as itself rather than marshalled field by field. That rules out the conveniences a
-    /// node property affords — a fixed char array reads far better as a string, and is a
-    /// different size — so those are refused rather than quietly changing the layout.
+    /// node property affords: a fixed char array reads far better as a string, but a string
+    /// is a reference of another size, so the field stays the bytes it is and the text is
+    /// read through them.
     /// </summary>
     static string ValueFieldType(ApiModel model, ApiStruct s, ApiField f, Convention convention)
     {
@@ -652,16 +690,46 @@ public static class CSharpBackend
                 + " field makes the lifetime of that data someone else's question. Describe"
                 + " the pointer as a sequence on the slot that hands it out instead.");
 
-        if (IsCharArray(f.Type))
-            throw new InvalidOperationException(
-                $"{s.Name}.{f.Name}: [value] copies the struct as it stands, and a fixed char"
-                + " array has no managed type of the same size -- a string is a reference."
-                + " Hand the text out through a slot that can encode it.");
-
         if (VectorArity(f.Type) is int n) return $"Vector{n}";
         if (NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v)) return v.CsType;
         if (ValueArray(model, s, f, convention) is { } array) return array.Buffer;
         return ValueTypeName(model, f.Type, convention);
+    }
+
+    /// <summary>
+    /// One field's seeding inside a <c>[value]</c> struct's <c>Default</c>. The header states
+    /// the neutral value per field, and it is the same statement the node constructor and the
+    /// scene loader read -- spelling it again beside a hand-written mirror is how the two come
+    /// to describe different neutral surfaces.
+    /// </summary>
+    static string ValueDefault(ApiModel model, ApiStruct s, ApiField f, Convention convention)
+    {
+        var d = f.TagValue("default")!.Trim();
+        var name = Idioms.Pascal(f.Name);
+        var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var lanes = VectorArity(f.Type) is int n ? n
+            : NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.Lanes.Length
+            : 1;
+        if (lanes > 1)
+        {
+            if (parts.Length != lanes)
+                throw new InvalidOperationException(
+                    $"{s.Name}.{f.Name}: [default:{d}] has {parts.Length} components but the field"
+                    + $" holds {lanes}.");
+            return $"{name} = new {ValueFieldType(model, s, f, convention)}"
+                + $"({string.Join(", ", parts.Select(p => p + "f"))}),";
+        }
+
+        if (ValueArray(model, s, f, convention) is not null)
+            throw new InvalidOperationException(
+                $"{s.Name}.{f.Name}: [default:{d}] states one value and the field holds an array of"
+                + " them. A default a caller can read is a single value, not a fill.");
+
+        var type = ValueFieldType(model, s, f, convention);
+        if (model.Enums.Any(e => e.Name == f.Type.Trim()))
+            return $"{name} = {type}.{Idioms.EnumMember(d, f.Type.Trim())},";
+        return $"{name} = {d}{(type is "float" ? "f" : "")},";
     }
 
     /// <summary>

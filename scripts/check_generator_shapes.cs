@@ -450,12 +450,55 @@ ExpectValueStruct("a value struct's math fields take the managed math types",
     absent: ["ke_vec3", "ke_quat"]);
 
 // A fixed char array reads far better as a string, and a node property is allowed to say
-// so. A value struct is not: a string is a reference, the array is bytes inline, and the
-// struct crosses as itself.
-ExpectValueStruct("a value struct refuses a fixed char array",
+// so. A value struct is not: a string is a reference of another size, so the field stays
+// the bytes the ABI reads and the arity moves into the wrapper that occupies them.
+ExpectValueStruct("a value struct's fixed char array stays the bytes it is",
     ValueStruct("ke_named", ("name", "char [64]")),
+    contains: ["public const int NameCapacity = 64;", "public NameBuffer Name;",
+               "[InlineArray(NameCapacity)]", "public partial struct NameBuffer",
+               "public sbyte Element;"],
+    absent: ["public string Name;"]);
+
+// The matrix the ABI declares as a run of floats, taking the managed type of the same
+// bytes. Left as the ABI struct, a caller composing a transform would be doing matrix
+// arithmetic against a type that has none.
+ExpectValueStruct("a value struct's matrix field takes the managed matrix type",
+    ValueStruct("ke_world_transform", ("matrix", "ke_mat4")),
+    contains: ["using System.Numerics;", "public Matrix4x4 Matrix;"],
+    absent: ["ke_mat4"]);
+
+// The neutral value of every field, seeded from the header that states it. Zero is a value
+// the ABI reads as itself, so a default-constructed instance is not neutral -- and spelling
+// the neutral surface a second time by hand is how the two come to disagree.
+ExpectValueStruct("a value struct seeds the defaults the header states",
+    TaggedValueStruct("ke_surface_component",
+        ("base_color", "ke_vec4", ["default:1 1 1 1"]),
+        ("roughness", "float", ["default:1"]),
+        ("layers", "uint32_t", ["default:1"]),
+        ("offset", "ke_vec2", [])),
+    contains: ["public static SurfaceComponent Default => new()",
+               "BaseColor = new Vector4(1f, 1f, 1f, 1f),", "Roughness = 1f,", "Layers = 1,"],
+    absent: ["Offset ="]);
+
+// A component's registered name is its only identity across languages, and the struct the
+// ABI declares is where that name comes from. A caller spelling it as a literal beside the
+// type is a second producer of the same identity, and renaming one compiles clean.
+ExpectValueStruct("a component value struct carries the name it is registered under",
+    ValueStruct("ke_point_light_component", ("intensity", "float")),
+    contains: ["public const string Name = \"point_light\";"],
+    absent: []);
+
+// Plain value data is not a component and has no registered name to carry.
+ExpectValueStruct("a value struct that is not a component carries no registered name",
+    ValueStruct("ke_vertex_position", ("x", "float")),
+    contains: [], absent: ["public const string Name"]);
+
+// A default states one value; an array holds many. Seeding it from one would be a fill the
+// header never described.
+ExpectValueStruct("a value struct refuses a default on an array field",
+    TaggedValueStruct("ke_named_default", ("name", "char [64]", ["default:none"])),
     contains: [], absent: [],
-    throws: "has no managed type of the same size");
+    throws: "states one value and the field holds an array");
 
 // A fixed array of another value struct. C# cannot spell `T[8]` inline for a struct T, so
 // the arity has to move into an [InlineArray] wrapper occupying the same bytes -- emitting
@@ -700,6 +743,14 @@ static JsonObject Function(string name, string returns, params object[] rest)
 static ApiStruct ValueStruct(string name, params (string Name, string Type)[] fields) =>
     new(name, null, ["value"],
         fields.Select(f => new ApiField(f.Name, f.Type, [], null)).ToList(), []);
+
+/// <summary>
+/// A <c>[value]</c> struct whose fields carry tags of their own, which is what a default
+/// stated in the header looks like by the time a backend reads it.
+/// </summary>
+static ApiStruct TaggedValueStruct(string name, params (string Name, string Type, string[] Tags)[] fields) =>
+    new(name, null, ["value"],
+        fields.Select(f => new ApiField(f.Name, f.Type, f.Tags, null)).ToList(), []);
 
 /// <summary>
 /// A struct the ABI hands out, whose counted pointers are read as spans. The struct is the

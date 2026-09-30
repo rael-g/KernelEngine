@@ -59,6 +59,9 @@ public sealed class Convention
     /// </summary>
     public required string ComponentSuffix { get; init; }
 
+    /// <summary>Whether a struct name marks an ECS component rather than plain value data.</summary>
+    public bool IsComponentType(string structName) => structName.EndsWith(ComponentSuffix);
+
     /// <summary>The registered component name for a component struct (<c>ke_point_light_component</c> → <c>point_light</c>).</summary>
     public string ComponentNameFor(string structName)
     {
