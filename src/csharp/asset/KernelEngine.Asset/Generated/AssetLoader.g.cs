@@ -77,7 +77,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         _borrowed = borrowed;
     }
 
-    /// <summary>Loads a 3D model from into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.</summary>
+    /// <summary>Loads a 3D model from path into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.</summary>
     /// <param name="path">Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     public Model LoadModel(string path)
@@ -92,13 +92,13 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         }
     }
 
-    /// <summary>Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null is ignored.</summary>
+    /// <summary>Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.</summary>
     internal void FreeModel(ModelData* data)
     {
         Handle->free_model(Handle, (ke_model_data*)data);
     }
 
-    /// <summary>Asynchronously loads a 3D model, calling on a scheduler thread once the load has finished or failed.</summary>
+    /// <summary>Asynchronously loads a 3D model, calling on_complete on a scheduler thread once the load has finished or failed.</summary>
     /// <param name="scheduler">Non-null task scheduler.</param>
     /// <param name="path">File path (copied internally; caller may free after return).</param>
     /// <returns>The loaded model; NULL when the load failed.</returns>

@@ -33,6 +33,10 @@ public static class DocParser
             {
                 sink.Add(n["text"]?.GetValue<string>() ?? "");
             }
+            else if (kind == "InlineCommandComment" && n["args"] is JsonArray words)
+            {
+                foreach (var w in words) sink.Add(w!.GetValue<string>());
+            }
             if (n["inner"] is JsonArray inner)
                 foreach (var c in inner) Walk(c!.AsObject(), sink);
         }

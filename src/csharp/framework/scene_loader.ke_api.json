@@ -21,7 +21,7 @@
           "tags": [
             "drains"
           ],
-          "doc": "Loads the scene at instantiating every entity it declares. This is where a script factory that refused an entity is answered for.",
+          "doc": "Loads the scene at path, instantiating every entity it declares. This is where a script factory that refused an entity is answered for.",
           "return_doc": null,
           "params": [
             {
@@ -61,7 +61,7 @@
               "name": "ctx",
               "type": "void *",
               "tags": [],
-              "doc": "Forwarded to unchanged."
+              "doc": "Forwarded to factory unchanged."
             },
             {
               "name": "out_error",

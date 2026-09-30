@@ -136,7 +136,7 @@
           "name": "load_font",
           "returns": "ke_font_data *",
           "tags": [],
-          "doc": "Loads and bakes a glyph atlas at for the codepoint range [first_codepoint, first_codepoint \u002B codepoint_count). On success allocates a ke_font_data (atlas RGBA8 \u002B metrics) the caller releases via free_font.",
+          "doc": "Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint, first_codepoint \u002B codepoint_count). On success allocates a ke_font_data (atlas RGBA8 \u002B metrics) the caller releases via free_font.",
           "return_doc": null,
           "params": [
             {

@@ -119,7 +119,7 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
         KernelError.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, up, down, left, right, &err), err, "bind_key_quad");
     }
 
-    /// <summary>Runs one frame of binding evaluation against updating polling state and firing for each phase transition. A null updates polling only.</summary>
+    /// <summary>Runs one frame of binding evaluation against snapshot, updating polling state and firing on_event for each phase transition. A null on_event updates polling only.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void Evaluate(ke_input_snapshot* snapshot, InputActionEvent? onEvent)
     {

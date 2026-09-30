@@ -45,7 +45,7 @@ public unsafe partial class ImageLoader : IDisposable, INativeImageLoader
         _borrowed = borrowed;
     }
 
-    /// <summary>Loads an image from into a newly allocated ke_texture_data (RGBA8). The caller owns the result and must release it with free_image.</summary>
+    /// <summary>Loads an image from path into a newly allocated ke_texture_data (RGBA8). The caller owns the result and must release it with free_image.</summary>
     /// <param name="path">Image file path to decode.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_texture_data* LoadImage(string path)

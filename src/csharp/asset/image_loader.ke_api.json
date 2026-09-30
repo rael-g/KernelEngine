@@ -19,7 +19,7 @@
           "name": "load_image",
           "returns": "ke_texture_data *",
           "tags": [],
-          "doc": "Loads an image from into a newly allocated ke_texture_data (RGBA8). The caller owns the result and must release it with free_image.",
+          "doc": "Loads an image from path into a newly allocated ke_texture_data (RGBA8). The caller owns the result and must release it with free_image.",
           "return_doc": null,
           "params": [
             {

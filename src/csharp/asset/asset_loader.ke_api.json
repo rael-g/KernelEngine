@@ -230,7 +230,7 @@
           "name": "load_model",
           "returns": "ke_model_data *",
           "tags": [],
-          "doc": "Loads a 3D model from into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.",
+          "doc": "Loads a 3D model from path into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.",
           "return_doc": null,
           "params": [
             {
@@ -256,7 +256,7 @@
           "tags": [
             "releases:Model"
           ],
-          "doc": "Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null is ignored.",
+          "doc": "Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.",
           "return_doc": null,
           "params": [
             {
@@ -272,7 +272,7 @@
           "name": "load_model_async",
           "returns": "ke_task *",
           "tags": [],
-          "doc": "Asynchronously loads a 3D model, calling on a scheduler thread once the load has finished or failed.",
+          "doc": "Asynchronously loads a 3D model, calling on_complete on a scheduler thread once the load has finished or failed.",
           "return_doc": "A ke_task* that can be waited on.",
           "params": [
             {
@@ -303,7 +303,7 @@
               "name": "user_data",
               "type": "void *",
               "tags": [],
-              "doc": "Forwarded unchanged to"
+              "doc": "Forwarded unchanged to on_complete."
             }
           ],
           "receiver": "struct ke_asset_loader *"

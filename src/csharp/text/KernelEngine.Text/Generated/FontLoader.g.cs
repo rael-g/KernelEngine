@@ -45,7 +45,7 @@ public unsafe partial class FontLoader : IDisposable, INativeFontLoader
         _borrowed = borrowed;
     }
 
-    /// <summary>Loads and bakes a glyph atlas at for the codepoint range [first_codepoint, first_codepoint + codepoint_count). On success allocates a ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font.</summary>
+    /// <summary>Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint, first_codepoint + codepoint_count). On success allocates a ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font.</summary>
     /// <param name="path">TTF/OTF file path to decode.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_font_data* LoadFont(string path, float pixelSize, uint firstCodepoint, uint codepointCount, uint atlasSize)
