@@ -472,7 +472,6 @@ pub fn build(b: *std.Build) void {
         &materials_dirs,
     );
     const forward = ctx.plugin("ke_render_forward", "src/zig/render/forward", &.{
-        argF(b, "camera-src", camera_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),

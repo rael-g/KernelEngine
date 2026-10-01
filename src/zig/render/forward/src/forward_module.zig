@@ -4,7 +4,6 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
-const camera = @import("camera").Camera(c);
 
 const gpa = std.heap.c_allocator;
 
@@ -67,8 +66,7 @@ fn collectDraws(
 const ForwardModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    ndc: c.ke_ndc_convention = undefined,
-    view_space: *c.ke_view_space = undefined,
+    camera: *c.ke_render_camera = undefined,
     logger: ?*c.ke_logger = null,
 
     ibl_enabled: bool = true,
@@ -116,12 +114,6 @@ const ForwardModule = struct {
 const PASS_NAME = "forward";
 const DEFAULT_MATERIAL_SHADER = "standard";
 const MAX_SHADER_QUALIFIED = 128;
-
-fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
-    return zm.loadMat(&out.m);
-}
 
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
     const lg = logger orelse return;
@@ -195,11 +187,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     enc.*.copy_texture_to_texture.?(enc, hdr_tex, hdr_opaque_tex, bw, bh);
 
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
-    const view = cameraView(fwd.view_space, cam_wt);
+    var view_m: c.ke_mat4 = undefined;
+    fwd.camera.view.?(fwd.camera, &cam_wt.matrix, &view_m);
     var proj_m: c.ke_mat4 = undefined;
-    camera.projection(cam, aspect, fwd.view_space, &fwd.ndc, &proj_m);
-    const proj = zm.loadMat(&proj_m.m);
-    const view_proj = zm.mul(view, proj);
+    fwd.camera.projection.?(fwd.camera, cam, aspect, &proj_m);
+    const view = zm.loadMat(&view_m.m);
+    const view_proj = zm.mul(view, zm.loadMat(&proj_m.m));
 
     var sky_segc: usize = 0;
     const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
@@ -280,15 +273,14 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 }
 
 fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, logger: ?*c.ke_logger, ibl_enabled: bool,
+         render_camera: *c.ke_render_camera, logger: ?*c.ke_logger, ibl_enabled: bool,
          mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
          light_cid: c.ke_component_id, ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
          frame_cid: c.ke_component_id,
          out_error: [*c][*c]c.ke_error) bool {
     fwd.core = core;
     fwd.device = dev;
-    fwd.ndc = ndc;
-    fwd.view_space = view_space;
+    fwd.camera = render_camera;
     fwd.logger = logger;
     fwd.ibl_enabled = ibl_enabled;
     fwd.mesh_cid = mesh_cid;
@@ -487,7 +479,7 @@ fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
 }
 
 export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
+                                    device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                     logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
                                     mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, light_cid: c.ke_component_id,
@@ -498,11 +490,11 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
-    const vs = view_space orelse return empty;
+    const camera_api = render_camera orelse return empty;
 
     const fwd = gpa.create(ForwardModule) catch return empty;
     fwd.* = .{};
-    if (!setup(fwd, dev, core_ref, ndc, vs, logger, ibl_enabled != 0,
+    if (!setup(fwd, dev, core_ref, camera_api, logger, ibl_enabled != 0,
                mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
         gpa.destroy(fwd);

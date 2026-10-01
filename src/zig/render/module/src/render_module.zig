@@ -347,7 +347,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, ndc, vs, logger, @intFromBool(ibl_enabled),
+        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
                                                 mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
