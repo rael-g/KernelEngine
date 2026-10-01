@@ -24,8 +24,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint> cid;
 
-    [NativeTypeName("struct ke_render_pass_ctx *(*)(struct ke_render_service *, ke_system_ctx *, const ke_render_pass_io *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_system_ctx*, ke_render_pass_io*, ke_render_pass_ctx*> begin_pass;
+    [NativeTypeName("struct ke_render_pass_ctx *(*)(struct ke_render_service *, const ke_render_pass_io *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_pass_io*, ke_render_pass_ctx*> begin_pass;
 
     [NativeTypeName("void (*)(struct ke_render_service *, struct ke_render_pass_ctx *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_pass_ctx*, void> end_pass;

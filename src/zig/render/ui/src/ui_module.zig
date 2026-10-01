@@ -243,7 +243,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const label_segs = ctx.?.view.?(ctx, 1, &label_segc);
     if (quad_segc == 0 and label_segc == 0) return true;
 
-    const pc = core.*.begin_pass.?(core, ctx, &ui.io);
+    const pc = core.*.begin_pass.?(core, &ui.io);
     if (pc == null) return true;
 
     var vertex_count: u32 = 0;

@@ -96,7 +96,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
 
-    const pc = core.*.begin_pass.?(core, ctx, &gb.io);
+    const pc = core.*.begin_pass.?(core, &gb.io);
     if (pc == null) return true;
 
     if (cam_segc == 0 or cam_segs[0].count == 0) {

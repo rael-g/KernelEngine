@@ -177,7 +177,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
-    const pc = core.*.begin_pass.?(core, ctx, &cm.cull_io);
+    const pc = core.*.begin_pass.?(core, &cm.cull_io);
     if (pc == null) return true;
 
     var bw: u32 = 0;

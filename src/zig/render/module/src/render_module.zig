@@ -69,9 +69,9 @@ fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.k
     return true;
 }
 
-fn clearSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
-    const pc = st.core.ref.*.begin_pass.?(st.core.ref, ctx, &st.io);
+    const pc = st.core.ref.*.begin_pass.?(st.core.ref, &st.io);
     if (pc == null) return true;
     const rp = pc.*.begin_render.?(pc);
     rp.*.end.?(rp);

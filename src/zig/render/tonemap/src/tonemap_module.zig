@@ -35,12 +35,12 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const tm = moduleOf(user);
     const core = tm.core;
     const dev = tm.device;
 
-    const pc = core.*.begin_pass.?(core, ctx, &tm.io);
+    const pc = core.*.begin_pass.?(core, &tm.io);
     if (pc == null) return true;
 
     const hdr_view = pc.*.read.?(pc, "hdr");

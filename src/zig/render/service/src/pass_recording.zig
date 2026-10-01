@@ -2,8 +2,7 @@ const rc = @import("render_service.zig");
 const c = rc.c;
 const gpa = rc.gpa;
 
-pub fn beginPass(self: [*c]c.ke_render_service, sys: ?*c.ke_system_ctx, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
-    _ = sys;
+pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
     const st = rc.coreOf(self);
     if (!st.frame_live) return null;
     const ps = gpa.create(rc.PassState) catch return null;

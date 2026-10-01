@@ -97,7 +97,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     zm.storeMat(lvp_arr[0..], lvp);
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);
 
-    const pc = core.*.begin_pass.?(core, ctx, &sh.io);
+    const pc = core.*.begin_pass.?(core, &sh.io);
     if (pc == null) return true;
 
     const rp = pc.*.begin_render.?(pc);

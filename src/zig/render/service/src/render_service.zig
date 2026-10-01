@@ -420,7 +420,7 @@ test "a pass cannot be opened once the frame has no surface to draw into" {
     var core = deadFrame(&state);
 
     var io = std.mem.zeroes(c.ke_render_pass_io);
-    try testing.expect(pass_recording.beginPass(&core, null, &io) == null);
+    try testing.expect(pass_recording.beginPass(&core, &io) == null);
 }
 
 test "a frame with no surface ends without submitting or presenting anything" {
