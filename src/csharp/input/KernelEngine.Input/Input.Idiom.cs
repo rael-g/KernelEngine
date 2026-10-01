@@ -44,6 +44,9 @@ public sealed unsafe partial class Input : IInput
                 case InputEventKind.MouseButtonUp:
                     dst.Button = (MouseButton)n.code;
                     break;
+                case InputEventKind.MouseMove:
+                    dst.Position = new Vector2(n.x, n.y);
+                    break;
                 case InputEventKind.MouseScroll:
                     dst.Scroll = new Vector2(n.x, n.y);
                     break;

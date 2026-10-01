@@ -33,6 +33,7 @@ const State = struct {
     events: [EVENT_CAPACITY]c.ke_input_event,
     event_count: u32,
     event_overflow: bool,
+    move_event: u32,
 };
 
 fn stateOf(self: *c.ke_input) *State {
@@ -70,6 +71,7 @@ fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) b
 
     s.event_count = 0;
     s.event_overflow = false;
+    s.move_event = 0;
     return true;
 }
 
@@ -96,6 +98,14 @@ fn inputOnMouseMove(self: ?*c.ke_input, x: f32, y: f32) callconv(.c) void {
     s.mouse_dy += (y - s.mouse_y);
     s.mouse_x = x;
     s.mouse_y = y;
+    if (s.move_event != 0) {
+        const e = &s.events[s.move_event - 1];
+        e.x = x;
+        e.y = y;
+        return;
+    }
+    pushEvent(s, c.KE_INPUT_EVENT_MOUSE_MOVE, 0, x, y);
+    if (!s.event_overflow) s.move_event = s.event_count;
 }
 
 fn inputOnMouseButton(self: ?*c.ke_input, button: i32, action: i32) callconv(.c) void {
@@ -130,6 +140,7 @@ fn inputDrainEvents(self: ?*c.ke_input, out_buf: [*c]c.ke_input_event, capacity:
     if (n > 0) @memcpy(out_buf[0..n], s.events[0..n]);
     s.event_count = 0;
     s.event_overflow = false;
+    s.move_event = 0;
     return n;
 }
 
@@ -369,6 +380,48 @@ test "draining yields the key events in the order they arrived" {
     try testing.expectEqual(@as(u32, 2), count);
     try testing.expectEqual(@as(c.ke_input_event_kind, c.KE_INPUT_EVENT_KEY_DOWN), events[0].kind);
     try testing.expectEqual(@as(c.ke_input_event_kind, c.KE_INPUT_EVENT_KEY_UP), events[1].kind);
+}
+
+test "moving the cursor emits one move event carrying the latest position" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_mouse_move.?(h.ref, 10, 20);
+    h.ref.*.on_mouse_move.?(h.ref, 30, 40);
+    h.ref.*.on_mouse_move.?(h.ref, 50, 60);
+
+    var events = std.mem.zeroes([10]c.ke_input_event);
+    try testing.expectEqual(@as(u32, 1), h.ref.*.drain_events.?(h.ref, &events, 10));
+    try testing.expectEqual(@as(c.ke_input_event_kind, c.KE_INPUT_EVENT_MOUSE_MOVE), events[0].kind);
+    try testing.expectEqual(@as(f32, 50), events[0].x);
+    try testing.expectEqual(@as(f32, 60), events[0].y);
+}
+
+test "a move event keeps its place among the events that arrived around it" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
+    h.ref.*.on_mouse_move.?(h.ref, 1, 2);
+    h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_RELEASE);
+    h.ref.*.on_mouse_move.?(h.ref, 3, 4);
+
+    var events = std.mem.zeroes([10]c.ke_input_event);
+    try testing.expectEqual(@as(u32, 3), h.ref.*.drain_events.?(h.ref, &events, 10));
+    try testing.expectEqual(@as(c.ke_input_event_kind, c.KE_INPUT_EVENT_KEY_DOWN), events[0].kind);
+    try testing.expectEqual(@as(c.ke_input_event_kind, c.KE_INPUT_EVENT_MOUSE_MOVE), events[1].kind);
+    try testing.expectEqual(@as(f32, 3), events[1].x);
+    try testing.expectEqual(@as(c.ke_input_event_kind, c.KE_INPUT_EVENT_KEY_UP), events[2].kind);
+}
+
+test "a move after a drain starts a new move event" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    h.ref.*.on_mouse_move.?(h.ref, 1, 2);
+    var events = std.mem.zeroes([10]c.ke_input_event);
+    try testing.expectEqual(@as(u32, 1), h.ref.*.drain_events.?(h.ref, &events, 10));
+
+    h.ref.*.on_mouse_move.?(h.ref, 7, 8);
+    try testing.expectEqual(@as(u32, 1), h.ref.*.drain_events.?(h.ref, &events, 10));
+    try testing.expectEqual(@as(f32, 7), events[0].x);
 }
 
 test "draining never writes past the caller capacity" {

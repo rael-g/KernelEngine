@@ -8,9 +8,12 @@ namespace KernelEngine.Input;
 /// <list type="bullet">
 ///   <item><b>KeyDown / KeyUp</b>: <see cref="Key"/> is valid.</item>
 ///   <item><b>MouseButtonDown / MouseButtonUp</b>: <see cref="Button"/> is valid.</item>
+///   <item><b>MouseMove</b>: <see cref="Position"/> is the absolute cursor position. Moves
+///   within one poll are merged into a single event carrying the latest position, so a
+///   burst of motion cannot crowd key and button events out of the queue.</item>
 ///   <item><b>MouseScroll</b>: <see cref="Scroll"/> is the (dx, dy) wheel delta.</item>
 /// </list>
-/// <para>Mouse-cursor position is continuous state, not a discrete event. Read it via
+/// <para>The cursor's position and per-frame delta are also continuous state: read them via
 /// <c>IInputReader.MousePosition</c>/<c>MouseDelta</c> in <c>Update</c>.</para>
 /// Pass by <c>ref</c> in handlers; setting <see cref="Handled"/> (via <see cref="Consume"/>)
 /// stops further propagation through the tree.
@@ -21,6 +24,7 @@ public struct InputEvent
     public Key            Key;
     public MouseButton    Button;
     public Vector2        Scroll;
+    public Vector2        Position;
 
     /// <summary>When true, the tree dispatcher stops visiting further nodes for this event.</summary>
     public bool Handled;

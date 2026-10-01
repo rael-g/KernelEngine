@@ -19,11 +19,13 @@ The four **sinks** are how the window backend writes state: `on_key`, `on_mouse_
   (`input_default.zig:81-84`). A release sets `released` and clears `down` (`:84-87`). Key codes
   outside `0..KE_INPUT_MAX_KEYS` (512) are dropped (`:76`).
 - Mouse motion adds the distance from the previous position to `mouse_dx/dy` and stores the new
-  position (`:93-96`); scroll adds to `scroll_dx/dy` (`:118-119`). Mouse buttons follow the key rule
-  on a 32-bit mask (`:99-112`).
+  position (`:94-100`); scroll adds to `scroll_dx/dy`. Mouse buttons follow the key rule
+  on a 32-bit mask.
 - Every key and button transition and every scroll also appends to the event queue, up to 512
-  entries; a full queue drops the event and sets a flag no header exposes (`:14`, `:40-44`,
-  `grep -rn overflow src/c/input` prints nothing).
+  entries; a full queue drops the event and sets a flag no header exposes (`:16`, `:43-53`,
+  `grep -rn overflow src/c/input` prints nothing). Mouse motion appends a `KE_INPUT_EVENT_MOUSE_MOVE`
+  too, but only once per poll: later moves overwrite the position of that one queued event
+  (`:94-109`), so a burst of motion cannot fill the queue and starve key events.
 
 `update` is the frame boundary: it clears every `pressed` and `released` flag, the mouse and scroll
 deltas, the pressed and released button masks, and the event queue. It leaves `down`, the button
