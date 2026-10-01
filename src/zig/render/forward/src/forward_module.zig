@@ -4,6 +4,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
+const camera = @import("camera").Camera(c);
 
 const gpa = std.heap.c_allocator;
 
@@ -196,7 +197,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
     const view = cameraView(fwd.view_space, cam_wt);
     var proj_m: c.ke_mat4 = undefined;
-    c.ke_camera_projection(cam, aspect, fwd.view_space, &fwd.ndc, &proj_m);
+    camera.projection(cam, aspect, fwd.view_space, &fwd.ndc, &proj_m);
     const proj = zm.loadMat(&proj_m.m);
     const view_proj = zm.mul(view, proj);
 

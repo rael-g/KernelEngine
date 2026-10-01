@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_RENDER_HANDLES_H_
 
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -20,22 +19,6 @@ extern "C"
 
     /// The invalid handle.
 #define KE_HANDLE_NONE 0u
-
-    static inline uint32_t ke_handle_index(uint32_t bits)
-    {
-        return bits & KE_HANDLE_INDEX_MASK;
-    }
-
-    static inline uint32_t ke_handle_generation(uint32_t bits)
-    {
-        return (bits >> KE_HANDLE_INDEX_BITS) & KE_HANDLE_GENERATION_MASK;
-    }
-
-    static inline uint32_t ke_handle_make(uint32_t index, uint32_t generation)
-    {
-        return (index & KE_HANDLE_INDEX_MASK) |
-               ((generation & KE_HANDLE_GENERATION_MASK) << KE_HANDLE_INDEX_BITS);
-    }
 
     typedef struct ke_mesh_handle        { uint32_t bits; } ke_mesh_handle;
     typedef struct ke_texture_handle     { uint32_t bits; } ke_texture_handle;
@@ -57,13 +40,6 @@ extern "C"
 #define KE_CUBEMAP_NONE     ((ke_cubemap_handle)   { KE_HANDLE_NONE })
 #define KE_SHADOW_MAP_NONE  ((ke_shadow_map_handle){ KE_HANDLE_NONE })
 #endif
-
-    static inline bool ke_mesh_is_valid(ke_mesh_handle h)
-        { return h.bits != KE_HANDLE_NONE; }
-    static inline bool ke_texture_is_valid(ke_texture_handle h)
-        { return h.bits != KE_HANDLE_NONE; }
-    static inline bool ke_material_is_valid(ke_material_handle h)
-        { return h.bits != KE_HANDLE_NONE; }
 
 #ifdef __cplusplus
 }

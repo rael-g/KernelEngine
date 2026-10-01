@@ -6,6 +6,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c.zig").c;
+const component_fields = @import("component_fields").Fields(c);
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
@@ -374,7 +375,7 @@ fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_compon
     const slot = c.ecs_get_mut_id(s.world, @intCast(entity), @intCast(component));
     if (!already_had) {
         if (layoutOf(s, component)) |fields| {
-            c.ke_component_fields_seed_defaults(slot, fields.ptr, @intCast(fields.len));
+            component_fields.seedDefaults(slot, fields.ptr, @intCast(fields.len));
         }
     }
     return slot;

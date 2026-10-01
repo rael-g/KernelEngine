@@ -50,7 +50,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     defer resolver.free_font.?(resolver, d);
 
     const atlas = st.core.upload_texture.?(st.core, key.ptr, d.atlas_width, d.atlas_height, d.atlas_rgba, null);
-    if (!c.ke_texture_is_valid(atlas)) {
+    if (atlas.bits == c.KE_HANDLE_NONE) {
         reportUnresolved(st, path, "its glyph atlas could not be uploaded");
         return c.KE_UI_FONT_FAILED;
     }

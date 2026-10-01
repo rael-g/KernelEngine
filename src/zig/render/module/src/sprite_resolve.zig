@@ -55,7 +55,7 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
 
 fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle {
     if (sp.texture[0] == 0) return c.KE_TEXTURE_NONE;
-    if (c.ke_texture_is_valid(sp.texture_handle)) return sp.texture_handle;
+    if (sp.texture_handle.bits != c.KE_HANDLE_NONE) return sp.texture_handle;
 
     const resolver = st.resolver orelse return c.KE_TEXTURE_NONE;
     sp.texture_handle = resolver.resolve_texture_into.?(resolver, st.core, &sp.texture, null);

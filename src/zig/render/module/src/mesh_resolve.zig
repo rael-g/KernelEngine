@@ -133,7 +133,7 @@ fn uvSphere(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh
 
 fn resolveMesh(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void {
     const mc: *c.ke_mesh_component = @ptrCast(m);
-    if (c.ke_mesh_is_valid(mc.mesh) or mc.primitive[0] == 0) return;
+    if (mc.mesh.bits != c.KE_HANDLE_NONE or mc.primitive[0] == 0) return;
     const name = std.mem.sliceTo(&mc.primitive, 0);
     mc.mesh = if (std.mem.eql(u8, name, "quad"))
         quad(core, null)
@@ -149,7 +149,7 @@ fn resolveMesh(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void {
 
 fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void {
     const mc: *c.ke_mesh_component = @ptrCast(m);
-    if (c.ke_material_is_valid(mc.material)) return;
+    if (mc.material.bits != c.KE_HANDLE_NONE) return;
     const bc = mc.base_color;
 
     var key: cache_key.Key("inline", 8) = .{};

@@ -4,6 +4,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
+const handles = @import("handle").Handles(c);
 
 const gpa = std.heap.c_allocator;
 
@@ -75,7 +76,7 @@ fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_h
 
     for (ui.fonts, 0..) |f, i| {
         if (f.in_use and std.mem.eql(u8, f.key, key_slice))
-            return .{ .bits = c.ke_handle_make(@intCast(i), c.KE_HANDLE_GENERATION_FIRST) };
+            return .{ .bits = handles.make(@intCast(i), c.KE_HANDLE_GENERATION_FIRST) };
     }
 
     var slot: ?usize = null;
@@ -105,7 +106,7 @@ fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_h
         .ascent = ascent,
         .in_use = true,
     };
-    return .{ .bits = c.ke_handle_make(@intCast(idx), c.KE_HANDLE_GENERATION_FIRST) };
+    return .{ .bits = handles.make(@intCast(idx), c.KE_HANDLE_GENERATION_FIRST) };
 }
 
 fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_metrics {
@@ -119,7 +120,7 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     const l: *c.ke_label_component = @ptrCast(l_ptr);
     l.glyph_count = 0;
 
-    const font_idx = c.ke_handle_index(l.font_handle.bits);
+    const font_idx = handles.index(l.font_handle.bits);
     if (l.font_handle.bits == c.KE_HANDLE_NONE or font_idx >= MAX_UI_FONTS or !ui.fonts[font_idx].in_use)
         return;
     const font = &ui.fonts[font_idx];
@@ -161,7 +162,7 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
 }
 
 fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
-    const tex_idx = c.ke_handle_index(tex.bits);
+    const tex_idx = handles.index(tex.bits);
     if (ui.bind_group_cache[tex_idx] != c.KE_GPU_INVALID_HANDLE)
         return ui.bind_group_cache[tex_idx];
 
@@ -187,7 +188,7 @@ fn emitQuad(ui: *UiState, vertex_count: *u32, batch_count: *u32, tex_in: c.ke_te
             x0: f32, y0: f32, x1: f32, y1: f32, tu0: f32, tv0: f32, tu1: f32, tv1: f32, color: [4]f32) void {
     if (vertex_count.* + 6 > ui.vertices.len) return;
     const tex = if (tex_in.bits == c.KE_HANDLE_NONE) ui.core.*.white_texture.?(ui.core) else tex_in;
-    if (c.ke_handle_index(tex.bits) >= MAX_UI_TEXTURES) return;
+    if (handles.index(tex.bits) >= MAX_UI_TEXTURES) return;
 
     const need_new_batch = batch_count.* == 0 or ui.batches[batch_count.* - 1].texture.bits != tex.bits;
     if (need_new_batch) {
@@ -269,7 +270,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
             const l = labels[i];
             if (l.glyph_count == 0) continue;
 
-            const font_idx = c.ke_handle_index(l.font_handle.bits);
+            const font_idx = handles.index(l.font_handle.bits);
             const tex = ui.fonts[font_idx].atlas;
             const premul = [4]f32{ l.color[0] * l.color[3], l.color[1] * l.color[3], l.color[2] * l.color[3], l.color[3] };
 

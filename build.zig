@@ -56,6 +56,9 @@ pub fn build(b: *std.Build) void {
     const src_zig = b.pathJoin(&.{ root, "src/zig" });
     const kerror_src = b.pathJoin(&.{ src_zig, "common/kerror.zig" });
     const heap_src = b.pathJoin(&.{ src_zig, "common/heap.zig" });
+    const component_fields_src = b.pathJoin(&.{ src_zig, "common/component_fields.zig" });
+    const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
+    const camera_src = b.pathJoin(&.{ src_zig, "render/common/camera.zig" });
     const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
@@ -102,6 +105,7 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     const ecs_flecs = ctx.plugin("ke_ecs_flecs", "src/zig/ecs/flecs", &.{
+        argF(b, "component-fields-src", component_fields_src),
         argF(b, "heap-src", heap_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -144,6 +148,8 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     const framework = ctx.plugin("ke_framework", "src/zig/framework", &.{
+        argF(b, "component-fields-src", component_fields_src),
+        argF(b, "handle-src", handle_src),
         argF(b, "heap-src", heap_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
@@ -364,6 +370,7 @@ pub fn build(b: *std.Build) void {
     const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui = ctx.plugin("ke_render_ui", "src/zig/render/ui", &.{
+        argF(b, "handle-src", handle_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -407,6 +414,7 @@ pub fn build(b: *std.Build) void {
     const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
     const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
     const deferred_lighting = ctx.plugin("ke_render_deferred_lighting", "src/zig/render/deferred_lighting", &.{
+        argF(b, "camera-src", camera_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -433,6 +441,7 @@ pub fn build(b: *std.Build) void {
         &materials_dirs,
     );
     const gbuffer = ctx.plugin("ke_render_gbuffer", "src/zig/render/gbuffer", &.{
+        argF(b, "camera-src", camera_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -454,6 +463,7 @@ pub fn build(b: *std.Build) void {
         &materials_dirs,
     );
     const forward = ctx.plugin("ke_render_forward", "src/zig/render/forward", &.{
+        argF(b, "camera-src", camera_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),

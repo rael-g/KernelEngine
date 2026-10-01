@@ -85,12 +85,12 @@ int main(void)
 
     ke_mesh_handle cube_h = core->upload_mesh(core, "example:cube", cube, sizeof(cube), cube_idx,
                                               sizeof(cube_idx) / sizeof(cube_idx[0]), &err);
-    if (!ke_mesh_is_valid(cube_h)) die("upload_mesh", err);
+    if (cube_h.bits == KE_HANDLE_NONE) die("upload_mesh", err);
 
     const float orange[4] = { 0.85f, 0.35f, 0.2f, 1.0f };
     ke_material_handle mat = core->create_material(core, "example:orange", orange, 0.0f, 0.5f, KE_TEXTURE_NONE, KE_TEXTURE_NONE,
                                                     KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, NULL, &err);
-    if (!ke_material_is_valid(mat)) die("create_material", err);
+    if (mat.bits == KE_HANDLE_NONE) die("create_material", err);
 
     ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields), NULL);
     ke_component_id world_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_WORLD_TRANSFORM, sizeof(ke_world_transform_component), NULL, 0, NULL);

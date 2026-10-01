@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const handles = @import("handle").Handles(c);
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
@@ -439,12 +440,12 @@ fn vtResolveMaterialInto(
     var albedo = c.KE_TEXTURE_NONE;
     if (spec.albedo_path[0] != 0) {
         albedo = vtResolveTextureInto(self, core, @ptrCast(&spec.albedo_path), out_error);
-        if (!c.ke_texture_is_valid(albedo)) return c.KE_MATERIAL_NONE;
+        if (albedo.bits == c.KE_HANDLE_NONE) return c.KE_MATERIAL_NONE;
     }
     var normal = c.KE_TEXTURE_NONE;
     if (spec.normal_path[0] != 0) {
         normal = vtResolveTextureInto(self, core, @ptrCast(&spec.normal_path), out_error);
-        if (!c.ke_texture_is_valid(normal)) return c.KE_MATERIAL_NONE;
+        if (normal.bits == c.KE_HANDLE_NONE) return c.KE_MATERIAL_NONE;
     }
 
     return core.create_material.?(
@@ -1080,18 +1081,18 @@ test "the none handle of every render resource is all bits zero" {
     try testing.expectEqual(@as(u32, 0), c.KE_SHADOW_MAP_NONE.bits);
 
     const zeroed = std.mem.zeroes(c.ke_mesh_handle);
-    try testing.expect(!c.ke_mesh_is_valid(zeroed));
+    try testing.expectEqual(@as(u32, c.KE_HANDLE_NONE), zeroed.bits);
 }
 
 test "a live handle is never zero, not even at index zero" {
     for (0..8) |index| {
-        const bits = c.ke_handle_make(@intCast(index), c.KE_HANDLE_GENERATION_FIRST);
+        const bits = handles.make(@intCast(index), c.KE_HANDLE_GENERATION_FIRST);
         const h = c.ke_mesh_handle{ .bits = bits };
-        try testing.expect(c.ke_mesh_is_valid(h));
-        try testing.expectEqual(@as(u32, @intCast(index)), c.ke_handle_index(h.bits));
+        try testing.expect(h.bits != c.KE_HANDLE_NONE);
+        try testing.expectEqual(@as(u32, @intCast(index)), handles.index(h.bits));
         try testing.expectEqual(
             @as(u32, c.KE_HANDLE_GENERATION_FIRST),
-            c.ke_handle_generation(h.bits),
+            handles.generation(h.bits),
         );
     }
 }

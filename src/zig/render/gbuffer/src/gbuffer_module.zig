@@ -4,6 +4,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
+const camera = @import("camera").Camera(c);
 
 const gpa = std.heap.c_allocator;
 
@@ -122,7 +123,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 
     const view = cameraView(gb.view_space, cam_wt);
     var proj_m: c.ke_mat4 = undefined;
-    c.ke_camera_projection(cam, aspect, gb.view_space, &gb.ndc, &proj_m);
+    camera.projection(cam, aspect, gb.view_space, &gb.ndc, &proj_m);
     const proj = zm.loadMat(&proj_m.m);
     const view_proj = zm.mul(view, proj);
 
@@ -461,4 +462,58 @@ test "meshes are gathered across every segment the query returned" {
 
     var out: [8]Draw = undefined;
     try testing.expectEqual(@as(u32, 2), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
+}
+
+const ProjectionCall = struct { calls: u32 = 0, first: f32 = 0, second: f32 = 0, near: f32 = 0, far: f32 = 0 };
+var orthographic_call: ProjectionCall = .{};
+var perspective_call: ProjectionCall = .{};
+
+fn recordOrthographic(_: [*c]c.ke_view_space, width: f32, height: f32, near_plane: f32, far_plane: f32, _: [*c]const c.ke_ndc_convention, _: [*c]c.ke_mat4) callconv(.c) void {
+    orthographic_call = .{ .calls = orthographic_call.calls + 1, .first = width, .second = height, .near = near_plane, .far = far_plane };
+}
+
+fn recordPerspective(_: [*c]c.ke_view_space, fov_y: f32, aspect: f32, near_plane: f32, far_plane: f32, _: [*c]const c.ke_ndc_convention, _: [*c]c.ke_mat4) callconv(.c) void {
+    perspective_call = .{ .calls = perspective_call.calls + 1, .first = fov_y, .second = aspect, .near = near_plane, .far = far_plane };
+}
+
+fn projectWith(cam: c.ke_camera_component, aspect: f32) void {
+    orthographic_call = .{};
+    perspective_call = .{};
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    view_space.orthographic = &recordOrthographic;
+    view_space.perspective = &recordPerspective;
+    var clip = std.mem.zeroes(c.ke_ndc_convention);
+    var proj = std.mem.zeroes(c.ke_mat4);
+    camera.projection(&cam, aspect, &view_space, &clip, &proj);
+}
+
+test "an orthographic camera asks for a box twice its size tall and aspect times that wide" {
+    var cam = std.mem.zeroes(c.ke_camera_component);
+    cam.orthographic = 1;
+    cam.orthographic_size = 5;
+    cam.near_plane = 0.1;
+    cam.far_plane = 100;
+    projectWith(cam, 2);
+
+    try testing.expectEqual(@as(u32, 1), orthographic_call.calls);
+    try testing.expectEqual(@as(u32, 0), perspective_call.calls);
+    try testing.expectEqual(@as(f32, 20), orthographic_call.first);
+    try testing.expectEqual(@as(f32, 10), orthographic_call.second);
+    try testing.expectEqual(@as(f32, 0.1), orthographic_call.near);
+    try testing.expectEqual(@as(f32, 100), orthographic_call.far);
+}
+
+test "a perspective camera hands its field of view over in radians" {
+    var cam = std.mem.zeroes(c.ke_camera_component);
+    cam.fov = 90;
+    cam.near_plane = 0.5;
+    cam.far_plane = 50;
+    projectWith(cam, 1.5);
+
+    try testing.expectEqual(@as(u32, 0), orthographic_call.calls);
+    try testing.expectEqual(@as(u32, 1), perspective_call.calls);
+    try testing.expectApproxEqAbs(std.math.pi / 2.0, perspective_call.first, 1e-6);
+    try testing.expectEqual(@as(f32, 1.5), perspective_call.second);
+    try testing.expectEqual(@as(f32, 0.5), perspective_call.near);
+    try testing.expectEqual(@as(f32, 50), perspective_call.far);
 }
