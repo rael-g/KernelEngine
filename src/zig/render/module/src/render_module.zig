@@ -341,7 +341,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             gpa.destroy(st);
             return empty;
         }
-        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, ndc, vs, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
+        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, st.camera.ref, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.skybox.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
