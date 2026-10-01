@@ -58,7 +58,6 @@ pub fn build(b: *std.Build) void {
     const heap_src = b.pathJoin(&.{ src_zig, "common/heap.zig" });
     const component_fields_src = b.pathJoin(&.{ src_zig, "common/component_fields.zig" });
     const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
-    const camera_src = b.pathJoin(&.{ src_zig, "render/common/camera.zig" });
     const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
