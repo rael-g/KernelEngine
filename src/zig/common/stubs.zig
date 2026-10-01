@@ -233,9 +233,10 @@ pub fn Stubs(comptime c: type) type {
         pub const Runtime = struct {
             vtable: c.ke_runtime,
             registered: u32,
+            limit: u32,
 
             pub fn init(self: *Runtime) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_runtime), .registered = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_runtime), .registered = 0, .limit = std.math.maxInt(u32) };
                 self.vtable.handle = self;
                 self.vtable.register_system = &registerSystem;
             }
@@ -246,6 +247,7 @@ pub fn Stubs(comptime c: type) type {
 
             fn registerSystem(self: ?*c.ke_runtime, _: [*c]const c.ke_runtime_system_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
                 const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
+                if (rt.registered >= rt.limit) return 0;
                 rt.registered += 1;
                 return rt.registered;
             }

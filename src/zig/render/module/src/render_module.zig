@@ -88,7 +88,7 @@ fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
                queries: [*c]const c.ke_query_decl, query_count: u32,
                access: [*c]const c.ke_component_access, access_count: u32,
-               user: anytype, exec: ExecFn) void {
+               user: anytype, exec: ExecFn, out_error: [*c][*c]c.ke_error) bool {
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = name;
     params.phase = c.KE_PHASE_RENDER;
@@ -99,7 +99,7 @@ fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
     params.pinned_thread = 0;
     params.user_data = user;
     params.execute = exec;
-    _ = rt.register_system.?(rt, &params, null);
+    return rt.register_system.?(rt, &params, out_error) != 0;
 }
 
 export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.ke_render_service {
@@ -286,7 +286,10 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         mesh_resolve_params.pinned_thread = 0;
         mesh_resolve_params.user_data = st.core.ref;
         mesh_resolve_params.execute = mesh_resolve.system;
-        _ = rt.register_system.?(rt, &mesh_resolve_params, null);
+        if (rt.register_system.?(rt, &mesh_resolve_params, out_error) == 0) {
+            destroyModule(@ptrCast(st));
+            return empty;
+        }
 
         const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
         st.sprite_resolve_state = .{ .core = st.core.ref, .mesh_cid = mesh_cid, .resolver = asset_resolver };
@@ -304,10 +307,19 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         sprite_resolve_params.pinned_thread = 0;
         sprite_resolve_params.user_data = &st.sprite_resolve_state;
         sprite_resolve_params.execute = sprite_resolve.system;
-        _ = rt.register_system.?(rt, &sprite_resolve_params, null);
+        if (rt.register_system.?(rt, &sprite_resolve_params, out_error) == 0) {
+            destroyModule(@ptrCast(st));
+            return empty;
+        }
 
-        registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
-        registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
+        if (!registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys, out_error)) {
+            destroyModule(@ptrCast(st));
+            return empty;
+        }
+        if (!registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys, out_error)) {
+            destroyModule(@ptrCast(st));
+            return empty;
+        }
 
         st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, @intFromBool(shadow_enabled),
                                               mesh_cid, world_transform_cid, light_cid, st.frame_cid, shadow_params, out_error);
@@ -370,9 +382,15 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         label_resolve_params.pinned_thread = 0;
         label_resolve_params.user_data = &st.label_resolve_state;
         label_resolve_params.execute = label_resolve.system;
-        _ = rt.register_system.?(rt, &label_resolve_params, null);
+        if (rt.register_system.?(rt, &label_resolve_params, out_error) == 0) {
+            destroyModule(@ptrCast(st));
+            return empty;
+        }
 
-        registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
+        if (!registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys, out_error)) {
+            destroyModule(@ptrCast(st));
+            return empty;
+        }
     }
 
     return .{ .ref = @ptrCast(st), .destroy = destroyModule };
@@ -462,6 +480,29 @@ test "a render module that fails at any GPU resource it creates gives back every
         rig.dev.fallible_budget = budget;
         const h = rig.create();
         if (h.ref != null) h.destroy.?(h.ref);
+        try testing.expectEqual(@as(i64, 0), rig.dev.live);
+        try heap.expectNoLeaks();
+    }
+}
+
+test "a render module whose runtime refuses any one system registration fails the create and gives back what it had created" {
+    var full: Rig = undefined;
+    try full.init();
+    const h = full.create();
+    try testing.expect(h.ref != null);
+    const system_total = full.rt.registered;
+    h.destroy.?(h.ref);
+    full.deinit();
+    try testing.expect(system_total > 0);
+
+    var limit: u32 = 0;
+    while (limit < system_total) : (limit += 1) {
+        var rig: Rig = undefined;
+        try rig.init();
+        defer rig.deinit();
+        rig.rt.limit = limit;
+        const failed = rig.create();
+        try testing.expect(failed.ref == null);
         try testing.expectEqual(@as(i64, 0), rig.dev.live);
         try heap.expectNoLeaks();
     }

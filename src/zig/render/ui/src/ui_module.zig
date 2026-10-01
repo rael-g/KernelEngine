@@ -497,7 +497,11 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     params.pinned_thread = 0;
     params.user_data = ui;
     params.execute = system;
-    _ = rt.register_system.?(rt, &params, null);
+    if (rt.register_system.?(rt, &params, out_error) == 0) {
+        destroyState(ui);
+        gpa.destroy(ui);
+        return empty;
+    }
 
     ui.label_shape_queries[0].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE };
     ui.label_shape_queries[0].term_count = 1;
@@ -510,7 +514,11 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     shape_params.pinned_thread = 0;
     shape_params.user_data = ui;
     shape_params.execute = labelShapeSystem;
-    _ = rt.register_system.?(rt, &shape_params, null);
+    if (rt.register_system.?(rt, &shape_params, out_error) == 0) {
+        destroyState(ui);
+        gpa.destroy(ui);
+        return empty;
+    }
 
     return .{ .ref = @ptrCast(&ui.api), .destroy = destroyHandle };
 }
@@ -544,6 +552,23 @@ test "a ui pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const ndc = std.mem.zeroes(c.ke_ndc_convention);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a ui pass the runtime refuses to register releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 0;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
