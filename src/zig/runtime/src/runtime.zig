@@ -988,8 +988,8 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
             cFree(RegisteredSystem, @ptrCast(rs), 1);
         }
         cFree(?*RegisteredSystem, systems, h.state.system_capacity);
-        freePhaseScratch(h);
     }
+    freePhaseScratch(h);
     cFree(RuntimeHandle, @ptrCast(h), 1);
     heap.release();
 }
