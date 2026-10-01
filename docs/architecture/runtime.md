@@ -98,6 +98,37 @@ wave and no later phase starts (`runtime.h:86-90`).
 
 ## Modules
 
-A module is a pair of hooks registered with `register_module` (`runtime.h:68-81`): `on_load` runs
-before `register_module` returns and registers the module's components and systems; `on_unload`
-runs when the runtime is destroyed. A refused load fails the registration.
+A module is a pair of hooks registered with `register_module` (`runtime.h:68-81`): `on_load`
+registers the module's components and systems and runs **before `register_module` returns**
+(`runtime.zig:465`); `on_unload` runs when the runtime is destroyed. A call with no params, or with no
+`on_load`, is refused (`runtime.zig:437-441`).
+
+What the runtime keeps of a module is its `user_data` and its `on_unload` — not its name
+(`RegisteredModule`, `runtime.zig:392-395`). The record is stored **before** `on_load` runs
+(`:460-461`). When `on_load` returns false, the record is cleared, `register_module` returns `0`, and
+the refused module's `on_unload` never runs (`:465-468`; test `:1316`). Nothing
+removes a system, so systems that module registered before it refused stay registered.
+
+`runtimeDestroy` first joins a pending render task, then calls every `on_unload` in **reverse
+registration order**, on the calling thread, and only afterwards frees its system storage
+(`runtime.zig:952-964`; test `:1294`). Registration order is the order of the `register_module`
+calls; the managed layer decides that order ([managed-layer.md](managed-layer.md#load-order)).
+
+## What the runtime keeps from a system registration
+
+`register_system` copies the params struct shallowly (`rs.params = p.*`, `runtime.zig:510`). Two of
+its pointers are then replaced by the runtime's own storage, and one is not:
+
+- **queries**: when the system declares at least one, each declaration is copied into the system
+  record, and the access list is merged with the queries' terms into the runtime's own array
+  (`:519-562`); `access_list` then points into that record's merged array and `queries` is cleared (`:562-565`);
+- **access list with no queries**: the merge is inside the same branch, so a system that declares
+  no query keeps the **caller's** `access_list` pointer, and the wave builder reads it again every
+  time its phase runs (`:666-680`, `systemsConflict`, `:137-154`);
+- **name**: never copied. Each wave's context takes `rs.params.name` (`:714`), a failing body is
+  blamed by that pointer (`:637`), and `failWithType` stores it as the raised error's message without
+  copying (`:914`, `src/zig/common/kerror.zig:99-108`).
+
+The contract says what the name is for (`runtime.h:102`) and not how long it must stay valid, so
+what a caller must keep alive is read off the code above: the name for as long as the runtime can tick, and
+the access list likewise when the system has no query.
