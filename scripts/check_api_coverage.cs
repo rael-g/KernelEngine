@@ -25,6 +25,8 @@ var excluded = new Dictionary<string, string>
     ["render/shadow/shadow_create.h"] = "render pass factory, called only by render_module",
     ["render/skybox/skybox_create.h"] = "render pass factory, called only by render_module",
     ["render/tonemap/tonemap_create.h"] = "render pass factory, called only by render_module",
+    ["render/camera.h"] = "consumed only by render passes, no managed caller",
+    ["render/camera/camera_create.h"] = "created natively by render_module, no managed caller",
 };
 
 var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(rootDir, "scripts", "api_domains.json")))!.AsObject();

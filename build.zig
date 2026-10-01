@@ -312,6 +312,16 @@ pub fn build(b: *std.Build) void {
         argF(b, "kerror-src", kerror_src),
     }, &.{&common.step}, .has_tests);
 
+    const render_camera = ctx.plugin("ke_render_camera", "src/zig/render/camera", &.{
+        argF(b, "heap-src", heap_src),
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
+        argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
+        argF(b, "kerror-src", kerror_src),
+    }, &.{&common.step}, .has_tests);
+
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
 
@@ -546,7 +556,7 @@ pub fn build(b: *std.Build) void {
         configuration,     audio_module,           configuration_toml, tonemap,
         skybox,            ui,                     shadow,             cluster,
         deferred_lighting, gpu_device_webgpu,      gbuffer,            forward,
-        render_service,
+        render_service,    render_camera,
     };
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
     b.getInstallStep().dependOn(&wgpu_copy.step);

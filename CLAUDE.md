@@ -82,7 +82,7 @@ Contracts worth knowing by name:
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
-Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty plugins are declared in the root `build.zig`; `grep 'ctx.plugin("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
+Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty-one plugins are declared in the root `build.zig`; `grep 'ctx.plugin("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
 No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile (stb, miniaudio) come from vcpkg; tomlc99 is the one vendored library.
 
