@@ -499,6 +499,7 @@ fn destroy(self_in: ?*c.ke_ecs) callconv(.c) void {
     if (s.world) |w| _ = c.ecs_fini(w);
 
     heap.gpa.destroy(s);
+    heap.release();
 }
 
 export fn ke_ecs_flecs_create(
@@ -573,6 +574,7 @@ export fn ke_ecs_flecs_create(
     s.api.query_register = queryRegister;
     s.api.query_resolve = queryResolve;
 
+    heap.retain();
     return .{ .ref = &s.api, .destroy = destroy };
 }
 

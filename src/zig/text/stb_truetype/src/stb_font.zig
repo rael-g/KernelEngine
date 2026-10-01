@@ -31,6 +31,7 @@ fn destroy(self: ?*c.ke_font_loader) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(loader.handle));
     gpa.destroy(state);
     gpa.destroy(loader);
+    heap.release();
 }
 
 fn readFile(path: [*c]const u8) ?[]u8 {
@@ -205,6 +206,7 @@ export fn ke_font_loader_stb_create(
     loader.load_font = &loadFont;
     loader.free_font = &freeFont;
 
+    heap.retain();
     return .{ .ref = loader, .destroy = &destroy };
 }
 

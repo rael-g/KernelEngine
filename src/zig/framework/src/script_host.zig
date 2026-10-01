@@ -358,6 +358,7 @@ fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
     for (s.types[0..s.type_count]) |*t| t.entities.deinit(heap.gpa);
     heap.gpa.free(s.types);
     heap.gpa.destroy(s);
+    heap.release();
 }
 
 pub export fn ke_script_host_create(
@@ -424,6 +425,7 @@ pub export fn ke_script_host_create(
         .resolve = &resolve,
     };
 
+    heap.retain();
     return .{ .ref = &s.api, .destroy = &destroy };
 }
 

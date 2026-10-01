@@ -270,6 +270,7 @@ fn vtDestroy(self: ?*c.ke_resource_cache) callconv(.c) void {
     s.resources.deinit();
     s.paths.deinit();
     gpa.destroy(s);
+    heap.release();
 }
 
 export fn ke_resource_cache_create(params: [*c]const c.ke_resource_cache_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_resource_cache_handle {
@@ -307,6 +308,7 @@ export fn ke_resource_cache_create(params: [*c]const c.ke_resource_cache_params,
     s.api.cache_insert = &vtCacheInsert;
     s.api.cache_evict = &vtCacheEvict;
 
+    heap.retain();
     return .{ .ref = &s.api, .destroy = &vtDestroy };
 }
 

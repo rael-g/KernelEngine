@@ -389,6 +389,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
     const cm: *ClusterModule = @ptrCast(@alignCast(self orelse return));
     gpa.destroy(cm);
+    heap.release();
 }
 
 export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
@@ -426,5 +427,6 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);
 
+    heap.retain();
     return .{ .ref = @ptrCast(cm), .destroy = destroyHandle };
 }

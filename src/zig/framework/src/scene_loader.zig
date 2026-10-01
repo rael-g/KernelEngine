@@ -716,6 +716,7 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     const s = stateOf(self);
     s.arena.deinit();
     heap.gpa.destroy(s);
+    heap.release();
 }
 
 export fn ke_scene_loader_create(
@@ -753,6 +754,7 @@ export fn ke_scene_loader_create(
     s.api.load = vtLoad;
     s.api.register_script_factory = vtRegisterScriptFactory;
 
+    heap.retain();
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
 

@@ -64,6 +64,7 @@ fn audioDestroy(self: ?*c.ke_audio) callconv(.c) void {
     state.sounds.deinit();
     gpa.destroy(state);
     gpa.destroy(api);
+    heap.release();
 }
 
 fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_audio_sound {
@@ -220,6 +221,7 @@ export fn ke_audio_miniaudio_create(
     api.set_master_volume = &audioSetMasterVolume;
 
     logInfo(state.logger, "miniaudio backend initialized");
+    heap.retain();
     return .{ .ref = api, .destroy = &audioDestroy };
 }
 

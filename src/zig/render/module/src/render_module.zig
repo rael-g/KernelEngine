@@ -131,6 +131,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
         if (st.view_space.destroy) |d| d(st.view_space.ref);
     }
     gpa.destroy(st);
+    heap.release();
 }
 
 const empty = c.ke_render_module_handle{ .ref = null, .destroy = null };
@@ -386,5 +387,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
     }
 
+    heap.retain();
     return .{ .ref = @ptrCast(st), .destroy = destroyModule };
 }

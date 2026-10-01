@@ -253,6 +253,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
     const sh: *ShadowModule = @ptrCast(@alignCast(self orelse return));
     gpa.destroy(sh);
+    heap.release();
 }
 
 export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
@@ -289,5 +290,6 @@ export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
         _ = rt.register_system.?(rt, &sys_params, null);
     }
 
+    heap.retain();
     return .{ .ref = @ptrCast(sh), .destroy = destroyHandle };
 }

@@ -32,6 +32,7 @@ fn loggerDestroy(self: ?*c.ke_logger) callconv(.c) void {
     }
     gpa.destroy(s);
     gpa.destroy(logger);
+    heap.release();
 }
 
 fn loggerLog(self: ?*c.ke_logger, event: [*c]const c.ke_log_event) callconv(.c) void {
@@ -134,6 +135,7 @@ export fn ke_logger_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_logg
     logger.flush = &loggerFlush;
     logger.add_sink = &loggerAddSink;
 
+    heap.retain();
     return .{ .ref = logger, .destroy = &loggerDestroy };
 }
 

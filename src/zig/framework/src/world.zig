@@ -175,6 +175,7 @@ fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     const s = stateOf(self);
     if (s.apply_registry) |reg| heap.gpa.free(reg[0..s.apply_capacity]);
     heap.gpa.destroy(@as(*Block, @fieldParentPtr("state", s)));
+    heap.release();
 }
 
 fn registerBuiltin(
@@ -245,6 +246,7 @@ export fn ke_world_create(
         return null_handle;
     }
 
+    heap.retain();
     return .{ .ref = world, .destroy = worldDestroy };
 }
 

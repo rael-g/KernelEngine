@@ -456,6 +456,7 @@ fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
     const ui: *UiState = @ptrCast(@alignCast(self orelse return));
     destroyState(ui);
     gpa.destroy(ui);
+    heap.release();
 }
 
 export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*c.ke_render_service,
@@ -509,5 +510,6 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     shape_params.execute = labelShapeSystem;
     _ = rt.register_system.?(rt, &shape_params, null);
 
+    heap.retain();
     return .{ .ref = @ptrCast(&ui.api), .destroy = destroyHandle };
 }

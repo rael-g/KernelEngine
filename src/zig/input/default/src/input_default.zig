@@ -231,6 +231,7 @@ fn inputDestroy(self: ?*c.ke_input) callconv(.c) void {
     const api = self orelse return;
     gpa.destroy(stateOf(api));
     gpa.destroy(api);
+    heap.release();
 }
 
 export fn ke_input_create(log: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_handle {
@@ -266,6 +267,7 @@ export fn ke_input_create(log: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) cal
     api.on_mouse_button = &inputOnMouseButton;
     api.on_mouse_scroll = &inputOnMouseScroll;
 
+    heap.retain();
     return .{ .ref = api, .destroy = &inputDestroy };
 }
 

@@ -471,6 +471,7 @@ fn vtDestroy(self_in: ?*c.ke_asset_resolver) callconv(.c) void {
     const s = stateOf(self);
     if (s.project_root) |root| heap.gpa.free(root);
     heap.gpa.destroy(s);
+    heap.release();
 }
 
 export fn ke_asset_resolver_create(
@@ -508,6 +509,7 @@ export fn ke_asset_resolver_create(
     s.api.resolve_mesh_into = vtResolveMeshInto;
     s.api.resolve_material_into = vtResolveMaterialInto;
 
+    heap.retain();
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
 

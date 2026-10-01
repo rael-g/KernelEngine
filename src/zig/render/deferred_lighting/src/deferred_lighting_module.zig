@@ -368,6 +368,7 @@ fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
     if (dl.gbuf_bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, dl.gbuf_bind_group);
     gpa.destroy(dl);
+    heap.release();
 }
 
 export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
@@ -404,5 +405,6 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);
 
+    heap.retain();
     return .{ .ref = @ptrCast(dl), .destroy = destroyHandle };
 }

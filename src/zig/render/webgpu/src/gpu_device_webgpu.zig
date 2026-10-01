@@ -446,6 +446,7 @@ export fn ke_gpu_device_webgpu_create(
         return .{ .ref = null, .destroy = null };
     };
 
+    heap.retain();
     return .{ .ref = dev, .destroy = deviceDestroy };
 }
 
@@ -459,6 +460,7 @@ fn deviceDestroy(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     if (s.surface_ext) |ext| gpa.destroy(ext);
     gpa.destroy(s);
     gpa.destroy(ptr(dev));
+    heap.release();
 }
 
 fn adapterCallback(

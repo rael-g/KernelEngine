@@ -323,6 +323,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
     const gb: *GBufferModule = @ptrCast(@alignCast(self orelse return));
     gpa.destroy(gb);
+    heap.release();
 }
 
 export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
@@ -355,6 +356,7 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);
 
+    heap.retain();
     return .{ .ref = @ptrCast(gb), .destroy = destroyHandle };
 }
 

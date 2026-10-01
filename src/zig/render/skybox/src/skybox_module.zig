@@ -199,6 +199,7 @@ fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
     const sm: *SkyboxModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(sm);
     gpa.destroy(sm);
+    heap.release();
 }
 
 export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
@@ -231,5 +232,6 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);
 
+    heap.retain();
     return .{ .ref = @ptrCast(sm), .destroy = destroyHandle };
 }

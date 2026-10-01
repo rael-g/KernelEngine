@@ -52,5 +52,6 @@ export fn ke_window_glfw_create(
         return null_handle;
     }
 
+    heap.retain();
     return .{ .ref = core.toApi(), .destroy = core_mod.Core.destroyApi };
 }
