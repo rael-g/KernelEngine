@@ -61,8 +61,9 @@ pointer per term, in registration order, all aligned with the entity array; a ta
 `NULL` (`ke_ecs.h:18-29`; `ecs_flecs.zig:473`). Column pointers are plain memory that stays valid
 until the next structural change (`ke_ecs.h:22`).
 
-`query_resolve` stops filling at `max_segments` and reports how many it wrote; a caller whose
-array is smaller than the match count does not learn that (`ecs_flecs.zig:465-468`).
+`query_resolve` fills at most `max_segments` and reports how many segments the query matches; a
+count above `max_segments` tells the caller its array was too small, and the runtime fails the tick
+on it rather than running a system over a partial set.
 
 ## Reserving an id from a parallel body — how the plugin meets the contract
 

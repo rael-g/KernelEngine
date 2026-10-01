@@ -708,6 +708,10 @@ fn freePhaseScratch(h: *RuntimeHandle) void {
     h.state.phase_pinned = null;
 }
 
+fn segmentOverflow(rs: *const RegisteredSystem) PhaseFailure {
+    return .{ .type = E.typeOf(.out_of_memory), .system = rs.params.name };
+}
+
 fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
     if (h.state.system_count == 0) return .{};
 
@@ -750,6 +754,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
                         const dst = &rs.seg_storage.?[q * KE_MAX_SEGMENTS_PER_QUERY];
                         var cnt: usize = 0;
                         h.state.ecs.query_resolve.?(h.state.ecs, rs.query_ids[q], dst, KE_MAX_SEGMENTS_PER_QUERY, &cnt);
+                        if (cnt > KE_MAX_SEGMENTS_PER_QUERY) return segmentOverflow(rs);
                         rs.seg_counts[q] = cnt;
                     }
                 }
@@ -832,8 +837,8 @@ fn runtimePrepareSystems(h: *RuntimeHandle) void {
     h.state.systems_prepared = last;
 }
 
-fn runtimeExtractRenderState(h: *RuntimeHandle) void {
-    if (h.state.ecs.query_resolve == null) return;
+fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
+    if (h.state.ecs.query_resolve == null) return .{};
     var raw: [KE_MAX_SEGMENTS_PER_QUERY]c.ke_ecs_segment = undefined;
 
     for (0..h.state.system_count) |si| {
@@ -853,6 +858,7 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
 
             var raw_count: usize = 0;
             h.state.ecs.query_resolve.?(h.state.ecs, rs.query_ids[q], &raw, KE_MAX_SEGMENTS_PER_QUERY, &raw_count);
+            if (raw_count > KE_MAX_SEGMENTS_PER_QUERY) return segmentOverflow(rs);
 
             var total: usize = 0;
             for (0..raw_count) |s| total += raw[s].count;
@@ -867,12 +873,13 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
 
                     for (0..qd.term_count) |t| {
                         if (eq.col_elem_size[t] == 0) continue;
-                        const new_col = cAllocBytes(eq.col_elem_size[t] *% new_cap) orelse continue;
+                        const new_col = cAllocBytes(eq.col_elem_size[t] *% new_cap) orelse return segmentOverflow(rs);
                         if (eq.col_bufs[t]) |oldc| cFreeBytes(oldc, eq.col_elem_size[t] *% eq.capacity);
                         eq.col_bufs[t] = new_col;
                     }
                     eq.capacity = new_cap;
                 }
+                if (total > eq.capacity) return segmentOverflow(rs);
             }
 
             const cap = eq.capacity;
@@ -908,6 +915,7 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
             }
         }
     }
+    return .{};
 }
 
 fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
@@ -965,7 +973,11 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
         return false;
     }
 
-    runtimeExtractRenderState(h);
+    failure = runtimeExtractRenderState(h);
+    if (failure.type) |t| {
+        E.failWithType(out_error, t, failure.system orelse "render extraction failed", @src());
+        return false;
+    }
 
     if (h.state.render_job == null) {
         if (cAlloc(RenderJob, 1)) |rj| h.state.render_job = &rj[0];
@@ -1634,6 +1646,55 @@ test "the shutdown phase runs once when the runtime is destroyed, after every ti
 
     try testing.expectEqual(@as(usize, 3), log.count);
     try testing.expectEqual(@as(c_int, c.KE_PHASE_SHUTDOWN), log.seen[2]);
+}
+
+fn fakeQueryRegister(_: ?*c.ke_ecs, _: [*c]const c.ke_component_id, _: usize) callconv(.c) c.ke_query_id {
+    return 1;
+}
+
+fn fakeQueryResolveOverflowing(_: ?*c.ke_ecs, _: c.ke_query_id, out: [*c]c.ke_ecs_segment, max: usize, out_count: [*c]usize) callconv(.c) void {
+    for (0..max) |i| out[i] = std.mem.zeroes(c.ke_ecs_segment);
+    out_count.* = max + 8;
+}
+
+fn fakeComponentSize(_: ?*c.ke_ecs, _: c.ke_component_id) callconv(.c) usize {
+    return 4;
+}
+
+fn overflowingQueryRuntime(r: *InlineRuntime, phase: c_int) !void {
+    r.bare.ecs.query_register = @ptrCast(&fakeQueryRegister);
+    r.bare.ecs.query_resolve = @ptrCast(&fakeQueryResolveOverflowing);
+    r.bare.ecs.component_size = @ptrCast(&fakeComponentSize);
+    try r.init();
+
+    var q = std.mem.zeroes(c.ke_query_decl);
+    q.terms[0] = access(1, c.KE_ACCESS_READ);
+    q.term_count = 1;
+    var sys = systemParams("Fragmented", phase);
+    sys.execute = &noopBody;
+    sys.queries = &q;
+    sys.query_count = 1;
+    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+}
+
+test "a sim query matching more segments than the runtime holds fails the tick instead of dropping them" {
+    var r = InlineRuntime{};
+    try overflowingQueryRuntime(&r, c.KE_PHASE_UPDATE);
+    defer r.bare.deinit();
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!r.rt().tick.?(r.rt(), 0.001, &err));
+    try testing.expect(err != null);
+}
+
+test "a render query matching more segments than the runtime holds fails the tick instead of dropping them" {
+    var r = InlineRuntime{};
+    try overflowingQueryRuntime(&r, c.KE_PHASE_RENDER);
+    defer r.bare.deinit();
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!r.rt().tick.?(r.rt(), 0.001, &err));
+    try testing.expect(err != null);
 }
 
 test "creating a runtime without an ecs is refused" {

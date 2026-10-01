@@ -463,8 +463,8 @@ fn queryResolve(
     var it = c.ecs_query_iter(s.world, q);
     while (c.ecs_query_next(&it)) {
         if (seg >= max_segments) {
-            c.ecs_iter_fini(&it);
-            break;
+            seg += 1;
+            continue;
         }
         const dst = &out_segments[seg];
         dst.entities = @ptrCast(it.entities);
@@ -973,6 +973,38 @@ test "a component registered without a field table still attaches zeroed" {
     const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
 
     try testing.expectEqual(@as(u32, 0), v.layers);
+}
+
+test "resolving a query into too small an array reports every segment it matches" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const shared = e.component_register.?(handle.ref, "resolve_shared", 4, null, 0, null);
+    var extras: [4]c.ke_component_id = undefined;
+    const names = [_][*:0]const u8{ "resolve_x0", "resolve_x1", "resolve_x2", "resolve_x3" };
+    for (&extras, names) |*cid, name| cid.* = e.component_register.?(handle.ref, name, 4, null, 0, null);
+
+    for (0..16) |mask| {
+        const entity = e.entity_create.?(handle.ref);
+        try testing.expect(e.component_add.?(handle.ref, entity, shared) != null);
+        for (extras, 0..) |cid, bit| {
+            if ((mask >> @intCast(bit)) & 1 != 0) try testing.expect(e.component_add.?(handle.ref, entity, cid) != null);
+        }
+    }
+
+    const cids = [_]c.ke_component_id{shared};
+    const query = e.query_register.?(handle.ref, &cids, cids.len);
+    try testing.expect(query != c.KE_QUERY_INVALID);
+
+    var small: [4]c.ke_ecs_segment = undefined;
+    var count: usize = 0;
+    e.query_resolve.?(handle.ref, query, &small, small.len, &count);
+    try testing.expectEqual(@as(usize, 16), count);
+
+    var roomy: [32]c.ke_ecs_segment = undefined;
+    e.query_resolve.?(handle.ref, query, &roomy, roomy.len, &count);
+    try testing.expectEqual(@as(usize, 16), count);
 }
 
 test "creating, filling and destroying an ecs leaves no block allocated" {

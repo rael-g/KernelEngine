@@ -7,27 +7,27 @@
         {
           "name": "KE_PHASE_STARTUP",
           "value": 0,
-          "doc": null
+          "doc": "Runs once, at the start of the first tick, before any other phase."
         },
         {
           "name": "KE_PHASE_PRE_UPDATE",
           "value": 1,
-          "doc": null
+          "doc": "Runs once, at the start of the first tick, before any other phase."
         },
         {
           "name": "KE_PHASE_FIXED_UPDATE",
           "value": 2,
-          "doc": null
+          "doc": "Runs once, at the start of the first tick, before any other phase."
         },
         {
           "name": "KE_PHASE_UPDATE",
           "value": 3,
-          "doc": null
+          "doc": "Runs once, at the start of the first tick, before any other phase."
         },
         {
           "name": "KE_PHASE_POST_UPDATE",
           "value": 4,
-          "doc": null
+          "doc": "Runs once, at the start of the first tick, before any other phase."
         },
         {
           "name": "KE_PHASE_RENDER",
@@ -37,7 +37,7 @@
         {
           "name": "KE_PHASE_SHUTDOWN",
           "value": 6,
-          "doc": "Runs asynchronously against the next tick\u0027s sim phases. Its systems read extracted query results, never live storage, and may not mutate structure."
+          "doc": "Runs once when the runtime is destroyed, if a tick ever started it, after the pending render phase has finished and before any module unloads. Destroy cannot report a failure, so a body that fails here is not answered for."
         }
       ]
     },

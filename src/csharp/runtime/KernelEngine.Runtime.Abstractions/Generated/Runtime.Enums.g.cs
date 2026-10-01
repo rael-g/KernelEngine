@@ -6,14 +6,19 @@ namespace KernelEngine.Runtime;
 /// <summary>Mirrors <c>ke_phase</c>.</summary>
 public enum RuntimePhase
 {
+    /// <summary>Runs once, at the start of the first tick, before any other phase.</summary>
     Startup = 0,
+    /// <summary>Runs once, at the start of the first tick, before any other phase.</summary>
     PreUpdate = 1,
+    /// <summary>Runs once, at the start of the first tick, before any other phase.</summary>
     FixedUpdate = 2,
+    /// <summary>Runs once, at the start of the first tick, before any other phase.</summary>
     Update = 3,
+    /// <summary>Runs once, at the start of the first tick, before any other phase.</summary>
     PostUpdate = 4,
     /// <summary>Runs asynchronously against the next tick's sim phases. Its systems read extracted query results, never live storage, and may not mutate structure.</summary>
     Render = 5,
-    /// <summary>Runs asynchronously against the next tick's sim phases. Its systems read extracted query results, never live storage, and may not mutate structure.</summary>
+    /// <summary>Runs once when the runtime is destroyed, if a tick ever started it, after the pending render phase has finished and before any module unloads. Destroy cannot report a failure, so a body that fails here is not answered for.</summary>
     Shutdown = 6,
 }
 
