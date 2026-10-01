@@ -404,7 +404,16 @@ const RegisteredSystem = struct {
     extracted: [KE_MAX_QUERIES_PER_SYSTEM]ExtractedQuery,
     derived_access: [KE_MAX_QUERIES_PER_SYSTEM * MAX_TERMS]c.ke_component_access,
     derived_access_count: u32,
+    name_storage: ?[]u8,
+    access_storage: ?[]c.ke_component_access,
 };
+
+fn releaseSystem(rs: *RegisteredSystem) void {
+    if (rs.name_storage) |n| heap.gpa.free(n);
+    if (rs.access_storage) |a| heap.gpa.free(a);
+    if (rs.seg_storage) |ss| cFree(c.ke_ecs_segment, ss, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY);
+    cFree(RegisteredSystem, @ptrCast(rs), 1);
+}
 
 const RegisteredModule = struct {
     user_data: ?*anyopaque,
@@ -486,6 +495,25 @@ fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_
     return id;
 }
 
+fn mergeAccess(rs: *RegisteredSystem, want: c.ke_component_access) bool {
+    for (0..rs.derived_access_count) |d| {
+        if (rs.derived_access[d].cid == want.cid) {
+            rs.derived_access[d].access |= want.access;
+            return true;
+        }
+    }
+    if (rs.derived_access_count == rs.derived_access.len) return false;
+    rs.derived_access[rs.derived_access_count] = want;
+    rs.derived_access_count += 1;
+    return true;
+}
+
+fn refuseAccess(rs: *RegisteredSystem, out_error: [*c][*c]c.ke_error) c.ke_system_id {
+    releaseSystem(rs);
+    E.fail(out_error, .invalid_argument, "system declares more distinct components than it can track", @src());
+    return 0;
+}
+
 fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
     if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -500,6 +528,19 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
     if (in_phase >= h.state.max_systems_per_phase) {
         E.fail(out_error, .out_of_memory, "phase is at its max_systems_per_phase limit", @src());
         return 0;
+    }
+
+    if (p.*.query_count > KE_MAX_QUERIES_PER_SYSTEM) {
+        E.fail(out_error, .invalid_argument, "system declares more queries than a system can hold", @src());
+        return 0;
+    }
+    if (p.*.queries != null) {
+        for (0..p.*.query_count) |q| {
+            if (p.*.queries[q].term_count > MAX_TERMS) {
+                E.fail(out_error, .invalid_argument, "query declares more terms than a query can hold", @src());
+                return 0;
+            }
+        }
     }
 
     if (h.state.system_count == h.state.system_capacity) {
@@ -521,59 +562,42 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
         return 0;
     };
     const rs = &rs_mem[0];
-    h.state.systems.?[h.state.system_count] = rs;
-    h.state.system_count += 1;
-
     rs.params = p.*;
     rs.query_count = 0;
     rs.seg_storage = null;
     rs.derived_access_count = 0;
+    rs.name_storage = null;
+    rs.access_storage = null;
     @memset(std.mem.asBytes(&rs.extracted), 0);
 
+    if (p.*.name != null) {
+        const text = std.mem.span(p.*.name);
+        const copy = heap.gpa.alloc(u8, text.len + 1) catch {
+            releaseSystem(rs);
+            E.fail(out_error, .out_of_memory, "system name allocation failed", @src());
+            return 0;
+        };
+        @memcpy(copy[0..text.len], text);
+        copy[text.len] = 0;
+        rs.name_storage = copy;
+        rs.params.name = @ptrCast(copy.ptr);
+    }
+
     if (p.*.queries != null and p.*.query_count > 0) {
-        var qn = p.*.query_count;
-        if (qn > KE_MAX_QUERIES_PER_SYSTEM) qn = KE_MAX_QUERIES_PER_SYSTEM;
+        const qn = p.*.query_count;
 
         for (0..qn) |q| {
             const qd = &p.*.queries[q];
-            var tn = qd.term_count;
-            if (tn > MAX_TERMS) tn = MAX_TERMS;
-
             rs.query_decls[q] = qd.*;
-            rs.query_decls[q].term_count = tn;
             rs.query_ids[q] = c.KE_QUERY_INVALID;
-
-            for (0..tn) |t| {
-                var found = false;
-                for (0..rs.derived_access_count) |d| {
-                    if (rs.derived_access[d].cid == qd.terms[t].cid) {
-                        rs.derived_access[d].access |= qd.terms[t].access;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found and rs.derived_access_count < KE_MAX_QUERIES_PER_SYSTEM * MAX_TERMS) {
-                    rs.derived_access[rs.derived_access_count].cid = qd.terms[t].cid;
-                    rs.derived_access[rs.derived_access_count].access = qd.terms[t].access;
-                    rs.derived_access_count += 1;
-                }
+            for (0..qd.term_count) |t| {
+                if (!mergeAccess(rs, qd.terms[t])) return refuseAccess(rs, out_error);
             }
         }
         rs.query_count = qn;
 
         for (0..p.*.access_count) |i| {
-            var found = false;
-            for (0..rs.derived_access_count) |d| {
-                if (rs.derived_access[d].cid == p.*.access_list[i].cid) {
-                    rs.derived_access[d].access |= p.*.access_list[i].access;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found and rs.derived_access_count < KE_MAX_QUERIES_PER_SYSTEM * MAX_TERMS) {
-                rs.derived_access[rs.derived_access_count] = p.*.access_list[i];
-                rs.derived_access_count += 1;
-            }
+            if (!mergeAccess(rs, p.*.access_list[i])) return refuseAccess(rs, out_error);
         }
 
         rs.params.access_list = &rs.derived_access;
@@ -582,11 +606,23 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
         rs.params.query_count = 0;
 
         rs.seg_storage = cAlloc(c.ke_ecs_segment, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY) orelse {
-            h.state.system_count -= 1;
+            releaseSystem(rs);
             E.fail(out_error, .out_of_memory, "query segment storage allocation failed", @src());
             return 0;
         };
+    } else if (p.*.access_list != null and p.*.access_count > 0) {
+        const copy = heap.gpa.alloc(c.ke_component_access, p.*.access_count) catch {
+            releaseSystem(rs);
+            E.fail(out_error, .out_of_memory, "system access list allocation failed", @src());
+            return 0;
+        };
+        @memcpy(copy, p.*.access_list[0..p.*.access_count]);
+        rs.access_storage = copy;
+        rs.params.access_list = copy.ptr;
     }
+
+    h.state.systems.?[h.state.system_count] = rs;
+    h.state.system_count += 1;
 
     h.state.next_system_id += 1;
     return h.state.next_system_id;
@@ -977,7 +1013,6 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     if (h.state.systems) |systems| {
         for (0..h.state.system_count) |i| {
             const rs = systems[i].?;
-            if (rs.seg_storage) |ss| cFree(c.ke_ecs_segment, ss, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY);
             for (0..KE_MAX_QUERIES_PER_SYSTEM) |q| {
                 const eq = &rs.extracted[q];
                 if (eq.entities_buf) |eb| cFree(c.ke_entity, eb, eq.capacity);
@@ -985,7 +1020,7 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
                     if (eq.col_bufs[t]) |cb| cFreeBytes(cb, eq.col_elem_size[t] *% eq.capacity);
                 }
             }
-            cFree(RegisteredSystem, @ptrCast(rs), 1);
+            releaseSystem(rs);
         }
         cFree(?*RegisteredSystem, systems, h.state.system_capacity);
     }
@@ -1384,6 +1419,110 @@ test "registering a system with no execute body is refused" {
 
     const sys = systemParams("Bad", c.KE_PHASE_UPDATE);
     try testing.expectEqual(@as(c.ke_system_id, 0), f.rt().register_system.?(f.rt(), &sys, null));
+}
+
+const BareRuntime = struct {
+    ecs: c.ke_ecs = std.mem.zeroes(c.ke_ecs),
+    scheduler: c.ke_scheduler = std.mem.zeroes(c.ke_scheduler),
+    runtime_h: c.ke_runtime_handle = undefined,
+
+    fn init(self: *BareRuntime) !void {
+        var rp = std.mem.zeroes(c.ke_runtime_params);
+        self.runtime_h = ke_runtime_create(&self.ecs, &self.scheduler, &rp, null);
+        try testing.expect(self.runtime_h.ref != null);
+    }
+
+    fn deinit(self: *BareRuntime) void {
+        self.runtime_h.destroy.?(self.runtime_h.ref.?);
+    }
+
+    fn rt(self: *BareRuntime) *c.ke_runtime {
+        return @ptrCast(self.runtime_h.ref);
+    }
+
+    fn registered(self: *BareRuntime, index: usize) *RegisteredSystem {
+        return handleOf(self.rt()).state.systems.?[index].?;
+    }
+};
+
+fn noopBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    return true;
+}
+
+fn scribble(bytes: []u8) void {
+    @memset(bytes, 'X');
+}
+
+test "a registered system keeps its own copy of the name" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var name_buf = [_]u8{ 'M', 'o', 'v', 'e', 0 };
+    var sys = systemParams(@ptrCast(&name_buf), c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    try testing.expect(b.rt().register_system.?(b.rt(), &sys, null) != 0);
+    scribble(&name_buf);
+
+    try testing.expectEqualStrings("Move", std.mem.span(b.registered(0).params.name));
+}
+
+test "a registered system keeps its own copy of the access list when it declares no query" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var list = [_]c.ke_component_access{ access(7, c.KE_ACCESS_WRITE), access(9, c.KE_ACCESS_READ) };
+    var sys = systemParams("Plain", c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    sys.access_list = &list;
+    sys.access_count = list.len;
+    try testing.expect(b.rt().register_system.?(b.rt(), &sys, null) != 0);
+    scribble(std.mem.sliceAsBytes(&list));
+
+    const kept = b.registered(0).params;
+    try testing.expectEqual(@as(usize, 2), @as(usize, kept.access_count));
+    try testing.expectEqual(@as(c.ke_component_id, 7), kept.access_list[0].cid);
+    try testing.expectEqual(@as(c.ke_component_id, 9), kept.access_list[1].cid);
+}
+
+test "a system declaring more queries than a system can hold is refused instead of truncated" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var queries: [KE_MAX_QUERIES_PER_SYSTEM + 1]c.ke_query_decl = undefined;
+    for (&queries) |*q| {
+        q.* = std.mem.zeroes(c.ke_query_decl);
+        q.terms[0] = access(1, c.KE_ACCESS_READ);
+        q.term_count = 1;
+    }
+    var sys = systemParams("Greedy", c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    sys.queries = &queries;
+    sys.query_count = queries.len;
+
+    var err: [*c]c.ke_error = null;
+    try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
+    try testing.expect(err != null);
+    try testing.expectEqualStrings("ke.error.invalid_argument", std.mem.span(err.*.type.*.name));
+}
+
+test "a query declaring more terms than a query can hold is refused instead of truncated" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var q = std.mem.zeroes(c.ke_query_decl);
+    q.term_count = MAX_TERMS + 1;
+    var sys = systemParams("Wide", c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    sys.queries = &q;
+    sys.query_count = 1;
+
+    var err: [*c]c.ke_error = null;
+    try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
+    try testing.expect(err != null);
 }
 
 test "creating a runtime without an ecs is refused" {
