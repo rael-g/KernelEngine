@@ -93,6 +93,7 @@ jobs:
       - name: Gates
         if: runner.os == 'Linux'
         run: |
+          dotnet run scripts/check_abi_layout.cs
           dotnet run scripts/check_api_coverage.cs
           dotnet run scripts/check_api_drift.cs
           dotnet run scripts/check_component_fields.cs
