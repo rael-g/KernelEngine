@@ -261,7 +261,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         }
     }
 
-    /// <summary>Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Waits for a pending render phase first. Fails with not_supported while a tick runs.</summary>
+    /// <summary>Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Called while a tick or a render phase runs, from a body, the removal is queued and takes effect with the next tick; the id is not looked up until then.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void UnregisterSystem(ulong id)
     {

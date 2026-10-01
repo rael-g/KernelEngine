@@ -435,6 +435,11 @@ const RenderJob = struct {
     failure: PhaseFailure = .{},
 };
 
+const PendingRemoval = struct {
+    id: c.ke_system_id,
+    next: ?*PendingRemoval,
+};
+
 const RuntimeState = struct {
     ecs: *c.ke_ecs,
     scheduler: *c.ke_scheduler,
@@ -453,6 +458,7 @@ const RuntimeState = struct {
     in_tick: std.atomic.Value(bool),
     in_render: std.atomic.Value(bool),
     pending_systems: std.atomic.Value(?*RegisteredSystem),
+    pending_removals: std.atomic.Value(?*PendingRemoval),
     max_systems_per_phase: u32,
     phase_indices: ?[*]u32,
     phase_params: ?[*]c.ke_runtime_system_params,
@@ -665,7 +671,8 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
 
 fn applyPendingSystems(h: *RuntimeHandle) void {
     var stack = h.state.pending_systems.swap(null, .acq_rel);
-    if (stack == null) return;
+    var removals = h.state.pending_removals.swap(null, .acq_rel);
+    if (stack == null and removals == null) return;
     _ = runtimeJoinPendingRender(h);
     var reversed: ?*RegisteredSystem = null;
     while (stack) |rs| {
@@ -678,23 +685,22 @@ fn applyPendingSystems(h: *RuntimeHandle) void {
         rs.pending_next = null;
         if (!appendSystem(h, rs, null)) releaseSystem(rs);
     }
+
+    var reversed_removals: ?*PendingRemoval = null;
+    while (removals) |r| {
+        removals = r.next;
+        r.next = reversed_removals;
+        reversed_removals = r;
+    }
+    while (reversed_removals) |r| {
+        reversed_removals = r.next;
+        _ = removeSystemNow(h, r.id);
+        cFree(PendingRemoval, @ptrCast(r), 1);
+    }
 }
 
-fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    if (self == null or self.?.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
-    const h = handleOf(self.?);
-    if (h.state.in_tick.load(.acquire)) {
-        E.fail(out_error, .not_supported, "a system cannot be unregistered while a tick runs", @src());
-        return false;
-    }
-    _ = runtimeJoinPendingRender(h);
-    const systems = h.state.systems orelse {
-        E.fail(out_error, .not_found, "no system has that id", @src());
-        return false;
-    };
+fn removeSystemNow(h: *RuntimeHandle, id: c.ke_system_id) bool {
+    const systems = h.state.systems orelse return false;
     for (0..h.state.system_count) |i| {
         if (systems[i].?.id != id) continue;
         releaseSystem(systems[i].?);
@@ -704,6 +710,33 @@ fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: 
         if (i < h.state.systems_prepared) h.state.systems_prepared -= 1;
         return true;
     }
+    return false;
+}
+
+fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (self == null or self.?.handle == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const h = handleOf(self.?);
+    if (id == 0 or id > @atomicLoad(u64, &h.state.next_system_id, .monotonic)) {
+        E.fail(out_error, .not_found, "no system has that id", @src());
+        return false;
+    }
+    if (h.state.in_tick.load(.acquire) or h.state.in_render.load(.acquire)) {
+        const node = cAlloc(PendingRemoval, 1) orelse {
+            E.fail(out_error, .out_of_memory, "removal record allocation failed", @src());
+            return false;
+        };
+        node[0] = .{ .id = id, .next = null };
+        var head = h.state.pending_removals.load(.acquire);
+        while (true) {
+            node[0].next = head;
+            head = h.state.pending_removals.cmpxchgWeak(head, &node[0], .release, .acquire) orelse return true;
+        }
+    }
+    _ = runtimeJoinPendingRender(h);
+    if (removeSystemNow(h, id)) return true;
     E.fail(out_error, .not_found, "no system has that id", @src());
     return false;
 }
@@ -1131,6 +1164,11 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
 
     if (h.state.render_job) |rj| cFree(RenderJob, @ptrCast(rj), 1);
 
+    var stranded_removals = h.state.pending_removals.swap(null, .acq_rel);
+    while (stranded_removals) |r| {
+        stranded_removals = r.next;
+        cFree(PendingRemoval, @ptrCast(r), 1);
+    }
     var stranded = h.state.pending_systems.swap(null, .acq_rel);
     while (stranded) |rs| {
         stranded = rs.pending_next;
@@ -1834,7 +1872,8 @@ const MidTick = struct {
     rt: *c.ke_runtime,
     registered: bool = false,
     late_runs: u32 = 0,
-    unregister_refused: bool = false,
+    unregister_accepted: bool = false,
+    keep: bool = false,
     late_id: c.ke_system_id = 0,
 };
 
@@ -1852,11 +1891,11 @@ fn registeringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.k
     late.execute = &lateBody;
     late.user_data = m;
     m.late_id = m.rt.register_system.?(m.rt, &late, null);
-    m.unregister_refused = !m.rt.unregister_system.?(m.rt, m.late_id, null);
+    if (!m.keep) m.unregister_accepted = m.rt.unregister_system.?(m.rt, m.late_id, null);
     return true;
 }
 
-test "a system registered from a body mid-tick starts running on the next tick" {
+test "a system registered and unregistered by the same body never runs" {
     var r = InlineRuntime{};
     try r.init();
     defer r.bare.deinit();
@@ -1869,12 +1908,62 @@ test "a system registered from a body mid-tick starts running on the next tick" 
 
     try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
     try testing.expect(m.late_id != 0);
+    try testing.expect(m.unregister_accepted);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
     try testing.expectEqual(@as(u32, 0), m.late_runs);
-    try testing.expect(m.unregister_refused);
+}
+
+test "a system registered from a body mid-tick starts running on the next tick" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var m = MidTick{ .rt = r.rt(), .keep = true };
+    var first = systemParams("Registers", c.KE_PHASE_UPDATE);
+    first.execute = &registeringBody;
+    first.user_data = &m;
+    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(m.late_id != 0);
+    try testing.expectEqual(@as(u32, 0), m.late_runs);
 
     try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
     try testing.expectEqual(@as(u32, 1), m.late_runs);
     try testing.expectEqual(m.late_id, r.rt().last_system.?(r.rt()));
+}
+
+fn unregisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const m: *MidTick = @ptrCast(@alignCast(ud.?));
+    if (m.registered) return true;
+    m.registered = true;
+    m.unregister_accepted = m.rt.unregister_system.?(m.rt, m.late_id, null);
+    return true;
+}
+
+test "a system unregistered from a body stops running from the next tick, and its removal is not lost" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var m = MidTick{ .rt = r.rt() };
+    var late = systemParams("Doomed", c.KE_PHASE_PRE_UPDATE);
+    late.execute = &lateBody;
+    late.user_data = &m;
+    m.late_id = r.rt().register_system.?(r.rt(), &late, null);
+    var killer = systemParams("Killer", c.KE_PHASE_UPDATE);
+    killer.execute = &unregisteringBody;
+    killer.user_data = &m;
+    try testing.expect(r.rt().register_system.?(r.rt(), &killer, null) != 0);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 1), m.late_runs);
+    try testing.expect(m.unregister_accepted);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 1), m.late_runs);
 }
 
 fn renderRegisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
