@@ -51,23 +51,34 @@ when `pinned_thread` is non-zero (`runWaveBody`, `runtime.zig:603-611`). The tic
 for every task in the wave (`runtime.zig:613-624`).
 
 A system marked `per_entity` is run as several concurrent slices of its entity set
-(`sliceCountFor`, `runtime.zig:736`); each slice learns its share from `ke_system_ctx_slice`
-(`runtime.zig:316`). A pinned system is never sliced.
+(`sliceCountFor`, `runtime.zig:736`); each slice learns its share from the `slice` slot of its `ke_system_ctx`
+(`ctxSlice`, `runtime.zig:247`). A pinned system is never sliced.
 
 ## Structural change — the defer queue
 
 A system body reads component memory only through its `ke_system_ctx`
-(`src/c/runtime/kernel_engine/runtime/system_ctx.h:31-45`). It cannot add or remove an entity or
-component directly: `spawn`, `attach`, `detach`, `despawn` and `defer` append to a queue owned by
-that body's own call (`runtime.zig:246-314`), and the queue is applied after the wave's barrier
-(`deferFlush`, `runtime.zig:324`, called at `runtime.zig:726`). Nothing one body queued is visible
-to a sibling in the same wave.
+(`src/c/runtime/kernel_engine/runtime/system_ctx.h`), whose `view` and `slice` slots hand it the
+segments of its queries and its share of them (`runtime.zig:200`, `runtime.zig:247`). It cannot add
+or remove an entity or component directly: the context carries a `ke_ecs_commands`
+(`src/c/ecs/kernel_engine/ecs/commands.h`), and `spawn`, `attach`, `detach`, `despawn` and `defer`
+record into a queue owned by that body's own call (`commandsSpawn` and its siblings,
+`runtime.zig:274-345`). The queue is applied after the wave's barrier (`deferFlush`,
+`runtime.zig:355`, called at `runtime.zig:758`). Nothing one body queued is visible to a sibling in
+the same wave.
+
+`ke_ecs_commands` has one meaning wherever it is used: it records, and the queue's owner applies.
+A caller that needs a change visible at once uses `ke_ecs`, which mutates immediately; there is no
+immediate flavour of the queue. `ke_scene_tree` follows the same split with `create_node` and
+`destroy_node` (immediate) beside `create_node_deferred` and `destroy_node_deferred`, which take the
+queue.
 
 `spawn` returns the new entity's id at once, so the body can attach to it in the same call; the
-entity enters the world at the barrier (`runtime.zig:262-275`).
+entity enters the world at the barrier (`runtime.zig:274`). `attach` refuses a payload whose size
+differs from the component's registered size, with a `ke_error`, when it is recorded.
 
-The render phase has no queue: `allow_defer` is false there (`runtime.zig:715`), the body's queue
-pointer stays null (`runtime.zig:585`), and each structural operation returns its failure sentinel.
+The render phase has no queue: `allow_defer` is false there (`runtime.zig:747`), the body's queue
+pointer stays null (`runtime.zig:617`), and every operation on its `ke_ecs_commands` fails with
+`not_supported` (`recordTarget`, `runtime.zig:253`).
 
 ## Sim and render — how they are decoupled
 

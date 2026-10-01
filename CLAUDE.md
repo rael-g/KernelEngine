@@ -75,7 +75,7 @@ Contracts worth knowing by name:
 - `ke_logger` / `ke_logger_sink` — pluggable logging
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
 - `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
-- `ke_system_ctx` — the only doorway to component memory inside a system body
+- `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
 - `ke_scheduler` — the single shared worker pool every parallel subsystem routes through
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup

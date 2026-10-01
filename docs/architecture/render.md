@@ -9,16 +9,16 @@ and a render resource is a component id.
 | part | what it is | where |
 |---|---|---|
 | GPU device | the device, resource and command contract; one implementation, WebGPU | `src/c/render/kernel_engine/render/gpu/gpu_device.h`; plugin `ke_gpu_device_webgpu` (`build.zig:280`) |
-| render service | resources by name, pass recording contexts, meshes, textures, materials, pipeline cache, frame lifecycle | `.../render/service/render_service.h:65`; `src/zig/render/service/` |
+| render service | resources by name, pass recording contexts, meshes, textures, materials, pipeline cache, frame lifecycle | `.../render/service/render_service.h:61`; `src/zig/render/service/` |
 | pass plugins | one plugin per pass: shadow, cluster, gbuffer, deferred lighting, skybox, forward, tonemap, UI | `src/zig/render/<pass>/` |
 | render module | composes the passes and registers the frame-edge systems | `src/zig/render/module/src/render_module.zig` |
 
 ## A resource is a component id
 
 `declare` allocates a transient GPU resource under a name and returns **the tag-component id to put
-in a pass's access list** (`render_service.h:69-72`). `import_texture`, `import_buffer`,
+in a pass's access list** (`render_service.h:65-68`). `import_texture`, `import_buffer`,
 `import_bind_group` and `import_tag` do the same for something owned elsewhere or for an ordering
-dependency that carries no data (`render_service.h:73-90`). `cid(name)` looks one up (`:91-92`).
+dependency that carries no data (`render_service.h:69-86`). `cid(name)` looks one up (`:87-88`).
 
 So "pass B reads what pass A writes" is written as the runtime already understands access: A lists
 the resource's cid with `KE_ACCESS_WRITE`, B with `KE_ACCESS_READ`.
@@ -31,9 +31,9 @@ reads and writes. The tonemap pass is the smallest example: it reads `hdr`, writ
 (`src/zig/render/tonemap/src/tonemap_module.zig:127-130`) and registers as `render.tonemap` in the
 render phase (`tonemap_module.zig:149-172`).
 
-Inside its body a pass opens a recording context with `begin_pass(sys, io)` and closes it with
-`end_pass` (`render_service.h:94-100`). `ke_render_pass_io` names the pass's reads and writes and the
-command slot it records into (`render_service.h:51-63`). The context resolves those names to views,
+Inside its body a pass opens a recording context with `begin_pass(io)` and closes it with
+`end_pass` (`render_service.h:91-94`). `ke_render_pass_io` names the pass's reads and writes and the
+command slot it records into (`render_service.h:47-59`). The context resolves those names to views,
 and offers a render pass, a compute pass and the raw encoder
 (`src/c/render/kernel_engine/render/service/pass_context.h:15-28`).
 
@@ -50,9 +50,9 @@ and offers a render pass, a compute pass and the raw encoder
 | `render.end_frame` | read | write |
 
 `begin_frame` acquires the backbuffer and clears the per-pass command slots
-(`render_service.h:102-104`; `src/zig/render/service/src/frame_lifecycle.zig:4-26`). `end_frame`
+(`render_service.h:96-98`; `src/zig/render/service/src/frame_lifecycle.zig:4-26`). `end_frame`
 flushes the queued buffer uploads, finishes every recorded slot, submits them in one call and
-presents (`render_service.h:105-106`; `frame_lifecycle.zig:29-90`).
+presents (`render_service.h:99-100`; `frame_lifecycle.zig:29-90`).
 
 ## Two orders, which are not the same order
 

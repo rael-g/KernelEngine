@@ -48,7 +48,7 @@ The shadow pass does not use materials: its own shader reads only the position a
 ## What exists at runtime
 
 `create_material` registers one material and returns a handle
-(`render_service.h:137-147`; `asset_upload.zig:179-250`):
+(`render_service.h:131-141`; `asset_upload.zig:179-250`):
 
 - `key` is required and dedups: a key already cached returns the existing handle.
 - `shader` is the authored material's name; null or empty selects `standard`, and a name of 64 bytes or

@@ -1,7 +1,7 @@
 # What happens when a pass asks for a pipeline that has not been compiled yet?
 
 It gets a placeholder immediately, and the real pipeline replaces it on a later call. A pass never
-waits for a shader compile. The service's `get_or_create_pipeline` (`render_service.h:197-201`) is the
+waits for a shader compile. The service's `get_or_create_pipeline` (`render_service.h:191-195`) is the
 policy layer; the device's `create_render_pipeline_async` is the primitive underneath it
 ([gpu-device.md](gpu-device.md#pipelines-compile-off-the-callers-thread)).
 
