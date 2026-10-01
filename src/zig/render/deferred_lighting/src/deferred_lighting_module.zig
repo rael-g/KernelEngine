@@ -4,7 +4,6 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
-const camera = @import("camera").Camera(c);
 
 const gpa = std.heap.c_allocator;
 
@@ -22,8 +21,7 @@ const DeferredFrame = extern struct {
 const DeferredLightingModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    ndc: c.ke_ndc_convention = undefined,
-    view_space: *c.ke_view_space = undefined,
+    camera: *c.ke_render_camera = undefined,
     logger: ?*c.ke_logger = null,
     ibl_enabled: bool = true,
 
@@ -50,12 +48,6 @@ const DeferredLightingModule = struct {
     queries: [4]c.ke_query_decl = undefined,
     access_count: u32 = 0,
 };
-
-fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
-    return zm.loadMat(&out.m);
-}
 
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
     const lg = logger orelse return;
@@ -125,11 +117,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const view = cameraView(dl.view_space, cam_wt);
+    var view_m: c.ke_mat4 = undefined;
+    dl.camera.view.?(dl.camera, &cam_wt.matrix, &view_m);
     var proj_m: c.ke_mat4 = undefined;
-    camera.projection(cam, aspect, dl.view_space, &dl.ndc, &proj_m);
-    const proj = zm.loadMat(&proj_m.m);
-    const view_proj = zm.mul(view, proj);
+    dl.camera.projection.?(dl.camera, cam, aspect, &proj_m);
+    const view = zm.loadMat(&view_m.m);
+    const view_proj = zm.mul(view, zm.loadMat(&proj_m.m));
     const inv_vp = zm.inverse(view_proj);
 
     var sky_segc: usize = 0;
@@ -211,14 +204,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 }
 
 fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, logger: ?*c.ke_logger, ibl_enabled: bool,
+         render_camera: *c.ke_render_camera, logger: ?*c.ke_logger, ibl_enabled: bool,
          camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
          ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
          out_error: [*c][*c]c.ke_error) bool {
     dl.core = core;
     dl.device = dev;
-    dl.ndc = ndc;
-    dl.view_space = view_space;
+    dl.camera = render_camera;
     dl.logger = logger;
     dl.ibl_enabled = ibl_enabled;
     dl.camera_cid = camera_cid;
@@ -378,7 +370,7 @@ fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
 }
 
 export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                              device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
+                                              device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                               logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
                                               camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                               light_cid: c.ke_component_id, ambient_cid: c.ke_component_id,
@@ -388,11 +380,11 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
-    const vs = view_space orelse return empty;
+    const camera_api = render_camera orelse return empty;
 
     const dl = gpa.create(DeferredLightingModule) catch return empty;
     dl.* = .{};
-    if (!setup(dl, dev, core_ref, ndc, vs, logger, ibl_enabled != 0,
+    if (!setup(dl, dev, core_ref, camera_api, logger, ibl_enabled != 0,
                camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
         gpa.destroy(dl);

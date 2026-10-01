@@ -334,7 +334,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return empty;
         }
 
-        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, ndc, vs, logger, @intFromBool(ibl_enabled),
+        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
                                                             camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
