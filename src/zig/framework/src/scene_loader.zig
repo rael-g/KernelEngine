@@ -44,6 +44,7 @@ const State = struct {
     script_ctx: ?*anyopaque,
 
     arena: Arena,
+    created: std.ArrayList(c.ke_entity),
 };
 
 fn stateOf(self: *c.ke_scene_loader) *State {
@@ -571,6 +572,11 @@ fn processEntity(
         E.fail(out_error, .out_of_memory, "failed to create node", @src());
         return false;
     }
+    s.created.append(heap.gpa, entity) catch {
+        _ = tree.destroy_node.?(tree, entity, null);
+        E.fail(out_error, .out_of_memory, "failed to record the node it created", @src());
+        return false;
+    };
 
     if (!applyComponentBlocks(s, entity, args.entity_tbl, out_error)) return false;
     if (args.override_outer) |outer| {
@@ -691,7 +697,21 @@ fn vtLoad(
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
-    return loadSceneRecursive(stateOf(self), path, c.KE_ENTITY_INVALID, null, null, null, out_error);
+    const s = stateOf(self);
+    s.created.clearRetainingCapacity();
+    if (loadSceneRecursive(s, path, c.KE_ENTITY_INVALID, null, null, null, out_error)) return true;
+    discardCreated(s);
+    return false;
+}
+
+fn discardCreated(s: *State) void {
+    const tree = treeOf(s.world) orelse return;
+    var i = s.created.items.len;
+    while (i > 0) {
+        i -= 1;
+        _ = tree.destroy_node.?(tree, s.created.items[i], null);
+    }
+    s.created.clearRetainingCapacity();
 }
 
 fn vtRegisterScriptFactory(
@@ -718,6 +738,7 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
+    s.created.deinit(heap.gpa);
     s.arena.deinit();
     heap.gpa.destroy(s);
 }
@@ -744,6 +765,7 @@ export fn ke_scene_loader_create(
         .script_factory = null,
         .script_ctx = null,
         .arena = .init(),
+        .created = .empty,
     };
 
     if (project_root != null) {
@@ -2065,6 +2087,32 @@ test "a value of the wrong type for a known field fails the load instead of bein
     try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
     try testing.expect(err != null);
     try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "fov") != null);
+}
+
+test "a scene that fails to load leaves none of the entities it had already created" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "First"
+        \\[[entity]]
+        \\name = "Second"
+        \\parent = "First"
+        \\[[entity]]
+        \\name = "Third"
+        \\[entity.nobody_registered_this]
+        \\x = 1
+        \\
+    );
+
+    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("First"));
+    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("First/Second"));
+    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Third"));
 }
 
 test "a loader is never created without a world" {
