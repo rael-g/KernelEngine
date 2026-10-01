@@ -9,12 +9,6 @@ namespace KernelEngine.Scheduler.Enki;
 /// scheduler internally; consumers register it via
 /// <c>services.Add&lt;IScheduler, EnkiScheduler&gt;()</c>.
 /// </summary>
-/// <remarks>
-/// Inherits from <see cref="KernelEngine.Scheduler.Scheduler"/> so all
-/// existing managed APIs (DispatchKernelTask, async Task overloads) stay
-/// available without duplication. The native lifecycle is owned by this
-/// instance — destroy happens in the inherited Dispose.
-/// </remarks>
 public sealed unsafe class EnkiScheduler : KernelEngine.Scheduler.Scheduler
 {
     public EnkiScheduler() : base(CreateNative())

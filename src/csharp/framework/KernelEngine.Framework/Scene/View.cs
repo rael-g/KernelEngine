@@ -7,12 +7,6 @@ namespace KernelEngine.Framework;
 /// The funnel through which a <see cref="Node"/>'s per-frame logic observes
 /// and mutates the world. Passed by ref to <see cref="Node.OnUpdate"/>.
 /// </summary>
-/// <remarks>
-/// A <c>ref struct</c> by design: it cannot be boxed, captured in a closure,
-/// stored in a field, or escape the stack frame of the method that received it.
-/// This is the structural guarantee that script-side code cannot smuggle world
-/// access past the engine's safety rules.
-/// </remarks>
 public readonly ref struct View
 {
     /// <summary>Time since the previous tick, in seconds.</summary>

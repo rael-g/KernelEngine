@@ -17,12 +17,6 @@ public abstract class Node
     /// <summary>
     /// The world that owns this node. Null before AddNode.
     /// </summary>
-    /// <remarks>
-    /// Not part of a node's surface on purpose. Handing a node the whole world so
-    /// it can create one child is granting access to everything to use almost
-    /// nothing; a node that wants a child says so with <see cref="AddChild{T}"/>,
-    /// and a node that wants to give someone else a child asks that node for it.
-    /// </remarks>
     private ScriptHost? ScriptHost { get; set; }
 
     /// <summary>
@@ -61,10 +55,6 @@ public abstract class Node
     /// resolves each component id and seeds the values authored before binding.
     /// Overridden by <c>NodePropertyGenerator</c>; base is a no-op.
     /// </summary>
-    /// <remarks>
-    /// Separate from <see cref="OnBind"/> so the generator and the node's own author
-    /// are never competing for the same method — a node that needs both keeps both.
-    /// </remarks>
     protected internal virtual void GeneratedBind(ScriptHost scriptHost) { }
 
     /// <summary>
@@ -264,11 +254,6 @@ public abstract class Node
     /// <c>NodePropertyGenerator</c> for node types that declare handlers; base is a
     /// no-op.
     /// </summary>
-    /// <remarks>
-    /// Signature-driven like the rest of the model: a node listens by declaring
-    /// <c>void On(in TPayload e)</c>, so what it reacts to is readable from the
-    /// method list rather than from a registration call somewhere else.
-    /// </remarks>
     protected internal virtual void GeneratedDeliverSignal(Type payloadType, ReadOnlySpan<byte> payload) { }
 
     internal void CompleteBind()

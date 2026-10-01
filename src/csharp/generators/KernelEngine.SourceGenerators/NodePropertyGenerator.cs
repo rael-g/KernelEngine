@@ -360,11 +360,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     /// Bytes of UTF-8 a string property stores, from its <c>[NodeText]</c> or the
     /// default when it declares none.
     /// </summary>
-    /// <remarks>
-    /// The default exists so a node that never thought about it still works; it is not a
-    /// ceiling anyone is stuck with, because exceeding it throws and names the attribute
-    /// that raises it rather than truncating.
-    /// </remarks>
     const int DefaultTextCapacity = 128;
 
     static int TextCapacityOf(IPropertySymbol p)
@@ -375,12 +370,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     }
 
     /// <summary>The name a scene file addresses this node's own component by.</summary>
-    /// <remarks>
-    /// One rule for engine and game alike: the component of a node is the node's name
-    /// in snake_case. A generated name nobody would guess (the old
-    /// <c>Namespace.Type_Data</c>) meant a game component could only be authored by
-    /// someone who had read the generator.
-    /// </remarks>
     static string SnakeCase(string name)
     {
         var sb = new StringBuilder(name.Length + 4);
@@ -405,11 +394,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     /// the cid under the node's own name, plus the apply that fills each declared
     /// property from the block's keys.
     /// </summary>
-    /// <remarks>
-    /// Static because a scene block is applied before any node of that type exists —
-    /// the loader writes component memory first and instantiates the node onto it.
-    /// Registering from an instance would always be one step too late.
-    /// </remarks>
     static void EmitSceneApply(StringBuilder sb, Slot slot, ImmutableArray<IPropertySymbol> properties)
     {
         sb.AppendLine();

@@ -467,12 +467,6 @@ public static class CSharpBackend
     /// Emits the one call that registers every node type this domain renders, so a
     /// scene naming any of them resolves without a hand-kept list.
     /// </summary>
-    /// <remarks>
-    /// The registration and the type it registers now come from the same input: adding
-    /// a <c>[node:]</c>-tagged struct to a header registers it. The hand-maintained
-    /// alternative fails silently in the worst possible place — the scene loader,
-    /// at runtime, on a name it cannot resolve, long after the header was written.
-    /// </remarks>
     public static string RenderNodeTypeRegistrar(string registrarName, IEnumerable<string> nodeNames, string ns)
     {
         var o = new List<string>

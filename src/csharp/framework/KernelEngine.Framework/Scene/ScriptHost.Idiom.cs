@@ -7,12 +7,6 @@ namespace KernelEngine.Framework;
 /// The node-shaped face of the script host: spawning, destroying and reaching nodes,
 /// in the object vocabulary this language speaks.
 /// </summary>
-/// <remarks>
-/// It lives on the host rather than beside it because the host already owns what the
-/// questions are about — which entity carries which instance, which entities a type
-/// has, what a borrow resolves to. A separate class over the same facts is a second
-/// place to keep them in step, which is what this one used to be.
-/// </remarks>
 public unsafe partial class ScriptHost : ISignalDeclarer
 {
     private World              _world = null!;
@@ -86,13 +80,6 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         public void Dispose() => _systemCtx = _previous;
     }
 
-    /// <remarks>
-    /// Announced after the binding reaches the host, never before: what the announcement
-    /// carries is a type, and the first thing a listener does with a type is ask for an
-    /// instance of it. A node the host has not been told about yet is a type with no
-    /// instances, and the listener would be reading an empty answer about a node that
-    /// exists.
-    /// </remarks>
     private void AnnounceBehavior(Node node)
     {
         if (!node.HasBehavior) return;
@@ -131,12 +118,6 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// Two ids answering is ambiguity the same way two nodes of one id are, so neither is
     /// resolved by picking whichever type registered first.
     /// </summary>
-    /// <remarks>
-    /// An ancestor borrow across several ids is decided here instead: the slot answers
-    /// with an entity and not with its depth, so which of several candidates is nearest
-    /// cannot be read off the answers. Widening the slot to say so would be modelling
-    /// inheritance in a contract that has none.
-    /// </remarks>
     internal Node? Borrow(Node owner, Type wanted, string name, ScriptBorrow reach)
     {
         var ids = ScriptTypesAssignableTo(wanted);

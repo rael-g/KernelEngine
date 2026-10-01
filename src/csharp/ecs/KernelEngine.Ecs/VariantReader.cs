@@ -10,10 +10,6 @@ namespace KernelEngine.Ecs;
 /// unsafe C layout so game/framework code can read component fields without
 /// requiring <c>AllowUnsafeBlocks</c>.
 /// </summary>
-/// <remarks>
-/// This is a <see langword="ref struct"/>: it may only live on the stack and
-/// must not be stored. It is valid only for the duration of the apply callback.
-/// </remarks>
 public ref struct VariantReader
 {
     private readonly nint _entries;
@@ -31,7 +27,6 @@ public ref struct VariantReader
     /// <summary>
     /// Whether <paramref name="key"/> names this entry, marking it taken when it does.
     /// </summary>
-    /// <remarks>The claim is on the key alone, whatever the value's type.</remarks>
     private static unsafe bool Claims(ref ke_variant_table_entry e, string key)
     {
         if (!KeyEquals(e.key, key)) return false;

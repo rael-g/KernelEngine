@@ -9,10 +9,6 @@ namespace KernelEngine.Audio;
 /// <c>[entity.components.audio_player]</c> block applies instead of being
 /// reported and skipped.
 /// </summary>
-/// <remarks>
-/// Backend-agnostic — it describes the domain's components, not one backend's,
-/// so it is added alongside a backend (<c>AddMiniAudio</c>), never instead of one.
-/// </remarks>
 public sealed unsafe class AudioModule : IRuntimeModule
 {
     /// <inheritdoc />

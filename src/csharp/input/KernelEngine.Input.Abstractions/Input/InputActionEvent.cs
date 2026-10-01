@@ -8,22 +8,6 @@ namespace KernelEngine.Input;
 /// node tree (<see cref="OnInputAction"/>-style handlers) in the same frame the underlying input
 /// occurred.
 /// </summary>
-/// <remarks>
-/// <para>
-/// The event is non-generic so the dispatcher and Tree can carry it without leaking the game's
-/// action enum type. Game code identifies its actions via the generic <see cref="Is{T}"/> /
-/// <see cref="As{T}"/> helpers, which compare both the enum type and the underlying integer.
-/// </para>
-/// <para>
-/// The value field that is meaningful depends on <see cref="Type"/>:
-/// <list type="bullet">
-///   <item><b>Button</b> — only <see cref="Phase"/> matters.</item>
-///   <item><b>Axis1D</b> — <see cref="ValueX"/>.</item>
-///   <item><b>Axis2D</b> — <see cref="ValueX"/> + <see cref="ValueY"/>.</item>
-///   <item><b>Axis3D</b> — <see cref="ValueX"/> + <see cref="ValueY"/> + <see cref="ValueZ"/>.</item>
-/// </list>
-/// </para>
-/// </remarks>
 public struct InputActionEvent
 {
     /// <summary>The CLR type of the action enum the event belongs to. Use <see cref="Is{T}"/> to match.</summary>

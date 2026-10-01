@@ -8,11 +8,6 @@ namespace NodeStress;
 /// beyond its own entity cannot be run as concurrent slices, so timing the two side by
 /// side prices the promise rather than asserting it.
 /// </summary>
-/// <remarks>
-/// The borrow resolving to nothing is deliberate — what a borrow costs here is the
-/// declaration, not the lookup, and binding it to a real child would change the
-/// workload the two types share.
-/// </remarks>
 public sealed partial class Anchored : Node
 {
     /// <summary>Position along the one axis this node moves on.</summary>

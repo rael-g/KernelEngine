@@ -6,21 +6,6 @@ namespace Kabic.C;
 /// to component memory by reading a description instead of running a callback
 /// somebody wrote by hand for that one component.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Emits C rather than computing offsets itself. A generator that laid out the
-/// struct would be a second, silently divergent authority on the ABI: it would
-/// have to model padding and alignment for every target, and would be wrong on
-/// the first platform whose rules differ. <c>offsetof</c> and <c>sizeof</c> hand
-/// that question back to the compiler that owns it.
-/// </para>
-/// <para>
-/// Field names in the table are the C field names. A scene file addresses a
-/// component field by the name the header gives it; <c>[name:]</c> renames the
-/// property a language binding exposes, which is a binding concern and does not
-/// reach the file format.
-/// </para>
-/// </remarks>
 public static class CBackend
 {
     /// <summary>

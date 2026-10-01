@@ -3,7 +3,6 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// How many bytes of UTF-8 a node's <see cref="string"/> property stores.
 /// </summary>
-/// <remarks>Assigning more than fits throws rather than truncating.</remarks>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class NodeTextAttribute : Attribute
 {

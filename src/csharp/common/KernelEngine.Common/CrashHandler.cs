@@ -8,21 +8,6 @@ namespace KernelEngine.Common;
 /// SEH access violation, debug assertions, etc.) into a clear diagnostic
 /// line on stderr plus a minidump file, instead of silent process death.
 /// </summary>
-/// <remarks>
-/// Register once at process startup before any native code that might assert
-/// or crash. Subsequent Register calls are no-ops (idempotent).
-/// <para>
-/// On Windows the handler chain is:
-/// <list type="number">
-///   <item><c>_set_abort_behavior</c> — routes <c>abort()</c> through Windows Error Reporting,
-///         which propagates as an SEH exception instead of dying silently.</item>
-///   <item><c>SetUnhandledExceptionFilter</c> — catches the SEH (or any other native fault)
-///         before the OS kills the process, prints a useful diagnostic to stderr.</item>
-///   <item><c>AppDomain.UnhandledException</c> — catches any managed exception that bubbled
-///         past every try/catch, prints the full stack trace.</item>
-/// </list>
-/// </para>
-/// </remarks>
 public static class CrashHandler
 {
     private static bool _registered;
