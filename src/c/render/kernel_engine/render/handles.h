@@ -64,10 +64,6 @@ extern "C"
         { return h.bits != KE_HANDLE_NONE; }
     static inline bool ke_material_is_valid(ke_material_handle h)
         { return h.bits != KE_HANDLE_NONE; }
-    static inline bool ke_cubemap_is_valid(ke_cubemap_handle h)
-        { return h.bits != KE_HANDLE_NONE; }
-    static inline bool ke_shadow_map_is_valid(ke_shadow_map_handle h)
-        { return h.bits != KE_HANDLE_NONE; }
 
 #ifdef __cplusplus
 }

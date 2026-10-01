@@ -58,27 +58,6 @@ extern "C"
         const ke_variant_table_entry *entries;
     } ke_variant_table;
 
-    static inline ke_variant ke_variant_null(void)
-        { ke_variant v; v.type = KE_VARIANT_NULL; v.i = 0; return v; }
-    static inline ke_variant ke_variant_bool(bool b)
-        { ke_variant v; v.type = KE_VARIANT_BOOL; v.b = b; return v; }
-    static inline ke_variant ke_variant_int(int64_t i)
-        { ke_variant v; v.type = KE_VARIANT_INT; v.i = i; return v; }
-    static inline ke_variant ke_variant_float(double f)
-        { ke_variant v; v.type = KE_VARIANT_FLOAT; v.f = f; return v; }
-    static inline ke_variant ke_variant_string(const char *s)
-        { ke_variant v; v.type = KE_VARIANT_STRING; v.s = s; return v; }
-    static inline ke_variant ke_variant_vec2(float x, float y)
-        { ke_variant v; v.type = KE_VARIANT_VEC2; v.v2.x = x; v.v2.y = y; return v; }
-    static inline ke_variant ke_variant_vec3(float x, float y, float z)
-        { ke_variant v; v.type = KE_VARIANT_VEC3; v.v3.x = x; v.v3.y = y; v.v3.z = z; return v; }
-    static inline ke_variant ke_variant_vec4(float x, float y, float z, float w)
-        { ke_variant v; v.type = KE_VARIANT_VEC4; v.v4.x = x; v.v4.y = y; v.v4.z = z; v.v4.w = w; return v; }
-    static inline ke_variant ke_variant_quat(float x, float y, float z, float w)
-        { ke_variant v; v.type = KE_VARIANT_QUAT; v.q.x = x; v.q.y = y; v.q.z = z; v.q.w = w; return v; }
-    static inline ke_variant ke_variant_table_v(const ke_variant_table *t)
-        { ke_variant v; v.type = KE_VARIANT_TABLE; v.t = t; return v; }
-
 #ifdef __cplusplus
 }
 #endif
