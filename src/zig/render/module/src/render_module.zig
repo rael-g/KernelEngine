@@ -63,10 +63,9 @@ fn registerComponent(
     return e.component_register.?(e, name, @sizeOf(T), table, @intCast(fields.len), null);
 }
 
-fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
-    _ = st.core.ref.*.begin_frame.?(st.core.ref, null);
-    return true;
+    return st.core.ref.*.begin_frame.?(st.core.ref, out_error) != 0;
 }
 
 fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -79,10 +78,9 @@ fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
-fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
-    _ = st.core.ref.*.end_frame.?(st.core.ref, null);
-    return true;
+    return st.core.ref.*.end_frame.?(st.core.ref, out_error) != 0;
 }
 
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
@@ -506,6 +504,28 @@ test "a render module whose runtime refuses any one system registration fails th
         try testing.expectEqual(@as(i64, 0), rig.dev.live);
         try heap.expectNoLeaks();
     }
+}
+
+fn failingFrame(_: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
+    c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "no backbuffer", @src().file, @intCast(@src().line), null);
+    return 0;
+}
+
+test "a frame the service cannot begin or end fails the render phase with the service's own error" {
+    var svc = std.mem.zeroes(c.ke_render_service);
+    svc.begin_frame = failingFrame;
+    svc.end_frame = failingFrame;
+    var st: ModuleState = undefined;
+    st.core = .{ .ref = &svc, .destroy = null };
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!beginFrameSys(null, &st, 0.0, &err));
+    try testing.expect(err != null);
+    try testing.expectEqualStrings("no backbuffer", std.mem.span(err.*.message));
+
+    err = null;
+    try testing.expect(!endFrameSys(null, &st, 0.0, &err));
+    try testing.expect(err != null);
 }
 
 test "a render module without a runtime, an ecs or a device is refused" {
