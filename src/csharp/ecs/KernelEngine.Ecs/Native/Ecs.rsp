@@ -7,6 +7,8 @@ ke_ecs_flecs
 --include-directory
 ../../../../c/ecs
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 Ecs.umbrella.h

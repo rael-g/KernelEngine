@@ -9,6 +9,8 @@ ke_logger_simple
 --include-directory
 ../../../../zig/logger/simple/include
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 Logger.umbrella.h

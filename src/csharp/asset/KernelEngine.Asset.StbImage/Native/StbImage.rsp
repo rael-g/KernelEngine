@@ -11,6 +11,8 @@ ke_asset_stb_image
 --include-directory
 ../../../../zig/asset/stb_image/include
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 ../../../../zig/asset/stb_image/include/kernel_engine/asset/stb_image/stb_image_loader.h

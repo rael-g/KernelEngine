@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_PHYSICS_COMPONENTS_H_
 #define KERNEL_ENGINE_PHYSICS_COMPONENTS_H_
 
-#include <kernel_engine/common/math.h>
+#include <kernel_engine/math/math.h>
 #include <kernel_engine/physics/physics_2d.h>
 #include <kernel_engine/spatial/transform.h>
 

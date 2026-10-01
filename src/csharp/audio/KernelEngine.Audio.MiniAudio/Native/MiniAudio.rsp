@@ -9,6 +9,8 @@ ke_audio_miniaudio
 --include-directory
 ../../../../zig/audio/miniaudio/include
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 ../../../../zig/audio/miniaudio/include/kernel_engine/audio/miniaudio/miniaudio_audio.h

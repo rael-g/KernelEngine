@@ -13,6 +13,7 @@
       "includeDirs": [
         "src/c/input",
         "src/zig/input/default/include",
+        "src/c/math",
         "src/zig/common/include",
         "src/c/ecs"
       ],
@@ -33,6 +34,7 @@
       ],
       "includeDirs": [
         "src/c/window",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/window/ke_api.json",
@@ -52,6 +54,7 @@
       "includeDirs": [
         "src/c/logger",
         "src/zig/logger/simple/include",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/logger/ke_api.json",
@@ -69,6 +72,7 @@
       ],
       "includeDirs": [
         "src/c/scheduler",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/scheduler/ke_api.json",
@@ -93,6 +97,7 @@
         "src/zig/runtime/include",
         "src/c/ecs",
         "src/c/scheduler",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/runtime/ke_api.json",
@@ -115,6 +120,7 @@
       ],
       "includeDirs": [
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/ecs/ke_api.json",
@@ -130,6 +136,7 @@
       ],
       "includeDirs": [
         "src/c/audio",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/audio/ke_api.json",
@@ -145,6 +152,7 @@
       ],
       "includeDirs": [
         "src/c/physics",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/physics/ke_api.json",
@@ -163,6 +171,7 @@
       "includeDirs": [
         "src/c/physics",
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "composeHeaders": [
@@ -193,6 +202,7 @@
       "includeDirs": [
         "src/c/audio",
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "composeHeaders": [
@@ -220,6 +230,7 @@
       ],
       "includeDirs": [
         "src/c/text",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/text/ke_api.json",
@@ -242,6 +253,7 @@
       "includeDirs": [
         "src/c/render",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/render/ke_api.json",
@@ -259,6 +271,7 @@
         "src/c/asset",
         "src/c/scheduler",
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "composeHeaders": [ "src/c/asset/kernel_engine/asset/mesh_data.h" ],
@@ -277,6 +290,7 @@
       "includeDirs": [
         "src/c/asset",
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "composeHeaders": [
@@ -298,6 +312,7 @@
       "includeDirs": [
         "src/c/asset",
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/asset/image_loader.ke_api.json",
@@ -322,6 +337,7 @@
         "src/c/render",
         "src/c/text",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/asset_resolver.ke_api.json",
@@ -342,6 +358,7 @@
       ],
       "includeDirs": [
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/spatial.ke_api.json",
@@ -374,6 +391,7 @@
         "src/c/runtime",
         "src/c/scheduler",
         "src/c/logger",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/world.ke_api.json",
@@ -399,6 +417,7 @@
         "src/c/ecs",
         "src/c/render",
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/scene_tree.ke_api.json",
@@ -421,6 +440,7 @@
         "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/scene_loader.ke_api.json",
@@ -442,6 +462,7 @@
         "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/signal_bus.ke_api.json",
@@ -463,6 +484,7 @@
         "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/script_host.ke_api.json",
@@ -480,6 +502,7 @@
       "includeDirs": [
         "src/c/render",
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/render/components.ke_api.json",
@@ -506,6 +529,7 @@
       ],
       "includeDirs": [
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include",
         "src/c/spatial"
       ],
@@ -534,6 +558,7 @@
         "src/c/framework",
         "src/zig/framework/include",
         "src/c/input",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/input_actions.ke_api.json",
@@ -551,6 +576,7 @@
       ],
       "includeDirs": [
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/common/mesh.ke_api.json",
@@ -562,9 +588,10 @@
     {
       "name": "math",
       "headers": [
-        "src/zig/common/include/kernel_engine/common/math.h"
+        "src/c/math/kernel_engine/math/math.h"
       ],
       "includeDirs": [
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/common/math.ke_api.json",
@@ -647,7 +674,7 @@
       "headers": [
         "src/zig/common/include/kernel_engine/common/types.h",
         "src/zig/common/include/kernel_engine/common/error.h",
-        "src/zig/common/include/kernel_engine/common/math.h",
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ],

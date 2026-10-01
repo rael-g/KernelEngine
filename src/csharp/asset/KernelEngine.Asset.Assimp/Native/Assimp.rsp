@@ -13,6 +13,8 @@ ke_asset_assimp
 --include-directory
 ../../../../zig/asset/assimp/include
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 ../../../../zig/asset/assimp/include/kernel_engine/asset/assimp/assimp_loader.h

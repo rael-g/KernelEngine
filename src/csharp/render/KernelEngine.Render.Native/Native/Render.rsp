@@ -11,6 +11,8 @@ ke_render_service
 --include-directory
 ../../../../c/spatial
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 Render.umbrella.h

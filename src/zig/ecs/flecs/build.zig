@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
     const flecs_include = b.option([]const u8, "flecs-include", "flecs headers dir") orelse @panic("-Dflecs-include required");
@@ -18,7 +19,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_ecs, flecs_include }) |inc| {
+    inline for (.{ ke_common, ke_math, ke_ecs, flecs_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
@@ -57,7 +58,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_ecs, flecs_include }) |inc| {
+    inline for (.{ ke_common, ke_math, ke_ecs, flecs_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addIncludePath(b.path("include"));
@@ -84,7 +85,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     probe_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_ecs, flecs_include }) |inc| {
+    inline for (.{ ke_common, ke_math, ke_ecs, flecs_include }) |inc| {
         probe_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     probe_mod.addIncludePath(b.path("include"));

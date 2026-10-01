@@ -15,6 +15,8 @@ ke_asset_assimp
 --include-directory
 ../../../../c/text
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 Asset.umbrella.h

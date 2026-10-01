@@ -1,7 +1,7 @@
 
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
-    @cInclude("kernel_engine/common/math.h");
+    @cInclude("kernel_engine/math/math.h");
     @cInclude("kernel_engine/ecs/ke_ecs.h");
     @cInclude("kernel_engine/ecs/variant.h");
     @cInclude("kernel_engine/ecs/component_field_write.h");

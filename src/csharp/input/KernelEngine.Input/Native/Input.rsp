@@ -9,6 +9,8 @@ ke_input_default
 --include-directory
 ../../../../zig/input/default/include
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 Input.umbrella.h

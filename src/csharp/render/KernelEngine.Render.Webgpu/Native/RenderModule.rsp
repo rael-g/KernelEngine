@@ -19,6 +19,8 @@ ke_render_module
 --include-directory
 ../../../../c/view
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --include-directory
 ../../../../c/framework

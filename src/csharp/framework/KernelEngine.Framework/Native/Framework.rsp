@@ -17,6 +17,8 @@ ke_framework
 --include-directory
 ../../../../c/text
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --include-directory
 ../../../../c/framework

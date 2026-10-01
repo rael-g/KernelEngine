@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_ECS_VARIANT_H_
 #define KERNEL_ENGINE_ECS_VARIANT_H_
 
-#include <kernel_engine/common/math.h>
+#include <kernel_engine/math/math.h>
 #include <stdbool.h>
 #include <stdint.h>
 

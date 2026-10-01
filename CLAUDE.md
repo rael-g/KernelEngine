@@ -67,7 +67,7 @@ Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-sta
 
 ### Layer 1 — C contracts (`src/c/<domain>/`)
 
-Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Sixteen domains: `asset`, `audio`, `configuration`, `ecs`, `framework`, `input`, `logger`, `physics`, `render`, `resource_cache`, `runtime`, `scheduler`, `spatial`, `text`, `view`, `window`.
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Seventeen domains: `asset`, `audio`, `configuration`, `ecs`, `framework`, `input`, `logger`, `math`, `physics`, `render`, `resource_cache`, `runtime`, `scheduler`, `spatial`, `text`, `view`, `window`.
 
 One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `scheduler`? include `scheduler`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_logger_simple`, `ke_resource_cache_default`, …).
 

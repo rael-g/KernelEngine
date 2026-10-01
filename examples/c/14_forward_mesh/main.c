@@ -1,5 +1,5 @@
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/common/math.h>
+#include <kernel_engine/math/math.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/render/gpu/gpu_device.h>

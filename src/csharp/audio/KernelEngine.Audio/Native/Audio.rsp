@@ -9,6 +9,8 @@ ke_audio_miniaudio
 --include-directory
 ../../../../c/spatial
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 Audio.umbrella.h

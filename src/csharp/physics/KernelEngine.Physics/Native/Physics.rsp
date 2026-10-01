@@ -9,6 +9,8 @@ ke_physics_box2d
 --include-directory
 ../../../../c/spatial
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 Physics.umbrella.h

@@ -103,6 +103,7 @@ pub fn build(b: *std.Build) void {
 
     const ecs_flecs = ctx.plugin("ke_ecs_flecs", "src/zig/ecs/flecs", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "flecs-include", vcpkg_include),
@@ -133,6 +134,7 @@ pub fn build(b: *std.Build) void {
 
     const runtime = ctx.plugin("ke_runtime", "src/zig/runtime", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
@@ -143,6 +145,7 @@ pub fn build(b: *std.Build) void {
 
     const framework = ctx.plugin("ke_framework", "src/zig/framework", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -294,6 +297,7 @@ pub fn build(b: *std.Build) void {
 
     const view_space = ctx.plugin("ke_view_space", "src/zig/view/space", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
         argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
@@ -308,6 +312,7 @@ pub fn build(b: *std.Build) void {
     const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
     const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
     const tonemap = ctx.plugin("ke_render_tonemap", "src/zig/render/tonemap", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -318,6 +323,7 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step }, .no_tests);
 
     const physics_body2d = ctx.plugin("ke_physics_body2d", "src/zig/physics/body2d", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
@@ -330,6 +336,7 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step, &runtime.step }, .no_tests);
 
     const audio_module = ctx.plugin("ke_audio_module", "src/zig/audio/module", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-audio-include", b.pathJoin(&.{ src_c, "audio" })),
@@ -343,6 +350,7 @@ pub fn build(b: *std.Build) void {
     const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox = ctx.plugin("ke_render_skybox", "src/zig/render/skybox", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -356,6 +364,7 @@ pub fn build(b: *std.Build) void {
     const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui = ctx.plugin("ke_render_ui", "src/zig/render/ui", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -369,6 +378,7 @@ pub fn build(b: *std.Build) void {
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
     const shadow = ctx.plugin("ke_render_shadow", "src/zig/render/shadow", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -381,6 +391,7 @@ pub fn build(b: *std.Build) void {
 
     const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{});
     const cluster = ctx.plugin("ke_render_cluster", "src/zig/render/cluster", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -396,6 +407,7 @@ pub fn build(b: *std.Build) void {
     const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
     const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
     const deferred_lighting = ctx.plugin("ke_render_deferred_lighting", "src/zig/render/deferred_lighting", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -421,6 +433,7 @@ pub fn build(b: *std.Build) void {
         &materials_dirs,
     );
     const gbuffer = ctx.plugin("ke_render_gbuffer", "src/zig/render/gbuffer", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -441,6 +454,7 @@ pub fn build(b: *std.Build) void {
         &materials_dirs,
     );
     const forward = ctx.plugin("ke_render_forward", "src/zig/render/forward", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -462,6 +476,7 @@ pub fn build(b: *std.Build) void {
 
     const render_service = ctx.plugin("ke_render_service", "src/zig/render/service", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -482,6 +497,7 @@ pub fn build(b: *std.Build) void {
     }, .has_tests);
 
     const render_module = ctx.plugin("ke_render_module", "src/zig/render/module", &.{
+        argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
@@ -542,6 +558,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "logger/simple/include" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
         })),
         argF(b, "libs", b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") })),
@@ -566,6 +583,7 @@ pub fn build(b: *std.Build) void {
 
     const demo05 = ctx.example("c_demo_05", "examples/c/05_gpu_device", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
@@ -579,6 +597,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "06_triangle" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
@@ -597,6 +616,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "07_uniform" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
@@ -616,6 +636,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "08_vertex_buffer" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
@@ -634,6 +655,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "09_texture" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
@@ -652,6 +674,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "10_depth" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
@@ -672,6 +695,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
@@ -696,6 +720,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
@@ -735,6 +760,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
