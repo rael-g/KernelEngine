@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) void {
     const ke_render    = b.option([]const u8, "ke-render-include",    "kernel_engine/render include dir")    orelse @panic("-Dke-render-include required");
     const ke_framework = b.option([]const u8, "ke-framework-include", "ke_framework's public include dir")   orelse @panic("-Dke-framework-include required");
     const ke_resource_cache = b.option([]const u8, "ke-resource-cache-include", "kernel_engine/resource_cache include dir") orelse @panic("-Dke-resource-cache-include required");
+    const ke_resource_cache_default = b.option([]const u8, "ke-resource-cache-default-include", "ke_resource_cache_default factory include dir") orelse @panic("-Dke-resource-cache-default-include required");
     const ke_text      = b.option([]const u8, "ke-text-include",      "kernel_engine/text include dir")      orelse @panic("-Dke-text-include required");
     const ke_logger    = b.option([]const u8, "ke-logger-include",    "kernel_engine/logger include dir")    orelse @panic("-Dke-logger-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
@@ -26,7 +27,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_resource_cache, ke_text, ke_logger, ke_self }) |inc| {
+    inline for (.{ ke_common, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_resource_cache, ke_resource_cache_default, ke_text, ke_logger, ke_self }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
@@ -56,7 +57,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_resource_cache, ke_text, ke_logger, ke_self }) |inc| {
+    inline for (.{ ke_common, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_resource_cache, ke_resource_cache_default, ke_text, ke_logger, ke_self }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });

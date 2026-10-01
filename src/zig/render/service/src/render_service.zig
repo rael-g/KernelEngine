@@ -10,6 +10,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/service/render_service.h");
     @cInclude("kernel_engine/render/service/pass_context.h");
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
+    @cInclude("kernel_engine/resource_cache/default/resource_cache_default_create.h");
 });
 
 pub const gpa = @import("heap").gpa;

@@ -10,7 +10,7 @@ var excluded = new Dictionary<string, string>
 {
     ["common/export.h"]                 = "visibility macros, no declarations",
     ["common/common_export.h"]          = "visibility macros, no declarations",
-    ["resource_cache/resource_cache_export.h"] = "visibility macros, no declarations",
+    ["resource_cache/default/resource_cache_default_create.h"] = "created natively by plugins, no managed caller",
     ["render/gpu/gpu_commands.h"]       = "L4 command surface, rebuilt per backend rather than bound once (named debt)",
     ["render/gpu/gpu_surface_ext.h"]    = "platform surface handoff, consumed only by a backend's own Zig",
     ["render/service/pass_context.h"]   = "pass-internal; a pass is native, no managed caller",

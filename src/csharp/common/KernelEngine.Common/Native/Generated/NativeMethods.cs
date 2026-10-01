@@ -17,9 +17,6 @@ public static unsafe partial class NativeMethods
     [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_error_fatal", ExactSpelling = true)]
     public static extern void error_fatal([NativeTypeName("const ke_error *")] ke_error* err);
 
-    [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_resource_cache_create", ExactSpelling = true)]
-    public static extern ke_resource_cache_handle resource_cache_create([NativeTypeName("const ke_resource_cache_params *")] ke_resource_cache_params* @params, ke_error** out_error);
-
     [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
     public const uint KE_RESOURCE_HANDLE_NONE = (4294967295U);
 }

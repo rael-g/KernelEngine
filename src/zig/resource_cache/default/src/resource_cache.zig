@@ -6,6 +6,7 @@ const gpa = std.heap.c_allocator;
 
 const c = @cImport({
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
+    @cInclude("kernel_engine/resource_cache/default/resource_cache_default_create.h");
 });
 
 const E = @import("kerror").Errors(c);
