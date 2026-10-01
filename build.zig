@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const abi_stamp = @import("scripts/abi_stamp.zig");
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -589,6 +591,16 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&wgpu_copy.step);
     b.getInstallStep().dependOn(ctx.plugins_step);
     ctx.plugins_step.dependOn(&wgpu_copy.step);
+
+    var stamp_threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer stamp_threaded.deinit();
+    const stamp_text = abi_stamp.compute(b.allocator, stamp_threaded.io(), root) catch |err|
+        std.debug.panic("cannot stamp the contract headers: {s}", .{@errorName(err)});
+    const stamp_install = b.addInstallFileWithDir(b.addWriteFiles().add("abi.stamp", stamp_text), .prefix, "abi.stamp");
+    for (all_plugins) |p| stamp_install.step.dependOn(&p.step);
+    stamp_install.step.dependOn(&wgpu_copy.step);
+    b.getInstallStep().dependOn(&stamp_install.step);
+    ctx.plugins_step.dependOn(&stamp_install.step);
 
     if (target.result.os.tag == .windows) {
         const copy_dlls_to_bin = b.addSystemCommand(&.{

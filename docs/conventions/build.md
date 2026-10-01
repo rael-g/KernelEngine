@@ -21,6 +21,15 @@ plugin libraries converge in one `lib/`. `Ctx.cache_dir` is the fixed
 `build/zig-cache` path passed to every sub-build as `--cache-dir` (`build.zig:16`, `86`, `914`),
 whatever `--cache-dir` the caller gave the root.
 
+## Which headers the libraries were built from
+
+After every plugin is built, the root build writes `<--prefix>/abi.stamp`: one line per contract header
+(`src/c/**/*.h`) and factory header (`src/zig/**/include/**/*.h`), each a SHA-256 of the file with its
+carriage returns removed (`scripts/abi_stamp.zig`). `tests/csharp/KernelEngine.Kernel.Tests/NativeFreshnessTests.cs`
+re-hashes those headers under `build/native` and fails, naming the files, when one has changed since
+the libraries were built, or when there is no stamp. A library built from an older header still loads,
+and nothing else tells it apart from a current one.
+
 ## What a plugin receives
 
 A plugin's `build.zig` runs standalone and takes its dependencies as `-D` options, never by reading
