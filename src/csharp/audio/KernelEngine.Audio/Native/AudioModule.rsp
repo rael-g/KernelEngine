@@ -13,6 +13,8 @@ ke_audio_module
 --include-directory
 ../../../../zig/common/include
 --include-directory
+../../../../c/framework
+--include-directory
 ../../../../zig/framework/include
 --file
 ../../../../zig/audio/module/include/kernel_engine/audio/module/audio_module.h

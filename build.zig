@@ -143,6 +143,7 @@ pub fn build(b: *std.Build) void {
 
     const framework = ctx.plugin("ke_framework", "src/zig/framework", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
@@ -323,7 +324,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-physics-include", b.pathJoin(&.{ src_c, "physics" })),
-        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "physics/body2d/include" })),
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &runtime.step }, .no_tests);
@@ -334,7 +335,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-audio-include", b.pathJoin(&.{ src_c, "audio" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
-        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "audio/module/include" })),
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &runtime.step }, .no_tests);
@@ -466,7 +467,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
-        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-resource-cache-include", b.pathJoin(&.{ src_c, "resource_cache" })),
         argF(b, "ke-resource-cache-default-include", b.pathJoin(&.{ src_zig, "resource_cache/default/include" })),
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
@@ -487,7 +488,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
         argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
-        argF(b, "ke-framework-include", b.pathJoin(&.{ src_zig, "framework/include" })),
+        argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-asset-include", b.pathJoin(&.{ src_c, "asset" })),
@@ -710,6 +711,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "runtime" }),
             b.pathJoin(&.{ src_zig, "runtime/include" }),
             b.pathJoin(&.{ src_c, "asset" }),
+            b.pathJoin(&.{ src_c, "framework" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{
@@ -748,6 +750,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "runtime" }),
             b.pathJoin(&.{ src_zig, "runtime/include" }),
             b.pathJoin(&.{ src_c, "asset" }),
+            b.pathJoin(&.{ src_c, "framework" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
         })),
         argF(b, "libs", joinPaths(b, &.{

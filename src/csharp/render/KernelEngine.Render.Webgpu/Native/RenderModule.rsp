@@ -21,6 +21,8 @@ ke_render_module
 --include-directory
 ../../../../zig/common/include
 --include-directory
+../../../../c/framework
+--include-directory
 ../../../../zig/framework/include
 --include-directory
 ../../../../zig/render/module/include

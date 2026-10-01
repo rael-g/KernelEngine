@@ -362,12 +362,13 @@
     {
       "name": "world",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/world.h"
+        "src/c/framework/kernel_engine/framework/world.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
         "src/c/runtime",
@@ -387,12 +388,13 @@
     {
       "name": "scene_tree",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/scene_tree.h"
+        "src/c/framework/kernel_engine/framework/scene_tree.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
         "src/c/render",
@@ -410,12 +412,13 @@
     {
       "name": "scene_loader",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/scene_loader.h"
+        "src/c/framework/kernel_engine/framework/scene_loader.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
         "src/zig/common/include"
@@ -430,12 +433,13 @@
       "_comment": "The signal bus. Emission is a frame's event, connection is durable data; the vtable is what lets a node in any language be either end of a wire.",
       "name": "signal_bus",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/signal_bus.h"
+        "src/c/framework/kernel_engine/framework/signal_bus.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
         "src/zig/common/include"
@@ -450,12 +454,13 @@
       "_comment": "The entity-to-script binding. Every scripting runtime otherwise keeps this map itself, which is what makes a node authored in one language invisible to another.",
       "name": "script_host",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/script_host.h"
+        "src/c/framework/kernel_engine/framework/script_host.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
         "src/zig/common/include"
@@ -523,9 +528,10 @@
     {
       "name": "input_actions",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/input_actions.h"
+        "src/c/framework/kernel_engine/framework/input_actions.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/input",
         "src/zig/common/include"
@@ -702,19 +708,19 @@
       "project": "src/csharp/framework/KernelEngine.Framework",
       "namespace": "KernelEngine.Framework.Native",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/components.h",
-        "src/zig/framework/include/kernel_engine/framework/scene_tree.h",
-        "src/zig/framework/include/kernel_engine/framework/world.h",
-        "src/zig/framework/include/kernel_engine/framework/input_actions.h",
-        "src/zig/framework/include/kernel_engine/framework/scene_loader.h",
+        "src/c/framework/kernel_engine/framework/components.h",
+        "src/c/framework/kernel_engine/framework/scene_tree.h",
+        "src/c/framework/kernel_engine/framework/world.h",
+        "src/c/framework/kernel_engine/framework/input_actions.h",
+        "src/c/framework/kernel_engine/framework/scene_loader.h",
         "src/zig/framework/include/kernel_engine/framework/world_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h",
         "src/zig/framework/include/kernel_engine/framework/input_actions_create.h",
-        "src/zig/framework/include/kernel_engine/framework/signal_bus.h",
+        "src/c/framework/kernel_engine/framework/signal_bus.h",
         "src/zig/framework/include/kernel_engine/framework/signal_bus_create.h",
         "src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h",
-        "src/zig/framework/include/kernel_engine/framework/script_host.h",
+        "src/c/framework/kernel_engine/framework/script_host.h",
         "src/zig/framework/include/kernel_engine/framework/script_host_create.h"
       ],
       "library": "ke_framework",
