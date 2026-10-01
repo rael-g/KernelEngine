@@ -247,7 +247,6 @@ fn destroy(self: [*c]ke.ke_configuration) callconv(.c) void {
     for (st.subs.items) |*s| gpa.free(s.section);
     st.subs.deinit(gpa);
     gpa.destroy(st);
-    heap.release();
 }
 
 export fn ke_configuration_create(out_error: ?*?*ke.ke_error) ke.ke_configuration_handle {
@@ -273,7 +272,6 @@ export fn ke_configuration_create(out_error: ?*?*ke.ke_error) ke.ke_configuratio
         .subs = .empty,
         .next_sub_id = 0,
     };
-    heap.retain();
     return .{ .ref = &st.api, .destroy = destroy };
 }
 

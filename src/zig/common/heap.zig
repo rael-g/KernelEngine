@@ -2,33 +2,54 @@ const std = @import("std");
 
 const tracking = @import("builtin").mode == .Debug;
 
+extern "c" fn atexit(callback: *const fn () callconv(.c) void) c_int;
+
 var debug_instance: std.heap.DebugAllocator(.{ .thread_safe = true }) = .init;
-var live_instances = std.atomic.Value(usize).init(0);
-var leak_reports = std.atomic.Value(usize).init(0);
+var exit_hook = std.atomic.Value(bool).init(false);
+
+fn reportLeaksAtExit() callconv(.c) void {
+    _ = debug_instance.deinit();
+}
+
+fn registerExitHook() void {
+    if (exit_hook.swap(true, .acq_rel)) return;
+    _ = atexit(&reportLeaksAtExit);
+}
+
+fn trackedAlloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+    registerExitHook();
+    const inner = debug_instance.allocator();
+    return inner.vtable.alloc(inner.ptr, len, alignment, ret_addr);
+}
+
+fn trackedResize(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
+    const inner = debug_instance.allocator();
+    return inner.vtable.resize(inner.ptr, memory, alignment, new_len, ret_addr);
+}
+
+fn trackedRemap(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+    const inner = debug_instance.allocator();
+    return inner.vtable.remap(inner.ptr, memory, alignment, new_len, ret_addr);
+}
+
+fn trackedFree(_: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
+    const inner = debug_instance.allocator();
+    inner.vtable.free(inner.ptr, memory, alignment, ret_addr);
+}
+
+const tracked_vtable: std.mem.Allocator.VTable = .{
+    .alloc = trackedAlloc,
+    .resize = trackedResize,
+    .remap = trackedRemap,
+    .free = trackedFree,
+};
 
 pub const gpa: std.mem.Allocator = if (tracking)
-    debug_instance.allocator()
+    .{ .ptr = undefined, .vtable = &tracked_vtable }
 else
     std.heap.smp_allocator;
 
-pub fn retain() void {
-    if (!tracking) return;
-    _ = live_instances.fetchAdd(1, .monotonic);
-}
-
-pub fn release() void {
-    if (!tracking) return;
-
-    var live = live_instances.load(.monotonic);
-    while (live != 0) {
-        live = live_instances.cmpxchgWeak(live, live - 1, .acq_rel, .monotonic) orelse break;
-    } else return;
-    if (live != 1) return;
-
-    if (debug_instance.deinit() == .leak) _ = leak_reports.fetchAdd(1, .monotonic);
-    debug_instance = .init;
-}
-
-pub fn leakReports() usize {
-    return leak_reports.load(.monotonic);
+pub fn leaks() usize {
+    if (!tracking) return 0;
+    return debug_instance.detectLeaks();
 }

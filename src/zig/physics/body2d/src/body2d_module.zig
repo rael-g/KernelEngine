@@ -192,7 +192,6 @@ fn findBody(
 fn destroyHandle(self: ?*c.ke_physics_body2d_module) callconv(.c) void {
     const m: *Module = @ptrCast(@alignCast(self orelse return));
     gpa.destroy(m);
-    heap.release();
 }
 
 export fn ke_physics_body2d_module_create(
@@ -252,7 +251,6 @@ export fn ke_physics_body2d_module_create(
     cp.execute = colliderSystem;
     _ = rt.*.register_system.?(rt, &cp, null);
 
-    heap.retain();
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
 

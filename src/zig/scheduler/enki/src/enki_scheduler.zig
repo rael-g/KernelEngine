@@ -189,7 +189,6 @@ fn destroy(self_in: ?*c.ke_scheduler) callconv(.c) void {
         s.ets = null;
     }
     heap.gpa.destroy(s);
-    heap.release();
 }
 
 export fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle {
@@ -216,7 +215,6 @@ export fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c
     s.api.dispatch_pinned = dispatchPinned;
     s.api.get_num_workers = getNumWorkers;
 
-    heap.retain();
     return .{ .ref = &s.api, .destroy = destroy };
 }
 

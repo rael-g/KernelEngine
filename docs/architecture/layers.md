@@ -56,18 +56,17 @@ are the consumer's own. These files carry no tests of their own: the plugins tha
 
 ### One allocator per plugin, and the leak check
 
-Every plugin allocates from `heap.gpa` (`heap.zig:9-12`): a `DebugAllocator` in a Debug build, which
-catches a double free or a free of the wrong length, and `smp_allocator` otherwise. The factories take
-no allocator, and a block is freed by the plugin that allocated it; memory a plugin hands out is
-released through that plugin's own `free_*` slot.
+Every plugin allocates from `heap.gpa` (`heap.zig`): a wrapper over a `DebugAllocator` in a Debug
+build, which catches a double free or a free of the wrong length, and `smp_allocator` otherwise. The
+factories take no allocator, and a block is freed by the plugin that allocated it; memory a plugin
+hands out is released through that plugin's own `free_*` slot.
 
-A factory calls `heap.retain()` just before it returns its handle, and the matching destroy slot ends
-with `heap.release()` (`heap.zig:14-30`). In a Debug build, the release that takes a plugin's count to
-zero runs the allocator's leak check, which logs every block still allocated with the stack that
-allocated it and leaves the allocator ready for the next instance. A test whose last destroy leaves a
-block behind therefore fails, naming the allocation. A plugin that still has a live instance is never
-checked, so an object a host never disposes reports nothing. The asset loader for assimp keeps a
-tracking allocator of its own and does not take part.
+The allocator is never reset. The first allocation registers one `atexit` callback, and that callback
+runs the leak check once, when the process or the library ends, logging every block still allocated
+with the stack that allocated it. `heap.leaks()` runs the same check on demand and returns the count,
+so a test can assert zero after it has destroyed what it created; a leak that no test asserts is
+reported only at exit, not as a test failure. The asset loader for assimp keeps a tracking allocator
+of its own and does not take part.
 
 ## Layer 3 — bindings are generated, never written
 

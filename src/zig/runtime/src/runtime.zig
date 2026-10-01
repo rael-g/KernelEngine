@@ -991,7 +991,6 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     }
     freePhaseScratch(h);
     cFree(RuntimeHandle, @ptrCast(h), 1);
-    heap.release();
 }
 
 export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params: [*c]const c.ke_runtime_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_runtime_handle {
@@ -1038,7 +1037,6 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
 
-    heap.retain();
     return .{ .ref = &h.api, .destroy = &runtimeDestroy };
 }
 

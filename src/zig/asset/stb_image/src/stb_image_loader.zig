@@ -33,7 +33,6 @@ fn destroy(self: ?*c.ke_image_loader) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(loader.handle));
     gpa.destroy(state);
     gpa.destroy(loader);
-    heap.release();
 }
 
 fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) [*c]c.ke_texture_data {
@@ -118,7 +117,6 @@ export fn ke_image_loader_stb_create(
     loader.load_image = &loadImage;
     loader.free_image = &freeImage;
 
-    heap.retain();
     return .{ .ref = loader, .destroy = &destroy };
 }
 

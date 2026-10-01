@@ -477,7 +477,6 @@ fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
     if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
     gpa.destroy(fwd);
-    heap.release();
 }
 
 export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
@@ -515,7 +514,6 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);
 
-    heap.retain();
     return .{ .ref = @ptrCast(fwd), .destroy = destroyHandle };
 }
 

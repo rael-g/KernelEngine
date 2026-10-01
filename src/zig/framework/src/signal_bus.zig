@@ -307,7 +307,6 @@ fn destroy(self_in: ?*c.ke_signal_bus) callconv(.c) void {
     heap.gpa.free(s.payloads);
     heap.gpa.free(s.deliveries);
     heap.gpa.destroy(s);
-    heap.release();
 }
 
 pub export fn ke_signal_bus_create(
@@ -383,7 +382,6 @@ pub export fn ke_signal_bus_create(
         .clear_frame = clearFrame,
     };
 
-    heap.retain();
     return .{ .ref = &s.api, .destroy = destroy };
 }
 

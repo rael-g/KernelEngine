@@ -60,7 +60,6 @@ pub const Core = struct {
         if (self.dev) |dev| dev.destroy();
         self.dev = null;
         heap.gpa.destroy(self);
-        heap.release();
     }
 
     fn onInitialize(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {

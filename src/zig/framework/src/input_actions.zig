@@ -654,7 +654,6 @@ fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     clearActions(s);
     if (s.actions) |actions| heap.gpa.free(actions[0..s.action_capacity]);
     heap.gpa.destroy(s);
-    heap.release();
 }
 
 export fn ke_input_actions_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_actions_handle {
@@ -682,7 +681,6 @@ export fn ke_input_actions_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.
     s.api.get_axis2d = vtGetAxis2d;
     s.api.get_axis3d = vtGetAxis3d;
 
-    heap.retain();
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
 

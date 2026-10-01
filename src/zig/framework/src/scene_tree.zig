@@ -402,7 +402,6 @@ fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     if (s.hierarchy.destroy) |d| d(s.hierarchy.ref);
     destroyEntitiesRecursive(s, s.root);
     heap.gpa.destroy(s);
-    heap.release();
 }
 
 export fn ke_scene_tree_create(
@@ -488,7 +487,6 @@ export fn ke_scene_tree_create(
         }
     }
 
-    heap.retain();
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
 

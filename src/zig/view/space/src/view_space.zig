@@ -172,7 +172,6 @@ fn destroy(self_in: ?*c.ke_view_space) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     heap.gpa.destroy(stateOf(self));
-    heap.release();
 }
 
 fn create(hand: Handedness, out_error: [*c][*c]c.ke_error) c.ke_view_space_handle {
@@ -191,7 +190,6 @@ fn create(hand: Handedness, out_error: [*c][*c]c.ke_error) c.ke_view_space_handl
     s.api.perspective = viewSpacePerspective;
     s.api.orthographic = viewSpaceOrthographic;
 
-    heap.retain();
     return .{ .ref = &s.api, .destroy = destroy };
 }
 

@@ -106,7 +106,6 @@ fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {
     s.order.deinit(heap.gpa);
     s.stack.deinit(heap.gpa);
     heap.gpa.destroy(s);
-    heap.release();
 }
 
 export fn ke_scene_hierarchy_create(
@@ -175,6 +174,5 @@ export fn ke_scene_hierarchy_create(
         return empty;
     }
 
-    heap.retain();
     return .{ .ref = @ptrCast(s), .destroy = vtDestroy };
 }

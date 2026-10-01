@@ -269,7 +269,6 @@ fn destroy(self_in: ?*c.ke_physics_2d) callconv(.c) void {
     c.b2DestroyWorld(s.world);
     if (s.bodies) |b| heap.gpa.free(b[0..s.body_capacity]);
     heap.gpa.destroy(s);
-    heap.release();
 }
 
 export fn ke_physics_2d_box2d_create(
@@ -320,7 +319,6 @@ export fn ke_physics_2d_box2d_create(
     s.api.set_body_gravity_scale = setBodyGravityScale;
 
     logInfo(s.logger, "Box2D physics world initialized");
-    heap.retain();
     return .{ .ref = &s.api, .destroy = destroy };
 }
 

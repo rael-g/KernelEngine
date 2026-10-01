@@ -209,7 +209,6 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     gpa.free(@constCast(st.shader_dir));
     gpa.destroy(st);
     gpa.destroy(@as(*c.ke_render_service, @ptrCast(self)));
-    heap.release();
 }
 
 export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
@@ -402,7 +401,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
     st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, null);
 
-    heap.retain();
     return .{ .ref = core, .destroy = destroyCore };
 }
 

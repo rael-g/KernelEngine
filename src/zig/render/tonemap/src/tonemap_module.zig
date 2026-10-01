@@ -143,7 +143,6 @@ fn destroyHandle(self: ?*c.ke_render_tonemap) callconv(.c) void {
     const tm: *TonemapModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(tm);
     gpa.destroy(tm);
-    heap.release();
 }
 
 export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
@@ -171,6 +170,5 @@ export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.execute = system;
     _ = rt.register_system.?(rt, &params, null);
 
-    heap.retain();
     return .{ .ref = @ptrCast(tm), .destroy = destroyHandle };
 }

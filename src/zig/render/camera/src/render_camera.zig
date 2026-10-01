@@ -102,7 +102,6 @@ fn destroy(self_in: ?*c.ke_render_camera) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     heap.gpa.destroy(stateOf(self));
-    heap.release();
 }
 
 export fn ke_render_camera_create(
@@ -133,7 +132,6 @@ export fn ke_render_camera_create(
     s.api.perspective_projection = cameraPerspectiveProjection;
     s.api.perspective_frustum = cameraPerspectiveFrustum;
 
-    heap.retain();
     return .{ .ref = &s.api, .destroy = destroy };
 }
 
