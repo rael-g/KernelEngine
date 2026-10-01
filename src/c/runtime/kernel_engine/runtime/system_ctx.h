@@ -5,6 +5,7 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/ecs/commands.h>
 #include <stddef.h>
 
 #ifdef KE_RUNTIME_STATIC
@@ -21,15 +22,16 @@ extern "C" {
 
 typedef struct ke_system_ctx ke_system_ctx;
 
-/// A structural operation run serially at the wave barrier. `user` points at the
-/// copy of the payload passed to defer; `ecs` is the live world.
-typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
-
 /// The operations a system body may perform on its own context, invoked through
 /// the ke_system_ctx it receives. `handle` is runtime-private. The free
 /// ke_system_ctx_* functions below wrap these slots.
 struct ke_system_ctx {
     void *handle;
+
+    /// The queue this body records structural changes into, applied at the wave barrier.
+    /// In the render phase the queue refuses every operation, because that phase reads an
+    /// extracted snapshot and may not change structure.
+    ke_ecs_commands *commands;
 
     /// @param out_count [out]
     /// @return [array_of:out_count]

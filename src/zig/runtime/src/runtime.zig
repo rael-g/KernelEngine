@@ -82,7 +82,21 @@ fn ctxOf(ptr: ?*c.ke_system_ctx) ?*CtxState {
     return @ptrCast(@alignCast(ctx.handle));
 }
 
-fn bindCtx(ctx: *c.ke_system_ctx, state: *CtxState) void {
+fn commandsOf(ptr: ?*c.ke_ecs_commands) ?*CtxState {
+    const cmds = ptr orelse return null;
+    return @ptrCast(@alignCast(cmds.handle));
+}
+
+fn bindCtx(ctx: *c.ke_system_ctx, commands: *c.ke_ecs_commands, state: *CtxState) void {
+    commands.* = .{
+        .handle = state,
+        .spawn = &commandsSpawn,
+        .attach = &commandsAttach,
+        .detach = &commandsDetach,
+        .despawn = &commandsDespawn,
+        .@"defer" = &commandsDefer,
+    };
+    ctx.commands = commands;
     ctx.handle = state;
     ctx.view = &ke_system_ctx_view;
     ctx.reserve = &ke_system_ctx_reserve;
@@ -317,6 +331,106 @@ export fn ke_system_ctx_slice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_co
     const s = ctxOf(ctx);
     if (out_index != null) out_index.* = if (s) |st| st.slice_index else 0;
     if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
+}
+
+fn recordTarget(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferQueue {
+    const s = commandsOf(self) orelse {
+        E.fail(out_error, .invalid_argument, "invalid command queue", src);
+        return null;
+    };
+    return s.defer_q orelse {
+        E.fail(out_error, .not_supported, "this phase may not change structure", src);
+        return null;
+    };
+}
+
+fn recordCommand(q: *DeferQueue, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferCommand {
+    if (!deferReserve(q, q.count + 1)) {
+        E.fail(out_error, .out_of_memory, "command queue is full", src);
+        return null;
+    }
+    const cmd = &q.cmds.?[q.count];
+    q.count += 1;
+    return cmd;
+}
+
+fn commandsSpawn(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_entity {
+    const q = recordTarget(self, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
+    const ecs = commandsOf(self).?.ecs orelse {
+        E.fail(out_error, .not_initialized, "no world", @src());
+        return c.KE_ENTITY_INVALID;
+    };
+    const entity = ecs.entity_reserve.?(ecs);
+    if (entity == c.KE_ENTITY_INVALID) {
+        E.fail(out_error, .out_of_memory, "entity id could not be reserved", @src());
+        return c.KE_ENTITY_INVALID;
+    }
+    const cmd = recordCommand(q, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
+    cmd.kind = .spawn;
+    cmd.entity = entity;
+    return entity;
+}
+
+fn commandsAttach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const q = recordTarget(self, out_error, @src()) orelse return false;
+    if (size != 0) {
+        const ecs = commandsOf(self).?.ecs orelse {
+            E.fail(out_error, .not_initialized, "no world", @src());
+            return false;
+        };
+        if (size != ecs.component_size.?(ecs, cid)) {
+            E.fail(out_error, .invalid_argument, "payload size differs from the component size", @src());
+            return false;
+        }
+    }
+    const offset = deferArenaPush(q, data, size);
+    if (offset == std.math.maxInt(usize)) {
+        E.fail(out_error, .out_of_memory, "command payload does not fit", @src());
+        return false;
+    }
+    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+    cmd.kind = .attach;
+    cmd.entity = entity;
+    cmd.cid = cid;
+    cmd.attach_offset = offset;
+    cmd.attach_size = size;
+    return true;
+}
+
+fn commandsDetach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const q = recordTarget(self, out_error, @src()) orelse return false;
+    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+    cmd.kind = .detach;
+    cmd.entity = entity;
+    cmd.cid = cid;
+    return true;
+}
+
+fn commandsDespawn(self: ?*c.ke_ecs_commands, entity: c.ke_entity, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const q = recordTarget(self, out_error, @src()) orelse return false;
+    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+    cmd.kind = .despawn;
+    cmd.entity = entity;
+    return true;
+}
+
+fn commandsDefer(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const q = recordTarget(self, out_error, @src()) orelse return false;
+    if (func == null) {
+        E.fail(out_error, .invalid_argument, "no function to defer", @src());
+        return false;
+    }
+    const offset = deferArenaPush(q, user, user_size);
+    if (offset == std.math.maxInt(usize)) {
+        E.fail(out_error, .out_of_memory, "command payload does not fit", @src());
+        return false;
+    }
+    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+    cmd.kind = .callback;
+    cmd.fn_ = func;
+    cmd.attach_offset = offset;
+    cmd.attach_size = user_size;
+    return true;
 }
 
 var s_defer_applied_total: u32 = 0;
@@ -564,6 +678,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
 const TaskPkg = struct {
     state: CtxState,
     ctx: c.ke_system_ctx,
+    commands: c.ke_ecs_commands,
     execute: ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32, [*c][*c]c.ke_error) callconv(.c) bool,
     user_data: ?*anyopaque,
     dt: f32,
@@ -690,7 +805,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
             var slice: u32 = 0;
             while (slice < slices) : (slice += 1) {
                 const pkg = &pkgs[wave_size];
-                bindCtx(&pkg.ctx, &pkg.state);
+                bindCtx(&pkg.ctx, &pkg.commands, &pkg.state);
                 pkg.state.ecs = h.state.ecs;
                 pkg.state.access_list = rs.params.access_list;
                 pkg.state.access_count = rs.params.access_count;
@@ -1879,7 +1994,8 @@ const SpawnProbe = struct {
 
 fn spawnerBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const probe: *SpawnProbe = @ptrCast(@alignCast(ud.?));
-    for (&probe.ids) |*slot| slot.* = ke_system_ctx_spawn(ctx);
+    const cmds = ctx.?.commands;
+    for (&probe.ids) |*slot| slot.* = cmds.*.spawn.?(cmds, null);
     _ = probe.calls.fetchAdd(1, .acq_rel);
     return true;
 }
@@ -1940,14 +2056,16 @@ test "an entity spawned with no components still exists after the barrier" {
 
 const MutatorProbe = struct {
     payload: u8 = 'X',
+    cid: c.ke_component_id = 0,
     ok: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 };
 
 fn mutatorBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const probe: *MutatorProbe = @ptrCast(@alignCast(ud.?));
-    const attached = ke_system_ctx_attach(ctx, 42, 5, &probe.payload, 1);
-    const detached = ke_system_ctx_detach(ctx, 42, 5);
-    const despawned = ke_system_ctx_despawn(ctx, 42);
+    const cmds = ctx.?.commands;
+    const attached = cmds.*.attach.?(cmds, 42, probe.cid, &probe.payload, 1, null);
+    const detached = cmds.*.detach.?(cmds, 42, probe.cid, null);
+    const despawned = cmds.*.despawn.?(cmds, 42, null);
     probe.ok.store(attached and detached and despawned, .release);
     return true;
 }
@@ -1959,6 +2077,7 @@ test "deferred attach detach and despawn are applied at the barrier" {
     resetDeferApplied();
 
     var probe = MutatorProbe{};
+    probe.cid = f.ecs().component_register.?(f.ecs(), "mutator_probe", 1, null, 0, null);
     var sys = systemParams("Mutator", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &mutatorBody;
@@ -1970,8 +2089,71 @@ test "deferred attach detach and despawn are applied at the barrier" {
 }
 
 fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
-    _ = ke_system_ctx_spawn(ctx);
+    const cmds = ctx.?.commands;
+    _ = cmds.*.spawn.?(cmds, null);
     return true;
+}
+
+const RefusalProbe = struct {
+    cid: c.ke_component_id = 0,
+    wrong_size_refused: bool = false,
+    wrong_size_error: ?*const c.ke_error_type = null,
+    render_refused: bool = false,
+    render_error: ?*const c.ke_error_type = null,
+};
+
+fn wrongSizeBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const probe: *RefusalProbe = @ptrCast(@alignCast(ud.?));
+    const cmds = ctx.?.commands;
+    var payload: [8]u8 = undefined;
+    var err: [*c]c.ke_error = null;
+    probe.wrong_size_refused = !cmds.*.attach.?(cmds, 42, probe.cid, &payload, payload.len, &err);
+    if (err != null) probe.wrong_size_error = err.*.type;
+    return true;
+}
+
+fn renderBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const probe: *RefusalProbe = @ptrCast(@alignCast(ud.?));
+    const cmds = ctx.?.commands;
+    var err: [*c]c.ke_error = null;
+    probe.render_refused = cmds.*.spawn.?(cmds, &err) == c.KE_ENTITY_INVALID;
+    if (err != null) probe.render_error = err.*.type;
+    return true;
+}
+
+test "an attach whose payload size differs from the component size is refused with an error" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    resetDeferApplied();
+
+    var probe = RefusalProbe{};
+    probe.cid = f.ecs().component_register.?(f.ecs(), "refusal_probe", 1, null, 0, null);
+    var sys = systemParams("WrongSize", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &wrongSizeBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    try testing.expect(probe.wrong_size_refused);
+    try testing.expect(probe.wrong_size_error == E.typeOf(.invalid_argument));
+    try testing.expectEqual(@as(u32, 0), deferAppliedCount());
+}
+
+test "the render phase refuses to record a structural change" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = RefusalProbe{};
+    var sys = systemParams("RenderSpawner", c.KE_PHASE_RENDER);
+    sys.user_data = &probe;
+    sys.execute = &renderBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    f.flushRender();
+    try testing.expect(probe.render_refused);
+    try testing.expect(probe.render_error == E.typeOf(.not_supported));
 }
 
 test "the defer queue drains between ticks" {
