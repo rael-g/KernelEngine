@@ -168,6 +168,14 @@ fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
 }
 
+fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_render_module_handle {
+    while (rt.last_system.?(rt) > mark) {
+        if (!rt.unregister_system.?(rt, rt.last_system.?(rt), null)) break;
+    }
+    destroyModule(@ptrCast(st));
+    return empty;
+}
+
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
                                   world: ?*c.ke_world, default_passes: c.ke_bool, logger: ?*c.ke_logger,
                                   asset_resolver: ?*c.ke_asset_resolver,
@@ -179,6 +187,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     const rt = runtime orelse return empty;
     const e = ecs orelse return empty;
     const dev = device orelse return empty;
+    const mark = rt.last_system.?(rt);
 
     const core_h = c.ke_render_service_create(dev, e, shader_dir, out_error);
     if (core_h.ref == null) return empty;
@@ -248,19 +257,16 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             st.owns_view_space = true;
         }
         const vs = st.view_space.ref orelse {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         };
         if (ndc.clip_left_handed == 0) {
             c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: no projection builds a right-handed clip space", @src().file, @intCast(@src().line), null);
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.camera = c.ke_render_camera_create(vs, &ndc, out_error);
         if (st.camera.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         const mesh_cid = registerComponent(e, c.KE_COMPONENT_NAME_MESH, c.ke_mesh_component, &c.ke_mesh_component_fields);
@@ -285,8 +291,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         mesh_resolve_params.user_data = st.core.ref;
         mesh_resolve_params.execute = mesh_resolve.system;
         if (rt.register_system.?(rt, &mesh_resolve_params, out_error) == 0) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
@@ -306,65 +311,54 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         sprite_resolve_params.user_data = &st.sprite_resolve_state;
         sprite_resolve_params.execute = sprite_resolve.system;
         if (rt.register_system.?(rt, &sprite_resolve_params, out_error) == 0) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         if (!registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys, out_error)) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         if (!registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys, out_error)) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, @intFromBool(shadow_enabled),
                                               mesh_cid, world_transform_cid, light_cid, st.frame_cid, shadow_params, out_error);
         if (st.shadow.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
                                                 point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, vs, st.camera.ref, out_error);
         if (st.cluster.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, st.camera.ref, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.gbuffer.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
                                                             camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, st.camera.ref, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.skybox.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
                                                 mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         st.tonemap = c.ke_render_tonemap_create(rt, st.core.ref, dev, logger, out_error);
         if (st.tonemap.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         st.ui = c.ke_render_ui_create(rt, e, st.core.ref, dev, ndc, bb_cid, 8, out_error);
         if (st.ui.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         const label_cid = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields);
@@ -381,13 +375,11 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         label_resolve_params.user_data = &st.label_resolve_state;
         label_resolve_params.execute = label_resolve.system;
         if (rt.register_system.?(rt, &label_resolve_params, out_error) == 0) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         if (!registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys, out_error)) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
     }
 
@@ -501,6 +493,7 @@ test "a render module whose runtime refuses any one system registration fails th
         rig.rt.limit = limit;
         const failed = rig.create();
         try testing.expect(failed.ref == null);
+        try testing.expectEqual(@as(u32, 0), rig.rt.live_count);
         try testing.expectEqual(@as(i64, 0), rig.dev.live);
         try heap.expectNoLeaks();
     }

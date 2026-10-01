@@ -232,11 +232,15 @@ pub fn Stubs(comptime c: type) type {
             vtable: c.ke_runtime,
             registered: u32,
             limit: u32,
+            live: [64]u64,
+            live_count: u32,
 
             pub fn init(self: *Runtime) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_runtime), .registered = 0, .limit = std.math.maxInt(u32) };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_runtime), .registered = 0, .limit = std.math.maxInt(u32), .live = undefined, .live_count = 0 };
                 self.vtable.handle = self;
                 self.vtable.register_system = &registerSystem;
+                self.vtable.unregister_system = &unregisterSystem;
+                self.vtable.last_system = &lastSystem;
             }
 
             pub fn api(self: *Runtime) *c.ke_runtime {
@@ -247,7 +251,26 @@ pub fn Stubs(comptime c: type) type {
                 const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
                 if (rt.registered >= rt.limit) return 0;
                 rt.registered += 1;
+                rt.live[rt.live_count] = rt.registered;
+                rt.live_count += 1;
                 return rt.registered;
+            }
+
+            fn unregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
+                for (0..rt.live_count) |i| {
+                    if (rt.live[i] != id) continue;
+                    var j = i;
+                    while (j + 1 < rt.live_count) : (j += 1) rt.live[j] = rt.live[j + 1];
+                    rt.live_count -= 1;
+                    return true;
+                }
+                return false;
+            }
+
+            fn lastSystem(self: ?*c.ke_runtime) callconv(.c) c.ke_system_id {
+                const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
+                return if (rt.live_count == 0) 0 else rt.live[rt.live_count - 1];
             }
         };
 

@@ -115,12 +115,14 @@ ke_runtime_params size=12 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
   max_systems_per_phase 8
-ke_runtime size=40 align=8
+ke_runtime size=56 align=8
   handle 0
   register_module 8
   register_system 16
-  tick 24
-  flush_render 32
+  unregister_system 24
+  last_system 32
+  tick 40
+  flush_render 48
 ke_runtime_handle size=16 align=8
   ref 0
   destroy 8

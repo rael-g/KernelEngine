@@ -38,6 +38,11 @@ public interface IRuntime : IDisposable
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
     ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false);
+    /// <summary>Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Waits for a pending render phase first. Not callable from a system body or while a tick runs.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    void UnregisterSystem(ulong id);
+    /// <summary>The id of the system registered last and still registered, or 0 when there is none. A module reads it before registering anything, and on failure unregisters every system whose id is above what it read.</summary>
+    ulong LastSystem();
     /// <summary>Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body's error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     void Tick(float dt);

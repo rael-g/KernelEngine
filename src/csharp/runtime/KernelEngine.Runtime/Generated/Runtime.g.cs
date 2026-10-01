@@ -261,6 +261,20 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         }
     }
 
+    /// <summary>Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Waits for a pending render phase first. Not callable from a system body or while a tick runs.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    public void UnregisterSystem(ulong id)
+    {
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(Handle->unregister_system(Handle, id, &err), err, "unregister_system");
+    }
+
+    /// <summary>The id of the system registered last and still registered, or 0 when there is none. A module reads it before registering anything, and on failure unregisters every system whose id is above what it read.</summary>
+    public ulong LastSystem()
+    {
+        return Handle->last_system(Handle);
+    }
+
     /// <summary>Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body's error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void Tick(float dt)

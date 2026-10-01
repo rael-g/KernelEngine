@@ -198,7 +198,6 @@ export fn ke_physics_body2d_module_create(
     params: ?*const c.ke_physics_body2d_module_params,
     out_error: ?*?*c.ke_error,
 ) callconv(.c) c.ke_physics_body2d_module_handle {
-    _ = out_error;
     const empty: c.ke_physics_body2d_module_handle = .{ .ref = null, .destroy = null };
 
     const pr = params orelse return empty;
@@ -230,7 +229,11 @@ export fn ke_physics_body2d_module_create(
     sp.pinned_thread = 0;
     sp.user_data = m;
     sp.execute = bodySystem;
-    _ = rt.*.register_system.?(rt, &sp, null);
+    const body_system = rt.*.register_system.?(rt, &sp, @ptrCast(out_error));
+    if (body_system == 0) {
+        gpa.destroy(m);
+        return empty;
+    }
 
     m.collider_queries = std.mem.zeroes([3]c.ke_query_decl);
     m.collider_queries[0].terms[0] = .{ .cid = collider_cid, .access = wr };
@@ -249,7 +252,11 @@ export fn ke_physics_body2d_module_create(
     cp.pinned_thread = 0;
     cp.user_data = m;
     cp.execute = colliderSystem;
-    _ = rt.*.register_system.?(rt, &cp, null);
+    if (rt.*.register_system.?(rt, &cp, @ptrCast(out_error)) == 0) {
+        _ = rt.*.unregister_system.?(rt, body_system, null);
+        gpa.destroy(m);
+        return empty;
+    }
 
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
@@ -313,4 +320,24 @@ test "a body2d module missing its runtime, ecs or physics is refused" {
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
+}
+
+test "a body2d module the runtime refuses a system of fails the create and leaves no system registered" {
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var physics = std.mem.zeroes(c.ke_physics_2d);
+
+    for ([_]u32{ 0, 1 }) |limit| {
+        var rt: Stubs.Runtime = undefined;
+        rt.init();
+        rt.limit = limit;
+        var params = std.mem.zeroes(c.ke_physics_body2d_module_params);
+        params.runtime = rt.api();
+        params.ecs = ecs.api();
+        params.physics = &physics;
+
+        try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+        try testing.expectEqual(@as(u32, 0), rt.live_count);
+        try heap.expectNoLeaks();
+    }
 }

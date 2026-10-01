@@ -395,6 +395,7 @@ const ExtractedQuery = struct {
 };
 
 const RegisteredSystem = struct {
+    id: u64,
     params: c.ke_runtime_system_params,
     query_decls: [KE_MAX_QUERIES_PER_SYSTEM]c.ke_query_decl,
     query_ids: [KE_MAX_QUERIES_PER_SYSTEM]c.ke_query_id,
@@ -409,6 +410,13 @@ const RegisteredSystem = struct {
 };
 
 fn releaseSystem(rs: *RegisteredSystem) void {
+    for (0..KE_MAX_QUERIES_PER_SYSTEM) |q| {
+        const eq = &rs.extracted[q];
+        if (eq.entities_buf) |eb| cFree(c.ke_entity, eb, eq.capacity);
+        for (0..MAX_TERMS) |t| {
+            if (eq.col_bufs[t]) |cb| cFreeBytes(cb, eq.col_elem_size[t] *% eq.capacity);
+        }
+    }
     if (rs.name_storage) |n| heap.gpa.free(n);
     if (rs.access_storage) |a| heap.gpa.free(a);
     if (rs.seg_storage) |ss| cFree(c.ke_ecs_segment, ss, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY);
@@ -564,6 +572,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
     };
     const rs = &rs_mem[0];
     rs.params = p.*;
+    rs.id = h.state.next_system_id + 1;
     rs.query_count = 0;
     rs.seg_storage = null;
     rs.derived_access_count = 0;
@@ -627,6 +636,38 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
 
     h.state.next_system_id += 1;
     return h.state.next_system_id;
+}
+
+fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (self == null or self.?.handle == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const h = handleOf(self.?);
+    _ = runtimeJoinPendingRender(h);
+    const systems = h.state.systems orelse {
+        E.fail(out_error, .not_found, "no system has that id", @src());
+        return false;
+    };
+    for (0..h.state.system_count) |i| {
+        if (systems[i].?.id != id) continue;
+        releaseSystem(systems[i].?);
+        var j = i;
+        while (j + 1 < h.state.system_count) : (j += 1) systems[j] = systems[j + 1];
+        h.state.system_count -= 1;
+        if (i < h.state.systems_prepared) h.state.systems_prepared -= 1;
+        return true;
+    }
+    E.fail(out_error, .not_found, "no system has that id", @src());
+    return false;
+}
+
+fn runtimeLastSystem(self: ?*c.ke_runtime) callconv(.c) c.ke_system_id {
+    if (self == null or self.?.handle == null) return 0;
+    const h = handleOf(self.?);
+    const systems = h.state.systems orelse return 0;
+    if (h.state.system_count == 0) return 0;
+    return systems[h.state.system_count - 1].?.id;
 }
 
 const TaskPkg = struct {
@@ -1033,13 +1074,6 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     if (h.state.systems) |systems| {
         for (0..h.state.system_count) |i| {
             const rs = systems[i].?;
-            for (0..KE_MAX_QUERIES_PER_SYSTEM) |q| {
-                const eq = &rs.extracted[q];
-                if (eq.entities_buf) |eb| cFree(c.ke_entity, eb, eq.capacity);
-                for (0..MAX_TERMS) |t| {
-                    if (eq.col_bufs[t]) |cb| cFreeBytes(cb, eq.col_elem_size[t] *% eq.capacity);
-                }
-            }
             releaseSystem(rs);
         }
         cFree(?*RegisteredSystem, systems, h.state.system_capacity);
@@ -1089,6 +1123,8 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
     h.api.handle = h;
     h.api.register_module = &runtimeRegisterModule;
     h.api.register_system = &runtimeRegisterSystem;
+    h.api.unregister_system = &runtimeUnregisterSystem;
+    h.api.last_system = &runtimeLastSystem;
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
 
@@ -1695,6 +1731,37 @@ test "a render query matching more segments than the runtime holds fails the tic
     var err: [*c]c.ke_error = null;
     try testing.expect(!r.rt().tick.?(r.rt(), 0.001, &err));
     try testing.expect(err != null);
+}
+
+test "an unregistered system no longer runs and the others keep running" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var log = PhaseLog{};
+    var entries: [3]PhaseLogEntry = undefined;
+    var ids: [3]c.ke_system_id = undefined;
+    const phases = [_]c_int{ c.KE_PHASE_PRE_UPDATE, c.KE_PHASE_UPDATE, c.KE_PHASE_POST_UPDATE };
+    for (phases, 0..) |ph, i| {
+        entries[i] = .{ .log = &log, .phase = ph };
+        var sys = systemParams("Logged", ph);
+        sys.execute = &phaseLogBody;
+        sys.user_data = &entries[i];
+        ids[i] = r.rt().register_system.?(r.rt(), &sys, null);
+        try testing.expect(ids[i] != 0);
+    }
+
+    try testing.expectEqual(ids[2], r.rt().last_system.?(r.rt()));
+    try testing.expect(r.rt().unregister_system.?(r.rt(), ids[1], null));
+    try testing.expectEqual(ids[2], r.rt().last_system.?(r.rt()));
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!r.rt().unregister_system.?(r.rt(), ids[1], &err));
+    try testing.expect(err != null);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, 2), log.count);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_PRE_UPDATE), log.seen[0]);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_POST_UPDATE), log.seen[1]);
 }
 
 test "creating a runtime without an ecs is refused" {
