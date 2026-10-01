@@ -153,3 +153,10 @@ It builds the system, takes its id, and pushes it on a lock-free stack. The next
 stack, in registration order, before its first phase, after joining a render phase still running
 against the table. `unregister_system` from a body is queued the same way and applied after the
 registrations of that stack.
+
+## How many segments a query may match
+
+`ke_runtime_params.max_segments_per_query` (`runtime_create.h`) is the most archetype segments one
+query may match; `0` selects 32. A tick whose query matches more fails with `out_of_memory` naming the
+system, in the sim phases and in the render extraction alike. The segment buffers of each system and
+the render extraction scratch are sized from it when the runtime and the system are created.

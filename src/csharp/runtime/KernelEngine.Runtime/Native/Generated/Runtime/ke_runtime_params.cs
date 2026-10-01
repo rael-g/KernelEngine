@@ -10,4 +10,7 @@ public partial struct ke_runtime_params
 
     [NativeTypeName("uint32_t")]
     public uint max_systems_per_phase;
+
+    [NativeTypeName("uint32_t")]
+    public uint max_segments_per_query;
 }

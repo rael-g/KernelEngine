@@ -10,7 +10,7 @@ const c = @cImport({
 const E = @import("kerror").Errors(c);
 
 const KE_MAX_QUERIES_PER_SYSTEM = 8;
-const KE_MAX_SEGMENTS_PER_QUERY = 32;
+const default_segments_per_query = 32;
 const KE_RUNTIME_PHASE_COUNT = 7;
 const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
@@ -72,6 +72,7 @@ const CtxState = struct {
     defer_q: ?*DeferQueue,
     seg_storage: ?[*]const c.ke_ecs_segment,
     seg_counts: ?[*]const usize,
+    segments_per_query: usize,
     view_query_count: u32,
     slice_index: u32,
     slice_count: u32,
@@ -202,7 +203,7 @@ fn ctxView(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callc
     const s = ctxOf(ctx) orelse return null;
     if (s.seg_storage == null or query_index >= s.view_query_count) return null;
     if (out_count != null) out_count.* = s.seg_counts.?[query_index];
-    return &s.seg_storage.?[@as(usize, query_index) * KE_MAX_SEGMENTS_PER_QUERY];
+    return &s.seg_storage.?[@as(usize, query_index) * s.segments_per_query];
 }
 
 fn deferReserve(q: *DeferQueue, needed: usize) bool {
@@ -402,6 +403,7 @@ const RegisteredSystem = struct {
     query_ids: [KE_MAX_QUERIES_PER_SYSTEM]c.ke_query_id,
     query_count: u32,
     seg_storage: ?[*]c.ke_ecs_segment,
+    seg_storage_len: usize,
     seg_counts: [KE_MAX_QUERIES_PER_SYSTEM]usize,
     extracted: [KE_MAX_QUERIES_PER_SYSTEM]ExtractedQuery,
     derived_access: [KE_MAX_QUERIES_PER_SYSTEM * MAX_TERMS]c.ke_component_access,
@@ -420,7 +422,7 @@ fn releaseSystem(rs: *RegisteredSystem) void {
     }
     if (rs.name_storage) |n| heap.gpa.free(n);
     if (rs.access_storage) |a| heap.gpa.free(a);
-    if (rs.seg_storage) |ss| cFree(c.ke_ecs_segment, ss, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY);
+    if (rs.seg_storage) |ss| cFree(c.ke_ecs_segment, ss, rs.seg_storage_len);
     cFree(RegisteredSystem, @ptrCast(rs), 1);
 }
 
@@ -460,6 +462,8 @@ const RuntimeState = struct {
     pending_systems: std.atomic.Value(?*RegisteredSystem),
     pending_removals: std.atomic.Value(?*PendingRemoval),
     max_systems_per_phase: u32,
+    max_segments_per_query: usize,
+    extract_scratch: ?[*]c.ke_ecs_segment,
     phase_indices: ?[*]u32,
     phase_params: ?[*]c.ke_runtime_system_params,
     wave_assignments: ?[*]u32,
@@ -533,7 +537,7 @@ fn refuseAccess(rs: *RegisteredSystem, out_error: [*c][*c]c.ke_error) ?*Register
     return null;
 }
 
-fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
+fn buildSystem(p: [*c]const c.ke_runtime_system_params, segments_per_query: usize, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
     if (p.*.query_count > KE_MAX_QUERIES_PER_SYSTEM) {
         E.fail(out_error, .invalid_argument, "system declares more queries than a system can hold", @src());
         return null;
@@ -557,6 +561,7 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
     rs.pending_next = null;
     rs.query_count = 0;
     rs.seg_storage = null;
+    rs.seg_storage_len = 0;
     rs.derived_access_count = 0;
     rs.name_storage = null;
     rs.access_storage = null;
@@ -597,7 +602,8 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
         rs.params.queries = null;
         rs.params.query_count = 0;
 
-        rs.seg_storage = cAlloc(c.ke_ecs_segment, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY) orelse {
+        rs.seg_storage_len = KE_MAX_QUERIES_PER_SYSTEM * segments_per_query;
+        rs.seg_storage = cAlloc(c.ke_ecs_segment, rs.seg_storage_len) orelse {
             releaseSystem(rs);
             E.fail(out_error, .out_of_memory, "query segment storage allocation failed", @src());
             return null;
@@ -652,7 +658,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
     }
     const h = handleOf(self.?);
 
-    const rs = buildSystem(p, out_error) orelse return 0;
+    const rs = buildSystem(p, h.state.max_segments_per_query, out_error) orelse return 0;
     rs.id = @atomicRmw(u64, &h.state.next_system_id, .Add, 1, .monotonic) + 1;
     if (h.state.in_tick.load(.acquire) or h.state.in_render.load(.acquire)) {
         var head = h.state.pending_systems.load(.acquire);
@@ -813,6 +819,7 @@ fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
 }
 
 fn freePhaseScratch(h: *RuntimeHandle) void {
+    cFree(c.ke_ecs_segment, h.state.extract_scratch, h.state.max_segments_per_query);
     const n: usize = @as(usize, h.state.max_systems_per_phase) * KE_RUNTIME_PHASE_COUNT;
     cFree(u32, h.state.phase_indices, n);
     cFree(c.ke_runtime_system_params, h.state.phase_params, n);
@@ -873,10 +880,10 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
             if (rs.query_count > 0 and rs.seg_storage != null) {
                 if (phase != c.KE_PHASE_RENDER and h.state.ecs.query_resolve != null) {
                     for (0..rs.query_count) |q| {
-                        const dst = &rs.seg_storage.?[q * KE_MAX_SEGMENTS_PER_QUERY];
+                        const dst = &rs.seg_storage.?[q * h.state.max_segments_per_query];
                         var cnt: usize = 0;
-                        h.state.ecs.query_resolve.?(h.state.ecs, rs.query_ids[q], dst, KE_MAX_SEGMENTS_PER_QUERY, &cnt);
-                        if (cnt > KE_MAX_SEGMENTS_PER_QUERY) return segmentOverflow(rs);
+                        h.state.ecs.query_resolve.?(h.state.ecs, rs.query_ids[q], dst, h.state.max_segments_per_query, &cnt);
+                        if (cnt > h.state.max_segments_per_query) return segmentOverflow(rs);
                         rs.seg_counts[q] = cnt;
                     }
                 }
@@ -894,6 +901,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
                 pkg.state.defer_q = null;
                 pkg.state.slice_index = slice;
                 pkg.state.slice_count = slices;
+                pkg.state.segments_per_query = h.state.max_segments_per_query;
 
                 if (rs.query_count > 0 and rs.seg_storage != null) {
                     pkg.state.seg_storage = rs.seg_storage;
@@ -961,7 +969,7 @@ fn runtimePrepareSystems(h: *RuntimeHandle) void {
 
 fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
     if (h.state.ecs.query_resolve == null) return .{};
-    var raw: [KE_MAX_SEGMENTS_PER_QUERY]c.ke_ecs_segment = undefined;
+    const raw = h.state.extract_scratch orelse return .{};
 
     for (0..h.state.system_count) |si| {
         const rs = h.state.systems.?[si].?;
@@ -979,8 +987,8 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
             }
 
             var raw_count: usize = 0;
-            h.state.ecs.query_resolve.?(h.state.ecs, rs.query_ids[q], &raw, KE_MAX_SEGMENTS_PER_QUERY, &raw_count);
-            if (raw_count > KE_MAX_SEGMENTS_PER_QUERY) return segmentOverflow(rs);
+            h.state.ecs.query_resolve.?(h.state.ecs, rs.query_ids[q], raw, h.state.max_segments_per_query, &raw_count);
+            if (raw_count > h.state.max_segments_per_query) return segmentOverflow(rs);
 
             var total: usize = 0;
             for (0..raw_count) |s| total += raw[s].count;
@@ -1032,7 +1040,7 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
             while (t2 < MAX_TERMS) : (t2 += 1) eq.seg.columns[t2] = null;
 
             if (rs.seg_storage) |ss| {
-                ss[q * KE_MAX_SEGMENTS_PER_QUERY] = eq.seg;
+                ss[q * h.state.max_segments_per_query] = eq.seg;
                 rs.seg_counts[q] = if (written > 0) 1 else 0;
             }
         }
@@ -1208,6 +1216,8 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 
     const max_per_phase: u32 = if (params != null and params.*.max_systems_per_phase > 0) params.*.max_systems_per_phase else 256;
     h.state.max_systems_per_phase = max_per_phase;
+    h.state.max_segments_per_query = if (params != null and params.*.max_segments_per_query > 0) params.*.max_segments_per_query else default_segments_per_query;
+    h.state.extract_scratch = cAlloc(c.ke_ecs_segment, h.state.max_segments_per_query);
     const n: usize = @as(usize, max_per_phase) * KE_RUNTIME_PHASE_COUNT;
     h.state.phase_indices = cAlloc(u32, n);
     h.state.phase_params = cAlloc(c.ke_runtime_system_params, n);
@@ -1215,7 +1225,7 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
     h.state.phase_pkgs = cAlloc(TaskPkg, n);
     h.state.phase_tasks = cAlloc(?*c.ke_task, n);
     h.state.phase_pinned = cAlloc(u32, n);
-    if (h.state.phase_indices == null or h.state.phase_params == null or h.state.wave_assignments == null or
+    if (h.state.extract_scratch == null or h.state.phase_indices == null or h.state.phase_params == null or h.state.wave_assignments == null or
         h.state.phase_pkgs == null or h.state.phase_tasks == null or h.state.phase_pinned == null)
     {
         freePhaseScratch(h);
@@ -1585,9 +1595,11 @@ const BareRuntime = struct {
     ecs: c.ke_ecs = std.mem.zeroes(c.ke_ecs),
     scheduler: c.ke_scheduler = std.mem.zeroes(c.ke_scheduler),
     runtime_h: c.ke_runtime_handle = undefined,
+    segments_per_query: u32 = 0,
 
     fn init(self: *BareRuntime) !void {
         var rp = std.mem.zeroes(c.ke_runtime_params);
+        rp.max_segments_per_query = self.segments_per_query;
         self.runtime_h = ke_runtime_create(&self.ecs, &self.scheduler, &rp, null);
         try testing.expect(self.runtime_h.ref != null);
     }
@@ -1994,6 +2006,47 @@ test "a system registered from a render body is queued instead of waiting on the
 
     try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
     try testing.expectEqual(@as(u32, 1), m.late_runs);
+}
+
+fn fakeQueryResolveFive(_: ?*c.ke_ecs, _: c.ke_query_id, out: [*c]c.ke_ecs_segment, max: usize, out_count: [*c]usize) callconv(.c) void {
+    const written = @min(max, 5);
+    for (0..written) |i| out[i] = std.mem.zeroes(c.ke_ecs_segment);
+    out_count.* = 5;
+}
+
+fn fiveSegmentRuntime(r: *InlineRuntime, segments_per_query: u32) !void {
+    r.bare.segments_per_query = segments_per_query;
+    r.bare.ecs.query_register = @ptrCast(&fakeQueryRegister);
+    r.bare.ecs.query_resolve = @ptrCast(&fakeQueryResolveFive);
+    r.bare.ecs.component_size = @ptrCast(&fakeComponentSize);
+    try r.init();
+    var q = std.mem.zeroes(c.ke_query_decl);
+    q.terms[0] = access(1, c.KE_ACCESS_READ);
+    q.term_count = 1;
+    var sys = systemParams("Five", c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    sys.queries = &q;
+    sys.query_count = 1;
+    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+}
+
+test "the segment capacity of a query is the runtime's parameter: five segments fit by default and not in four" {
+    var roomy = InlineRuntime{};
+    try fiveSegmentRuntime(&roomy, 0);
+    defer roomy.bare.deinit();
+    try testing.expect(roomy.rt().tick.?(roomy.rt(), 0.001, null));
+
+    var tight = InlineRuntime{};
+    try fiveSegmentRuntime(&tight, 4);
+    defer tight.bare.deinit();
+    try testing.expect(!tight.rt().tick.?(tight.rt(), 0.001, null));
+}
+
+test "a capacity raised to the match count lets the tick through" {
+    var r = InlineRuntime{};
+    try fiveSegmentRuntime(&r, 5);
+    defer r.bare.deinit();
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
 }
 
 test "creating a runtime without an ecs is refused" {

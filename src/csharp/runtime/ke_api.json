@@ -249,6 +249,12 @@
           "type": "uint32_t",
           "tags": [],
           "doc": "Most systems one phase may hold; registering past it fails. 0 selects 256."
+        },
+        {
+          "name": "max_segments_per_query",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Most archetype segments one query may match; a tick whose query matches more fails. 0 selects 32."
         }
       ]
     }
