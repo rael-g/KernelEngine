@@ -30,7 +30,7 @@ A sweep of every header under `src/c/` and every plugin `include/` finds 31 stru
 ### Who owns the object behind a vtable
 
 A factory returns an **owner**, a two-member struct `{ ref, destroy }`
-(`ke_window_handle`, `window.h:48-52`; 34 of them, none with another member), by value. `ref` is the
+(`ke_window_handle`, `window.h:43-47`; 34 of them, none with another member), by value. `ref` is the
 vtable pointer and `destroy` takes that same pointer. The factory headers that say what failure looks
 like — eleven of them, among them `script_host_create.h:38`,
 `src/zig/window/glfw/include/kernel_engine/window/glfw/glfw_window.h:33` and
@@ -40,7 +40,7 @@ whose `ref` is `NULL`; the others are silent. Every function declared in those h
 
 The vtable carries no `destroy` of its own, so whoever receives only the bare `ke_X *` cannot destroy
 it: owning is a property of holding the `{ ref, destroy }`. Three vtables carry a `destroy` slot
-regardless: `ke_logger_sink` (owned by the logger it is handed to, `logger.h:26`, `:42`),
+regardless: `ke_logger_sink` (owned by the logger it is handed to, `logger.h:24`, `:42`),
 `ke_gpu_command_encoder` and `ke_gpu_command_buffer`
 (`src/c/render/kernel_engine/render/gpu/gpu_commands.h:75`, `:83`).
 
@@ -93,7 +93,7 @@ exists because C `bool` is not blittable through P/Invoke (`types.h:11-12`).
 ## Doc tags
 
 A `///` or `/** */` comment on a contract member may open with bracketed tags that state what the
-signature cannot: `[out]` on a parameter the callee writes (`window.h:39`), `[borrowed,nullable]` on
+signature cannot: `[out]` on a parameter the callee writes (`window.h:34`), `[borrowed,nullable]` on
 a pointer the callee does not own and may receive as null (`glfw_window.h:25`). kabic reads them
 (`src/csharp/kabic/Kabic.Frontend/DocParser.cs:9`) and projects them into each target language; a
 tag that is not there is a fact no projection can recover.
@@ -133,7 +133,7 @@ whatever reused the slot (`:34-78`).
 | `ke_mesh_handle`, `ke_texture_handle`, `ke_material_handle`, `ke_cubemap_handle`, `ke_shadow_map_handle`, `ke_ui_font_handle` | `0` | `handles.h:22`; `ui/components.h:19` |
 | `ke_entity` | `0` (`KE_ENTITY_INVALID`) | `src/c/ecs/kernel_engine/ecs/ecs.h:13-14` |
 | `ke_query_id` | `0` | `ke_ecs.h:14-15` |
-| `ke_audio_sound`, `ke_body_2d` | `0` | `audio.h:17-18`; `physics_2d.h:16-17` |
+| `ke_audio_sound`, `ke_body_2d` | `0` | `audio.h:15-16`; `physics_2d.h:14-15` |
 | `ke_script_type_id` | `0` | `script_host.h:35` |
 | `ke_module_id`, `ke_system_id` | `0` is what a refused registration returns | `runtime.h:17-18`, `runtime.zig:437-441`, `:465-468` |
 | `ke_resource_handle` | `UINT32_MAX` | `src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h:13-15` |

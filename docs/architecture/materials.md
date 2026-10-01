@@ -24,10 +24,10 @@ write the surface, and `discard` when `alpha < mat.alpha_cutoff` (`src/shaders/m
 
 ## What the build makes of it
 
-`Ctx.materialShaders` runs once per consuming pass (`build.zig:414-454`). For each pass it lists every
+`Ctx.materialShaders` runs once per consuming pass (`build.zig:426-468`). For each pass it lists every
 `*.slang` in the materials directories, generates a wrapper from the pass's template by substituting the
 material's module name and struct name, and compiles the wrapper's vertex and fragment entry points
-(`build.zig:831-879`). The two templates are:
+(`build.zig:857-905`). The two templates are:
 
 | pass | template | fragment entry |
 |---|---|---|
@@ -39,8 +39,8 @@ fragment functions call the same `ke_surface_from_vertex`, which builds the tang
 seeds a default surface and lets the material fill it (`forward_common.slang:76-95`). Only what happens after the surface is built differs between passes.
 
 The output is `<material>.<pass>.{vs,fs}.wgsl` in the shader directory the service loads from
-(`build.zig:803-824`, `shader_loader.zig:9-17`, `:39`). The directories searched are the shared
-`src/shaders/materials` and one example's `materials` directory (`build.zig:410-413`).
+(`build.zig:829-850`, `shader_loader.zig:9-17`, `:39`). The directories searched are the shared
+`src/shaders/materials` and one example's `materials` directory (`build.zig:422-425`).
 
 The shadow pass does not use materials: its own shader reads only the position and the model matrix
 (`src/zig/render/shadow/shaders/shadow.slang`), so a `vertex()` perturbation is not seen by shadows.

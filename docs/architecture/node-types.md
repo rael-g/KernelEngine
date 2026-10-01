@@ -88,9 +88,9 @@ Three namespaces are involved, and they are not normalized the same way.
 
 | what | name | where it is resolved |
 |---|---|---|
-| the node's own component, for a block `[entity.<name>]` | the registered component name, matched exactly | `component_lookup` in the loader (`src/zig/framework/src/scene_loader.zig:331`) |
+| the node's own component, for a block `[entity.<name>]` | the registered component name, matched exactly | `component_lookup` in the loader (`src/zig/framework/src/scene_loader.zig:327`) |
 | the node type, for `type = "<name>"` | normalized, qualified first then short | `NodeTypeRegistry.Resolve` |
-| a signal, for `signal = "<name>"` | the payload struct's own name, matched exactly | `signal_lookup` (`scene_loader.zig:480`) |
+| a signal, for `signal = "<name>"` | the payload struct's own name, matched exactly | `signal_lookup` (`scene_loader.zig:476`) |
 
 A game node's own block key is `SnakeCase(class name)`; its property keys inside the block are
 `SnakeCase(property name)` (`NodePropertyGenerator.cs:410`).
@@ -120,7 +120,7 @@ fit in 128 bytes is refused. With no factory registered, a `type` key is ignored
 ## What binding a typed entity does
 
 The scene loader creates the entity, applies its component blocks, and only then calls the script
-factory (`processEntity`, `scene_loader.zig:545-632`, blocks at `:608`, factory at `:615`). The
+factory (`processEntity`, `scene_loader.zig:541-628`, blocks at `:608`, factory at `:615`). The
 managed factory registered by `SceneRouterModule` (`Modules/SceneRouterModule.cs:49-54`):
 
 1. resolves the type name through the registry;

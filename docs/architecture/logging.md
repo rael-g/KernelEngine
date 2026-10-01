@@ -1,13 +1,13 @@
 # How does a log event reach a sink?
 
 There is one logger, a vtable `ke_logger` created by `ke_logger_create` (`src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h`), and any number of sinks,
-`ke_logger_sink` values the logger owns (`src/c/logger/kernel_engine/logger/logger.h:28-70`). The
+`ke_logger_sink` values the logger owns (`src/c/logger/kernel_engine/logger/logger.h:26-68`). The
 only implementation is `src/zig/logger/simple/src/logger_simple.zig`.
 
 ## The event
 
 A `ke_log_event` is three fields: an `int32_t level`, a `tag` and a `message`, both `const char *`
-(`logger.h:17-22`). It carries no timestamp, thread or source location. `tag` and `message` are
+(`logger.h:15-20`). It carries no timestamp, thread or source location. `tag` and `message` are
 valid only for the duration of the call that receives them, so a sink that wants to keep one copies
 it. `level` is a `ke_log_level`, `KE_LOG_LEVEL_TRACE` (0) through `KE_LOG_LEVEL_CRITICAL` (5)
 (`log_level.h:13-20`); the console sink prints any other value as `"UNKNOWN"`

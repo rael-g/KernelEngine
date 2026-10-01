@@ -8,7 +8,7 @@ and a render resource is a component id.
 
 | part | what it is | where |
 |---|---|---|
-| GPU device | the device, resource and command contract; one implementation, WebGPU | `src/c/render/kernel_engine/render/gpu/gpu_device.h`; plugin `ke_gpu_device_webgpu` (`build.zig:277`) |
+| GPU device | the device, resource and command contract; one implementation, WebGPU | `src/c/render/kernel_engine/render/gpu/gpu_device.h`; plugin `ke_gpu_device_webgpu` (`build.zig:280`) |
 | render service | resources by name, pass recording contexts, meshes, textures, materials, pipeline cache, frame lifecycle | `.../render/service/render_service.h:65`; `src/zig/render/service/` |
 | pass plugins | one plugin per pass: shadow, cluster, gbuffer, deferred lighting, skybox, forward, tonemap, UI | `src/zig/render/<pass>/` |
 | render module | composes the passes and registers the frame-edge systems | `src/zig/render/module/src/render_module.zig` |

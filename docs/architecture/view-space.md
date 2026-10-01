@@ -47,7 +47,7 @@ one is making its own choice (`view_space.h:27-32`).
 
 ### Two plugins, one implementation
 
-`src/zig/view/space` builds one library, `ke_view_space` (`build.zig:295`), with two factories,
+`src/zig/view/space` builds one library, `ke_view_space` (`build.zig:298`), with two factories,
 `ke_view_space_rh_create` and `ke_view_space_lh_create` (`view_space.zig:199-209`; headers
 `view_space_rh_create.h`, `view_space_lh_create.h`). They differ in a single `Handedness` value held
 in the state (`view_space.zig:14-19`), and every slot switches on it:

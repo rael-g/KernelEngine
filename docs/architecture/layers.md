@@ -16,11 +16,11 @@ plugin not declared there is not built.
 ## Layer 1 — a contract is a struct of function pointers
 
 A contract is a C struct whose members are function pointers plus an opaque `void *handle`
-(`ke_window`, `src/c/window/kernel_engine/window/window.h:18`). Callers never link against a symbol
+(`ke_window`, `src/c/window/kernel_engine/window/window.h:16`). Callers never link against a symbol
 to use it; they call through the pointer.
 
 Ownership travels in a second struct of the shape `{ ref, destroy }`
-(`ke_window_handle`, `window.h:48`): the factory returns the owner, and everything else that needs
+(`ke_window_handle`, `window.h:43`): the factory returns the owner, and everything else that needs
 the object receives the borrowed `ke_window *`.
 
 `src/c/` contains no `.c`, `.zig` or build file — only headers
@@ -41,7 +41,7 @@ except through the vtable it returns.
 
 A plugin is configured by the root build, not by itself: the root `build.zig` runs each plugin's
 `zig build` with one shared `--prefix` so every library lands in one directory
-(`build.zig:885-913`), and passes each include path as a `-D` option
+(`build.zig:911-939`), and passes each include path as a `-D` option
 (`src/zig/window/glfw/build.zig:9-15`). A plugin asks for exactly the domains it consumes, so a
 domain it did not ask for is not on its include path.
 

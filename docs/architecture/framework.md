@@ -1,6 +1,6 @@
 # What is the framework made of, and what does each piece depend on?
 
-The framework is one plugin, `src/zig/framework/`, built as `ke_framework` (`build.zig:144`). It
+The framework is one plugin, `src/zig/framework/`, built as `ke_framework` (`build.zig:146`). It
 exports eight factories, one per piece. Each piece is constructed on its own from the borrowed
 objects it needs; no piece is reachable except through its vtable
 ([layers.md](layers.md#layer-2--a-plugin-exports-one-factory-and-nothing-else)).
@@ -122,7 +122,7 @@ fixed by the first caller that knows it, `:95-100`). `signal_lookup(name)` only 
 registers (`signal_bus.zig:119-134`).
 
 The scene loader resolves `signal = "..."` of a `[[entity.connect]]` with `signal_lookup`
-(`scene_loader.zig:480`), and a name that was not registered fails the load. A signal therefore exists
+(`scene_loader.zig:476`), and a name that was not registered fails the load. A signal therefore exists
 for a scene only if some runtime called `signal_id` for it **before** the scene is read. The managed
 layer does that for every signal a node type emits or handles when `SceneNodesModule` loads
 ([node-types.md](node-types.md#borrows-and-emitt)); a runtime in another language must do the same

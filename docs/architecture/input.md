@@ -7,13 +7,13 @@ tick. A second system evaluates action bindings against the copy
 
 ## The state: `ke_input`
 
-`ke_input` is a vtable (`src/c/input/kernel_engine/input/input.h:18-132`); its one implementation is
+`ke_input` is a vtable (`src/c/input/kernel_engine/input/input.h:16-130`); its one implementation is
 `ke_input_default` (`src/zig/input/default/src/input_default.zig`). It holds per-key `down`,
 `pressed` and `released` flags, mouse position, per-frame mouse and scroll deltas, three mouse-button
 bitmasks, and a queue of discrete events (`input_default.zig:17-35`).
 
 The four **sinks** are how the window backend writes state: `on_key`, `on_mouse_move`,
-`on_mouse_button`, `on_mouse_scroll` (`input.h:104-130`).
+`on_mouse_button`, `on_mouse_scroll` (`input.h:102-128`).
 
 - A key press sets `down`, and sets `pressed` only if the key was not already down
   (`input_default.zig:80-83`). A release sets `released` and clears `down` (`:84-87`). Key codes
@@ -43,9 +43,9 @@ no read after. A press and release both landing between two `update` calls leave
 `get_snapshot` copies the state into a `ke_input_snapshot`: three 512-bit key bitsets, mouse
 position, deltas, scroll, and the three button masks (`snapshot.h:14-52`,
 `input_default.zig:153-177`). The copy is a plain struct with no pointer back, so it can be read on
-any thread while the live object keeps changing (`input.h:46-51`). Reads go through the
+any thread while the live object keeps changing (`input.h:44-49`). Reads go through the
 `snapshot_is_*` slots of `ke_input`, which treat out-of-range codes as false
-(`input.h:53-93`, `input_default.zig:179-227`).
+(`input.h:51-91`, `input_default.zig:179-227`).
 
 `ke_input_default` takes no lock: sinks, `update` and `get_snapshot` read and write the same
 `State` with plain stores (`input_default.zig:17-35`). Callers must not overlap them.

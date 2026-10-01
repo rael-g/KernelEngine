@@ -4,7 +4,7 @@ The GPU device is the lowest rendering contract: buffers, textures, pipelines, c
 presentation, and nothing about frames, passes or materials. The render service builds on it
 ([render.md](render.md)). The contract is `src/c/render/kernel_engine/render/gpu/gpu_device.h` and
 `gpu_commands.h`; the one implementation is the WebGPU plugin `ke_gpu_device_webgpu`
-(`src/zig/render/webgpu/src/gpu_device_webgpu.zig`, `build.zig:277`).
+(`src/zig/render/webgpu/src/gpu_device_webgpu.zig`, `build.zig:280`).
 
 ## What the contract is
 
