@@ -74,8 +74,6 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
-        /// Writes `value` into `field` of `component`, coercing where the two kinds agree.
-        /// @return false when the value's kind cannot be held by the field; the component is untouched then.
         pub fn write(component: ?*anyopaque, field: ?*const c.ke_component_field, value: ?*const c.ke_variant) bool {
             const base: [*]u8 = @ptrCast(component orelse return false);
             const f = field orelse return false;

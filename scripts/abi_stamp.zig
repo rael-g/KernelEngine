@@ -30,9 +30,6 @@ pub fn digestWithoutCarriageReturns(bytes: []const u8) [Sha256.digest_length]u8 
     return hasher.finalResult();
 }
 
-/// One line per contract or factory header under `repo_root`, sorted by path:
-/// the SHA-256 of the file with its carriage returns removed, two spaces, the
-/// path relative to `repo_root` with forward slashes.
 pub fn compute(allocator: std.mem.Allocator, io: std.Io, repo_root: []const u8) ![]u8 {
     var paths: std.ArrayList([]const u8) = .empty;
     defer {

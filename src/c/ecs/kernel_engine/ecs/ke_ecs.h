@@ -112,9 +112,8 @@ extern "C"
          * backend state.
          * @param out_segments [out,array_of:max_segments] Receives the matched segments.
          * @param max_segments Capacity of out_segments.
-         * @param out_count [out] Receives how many segments the query matches. Only the first
-         *        max_segments of them are written, so a value above max_segments tells the
-         *        caller that its array was too small and the rest were dropped.
+         * @param out_count [out] Receives how many segments the query matches; above
+         *        max_segments, out_segments holds only the first max_segments of them.
          */
         void (*query_resolve)(struct ke_ecs   *self,
                               ke_query_id       query,

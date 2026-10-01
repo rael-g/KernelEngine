@@ -260,7 +260,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "Records bind into \u0060commands\u0060: the binding exists, and the entity appears in its type\u0027s instances, once \u0060commands\u0060 is applied. For a caller that runs beside other bodies and so may not touch the host. A bind that cannot succeed when applied, because the entity already carries an instance, is dropped there.",
+          "doc": "Records bind into \u0060commands\u0060; the binding takes effect when \u0060commands\u0060 is applied. A bind that fails at that point is dropped.",
           "return_doc": null,
           "params": [
             {
@@ -306,7 +306,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "Records unbind into \u0060commands\u0060; the binding is dropped once \u0060commands\u0060 is applied, and the instance stays readable until then.",
+          "doc": "Records unbind into \u0060commands\u0060; the binding is dropped when \u0060commands\u0060 is applied.",
           "return_doc": null,
           "params": [
             {

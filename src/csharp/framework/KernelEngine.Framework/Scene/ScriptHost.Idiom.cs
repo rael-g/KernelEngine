@@ -20,12 +20,6 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     private readonly System.Collections.Concurrent.ConcurrentQueue<(long Epoch, System.Runtime.InteropServices.GCHandle Handle)> _retired = new();
     private long _epoch;
 
-    /// <summary>
-    /// Raised the first time a node of a given type registers behavior, with that node as the probe: the native host does not list a node bound from a system body until the wave barrier. The host
-    /// listens so it can give that type its own runtime system: behavior access is a
-    /// property of the node type, so one system per type is what lets the scheduler
-    /// see the reach instead of lumping every script into one opaque system.
-    /// </summary>
     internal event Action<Type, Node>? BehaviorTypeAdded;
 
     /// <summary>
@@ -328,12 +322,6 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         if (_rooted.TryRemove(entity, out var handle)) _retired.Enqueue((Interlocked.Read(ref _epoch), handle));
     }
 
-    /// <summary>
-    /// Frees the roots of nodes whose unbind was recorded two or more ticks ago. A recorded
-    /// unbind drops the native binding at the barrier of the tick that recorded it; the extra
-    /// tick covers a body that recorded it while this ran in the same wave. Called once per
-    /// tick.
-    /// </summary>
     internal void ReleaseRetired()
     {
         var now = Interlocked.Increment(ref _epoch);

@@ -9,10 +9,8 @@
 extern "C" {
 #endif
 
-/// Error type singleton. Comparison is via ke_error_is(), which walks the parent chain
-/// and matches a type by its address or by its name — a plugin that does not link
-/// ke_common carries its own copy of each generic, so the name is what identifies one
-/// across libraries. Never compare type addresses directly.
+/// Error type singleton. ke_error_is() matches a type by address or by name and walks
+/// the parent chain; never compare type addresses directly.
 ///
 /// Error types form an inheritance tree. The generics below (KE_ERROR_*) are the
 /// shared roots; it is physically impossible to enumerate every error in existence

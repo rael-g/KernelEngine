@@ -6,10 +6,7 @@ using Xunit;
 namespace EngineTests;
 
 /// <summary>
-/// The native libraries every managed test loads were built from the contract and factory
-/// headers recorded in <c>abi.stamp</c>. A header edited since then means a library that
-/// can still load and no longer agrees with the struct layouts and vtables the managed side
-/// was generated against, so the test fails instead of letting it run.
+/// Fails when a contract or factory header changed after the native libraries were built.
 /// </summary>
 public class NativeFreshnessTests
 {

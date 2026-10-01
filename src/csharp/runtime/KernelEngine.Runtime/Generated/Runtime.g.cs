@@ -177,7 +177,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         }
     }
 
-    /// <summary>Registers a system body against the phase and the component access it declares. Called while a tick runs, from a body, it returns the id at once and the system starts running with the next tick; a failure of the phase limit then goes unreported.</summary>
+    /// <summary>Registers a system body against the phase and the component access it declares. Registered from a body, the system takes effect with the next tick and a refusal is not reported.</summary>
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
     /// <param name="phase">Which phase of the tick the body runs in.</param>
     /// <param name="execute">The body itself.</param>
@@ -261,7 +261,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         }
     }
 
-    /// <summary>Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Called while a tick or a render phase runs, from a body, the removal is queued and takes effect with the next tick; the id is not looked up until then.</summary>
+    /// <summary>Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void UnregisterSystem(ulong id)
     {
@@ -269,7 +269,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         KernelError.ThrowIfFailed(Handle->unregister_system(Handle, id, &err), err, "unregister_system");
     }
 
-    /// <summary>The id of the system registered last and still registered, or 0 when there is none. A module reads it before registering anything, and on failure unregisters every system whose id is above what it read.</summary>
+    /// <summary>The id of the system registered last and still registered, or 0 when there is none.</summary>
     public ulong LastSystem()
     {
         return Handle->last_system(Handle);

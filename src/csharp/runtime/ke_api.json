@@ -7,27 +7,27 @@
         {
           "name": "KE_PHASE_STARTUP",
           "value": 0,
-          "doc": "Runs once, at the start of the first tick, before any other phase."
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_PRE_UPDATE",
           "value": 1,
-          "doc": "Runs once, at the start of the first tick, before any other phase."
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_FIXED_UPDATE",
           "value": 2,
-          "doc": "Runs once, at the start of the first tick, before any other phase."
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_UPDATE",
           "value": 3,
-          "doc": "Runs once, at the start of the first tick, before any other phase."
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_POST_UPDATE",
           "value": 4,
-          "doc": "Runs once, at the start of the first tick, before any other phase."
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_RENDER",
@@ -37,7 +37,7 @@
         {
           "name": "KE_PHASE_SHUTDOWN",
           "value": 6,
-          "doc": "Runs once when the runtime is destroyed, if a tick ever started it, after the pending render phase has finished and before any module unloads. Destroy cannot report a failure, so a body that fails here is not answered for."
+          "doc": "Runs once when the runtime is destroyed, if a tick ever ran. A failure of its bodies is not reported."
         }
       ]
     },
@@ -297,7 +297,7 @@
           "name": "register_system",
           "returns": "ke_system_id",
           "tags": [],
-          "doc": "Registers a system body against the phase and the component access it declares. Called while a tick runs, from a body, it returns the id at once and the system starts running with the next tick; a failure of the phase limit then goes unreported.",
+          "doc": "Registers a system body against the phase and the component access it declares. Registered from a body, the system takes effect with the next tick and a refusal is not reported.",
           "return_doc": "0 when the system was refused.",
           "params": [
             {
@@ -321,7 +321,7 @@
           "name": "unregister_system",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Called while a tick or a render phase runs, from a body, the removal is queued and takes effect with the next tick; the id is not looked up until then.",
+          "doc": "Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.",
           "return_doc": "false when no system has that id.",
           "params": [
             {
@@ -343,7 +343,7 @@
           "name": "last_system",
           "returns": "ke_system_id",
           "tags": [],
-          "doc": "The id of the system registered last and still registered, or 0 when there is none. A module reads it before registering anything, and on failure unregisters every system whose id is above what it read.",
+          "doc": "The id of the system registered last and still registered, or 0 when there is none.",
           "return_doc": null,
           "params": [],
           "receiver": "ke_runtime *"

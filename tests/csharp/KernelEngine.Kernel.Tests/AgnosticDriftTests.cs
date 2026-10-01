@@ -7,9 +7,7 @@ using Xunit.Abstractions;
 namespace EngineTests;
 
 /// <summary>
-/// Structural test: no backend-specific symbol may leak into the layers that are meant to be
-/// agnostic of the graphics backend. A layer that cannot be found, or that yields no file to
-/// read, fails the test: a scan that opens nothing proves nothing.
+/// Fails when a backend-specific symbol appears in a layer that must be backend-agnostic.
 /// </summary>
 public class AgnosticDriftTests(ITestOutputHelper output)
 {

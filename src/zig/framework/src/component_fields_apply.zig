@@ -13,9 +13,8 @@ fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
     return std.mem.eql(u8, std.mem.span(key), std.mem.span(name));
 }
 
-/// Applies every entry the table describes; a duplicated key resolves to the
-/// last one authored. Returns the first field that could not hold the value
-/// authored for it, or null when every entry was applied.
+/// Applies every entry the table describes; the last of a duplicated key wins.
+/// Returns the first field that cannot hold its value, or null.
 pub fn apply(
     component: ?*anyopaque,
     entries: [*c]c.ke_variant_table_entry,

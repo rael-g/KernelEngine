@@ -363,7 +363,7 @@
               "tags": [
                 "out"
               ],
-              "doc": "Receives how many segments the query matches. Only the first max_segments of them are written, so a value above max_segments tells the caller that its array was too small and the rest were dropped."
+              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them."
             }
           ],
           "receiver": "struct ke_ecs *"

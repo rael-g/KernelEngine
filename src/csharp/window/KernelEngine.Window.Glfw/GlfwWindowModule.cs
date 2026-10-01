@@ -6,9 +6,8 @@ namespace KernelEngine.Window.Glfw;
 
 /// <summary>
 /// GLFW window as an <see cref="IRuntimeModule"/>. Registers <see cref="IWindow"/>
-/// during Configure. It registers no system: GLFW delivers events only to the thread
-/// that created the window, so the host calls <see cref="IWindow.PollEvents"/> on that
-/// thread before each <c>Tick</c>. The runtime never knows what GLFW is — it sees an opaque module.
+/// during Configure. The host polls events: it calls <see cref="IWindow.PollEvents"/> on
+/// the window's thread before each <c>Tick</c>.
 /// </summary>
 public sealed class GlfwWindowModule : IRuntimeModule
 {

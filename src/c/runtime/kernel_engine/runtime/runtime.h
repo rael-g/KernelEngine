@@ -18,7 +18,7 @@ typedef uint64_t ke_module_id;
 typedef uint64_t ke_system_id;
 
 typedef enum ke_phase {
-    /// Runs once, at the start of the first tick, before any other phase.
+    /// Runs once, before the other phases of the first tick.
     KE_PHASE_STARTUP      = 0,
     KE_PHASE_PRE_UPDATE   = 1,
     KE_PHASE_FIXED_UPDATE = 2,
@@ -27,9 +27,8 @@ typedef enum ke_phase {
     /// Runs asynchronously against the next tick's sim phases. Its systems read
     /// extracted query results, never live storage, and may not mutate structure.
     KE_PHASE_RENDER       = 5,
-    /// Runs once when the runtime is destroyed, if a tick ever started it, after the
-    /// pending render phase has finished and before any module unloads. Destroy
-    /// cannot report a failure, so a body that fails here is not answered for.
+    /// Runs once when the runtime is destroyed, if a tick ever ran. A failure of its
+    /// bodies is not reported.
     KE_PHASE_SHUTDOWN     = 6,
 } ke_phase;
 
@@ -154,20 +153,16 @@ typedef struct ke_runtime {
     /// @param p [expand] What the module is called and the hooks it registers.
     ke_module_id (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_error **out_error);
     /// Registers a system body against the phase and the component access it declares.
-    /// Called while a tick runs, from a body, it returns the id at once and the system starts
-    /// running with the next tick; a failure of the phase limit then goes unreported.
+    /// Registered from a body, the system takes effect with the next tick and a refusal
+    /// is not reported.
     /// @param p [expand] What the system is called, when it runs, and what it touches.
     /// @return 0 when the system was refused.
     ke_system_id (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_error **out_error);
-    /// Removes a system registered earlier, so a module whose load fails after registering
-    /// some systems can take them back before it frees what their bodies point at. Called
-    /// while a tick or a render phase runs, from a body, the removal is queued and takes
-    /// effect with the next tick; the id is not looked up until then.
+    /// Removes a system registered earlier. Called from a body, the removal takes effect
+    /// with the next tick.
     /// @return false when no system has that id.
     bool (*unregister_system)(ke_runtime *self, ke_system_id id, ke_error **out_error);
     /// The id of the system registered last and still registered, or 0 when there is none.
-    /// A module reads it before registering anything, and on failure unregisters every system
-    /// whose id is above what it read.
     ke_system_id (*last_system)(ke_runtime *self);
 
     /// [drains] Runs one tick: every sim phase in order, then the render phase.

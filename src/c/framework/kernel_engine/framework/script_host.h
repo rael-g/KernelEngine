@@ -136,10 +136,8 @@ extern "C"
         /// itself is the binding runtime's to release.
         void (*unbind)(struct ke_script_host *self, ke_entity entity);
 
-        /// [idiom] Records bind into `commands`: the binding exists, and the entity appears
-        /// in its type's instances, once `commands` is applied. For a caller that runs beside
-        /// other bodies and so may not touch the host. A bind that cannot succeed when
-        /// applied, because the entity already carries an instance, is dropped there.
+        /// [idiom] Records bind into `commands`; the binding takes effect when `commands`
+        /// is applied. A bind that fails at that point is dropped.
         /// @param instance [rooted:entity]
         /// @param commands [ctx]
         bool (*bind_deferred)(struct ke_script_host *self,
@@ -149,8 +147,8 @@ extern "C"
                               ke_ecs_commands       *commands,
                               ke_error             **out_error);
 
-        /// [idiom] Records unbind into `commands`; the binding is dropped once `commands`
-        /// is applied, and the instance stays readable until then.
+        /// [idiom] Records unbind into `commands`; the binding is dropped when `commands`
+        /// is applied.
         /// @param commands [ctx]
         bool (*unbind_deferred)(struct ke_script_host *self,
                                 ke_entity              entity,
