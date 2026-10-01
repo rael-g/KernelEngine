@@ -3,7 +3,6 @@ const std = @import("std");
 const c = @import("cimport.zig").c;
 const E = @import("kerror").Errors(c);
 
-const pi: f32 = 3.14159265358979323846;
 
 fn entries(e: [*c]c.ke_variant_table_entry, n: u32) []c.ke_variant_table_entry {
     if (n == 0) return &.{};
@@ -43,7 +42,7 @@ pub export fn ke_render_apply_camera(
             E.fail(out_error, .invalid_argument, "fov_degrees is an angle strictly between 0 and 180", @src());
             return false;
         }
-        cam.fov = f * (pi / 180.0);
+        cam.fov = f;
     }
     return true;
 }
@@ -114,18 +113,18 @@ fn keyed(key: [*c]const u8, value: c.ke_variant) c.ke_variant_table_entry {
     return e;
 }
 
-test "a field of view authored in degrees reaches the component in radians" {
+test "a field of view authored in degrees reaches the component in degrees" {
     var cam = std.mem.zeroes(c.ke_camera_component);
     var list = [_]c.ke_variant_table_entry{keyed("fov_degrees", vFloat(90.0))};
     try testing.expect(ke_render_apply_camera(null, &cam, &list, @intCast(list.len), null));
-    try testing.expectApproxEqAbs(@as(f32, std.math.pi / 2.0), cam.fov, 1e-6);
+    try testing.expectEqual(@as(f32, 90.0), cam.fov);
 }
 
 test "a field of view authored as a whole number of degrees is coerced, not ignored" {
     var cam = std.mem.zeroes(c.ke_camera_component);
     var list = [_]c.ke_variant_table_entry{keyed("fov_degrees", vInt(60))};
     try testing.expect(ke_render_apply_camera(null, &cam, &list, @intCast(list.len), null));
-    try testing.expectApproxEqAbs(@as(f32, std.math.pi / 3.0), cam.fov, 1e-6);
+    try testing.expectEqual(@as(f32, 60.0), cam.fov);
 }
 
 test "claiming the field of view key marks it consumed so the loader stops calling it unknown" {
@@ -177,7 +176,7 @@ test "the last field of view authored for a duplicated key wins" {
         keyed("fov_degrees", vFloat(90.0)),
     };
     try testing.expect(ke_render_apply_camera(null, &cam, &list, @intCast(list.len), null));
-    try testing.expectApproxEqAbs(@as(f32, std.math.pi / 2.0), cam.fov, 1e-6);
+    try testing.expectEqual(@as(f32, 90.0), cam.fov);
 }
 
 test "an empty entry list leaves the camera alone" {
