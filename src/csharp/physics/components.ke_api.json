@@ -335,7 +335,7 @@
   "vtables": [
     {
       "name": "ke_physics_2d",
-      "doc": "ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins (Box2D for now). Not thread-safe \u2014 call all methods on the same thread (typically ke.sim).",
+      "doc": "ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins (Box2D for now). Not thread-safe \u2014 call all methods on the same thread.",
       "tags": [],
       "fields": [
         {

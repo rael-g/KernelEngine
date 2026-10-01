@@ -30,7 +30,7 @@ public readonly record struct BodyState2D(
 /// <summary>
 /// Managed mirror of the C kernel's <c>ke_physics_2d</c> vtable — a 2D rigid-body world.
 /// Concrete implementations come from plugin libraries (e.g. <c>KernelEngine.Physics.Box2D</c>).
-/// Not thread-safe: call all methods on the same thread (typically ke.sim).
+/// Not thread-safe: call all methods on the same thread.
 /// </summary>
 public interface IPhysics2D : IDisposable
 {

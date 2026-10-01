@@ -3,7 +3,7 @@
 namespace KernelEngine.Input;
 
 /// <summary>
-/// One discrete input event produced on ke.main and dispatched through the node tree on ke.sim.
+/// One discrete input event produced by the input service and dispatched through the node tree.
 /// Flat layout; field meaning depends on <see cref="Kind"/>:
 /// <list type="bullet">
 ///   <item><b>KeyDown / KeyUp</b>: <see cref="Key"/> is valid.</item>

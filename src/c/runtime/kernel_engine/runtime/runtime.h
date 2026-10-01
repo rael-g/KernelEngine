@@ -119,8 +119,8 @@ typedef struct ke_runtime_system_params {
 
     /// [array_of:access_count, default:empty] Cids the system touches that no query term
     /// covers, folded into the derived set so the wave-builder still orders on them:
-    /// ordering-only tags (render resources carry no data) and entity-keyed reads
-    /// via ke_system_ctx_get. Declaring nothing is not "no opinion" -- it says the system
+    /// ordering-only tags (render resources carry no data) and component access made
+    /// without a query. Declaring nothing is not "no opinion" -- it says the system
     /// conflicts with nobody, so it may run concurrently with every other system in its
     /// phase. Anything touching component storage says so.
     const ke_component_access *access_list;

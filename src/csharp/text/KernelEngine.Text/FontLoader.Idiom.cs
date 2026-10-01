@@ -6,7 +6,7 @@ namespace KernelEngine.Text;
 /// <summary>
 /// The parts of <see cref="FontLoader"/> that express the native surface in C# terms rather than
 /// mirroring it: the async decode (native <c>load_font</c> is synchronous CPU work, so this wraps
-/// it in <see cref="Task.Run(Action)"/> to keep ke.sim off disk I/O and the CPU bake), and copying
+/// it in <see cref="Task.Run(Action)"/> to keep the calling system off disk I/O and the CPU bake), and copying
 /// the native atlas + glyph arrays into managed memory before <c>free_font</c> releases them.
 /// Everything that is a direct image of the C ABI is generated in <c>Generated/FontLoader.g.cs</c>.
 /// </summary>

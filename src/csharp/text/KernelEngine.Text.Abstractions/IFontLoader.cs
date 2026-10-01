@@ -3,7 +3,7 @@
 /// <summary>
 /// Async font decoder. Mirrors <see cref="IImageLoader"/> — backends (stb_truetype, FreeType, …)
 /// implement; the framework's <c>Assets.LoadFontAsync</c> orchestrates the texture upload via
-/// <c>ResourceManager.CreateTextureAsync</c>. ke.sim never blocks on disk I/O or CPU decode.
+/// <c>ResourceManager.CreateTextureAsync</c>. The calling system never blocks on disk I/O or CPU decode.
 /// </summary>
 public interface IFontLoader : IDisposable
 {

@@ -41,7 +41,7 @@ public sealed class KernelTask<T>
 
     /// <summary>
     /// Blocks the calling thread until the task completes and returns the result.
-    /// Prefer <c>await</c> over this on the sim/render threads.
+    /// Prefer <c>await</c> over this inside a system body.
     /// </summary>
     public T Result => _inner.GetAwaiter().GetResult();
 

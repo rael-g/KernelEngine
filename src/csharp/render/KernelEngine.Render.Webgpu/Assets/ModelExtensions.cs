@@ -17,7 +17,7 @@ public static class ModelExtensions
     /// <see cref="IRenderResources"/>, then adds one <see cref="MeshRenderer"/> node per
     /// sub-mesh to <paramref name="scriptHost"/>. Converts the engine's <c>Vertex</c>
     /// layout (12 floats, tangent.w handedness) to <c>MeshVertex</c> (11 floats).
-    /// Must be called from the render worker, because GPU uploads are pinned to ke.render.
+    /// Must be called from the render worker, because GPU uploads are pinned to it.
     /// </summary>
     public static IReadOnlyList<MeshRenderer> AddModel(
         this ScriptHost scriptHost,

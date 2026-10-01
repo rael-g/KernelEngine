@@ -13,7 +13,7 @@ namespace KernelEngine.Input;
 /// <para>
 /// For <b>edge events</b> (key just pressed / just released, button clicked, scroll wheel ticks),
 /// subscribe via <c>Node.OnInput(ref InputEvent)</c> — events flow through a kernel ring buffer
-/// drained per frame, so nothing is lost when ke.main produces snapshots faster than ke.sim consumes.
+/// drained per frame, so nothing is lost when snapshots are produced faster than they are consumed.
 /// The action layer (chapter 22) will eventually offer <c>WasActionPressed(action)</c> derived from
 /// the same event stream.
 /// </para>

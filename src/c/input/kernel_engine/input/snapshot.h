@@ -22,7 +22,7 @@ extern "C"
 
     /**
      * Frozen snapshot of all input state for a single frame.
-     * Passed from ke.main to ke.sim so reads are consistent and thread-safe.
+     * Passed from the input poll to its readers so reads are consistent and thread-safe.
      *
      * The key fields are bitsets. Read them through the accessors below rather
      * than indexing directly: the packing is a detail of this contract, and a

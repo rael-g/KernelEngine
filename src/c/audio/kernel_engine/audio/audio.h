@@ -19,7 +19,7 @@ extern "C"
 
     /**
      * Audio playback. Concrete implementations ship as separate plugins
-     * (miniaudio, FMOD, ...). Every slot is safe to call from ke.sim — backends
+     * (miniaudio, FMOD, ...). Every slot is safe to call from a system body — backends
      * marshal internally to their own audio thread.
      */
     typedef struct ke_audio

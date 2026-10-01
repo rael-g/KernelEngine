@@ -733,7 +733,7 @@
   "structs": [
     {
       "name": "ke_input_snapshot",
-      "doc": "Frozen snapshot of all input state for a single frame. Passed from ke.main to ke.sim so reads are consistent and thread-safe. The key fields are bitsets. Read them through the accessors below rather than indexing directly: the packing is a detail of this contract, and a caller that reimplements it silently breaks if the packing ever changes.",
+      "doc": "Frozen snapshot of all input state for a single frame. Passed from the input poll to its readers so reads are consistent and thread-safe. The key fields are bitsets. Read them through the accessors below rather than indexing directly: the packing is a detail of this contract, and a caller that reimplements it silently breaks if the packing ever changes.",
       "tags": [],
       "fields": [
         {
@@ -812,7 +812,7 @@
     },
     {
       "name": "ke_input_event",
-      "doc": "One discrete input event captured during ke.main\u0027s poll phase. Flat layout (no anonymous unions) for friction-free C# P/Invoke binding. Field interpretation depends on kind: - KEY_DOWN / KEY_UP: code = key code (GLFW codes) - MOUSE_BUTTON_DOWN/UP: code = button index - MOUSE_MOVE: x, y = absolute cursor position - MOUSE_SCROLL: x, y = scroll delta x, y",
+      "doc": "One discrete input event captured during the input poll. Flat layout (no anonymous unions) for friction-free C# P/Invoke binding. Field interpretation depends on kind: - KEY_DOWN / KEY_UP: code = key code (GLFW codes) - MOUSE_BUTTON_DOWN/UP: code = button index - MOUSE_MOVE: x, y = absolute cursor position - MOUSE_SCROLL: x, y = scroll delta x, y",
       "tags": [],
       "fields": [
         {

@@ -31,7 +31,7 @@ extern "C"
     } ke_input_event_kind;
 
     /**
-     * @brief One discrete input event captured during ke.main's poll phase.
+     * @brief One discrete input event captured during the input poll.
      *
      * Flat layout (no anonymous unions) for friction-free C# P/Invoke binding.
      * Field interpretation depends on @c kind:
