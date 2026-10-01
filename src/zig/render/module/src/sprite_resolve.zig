@@ -88,6 +88,20 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
     );
 }
 
+fn swapMesh(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c.ke_mesh_handle) void {
+    if (resolved.bits == c.KE_HANDLE_NONE) return;
+    const held = m.mesh;
+    m.mesh = resolved;
+    if (held.bits != c.KE_HANDLE_NONE) core.release_mesh.?(core, held);
+}
+
+fn swapMaterial(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c.ke_material_handle) void {
+    if (resolved.bits == c.KE_HANDLE_NONE) return;
+    const held = m.material;
+    m.material = resolved;
+    if (held.bits != c.KE_HANDLE_NONE) core.release_material.?(core, held);
+}
+
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 
@@ -101,8 +115,8 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c]
         while (i < segs[s].count) : (i += 1) {
             const sp: *c.ke_sprite2d_component = @ptrCast(&sprites[i]);
             sp.attached = 1;
-            meshes[i].mesh = quadFor(st.core, sp);
-            meshes[i].material = materialFor(st, sp);
+            swapMesh(st.core, @ptrCast(&meshes[i]), quadFor(st.core, sp));
+            swapMaterial(st.core, @ptrCast(&meshes[i]), materialFor(st, sp));
         }
     }
 
@@ -301,4 +315,100 @@ test "an image already uploaded is not resolved a second time" {
     @memcpy(sp.texture[0.."res://sprite.png".len], "res://sprite.png");
     sp.texture_handle = .{ .bits = 9 };
     try testing.expectEqual(@as(u32, 9), resolveTexture(&st, &sp).bits);
+}
+
+const Refs = struct {
+    var mesh: i32 = 0;
+    var material: i32 = 0;
+    var next_mesh: u32 = 1;
+    var next_material: u32 = 1;
+
+    fn reset() void {
+        mesh = 0;
+        material = 0;
+        next_mesh = 1;
+        next_material = 1;
+    }
+};
+
+fn refUploadMesh(
+    _: [*c]c.ke_render_service,
+    _: [*c]const u8,
+    _: ?*const anyopaque,
+    _: usize,
+    _: [*c]const u16,
+    _: u32,
+    _: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_mesh_handle {
+    Refs.mesh += 1;
+    return .{ .bits = 100 };
+}
+
+fn refCreateMaterial(
+    _: [*c]c.ke_render_service,
+    _: [*c]const u8,
+    _: [*c]const f32,
+    _: f32,
+    _: f32,
+    _: c.ke_texture_handle,
+    _: c.ke_texture_handle,
+    _: c.ke_alpha_mode,
+    _: f32,
+    _: f32,
+    _: f32,
+    _: [*c]const u8,
+    _: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_material_handle {
+    Refs.material += 1;
+    return .{ .bits = 200 };
+}
+
+fn refReleaseMesh(_: [*c]c.ke_render_service, _: c.ke_mesh_handle) callconv(.c) void {
+    Refs.mesh -= 1;
+}
+
+fn refReleaseMaterial(_: [*c]c.ke_render_service, _: c.ke_material_handle) callconv(.c) void {
+    Refs.material -= 1;
+}
+
+var view_sprites: [1]c.ke_sprite2d_component = undefined;
+var view_meshes: [1]c.ke_mesh_component = undefined;
+var view_entities: [1]c.ke_entity = .{1};
+var view_segment: c.ke_ecs_segment = undefined;
+
+fn fakeView(_: [*c]c.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
+    if (index != 0) {
+        out_count.* = 0;
+        return null;
+    }
+    view_segment = std.mem.zeroes(c.ke_ecs_segment);
+    view_segment.count = 1;
+    view_segment.entities = &view_entities;
+    view_segment.columns[0] = &view_sprites;
+    view_segment.columns[1] = &view_meshes;
+    out_count.* = 1;
+    return &view_segment;
+}
+
+test "a sprite resolved every tick holds one reference to its mesh and material, not one per tick" {
+    Refs.reset();
+    var svc = std.mem.zeroes(c.ke_render_service);
+    svc.upload_mesh = refUploadMesh;
+    svc.create_material = refCreateMaterial;
+    svc.release_mesh = refReleaseMesh;
+    svc.release_material = refReleaseMaterial;
+    var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
+
+    view_sprites[0] = defaultSprite();
+    view_sprites[0].attached = 1;
+    view_meshes[0] = std.mem.zeroes(c.ke_mesh_component);
+    var ctx = std.mem.zeroes(c.ke_system_ctx);
+    ctx.view = fakeView;
+
+    for (0..5) |_| try testing.expect(system(&ctx, &st, 0.0, null));
+
+    try testing.expectEqual(@as(i32, 1), Refs.mesh);
+    try testing.expectEqual(@as(i32, 1), Refs.material);
+    try testing.expectEqual(@as(u32, 100), view_meshes[0].mesh.bits);
+    try testing.expectEqual(@as(u32, 200), view_meshes[0].material.bits);
 }
