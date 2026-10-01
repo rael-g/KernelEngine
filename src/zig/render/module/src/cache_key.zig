@@ -1,17 +1,8 @@
 const std = @import("std");
 
-/// A cache key built from a fixed number of scalars.
-///
-/// Every scalar is written as its 32-bit pattern in hex, which is why this cannot
-/// fail: eight characters per field, known before the first one is written, so the
-/// buffer is sized by the type rather than guessed at. Decimal formatting has no
-/// such bound — ten floats printed with `{d}` come close enough to a hand-picked
-/// ceiling that overflowing it is a matter of which values a scene happens to
-/// author, and the caller would learn about it as a missing mesh.
-///
-/// The bit pattern is also the exact identity: two values that differ anywhere in
-/// the mantissa get different keys, where a rounded decimal rendering would merge
-/// them into one cache entry.
+/// A cache key built from a fixed number of scalars. Every scalar is written as
+/// its 32-bit pattern in hex, so building one cannot fail and two values that
+/// differ anywhere in the mantissa get different keys.
 pub fn Key(comptime prefix: []const u8, comptime field_count: usize) type {
     return struct {
         const Self = @This();

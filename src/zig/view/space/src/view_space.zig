@@ -10,7 +10,6 @@ const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
-/// Which way the camera faces along view-space z.
 const Handedness = enum { right, left };
 
 const State = struct {
@@ -111,8 +110,6 @@ fn viewSpaceFromTransform(
     });
 }
 
-/// Applies the device's clip conventions to a projection: a top-left
-/// framebuffer origin negates the y row.
 fn intoClip(p_in: zm.Mat, clip: c.ke_ndc_convention) zm.Mat {
     var p = p_in;
     if (clip.y_flip != 0) p[1][1] = -p[1][1];

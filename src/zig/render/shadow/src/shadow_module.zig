@@ -18,8 +18,6 @@ const default_params = c.ke_render_shadow_params{
     .far_plane = 50.0,
 };
 
-/// Each unset field falls back to the default, so a caller may name only what it
-/// wants to change.
 fn paramsOr(params: [*c]const c.ke_render_shadow_params) c.ke_render_shadow_params {
     const p = params orelse return default_params;
     return .{

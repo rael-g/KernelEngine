@@ -7,8 +7,6 @@ const E = @import("kerror").Errors(c);
 
 const mat4 = @import("mat4.zig");
 
-/// Name capacity is dictated by the name component itself, so a deferred
-/// create's inline copy can never truncate differently from the final write.
 const name_max = @typeInfo(@FieldType(c.ke_name_component, "name")).array.len;
 
 const State = struct {
@@ -47,14 +45,12 @@ fn getWorldTransform(s: *State, e: c.ke_entity) ?*c.ke_world_transform_component
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.world_transform_cid)));
 }
 
-/// Resolves an existing component cid by name, registering it when absent.
 fn ensureComponent(ecs: *c.ke_ecs, name: [*c]const u8, size: usize) c.ke_component_id {
     var meta: c.ke_component_meta = undefined;
     if (ecs.component_lookup.?(ecs, name, &meta, null)) return meta.cid;
     return ecs.component_register.?(ecs, name, size, null, 0, null);
 }
 
-/// Writes `src` into a fixed-size component name field, truncating to fit.
 fn writeName(dst: []u8, src: [*c]const u8) void {
     if (src == null or src[0] == 0) {
         dst[0] = 0;
@@ -99,8 +95,6 @@ fn vtNextSibling(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c
     return h.next_sibling;
 }
 
-/// Attaches the scene-graph components to an entity and prepends it into its
-/// parent's child list. Valid only where structural changes are legal.
 fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) bool {
     if (s.ecs.component_add.?(s.ecs, entity, s.world_transform_cid) == null or
         s.ecs.component_add.?(s.ecs, entity, s.hierarchy_cid) == null or
@@ -258,8 +252,6 @@ fn destroyEntitiesRecursive(s: *State, e: c.ke_entity) void {
     s.ecs.entity_destroy.?(s.ecs, e);
 }
 
-/// Unlinks from the parent's child list, then destroys the subtree. The
-/// structural part is legal only outside a wave or at the wave barrier.
 fn destroySubtree(s: *State, entity: c.ke_entity) void {
     const h = getHierarchy(s, entity) orelse return;
     const h_prev = h.prev_sibling;
@@ -486,9 +478,6 @@ const FakeComponent = struct {
     size: usize,
 };
 
-/// Exposed so a sibling implementation defined over the scene graph — the script
-/// host resolving a node's relatives — can be tested against a real tree instead
-/// of a second stand-in that would drift from this one.
 pub const FakeEcs = struct {
     vtable: c.ke_ecs,
     arena: std.heap.ArenaAllocator,

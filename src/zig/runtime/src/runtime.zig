@@ -11,9 +11,6 @@ const E = @import("kerror").Errors(c);
 
 const KE_MAX_QUERIES_PER_SYSTEM = 8;
 const KE_MAX_SEGMENTS_PER_QUERY = 32;
-/// One scratch set per phase. runtimeRunPhase is re-entrant across threads —
-/// the render phase is pipelined against the next tick's sim phases — so a
-/// single shared set would let two threads write the same buffers.
 const KE_RUNTIME_PHASE_COUNT = 7;
 const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
@@ -31,8 +28,6 @@ fn cFree(comptime T: type, p: ?[*]T, n: usize) void {
     if (p) |pp| heap.gpa.free(pp[0..n]);
 }
 
-/// For the byte-sized per-column buffers, whose element type is only known at
-/// runtime (it comes from the ECS's component_size).
 fn cAllocBytes(n: usize) ?*anyopaque {
     if (n == 0) return null;
     const slice = heap.gpa.alloc(u8, n) catch return null;
@@ -216,11 +211,6 @@ fn deferReserve(q: *DeferQueue, needed: usize) bool {
     return true;
 }
 
-/// Payloads are copied into one byte arena and later handed back to a callback
-/// that casts them to its own struct, so each has to start on an address that
-/// struct could legally live at. Without this an odd-sized payload leaves the
-/// next one misaligned, and the cast is undefined behaviour rather than a
-/// visible failure.
 const defer_arena_align: usize = 16;
 
 fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
@@ -269,10 +259,6 @@ export fn ke_system_ctx_defer(ctx: ?*c.ke_system_ctx, func: c.ke_defer_fn, user:
     return true;
 }
 
-/// Returns the id the entity will have, usable immediately — a system that spawns
-/// something almost always needs to give it components in the same body, and it
-/// can only name it if the id exists now. The entity itself enters the world at
-/// the wave barrier.
 export fn ke_system_ctx_spawn(ctx: ?*c.ke_system_ctx) callconv(.c) c.ke_entity {
     const s = ctxOf(ctx) orelse return c.KE_ENTITY_INVALID;
     const q = s.defer_q orelse return c.KE_ENTITY_INVALID;
@@ -585,9 +571,6 @@ const TaskPkg = struct {
     allow_defer: bool,
 };
 
-/// What a body failed with, reduced to what survives leaving the worker that ran
-/// it: the type singleton, and the name of the system to blame. The ke_error the
-/// body filled belongs to that thread's slot and is gone by the time anyone asks.
 const PhaseFailure = struct {
     type: ?*const c.ke_error_type = null,
     system: [*c]const u8 = null,
@@ -750,10 +733,6 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
     return failure;
 }
 
-/// How many concurrent slices one system's body is run as. A system that did not
-/// promise per-entity independence, or that is pinned to a named thread, is always
-/// one call; otherwise the entity set is split across the pool, never past the room
-/// left in the phase's package storage.
 fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: u32) u32 {
     if (room == 0) return 0;
     if (!p.per_entity or p.pinned_thread != 0) return 1;
@@ -870,9 +849,6 @@ fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) c
     }
 }
 
-/// Waits out the render phase dispatched by the previous tick and hands back what
-/// it failed with, which is carried on the job rather than in the runtime because
-/// that phase runs alongside the sim phases of the tick after it.
 fn runtimeJoinPendingRender(h: *RuntimeHandle) PhaseFailure {
     const task = h.state.pending_render_task orelse return .{};
     _ = h.state.scheduler.wait.?(h.state.scheduler, task, null);

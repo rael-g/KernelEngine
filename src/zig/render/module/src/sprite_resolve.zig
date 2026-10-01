@@ -16,9 +16,6 @@ const Vertex = extern struct {
 pub const State = struct {
     core: *c.ke_render_service,
     mesh_cid: c.ke_component_id,
-    /// Borrowed, optional: turns an authored path into an uploaded texture. Null
-    /// where the host wired no loader, and a sprite naming a file then draws
-    /// untextured rather than failing a frame.
     resolver: ?*c.ke_asset_resolver,
 };
 
@@ -56,7 +53,6 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
     return core.upload_mesh.?(core, k, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, null);
 }
 
-/// Uploads the image the sprite names, once.
 fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle {
     if (sp.texture[0] == 0) return c.KE_TEXTURE_NONE;
     if (c.ke_texture_is_valid(sp.texture_handle)) return sp.texture_handle;

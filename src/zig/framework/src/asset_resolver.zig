@@ -10,7 +10,6 @@ const mesh_shape = @import("mesh_shape.zig");
 const res_prefix = "res://";
 const primitive_prefix = "res://primitives/";
 
-/// Longest resolved filesystem path this resolver will produce.
 const path_buf_max = 1024;
 
 const State = struct {
@@ -35,7 +34,6 @@ fn fileExists(path: [*:0]const u8) bool {
     return true;
 }
 
-/// Copies `src` into `dst` truncating to fit, always NUL-terminating.
 fn copyStringClamped(dst: []u8, src: []const u8) void {
     if (dst.len == 0) return;
     const n = @min(src.len, dst.len - 1);
@@ -43,8 +41,6 @@ fn copyStringClamped(dst: []u8, src: []const u8) void {
     dst[n] = 0;
 }
 
-/// Joins root and remainder, inserting a '/' only when neither side supplies
-/// one. Truncates to fit `out`.
 fn joinPath(out: []u8, root: []const u8, remainder: []const u8) void {
     if (out.len == 0) return;
     const need_sep = root.len > 0 and
@@ -69,7 +65,6 @@ fn joinPath(out: []u8, root: []const u8, remainder: []const u8) void {
     out[i] = 0;
 }
 
-/// res://x -> project_root/x ; anything else passes through unchanged.
 fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
     const p = std.mem.span(path);
     if (std.mem.startsWith(u8, p, res_prefix)) {
@@ -84,7 +79,6 @@ fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
     copyStringClamped(out, p);
 }
 
-/// Reads a numeric TOML key that may be written as either a float or an int.
 fn tomlNumberIn(tab: ?*c.toml_table_t, key: [*c]const u8) ?f32 {
     const d = c.toml_double_in(tab, key);
     if (d.ok != 0) return @floatCast(d.u.d);
@@ -101,8 +95,6 @@ fn tomlNumberAt(arr: ?*c.toml_array_t, idx: c_int) ?f32 {
     return null;
 }
 
-/// Parses a `.material` TOML file. Defaults applied for missing keys. Returns
-/// false on missing/unparseable file or absent [material] section.
 fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
     out.base_color[0] = 1.0;
     out.base_color[1] = 1.0;
@@ -354,8 +346,6 @@ fn vtResolveTextureInto(
     return h;
 }
 
-/// ke_render_service's vertex-buffer layout is 11 floats (pos3+nrm3+uv2+tan3);
-/// ke_vertex carries a 12th (bitangent-sign tw) the GPU pipeline never binds.
 const gpu_floats_per_vertex = 11;
 
 fn vtResolveMeshInto(

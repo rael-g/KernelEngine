@@ -5,15 +5,11 @@ const E = @import("kerror").Errors(c);
 
 const pi: f32 = 3.14159265358979323846;
 
-/// Entries arrive as a C pointer + count; the callbacks only ever read them.
 fn entries(e: [*c]c.ke_variant_table_entry, n: u32) []c.ke_variant_table_entry {
     if (n == 0) return &.{};
     return e[0..n];
 }
 
-/// Marks the entry as taken on a match: asking whether a key is yours and being
-/// told yes is what claiming it means, and the loader reads that back to find the
-/// keys nothing in the engine wanted.
 fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     if (entry.key == null) return false;
     if (!std.mem.eql(u8, std.mem.span(entry.key), name)) return false;
@@ -29,8 +25,6 @@ fn asFloat(v: *const c.ke_variant) ?f32 {
     };
 }
 
-/// `fov_degrees` is the same field as `fov` in a different unit. A table maps a
-/// key to storage; it has no way to say "and multiply by pi/180".
 pub export fn ke_render_apply_camera(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
@@ -54,9 +48,6 @@ pub export fn ke_render_apply_camera(
     return true;
 }
 
-/// Null on anything that is not one of the three spellings, including a string
-/// that merely looks like one: coercing an unrecognised name to opaque turns a
-/// typo into a render everyone sees and nobody is told about.
 fn alphaModeOf(v: *const c.ke_variant) ?u32 {
     if (v.type != c.KE_VARIANT_STRING or v.unnamed_0.s == null) return null;
     const mode = std.mem.span(v.unnamed_0.s);
@@ -66,9 +57,6 @@ fn alphaModeOf(v: *const c.ke_variant) ?u32 {
     return null;
 }
 
-/// `alpha_mode` is authored as the enumerator's name rather than its number.
-/// The table would write the string's bytes over a uint32_t; naming an
-/// enumerator is a mapping only the domain that declares the enum holds.
 pub export fn ke_render_apply_mesh(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
@@ -87,7 +75,6 @@ pub export fn ke_render_apply_mesh(
     return true;
 }
 
-/// Same enumerator-by-name mapping as a mesh's, for the same reason.
 pub export fn ke_render_apply_sprite2d(
     _: ?*anyopaque,
     ptr: ?*anyopaque,

@@ -16,8 +16,6 @@ pub fn freePixels(gpa: std.mem.Allocator, tex: *const c.ke_texture_data) void {
     gpa.free(base[0..tex.byte_count]);
 }
 
-/// A texture that fails to load becomes an opaque white 1x1 rather than a hole,
-/// so a missing file degrades to an unlit surface instead of failing the model.
 fn fallbackWhite(gpa: std.mem.Allocator, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {
     log.warn(logger, "Failed to load texture; using white fallback");
     const px = gpa.alignedAlloc(u8, pixel_align, 4) catch return false;

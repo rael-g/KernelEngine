@@ -692,7 +692,7 @@
     {
       "name": "ke_system_ctx_spawn",
       "returns": "ke_entity",
-      "doc": null,
+      "doc": "Returns the id the entity will have, usable immediately, so a body that spawns something can give it components in the same call. The entity itself enters the world at the wave barrier. A context of zero spawns nothing and answers KE_ENTITY_INVALID.",
       "return_doc": null,
       "params": [
         {

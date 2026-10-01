@@ -28,10 +28,6 @@ pub fn build(b: *std.Build) void {
     if (target.result.os.tag == .windows) addDllCrtInitTest(b, target, optimize, test_step);
 }
 
-/// Builds the two probe DLLs the CRT-init test compares — identical but for
-/// the `_DllMainCRTStartup` re-export — and threads their paths into the test
-/// through build options. Both link the same C++ translation unit, whose global
-/// constructor is what the test is really observing.
 fn addDllCrtInitTest(
     b: *std.Build,
     target: std.Build.ResolvedTarget,

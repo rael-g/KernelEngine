@@ -51,8 +51,6 @@ inline fn stateOf(user: ?*anyopaque) *ModuleState {
     return @alignCast(@ptrCast(user.?));
 }
 
-/// Registers a component with the generated table describing its layout, taking
-/// the field count from the table.
 fn registerComponent(
     e: *c.ke_ecs,
     name: [*c]const u8,
@@ -164,8 +162,6 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     return true;
 }
 
-/// Registers a generated field table, taking its length from the array type so
-/// the count can never drift from the table it describes.
 fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);

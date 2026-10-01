@@ -9,14 +9,10 @@ const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
-/// Box2D v3 replaced v2's separate velocity/position iteration counts with a
-/// single sub-step count; 4 is the value its own docs call usual.
 const sub_step_count: c_int = 4;
 
 const initial_body_capacity: u32 = 64;
 
-/// ke_body_2d is a dense index into `bodies`, biased by one so that 0 stays the
-/// invalid sentinel the contract reserves.
 const Entry = struct {
     body: c.b2BodyId,
     live: bool,
@@ -45,8 +41,6 @@ fn logInfo(logger: ?*c.ke_logger, msg: [*:0]const u8) void {
     if (lg.log) |f| f(lg, &ev);
 }
 
-/// Returns the body for a handle, or null when the handle is the invalid
-/// sentinel, out of range, or refers to a slot already destroyed.
 fn lookup(s: *State, id: c.ke_body_2d) ?c.b2BodyId {
     if (id == c.KE_BODY_2D_INVALID) return null;
     const idx = id - 1;
@@ -126,8 +120,6 @@ fn destroyBody(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d) callconv(.c) void {
     s.bodies.?[id - 1].live = false;
 }
 
-/// Shared by the box and circle paths: v3 carries friction and restitution on
-/// the shape's surface material, with density left on the def itself.
 fn makeShapeDef(
     density: f32,
     friction: f32,

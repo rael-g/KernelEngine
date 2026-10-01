@@ -16,33 +16,15 @@ const windows = struct {
 /// Workaround for a Zig defect on `x86_64-windows-gnu`. Re-export from the root
 /// module of any plugin that links C or C++ static libraries:
 ///
-///     pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+/// pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 ///
-/// Zig links mingw's libc but replaces the DLL entry point with a stub that
-/// only forwards to a user `DllMain`, skipping the CRT bring-up that libc
-/// assumes has run: `_initialize_onexit_table` (without it `atexit()` writes
-/// through an uninitialized table and corrupts the heap — mingw's `strtod`
-/// reaches it lazily, so parsing a float is enough) and `_initterm` over the C
-/// and C++ initializer sections (without it no global constructor in a linked
-/// dependency ever runs).
-///
-/// Declaring the symbol is the whole fix: `std.start` only exports its stub
-/// when the root module has none, so the linker binds mingw's instead. Do not
-/// hand-roll a `DllMain` calling `_initterm`/`__main` — `__main` registers
-/// destructors through `atexit`, so it runs before that table exists.
-///
-/// `test/dll_crt_init_test.zig` fails when this stops being necessary.
+/// Do not hand-roll a `DllMain` instead.
 pub extern fn _DllMainCRTStartup(
     hinst: std.os.windows.HINSTANCE,
     reason: std.os.windows.DWORD,
     reserved: std.os.windows.LPVOID,
 ) callconv(.winapi) std.os.windows.BOOL;
 
-/// `stderr` is a plain extern global on glibc but a macro expanding to a
-/// function call on the Windows UCRT (`__acrt_iob_func(2)`) — referencing
-/// `io.stderr` directly forces Zig to comptime-evaluate that call, which
-/// fails. Resolved at runtime instead; the `windows` branch is pruned at
-/// comptime on every other target.
 fn stderrFile() [*c]io.FILE {
     if (@import("builtin").os.tag == .windows) return io.__acrt_iob_func(2);
     return io.stderr;
@@ -67,11 +49,7 @@ pub fn Errors(comptime c: type) type {
             break :blk t;
         };
 
-        /// The program-lifetime singleton for `kind`. Needed where an error must
-        /// outlive the call that produced it — an async completion runs after
-        /// its originating frame is gone, so it cannot point at the thread-local
-        /// slot below. Referencing ke_common's exported singletons instead would
-        /// force a link against it, which this seam exists to avoid.
+        /// The program-lifetime singleton for `kind`.
         pub fn typeOf(kind: Kind) *const c.ke_error_type {
             return &types[@intFromEnum(kind)];
         }
@@ -93,9 +71,8 @@ pub fn Errors(comptime c: type) type {
         }
 
         /// Raise an error whose type was decided elsewhere, here on the calling
-        /// thread. What crossed is the type singleton; the message describes where
-        /// the failure was picked up rather than what went wrong, because the
-        /// originating thread's slot is long recycled by the time this runs.
+        /// thread. The message describes where the failure was picked up, not what
+        /// went wrong.
         pub fn failWithType(out_error: [*c][*c]c.ke_error, error_type: *const c.ke_error_type,
                             msg: [*c]const u8, src: std.builtin.SourceLocation) void {
             slot = .{
@@ -108,10 +85,8 @@ pub fn Errors(comptime c: type) type {
             if (out_error != null) out_error.* = &slot;
         }
 
-        /// Prints the error chain to stderr and ends the process — no OS crash
-        /// dialog, message always readable first. Mirrors ke_common's
-        /// ke_error_fatal so a backend abort hook (flecs, enkiTS, ...) can give
-        /// up cleanly without linking ke_common or calling libc's abort().
+        /// Prints the error chain to stderr and ends the process, with no OS crash
+        /// dialog. Mirrors ke_common's ke_error_fatal.
         pub fn fatal(err_in: ?*const c.ke_error) noreturn {
             if (@import("builtin").os.tag == .windows) {
                 _ = windows.SetErrorMode(windows.SEM_FAILCRITICALERRORS |

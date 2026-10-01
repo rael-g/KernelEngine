@@ -23,8 +23,6 @@ const Draw = struct {
     world: *const c.ke_world_transform_component,
 };
 
-/// The meshes this camera owes the opaque pass: those whose layers the cull_mask
-/// names and whose material does not blend. Returns how many of `out` were filled.
 fn collectDraws(
     core: *c.ke_render_service,
     cam: *const c.ke_camera_component,
@@ -369,7 +367,6 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
 
 const testing = std.testing;
 
-/// Reports every material as opaque except handle 0.
 fn opaqueUnlessZero(_: [*c]c.ke_render_service, m: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
     return if (m.bits == 0) c.KE_ALPHA_MODE_BLEND else c.KE_ALPHA_MODE_OPAQUE;
 }

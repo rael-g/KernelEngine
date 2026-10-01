@@ -11,8 +11,6 @@ const textures = @import("texture_decoder.zig");
 
 const E = @import("kerror").Errors(c);
 
-/// Splits meshes so their indices still fit the engine's 16-bit index buffer.
-/// One below 65535 because the splitter treats the limit as exclusive.
 const vertex_limit: c_int = 65534;
 
 const import_flags: c_uint = c.aiProcess_Triangulate |
@@ -23,13 +21,8 @@ const import_flags: c_uint = c.aiProcess_Triangulate |
     c.aiProcess_SortByPType |
     c.aiProcess_SplitLargeMeshes;
 
-/// Longest texture path (embedded reference or resolved file) the loader tracks.
 const texture_path_max = 1024;
 
-/// In debug the plugin runs on a tracking allocator, so a model that is never
-/// freed is reported by name when the loader is destroyed instead of going
-/// unnoticed. Release uses the lock-free general allocator: model loading is
-/// dispatched onto the shared worker pool, so it must be safe from any thread.
 const debug_heap = @import("builtin").mode == .Debug;
 const TrackingHeap = std.heap.DebugAllocator(.{ .thread_safe = true });
 
@@ -40,17 +33,12 @@ const State = struct {
     gpa: std.mem.Allocator,
 };
 
-/// Allocates the loader's own State. Bootstrap only: the tracking heap cannot
-/// hold the struct it lives inside, so this one block comes from the process
-/// allocator and is released by the same one in vtDestroy.
 const state_heap = std.heap.smp_allocator;
 
 fn stateOf(self: *c.ke_asset_loader) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-/// One entry per distinct texture reference in the model. Assimp names embedded
-/// textures "*N", so the key doubles as the dedup identity and the source.
 const TextureRef = struct {
     key: [texture_path_max]u8,
     embedded: ?*const c.aiTexture,
@@ -70,8 +58,6 @@ const TextureTable = struct {
     }
 };
 
-/// Registers the first texture of `kind` on `mat`, returning its table index, or
-/// -1 when the material has none. Repeated references collapse onto one entry.
 fn registerTexture(
     table: *TextureTable,
     scene: *const c.aiScene,
@@ -258,9 +244,6 @@ fn vtLoadModel(
     return loadModel(stateOf(self), path, out_error);
 }
 
-/// Releases a model this loader produced. Every block came from the loader's
-/// own allocator, so the model must be handed back to the same loader that
-/// returned it — a foreign or hand-built ke_model_data is not a valid argument.
 fn vtFreeModel(self_in: ?*c.ke_asset_loader, data_in: ?*c.ke_model_data) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;

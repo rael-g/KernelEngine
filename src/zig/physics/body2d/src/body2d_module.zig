@@ -174,9 +174,6 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
     return true;
 }
 
-/// Climbs the hierarchy from a shape to the nearest entity that owns a body.
-/// Bounded by the parent map's size so a hierarchy corrupted into a cycle
-/// terminates rather than hanging the tick.
 fn findBody(
     parents: *std.AutoHashMap(c.ke_entity, c.ke_entity),
     bodies: *std.AutoHashMap(c.ke_entity, c.ke_body_2d),
@@ -256,8 +253,6 @@ export fn ke_physics_body2d_module_create(
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
 
-/// Registers a generated field table, taking its length from the array type so
-/// the count can never drift from the table it describes.
 fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);

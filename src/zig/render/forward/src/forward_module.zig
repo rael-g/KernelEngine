@@ -31,15 +31,10 @@ const Draw = struct {
     view_depth: f32,
 };
 
-/// Orders by ascending view depth, which is farthest first under a right-handed
-/// view space.
 fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
     return a.view_depth < b.view_depth;
 }
 
-/// The draws this camera owes the transparent pass, farthest first: meshes whose
-/// layers the cull_mask names and whose material blends. Returns how many of
-/// `out` were filled.
 fn collectDraws(
     core: *c.ke_render_service,
     cam: *const c.ke_camera_component,
@@ -530,7 +525,6 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
 
 const testing = std.testing;
 
-/// Reports every material as blending except handle 0.
 fn blendUnlessZero(_: [*c]c.ke_render_service, m: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
     return if (m.bits == 0) c.KE_ALPHA_MODE_OPAQUE else c.KE_ALPHA_MODE_BLEND;
 }

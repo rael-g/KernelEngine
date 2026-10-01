@@ -101,11 +101,6 @@ pub const CoreState = struct {
     backbuffer_w: u32,
     backbuffer_h: u32,
 
-    /// Whether this frame has a surface to draw into. A window being closed takes
-    /// its surface with it, and acquiring the next texture starts failing while the
-    /// tick that asked for it is still running — so the answer has to gate every
-    /// pass rather than each pass asking on its own, which is how one unchecked
-    /// caller turns a handled failure into a null dereference inside the driver.
     frame_live: bool,
 
     cmd_encoders: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_encoder,
@@ -410,9 +405,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
 
 const testing = std.testing;
 
-/// A core with nothing set but the one field these tests are about. Every path
-/// under test refuses before it reaches the device, and that is the property being
-/// checked: a frame with no surface must not travel far enough to need one.
 fn deadFrame(state: *CoreState) c.ke_render_service {
     state.frame_live = false;
     var core = std.mem.zeroes(c.ke_render_service);

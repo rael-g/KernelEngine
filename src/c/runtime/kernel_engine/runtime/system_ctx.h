@@ -83,6 +83,10 @@ KE_RUNTIME_API ke_entity ke_system_ctx_reserve(ke_system_ctx *ctx);
 KE_RUNTIME_API bool ke_system_ctx_defer(ke_system_ctx *ctx, ke_defer_fn fn,
                                           const void *user, size_t user_size);
 
+/// Returns the id the entity will have, usable immediately, so a body that spawns
+/// something can give it components in the same call. The entity itself enters the
+/// world at the wave barrier. A context of zero spawns nothing and answers
+/// KE_ENTITY_INVALID.
 /// @param ctx [ctx]
 KE_RUNTIME_API ke_entity ke_system_ctx_spawn(ke_system_ctx *ctx);
 

@@ -7,15 +7,11 @@ const E = @import("kerror").Errors(c);
 
 const pi: f32 = 3.14159265358979323846;
 
-/// Entries arrive as a C pointer + count; the callbacks only ever read them.
 fn entries(e: [*c]c.ke_variant_table_entry, n: u32) []c.ke_variant_table_entry {
     if (n == 0) return &.{};
     return e[0..n];
 }
 
-/// Marks the entry as taken on a match: asking whether a key is yours and being
-/// told yes is what claiming it means, and the loader reads that back to find the
-/// keys nothing in the engine wanted.
 fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     if (entry.key == null) return false;
     if (!std.mem.eql(u8, std.mem.span(entry.key), name)) return false;
@@ -46,9 +42,6 @@ fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     };
 }
 
-/// A 2D pose stores radians, and a scene authors degrees — the same unit it
-/// authors 3D rotation in. A description maps a key to storage and cannot say
-/// "and convert", so the conversion lands here.
 pub export fn ke_framework_apply_transform2d(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
@@ -68,14 +61,6 @@ pub export fn ke_framework_apply_transform2d(
     return true;
 }
 
-/// Two corrections the table cannot make:
-///
-/// `rotation_euler` is three angles standing for the same quaternion `rotation`
-/// holds — a description maps a key to storage and cannot say "and convert".
-///
-/// A 2D `scale` widens to z=0 through the generic path, which is the right fill
-/// for a position and collapses an object flat here. A scale authored in 2D
-/// means "leave depth alone", so z returns to 1.
 pub export fn ke_framework_apply_transform(
     _: ?*anyopaque,
     ptr: ?*anyopaque,

@@ -41,7 +41,7 @@ public unsafe partial class SystemCtx
         return Native.ke_system_ctx_defer((ke_system_ctx*)ctx, fn, user, userSize);
     }
 
-
+    /// <summary>Returns the id the entity will have, usable immediately, so a body that spawns something can give it components in the same call. The entity itself enters the world at the wave barrier. A context of zero spawns nothing and answers KE_ENTITY_INVALID.</summary>
     public static ulong Spawn(nint ctx)
     {
         return Native.ke_system_ctx_spawn((ke_system_ctx*)ctx);

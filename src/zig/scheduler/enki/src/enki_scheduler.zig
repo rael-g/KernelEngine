@@ -9,9 +9,6 @@ const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
-/// ke_task* is opaque to callers, so the pinned/regular distinction rides in
-/// its low bit — both Task allocations are at least 2-byte aligned, leaving it
-/// free. wait() and is_completed() need it to pick the right enkiTS call.
 const pinned_tag: usize = 1;
 
 const Task = struct {
@@ -20,13 +17,8 @@ const Task = struct {
     on_complete: c.ke_task_on_complete_func,
     on_complete_user_data: ?*anyopaque,
     completed: std.atomic.Value(bool),
-    /// Either an enkiTaskSet* or an enkiPinnedTask*, matching the tag.
     handle: ?*anyopaque,
-    /// Set once, before the task is scheduled; read by the worker thread.
     tagged_self: ?*c.ke_task,
-    /// The type the body failed with, held until wait() raises it on the waiting
-    /// thread. Only the type crosses: a ke_error lives in the failing thread's own
-    /// storage and is recycled by the failures after it.
     failure: ?*const c.ke_error_type,
 
     fn run(self: *Task) void {

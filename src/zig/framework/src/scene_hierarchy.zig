@@ -43,9 +43,6 @@ fn identityMatrix() c.ke_mat4 {
     return m;
 }
 
-/// Appends `root` and its whole subtree, parents first. Iterative: children are
-/// pushed onto the stack and popped later, which reproduces a depth-first order
-/// without the call depth.
 fn pushSubtree(s: *State, root: c.ke_entity) void {
     s.stack.append(heap.gpa, root) catch return;
     while (s.stack.pop()) |entity| {
@@ -75,12 +72,6 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
     }
 }
 
-/// Flattening and propagation are one system on purpose. Split in two they would
-/// declare no conflicting access — a reader of hierarchy and a writer of
-/// transforms — so the wave builder would be free to run them side by side, and
-/// the second would read the order buffer while the first was still filling it.
-/// The buffer is private scratch that nothing else consumes, so there is nothing
-/// to gain from exposing the split and a race to lose.
 fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const s: *State = @ptrCast(@alignCast(user orelse return true));
     flatten(s, ctx);

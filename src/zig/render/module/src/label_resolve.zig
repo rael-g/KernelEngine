@@ -6,15 +6,10 @@ const std = @import("std");
 pub const State = struct {
     core: *c.ke_render_service,
     ui: *c.ke_render_ui,
-    /// Borrowed, optional.
     resolver: ?*c.ke_asset_resolver,
-    /// Borrowed, optional.
     logger: ?*c.ke_logger = null,
 };
 
-/// Reports a label that named a font the engine could not produce. Staying quiet
-/// draws the label as nothing, which reads on screen as an empty scene rather
-/// than as the failure it is.
 fn reportUnresolved(st: *State, path: []const u8, reason: []const u8) void {
     const lg = st.logger orelse return;
     var buf: [320]u8 = undefined;
@@ -23,9 +18,6 @@ fn reportUnresolved(st: *State, path: []const u8, reason: []const u8) void {
     lg.log.?(lg, &ev);
 }
 
-/// Bakes and registers the font, keyed by every parameter of the bake. A failure
-/// answers KE_UI_FONT_FAILED, which both stops the retry and records that the
-/// label asked for something it did not get.
 fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     const path = std.mem.sliceTo(&l.font, 0);
 

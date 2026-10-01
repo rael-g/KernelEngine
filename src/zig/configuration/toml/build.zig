@@ -56,9 +56,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
 }
 
-/// Wires the shared vendored tomlc99 into `mod`: its include dir plus
-/// `toml.c`, compiled with -fno-sanitize=undefined because this third-party
-/// source carries UB that is not ours to fix.
 pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
     mod.addIncludePath(.{ .cwd_relative = dir });
     mod.addCSourceFile(.{
