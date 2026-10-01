@@ -7,10 +7,12 @@
         "src/c/input/kernel_engine/input/input.h",
         "src/c/input/kernel_engine/input/snapshot.h",
         "src/c/input/kernel_engine/input/event.h",
-        "src/c/input/kernel_engine/input/key.h"
+        "src/c/input/kernel_engine/input/key.h",
+        "src/zig/input/default/include/kernel_engine/input/default/input_default_create.h"
       ],
       "includeDirs": [
         "src/c/input",
+        "src/zig/input/default/include",
         "src/zig/common/include",
         "src/c/ecs"
       ],
@@ -728,7 +730,8 @@
         "src/c/input/kernel_engine/input/key.h",
         "src/c/input/kernel_engine/input/snapshot.h",
         "src/c/input/kernel_engine/input/event.h",
-        "src/c/input/kernel_engine/input/input.h"
+        "src/c/input/kernel_engine/input/input.h",
+        "src/zig/input/default/include/kernel_engine/input/default/input_default_create.h"
       ],
       "library": "ke_input_default",
       "output": "Generated/Input/"

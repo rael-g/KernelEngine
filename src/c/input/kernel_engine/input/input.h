@@ -3,7 +3,6 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/common/types.h>
-#include <kernel_engine/input/input_export.h>
 #include <kernel_engine/input/snapshot.h>
 #include <kernel_engine/input/event.h>
 #ifdef __cplusplus
@@ -52,6 +51,48 @@ extern "C"
         void (*get_snapshot)(struct ke_input *self, ke_input_snapshot *out_snapshot);
 
         /**
+         * Returns true while the key is held down in a snapshot.
+         * @param snapshot [borrowed] Snapshot to read.
+         * @param key [enum:ke_key] Key to query. Out-of-range codes read as false.
+         */
+        ke_bool (*snapshot_is_key_down)(struct ke_input *self, const ke_input_snapshot *snapshot, int32_t key);
+
+        /**
+         * Returns true if the key transitioned to down during the snapshot's frame.
+         * @param snapshot [borrowed] Snapshot to read.
+         * @param key [enum:ke_key] Key to query. Out-of-range codes read as false.
+         */
+        ke_bool (*snapshot_is_key_pressed)(struct ke_input *self, const ke_input_snapshot *snapshot, int32_t key);
+
+        /**
+         * Returns true if the key transitioned to up during the snapshot's frame.
+         * @param snapshot [borrowed] Snapshot to read.
+         * @param key [enum:ke_key] Key to query. Out-of-range codes read as false.
+         */
+        ke_bool (*snapshot_is_key_released)(struct ke_input *self, const ke_input_snapshot *snapshot, int32_t key);
+
+        /**
+         * Returns true while the mouse button is held down in a snapshot.
+         * @param snapshot [borrowed] Snapshot to read.
+         * @param button [enum:ke_mouse_button] Button to query. Out-of-range indices read as false.
+         */
+        ke_bool (*snapshot_is_mouse_button_down)(struct ke_input *self, const ke_input_snapshot *snapshot, int32_t button);
+
+        /**
+         * Returns true if the mouse button transitioned to down during the snapshot's frame.
+         * @param snapshot [borrowed] Snapshot to read.
+         * @param button [enum:ke_mouse_button] Button to query. Out-of-range indices read as false.
+         */
+        ke_bool (*snapshot_is_mouse_button_pressed)(struct ke_input *self, const ke_input_snapshot *snapshot, int32_t button);
+
+        /**
+         * Returns true if the mouse button transitioned to up during the snapshot's frame.
+         * @param snapshot [borrowed] Snapshot to read.
+         * @param button [enum:ke_mouse_button] Button to query. Out-of-range indices read as false.
+         */
+        ke_bool (*snapshot_is_mouse_button_released)(struct ke_input *self, const ke_input_snapshot *snapshot, int32_t button);
+
+        /**
          * [raw] Drains pending discrete events and clears the queue. Events beyond the
          * buffer capacity are dropped. Must run on the same thread as the sinks below.
          * @param out_buf [out,array_of:capacity] Receives the drained events.
@@ -95,12 +136,6 @@ extern "C"
         ke_input *ref;
         void (*destroy)(ke_input *self);
     } ke_input_handle;
-
-    /**
-     * Creates an input system.
-     * @param logger [borrowed,nullable] Optional logger; pass NULL to disable logging.
-     */
-    KE_INPUT_API ke_input_handle ke_input_create(struct ke_logger *logger, ke_error **out_error);
 
 #ifdef __cplusplus
 }

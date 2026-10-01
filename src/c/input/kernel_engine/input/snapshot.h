@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_INPUT_SNAPSHOT_H_
 
 #include <kernel_engine/common/types.h>
-#include <kernel_engine/input/input_export.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -24,7 +23,7 @@ extern "C"
      * Frozen snapshot of all input state for a single frame.
      * Passed from the input poll to its readers so reads are consistent and thread-safe.
      *
-     * The key fields are bitsets. Read them through the accessors below rather
+     * The key fields are bitsets. Read them through the snapshot_is_* slots of ke_input rather
      * than indexing directly: the packing is a detail of this contract, and a
      * caller that reimplements it silently breaks if the packing ever changes.
      */
@@ -51,48 +50,6 @@ extern "C"
         uint32_t mouse_buttons_released;
 
     } ke_input_snapshot;
-
-    /**
-     * Returns true while the key is held down.
-     * @param snapshot [borrowed] Snapshot to read.
-     * @param key [enum:ke_key] Key to query. Out-of-range codes read as false.
-     */
-    KE_INPUT_API ke_bool ke_input_snapshot_is_key_down(const ke_input_snapshot *snapshot, int32_t key);
-
-    /**
-     * Returns true if the key transitioned to down during the snapshot's frame.
-     * @param snapshot [borrowed] Snapshot to read.
-     * @param key [enum:ke_key] Key to query. Out-of-range codes read as false.
-     */
-    KE_INPUT_API ke_bool ke_input_snapshot_is_key_pressed(const ke_input_snapshot *snapshot, int32_t key);
-
-    /**
-     * Returns true if the key transitioned to up during the snapshot's frame.
-     * @param snapshot [borrowed] Snapshot to read.
-     * @param key [enum:ke_key] Key to query. Out-of-range codes read as false.
-     */
-    KE_INPUT_API ke_bool ke_input_snapshot_is_key_released(const ke_input_snapshot *snapshot, int32_t key);
-
-    /**
-     * Returns true while the mouse button is held down.
-     * @param snapshot [borrowed] Snapshot to read.
-     * @param button [enum:ke_mouse_button] Button to query. Out-of-range indices read as false.
-     */
-    KE_INPUT_API ke_bool ke_input_snapshot_is_mouse_button_down(const ke_input_snapshot *snapshot, int32_t button);
-
-    /**
-     * Returns true if the mouse button transitioned to down during the snapshot's frame.
-     * @param snapshot [borrowed] Snapshot to read.
-     * @param button [enum:ke_mouse_button] Button to query. Out-of-range indices read as false.
-     */
-    KE_INPUT_API ke_bool ke_input_snapshot_is_mouse_button_pressed(const ke_input_snapshot *snapshot, int32_t button);
-
-    /**
-     * Returns true if the mouse button transitioned to up during the snapshot's frame.
-     * @param snapshot [borrowed] Snapshot to read.
-     * @param button [enum:ke_mouse_button] Button to query. Out-of-range indices read as false.
-     */
-    KE_INPUT_API ke_bool ke_input_snapshot_is_mouse_button_released(const ke_input_snapshot *snapshot, int32_t button);
 
 #ifdef __cplusplus
 }

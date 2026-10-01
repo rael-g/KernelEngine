@@ -7,6 +7,8 @@ ke_input_default
 --include-directory
 ../../../../c/input
 --include-directory
+../../../../zig/input/default/include
+--include-directory
 ../../../../zig/common/include
 --file
 Input.umbrella.h
@@ -15,6 +17,7 @@ Input.umbrella.h
 ../../../../c/input/kernel_engine/input/input.h
 ../../../../c/input/kernel_engine/input/key.h
 ../../../../c/input/kernel_engine/input/snapshot.h
+../../../../zig/input/default/include/kernel_engine/input/default/input_default_create.h
 --methodClassName
 NativeMethods
 --prefixStrip

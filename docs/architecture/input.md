@@ -7,16 +7,16 @@ tick. A second system evaluates action bindings against the copy
 
 ## The state: `ke_input`
 
-`ke_input` is a vtable (`src/c/input/kernel_engine/input/input.h:19-91`); its one implementation is
+`ke_input` is a vtable (`src/c/input/kernel_engine/input/input.h:18-132`); its one implementation is
 `ke_input_default` (`src/zig/input/default/src/input_default.zig`). It holds per-key `down`,
 `pressed` and `released` flags, mouse position, per-frame mouse and scroll deltas, three mouse-button
-bitmasks, and a queue of discrete events (`input_default.zig:16-34`).
+bitmasks, and a queue of discrete events (`input_default.zig:17-35`).
 
 The four **sinks** are how the window backend writes state: `on_key`, `on_mouse_move`,
-`on_mouse_button`, `on_mouse_scroll` (`input.h:63-89`).
+`on_mouse_button`, `on_mouse_scroll` (`input.h:104-130`).
 
 - A key press sets `down`, and sets `pressed` only if the key was not already down
-  (`input_default.zig:79-82`). A release sets `released` and clears `down` (`:83-86`). Key codes
+  (`input_default.zig:80-83`). A release sets `released` and clears `down` (`:84-87`). Key codes
   outside `0..KE_INPUT_MAX_KEYS` (512) are dropped (`:76`).
 - Mouse motion adds the distance from the previous position to `mouse_dx/dy` and stores the new
   position (`:93-96`); scroll adds to `scroll_dx/dy` (`:118-119`). Mouse buttons follow the key rule
@@ -27,13 +27,13 @@ The four **sinks** are how the window backend writes state: `on_key`, `on_mouse_
 
 `update` is the frame boundary: it clears every `pressed` and `released` flag, the mouse and scroll
 deltas, the pressed and released button masks, and the event queue. It leaves `down`, the button
-`down` mask and the cursor position (`input_default.zig:53-72`).
+`down` mask and the cursor position (`input_default.zig:54-73`).
 
 ## What an edge is, and until when it lasts
 
 An edge (`pressed`, `released`) is set by the sink call that causes it and cleared by the next
 `update`. Nothing else clears it: `get_snapshot` and the `is_key_*` queries only read
-(`input_default.zig:134-176`; test `a key press is visible until the next update`, `:285`). So an
+(`input_default.zig:135-177`; test `a key press is visible until the next update`, `:298`). So an
 edge is visible to every read made between the sink call that set it and the next `update`, and to
 no read after. A press and release both landing between two `update` calls leave `pressed` and
 `released` both set and `down` false.
@@ -41,14 +41,14 @@ no read after. A press and release both landing between two `update` calls leave
 ## The snapshot
 
 `get_snapshot` copies the state into a `ke_input_snapshot`: three 512-bit key bitsets, mouse
-position, deltas, scroll, and the three button masks (`snapshot.h:15-53`,
-`input_default.zig:152-176`). The copy is a plain struct with no pointer back, so it can be read on
-any thread while the live object keeps changing (`input.h:47-52`). Reads go through the exported
-`ke_input_snapshot_is_*` functions, which treat out-of-range codes as false
-(`snapshot.h:55-101`, `input_default.zig:178-220`).
+position, deltas, scroll, and the three button masks (`snapshot.h:14-52`,
+`input_default.zig:153-177`). The copy is a plain struct with no pointer back, so it can be read on
+any thread while the live object keeps changing (`input.h:46-51`). Reads go through the
+`snapshot_is_*` slots of `ke_input`, which treat out-of-range codes as false
+(`input.h:53-93`, `input_default.zig:179-227`).
 
 `ke_input_default` takes no lock: sinks, `update` and `get_snapshot` read and write the same
-`State` with plain stores (`input_default.zig:16-34`). Callers must not overlap them.
+`State` with plain stores (`input_default.zig:17-35`). Callers must not overlap them.
 
 ## How the window feeds the sinks
 

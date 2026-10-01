@@ -65,10 +65,12 @@ public unsafe class InputDrainTests
         data.keys_down[1] = 1UL << (65 % 64);
         data.mouse_buttons_down = 1u << (int)MouseButton.Right;
 
-        Assert.True(InputSnapshot.IsKeyDown(data, Key.A));
-        Assert.False(InputSnapshot.IsKeyDown(data, (Key)64));
-        Assert.False(InputSnapshot.IsKeyPressed(data, Key.A));
-        Assert.True(InputSnapshot.IsMouseButtonDown(data, MouseButton.Right));
-        Assert.False(InputSnapshot.IsMouseButtonDown(data, MouseButton.Left));
+        using var input = new Input(null);
+
+        Assert.True(input.SnapshotIsKeyDown(&data, Key.A));
+        Assert.False(input.SnapshotIsKeyDown(&data, (Key)64));
+        Assert.False(input.SnapshotIsKeyPressed(&data, Key.A));
+        Assert.True(input.SnapshotIsMouseButtonDown(&data, MouseButton.Right));
+        Assert.False(input.SnapshotIsMouseButtonDown(&data, MouseButton.Left));
     }
 }

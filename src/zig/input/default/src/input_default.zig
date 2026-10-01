@@ -6,6 +6,7 @@ const gpa = std.heap.c_allocator;
 
 const c = @cImport({
     @cInclude("kernel_engine/input/input.h");
+    @cInclude("kernel_engine/input/default/input_default_create.h");
 });
 
 const E = @import("kerror").Errors(c);
@@ -189,32 +190,38 @@ fn buttonBit(snapshot: [*c]const c.ke_input_snapshot, mask: u32, button: i32) c.
     return @intFromBool((mask & (@as(u32, 1) << @intCast(button))) != 0);
 }
 
-export fn ke_input_snapshot_is_key_down(snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+fn snapshotIsKeyDown(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+    _ = self;
     if (snapshot == null) return 0;
     return keyBit(snapshot, &snapshot.*.keys_down, key);
 }
 
-export fn ke_input_snapshot_is_key_pressed(snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+fn snapshotIsKeyPressed(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+    _ = self;
     if (snapshot == null) return 0;
     return keyBit(snapshot, &snapshot.*.keys_pressed, key);
 }
 
-export fn ke_input_snapshot_is_key_released(snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+fn snapshotIsKeyReleased(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+    _ = self;
     if (snapshot == null) return 0;
     return keyBit(snapshot, &snapshot.*.keys_released, key);
 }
 
-export fn ke_input_snapshot_is_mouse_button_down(snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+fn snapshotIsMouseButtonDown(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+    _ = self;
     if (snapshot == null) return 0;
     return buttonBit(snapshot, snapshot.*.mouse_buttons_down, button);
 }
 
-export fn ke_input_snapshot_is_mouse_button_pressed(snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+fn snapshotIsMouseButtonPressed(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+    _ = self;
     if (snapshot == null) return 0;
     return buttonBit(snapshot, snapshot.*.mouse_buttons_pressed, button);
 }
 
-export fn ke_input_snapshot_is_mouse_button_released(snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+fn snapshotIsMouseButtonReleased(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+    _ = self;
     if (snapshot == null) return 0;
     return buttonBit(snapshot, snapshot.*.mouse_buttons_released, button);
 }
@@ -246,6 +253,12 @@ export fn ke_input_create(log: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) cal
     api.is_key_down = &inputIsKeyDown;
     api.is_key_released = &inputIsKeyReleased;
     api.get_snapshot = &inputGetSnapshot;
+    api.snapshot_is_key_down = &snapshotIsKeyDown;
+    api.snapshot_is_key_pressed = &snapshotIsKeyPressed;
+    api.snapshot_is_key_released = &snapshotIsKeyReleased;
+    api.snapshot_is_mouse_button_down = &snapshotIsMouseButtonDown;
+    api.snapshot_is_mouse_button_pressed = &snapshotIsMouseButtonPressed;
+    api.snapshot_is_mouse_button_released = &snapshotIsMouseButtonReleased;
     api.drain_events = &inputDrainEvents;
     api.on_key = &inputOnKey;
     api.on_mouse_move = &inputOnMouseMove;
@@ -441,4 +454,37 @@ test "mouse motion on a null self is ignored" {
     const h = ke_input_create(null, null);
     defer h.destroy.?(h.ref);
     h.ref.*.on_mouse_move.?(null, 1, 1);
+}
+
+test "snapshot accessors read the key and button bitsets" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    const api = h.ref.*;
+    _ = api.update.?(h.ref, null);
+    api.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
+    api.on_mouse_button.?(h.ref, 2, c.KE_INPUT_ACTION_PRESS);
+
+    var snapshot = std.mem.zeroes(c.ke_input_snapshot);
+    api.get_snapshot.?(h.ref, &snapshot);
+
+    try testing.expectEqual(@as(c.ke_bool, 1), api.snapshot_is_key_down.?(h.ref, &snapshot, 65));
+    try testing.expectEqual(@as(c.ke_bool, 1), api.snapshot_is_key_pressed.?(h.ref, &snapshot, 65));
+    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_released.?(h.ref, &snapshot, 65));
+    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, &snapshot, 66));
+    try testing.expectEqual(@as(c.ke_bool, 1), api.snapshot_is_mouse_button_down.?(h.ref, &snapshot, 2));
+    try testing.expectEqual(@as(c.ke_bool, 1), api.snapshot_is_mouse_button_pressed.?(h.ref, &snapshot, 2));
+    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_mouse_button_released.?(h.ref, &snapshot, 2));
+}
+
+test "snapshot accessors read out-of-range codes and a null snapshot as false" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    const api = h.ref.*;
+    var snapshot = std.mem.zeroes(c.ke_input_snapshot);
+
+    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, &snapshot, -1));
+    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, &snapshot, c.KE_INPUT_MAX_KEYS));
+    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_mouse_button_down.?(h.ref, &snapshot, c.KE_INPUT_MAX_MOUSE_BUTTONS));
+    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, null, 65));
+    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_mouse_button_down.?(h.ref, null, 0));
 }
