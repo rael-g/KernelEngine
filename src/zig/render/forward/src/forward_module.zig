@@ -29,11 +29,11 @@ const PerFrame = extern struct {
 const Draw = struct {
     mesh: *const c.ke_mesh_component,
     world: *const c.ke_world_transform_component,
-    view_depth: f32,
+    view_distance_sq: f32,
 };
 
 fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
-    return a.view_depth < b.view_depth;
+    return a.view_distance_sq > b.view_distance_sq;
 }
 
 fn collectDraws(
@@ -56,7 +56,7 @@ fn collectDraws(
             const wm = wts[i].matrix.m;
             const wp = zm.f32x4(wm[12], wm[13], wm[14], 1.0);
             const view_pos = zm.mul(wp, view);
-            out[count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]), .view_depth = view_pos[2] };
+            out[count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]), .view_distance_sq = view_pos[0] * view_pos[0] + view_pos[1] * view_pos[1] + view_pos[2] * view_pos[2] };
             count += 1;
         }
     }
@@ -647,6 +647,24 @@ test "the culled draws come back farthest first, so blending composites back to 
     const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
 
     const eye_at_origin = zm.lookAtRh(zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 0, -1, 1), zm.f32x4(0, 1, 0, 0));
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, eye_at_origin, &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 3), n);
+    try testing.expectEqual(@as(u32, 0b010), out[0].mesh.layers);
+    try testing.expectEqual(@as(u32, 0b100), out[1].mesh.layers);
+    try testing.expectEqual(@as(u32, 0b001), out[2].mesh.layers);
+}
+
+test "draws come back farthest first under a left handed view too" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b111);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(2), transformAt(9), transformAt(5) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    const eye_at_origin = zm.lookAtLh(zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 0, 1, 1), zm.f32x4(0, 1, 0, 0));
 
     var out: [8]Draw = undefined;
     const n = collectDraws(&svc, &cam, eye_at_origin, &segs, segs.len, out[0..]);
