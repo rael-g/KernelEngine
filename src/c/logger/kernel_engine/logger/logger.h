@@ -11,8 +11,6 @@ extern "C"
 
 typedef struct ke_logger ke_logger;
 
-#define KE_ID_LOGGER "ke_logger"
-
     /** One log entry. `tag`/`message` are valid only for the duration of the call they're passed to. */
     typedef struct ke_log_event
     {

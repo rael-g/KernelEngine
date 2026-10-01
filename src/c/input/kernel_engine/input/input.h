@@ -12,8 +12,6 @@ extern "C"
 
     struct ke_logger;
 
-#define KE_ID_INPUT "ke_input"
-
     /** Live keyboard and mouse state for one window. */
     typedef struct ke_input
     {

@@ -12,8 +12,6 @@ extern "C"
 {
 #endif
 
-#define KE_ID_WINDOW "ke_window"
-
     /** [interface] OS-level window abstraction. */
     typedef struct ke_window
     {
@@ -30,9 +28,6 @@ extern "C"
 
         /** Processes pending OS events. Call once per frame. */
         bool (*poll_events)(struct ke_window *self, ke_error **out_error);
-
-        /** Presents the back buffer. Call once per frame, after rendering. */
-        bool (*swap_buffers)(struct ke_window *self, ke_error **out_error);
 
         /**
          * Retrieves the current client-area size in pixels.

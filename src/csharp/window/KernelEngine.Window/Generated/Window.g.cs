@@ -61,14 +61,6 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
         KernelError.ThrowIfFailed(Handle->poll_events(Handle, &err), err, "poll_events");
     }
 
-    /// <summary>Presents the back buffer. Call once per frame, after rendering.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
-    public void SwapBuffers()
-    {
-        ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->swap_buffers(Handle, &err), err, "swap_buffers");
-    }
-
     /// <summary>Retrieves the current client-area size in pixels.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public (int Width, int Height) GetSize()

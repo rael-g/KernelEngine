@@ -297,10 +297,6 @@ fn log(world: *c.ke_world, level: c_int, comptime fmt: []const u8, args: anytype
     if (lg.log) |f| f(lg, &ev);
 }
 
-fn warn(world: *c.ke_world, comptime fmt: []const u8, args: anytype) void {
-    log(world, c.KE_LOG_LEVEL_WARNING, fmt, args);
-}
-
 /// Reports a structural fault and fails the load.
 fn structural(
     world: *c.ke_world,

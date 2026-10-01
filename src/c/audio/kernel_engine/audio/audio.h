@@ -11,8 +11,6 @@ extern "C"
 {
 #endif
 
-#define KE_ID_AUDIO "ke_audio"
-
     /** Opaque sound identifier owned by an audio backend. 0 is reserved as "invalid". */
     typedef uint32_t ke_audio_sound;
 #define KE_AUDIO_SOUND_INVALID ((ke_audio_sound)0)

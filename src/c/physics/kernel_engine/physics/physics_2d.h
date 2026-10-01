@@ -10,8 +10,6 @@ extern "C"
 {
 #endif
 
-#define KE_ID_PHYSICS_2D "ke_physics_2d"
-
     /** Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as "invalid". */
     typedef uint32_t ke_body_2d;
 #define KE_BODY_2D_INVALID ((ke_body_2d)0)
