@@ -47,7 +47,6 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
-    mod.linkSystemLibrary("ke_runtime", .{});
     mod.linkSystemLibrary("ke_view_space", .{});
     mod.linkSystemLibrary("ke_render_camera", .{});
     mod.linkSystemLibrary("ke_render_service", .{});
@@ -94,7 +93,6 @@ pub fn build(b: *std.Build) void {
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.addRPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.linkSystemLibrary("ke_runtime", .{});
     test_mod.linkSystemLibrary("ke_view_space", .{});
     test_mod.linkSystemLibrary("ke_render_camera", .{});
     test_mod.linkSystemLibrary("ke_render_service", .{});

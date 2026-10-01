@@ -171,7 +171,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "kerror-src", kerror_src),
         argF(b, "tomlc99-dir", tomlc99_dir),
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
-    }, &.{&runtime.step}, .has_tests);
+    }, &.{}, .has_tests);
 
     const window_glfw = ctx.plugin("ke_window_glfw", "src/zig/window/glfw", &.{
         argF(b, "heap-src", heap_src),
@@ -360,7 +360,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "physics/body2d/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step }, .has_tests);
+    }, &.{ &common.step }, .has_tests);
 
     const audio_module = ctx.plugin("ke_audio_module", "src/zig/audio/module", &.{
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
@@ -372,7 +372,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "audio/module/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step }, .no_tests);
+    }, &.{ &common.step }, .no_tests);
 
     const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
@@ -388,7 +388,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &skybox_vs.step, &skybox_fs.step }, .has_tests);
+    }, &.{ &common.step, &skybox_vs.step, &skybox_fs.step }, .has_tests);
 
     const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
@@ -405,7 +405,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &ui_vs.step, &ui_fs.step }, .has_tests);
+    }, &.{ &common.step, &ui_vs.step, &ui_fs.step }, .has_tests);
 
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
@@ -421,7 +421,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/shadow/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &shadow_vs.step, &shadow_fs.step }, .has_tests);
+    }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step }, .has_tests);
 
     const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{});
     const cluster = ctx.plugin("ke_render_cluster", "src/zig/render/cluster", &.{
@@ -437,7 +437,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/cluster/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &cluster_cs.step }, .has_tests);
+    }, &.{ &common.step, &cluster_cs.step }, .has_tests);
 
     const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
     const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
@@ -455,7 +455,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .has_tests);
+    }, &.{ &common.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .has_tests);
 
     const materials_dirs = [_][]const u8{
         b.pathJoin(&.{ shader_lib_dir, "materials" }),
@@ -482,7 +482,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/gbuffer/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step }, .has_tests);
+    }, &.{ &common.step }, .has_tests);
     for (gbuffer_material_shaders) |s| gbuffer.step.dependOn(&s.step);
 
     const forward_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };
@@ -506,7 +506,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/forward/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step }, .has_tests);
+    }, &.{ &common.step }, .has_tests);
     for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
 
     const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
@@ -536,7 +536,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "magenta-vs-wgsl", magenta_vs_wgsl),
         argF(b, "magenta-fs-wgsl", magenta_fs_wgsl),
     }, &.{
-        &common.step,     &resource_cache_default.step, &runtime.step,
+        &common.step,     &resource_cache_default.step,
         &magenta_vs.step, &magenta_fs.step,
     }, .has_tests);
 
@@ -568,7 +568,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
         argF(b, "kerror-src", kerror_src),
     }, &.{
-        &common.step,            &runtime.step, &render_service.step, &view_space.step,
+        &common.step,            &render_service.step, &view_space.step,
         &tonemap.step,           &skybox.step,  &ui.step,
         &gbuffer.step,           &shadow.step,  &cluster.step,
         &deferred_lighting.step, &forward.step, &render_camera.step,

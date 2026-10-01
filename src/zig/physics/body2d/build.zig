@@ -29,7 +29,6 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
-    mod.linkSystemLibrary("ke_runtime", .{});
     mod.addCMacro("KE_PHYSICS_BODY2D_EXPORT", "");
 
     const lib = b.addLibrary(.{
@@ -55,7 +54,6 @@ pub fn build(b: *std.Build) void {
     }
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.linkSystemLibrary("ke_runtime", .{});
     test_mod.addCMacro("KE_PHYSICS_BODY2D_EXPORT", "");
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
 

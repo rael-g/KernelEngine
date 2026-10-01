@@ -37,7 +37,6 @@ pub fn build(b: *std.Build) void {
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
     mod.linkSystemLibrary("ke_resource_cache_default", .{});
-    mod.linkSystemLibrary("ke_runtime", .{});
     mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
 
     mod.addAnonymousImport("magenta.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_vs_wgsl } });
@@ -69,7 +68,6 @@ pub fn build(b: *std.Build) void {
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.linkSystemLibrary("ke_resource_cache_default", .{});
-    test_mod.linkSystemLibrary("ke_runtime", .{});
     test_mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
     test_mod.addAnonymousImport("magenta.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_vs_wgsl } });
     test_mod.addAnonymousImport("magenta.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_fs_wgsl } });

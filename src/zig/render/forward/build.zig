@@ -29,7 +29,6 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
-    mod.linkSystemLibrary("ke_runtime", .{});
     mod.addCMacro("KE_RENDER_FORWARD_EXPORT", "");
 
     const zmath = b.dependency("zmath", .{});
@@ -59,7 +58,6 @@ pub fn build(b: *std.Build) void {
     }
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.linkSystemLibrary("ke_runtime", .{});
     test_mod.addCMacro("KE_RENDER_FORWARD_EXPORT", "");
     test_mod.addImport("zmath", zmath.module("root"));
 
