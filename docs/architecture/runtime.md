@@ -154,9 +154,12 @@ stack, in registration order, before its first phase, after joining a render pha
 against the table. `unregister_system` from a body is queued the same way and applied after the
 registrations of that stack.
 
-## How many segments a query may match
+## How many segments and queries there are
 
-`ke_runtime_params.max_segments_per_query` (`runtime_create.h`) is the most archetype segments one
-query may match; `0` selects 32. A tick whose query matches more fails with `out_of_memory` naming the
-system, in the sim phases and in the render extraction alike. The segment buffers of each system and
-the render extraction scratch are sized from it when the runtime and the system are created.
+Neither is capped. A system's per-query storage is allocated from the number of queries it declares.
+Each query starts with room for a few segments; when `query_resolve` reports more matches than the
+buffer holds, the runtime grows the buffer to that count and resolves again, before the wave is
+dispatched, so no body ever holds a buffer that moves. The render extraction scratch grows the same
+way. The only failure left is an allocation failure, which fails the tick with `out_of_memory`. A
+query's width is the one fixed number: `KE_QUERY_MAX_TERMS`, the length of the column array inside
+`ke_ecs_segment`.

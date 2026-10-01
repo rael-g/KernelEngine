@@ -28,10 +28,6 @@ typedef struct ke_runtime_params {
 
     /// Most systems one phase may hold; registering past it fails. 0 selects 256.
     uint32_t max_systems_per_phase;
-
-    /// Most archetype segments one query may match; a tick whose query matches more fails.
-    /// 0 selects 32.
-    uint32_t max_segments_per_query;
 } ke_runtime_params;
 
 KE_RUNTIME_CREATE_API ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,

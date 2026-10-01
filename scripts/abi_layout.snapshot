@@ -111,11 +111,10 @@ ke_runtime_system_params size=72 align=8
   access_count 56
   pinned_thread 60
   per_entity 64
-ke_runtime_params size=16 align=4
+ke_runtime_params size=12 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
   max_systems_per_phase 8
-  max_segments_per_query 12
 ke_runtime size=56 align=8
   handle 0
   register_module 8
