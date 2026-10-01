@@ -569,3 +569,10 @@ test "a null filter leaves the fixture colliding with everything" {
     const state = runPast(h, ball);
     try testing.expect(state.velocity_x < 0.0);
 }
+
+test "creating and destroying a physics world leaves no block allocated" {
+    const h = makeWorld(0.0, -9.81);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

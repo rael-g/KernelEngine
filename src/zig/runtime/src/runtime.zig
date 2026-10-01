@@ -2214,3 +2214,19 @@ test "a multi term query hands back aligned columns" {
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expectEqual(expect, g_pv_sum);
 }
+
+test "creating, ticking and destroying a runtime leaves no block allocated" {
+    var f = try Fixture.init();
+    var sys = systemParams("LeakProbe", c.KE_PHASE_UPDATE);
+    sys.execute = &repeatSpawnerBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(f.tick(1.0 / 60.0));
+    f.deinit();
+    try heap.expectNoLeaks();
+}
+
+test "a runtime with no system registered leaves no block allocated" {
+    var f = try Fixture.init();
+    f.deinit();
+    try heap.expectNoLeaks();
+}

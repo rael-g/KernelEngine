@@ -1202,3 +1202,12 @@ test "a tree refused for a missing ecs names the shared invalid-argument type" {
     try testing.expect(err.*.type != null);
     try testing.expectEqual(E.typeOf(.invalid_argument), err.*.type);
 }
+
+test "creating nodes and destroying the tree leaves no block allocated" {
+    var f: Fixture = undefined;
+    try f.init();
+    const world = f.create("World", c.KE_ENTITY_INVALID);
+    _ = f.create("Player", world);
+    f.deinit();
+    try heap.expectNoLeaks();
+}

@@ -366,3 +366,18 @@ test "two worlds never share the ecs, and destroying one leaves the other alive"
 
     hb.destroy.?(hb.ref);
 }
+
+test "creating and destroying a world leaves no block allocated" {
+    var ecs: StubEcs = undefined;
+    stubEcsInit(&ecs);
+    var runtime = std.mem.zeroes(c.ke_runtime);
+
+    var params = std.mem.zeroes(c.ke_world_params);
+    params.ecs = &ecs.vtable;
+    params.runtime = &runtime;
+    params.project_root = "res/";
+
+    const h = ke_world_create(&params, null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

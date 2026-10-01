@@ -201,3 +201,10 @@ test "loading a one pixel targa yields its dimensions and pixels" {
 test "destroying a null loader is a no-op" {
     destroy(null);
 }
+
+test "creating and destroying the image loader leaves no block allocated" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

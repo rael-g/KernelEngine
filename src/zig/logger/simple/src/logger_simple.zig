@@ -336,3 +336,9 @@ test "levelToString(-1) is UNKNOWN" {
 test "levelToString(6) is UNKNOWN" {
     try testing.expectEqualStrings("UNKNOWN", std.mem.span(levelToString(6)));
 }
+
+test "creating and destroying a logger leaves no block allocated" {
+    const h = ke_logger_create(null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

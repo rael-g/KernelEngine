@@ -443,3 +443,10 @@ test "destroying a null scheduler is safe" {
     h.destroy.?(h.ref);
     h.destroy.?(null);
 }
+
+test "creating and destroying a scheduler leaves no block allocated" {
+    const h = ke_scheduler_enki_create(null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

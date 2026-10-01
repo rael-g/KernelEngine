@@ -294,3 +294,10 @@ test "loading a real system font produces an atlas with every requested glyph" {
 test "destroying a null loader is a no-op" {
     destroy(null);
 }
+
+test "creating and destroying the font loader leaves no block allocated" {
+    const h = createLoader();
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

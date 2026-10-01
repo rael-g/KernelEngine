@@ -305,3 +305,10 @@ test "playing through a null backend returns false" {
     const ok = audioPlay(null, c.KE_AUDIO_SOUND_INVALID, 1.0, 0, null);
     try testing.expect(!ok);
 }
+
+test "creating and destroying the audio backend leaves no block allocated" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

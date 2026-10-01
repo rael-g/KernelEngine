@@ -974,3 +974,12 @@ test "a component registered without a field table still attaches zeroed" {
 
     try testing.expectEqual(@as(u32, 0), v.layers);
 }
+
+test "creating, filling and destroying an ecs leaves no block allocated" {
+    const handle = ke_ecs_flecs_create(null, null);
+    const cid = handle.ref.*.component_register.?(handle.ref, "leak_probe", 8, null, 0, null);
+    const e = handle.ref.*.entity_create.?(handle.ref);
+    try testing.expect(handle.ref.*.component_add.?(handle.ref, e, cid) != null);
+    handle.destroy.?(handle.ref);
+    try heap.expectNoLeaks();
+}

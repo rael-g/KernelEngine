@@ -542,3 +542,11 @@ test "snapshot accessors read out-of-range codes and a null snapshot as false" {
     try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, null, 65));
     try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_mouse_button_down.?(h.ref, null, 0));
 }
+
+test "creating and destroying the input leaves no block allocated" {
+    const h = ke_input_create(null, null);
+    h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
+    h.ref.*.on_mouse_move.?(h.ref, 1, 2);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

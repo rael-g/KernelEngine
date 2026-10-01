@@ -53,3 +53,7 @@ pub fn leaks() usize {
     if (!tracking) return 0;
     return debug_instance.detectLeaks();
 }
+
+pub fn expectNoLeaks() !void {
+    try std.testing.expectEqual(@as(usize, 0), leaks());
+}

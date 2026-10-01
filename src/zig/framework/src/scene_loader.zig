@@ -2550,3 +2550,10 @@ test "a connect written as a single table instead of an array fails the load" {
     _ = try f.declaredSignal("Poke");
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }
+
+test "creating and destroying a scene loader with its world leaves no block allocated" {
+    var f: Fixture = undefined;
+    try f.init();
+    f.deinit();
+    try heap.expectNoLeaks();
+}

@@ -340,3 +340,10 @@ test "creation without a view space or a clip convention fails with no handle" {
     const no_clip = ke_render_camera_create(&vs, null, null);
     try testing.expect(no_clip.ref == null);
 }
+
+test "creating and destroying a camera leaves no block allocated" {
+    var f: Fixture = undefined;
+    f.init();
+    f.deinit();
+    try heap.expectNoLeaks();
+}

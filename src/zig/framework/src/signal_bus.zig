@@ -555,3 +555,9 @@ test "a signal wired by name before its layout is declared still resolves to one
     _ = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 1), count);
 }
+
+test "creating and destroying a signal bus leaves no block allocated" {
+    const h = makeBus();
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

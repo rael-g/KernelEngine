@@ -467,3 +467,11 @@ test "an orthographic camera separates a point above its centre from one below" 
     try testing.expect(above[1] > 0.0);
     try testing.expect(right[0] > 0.0);
 }
+
+test "creating and destroying both view spaces leaves no block allocated" {
+    const rh = ke_view_space_rh_create(null);
+    const lh = ke_view_space_lh_create(null);
+    rh.destroy.?(rh.ref);
+    lh.destroy.?(lh.ref);
+    try heap.expectNoLeaks();
+}

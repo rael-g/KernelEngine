@@ -1066,3 +1066,9 @@ test "a key held across two evaluations reports pressed only on the first" {
     _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
     try testing.expect(!a.api().was_action_pressed.?(a.api(), id));
 }
+
+test "creating and destroying the actions map leaves no block allocated" {
+    var actions = try Actions.init();
+    actions.deinit();
+    try heap.expectNoLeaks();
+}

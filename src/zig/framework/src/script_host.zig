@@ -820,3 +820,11 @@ test "a node is not its own ancestor" {
 
     try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), node, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, null));
 }
+
+test "creating and destroying a script host leaves no block allocated" {
+    var h: Harness = undefined;
+    try h.init();
+    _ = try h.declare("LeakProbe", c.KE_SCRIPT_REACH_SELF);
+    h.deinit();
+    try heap.expectNoLeaks();
+}

@@ -592,3 +592,11 @@ test "destroying the cache runs the destroy callback for every live resource" {
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i32, 2), marker);
 }
+
+test "creating, using and destroying a resource cache leaves no block allocated" {
+    const h = makeCountingCache();
+    try testing.expect(h.ref.*.register_resource.?(h.ref, 42, null));
+    try testing.expect(h.ref.*.release.?(h.ref, 42, null));
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

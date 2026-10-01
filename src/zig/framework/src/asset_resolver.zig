@@ -1096,3 +1096,9 @@ test "a live handle is never zero, not even at index zero" {
         );
     }
 }
+
+test "creating and destroying a resolver leaves no block allocated" {
+    const h = ke_asset_resolver_create(null, null, null, null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

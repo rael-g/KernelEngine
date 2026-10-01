@@ -64,7 +64,7 @@ hands out is released through that plugin's own `free_*` slot.
 The allocator is never reset. The first allocation registers one `atexit` callback, and that callback
 runs the leak check once, when the process or the library ends, logging every block still allocated
 with the stack that allocated it. `heap.leaks()` runs the same check on demand and returns the count,
-so a test can assert zero after it has destroyed what it created; a leak that no test asserts is
+so a test can assert zero after it has destroyed what it created (`heap.expectNoLeaks`, which each plugin that can be created without a GPU, a window or a native host library does in its own file); a leak that no test asserts is
 reported only at exit, not as a test failure. The asset loader for assimp keeps a tracking allocator
 of its own and does not take part.
 
