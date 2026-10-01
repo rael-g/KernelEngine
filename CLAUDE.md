@@ -84,9 +84,9 @@ Contracts worth knowing by name:
 
 Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty plugins are declared in the root `build.zig`; `grep 'ctx.plugin("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
-No C++ remains in the tree. The only non-Zig implementation files are vendored C libraries (stb_image, stb_truetype, miniaudio, tomlc99) compiled by the plugin that owns them.
+No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile (stb, miniaudio) come from vcpkg; tomlc99 is the one vendored library.
 
-Vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `<plugin>/third_party/<lib>/` with a `VENDOR.md` recording upstream, license and sync date. Contained — never leaks to a sibling plugin. Precedent: `src/zig/common/third_party/tomlc99/`.
+Vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `<plugin>/third_party/<lib>/` with a `VENDOR.md` recording upstream, license and sync date. Contained — never leaks to a sibling plugin.
 
 #### Layer boundary rule (non-negotiable)
 
