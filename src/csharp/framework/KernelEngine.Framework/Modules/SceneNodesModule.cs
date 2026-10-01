@@ -105,9 +105,8 @@ public sealed class SceneNodesModule : IRuntimeModule
             }, accessList: []);
         }
 
-        scriptHost.BehaviorTypeAdded += type =>
+        scriptHost.BehaviorTypeAdded += (type, probe) =>
         {
-            var probe = (Node)scriptHost.BehaviorsOf(type)[0];
             var uses = new List<NodeComponentUse>();
             probe.CollectBehaviorComponents(uses);
 

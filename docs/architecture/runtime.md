@@ -145,3 +145,10 @@ its pointers are then replaced by the runtime's own storage, and one is not:
 The contract says what the name is for (`runtime.h:102`) and not how long it must stay valid, so
 what a caller must keep alive is read off the code above: the name for as long as the runtime can tick, and
 the access list likewise when the system has no query.
+
+## Registering a system while a tick runs
+
+`register_system` called from a body does not touch the system table, which other threads are reading.
+It builds the system, takes its id, and pushes it on a lock-free stack. The next `tick` applies the
+stack, in registration order, before its first phase, after joining a render phase still running
+against the table. `unregister_system` fails with `not_supported` while a tick runs.

@@ -21,12 +21,12 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     private long _epoch;
 
     /// <summary>
-    /// Raised the first time a node of a given type registers behavior. The host
+    /// Raised the first time a node of a given type registers behavior, with that node as the probe: the native host does not list a node bound from a system body until the wave barrier. The host
     /// listens so it can give that type its own runtime system: behavior access is a
     /// property of the node type, so one system per type is what lets the scheduler
     /// see the reach instead of lumping every script into one opaque system.
     /// </summary>
-    internal event Action<Type>? BehaviorTypeAdded;
+    internal event Action<Type, Node>? BehaviorTypeAdded;
 
     /// <summary>
     /// The bound nodes of one type, read from the script host rather than from a list
@@ -89,7 +89,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         var type = node.GetType();
         bool first;
         lock (_announcedBehaviors) first = _announcedBehaviors.Add(type);
-        if (first) BehaviorTypeAdded?.Invoke(type);
+        if (first) BehaviorTypeAdded?.Invoke(type, node);
     }
 
     private uint _nativeTransformCid;

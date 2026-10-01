@@ -396,6 +396,7 @@ const ExtractedQuery = struct {
 
 const RegisteredSystem = struct {
     id: u64,
+    pending_next: ?*RegisteredSystem,
     params: c.ke_runtime_system_params,
     query_decls: [KE_MAX_QUERIES_PER_SYSTEM]c.ke_query_decl,
     query_ids: [KE_MAX_QUERIES_PER_SYSTEM]c.ke_query_id,
@@ -449,6 +450,8 @@ const RuntimeState = struct {
     fixed_dt_max_accum: f32,
     fixed_accumulator: f32,
     started: bool,
+    in_tick: std.atomic.Value(bool),
+    pending_systems: std.atomic.Value(?*RegisteredSystem),
     max_systems_per_phase: u32,
     phase_indices: ?[*]u32,
     phase_params: ?[*]c.ke_runtime_system_params,
@@ -517,62 +520,34 @@ fn mergeAccess(rs: *RegisteredSystem, want: c.ke_component_access) bool {
     return true;
 }
 
-fn refuseAccess(rs: *RegisteredSystem, out_error: [*c][*c]c.ke_error) c.ke_system_id {
+fn refuseAccess(rs: *RegisteredSystem, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
     releaseSystem(rs);
     E.fail(out_error, .invalid_argument, "system declares more distinct components than it can track", @src());
-    return 0;
+    return null;
 }
 
-fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
-    if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return 0;
-    }
-    const h = handleOf(self.?);
-
-    var in_phase: u32 = 0;
-    for (0..h.state.system_count) |si| {
-        if (h.state.systems.?[si].?.params.phase == p.*.phase) in_phase += 1;
-    }
-    if (in_phase >= h.state.max_systems_per_phase) {
-        E.fail(out_error, .out_of_memory, "phase is at its max_systems_per_phase limit", @src());
-        return 0;
-    }
-
+fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
     if (p.*.query_count > KE_MAX_QUERIES_PER_SYSTEM) {
         E.fail(out_error, .invalid_argument, "system declares more queries than a system can hold", @src());
-        return 0;
+        return null;
     }
     if (p.*.queries != null) {
         for (0..p.*.query_count) |q| {
             if (p.*.queries[q].term_count > MAX_TERMS) {
                 E.fail(out_error, .invalid_argument, "query declares more terms than a query can hold", @src());
-                return 0;
+                return null;
             }
         }
     }
 
-    if (h.state.system_count == h.state.system_capacity) {
-        const new_cap: usize = if (h.state.system_capacity != 0) h.state.system_capacity * 2 else 4;
-        const new_buf = cAlloc(?*RegisteredSystem, new_cap) orelse {
-            E.fail(out_error, .out_of_memory, "system array allocation failed", @src());
-            return 0;
-        };
-        if (h.state.systems) |old| {
-            @memcpy(new_buf[0..h.state.system_count], old[0..h.state.system_count]);
-            cFree(?*RegisteredSystem, old, h.state.system_capacity);
-        }
-        h.state.systems = new_buf;
-        h.state.system_capacity = new_cap;
-    }
-
     const rs_mem = cAlloc(RegisteredSystem, 1) orelse {
         E.fail(out_error, .out_of_memory, "registered_system allocation failed", @src());
-        return 0;
+        return null;
     };
     const rs = &rs_mem[0];
     rs.params = p.*;
-    rs.id = h.state.next_system_id + 1;
+    rs.id = 0;
+    rs.pending_next = null;
     rs.query_count = 0;
     rs.seg_storage = null;
     rs.derived_access_count = 0;
@@ -585,7 +560,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
         const copy = heap.gpa.alloc(u8, text.len + 1) catch {
             releaseSystem(rs);
             E.fail(out_error, .out_of_memory, "system name allocation failed", @src());
-            return 0;
+            return null;
         };
         @memcpy(copy[0..text.len], text);
         copy[text.len] = 0;
@@ -618,24 +593,90 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
         rs.seg_storage = cAlloc(c.ke_ecs_segment, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY) orelse {
             releaseSystem(rs);
             E.fail(out_error, .out_of_memory, "query segment storage allocation failed", @src());
-            return 0;
+            return null;
         };
     } else if (p.*.access_list != null and p.*.access_count > 0) {
         const copy = heap.gpa.alloc(c.ke_component_access, p.*.access_count) catch {
             releaseSystem(rs);
             E.fail(out_error, .out_of_memory, "system access list allocation failed", @src());
-            return 0;
+            return null;
         };
         @memcpy(copy, p.*.access_list[0..p.*.access_count]);
         rs.access_storage = copy;
         rs.params.access_list = copy.ptr;
     }
 
+    return rs;
+}
+
+fn appendSystem(h: *RuntimeHandle, rs: *RegisteredSystem, out_error: [*c][*c]c.ke_error) bool {
+    var in_phase: u32 = 0;
+    for (0..h.state.system_count) |si| {
+        if (h.state.systems.?[si].?.params.phase == rs.params.phase) in_phase += 1;
+    }
+    if (in_phase >= h.state.max_systems_per_phase) {
+        E.fail(out_error, .out_of_memory, "phase is at its max_systems_per_phase limit", @src());
+        return false;
+    }
+
+    if (h.state.system_count == h.state.system_capacity) {
+        const new_cap: usize = if (h.state.system_capacity != 0) h.state.system_capacity * 2 else 4;
+        const new_buf = cAlloc(?*RegisteredSystem, new_cap) orelse {
+            E.fail(out_error, .out_of_memory, "system array allocation failed", @src());
+            return false;
+        };
+        if (h.state.systems) |old| {
+            @memcpy(new_buf[0..h.state.system_count], old[0..h.state.system_count]);
+            cFree(?*RegisteredSystem, old, h.state.system_capacity);
+        }
+        h.state.systems = new_buf;
+        h.state.system_capacity = new_cap;
+    }
+
     h.state.systems.?[h.state.system_count] = rs;
     h.state.system_count += 1;
+    return true;
+}
 
-    h.state.next_system_id += 1;
-    return h.state.next_system_id;
+fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
+    if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return 0;
+    }
+    const h = handleOf(self.?);
+
+    const rs = buildSystem(p, out_error) orelse return 0;
+    rs.id = @atomicRmw(u64, &h.state.next_system_id, .Add, 1, .monotonic) + 1;
+    if (h.state.in_tick.load(.acquire)) {
+        var head = h.state.pending_systems.load(.acquire);
+        while (true) {
+            rs.pending_next = head;
+            head = h.state.pending_systems.cmpxchgWeak(head, rs, .release, .acquire) orelse return rs.id;
+        }
+    }
+    _ = runtimeJoinPendingRender(h);
+    if (!appendSystem(h, rs, out_error)) {
+        releaseSystem(rs);
+        return 0;
+    }
+    return rs.id;
+}
+
+fn applyPendingSystems(h: *RuntimeHandle) void {
+    var stack = h.state.pending_systems.swap(null, .acq_rel);
+    if (stack == null) return;
+    _ = runtimeJoinPendingRender(h);
+    var reversed: ?*RegisteredSystem = null;
+    while (stack) |rs| {
+        stack = rs.pending_next;
+        rs.pending_next = reversed;
+        reversed = rs;
+    }
+    while (reversed) |rs| {
+        reversed = rs.pending_next;
+        rs.pending_next = null;
+        if (!appendSystem(h, rs, null)) releaseSystem(rs);
+    }
 }
 
 fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -644,6 +685,10 @@ fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: 
         return false;
     }
     const h = handleOf(self.?);
+    if (h.state.in_tick.load(.acquire)) {
+        E.fail(out_error, .not_supported, "a system cannot be unregistered while a tick runs", @src());
+        return false;
+    }
     _ = runtimeJoinPendingRender(h);
     const systems = h.state.systems orelse {
         E.fail(out_error, .not_found, "no system has that id", @src());
@@ -982,6 +1027,18 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
+    const h = handleOf(self.?);
+    applyPendingSystems(h);
+    h.state.in_tick.store(true, .release);
+    defer h.state.in_tick.store(false, .release);
+    return runtimeTickBody(self, dt, out_error);
+}
+
+fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) bool {
+    if (self == null or self.?.handle == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
     if (dt < 0.0) {
         E.fail(out_error, .invalid_argument, "negative dt", @src());
         return false;
@@ -1070,6 +1127,12 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     }
 
     if (h.state.render_job) |rj| cFree(RenderJob, @ptrCast(rj), 1);
+
+    var stranded = h.state.pending_systems.swap(null, .acq_rel);
+    while (stranded) |rs| {
+        stranded = rs.pending_next;
+        releaseSystem(rs);
+    }
 
     if (h.state.systems) |systems| {
         for (0..h.state.system_count) |i| {
@@ -1762,6 +1825,53 @@ test "an unregistered system no longer runs and the others keep running" {
     try testing.expectEqual(@as(usize, 2), log.count);
     try testing.expectEqual(@as(c_int, c.KE_PHASE_PRE_UPDATE), log.seen[0]);
     try testing.expectEqual(@as(c_int, c.KE_PHASE_POST_UPDATE), log.seen[1]);
+}
+
+const MidTick = struct {
+    rt: *c.ke_runtime,
+    registered: bool = false,
+    late_runs: u32 = 0,
+    unregister_refused: bool = false,
+    late_id: c.ke_system_id = 0,
+};
+
+fn lateBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const m: *MidTick = @ptrCast(@alignCast(ud.?));
+    m.late_runs += 1;
+    return true;
+}
+
+fn registeringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const m: *MidTick = @ptrCast(@alignCast(ud.?));
+    if (m.registered) return true;
+    m.registered = true;
+    var late = systemParams("Late", c.KE_PHASE_UPDATE);
+    late.execute = &lateBody;
+    late.user_data = m;
+    m.late_id = m.rt.register_system.?(m.rt, &late, null);
+    m.unregister_refused = !m.rt.unregister_system.?(m.rt, m.late_id, null);
+    return true;
+}
+
+test "a system registered from a body mid-tick starts running on the next tick" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var m = MidTick{ .rt = r.rt() };
+    var first = systemParams("Registers", c.KE_PHASE_UPDATE);
+    first.execute = &registeringBody;
+    first.user_data = &m;
+    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(m.late_id != 0);
+    try testing.expectEqual(@as(u32, 0), m.late_runs);
+    try testing.expect(m.unregister_refused);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 1), m.late_runs);
+    try testing.expectEqual(m.late_id, r.rt().last_system.?(r.rt()));
 }
 
 test "creating a runtime without an ecs is refused" {

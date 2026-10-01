@@ -177,7 +177,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         }
     }
 
-    /// <summary>Registers a system body against the phase and the component access it declares.</summary>
+    /// <summary>Registers a system body against the phase and the component access it declares. Called while a tick runs, from a body, it returns the id at once and the system starts running with the next tick; a failure of the phase limit then goes unreported.</summary>
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
     /// <param name="phase">Which phase of the tick the body runs in.</param>
     /// <param name="execute">The body itself.</param>
@@ -261,7 +261,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         }
     }
 
-    /// <summary>Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Waits for a pending render phase first. Not callable from a system body or while a tick runs.</summary>
+    /// <summary>Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Waits for a pending render phase first. Fails with not_supported while a tick runs.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public void UnregisterSystem(ulong id)
     {

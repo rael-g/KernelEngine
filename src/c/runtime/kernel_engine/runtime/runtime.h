@@ -154,12 +154,14 @@ typedef struct ke_runtime {
     /// @param p [expand] What the module is called and the hooks it registers.
     ke_module_id (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_error **out_error);
     /// Registers a system body against the phase and the component access it declares.
+    /// Called while a tick runs, from a body, it returns the id at once and the system starts
+    /// running with the next tick; a failure of the phase limit then goes unreported.
     /// @param p [expand] What the system is called, when it runs, and what it touches.
     /// @return 0 when the system was refused.
     ke_system_id (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_error **out_error);
     /// Removes a system registered earlier, so a module whose load fails after registering
     /// some systems can take them back before it frees what their bodies point at. Waits for
-    /// a pending render phase first. Not callable from a system body or while a tick runs.
+    /// a pending render phase first. Fails with not_supported while a tick runs.
     /// @return false when no system has that id.
     bool (*unregister_system)(ke_runtime *self, ke_system_id id, ke_error **out_error);
     /// The id of the system registered last and still registered, or 0 when there is none.

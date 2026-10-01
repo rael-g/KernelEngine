@@ -297,7 +297,7 @@
           "name": "register_system",
           "returns": "ke_system_id",
           "tags": [],
-          "doc": "Registers a system body against the phase and the component access it declares.",
+          "doc": "Registers a system body against the phase and the component access it declares. Called while a tick runs, from a body, it returns the id at once and the system starts running with the next tick; a failure of the phase limit then goes unreported.",
           "return_doc": "0 when the system was refused.",
           "params": [
             {
@@ -321,7 +321,7 @@
           "name": "unregister_system",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Waits for a pending render phase first. Not callable from a system body or while a tick runs.",
+          "doc": "Removes a system registered earlier, so a module whose load fails after registering some systems can take them back before it frees what their bodies point at. Waits for a pending render phase first. Fails with not_supported while a tick runs.",
           "return_doc": "false when no system has that id.",
           "params": [
             {
