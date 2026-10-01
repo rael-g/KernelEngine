@@ -5,7 +5,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 

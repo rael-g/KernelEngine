@@ -19,7 +19,7 @@ const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 fn cAlloc(comptime T: type, n: usize) ?[*]T {
     if (n == 0) return null;

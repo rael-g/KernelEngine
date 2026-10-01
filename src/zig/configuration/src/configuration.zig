@@ -7,7 +7,7 @@ const ke = @cImport({
     @cInclude("kernel_engine/configuration/configuration.h");
 });
 
-const gpa = @import("heap.zig").gpa;
+const gpa = @import("heap").gpa;
 
 const NONE: u32 = std.math.maxInt(u32);
 

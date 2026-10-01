@@ -55,6 +55,7 @@ pub fn build(b: *std.Build) void {
     const src_c = b.pathJoin(&.{ root, "src/c" });
     const src_zig = b.pathJoin(&.{ root, "src/zig" });
     const kerror_src = b.pathJoin(&.{ src_zig, "common/kerror.zig" });
+    const heap_src = b.pathJoin(&.{ src_zig, "common/heap.zig" });
     const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
@@ -101,6 +102,7 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     const ecs_flecs = ctx.plugin("ke_ecs_flecs", "src/zig/ecs/flecs", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "flecs-include", vcpkg_include),
@@ -121,6 +123,7 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     const scheduler_enki = ctx.plugin("ke_scheduler_enki", "src/zig/scheduler/enki", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
         argF(b, "enki-include", b.pathJoin(&.{ vcpkg_include, "enkiTS" })),
@@ -129,6 +132,7 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     const runtime = ctx.plugin("ke_runtime", "src/zig/runtime", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-scheduler-include", b.pathJoin(&.{ src_c, "scheduler" })),
@@ -138,6 +142,7 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     const framework = ctx.plugin("ke_framework", "src/zig/framework", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-spatial-include", b.pathJoin(&.{ src_c, "spatial" })),
@@ -156,6 +161,7 @@ pub fn build(b: *std.Build) void {
     }, &.{&runtime.step}, .has_tests);
 
     const window_glfw = ctx.plugin("ke_window_glfw", "src/zig/window/glfw", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-window-include", b.pathJoin(&.{ src_c, "window" })),
         argF(b, "ke-input-include", b.pathJoin(&.{ src_c, "input" })),
@@ -196,6 +202,7 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     const physics_box2d = ctx.plugin("ke_physics_2d_box2d", "src/zig/physics/box2d", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-physics-include", b.pathJoin(&.{ src_c, "physics" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
@@ -229,12 +236,14 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     const configuration = ctx.plugin("ke_configuration", "src/zig/configuration", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-config-include", b.pathJoin(&.{ src_c, "configuration" })),
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
     }, &.{&common.step}, .has_tests);
 
     const configuration_toml = ctx.plugin("ke_configuration_toml", "src/zig/configuration/toml", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-config-include", b.pathJoin(&.{ src_c, "configuration" })),
         argF(b, "ke-lib-dir", b.pathJoin(&.{ ctx.prefix, "lib" })),
@@ -282,6 +291,7 @@ pub fn build(b: *std.Build) void {
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
 
     const view_space = ctx.plugin("ke_view_space", "src/zig/view/space", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
         argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
@@ -449,6 +459,7 @@ pub fn build(b: *std.Build) void {
     const magenta_fs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.fs.wgsl" });
 
     const render_service = ctx.plugin("ke_render_service", "src/zig/render/service", &.{
+        argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
         argF(b, "ke-runtime-include", b.pathJoin(&.{ src_c, "runtime" })),

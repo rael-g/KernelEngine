@@ -3,7 +3,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 const device = @import("device.zig");
 
 pub const GlfwDevice = struct {

@@ -12,7 +12,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
 });
 
-pub const gpa = @import("heap.zig").gpa;
+pub const gpa = @import("heap").gpa;
 
 const resource_table = @import("resource_table.zig");
 const pass_recording = @import("pass_recording.zig");

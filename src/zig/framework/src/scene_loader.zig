@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 const world_impl = @import("world.zig");
 const fields_apply = @import("component_fields_apply.zig");
 

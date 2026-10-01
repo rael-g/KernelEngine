@@ -9,7 +9,7 @@ const c = @import("c.zig").c;
 
 const core_mod = @import("core.zig");
 const glfw = @import("glfw_device.zig");
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 comptime {
     _ = @import("device.zig");
