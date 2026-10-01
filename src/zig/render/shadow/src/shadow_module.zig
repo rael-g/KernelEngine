@@ -76,7 +76,7 @@ fn lightViewProj(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, p: c.ke_render_
 
 fn lightDirOf(ctx: ?*c.ke_system_ctx) ?zm.Vec {
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
     if (segc == 0 or segs[0].count == 0) return null;
     const dl: *const c.ke_directional_light_component = @ptrCast(@alignCast(segs[0].columns[0]));
     return zm.f32x4(dl.direction.x, dl.direction.y, dl.direction.z, 0.0);
@@ -106,7 +106,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 
     var draw_idx: u32 = 0;
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    const segs = ctx.?.view.?(ctx, 1, &segc);
     var s: usize = 0;
     while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));

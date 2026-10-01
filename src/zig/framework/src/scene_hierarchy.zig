@@ -60,7 +60,7 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
     s.order.clearRetainingCapacity();
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
     if (segs == null) return;
 
     for (0..segc) |si| {

@@ -169,7 +169,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const core = fwd.core;
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return true;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
@@ -196,7 +196,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const view_proj = zm.mul(view, zm.loadMat(&proj_m.m));
 
     var sky_segc: usize = 0;
-    const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
@@ -218,7 +218,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     zm.storeMat(frame.view[0..], view);
 
     var li_segc: usize = 0;
-    const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
+    const li_segs = ctx.?.view.?(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
         const d: *const c.ke_directional_light_component = @ptrCast(@alignCast(li_segs[0].columns[0]));
         frame.light_dir = .{ d.direction.x, d.direction.y, d.direction.z, 0.0 };
@@ -227,7 +227,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         frame.shadow_params[2] = 1.0;
     }
     var am_segc: usize = 0;
-    const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
+    const am_segs = ctx.?.view.?(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
         const al: *const c.ke_ambient_light_component = @ptrCast(@alignCast(am_segs[0].columns[0]));
         frame.ambient = .{ al.color.x, al.color.y, al.color.z, 0.0 };
@@ -235,7 +235,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 4, &segc);
+    const segs = ctx.?.view.?(ctx, 4, &segc);
     const draw_count = collectDraws(core, cam, view, segs, segc, fwd.draws[0..MAX_DRAWS]);
 
     const rp = pc.*.begin_render.?(pc);

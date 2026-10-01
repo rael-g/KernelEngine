@@ -215,7 +215,7 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*
     const ui = moduleOf(user);
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
     if (segc == 0) return true;
 
     var bw: u32 = 0;
@@ -238,9 +238,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const core = ui.core;
 
     var quad_segc: usize = 0;
-    const quad_segs = c.ke_system_ctx_view(ctx, 0, &quad_segc);
+    const quad_segs = ctx.?.view.?(ctx, 0, &quad_segc);
     var label_segc: usize = 0;
-    const label_segs = c.ke_system_ctx_view(ctx, 1, &label_segc);
+    const label_segs = ctx.?.view.?(ctx, 1, &label_segc);
     if (quad_segc == 0 and label_segc == 0) return true;
 
     const pc = core.*.begin_pass.?(core, ctx, &ui.io);

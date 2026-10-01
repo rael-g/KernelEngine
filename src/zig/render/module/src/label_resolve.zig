@@ -67,7 +67,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const labels: [*c]c.ke_label_component = @ptrCast(@alignCast(segs[s].columns[0]));

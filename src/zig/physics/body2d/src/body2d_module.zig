@@ -31,7 +31,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
     const p = m.physics;
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
 
     var s: usize = 0;
     while (s < segc) : (s += 1) {
@@ -93,7 +93,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
 
 fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const cols: [*c]c.ke_collider2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -116,7 +116,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
     defer bodies.deinit();
 
     var segc: usize = 0;
-    var segs = c.ke_system_ctx_view(ctx, 2, &segc);
+    var segs = ctx.?.view.?(ctx, 2, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const hs: [*c]c.ke_hierarchy_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -129,7 +129,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
         }
     }
 
-    segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    segs = ctx.?.view.?(ctx, 1, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
         const bs: [*c]c.ke_body2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -143,7 +143,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
         }
     }
 
-    segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    segs = ctx.?.view.?(ctx, 0, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
         const cols: [*c]c.ke_collider2d_component = @ptrCast(@alignCast(segs[s].columns[0]));

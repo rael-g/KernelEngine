@@ -100,7 +100,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const dev = dl.device;
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
 
     const pc = core.*.begin_pass.?(core, ctx, &dl.io);
     if (pc == null) return true;
@@ -127,7 +127,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const inv_vp = zm.inverse(view_proj);
 
     var sky_segc: usize = 0;
-    const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
@@ -151,7 +151,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     zm.storeMat(frame.inv_view_proj[0..], inv_vp);
 
     var li_segc: usize = 0;
-    const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
+    const li_segs = ctx.?.view.?(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
         const d: *const c.ke_directional_light_component = @ptrCast(@alignCast(li_segs[0].columns[0]));
         frame.light_dir = .{ d.direction.x, d.direction.y, d.direction.z, 0.0 };
@@ -160,7 +160,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         frame.shadow_params[2] = 1.0;
     }
     var am_segc: usize = 0;
-    const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
+    const am_segs = ctx.?.view.?(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
         const al: *const c.ke_ambient_light_component = @ptrCast(@alignCast(am_segs[0].columns[0]));
         frame.ambient = .{ al.color.x, al.color.y, al.color.z, 0.0 };

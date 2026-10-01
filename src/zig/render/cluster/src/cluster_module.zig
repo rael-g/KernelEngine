@@ -107,7 +107,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         var chunk: [UPLOAD_CHUNK]PointLightGpu = undefined;
         var fill: u32 = 0;
         var segc: usize = 0;
-        const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+        const segs = ctx.?.view.?(ctx, 0, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
             const pls: [*c]const c.ke_point_light_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -141,7 +141,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         var chunk: [UPLOAD_CHUNK]SpotLightGpu = undefined;
         var fill: u32 = 0;
         var segc: usize = 0;
-        const segs = c.ke_system_ctx_view(ctx, 1, &segc);
+        const segs = ctx.?.view.?(ctx, 1, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
             const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -172,7 +172,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     }
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 2, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 2, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return true;
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));

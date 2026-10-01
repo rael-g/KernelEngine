@@ -88,11 +88,11 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
     );
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
-    var segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    var segs = ctx.?.view.?(ctx, 0, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const sprites: [*c]c.ke_sprite2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -106,7 +106,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
         }
     }
 
-    segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    segs = ctx.?.view.?(ctx, 1, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
         const sprites: [*c]c.ke_sprite2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -114,7 +114,8 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
         while (i < segs[s].count) : (i += 1) {
             if (sprites[i].attached != 0) continue;
             sprites[i].attached = 1;
-            _ = c.ke_system_ctx_attach(ctx, segs[s].entities[i], st.mesh_cid, null, 0);
+            const commands = ctx.?.commands;
+            if (!commands.*.attach.?(commands, segs[s].entities[i], st.mesh_cid, null, 0, out_error)) return false;
         }
     }
     return true;

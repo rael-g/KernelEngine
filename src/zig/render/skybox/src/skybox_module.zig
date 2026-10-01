@@ -41,7 +41,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const dev = sm.device;
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return true;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
@@ -65,7 +65,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     core.*.upload.?(core, sm.frame_uniform, 0, &frame, @sizeOf(SkyFrame));
 
     var sky_segc: usize = 0;
-    const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
     const env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else

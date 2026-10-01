@@ -94,7 +94,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const core = gb.core;
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
 
     const pc = core.*.begin_pass.?(core, ctx, &gb.io);
     if (pc == null) return true;
@@ -124,7 +124,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0);
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    const segs = ctx.?.view.?(ctx, 1, &segc);
     var selected: [MAX_DRAWS]Draw = undefined;
     const selected_count = collectDraws(core, cam, segs, segc, selected[0..]);
 
