@@ -145,14 +145,14 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - **Naming**: `snake_case` with a `ke_` prefix on everything crossing the ABI.
 - **Headers**: `#pragma once` always. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
 - **Error handling**: a call that can fail takes `ke_error **out_error` and, on failure, fills it with `KE_ERROR_SET` and returns its failure sentinel (`false`, a null handle, an invalid id). All callers check the return.
-- **Memory**: `ke_allocator` is an **internal implementation utility**, not a public API. C implementations use `ke_allocator_malloc` (or `arena`, `proxy`) internally — PRIVATE to each impl. Factory functions do **not** take `ke_allocator*` as a parameter. In debug builds, impls link `ke_allocator_proxy` PRIVATE and emit a leak report on destroy. Raw pointers are non-owning unless documented otherwise.
+- **Memory**: each plugin owns its allocation, and the factory functions do **not** take an allocator parameter. Raw pointers are non-owning unless documented otherwise.
 - **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
 - **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
 
 ### C#
 - XML doc comments (`///`) on all `public` and `protected` members.
 - Generated bindings in `Generated/` — never edit manually.
-- `InternalsVisibleTo` is **banned**, with no remaining entries to grandfather. A native handle stays a private field, fully encapsulated behind managed methods — not `internal` plus a friend list, and not a public pointer either.
+- `InternalsVisibleTo` is **banned**. A native handle crosses assemblies through the public `Native` pointer of a generated `INative<Domain>` interface, implemented explicitly so the object itself exposes only managed methods — never through `internal` plus a friend list.
 
 ### Git / commits
 - Conventional Commits: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
