@@ -8,7 +8,7 @@ and a render resource is a component id.
 
 | part | what it is | where |
 |---|---|---|
-| GPU device | the device, resource and command contract; one implementation, WebGPU | `src/c/render/kernel_engine/render/gpu/gpu_device.h`; plugin `ke_gpu_device_webgpu` (`build.zig:266`) |
+| GPU device | the device, resource and command contract; one implementation, WebGPU | `src/c/render/kernel_engine/render/gpu/gpu_device.h`; plugin `ke_gpu_device_webgpu` (`build.zig:277`) |
 | render service | resources by name, pass recording contexts, meshes, textures, materials, pipeline cache, frame lifecycle | `.../render/service/render_service.h:65`; `src/zig/render/service/` |
 | pass plugins | one plugin per pass: shadow, cluster, gbuffer, deferred lighting, skybox, forward, tonemap, UI | `src/zig/render/<pass>/` |
 | render module | composes the passes and registers the frame-edge systems | `src/zig/render/module/src/render_module.zig` |
@@ -62,7 +62,7 @@ one registered before it. The access lists therefore keep a reader and a writer 
 apart; they do not put the writer first.
 
 **Submission order** is the command slot's. `end_frame` walks slots `0` to `MAX_CMD_BUFFERS - 1`
-and submits each one that was recorded (`frame_lifecycle.zig:44-71`, `src/zig/render/service/src/render_service.zig:26`).
+and submits each one that was recorded (`frame_lifecycle.zig:44-71`, `src/zig/render/service/src/render_service.zig:27`).
 Each pass chooses its own slot, as a literal in its own plugin:
 
 | slot | pass | source |
@@ -140,7 +140,7 @@ context.
 **Compute is recorded through a proxy.** `begin_compute` does not return the device's compute pass. It
 returns a recorder owned by the service, one per command slot, that stores `set_pipeline`,
 `set_bind_group`, `dispatch` and `dispatch_indirect` as plain records, at most 32 per slot
-(`pass_recording.zig:109-156`, `render_service.zig:77-89`). `end_pass` marks the slot as a compute slot
+(`pass_recording.zig:109-156`, `render_service.zig:78-90`). `end_pass` marks the slot as a compute slot
 rather than a finished one (`pass_recording.zig:35-47`). `end_frame` then opens a real compute pass on
 that slot's encoder, replays the records in order, ends it and finishes the buffer
 (`frame_lifecycle.zig:49-70`). So a dispatch reaches the device at `end_frame`, in slot order, not at the
@@ -149,7 +149,7 @@ moment the pass body calls it. The cluster cull is the one user (`cluster_module
 **Uploads are staged.** `upload(buffer, offset, data, size)` does not touch the device. It reserves space
 in an 8 MiB arena and a record slot with atomic counters, copies the bytes into the arena and appends the
 record, so systems running on different workers can call it without a lock
-(`frame_lifecycle.zig:93-103`, `render_service.zig:29`, `:32`). `end_frame` writes every record to its
+(`frame_lifecycle.zig:93-103`, `render_service.zig:30`, `:32`). `end_frame` writes every record to its
 buffer with the device's `write_buffer` before it submits anything (`frame_lifecycle.zig:34-39`);
 `begin_frame` resets both counters (`frame_lifecycle.zig:13-14`). An upload past 4096 records or past the
 arena is dropped without an error.

@@ -32,7 +32,7 @@ The world is created and given its gravity by the managed `AddBox2D`, which read
 `ke_physics_body2d_module_create` registers both in `KE_PHASE_UPDATE`, unpinned
 (`body2d_module.zig:227-254`); the managed `Body2DModule` calls it in `OnLoad` and then calls
 `ke_physics_register_scene_apply`, which registers the two field tables
-(`src/csharp/physics/KernelEngine.Physics/Body2DModule.cs:32-56`, `body2d_module.zig:266-273`). Without that
+(`src/csharp/physics/KernelEngine.Physics/Body2DModule.cs:28-52`, `body2d_module.zig:266-273`). Without that
 module a `Body2D` is storage nothing advances.
 
 `physics.body2d` reads and writes `body2d` and `transform2d`; `physics.collider2d` reads `body2d`,

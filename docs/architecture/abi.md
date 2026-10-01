@@ -77,7 +77,7 @@ link `ke_common` fills the error through `Errors(c).fail` in `src/zig/common/ker
 uses a set of type nodes of its own (`kerror.zig:64-67`).
 
 The managed side matches by name, walking `Parent`
-(`src/csharp/common/KernelEngine.Common/KernelErrorType.cs:31-37`).
+(`src/csharp/common/KernelEngine.Common/KernelErrorType.cs:26-32`).
 
 ### The one sanctioned way to end the process
 
@@ -136,7 +136,7 @@ whatever reused the slot (`:34-78`).
 | `ke_audio_sound`, `ke_body_2d` | `0` | `audio.h:17-18`; `physics_2d.h:16-17` |
 | `ke_script_type_id` | `0` | `script_host.h:35` |
 | `ke_module_id`, `ke_system_id` | `0` is what a refused registration returns | `runtime.h:17-18`, `runtime.zig:437-441`, `:465-468` |
-| `ke_resource_handle` | `UINT32_MAX` | `src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h:14-16` |
+| `ke_resource_handle` | `UINT32_MAX` | `src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h:13-15` |
 | `ke_configuration_subscription` | `UINT32_MAX` | `src/c/configuration/kernel_engine/configuration/configuration.h:15` |
 | `ke_gpu_buffer`, `ke_gpu_texture`, and the other 64-bit GPU ids | `UINT64_MAX` (`KE_GPU_INVALID_HANDLE`) | `gpu_device.h:15-16`; `gpu_enums.h:239` |
 | `ke_component_id` | `KE_COMPONENT_INVALID` is `(ke_component_id)-1`, but `component_register` reports failure with `0` and every component entry point refuses `0` | `ecs.h:16-17`; `ke_ecs.h:58`; `ecs_flecs.zig:393`, `:414`, `:422` |

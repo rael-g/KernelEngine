@@ -57,7 +57,7 @@ absolute path of the same file are two textures.
 `KE_ERROR_INVALID_ARGUMENT`, then ask the matching cache for the key before creating anything on the
 GPU (`asset_upload.zig:20-27`, `72-80`, `116-124`, `179-195`). The service owns three caches for these, one per
 kind (`mesh_cache`, `texture_cache`, `material_cache`, created at
-`src/zig/render/service/src/render_service.zig:280-292`; a fourth serves shaders), each with a `destroy_fn` that frees the GPU
+`src/zig/render/service/src/render_service.zig:281-293`; a fourth serves shaders), each with a `destroy_fn` that frees the GPU
 objects of one resource (`asset_upload.zig:319-343`).
 
 - **A key already cached returns the existing handle**, and the call's remaining arguments are not
@@ -73,16 +73,16 @@ objects of one resource (`asset_upload.zig:319-343`).
 ## The cache
 
 `ke_resource_cache` is two hash tables, one from handle to count and one from path key to handle
-(`resource_cache.zig:115-121`).
+(`resource_cache.zig:116-122`).
 
 - `register_resource` inserts a handle with count 1; `retain` adds one; `release` removes one and, at
   zero, drops the handle, evicts every path that mapped to it and calls the cache's `destroy_fn`
-  (`resource_cache.zig:127-203`).
+  (`resource_cache.zig:128-204`).
 - **`try_get_cached` retains on behalf of the caller.** A hit increments the count of the handle it
-  returns (`resource_cache.zig:205-220`), so every `try_get_*` or keyed upload that hits owes one
+  returns (`resource_cache.zig:206-221`), so every `try_get_*` or keyed upload that hits owes one
   `release`.
 - The path table stores a 64-bit hash of the key and never the key (`keyFromPath`,
-  `resource_cache.zig:13-21`, `108-113`). Two keys with equal hashes are the same entry.
+  `resource_cache.zig:14-22`, `108-113`). Two keys with equal hashes are the same entry.
 
 ## Who asks
 
@@ -112,7 +112,7 @@ The resolver reaches the render module through a borrowed pointer given at creat
 `WebgpuRenderModule.OnLoad` passes `NativeAssetResolver`'s native handle if the container has one,
 and null otherwise (`WebgpuRenderModule.cs:126-129`). `AddAssetResolver` registers the resolver with
 the image and font loaders the container holds, and the project root defaulting to the application
-base directory (`src/csharp/framework/KernelEngine.Framework/Assets/AssetResolverServiceCollectionExtensions.cs:22-30`).
+base directory (`src/csharp/framework/KernelEngine.Framework/Assets/AssetResolverServiceCollectionExtensions.cs:18-26`).
 
 ## What does not exist
 

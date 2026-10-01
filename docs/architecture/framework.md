@@ -1,6 +1,6 @@
 # What is the framework made of, and what does each piece depend on?
 
-The framework is one plugin, `src/zig/framework/`, built as `ke_framework` (`build.zig:140`). It
+The framework is one plugin, `src/zig/framework/`, built as `ke_framework` (`build.zig:144`). It
 exports eight factories, one per piece. Each piece is constructed on its own from the borrowed
 objects it needs; no piece is reachable except through its vtable
 ([layers.md](layers.md#layer-2--a-plugin-exports-one-factory-and-nothing-else)).

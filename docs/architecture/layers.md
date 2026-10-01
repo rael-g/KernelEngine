@@ -29,7 +29,7 @@ the object receives the borrowed `ke_window *`.
 ## Layer 2 — a plugin exports one factory and nothing else
 
 A plugin is a directory with its own `build.zig`, compiled to one dynamic library
-(`src/zig/window/glfw/build.zig:46-52`). The only symbol the rest of the engine may link to is the
+(`src/zig/window/glfw/build.zig:48-54`). The only symbol the rest of the engine may link to is the
 factory, declared in the plugin's own `include/` and defined with `export fn`:
 
 - declaration: `src/zig/window/glfw/include/kernel_engine/window/glfw/glfw_window.h:34`
@@ -41,8 +41,8 @@ except through the vtable it returns.
 
 A plugin is configured by the root build, not by itself: the root `build.zig` runs each plugin's
 `zig build` with one shared `--prefix` so every library lands in one directory
-(`build.zig:866-894`), and passes each include path as a `-D` option
-(`src/zig/window/glfw/build.zig:8-14`). A plugin asks for exactly the domains it consumes, so a
+(`build.zig:885-913`), and passes each include path as a `-D` option
+(`src/zig/window/glfw/build.zig:9-15`). A plugin asks for exactly the domains it consumes, so a
 domain it did not ask for is not on its include path.
 
 ## Layer 3 — bindings are generated, never written

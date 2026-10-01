@@ -79,7 +79,7 @@ the registry's message (the managed factory's exception reaches the loader as it
 gives an entity that carries the component and no managed node, and a `type` without the block binds the
 node over the component's defaults. When both are present the block is applied first and the factory
 runs after it, so a node binds onto the values the scene authored
-(`processEntity`, `scene_loader.zig:608`, `:615`; `Node.GeneratedSeed`, `Node.cs:218-222`).
+(`processEntity`, `scene_loader.zig:608`, `:615`; `Node.GeneratedSeed`, `Node.cs:208-212`).
 
 ## Component blocks
 

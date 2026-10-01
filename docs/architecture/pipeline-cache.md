@@ -57,7 +57,7 @@ Finished compile tasks are reaped when the device presents (`gpu_device_webgpu.z
 
 Destroying the render service first calls the device's `flush_pipeline_compiles`, which waits for every
 compile still in flight, and only then destroys the cache's pipelines
-(`render_service.zig:192`, `:210`). The order is the contract: a callback writes into a cache entry, so
+(`render_service.zig:193`, `:210`). The order is the contract: a callback writes into a cache entry, so
 the cache cannot be destroyed while one may still run (`gpu_device.h:350-355`).
 
 ## Who calls it

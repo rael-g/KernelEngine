@@ -22,7 +22,7 @@ an argument.
 
 A device returns it from `get_ndc_convention` (`gpu_device.h:336`). The WebGPU backend answers
 `z_zero_to_one = 1`, `y_flip = 0`, `clip_left_handed = 1` (`gpu_device_webgpu.zig:709-711`), and the
-render service stores the answer when it is created (`render_service.zig:277`).
+render service stores the answer when it is created (`render_service.zig:278`).
 
 Only two of the three flags have a reader. `z_zero_to_one` picks the depth-range variant of the
 builder and `y_flip` negates the y row (`view_space.zig:116-120`, `:134`, `:160`); the UI pass reads
@@ -47,7 +47,7 @@ one is making its own choice (`view_space.h:27-32`).
 
 ### Two plugins, one implementation
 
-`src/zig/view/space` builds one library, `ke_view_space` (`build.zig:284`), with two factories,
+`src/zig/view/space` builds one library, `ke_view_space` (`build.zig:295`), with two factories,
 `ke_view_space_rh_create` and `ke_view_space_lh_create` (`view_space.zig:199-209`; headers
 `view_space_rh_create.h`, `view_space_lh_create.h`). They differ in a single `Handedness` value held
 in the state (`view_space.zig:14-19`), and every slot switches on it:

@@ -69,12 +69,12 @@ Both systems below are registered by `OnLoad` of a runtime module, in `PreUpdate
 2. `Scene.Input` calls `input.Update()`, then `input.CaptureSnapshot()` (a `get_snapshot` wrapped in
    an `IInputReader`), stores it in a field, then calls `evaluator.Evaluate(snapshot)`. It is pinned
    to worker 1 and declares an empty access list
-   (`src/csharp/framework/KernelEngine.Framework/Modules/SceneNodesModule.cs:92-97`).
+   (`src/csharp/framework/KernelEngine.Framework/Modules/SceneNodesModule.cs:82-87`).
 
 The snapshot field is what every later reader sees for the rest of the tick. `Scene.Behaviors.*`
 systems run in `Update`, which starts only after `PreUpdate` has finished
 ([runtime.md](runtime.md)), and receive the snapshot in their `View`
-(`SceneNodesModule.cs:151`; `Scene/View.cs:43-49`). `View.IsKeyDown` and `View.IsKeyJustPressed`
+(`SceneNodesModule.cs:141`; `Scene/View.cs:37-43`). `View.IsKeyDown` and `View.IsKeyJustPressed`
 read the snapshot's `down` and `pressed` bits. The action evaluator's state, evaluated once in step 2,
 is read by `IInputActionMap` (`Input/InputActionMap.cs:50-59`).
 
@@ -103,13 +103,13 @@ key pressed and released between two evaluations is not seen at all, where the s
 `keys_pressed` would have it.
 
 The managed `InputActionMap.Evaluate` passes no event callback (`InputActionMap.cs:44-46`), which the
-native contract defines as "update polling state only" (`src/zig/framework/include/kernel_engine/framework/input_actions.h:68-70`). So the
+native contract defines as "update polling state only" (`src/c/framework/kernel_engine/framework/input_actions.h:68-70`). So the
 STARTED, PERFORMED and CANCELED events of `ke_input_action_event` are never delivered to managed
 code; polling is the only managed read path.
 
 When an `IActionEvaluator` is registered but no `IInput` is, `Scene.Input` still calls `Evaluate`
 with a null reader; the managed map forwards a null snapshot and the native call fails with
-`KE_ERROR_INVALID_ARGUMENT` (`SceneNodesModule.cs:94-96`, `InputActionMap.cs:44`,
+`KE_ERROR_INVALID_ARGUMENT` (`SceneNodesModule.cs:84-86`, `InputActionMap.cs:44`,
 `input_actions.zig:541-544`), which the generated wrapper throws.
 
 ## What nothing reads

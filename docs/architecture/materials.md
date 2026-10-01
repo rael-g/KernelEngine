@@ -24,10 +24,10 @@ write the surface, and `discard` when `alpha < mat.alpha_cutoff` (`src/shaders/m
 
 ## What the build makes of it
 
-`Ctx.materialShaders` runs once per consuming pass (`build.zig:402-442`). For each pass it lists every
+`Ctx.materialShaders` runs once per consuming pass (`build.zig:414-454`). For each pass it lists every
 `*.slang` in the materials directories, generates a wrapper from the pass's template by substituting the
 material's module name and struct name, and compiles the wrapper's vertex and fragment entry points
-(`build.zig:812-860`). The two templates are:
+(`build.zig:831-879`). The two templates are:
 
 | pass | template | fragment entry |
 |---|---|---|
@@ -39,8 +39,8 @@ fragment functions call the same `ke_surface_from_vertex`, which builds the tang
 seeds a default surface and lets the material fill it (`forward_common.slang:76-95`). Only what happens after the surface is built differs between passes.
 
 The output is `<material>.<pass>.{vs,fs}.wgsl` in the shader directory the service loads from
-(`build.zig:784-805`, `shader_loader.zig:9-17`, `:39`). The directories searched are the shared
-`src/shaders/materials` and one example's `materials` directory (`build.zig:398-401`).
+(`build.zig:803-824`, `shader_loader.zig:9-17`, `:39`). The directories searched are the shared
+`src/shaders/materials` and one example's `materials` directory (`build.zig:410-413`).
 
 The shadow pass does not use materials: its own shader reads only the position and the model matrix
 (`src/zig/render/shadow/shaders/shadow.slang`), so a `vertex()` perturbation is not seen by shadows.
@@ -52,14 +52,14 @@ The shadow pass does not use materials: its own shader reads only the position a
 
 - `key` is required and dedups: a key already cached returns the existing handle.
 - `shader` is the authored material's name; null or empty selects `standard`, and a name of 64 bytes or
-  more is refused (`asset_upload.zig:186-190`, `render_service.zig:30`).
+  more is refused (`asset_upload.zig:186-190`, `render_service.zig:31`).
 - The base colour's rgb is converted from sRGB to linear; alpha is kept (`asset_upload.zig:198-201`).
 - The MASK cutoff reaches the GPU only for MASK materials; every other mode uploads `0`
   (`asset_upload.zig:197`), which is why `standard.slang`'s `discard` never fires for them.
 - A 48-byte uniform buffer and a bind group over the service's four-entry material layout are created;
   an absent albedo becomes the 1x1 white texture and an absent normal a 1x1 flat normal
-  (`asset_upload.zig:203-225`, `render_service.zig:388-396`).
-- An unknown handle resolves to the built-in white material (`render_service.zig:156-159`).
+  (`asset_upload.zig:203-225`, `render_service.zig:389-397`).
+- An unknown handle resolves to the built-in white material (`render_service.zig:157-160`).
 
 The mesh component's `alpha_mode` is `OPAQUE`, `MASK` or `BLEND` (`handles.h:46-51`) and the material
 stores it. It decides the pass: `OPAQUE` and `MASK` go to the gbuffer pass and `BLEND` to the forward
