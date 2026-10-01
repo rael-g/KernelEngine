@@ -64,6 +64,7 @@ double prev = clock.Elapsed.TotalSeconds;
 while (!window.ShouldClose())
 {
     double now = clock.Elapsed.TotalSeconds;
+    window.PollEvents();
     runtime.Tick((float)(now - prev));
     prev = now;
 }

@@ -31,6 +31,7 @@ double prev = sw.Elapsed.TotalSeconds;
 while (!window.ShouldClose())
 {
     double now = sw.Elapsed.TotalSeconds;
+    window.PollEvents();
     runtime.Tick((float)(now - prev));
     prev = now;
 }

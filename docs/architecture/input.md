@@ -64,36 +64,25 @@ registered **at the moment the window singleton is first resolved**, and from no
 
 ## One tick in the managed host
 
-Both systems below are registered by `OnLoad` of a runtime module, in `PreUpdate`.
+The host calls `window.PollEvents()` on the thread that created the window, then `runtime.Tick`
+(`examples/csharp/00_runtime_minimal/Program.cs`). The window module registers no system, so the
+sink calls of a poll can never interleave with the tick.
 
-1. `Glfw.PollEvents` calls `window.PollEvents()`. It is unpinned and declares no component access
-   (`GlfwWindowModule.cs:49-52`).
-2. `Scene.Input` calls `input.Update()`, then `input.CaptureSnapshot()` (a `get_snapshot` wrapped in
-   an `IInputReader`), stores it in a field, then calls `evaluator.Evaluate(snapshot)`. It is pinned
-   to worker 1 and declares an empty access list
-   (`src/csharp/framework/KernelEngine.Framework/Modules/SceneNodesModule.cs:82-87`).
+In the tick, `Scene.Input` (registered by `OnLoad` of a runtime module, in `PreUpdate`) calls
+`input.Update()`, then `input.CaptureSnapshot()` (a `get_snapshot` wrapped in an `IInputReader`),
+stores it in a field, then calls `evaluator.Evaluate(snapshot)`. It is pinned to worker 1 and
+declares an empty access list (`src/csharp/framework/KernelEngine.Framework/Modules/SceneNodesModule.cs:82-87`).
 
 The snapshot field is what every later reader sees for the rest of the tick. `Scene.Behaviors.*`
 systems run in `Update`, which starts only after `PreUpdate` has finished
 ([runtime.md](runtime.md)), and receive the snapshot in their `View`
 (`SceneNodesModule.cs:141`; `Scene/View.cs:37-43`). `View.IsKeyDown` and `View.IsKeyJustPressed`
-read the snapshot's `down` and `pressed` bits. The action evaluator's state, evaluated once in step 2,
+read the snapshot's `down` and `pressed` bits. The action evaluator's state, evaluated once by `Scene.Input`,
 is read by `IInputActionMap` (`Input/InputActionMap.cs:50-59`).
 
 `FixedUpdate` runs between the two phases, zero or more times per tick
 ([runtime.md](runtime.md#fixed-timestep)). Each such run sees the same snapshot and the same action
 state, so an edge visible in one is visible in all of them in that tick.
-
-### What orders steps 1 and 2
-
-Nothing declares an order between them. Both name no component, so `systemsConflict` reports no
-conflict with anything and the greedy wave rule keeps them in one wave unless a conflicting system
-registered between them opens a new one (`src/zig/runtime/src/runtime.zig:132-186`, `680`). A wave's tasks
-are all dispatched before any is waited on (`runtime.zig:603-624`). So a `Glfw.PollEvents` sink call
-and the `update` + `get_snapshot` of `Scene.Input` can interleave. Per the edge rule above, a press
-whose sink call lands before `update` in the same tick has its `pressed` flag cleared and never
-appears in a snapshot; its `down` flag stays, so `IsKeyDown` and every action binding (which reads
-`down` only) still see the key.
 
 ## Actions are not edges of the snapshot
 
