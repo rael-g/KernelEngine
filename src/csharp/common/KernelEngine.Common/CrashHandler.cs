@@ -5,7 +5,7 @@ namespace KernelEngine.Common;
 
 /// <summary>
 /// Installs process-wide handlers that turn opaque native crashes (abort(),
-/// SEH access violation, bgfx debug assertions, etc.) into a clear diagnostic
+/// SEH access violation, debug assertions, etc.) into a clear diagnostic
 /// line on stderr plus a minidump file, instead of silent process death.
 /// </summary>
 /// <remarks>
@@ -161,7 +161,7 @@ public static class CrashHandler
 
         string name = code switch
         {
-            unchecked((int)0x80000003) => "STATUS_BREAKPOINT (bgfx debug assert / int3)",
+            unchecked((int)0x80000003) => "STATUS_BREAKPOINT (debug assert / int3)",
             unchecked((int)0xC0000005) => "STATUS_ACCESS_VIOLATION (null/dangling pointer)",
             unchecked((int)0xC00000FD) => "STATUS_STACK_OVERFLOW",
             unchecked((int)0x40010005) => "DBG_CONTROL_C",

@@ -3,7 +3,7 @@ Generated/Render/
 --namespace
 KernelEngine.Render.Native
 --libraryPath
-ke_render_bgfx
+ke_render_service
 --include-directory
 ../../../../c/ecs
 --include-directory

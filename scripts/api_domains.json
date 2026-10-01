@@ -808,7 +808,7 @@
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
         "src/c/render/kernel_engine/render/gpu/gpu_device.h"
       ],
-      "library": "ke_render_bgfx",
+      "library": "ke_render_service",
       "output": "Generated/Render/"
     },
     {
