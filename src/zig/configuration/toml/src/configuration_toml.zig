@@ -138,7 +138,7 @@ fn clearRecs() void {
             else => {},
         }
     }
-    g_recs.clearRetainingCapacity();
+    g_recs.clearAndFree(gpa);
 }
 
 fn findInt(section: []const u8, key: []const u8) ?i64 {
