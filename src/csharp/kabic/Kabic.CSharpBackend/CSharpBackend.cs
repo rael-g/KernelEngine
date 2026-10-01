@@ -1195,7 +1195,7 @@ public static class CSharpBackend
             o.Add("    /// over there stops the collector from moving or reclaiming the object; the");
             o.Add("    /// handle is what makes the pointer mean anything by the time it comes back.");
             o.Add("    /// </summary>");
-            o.Add($"    private readonly Dictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
+            o.Add($"    private readonly System.Collections.Concurrent.ConcurrentDictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
         }
 
         foreach (var cg in closureGroups.Where(c => c.Lifetime == ClosureLifetime.Retained))
@@ -2583,7 +2583,7 @@ public static class CSharpBackend
                     o.Add($"{pInd}{pCall};");
                     if (slot.TagValue("unroots") is string freedKey)
                     {
-                        o.Add($"{pInd}if (_rooted.Remove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
+                        o.Add($"{pInd}if (_rooted.TryRemove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
                     }
                 }
                 else if (pHolds)

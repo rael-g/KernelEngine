@@ -255,6 +255,84 @@
           "receiver": "struct ke_script_host *"
         },
         {
+          "name": "bind_deferred",
+          "returns": "_Bool",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Records bind into \u0060commands\u0060: the binding exists, and the entity appears in its type\u0027s instances, once \u0060commands\u0060 is applied. For a caller that runs beside other bodies and so may not touch the host. A bind that cannot succeed when applied, because the entity already carries an instance, is dropped there.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "instance",
+              "type": "void *",
+              "tags": [
+                "rooted:entity"
+              ],
+              "doc": null
+            },
+            {
+              "name": "commands",
+              "type": "ke_ecs_commands *",
+              "tags": [
+                "ctx"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "unbind_deferred",
+          "returns": "_Bool",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Records unbind into \u0060commands\u0060; the binding is dropped once \u0060commands\u0060 is applied, and the instance stays readable until then.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "commands",
+              "type": "ke_ecs_commands *",
+              "tags": [
+                "ctx"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
           "name": "instance_of",
           "returns": "_Bool",
           "tags": [

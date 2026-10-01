@@ -939,11 +939,11 @@ test "repeated slashes collapse instead of failing the walk" {
     try testing.expectEqual(a, f.find("//A///"));
 }
 
-const RecordingCommands = struct {
+pub const RecordingCommands = struct {
     vtable: c.ke_ecs_commands,
     ecs: *c.ke_ecs,
-    fns: [4]c.ke_defer_fn = undefined,
-    payloads: [4][@max(@sizeOf(PendingCreate), @sizeOf(PendingDestroy))]u8 = undefined,
+    fns: [8]c.ke_defer_fn = undefined,
+    payloads: [8][128]u8 = undefined,
     count: usize = 0,
 
     fn of(self: ?*c.ke_ecs_commands) *RecordingCommands {
@@ -964,19 +964,19 @@ const RecordingCommands = struct {
         return true;
     }
 
-    fn init(ecs: *c.ke_ecs) RecordingCommands {
+    pub fn init(ecs: *c.ke_ecs) RecordingCommands {
         var r: RecordingCommands = .{ .vtable = std.mem.zeroes(c.ke_ecs_commands), .ecs = ecs };
         r.vtable.spawn = spawn;
         r.vtable.@"defer" = defer_;
         return r;
     }
 
-    fn bind(self: *RecordingCommands) *c.ke_ecs_commands {
+    pub fn bind(self: *RecordingCommands) *c.ke_ecs_commands {
         self.vtable.handle = self;
         return &self.vtable;
     }
 
-    fn apply(self: *RecordingCommands) void {
+    pub fn apply(self: *RecordingCommands) void {
         for (0..self.count) |i| self.fns[i].?(self.ecs, &self.payloads[i]);
         self.count = 0;
     }

@@ -28,7 +28,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     /// over there stops the collector from moving or reclaiming the object; the
     /// handle is what makes the pointer mean anything by the time it comes back.
     /// </summary>
-    private readonly Dictionary<ulong, GCHandle> _rooted = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, GCHandle> _rooted = new();
 
     private ke_script_host* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(ScriptHost));
@@ -115,7 +115,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     public void Unbind(ulong entity)
     {
         Handle->unbind(Handle, entity);
-        if (_rooted.Remove(entity, out var freed)) freed.Free();
+        if (_rooted.TryRemove(entity, out var freed)) freed.Free();
     }
 
     /// <summary>The instance bound to `entity`. False when none is, which is the normal answer rather than a failure: an entity a scene made without a script, or one another runtime owns, matches the same queries.</summary>

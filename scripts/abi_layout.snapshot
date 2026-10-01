@@ -580,7 +580,7 @@ ke_signal_bus_handle size=16 align=8
   destroy 8
 
 [script_host]
-ke_script_host size=88 align=8
+ke_script_host size=104 align=8
   handle 0
   register_type 8
   type_lookup 16
@@ -588,10 +588,12 @@ ke_script_host size=88 align=8
   type_reach 32
   bind 40
   unbind 48
-  instance_of 56
-  instance_count 64
-  instances 72
-  resolve 80
+  bind_deferred 56
+  unbind_deferred 64
+  instance_of 72
+  instance_count 80
+  instances 88
+  resolve 96
 ke_script_host_handle size=16 align=8
   ref 0
   destroy 8

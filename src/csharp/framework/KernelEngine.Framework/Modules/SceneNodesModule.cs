@@ -81,6 +81,7 @@ public sealed class SceneNodesModule : IRuntimeModule
 
         runtime.RegisterSystem("Scene.Input", RuntimePhase.PreUpdate, (_, _) =>
         {
+            scriptHost.ReleaseRetired();
             input?.Update();
             _inputSnapshot = input?.CaptureSnapshot();
             evaluator?.Evaluate(_inputSnapshot);
