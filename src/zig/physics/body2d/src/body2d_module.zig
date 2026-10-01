@@ -4,7 +4,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const c = @import("cimport.zig").c;
 
-var gpa = std.heap.c_allocator;
+const heap = @import("heap");
+var gpa = heap.gpa;
 
 const Module = struct {
     physics: *c.ke_physics_2d,

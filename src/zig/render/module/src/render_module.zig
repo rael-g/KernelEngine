@@ -7,7 +7,8 @@ const label_resolve = @import("label_resolve.zig");
 
 pub const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32, [*c][*c]c.ke_error) callconv(.c) bool;
 

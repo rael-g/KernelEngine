@@ -1,4 +1,5 @@
 const std = @import("std");
+const heap = @import("heap");
 const rc = @import("render_service.zig");
 const c = rc.c;
 
@@ -69,7 +70,7 @@ fn onRealPipelineReady(pso: c.ke_gpu_pipeline, user: ?*anyopaque) callconv(.c) v
         ctx.entry.real_pso = pso;
         ctx.entry.state.store(.ready, .release);
     }
-    std.heap.c_allocator.destroy(ctx);
+    heap.gpa.destroy(ctx);
 }
 
 pub const PipelineCache = struct {
@@ -78,7 +79,7 @@ pub const PipelineCache = struct {
 
     pub fn init() PipelineCache {
         return .{
-            .map = std.AutoHashMap(PsoKey, *Entry).init(std.heap.c_allocator),
+            .map = std.AutoHashMap(PsoKey, *Entry).init(heap.gpa),
             .magenta_fs = [_]c.ke_gpu_shader_module{c.KE_GPU_INVALID_HANDLE} ** MAX_COLOR_TARGETS,
         };
     }
@@ -89,7 +90,7 @@ pub const PipelineCache = struct {
             const e = entry_ptr.*;
             if (e.state.load(.acquire) == .ready) device.destroy_pipeline.?(device, e.real_pso);
             device.destroy_pipeline.?(device, e.fallback_pso);
-            std.heap.c_allocator.destroy(e);
+            heap.gpa.destroy(e);
         }
         self.map.deinit();
         for (&self.magenta_fs) |*h| {
@@ -141,7 +142,7 @@ pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke
         return if (entry.state.load(.acquire) == .ready) entry.real_pso else entry.fallback_pso;
     }
 
-    const entry = std.heap.c_allocator.create(Entry) catch {
+    const entry = heap.gpa.create(Entry) catch {
         return st.device.create_render_pipeline.?(st.device, params);
     };
     entry.* = .{
@@ -152,11 +153,11 @@ pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke
 
     st.pipeline_cache.map.put(key, entry) catch {
         st.device.destroy_pipeline.?(st.device, entry.fallback_pso);
-        std.heap.c_allocator.destroy(entry);
+        heap.gpa.destroy(entry);
         return st.device.create_render_pipeline.?(st.device, params);
     };
 
-    const ctx = std.heap.c_allocator.create(CompileCtx) catch {
+    const ctx = heap.gpa.create(CompileCtx) catch {
         return entry.fallback_pso;
     };
     ctx.* = .{ .entry = entry };

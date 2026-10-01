@@ -4,7 +4,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 pub const TonemapModule = struct {
     core: *c.ke_render_service = undefined,

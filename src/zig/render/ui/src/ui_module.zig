@@ -6,7 +6,8 @@ const cimport = @import("cimport.zig");
 const c = cimport.c;
 const handles = @import("handle").Handles(c);
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const MAX_UI_QUADS = 8192;
 const MAX_UI_BATCHES = 512;

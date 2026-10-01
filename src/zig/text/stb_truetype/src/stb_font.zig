@@ -4,7 +4,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const stb = @cImport({
     @cInclude("stb_truetype.h");

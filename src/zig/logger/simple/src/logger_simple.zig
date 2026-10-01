@@ -3,7 +3,8 @@ const testing = std.testing;
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const c = @cImport({
     @cInclude("kernel_engine/logger/logger.h");
