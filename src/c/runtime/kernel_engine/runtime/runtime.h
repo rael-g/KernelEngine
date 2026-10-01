@@ -18,6 +18,7 @@ typedef uint64_t ke_module_id;
 typedef uint64_t ke_system_id;
 
 typedef enum ke_phase {
+    /// Runs once, at the start of the first tick, before any other phase.
     KE_PHASE_STARTUP      = 0,
     KE_PHASE_PRE_UPDATE   = 1,
     KE_PHASE_FIXED_UPDATE = 2,
@@ -26,6 +27,9 @@ typedef enum ke_phase {
     /// Runs asynchronously against the next tick's sim phases. Its systems read
     /// extracted query results, never live storage, and may not mutate structure.
     KE_PHASE_RENDER       = 5,
+    /// Runs once when the runtime is destroyed, if a tick ever started it, after the
+    /// pending render phase has finished and before any module unloads. Destroy
+    /// cannot report a failure, so a body that fails here is not answered for.
     KE_PHASE_SHUTDOWN     = 6,
 } ke_phase;
 

@@ -5,17 +5,19 @@ what that function and the ones it calls do; where they disagree with it, it is 
 
 ## Phases, in the order `tick` runs them
 
-`ke_phase` has seven values (`src/c/runtime/kernel_engine/runtime/runtime.h:20-30`). `tick` runs
-five of them, in this order:
+`ke_phase` has seven values (`src/c/runtime/kernel_engine/runtime/runtime.h`). The first `tick`
+runs `KE_PHASE_STARTUP` once, before anything else. Every tick then runs, in this order:
 
-1. `KE_PHASE_PRE_UPDATE` (`runtime.zig:874`)
-2. `KE_PHASE_FIXED_UPDATE`, zero or more times (`runtime.zig:880-883`)
-3. `KE_PHASE_UPDATE` (`runtime.zig:885`)
-4. `KE_PHASE_POST_UPDATE` (`runtime.zig:886`)
-5. `KE_PHASE_RENDER`, dispatched and not awaited (`runtime.zig:903`)
+1. `KE_PHASE_PRE_UPDATE`
+2. `KE_PHASE_FIXED_UPDATE`, zero or more times
+3. `KE_PHASE_UPDATE`
+4. `KE_PHASE_POST_UPDATE`
+5. `KE_PHASE_RENDER`, dispatched and not awaited
 
-No function in `runtime.zig` runs `KE_PHASE_STARTUP` or `KE_PHASE_SHUTDOWN`
-(`grep -n 'PHASE_STARTUP\|PHASE_SHUTDOWN' src/zig/runtime/src/runtime.zig` prints nothing).
+`KE_PHASE_SHUTDOWN` runs once from the runtime's destroy, if a tick ever started it, after the
+pending render phase is joined and before the modules unload. A failure there cannot be reported,
+because destroy returns nothing. `grep -n 'PHASE_STARTUP\|PHASE_SHUTDOWN' src/zig/runtime/src/runtime.zig`
+finds where each runs.
 
 A phase that fails stops the tick: each later sim phase is guarded by `failure.type == null`
 (`runtime.zig:880`, `909`, `910`), and inside a phase no wave starts after a failed one (`runtime.zig:731`).

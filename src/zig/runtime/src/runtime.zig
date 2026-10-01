@@ -440,6 +440,7 @@ const RuntimeState = struct {
     fixed_dt: f32,
     fixed_dt_max_accum: f32,
     fixed_accumulator: f32,
+    started: bool,
     max_systems_per_phase: u32,
     phase_indices: ?[*]u32,
     phase_params: ?[*]c.ke_runtime_system_params,
@@ -939,7 +940,12 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
     const h = handleOf(self.?);
 
     runtimePrepareSystems(h);
-    var failure = runtimeRunPhase(h, c.KE_PHASE_PRE_UPDATE, dt);
+    var failure = PhaseFailure{};
+    if (!h.state.started) {
+        h.state.started = true;
+        failure = runtimeRunPhase(h, c.KE_PHASE_STARTUP, 0.0);
+    }
+    if (failure.type == null) failure = runtimeRunPhase(h, c.KE_PHASE_PRE_UPDATE, dt);
 
     h.state.fixed_accumulator += dt;
     if (h.state.fixed_accumulator > h.state.fixed_dt_max_accum) {
@@ -998,6 +1004,8 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     const h = handleOf(self.?);
 
     _ = runtimeJoinPendingRender(h);
+
+    if (h.state.started) _ = runtimeRunPhase(h, c.KE_PHASE_SHUTDOWN, 0.0);
 
     if (h.state.modules) |modules| {
         var i = h.state.module_count;
@@ -1523,6 +1531,109 @@ test "a query declaring more terms than a query can hold is refused instead of t
     var err: [*c]c.ke_error = null;
     try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
     try testing.expect(err != null);
+}
+
+var inline_failure: ?*const c.ke_error_type = null;
+var inline_token: u8 = 0;
+
+fn inlineDispatch(_: [*c]c.ke_scheduler, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
+    inline_failure = null;
+    func.?(data, &inline_failure);
+    return @ptrCast(&inline_token);
+}
+
+fn inlineDispatchPinned(self: [*c]c.ke_scheduler, _: u32, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
+    return inlineDispatch(self, func, data);
+}
+
+fn inlineWait(_: [*c]c.ke_scheduler, _: ?*c.ke_task, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (inline_failure) |t| {
+        E.failWithType(out_error, t, "inline task failed", @src());
+        return false;
+    }
+    return true;
+}
+
+const InlineRuntime = struct {
+    bare: BareRuntime = .{},
+
+    fn init(self: *InlineRuntime) !void {
+        self.bare.scheduler.dispatch = @ptrCast(&inlineDispatch);
+        self.bare.scheduler.dispatch_pinned = @ptrCast(&inlineDispatchPinned);
+        self.bare.scheduler.wait = @ptrCast(&inlineWait);
+        try self.bare.init();
+    }
+
+    fn rt(self: *InlineRuntime) *c.ke_runtime {
+        return self.bare.rt();
+    }
+};
+
+const PhaseLog = struct {
+    seen: [16]c_int = undefined,
+    count: usize = 0,
+};
+
+fn phaseLogBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    _ = ctx;
+    const entry: *const PhaseLogEntry = @ptrCast(@alignCast(ud.?));
+    entry.log.seen[entry.log.count] = entry.phase;
+    entry.log.count += 1;
+    return true;
+}
+
+const PhaseLogEntry = struct {
+    log: *PhaseLog,
+    phase: c_int,
+};
+
+test "the startup phase runs once, before the first tick's other phases" {
+    var r = InlineRuntime{};
+    try r.init();
+
+    var log = PhaseLog{};
+    const phases = [_]c_int{ c.KE_PHASE_UPDATE, c.KE_PHASE_STARTUP, c.KE_PHASE_PRE_UPDATE };
+    var entries: [phases.len]PhaseLogEntry = undefined;
+    for (phases, 0..) |ph, i| {
+        entries[i] = .{ .log = &log, .phase = ph };
+        var sys = systemParams("Logged", ph);
+        sys.execute = &phaseLogBody;
+        sys.user_data = &entries[i];
+        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    }
+
+    for (0..3) |_| try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    r.bare.deinit();
+
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_STARTUP), log.seen[0]);
+    var startups: usize = 0;
+    for (log.seen[0..log.count]) |ph| {
+        if (ph == c.KE_PHASE_STARTUP) startups += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), startups);
+}
+
+test "the shutdown phase runs once when the runtime is destroyed, after every tick" {
+    var r = InlineRuntime{};
+    try r.init();
+
+    var log = PhaseLog{};
+    const phases = [_]c_int{ c.KE_PHASE_SHUTDOWN, c.KE_PHASE_UPDATE };
+    var entries: [phases.len]PhaseLogEntry = undefined;
+    for (phases, 0..) |ph, i| {
+        entries[i] = .{ .log = &log, .phase = ph };
+        var sys = systemParams("Logged", ph);
+        sys.execute = &phaseLogBody;
+        sys.user_data = &entries[i];
+        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    }
+
+    for (0..2) |_| try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, 2), log.count);
+    r.bare.deinit();
+
+    try testing.expectEqual(@as(usize, 3), log.count);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_SHUTDOWN), log.seen[2]);
 }
 
 test "creating a runtime without an ecs is refused" {
