@@ -69,18 +69,6 @@ typedef struct ke_logger ke_logger;
         void (*destroy)(ke_logger *self);
     } ke_logger_handle;
 
-    /** Creates a logger instance. */
-    KE_LOGGER_API ke_logger_handle ke_logger_create(ke_error **out_error);
-
-    /**
-     * Builds a stateless sink that formats entries as `[LEVEL] tag: message`
-     * and writes them to the process's standard error stream, flushing after
-     * every entry. Every language wants this as a default; native so none of
-     * them re-derive the format (or the level-name mapping `ke_log_level_to_string`
-     * already owns).
-     */
-    KE_LOGGER_API ke_logger_sink ke_console_sink_create(void);
-
 #ifdef __cplusplus
 }
 #endif

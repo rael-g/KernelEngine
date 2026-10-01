@@ -43,10 +43,13 @@
       "name": "logger",
       "headers": [
         "src/c/logger/kernel_engine/logger/logger.h",
-        "src/c/logger/kernel_engine/logger/log_level.h"
+        "src/c/logger/kernel_engine/logger/log_level.h",
+        "src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h",
+        "src/zig/logger/simple/include/kernel_engine/logger/simple/console_sink_create.h"
       ],
       "includeDirs": [
         "src/c/logger",
+        "src/zig/logger/simple/include",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/logger/ke_api.json",
@@ -736,7 +739,9 @@
       "namespace": "KernelEngine.Logger.Native",
       "headers": [
         "src/c/logger/kernel_engine/logger/log_level.h",
-        "src/c/logger/kernel_engine/logger/logger.h"
+        "src/c/logger/kernel_engine/logger/logger.h",
+        "src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h",
+        "src/zig/logger/simple/include/kernel_engine/logger/simple/console_sink_create.h"
       ],
       "library": "ke_logger_simple",
       "output": "Generated/Logger/"

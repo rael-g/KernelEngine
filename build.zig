@@ -538,6 +538,7 @@ pub fn build(b: *std.Build) void {
     const demo01 = ctx.example("c_demo_01", "examples/c/01_minimal_log", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "logger" }),
+            b.pathJoin(&.{ src_zig, "logger/simple/include" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
         })),
         argF(b, "libs", b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") })),

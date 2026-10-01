@@ -22,9 +22,8 @@ public static class LoggerServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the built-in console sink (native <c>ke_console_sink_create</c> — same
-    /// <c>[LEVEL] tag: message</c> format and level names as <c>ke_log_level_to_string</c>,
-    /// not re-derived here). Reads <c>[logging] console_level</c> from the Project file
+    /// Registers the built-in console sink (native <c>ke_console_sink_create</c>, which owns the
+    /// <c>[LEVEL] tag: message</c> format and the level names). Reads <c>[logging] console_level</c> from the Project file
     /// when present; otherwise passes through every level.
     /// </summary>
     public static IServiceCollection AddConsoleSink(this IServiceCollection services)
@@ -53,8 +52,7 @@ public static class LoggerServiceCollectionExtensions
 /// <summary>
 /// An <see cref="ILoggerSink"/> that delegates formatting to the native console sink
 /// (<c>ke_console_sink_create</c>) instead of re-implementing the `[LEVEL] tag: message`
-/// format and level-name mapping in C# — the previous hand-written version drifted
-/// (`"CRIT"` vs. the native `ke_log_level_to_string`'s `"CRITICAL"`).
+/// format and level-name mapping in C#.
 /// </summary>
 internal sealed unsafe class NativeConsoleLoggerSink : ILoggerSink
 {

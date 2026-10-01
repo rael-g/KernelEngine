@@ -23,7 +23,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     mod.addImport("kerror", kerror_mod);
-    mod.addCMacro("KE_LOGGER_EXPORT", "");
+    mod.addIncludePath(b.path("include"));
+    mod.addCMacro("KE_LOGGER_SIMPLE_EXPORT", "");
 
     const lib = b.addLibrary(.{
         .name = "ke_logger_simple",
@@ -50,7 +51,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }));
-    test_mod.addCMacro("KE_LOGGER_EXPORT", "");
+    test_mod.addIncludePath(b.path("include"));
+    test_mod.addCMacro("KE_LOGGER_SIMPLE_EXPORT", "");
 
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);

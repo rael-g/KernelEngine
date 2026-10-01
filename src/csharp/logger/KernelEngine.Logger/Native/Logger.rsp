@@ -7,12 +7,16 @@ ke_logger_simple
 --include-directory
 ../../../../c/logger
 --include-directory
+../../../../zig/logger/simple/include
+--include-directory
 ../../../../zig/common/include
 --file
 Logger.umbrella.h
 --traverse
 ../../../../c/logger/kernel_engine/logger/log_level.h
 ../../../../c/logger/kernel_engine/logger/logger.h
+../../../../zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h
+../../../../zig/logger/simple/include/kernel_engine/logger/simple/console_sink_create.h
 --methodClassName
 NativeMethods
 --prefixStrip

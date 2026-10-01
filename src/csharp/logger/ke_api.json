@@ -215,20 +215,6 @@
   ],
   "functions": [
     {
-      "name": "ke_log_level_to_string",
-      "returns": "const char *",
-      "doc": "Converts a log level to a human-readable string.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "level",
-          "type": "int32_t",
-          "tags": [],
-          "doc": null
-        }
-      ]
-    },
-    {
       "name": "ke_logger_create",
       "returns": "ke_logger_handle",
       "doc": "Creates a logger instance.",
@@ -245,7 +231,7 @@
     {
       "name": "ke_console_sink_create",
       "returns": "ke_logger_sink",
-      "doc": "Builds a stateless sink that formats entries as \u0060[LEVEL] tag: message\u0060 and writes them to the process\u0027s standard error stream, flushing after every entry. Every language wants this as a default; native so none of them re-derive the format (or the level-name mapping \u0060ke_log_level_to_string\u0060 already owns).",
+      "doc": "Builds a stateless sink that formats entries as \u0060[LEVEL] tag: message\u0060 and writes them to the process\u0027s standard error stream, flushing after every entry. Every language wants this as a default; native so none of them re-derive the format.",
       "return_doc": null,
       "params": []
     }
