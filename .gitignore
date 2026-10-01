@@ -80,3 +80,6 @@ Thumbs.db
 *.bak
 *.orig
 *.pid
+
+# Clang resource-dir headers that scripts/generate_bindings.cs fetches
+/.cache/
