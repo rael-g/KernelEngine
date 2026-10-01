@@ -320,7 +320,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         }
 
         st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-                                                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, vs, out_error);
+                                                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, vs, st.camera.ref, out_error);
         if (st.cluster.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);

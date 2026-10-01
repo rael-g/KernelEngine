@@ -48,6 +48,7 @@ const ClusterModule = struct {
     core: *c.ke_render_service = undefined,
     logger: ?*c.ke_logger = null,
     view_space: *c.ke_view_space = undefined,
+    camera: *c.ke_render_camera = undefined,
     point_light_cid: c.ke_component_id = undefined,
     spot_light_cid: c.ke_component_id = undefined,
     world_transform_cid: c.ke_component_id = undefined,
@@ -82,12 +83,6 @@ const ClusterModule = struct {
     point_overflow_warned: bool = false,
     spot_overflow_warned: bool = false,
 };
-
-fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
-    return zm.loadMat(&out.m);
-}
 
 fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: usize) void {
     const lg = logger orelse return;
@@ -190,13 +185,16 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
     const depth_from_view_z = cm.view_space.params.?(cm.view_space).depth_from_view_z;
+    var frustum: c.ke_camera_frustum = undefined;
+    cm.camera.perspective_frustum.?(cm.camera, cam, aspect, &frustum);
+    var view_m: c.ke_mat4 = undefined;
+    cm.camera.view.?(cm.camera, &cam_wt.matrix, &view_m);
     var params: ClusterParams = .{
         .grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
         .counts = .{ @floatFromInt(pn), @floatFromInt(sn), depth_from_view_z, 0.0 },
-        .proj = .{ std.math.tan(cam.fov * deg2rad * 0.5), aspect, cam.near_plane, cam.far_plane },
-        .view = undefined,
+        .proj = .{ frustum.tan_half_fov_y, frustum.aspect, frustum.near_plane, frustum.far_plane },
+        .view = view_m.m,
     };
-    zm.storeMat(params.view[0..], cameraView(cm.view_space, cam_wt));
     core.*.upload.?(core, cm.cull_uniform, 0, &params, @sizeOf(ClusterParams));
 
     uploadGrid(cm, bw, bh, cam.near_plane, cam.far_plane);
@@ -233,11 +231,12 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
              logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
              world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
-             frame_cid: c.ke_component_id, view_space: *c.ke_view_space,
+             frame_cid: c.ke_component_id, view_space: *c.ke_view_space, render_camera: *c.ke_render_camera,
              out_error: [*c][*c]c.ke_error) bool {
     cm.core = core;
     cm.logger = logger;
     cm.view_space = view_space;
+    cm.camera = render_camera;
     cm.point_light_cid = point_light_cid;
     cm.spot_light_cid = spot_light_cid;
     cm.world_transform_cid = world_transform_cid;
@@ -397,17 +396,19 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
                                     point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
                                     world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
                                     frame_cid: c.ke_component_id, view_space: ?*c.ke_view_space,
+                                    render_camera: ?*c.ke_render_camera,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_cluster_handle {
     const empty = c.ke_render_cluster_handle{ .ref = null, .destroy = null };
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
     const vs = view_space orelse return empty;
+    const camera_api = render_camera orelse return empty;
 
     const cm = gpa.create(ClusterModule) catch return empty;
     cm.* = .{};
     if (!setup(cm, dev, core_ref, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-               point_light_cid, spot_light_cid, world_transform_cid, camera_cid, frame_cid, vs, out_error)) {
+               point_light_cid, spot_light_cid, world_transform_cid, camera_cid, frame_cid, vs, camera_api, out_error)) {
         gpa.destroy(cm);
         return empty;
     }
