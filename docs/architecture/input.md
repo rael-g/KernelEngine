@@ -10,13 +10,13 @@ tick. A second system evaluates action bindings against the copy
 `ke_input` is a vtable (`src/c/input/kernel_engine/input/input.h:16-130`); its one implementation is
 `ke_input_default` (`src/zig/input/default/src/input_default.zig`). It holds per-key `down`,
 `pressed` and `released` flags, mouse position, per-frame mouse and scroll deltas, three mouse-button
-bitmasks, and a queue of discrete events (`input_default.zig:17-35`).
+bitmasks, and a queue of discrete events (`input_default.zig:18-36`).
 
 The four **sinks** are how the window backend writes state: `on_key`, `on_mouse_move`,
 `on_mouse_button`, `on_mouse_scroll` (`input.h:102-128`).
 
 - A key press sets `down`, and sets `pressed` only if the key was not already down
-  (`input_default.zig:80-83`). A release sets `released` and clears `down` (`:84-87`). Key codes
+  (`input_default.zig:81-84`). A release sets `released` and clears `down` (`:84-87`). Key codes
   outside `0..KE_INPUT_MAX_KEYS` (512) are dropped (`:76`).
 - Mouse motion adds the distance from the previous position to `mouse_dx/dy` and stores the new
   position (`:93-96`); scroll adds to `scroll_dx/dy` (`:118-119`). Mouse buttons follow the key rule
@@ -27,13 +27,13 @@ The four **sinks** are how the window backend writes state: `on_key`, `on_mouse_
 
 `update` is the frame boundary: it clears every `pressed` and `released` flag, the mouse and scroll
 deltas, the pressed and released button masks, and the event queue. It leaves `down`, the button
-`down` mask and the cursor position (`input_default.zig:54-73`).
+`down` mask and the cursor position (`input_default.zig:55-74`).
 
 ## What an edge is, and until when it lasts
 
 An edge (`pressed`, `released`) is set by the sink call that causes it and cleared by the next
 `update`. Nothing else clears it: `get_snapshot` and the `is_key_*` queries only read
-(`input_default.zig:135-177`; test `a key press is visible until the next update`, `:298`). So an
+(`input_default.zig:136-178`; test `a key press is visible until the next update`, `:298`). So an
 edge is visible to every read made between the sink call that set it and the next `update`, and to
 no read after. A press and release both landing between two `update` calls leave `pressed` and
 `released` both set and `down` false.
@@ -42,21 +42,21 @@ no read after. A press and release both landing between two `update` calls leave
 
 `get_snapshot` copies the state into a `ke_input_snapshot`: three 512-bit key bitsets, mouse
 position, deltas, scroll, and the three button masks (`snapshot.h:14-52`,
-`input_default.zig:153-177`). The copy is a plain struct with no pointer back, so it can be read on
+`input_default.zig:154-178`). The copy is a plain struct with no pointer back, so it can be read on
 any thread while the live object keeps changing (`input.h:44-49`). Reads go through the
 `snapshot_is_*` slots of `ke_input`, which treat out-of-range codes as false
-(`input.h:51-91`, `input_default.zig:179-227`).
+(`input.h:51-91`, `input_default.zig:180-228`).
 
 `ke_input_default` takes no lock: sinks, `update` and `get_snapshot` read and write the same
-`State` with plain stores (`input_default.zig:17-35`). Callers must not overlap them.
+`State` with plain stores (`input_default.zig:18-36`). Callers must not overlap them.
 
 ## How the window feeds the sinks
 
 `ke_window_glfw` takes a borrowed, nullable `ke_input *` in its params
 (`src/zig/window/glfw/src/core.zig:13-21`). `window.poll_events` calls `glfwPollEvents`, and the
 callbacks it triggers reach `handleEvent`, which forwards each key, button, motion and scroll event
-to the matching sink (`core.zig:88-95`, `124-141`). With a null input the events are dropped
-(`core.zig:125`). The managed `AddGlfwWindow` fills that field from `INativeInput` if one is
+to the matching sink (`core.zig:89-96`, `124-141`). With a null input the events are dropped
+(`core.zig:126`). The managed `AddGlfwWindow` fills that field from `INativeInput` if one is
 registered **at the moment the window singleton is first resolved**, and from nothing otherwise
 (`src/csharp/window/KernelEngine.Window.Glfw/ServiceCollectionExtensions.cs:51-56`).
 

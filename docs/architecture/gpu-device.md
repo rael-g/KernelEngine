@@ -11,7 +11,7 @@ presentation, and nothing about frames, passes or materials. The render service 
 **Handles are 64-bit integers.** Buffers, textures, views, samplers, shader modules, pipelines, bind
 groups, layouts, queues and fences are `uint64_t` typedefs, and `KE_GPU_INVALID_HANDLE` is
 `UINT64_MAX` (`gpu_device.h:15-24`, `gpu_enums.h:239`). The WebGPU backend stores the underlying
-pointer in the integer (`@intFromPtr`, e.g. `gpu_device_webgpu.zig:1194-1207`).
+pointer in the integer (`@intFromPtr`, e.g. `gpu_device_webgpu.zig:1197-1210`).
 
 **The device is a vtable** (`ke_gpu_device`, `gpu_device.h:265-356`), obtained from a factory that
 returns an owner wrapper `{ref, destroy}` (`gpu_device.h:358-362`). Its slots fall into groups:
@@ -40,7 +40,7 @@ error.
 `KE_GPU_INVALID_HANDLE` or nothing. Two error types belong to the contract:
 `KE_ERROR_GPU_SHADER_COMPILATION` and `KE_ERROR_GPU_RESOURCE_CREATION`, both children of
 `KE_ERROR_INVALID_ARGUMENT` (declared at `gpu_device.h:34`, `:41`; defined with their parent at
-`gpu_device_webgpu.zig:715-726`).
+`gpu_device_webgpu.zig:718-729`).
 
 **What the device tells a caller about itself.**
 
@@ -52,7 +52,7 @@ error.
 - `query_extension(name)` returns a typed extension vtable or null. One extension is defined,
   `ke_gpu_surface_ext` (`gpu_surface_ext.h`): acquire the current swapchain view, reconfigure after a
   resize, report the current size. It exists only when the device was created with a window. The render
-  service looks it up at creation (`render_service.zig:231-235`) and passes lookups through to its passes
+  service looks it up at creation (`render_service.zig:233-237`) and passes lookups through to its passes
   as `ke_render_pass_ctx::query_ext` (`pass_recording.zig:162-165`).
 
 ## Storage, compute and indirect
@@ -62,17 +62,17 @@ and `_INDIRECT`, `KE_GPU_TEXTURE_USAGE_STORAGE` (`gpu_enums.h:57`, `:69-70`), th
 `STORAGE_BUFFER` (read-write, compute only), `READONLY_STORAGE_BUFFER` (usable from a fragment stage) and
 `STORAGE_TEXTURE` (`gpu_enums.h:200-202`), `create_compute_pipeline`, and the compute and indirect
 commands above. The cluster light cull uses storage buffers and a compute dispatch
-(`cluster_module.zig:222-228`, `:348-357`); no pass in the tree uses `dispatch_indirect` or
+(`cluster_module.zig:223-229`, `:348-357`); no pass in the tree uses `dispatch_indirect` or
 `draw_indirect`.
 
 ## What the WebGPU backend does
 
 ### Creation
 
-`ke_gpu_device_webgpu_create(params, out_error)` (`gpu_device_webgpu.zig:418`; header
+`ke_gpu_device_webgpu_create(params, out_error)` (`gpu_device_webgpu.zig:419`; header
 `gpu_device_webgpu_create.h`) takes an optional window and an optional scheduler. Creating the instance,
 adapter (high-performance preference) and device is where it can fail, with the error text set on
-`out_error` (`gpu_device_webgpu.zig:282-352`, `:418-449`). With a window it creates a surface, prefers
+`out_error` (`gpu_device_webgpu.zig:283-353`, `:418-449`). With a window it creates a surface, prefers
 `BGRA8Unorm` or `RGBA8Unorm` from the surface's formats and falls back to the first one offered, and
 configures it with `Fifo` presentation (`:334-372`). `shader_language` answers WGSL, and
 `get_ndc_convention` answers `z_zero_to_one`, no y flip, left-handed (`:705-711`).
@@ -99,7 +99,7 @@ configures it with `Fifo` presentation (`:334-372`). `shader_language` answers W
 `create_render_pipeline` compiles on the calling thread. `create_render_pipeline_async` does not call a
 WebGPU asynchronous entry point; it adds a reference to each shader module, dispatches a job to the
 scheduler passed at creation, and the job calls the synchronous `wgpuDeviceCreateRenderPipeline` and
-invokes the callback from its worker (`gpu_device_webgpu.zig:986-1035`). Up to
+invokes the callback from its worker (`gpu_device_webgpu.zig:989-1038`). Up to
 `MAX_PENDING_COMPILES` = 64 jobs are tracked; with no scheduler, or with 64 already tracked, the
 compile runs synchronously and the callback fires before the call returns. `flush_pipeline_compiles` waits on every
 tracked job (`:1037-1045`). What the cache built on top of this does is in

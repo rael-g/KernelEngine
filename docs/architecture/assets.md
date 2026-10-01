@@ -10,13 +10,13 @@ remembers what it uploaded by key (`src/zig/render/service/src/asset_upload.zig`
 ## The resolver
 
 `ke_asset_resolver_create(image_loader, font_loader, project_root)` takes borrowed loaders and a root,
-each of which may be null (`asset_resolver_create.h`; `asset_resolver.zig:476-511`). It has two
+each of which may be null (`asset_resolver_create.h`; `asset_resolver.zig:477-513`). It has two
 families of slot.
 
 **`resolve_*` decode and return data the caller frees**: `resolve_texture` (RGBA8 through the image
 loader), `resolve_mesh`, `resolve_material`, `resolve_font`. Texture, mesh and font each have a
 `free_*` slot; `resolve_material` fills a caller-owned `ke_material_spec` and has none
-(`asset_resolver.h`, `asset_resolver.zig:500-506`). They touch no GPU.
+(`asset_resolver.h`, `asset_resolver.zig:501-507`). They touch no GPU.
 
 - A path starting with `res://` has that prefix replaced by the project root, joined with a `/` only when neither side already supplies one; any
   other path is used as given. With no root, a `res://` path keeps only what follows the prefix
@@ -57,7 +57,7 @@ absolute path of the same file are two textures.
 `KE_ERROR_INVALID_ARGUMENT`, then ask the matching cache for the key before creating anything on the
 GPU (`asset_upload.zig:20-27`, `72-80`, `116-124`, `179-195`). The service owns three caches for these, one per
 kind (`mesh_cache`, `texture_cache`, `material_cache`, created at
-`src/zig/render/service/src/render_service.zig:276-288`; a fourth serves shaders), each with a `destroy_fn` that frees the GPU
+`src/zig/render/service/src/render_service.zig:278-290`; a fourth serves shaders), each with a `destroy_fn` that frees the GPU
 objects of one resource (`asset_upload.zig:319-343`).
 
 - **A key already cached returns the existing handle**, and the call's remaining arguments are not
@@ -73,22 +73,22 @@ objects of one resource (`asset_upload.zig:319-343`).
 ## The cache
 
 `ke_resource_cache` is two hash tables, one from handle to count and one from path key to handle
-(`resource_cache.zig:116-122`).
+(`resource_cache.zig:117-123`).
 
 - `register_resource` inserts a handle with count 1; `retain` adds one; `release` removes one and, at
   zero, drops the handle, evicts every path that mapped to it and calls the cache's `destroy_fn`
-  (`resource_cache.zig:128-204`).
+  (`resource_cache.zig:129-205`).
 - **`try_get_cached` retains on behalf of the caller.** A hit increments the count of the handle it
-  returns (`resource_cache.zig:206-221`), so every `try_get_*` or keyed upload that hits owes one
+  returns (`resource_cache.zig:207-222`), so every `try_get_*` or keyed upload that hits owes one
   `release`.
 - The path table stores a 64-bit hash of the key and never the key (`keyFromPath`,
-  `resource_cache.zig:14-22`, `108-113`). Two keys with equal hashes are the same entry.
+  `resource_cache.zig:15-23`, `108-113`). Two keys with equal hashes are the same entry.
 
 ## Who asks
 
 - **Sprites.** A `ke_sprite2d_component` carries a `texture` path (`component_fields.h:65`). The
   `render.sprite2d.resolve` system, registered in `KE_PHASE_UPDATE` and unpinned
-  (`render_module.zig:301-309`), calls `resolve_texture_into` and stores the handle on the component;
+  (`render_module.zig:303-311`), calls `resolve_texture_into` and stores the handle on the component;
   it skips the call once the component's handle is valid (`sprite_resolve.zig:56-63`). A null
   resolver or an empty path leaves the sprite untextured (`:61-64`).
 - **Labels.** The `label` resolve system bakes a font once per label through `resolve_font`, with the
@@ -98,7 +98,7 @@ objects of one resource (`asset_upload.zig:319-343`).
   no text.
 - **Primitive meshes in scenes** do not go through the resolver. The mesh component names a
   `primitive`, and `render.mesh.resolve` bakes that primitive itself and uploads it under
-  a key starting `primitive:` (`mesh_resolve.zig:25`, `38`, `79`, `131`; `resolveMesh` at `134`; registered at `render_module.zig:283-291`).
+  a key starting `primitive:` (`mesh_resolve.zig:25`, `38`, `79`, `131`; `resolveMesh` at `134`; registered at `render_module.zig:285-293`).
 - **Models** are decoded by the Assimp loader and uploaded by game code through
   `IRenderResources` (`src/zig/asset/assimp/src/assimp_loader.zig:111`;
   `src/csharp/render/KernelEngine.Render.Webgpu/Assets/ModelExtensions.cs:33-34`, `64`), which

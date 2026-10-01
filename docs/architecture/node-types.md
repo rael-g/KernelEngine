@@ -31,7 +31,7 @@ driven from `scripts/generate_csharp.cs:98-105`). What it writes:
 The component name is the same string the native module registers the component under: the header
 that tags the struct also generates `KE_COMPONENT_NAME_CAMERA "camera"`
 (`src/c/render/kernel_engine/render/component_fields.h:9`), and the render module registers by that
-macro (`src/zig/render/module/src/render_module.zig:142`).
+macro (`src/zig/render/module/src/render_module.zig:144`).
 
 ## From a class: partial properties and behavior
 

@@ -23,7 +23,7 @@ Every capacity a piece limits itself to is a params field with `0` selecting the
 
 A node is an entity. `ke_scene_tree_create` registers five components — transform, 2D transform,
 world transform, hierarchy, name — if the ECS does not have them yet, then creates one root
-entity named `Root` carrying hierarchy and name (`src/zig/framework/src/scene_tree.zig:412-444`).
+entity named `Root` carrying hierarchy and name (`src/zig/framework/src/scene_tree.zig:413-445`).
 The hierarchy component holds five entity ids — parent, first child, last child, next sibling and
 previous sibling (`components.h:12-18`) — as an intrusive list, so relinking is constant-time
 (`scene_hierarchy.h:14-16`).
@@ -34,7 +34,7 @@ A new node is **appended**: it is linked after its parent's `last_child`, and be
 when the parent had none (`populateNode`, `src/zig/framework/src/scene_tree.zig:98-136`, link at
 `:133-141`). Walking `first_child` and then `next_sibling` therefore visits children in the order they
 were created, which `next_sibling` states as a guarantee (`scene_tree.h:58`; test
-`scene_tree.zig:744`). `last_child` and `prev_sibling` are what keep an append and an unlink
+`scene_tree.zig:746`). `last_child` and `prev_sibling` are what keep an append and an unlink
 constant-time (`destroySubtree`, `:263-282`).
 
 A parent of `KE_ENTITY_INVALID` means the root (`scene_tree.zig:163`). A node created through a system
@@ -44,7 +44,7 @@ depth-first from the root and returns the first match in child order; a name con
 one segment at a time from the root (`findByName`, `childBySegment`, `vtFindNode`, `:198-247`).
 
 When a runtime is supplied, the tree also builds a scene hierarchy by calling that piece's own
-factory (`scene_tree.zig:458`). The hierarchy registers two systems: one flattens the tree into an
+factory (`scene_tree.zig:459`). The hierarchy registers two systems: one flattens the tree into an
 array ordered parents-before-children, the other turns local transforms into world matrices by
 walking that array once, never recursing (`scene_hierarchy.h:14-23`). The hierarchy must be
 destroyed only after the runtime has finished ticking, because its systems are registered for the
@@ -54,7 +54,7 @@ runtime's lifetime (`scene_hierarchy.h:26-28`).
 
 `ke_world` holds seven borrowed pointers — scheduler, ecs, runtime, scene tree, project root,
 logger, signal bus — and a registry mapping a component id to how a scene block fills it
-(`src/zig/framework/src/world.zig:20-32`, stored at `world.zig:221-227`).
+(`src/zig/framework/src/world.zig:20-32`, stored at `world.zig:222-228`).
 
 What it exposes (`world.h`, slots from line 55):
 
@@ -70,12 +70,12 @@ What reads the world: the scene loader takes the ecs and the scene tree through 
 (`scene_loader.zig:53-59`), the logger and the signal bus through functions that are not vtable
 slots (`world.zig:44-52`; `scene_loader.zig:277`, `450`), and the registry. Nothing in the plugin
 reads the world's stored `scheduler` or `project_root`: `grep -n 'scheduler\|project_root'
-src/zig/framework/src/world.zig` shows them assigned at `world.zig:221` and `235` and nowhere else.
+src/zig/framework/src/world.zig` shows them assigned at `world.zig:222` and `235` and nowhere else.
 
 ## The project root
 
 A project root is passed separately to three pieces — the world, the scene loader, the asset
-resolver — and each keeps its own copy: the resolver duplicates it (`asset_resolver.zig:492`), the
+resolver — and each keeps its own copy: the resolver duplicates it (`asset_resolver.zig:493`), the
 loader copies it into a fixed buffer (`scene_loader.zig:41`, `776-783`), the world stores the
 pointer. The resolver rewrites `res://x` to `<project_root>/x` and passes any other path through
 unchanged (`asset_resolver.zig:69-73`).

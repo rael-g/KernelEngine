@@ -10,9 +10,9 @@ is in `architecture/configuration.md`. This document is the key list.
 
 A table is a section; a nested table joins the path with a dot, so `[runtime.window]` is section
 `runtime.window`. Arrays are not loaded, and neither is any value that is not an integer, float,
-boolean or string (`src/zig/configuration/toml/src/configuration_toml.zig:20-36`, `45-59`).
+boolean or string (`src/zig/configuration/toml/src/configuration_toml.zig:21-37`, `45-59`).
 Numeric keys read as `double` must be written with a decimal point: an integer-valued key read as a
-double is a type mismatch and yields the reader's fallback (`src/zig/configuration/src/configuration.zig:108-117`).
+double is a type mismatch and yields the reader's fallback (`src/zig/configuration/src/configuration.zig:109-118`).
 
 An unknown key is not an error. The store accepts whatever the file says, and nothing checks the
 file against a list of keys.
@@ -38,8 +38,8 @@ A `logging.console_level` that is not a `LogLevel` name makes `Enum.Parse` throw
 first resolved (`Logger/ServiceCollectionExtensions.cs:37`).
 
 A `0` for the cluster keys is not a size: it is passed to the render module, which substitutes its
-own defaults (`src/zig/render/module/src/render_module.zig:193-207`). `clear_color_*` are four scalars because the loader
-skips arrays (`src/zig/configuration/toml/src/configuration_toml.zig:58-59`).
+own defaults (`src/zig/render/module/src/render_module.zig:195-209`). `clear_color_*` are four scalars because the loader
+skips arrays (`src/zig/configuration/toml/src/configuration_toml.zig:59-60`).
 
 Each of the constructors named above also has an overload that takes the same values inline and
 bypasses the file (`AddConsoleSink(LogLevel)`, `AddGlfwWindow(width, height, title)`,

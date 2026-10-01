@@ -15,7 +15,7 @@ entity (`src/c/physics/kernel_engine/physics/components.h`). `ke_collider2d_comp
 and `mask`, and `attached`. Both are scene-authorable by the keys in
 `src/c/physics/kernel_engine/physics/component_fields.h`; `body` is not in the field table, `attached`
 is. A body entity also needs a `transform2d`: the system's query requires both
-(`body2d_module.zig:219-222`). A collider is its own entity, a descendant of the body's entity, as in
+(`body2d_module.zig:221-224`). A collider is its own entity, a descendant of the body's entity, as in
 `examples/csharp/games/pong/scenes/Paddle.scene.toml`.
 
 ## The world
@@ -30,9 +30,9 @@ The world is created and given its gravity by the managed `AddBox2D`, which read
 ## The two systems
 
 `ke_physics_body2d_module_create` registers both in `KE_PHASE_UPDATE`, unpinned
-(`body2d_module.zig:224-251`); the managed `Body2DModule` calls it in `OnLoad` and then calls
+(`body2d_module.zig:226-253`); the managed `Body2DModule` calls it in `OnLoad` and then calls
 `ke_physics_register_scene_apply`, which registers the two field tables
-(`src/csharp/physics/KernelEngine.Physics/Body2DModule.cs:28-52`, `body2d_module.zig:261-268`). Without that
+(`src/csharp/physics/KernelEngine.Physics/Body2DModule.cs:28-52`, `body2d_module.zig:264-271`). Without that
 module a `Body2D` is storage nothing advances.
 
 `physics.body2d` reads and writes `body2d` and `transform2d`; `physics.collider2d` reads `body2d`,
@@ -40,7 +40,7 @@ module a `Body2D` is storage nothing advances.
 puts them in separate waves in registration order, body first ([runtime.md](runtime.md#waves--what-may-run-concurrently)).
 The collider system therefore sees, in the same tick, the handles the body system just created.
 
-### `physics.body2d`, once per tick (`bodySystem`, `body2d_module.zig:28-91`)
+### `physics.body2d`, once per tick (`bodySystem`, `body2d_module.zig:29-92`)
 
 1. **Create.** For each body whose `body` is invalid: if `position` is exactly (0, 0) it is first
    taken from the entity's `transform2d` position and rotation; then `create_body` is called with the

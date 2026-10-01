@@ -25,8 +25,8 @@ A phase that fails stops the tick: each later sim phase is guarded by `failure.t
 Each tick adds `dt` to an accumulator, clamps it to `fixed_dt_max_accum`, then runs
 `KE_PHASE_FIXED_UPDATE` once per `fixed_dt` the accumulator holds, passing `fixed_dt` as the body's
 `dt` (`runtime.zig:876-883`). Time beyond the clamp is discarded, not carried over. Defaults
-`1/60` and `0.25` apply when the params field is `0` (`runtime.zig:981-982`); the runtime's third
-tunable, `max_systems_per_phase`, defaults to `256` (`runtime.zig:984-985`).
+`1/60` and `0.25` apply when the params field is `0` (`runtime.zig:982-983`); the runtime's third
+tunable, `max_systems_per_phase`, defaults to `256` (`runtime.zig:985-986`).
 
 ## Waves — what may run concurrently
 

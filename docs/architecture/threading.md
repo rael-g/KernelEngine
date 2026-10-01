@@ -8,14 +8,14 @@ role.
 `ke_scheduler` (`src/c/scheduler/kernel_engine/scheduler/scheduler.h:39`) is a struct of six
 function pointers over an opaque handle. Its one implementation is enkiTS
 (`src/zig/scheduler/enki/src/enki_scheduler.zig`), created by `ke_scheduler_enki_create`
-(`enki_scheduler.zig:194`). The factory takes no worker-count parameter; the pool is whatever
-`enkiInitTaskScheduler` makes of the machine (`enki_scheduler.zig:208`).
+(`enki_scheduler.zig:195`). The factory takes no worker-count parameter; the pool is whatever
+`enkiInitTaskScheduler` makes of the machine (`enki_scheduler.zig:209`).
 
 `get_num_workers` reports enki's thread count minus one (`enki_scheduler.zig:174-180`).
 
 Every subsystem that runs work in parallel goes through this one object. The runtime's wave
 dispatcher is a client like any other ([runtime.md](runtime.md#dispatch)); flecs is given no
-threads and no pipeline — the plugin only calls `ecs_init()` (`src/zig/ecs/flecs/src/ecs_flecs.zig:539`),
+threads and no pipeline — the plugin only calls `ecs_init()` (`src/zig/ecs/flecs/src/ecs_flecs.zig:540`),
 never `ecs_set_threads` or `ecs_progress`.
 
 ## A task

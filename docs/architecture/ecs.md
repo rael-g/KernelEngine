@@ -2,7 +2,7 @@
 
 The contract is `ke_ecs` (`src/c/ecs/kernel_engine/ecs/ke_ecs.h:32`). Its one implementation is
 `src/zig/ecs/flecs/src/ecs_flecs.zig`, created by `ke_ecs_flecs_create`
-(`ecs_flecs.zig:504`).
+(`ecs_flecs.zig:505`).
 
 ## Identity
 
@@ -71,9 +71,9 @@ The contract forbids satisfying `entity_reserve` by forwarding to `entity_create
 It hands out ids from a band the world is configured never to issue from:
 
 - the band is `[reserve_low, world_id_base)`, where `reserve_low` is one past the largest id flecs
-  had issued when the world was created (`ecs_flecs.zig:546`);
+  had issued when the world was created (`ecs_flecs.zig:547`);
 - flecs is told to allocate only from `world_id_base` upward, by an entity range
-  (`ecs_flecs.zig:553`);
+  (`ecs_flecs.zig:554`);
 - a reserve is one atomic increment of a counter (`ecs_flecs.zig:192-199`).
 
 The reserved id is a usable reference at once, but the entity does not exist in the world until

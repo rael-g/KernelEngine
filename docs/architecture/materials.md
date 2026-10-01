@@ -52,14 +52,14 @@ The shadow pass does not use materials: its own shader reads only the position a
 
 - `key` is required and dedups: a key already cached returns the existing handle.
 - `shader` is the authored material's name; null or empty selects `standard`, and a name of 64 bytes or
-  more is refused (`asset_upload.zig:186-190`, `render_service.zig:31`).
+  more is refused (`asset_upload.zig:186-190`, `render_service.zig:32`).
 - The base colour's rgb is converted from sRGB to linear; alpha is kept (`asset_upload.zig:198-201`).
 - The MASK cutoff reaches the GPU only for MASK materials; every other mode uploads `0`
   (`asset_upload.zig:197`), which is why `standard.slang`'s `discard` never fires for them.
 - A 48-byte uniform buffer and a bind group over the service's four-entry material layout are created;
   an absent albedo becomes the 1x1 white texture and an absent normal a 1x1 flat normal
-  (`asset_upload.zig:203-225`, `render_service.zig:384-392`).
-- An unknown handle resolves to the built-in white material (`render_service.zig:152-155`).
+  (`asset_upload.zig:203-225`, `render_service.zig:386-394`).
+- An unknown handle resolves to the built-in white material (`render_service.zig:153-156`).
 
 The mesh component's `alpha_mode` is `OPAQUE`, `MASK` or `BLEND` (`handles.h:29-34`) and the material
 stores it. It decides the pass: `OPAQUE` and `MASK` go to the gbuffer pass and `BLEND` to the forward
@@ -71,10 +71,10 @@ For each draw a consuming pass:
 
 1. Asks the service for the material's shader name (`material_shader`).
 2. Loads `<name>.<pass>` as a vertex and a fragment module and writes them into its pipeline template
-   (`gbuffer_module.zig:72-81`, `forward_module.zig:101-111`). If either file is missing the draw is
+   (`gbuffer_module.zig:73-82`, `forward_module.zig:102-112`). If either file is missing the draw is
    skipped.
 3. Asks the pipeline cache for the pipeline ([pipeline-cache.md](pipeline-cache.md)).
-4. Binds the material's bind group at set 1 (`gbuffer_module.zig:151-153`, `forward_module.zig:263-265`)
+4. Binds the material's bind group at set 1 (`gbuffer_module.zig:152-154`, `forward_module.zig:264-266`)
    and the object's transform at set 2.
 
 Everything about the pipeline except the two modules is fixed by the pass: vertex layout, blend state,
@@ -86,7 +86,7 @@ A mesh component either carries a valid material handle, or the `render.mesh.res
 one from the values authored on the mesh itself: colour, roughness, alpha mode, cutoff, `ior` and
 `distortion_strength`, keyed by the hex bit patterns of all of those but `distortion_strength`, with
 metallic fixed at `0` and the default shader (`mesh_resolve.zig:151-175`, run in `KE_PHASE_UPDATE`,
-`render_module.zig:284-292`). A mesh authored in a scene therefore draws with `standard`.
+`render_module.zig:286-294`). A mesh authored in a scene therefore draws with `standard`.
 The in-tree callers of `create_material` that exist outside that system pass no shader either
 (`asset_resolver.zig:451-464`, `sprite_resolve.zig:74-86`); the way to pick an authored material is the
 `shader` argument of `create_material`, which game code reaches through the render resources wrapper
