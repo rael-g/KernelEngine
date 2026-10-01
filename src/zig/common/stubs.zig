@@ -47,10 +47,8 @@ pub fn Stubs(comptime c: type) type {
 
             fn mint(self: ?*c.ke_gpu_device) u64 {
                 const d = of(self);
-                const h = d.next;
-                d.next += 1;
-                d.live += 1;
-                return h;
+                _ = @atomicRmw(i64, &d.live, .Add, 1, .monotonic);
+                return @atomicRmw(u64, &d.next, .Add, 1, .monotonic);
             }
 
             fn spendFallible(self: ?*c.ke_gpu_device) bool {
@@ -122,7 +120,7 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn destroyHandle(self: ?*c.ke_gpu_device, _: u64) callconv(.c) void {
-                of(self).live -= 1;
+                _ = @atomicRmw(i64, &of(self).live, .Sub, 1, .monotonic);
             }
         };
 

@@ -55,55 +55,158 @@ fn copyEntry(dst: *[64]u8, src: [*c]const u8) void {
 const PipelineState = enum(u8) { pending, ready };
 
 const Entry = struct {
+    key: PsoKey,
+    hash: u64,
     state: std.atomic.Value(PipelineState),
     real_pso: c.ke_gpu_pipeline,
     fallback_pso: c.ke_gpu_pipeline,
-};
 
-const CompileCtx = struct {
-    entry: *Entry,
+    fn current(self: *const Entry) c.ke_gpu_pipeline {
+        return if (self.state.load(.acquire) == .ready) self.real_pso else self.fallback_pso;
+    }
 };
 
 fn onRealPipelineReady(pso: c.ke_gpu_pipeline, user: ?*anyopaque) callconv(.c) void {
-    const ctx: *CompileCtx = @ptrCast(@alignCast(user.?));
-    if (pso != c.KE_GPU_INVALID_HANDLE) {
-        ctx.entry.real_pso = pso;
-        ctx.entry.state.store(.ready, .release);
-    }
-    heap.gpa.destroy(ctx);
+    const entry: *Entry = @ptrCast(@alignCast(user.?));
+    if (pso == c.KE_GPU_INVALID_HANDLE) return;
+    entry.real_pso = pso;
+    entry.state.store(.ready, .release);
 }
 
+const hashKey = std.hash_map.getAutoHashFn(PsoKey, void);
+const eqlKey = std.hash_map.getAutoEqlFn(PsoKey, void);
+
+const first_capacity = 16;
+
+const Snapshot = struct {
+    slots: []?*Entry,
+    count: usize,
+    retired_next: ?*Snapshot,
+
+    fn create(capacity: usize) ?*Snapshot {
+        const snap = heap.gpa.create(Snapshot) catch return null;
+        const slots = heap.gpa.alloc(?*Entry, capacity) catch {
+            heap.gpa.destroy(snap);
+            return null;
+        };
+        @memset(slots, null);
+        snap.* = .{ .slots = slots, .count = 0, .retired_next = null };
+        return snap;
+    }
+
+    fn destroy(self: *Snapshot) void {
+        heap.gpa.free(self.slots);
+        heap.gpa.destroy(self);
+    }
+
+    fn find(self: *const Snapshot, hash: u64, key: *const PsoKey) ?*Entry {
+        const mask = self.slots.len - 1;
+        var i: usize = @intCast(hash & mask);
+        while (self.slots[i]) |e| : (i = (i + 1) & mask) {
+            if (e.hash == hash and eqlKey({}, e.key, key.*)) return e;
+        }
+        return null;
+    }
+
+    fn place(self: *Snapshot, entry: *Entry) void {
+        const mask = self.slots.len - 1;
+        var i: usize = @intCast(entry.hash & mask);
+        while (self.slots[i] != null) i = (i + 1) & mask;
+        self.slots[i] = entry;
+        self.count += 1;
+    }
+
+    fn grownWith(self: ?*const Snapshot, entry: *Entry) ?*Snapshot {
+        const have = if (self) |snap| snap.count else 0;
+        var capacity: usize = if (self) |snap| snap.slots.len else first_capacity;
+        while ((have + 1) * 2 > capacity) capacity *= 2;
+        const next = Snapshot.create(capacity) orelse return null;
+        if (self) |snap| {
+            for (snap.slots) |slot| {
+                if (slot) |e| next.place(e);
+            }
+        }
+        next.place(entry);
+        return next;
+    }
+};
+
+const Insert = union(enum) {
+    published,
+    existing: *Entry,
+    failed,
+};
+
 pub const PipelineCache = struct {
-    map: std.AutoHashMap(PsoKey, *Entry),
-    magenta_fs: [MAX_COLOR_TARGETS]c.ke_gpu_shader_module,
+    current: std.atomic.Value(?*Snapshot),
+    retired: std.atomic.Value(?*Snapshot),
+    magenta_fs: [MAX_COLOR_TARGETS]std.atomic.Value(c.ke_gpu_shader_module),
 
     pub fn init() PipelineCache {
-        return .{
-            .map = std.AutoHashMap(PsoKey, *Entry).init(heap.gpa),
-            .magenta_fs = [_]c.ke_gpu_shader_module{c.KE_GPU_INVALID_HANDLE} ** MAX_COLOR_TARGETS,
+        var cache: PipelineCache = .{
+            .current = .init(null),
+            .retired = .init(null),
+            .magenta_fs = undefined,
         };
+        for (&cache.magenta_fs) |*h| h.* = .init(c.KE_GPU_INVALID_HANDLE);
+        return cache;
+    }
+
+    fn find(self: *PipelineCache, hash: u64, key: *const PsoKey) ?*Entry {
+        const snap = self.current.load(.acquire) orelse return null;
+        return snap.find(hash, key);
+    }
+
+    fn insert(self: *PipelineCache, entry: *Entry) Insert {
+        while (true) {
+            const base = self.current.load(.acquire);
+            if (base) |snap| {
+                if (snap.find(entry.hash, &entry.key)) |winner| return .{ .existing = winner };
+            }
+            const next = Snapshot.grownWith(base, entry) orelse return .failed;
+            if (self.current.cmpxchgStrong(base, next, .acq_rel, .acquire) == null) {
+                if (base) |old| self.retire(old);
+                return .published;
+            }
+            next.destroy();
+        }
+    }
+
+    fn retire(self: *PipelineCache, snap: *Snapshot) void {
+        var head = self.retired.load(.acquire);
+        while (true) {
+            snap.retired_next = head;
+            head = self.retired.cmpxchgWeak(head, snap, .release, .acquire) orelse return;
+        }
     }
 
     pub fn destroyAll(self: *PipelineCache, device: *c.ke_gpu_device) void {
-        var it = self.map.valueIterator();
-        while (it.next()) |entry_ptr| {
-            const e = entry_ptr.*;
-            if (e.state.load(.acquire) == .ready) device.destroy_pipeline.?(device, e.real_pso);
-            device.destroy_pipeline.?(device, e.fallback_pso);
-            heap.gpa.destroy(e);
+        if (self.current.swap(null, .acq_rel)) |snap| {
+            for (snap.slots) |slot| {
+                const e = slot orelse continue;
+                if (e.state.load(.acquire) == .ready) device.destroy_pipeline.?(device, e.real_pso);
+                device.destroy_pipeline.?(device, e.fallback_pso);
+                heap.gpa.destroy(e);
+            }
+            snap.destroy();
         }
-        self.map.deinit();
+        var old = self.retired.swap(null, .acq_rel);
+        while (old) |snap| {
+            old = snap.retired_next;
+            snap.destroy();
+        }
         for (&self.magenta_fs) |*h| {
-            if (h.* != c.KE_GPU_INVALID_HANDLE) device.destroy_shader_module.?(device, h.*);
-            h.* = c.KE_GPU_INVALID_HANDLE;
+            const module = h.swap(c.KE_GPU_INVALID_HANDLE, .acq_rel);
+            if (module != c.KE_GPU_INVALID_HANDLE) device.destroy_shader_module.?(device, module);
         }
     }
 };
 
 fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) c.ke_gpu_shader_module {
     const n = @max(@min(target_count, MAX_COLOR_TARGETS), 1);
-    const idx = n - 1;
-    if (st.pipeline_cache.magenta_fs[idx] != c.KE_GPU_INVALID_HANDLE) return st.pipeline_cache.magenta_fs[idx];
+    const slot = &st.pipeline_cache.magenta_fs[n - 1];
+    const existing = slot.load(.acquire);
+    if (existing != c.KE_GPU_INVALID_HANDLE) return existing;
 
     var buf: [2048]u8 = undefined;
     var w = std.Io.Writer.fixed(&buf);
@@ -117,13 +220,17 @@ fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) c.ke_gpu_shader_m
         w.writeAll("  return o;\n}\n") catch {};
     }
     const src = w.buffered();
-    const h = st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
+    const made = st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
         .code = src.ptr,
         .byte_size = src.len,
         .entry_point = "fs_main",
     }, null);
-    st.pipeline_cache.magenta_fs[idx] = h;
-    return h;
+    if (made == c.KE_GPU_INVALID_HANDLE) return made;
+    if (slot.cmpxchgStrong(c.KE_GPU_INVALID_HANDLE, made, .acq_rel, .acquire)) |won| {
+        st.device.destroy_shader_module.?(st.device, made);
+        return won;
+    }
+    return made;
 }
 
 fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_params) c.ke_gpu_pipeline {
@@ -137,31 +244,35 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_p
 pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
     const st = rc.coreOf(self);
     const key = PsoKey.fromParams(params);
+    const hash = hashKey({}, key);
 
-    if (st.pipeline_cache.map.get(key)) |entry| {
-        return if (entry.state.load(.acquire) == .ready) entry.real_pso else entry.fallback_pso;
-    }
+    if (st.pipeline_cache.find(hash, &key)) |entry| return entry.current();
 
     const entry = heap.gpa.create(Entry) catch {
         return st.device.create_render_pipeline.?(st.device, params);
     };
     entry.* = .{
+        .key = key,
+        .hash = hash,
         .state = std.atomic.Value(PipelineState).init(.pending),
         .real_pso = c.KE_GPU_INVALID_HANDLE,
         .fallback_pso = buildFallback(st, params),
     };
 
-    st.pipeline_cache.map.put(key, entry) catch {
-        st.device.destroy_pipeline.?(st.device, entry.fallback_pso);
-        heap.gpa.destroy(entry);
-        return st.device.create_render_pipeline.?(st.device, params);
-    };
-
-    const ctx = heap.gpa.create(CompileCtx) catch {
-        return entry.fallback_pso;
-    };
-    ctx.* = .{ .entry = entry };
-    st.device.create_render_pipeline_async.?(st.device, params, onRealPipelineReady, ctx);
-
-    return entry.fallback_pso;
+    switch (st.pipeline_cache.insert(entry)) {
+        .published => {
+            st.device.create_render_pipeline_async.?(st.device, params, onRealPipelineReady, entry);
+            return entry.fallback_pso;
+        },
+        .existing => |winner| {
+            st.device.destroy_pipeline.?(st.device, entry.fallback_pso);
+            heap.gpa.destroy(entry);
+            return winner.current();
+        },
+        .failed => {
+            st.device.destroy_pipeline.?(st.device, entry.fallback_pso);
+            heap.gpa.destroy(entry);
+            return st.device.create_render_pipeline.?(st.device, params);
+        },
+    }
 }

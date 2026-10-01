@@ -19,7 +19,7 @@ state (`gbuffer_module.zig:60-61`, `forward_module.zig:83-84`).
 
 ## One request, step by step
 
-`getOrCreatePipeline` (`pipeline_cache.zig:137-167`):
+`getOrCreatePipeline` (`pipeline_cache.zig:244-278`):
 
 1. **Hit.** The key is in the map. If the entry's state is `ready` it returns the real pipeline;
    otherwise it returns the entry's fallback.
@@ -28,18 +28,28 @@ state (`gbuffer_module.zig:60-61`, `forward_module.zig:83-84`).
    pipeline asynchronously, and returns the fallback.
 
 The fallback's fragment shader is generated WGSL that writes opaque magenta to every colour target,
-sized to the request's `color_target_count` (`pipeline_cache.zig:103-127`, `:128-134`). The modules are
+sized to the request's `color_target_count` (`pipeline_cache.zig:205-243`). The modules are
 cached per target count. A magenta surface on screen therefore means a request that has not yet
 resolved.
 
 When the device calls back, `onRealPipelineReady` stores the pipeline in the entry and sets the state to
-`ready` with release ordering; a reader's acquire load sees it (`pipeline_cache.zig:67-74`, `:141`).
+`ready` with release ordering; a reader's acquire load sees it (`pipeline_cache.zig:69-74`).
 A callback carrying the invalid handle leaves the entry `pending`, so a pipeline that fails to compile
 keeps returning its fallback on every later call.
 
-Two allocation failures (the entry, the map insertion) degrade to a synchronous `create_render_pipeline`
-call that leaves no entry behind; a failure to allocate the completion context returns the fallback
-and leaves the entry `pending` for good (`pipeline_cache.zig:146-158`, `:159-161`).
+Two allocation failures (the entry, the publication of a table that holds it) degrade to a synchronous
+`create_render_pipeline` call that leaves no entry behind. The completion context is the entry itself, so
+there is no third allocation whose failure could leave an entry `pending` for good.
+
+## Concurrent requests
+
+Passes in one wave ask for pipelines from different threads, and the contract forbids a lock. The table is
+a snapshot nobody mutates after publishing it: a lookup loads the current snapshot and probes it; a miss
+builds its entry, then publishes a copy of the snapshot that holds it with one compare-and-swap. A
+request that loses the swap looks again; if another thread published the same key meanwhile, it destroys
+the fallback it had built, never started its compile, and answers with the winner's entry. Replaced
+snapshots are kept on a list until the cache is destroyed, because a reader may still be probing one. The
+magenta fragment module for each target count is published the same way.
 
 ## Where the compile runs
 
