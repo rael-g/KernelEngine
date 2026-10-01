@@ -50,7 +50,7 @@ domain it did not ask for is not on its include path.
 Behavior two plugins both need is not put in a contract header. It is a Zig source file the root build
 hands to each consumer as a `-D<name>-src` option (`build.zig:57-61`), and the consumer imports it as a
 module. `src/zig/common/` holds `kerror.zig`, `heap.zig` and `component_fields.zig`;
-`src/zig/render/common/` holds `handle.zig` and `camera.zig`. A shared file that touches C types is a
+`src/zig/render/common/` holds `handle.zig`. A shared file that touches C types is a
 function of the consumer's own `c` namespace, as in `@import("kerror").Errors(c)`, so the types it sees
 are the consumer's own. These files carry no tests of their own: the plugins that import them test them.
 

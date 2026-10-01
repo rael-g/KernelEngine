@@ -62,7 +62,7 @@ and `_INDIRECT`, `KE_GPU_TEXTURE_USAGE_STORAGE` (`gpu_enums.h:57`, `:69-70`), th
 `STORAGE_BUFFER` (read-write, compute only), `READONLY_STORAGE_BUFFER` (usable from a fragment stage) and
 `STORAGE_TEXTURE` (`gpu_enums.h:200-202`), `create_compute_pipeline`, and the compute and indirect
 commands above. The cluster light cull uses storage buffers and a compute dispatch
-(`cluster_module.zig:224-230`, `:348-357`); no pass in the tree uses `dispatch_indirect` or
+(`cluster_module.zig:222-228`, `:348-357`); no pass in the tree uses `dispatch_indirect` or
 `draw_indirect`.
 
 ## What the WebGPU backend does

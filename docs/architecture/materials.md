@@ -71,10 +71,10 @@ For each draw a consuming pass:
 
 1. Asks the service for the material's shader name (`material_shader`).
 2. Loads `<name>.<pass>` as a vertex and a fragment module and writes them into its pipeline template
-   (`gbuffer_module.zig:74-83`, `forward_module.zig:103-113`). If either file is missing the draw is
+   (`gbuffer_module.zig:72-81`, `forward_module.zig:101-111`). If either file is missing the draw is
    skipped.
 3. Asks the pipeline cache for the pipeline ([pipeline-cache.md](pipeline-cache.md)).
-4. Binds the material's bind group at set 1 (`gbuffer_module.zig:159-161`, `forward_module.zig:270-272`)
+4. Binds the material's bind group at set 1 (`gbuffer_module.zig:151-153`, `forward_module.zig:263-265`)
    and the object's transform at set 2.
 
 Everything about the pipeline except the two modules is fixed by the pass: vertex layout, blend state,
@@ -86,7 +86,7 @@ A mesh component either carries a valid material handle, or the `render.mesh.res
 one from the values authored on the mesh itself: colour, roughness, alpha mode, cutoff, `ior` and
 `distortion_strength`, keyed by the hex bit patterns of all of those but `distortion_strength`, with
 metallic fixed at `0` and the default shader (`mesh_resolve.zig:151-175`, run in `KE_PHASE_UPDATE`,
-`render_module.zig:274-282`). A mesh authored in a scene therefore draws with `standard`.
+`render_module.zig:284-292`). A mesh authored in a scene therefore draws with `standard`.
 The in-tree callers of `create_material` that exist outside that system pass no shader either
 (`asset_resolver.zig:451-464`, `sprite_resolve.zig:74-86`); the way to pick an authored material is the
 `shader` argument of `create_material`, which game code reaches through the render resources wrapper

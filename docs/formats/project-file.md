@@ -38,7 +38,7 @@ A `logging.console_level` that is not a `LogLevel` name makes `Enum.Parse` throw
 first resolved (`Logger/ServiceCollectionExtensions.cs:37`).
 
 A `0` for the cluster keys is not a size: it is passed to the render module, which substitutes its
-own defaults (`src/zig/render/module/src/render_module.zig:191-205`). `clear_color_*` are four scalars because the loader
+own defaults (`src/zig/render/module/src/render_module.zig:193-207`). `clear_color_*` are four scalars because the loader
 skips arrays (`src/zig/configuration/toml/src/configuration_toml.zig:58-59`).
 
 Each of the constructors named above also has an overload that takes the same values inline and

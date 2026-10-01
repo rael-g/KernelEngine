@@ -123,7 +123,7 @@ runs nine of the ten (see `docs/conventions/ci.md`).
 |---|---|
 | `check_api_drift.cs` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory (`check_api_drift.cs:62`, `:82`, `:102`) |
 | `check_reconstruction.cs` | any file `regenerate_api.cs --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
-| `check_api_coverage.cs` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `.rsp`, and no recorded exclusion (`check_api_coverage.cs:54-65`); a header with only `static inline` functions needs none |
+| `check_api_coverage.cs` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `.rsp`, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
 | `check_out_params.cs` | a parameter named `out` or `out_*`, other than `out_error`, carries no `[out]` tag (`check_out_params.cs:57-68`); one exclusion is recorded |
 | `check_generator_shapes.cs` | for a given synthetic header shape, the C# backend's text lacks a required fragment or holds a forbidden one; run with `--no-cache` so the current backend is the one checked |
 | `check_zig_shapes.cs` | the same, against the Zig backend (`check_zig_shapes.cs:26-33`) |

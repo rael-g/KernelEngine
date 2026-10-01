@@ -28,7 +28,7 @@ Only two of the three flags have a reader. `z_zero_to_one` picks the depth-range
 builder and `y_flip` negates the y row (`view_space.zig:113-117`, `:134`, `:160`); the UI pass reads
 `y_flip` for its own orthographic projection (`ui_module.zig:297`). `clip_left_handed` is read in one
 place: the render module refuses to be created when the device reports it as `0`
-(`render_module.zig:253`). No projection builder branches on it.
+(`render_module.zig:256`). No projection builder branches on it.
 
 ## What `ke_view_space` offers
 
@@ -71,34 +71,47 @@ The tests pin the shared guarantee: a surface in front of the camera has positiv
 ### Which one the engine uses
 
 The render module takes an optional `ke_view_space` as a parameter; when none is supplied it creates
-the right-handed one and owns it (`render_module.zig:242-246`). The shadow, cluster, gbuffer,
-deferred-lighting, skybox and forward passes receive that one pointer, and every one of them except
-the cluster pass also receives the device's convention (`render_module.zig:304-342`).
+the right-handed one and owns it (`render_module.zig:245-249`). The shadow and cluster passes receive
+that one pointer; the shadow pass also receives the device's convention (`render_module.zig:314-323`).
+The gbuffer, deferred-lighting, skybox and forward passes receive the `ke_render_camera` the module
+builds over it instead (`render_module.zig:263`, below).
 
-## How a camera component becomes a projection
+## How a camera component becomes matrices
 
-`Camera(c).projection` (`src/zig/render/common/camera.zig:5-20`) is a Zig source shared by the passes
-over a `ke_camera_component` (`components.h:15-25`):
+`ke_render_camera` (`src/c/render/kernel_engine/render/camera.h`) is the contract for what a
+`ke_camera_component` (`components.h:15-25`) and its world transform mean as matrices. Its one
+implementation is `src/zig/render/camera/`, created by `ke_render_camera_create` over a `ke_view_space`
+and a copy of the device's clip convention (`render_camera.zig:107`). `render_module` creates it after the
+view space and owns it (`render_module.zig:263`); the passes receive the pointer from their own
+factories and never see the view space or the clip convention for this purpose.
 
-- `orthographic != 0`: the visible height is `orthographic_size * 2`, the width is that times the
-  aspect, and `view_space->orthographic` builds the matrix with the component's near and far
-  planes (`camera.zig:12-16`).
-- Otherwise: `fov` is read **in degrees**, converted to radians, and handed to
-  `view_space->perspective` (`camera.zig:18-19`).
+The slots, in `camera.h` order (`render_camera.zig:25-100`):
+
+- `view` is the view space's `view_from_transform` of the camera's world transform.
+- `view_rotation` is the same view with its translation zeroed, for what is drawn infinitely far away.
+- `projection` reads `orthographic`. When it is non-zero the visible height is `orthographic_size * 2`,
+  the width is that times the aspect, and `view_space->orthographic` builds the matrix with the
+  component's near and far planes (`render_camera.zig:65-70`). Otherwise `fov` is read **in degrees**,
+  converted to radians, and handed to `view_space->perspective` (`render_camera.zig:49-53`).
+- `perspective_projection` takes the perspective branch whatever `orthographic` says.
+- `perspective_frustum` reports the tangent of half the vertical field of view, the aspect, near and far
+  (`render_camera.zig:94`), again whatever `orthographic` says.
 
 The component defaults are `fov` 60, `near_plane` 0.1, `far_plane` 1000, `orthographic_size` 5
 (`components.h:15-20`, `component_fields.h:19`).
 
-The gbuffer, deferred-lighting and forward passes all call it
-(`gbuffer_module.zig:126`, `deferred_lighting_module.zig:130`, `forward_module.zig:200`), each
-building its view with `view_from_transform` (`gbuffer_module.zig:89-93` and the same three-line
-helper in the other passes). Three passes do not use it:
+Which pass asks for what:
 
-- the skybox pass always builds a perspective projection from `fov`, whatever `orthographic` says,
-  and zeroes the view's translation (`skybox_module.zig:70-77`);
-- the cluster pass does not build a projection at all; it uploads `tan(fov / 2)`, the aspect, near
-  and far (`cluster_module.zig:196`);
-- the shadow pass builds an orthographic projection of its own, below.
+- gbuffer, deferred-lighting and forward ask for `view` and `projection`
+  (`gbuffer_module.zig:117-119`, `deferred_lighting_module.zig:121-123`, `forward_module.zig:191-193`).
+  Deferred lighting reconstructs positions from the depth the gbuffer wrote, so the two must agree, and
+  asking the same interface is what makes them agree.
+- the skybox pass asks for `view_rotation` and `perspective_projection`
+  (`skybox_module.zig:58-60`), so an orthographic camera still gets a perspective sky.
+- the cluster pass asks for `view` and `perspective_frustum` (`cluster_module.zig:189-191`), so it too
+  describes a perspective camera whatever `orthographic` says; it still takes the view space for
+  `depth_from_view_z`.
+- the shadow pass builds an orthographic projection of its own from the light, below.
 
 ## The directional light's view
 

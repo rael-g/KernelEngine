@@ -88,7 +88,7 @@ objects of one resource (`asset_upload.zig:319-343`).
 
 - **Sprites.** A `ke_sprite2d_component` carries a `texture` path (`component_fields.h:65`). The
   `render.sprite2d.resolve` system, registered in `KE_PHASE_UPDATE` and unpinned
-  (`render_module.zig:291-299`), calls `resolve_texture_into` and stores the handle on the component;
+  (`render_module.zig:301-309`), calls `resolve_texture_into` and stores the handle on the component;
   it skips the call once the component's handle is valid (`sprite_resolve.zig:56-63`). A null
   resolver or an empty path leaves the sprite untextured (`:61-64`).
 - **Labels.** The `label` resolve system bakes a font once per label through `resolve_font`, with the
@@ -98,7 +98,7 @@ objects of one resource (`asset_upload.zig:319-343`).
   no text.
 - **Primitive meshes in scenes** do not go through the resolver. The mesh component names a
   `primitive`, and `render.mesh.resolve` bakes that primitive itself and uploads it under
-  a key starting `primitive:` (`mesh_resolve.zig:25`, `38`, `79`, `131`; `resolveMesh` at `134`; registered at `render_module.zig:273-281`).
+  a key starting `primitive:` (`mesh_resolve.zig:25`, `38`, `79`, `131`; `resolveMesh` at `134`; registered at `render_module.zig:283-291`).
 - **Models** are decoded by the Assimp loader and uploaded by game code through
   `IRenderResources` (`src/zig/asset/assimp/src/assimp_loader.zig:111`;
   `src/csharp/render/KernelEngine.Render.Webgpu/Assets/ModelExtensions.cs:33-34`, `64`), which
