@@ -542,6 +542,7 @@ pub fn build(b: *std.Build) void {
 
     const render_module = ctx.plugin("ke_render_module", "src/zig/render/module", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),

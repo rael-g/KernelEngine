@@ -6,9 +6,11 @@ pub fn Stubs(comptime c: type) type {
             vtable: c.ke_gpu_device,
             next: u64,
             live: i64,
+            fallible_created: u32,
+            fallible_budget: u32,
 
             pub fn init(self: *Device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32) };
                 self.vtable.handle = self;
                 self.vtable.create_buffer = &createBuffer;
                 self.vtable.create_bind_group_layout = &createBindGroupLayout;
@@ -29,6 +31,10 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.get_default_queue = &defaultQueue;
                 self.vtable.query_extension = &queryExtension;
                 self.vtable.get_ndc_convention = &ndcConvention;
+                self.vtable.shader_language = &shaderLanguage;
+                self.vtable.create_shader_module = &createShaderModule;
+                self.vtable.destroy_shader_module = &destroyHandle;
+                self.vtable.create_render_pipeline_async = &createRenderPipelineAsync;
             }
 
             pub fn api(self: *Device) *c.ke_gpu_device {
@@ -47,7 +53,15 @@ pub fn Stubs(comptime c: type) type {
                 return h;
             }
 
+            fn spendFallible(self: ?*c.ke_gpu_device) bool {
+                const d = of(self);
+                if (d.fallible_created >= d.fallible_budget) return false;
+                d.fallible_created += 1;
+                return true;
+            }
+
             fn createBuffer(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_buffer_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_buffer {
+                if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
                 return mint(self);
             }
 
@@ -56,6 +70,7 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn createBindGroup(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group {
+                if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
                 return mint(self);
             }
 
@@ -69,6 +84,19 @@ pub fn Stubs(comptime c: type) type {
 
             fn createSampler(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_sampler_params) callconv(.c) c.ke_gpu_sampler {
                 return mint(self);
+            }
+
+            fn createShaderModule(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_shader_module_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
+                if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
+                return mint(self);
+            }
+
+            fn shaderLanguage(_: ?*c.ke_gpu_device) callconv(.c) c.ke_gpu_shader_language {
+                return c.KE_GPU_SHADER_LANG_WGSL;
+            }
+
+            fn createRenderPipelineAsync(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params, on_ready: ?*const fn (c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
+                if (on_ready) |ready| ready(mint(self), user);
             }
 
             fn createTexture(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_texture_params) callconv(.c) c.ke_gpu_texture {
@@ -90,7 +118,7 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn ndcConvention(_: ?*c.ke_gpu_device) callconv(.c) c.ke_ndc_convention {
-                return .{ .z_zero_to_one = 1, .y_flip = 1, .clip_left_handed = 0 };
+                return .{ .z_zero_to_one = 1, .y_flip = 1, .clip_left_handed = 1 };
             }
 
             fn destroyHandle(self: ?*c.ke_gpu_device, _: u64) callconv(.c) void {
@@ -251,6 +279,29 @@ pub fn Stubs(comptime c: type) type {
 
             fn queryRegister(self: ?*c.ke_ecs, _: [*c]const c.ke_component_id, _: usize) callconv(.c) c.ke_query_id {
                 return mint(self);
+            }
+        };
+
+        pub const World = struct {
+            vtable: c.ke_world,
+
+            pub fn init(self: *World) void {
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_world) };
+                self.vtable.handle = self;
+                self.vtable.register_component_fields = &registerFields;
+                self.vtable.register_component_apply = &registerApply;
+            }
+
+            pub fn api(self: *World) *c.ke_world {
+                return &self.vtable;
+            }
+
+            fn registerFields(_: ?*c.ke_world, _: c.ke_component_id, _: [*c]const c.ke_component_field, _: u32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                return true;
+            }
+
+            fn registerApply(_: ?*c.ke_world, _: c.ke_component_id, _: c.ke_component_apply_fn, _: ?*anyopaque, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                return true;
             }
         };
     };

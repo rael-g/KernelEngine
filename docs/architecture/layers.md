@@ -64,7 +64,7 @@ hands out is released through that plugin's own `free_*` slot.
 The allocator is never reset. The first allocation registers one `atexit` callback, and that callback
 runs the leak check once, when the process or the library ends, logging every block still allocated
 with the stack that allocated it. `heap.leaks()` runs the same check on demand and returns the count,
-so a test can assert zero after it has destroyed what it created (`heap.expectNoLeaks`, which every plugin with a factory does in its own file, over `stubs.zig` where the factory is handed collaborators; the exceptions are the webgpu device, the glfw window, the assimp loader, which keeps its own allocator, and the render module, which composes the other plugins' real factories); a leak that no test asserts is
+so a test can assert zero after it has destroyed what it created (`heap.expectNoLeaks`, which every plugin with a factory does in its own file, over `stubs.zig` where the factory is handed collaborators; the exceptions are the webgpu device, the glfw window and the assimp loader, which keeps its own allocator). The render module composes the real factories of ten other plugins, so its test links them and stands in only for the device, the ecs, the runtime and the world; a leak that no test asserts is
 reported only at exit, not as a test failure. The asset loader for assimp keeps a tracking allocator
 of its own and does not take part.
 
