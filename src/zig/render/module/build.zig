@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
     const ke_cluster = b.option([]const u8, "ke-cluster-include", "ke_render_cluster plugin include dir") orelse @panic("-Dke-cluster-include required");
     const ke_deferred_lighting = b.option([]const u8, "ke-deferred-lighting-include", "ke_render_deferred_lighting plugin include dir") orelse @panic("-Dke-deferred-lighting-include required");
     const ke_forward = b.option([]const u8, "ke-forward-include", "ke_render_forward plugin include dir") orelse @panic("-Dke-forward-include required");
+    const ke_camera = b.option([]const u8, "ke-camera-include", "ke_render_camera plugin include dir") orelse @panic("-Dke-camera-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
@@ -38,7 +39,7 @@ pub fn build(b: *std.Build) void {
     inline for (.{
         ke_common,  ke_math,  ke_ecs,  ke_runtime, ke_spatial, ke_render, ke_framework, ke_text,   ke_logger,  ke_asset,
         ke_service, ke_self, ke_view, ke_view_space, ke_tonemap, ke_skybox,  ke_ui,     ke_gbuffer,   ke_shadow, ke_cluster, ke_deferred_lighting,
-        ke_forward,
+        ke_forward, ke_camera,
     }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
@@ -46,6 +47,7 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("ke_common", .{});
     mod.linkSystemLibrary("ke_runtime", .{});
     mod.linkSystemLibrary("ke_view_space", .{});
+    mod.linkSystemLibrary("ke_render_camera", .{});
     mod.linkSystemLibrary("ke_render_service", .{});
     mod.linkSystemLibrary("ke_render_tonemap", .{});
     mod.linkSystemLibrary("ke_render_skybox", .{});
@@ -82,7 +84,7 @@ pub fn build(b: *std.Build) void {
     inline for (.{
         ke_common,  ke_math,  ke_ecs,  ke_runtime, ke_spatial, ke_render, ke_framework, ke_text,   ke_logger,  ke_asset,
         ke_service, ke_self, ke_view, ke_view_space, ke_tonemap, ke_skybox,  ke_ui,     ke_gbuffer,   ke_shadow, ke_cluster, ke_deferred_lighting,
-        ke_forward,
+        ke_forward, ke_camera,
     }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
@@ -91,6 +93,7 @@ pub fn build(b: *std.Build) void {
     test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.linkSystemLibrary("ke_runtime", .{});
     test_mod.linkSystemLibrary("ke_view_space", .{});
+    test_mod.linkSystemLibrary("ke_render_camera", .{});
     test_mod.linkSystemLibrary("ke_render_service", .{});
     test_mod.linkSystemLibrary("ke_render_tonemap", .{});
     test_mod.linkSystemLibrary("ke_render_skybox", .{});

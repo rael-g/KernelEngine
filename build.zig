@@ -531,6 +531,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-service-include", b.pathJoin(&.{ src_zig, "render/service/include" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/module/include" })),
         argF(b, "ke-view-space-include", b.pathJoin(&.{ src_zig, "view/space/include" })),
+        argF(b, "ke-camera-include", b.pathJoin(&.{ src_zig, "render/camera/include" })),
         argF(b, "ke-tonemap-include", b.pathJoin(&.{ src_zig, "render/tonemap/include" })),
         argF(b, "ke-skybox-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
         argF(b, "ke-ui-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
@@ -545,7 +546,7 @@ pub fn build(b: *std.Build) void {
         &common.step,            &runtime.step, &render_service.step, &view_space.step,
         &tonemap.step,           &skybox.step,  &ui.step,
         &gbuffer.step,           &shadow.step,  &cluster.step,
-        &deferred_lighting.step, &forward.step,
+        &deferred_lighting.step, &forward.step, &render_camera.step,
     }, .has_tests);
 
     const all_plugins = [_]*std.Build.Step.Run{

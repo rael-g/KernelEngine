@@ -45,6 +45,7 @@ const ModuleState = struct {
 
     view_space: c.ke_view_space_handle,
     owns_view_space: bool,
+    camera: c.ke_render_camera_handle,
 };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
@@ -123,6 +124,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.gbuffer.destroy) |d| d(st.gbuffer.ref);
     if (st.shadow.destroy) |d| d(st.shadow.ref);
     if (st.cluster.destroy) |d| d(st.cluster.ref);
+    if (st.camera.destroy) |d| d(st.camera.ref);
     if (st.core.destroy) |d| d(st.core.ref);
     if (st.owns_view_space) {
         if (st.view_space.destroy) |d| d(st.view_space.ref);
@@ -213,6 +215,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.ui = .{ .ref = null, .destroy = null };
     st.view_space = .{ .ref = null, .destroy = null };
     st.owns_view_space = false;
+    st.camera = .{ .ref = null, .destroy = null };
     const shadow_enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     const ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.logger = logger;
@@ -252,6 +255,13 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         };
         if (ndc.clip_left_handed == 0) {
             c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: no projection builds a right-handed clip space", @src().file, @intCast(@src().line), null);
+            if (core_h.destroy) |d| d(core_h.ref);
+            gpa.destroy(st);
+            return empty;
+        }
+
+        st.camera = c.ke_render_camera_create(vs, &ndc, out_error);
+        if (st.camera.ref == null) {
             if (core_h.destroy) |d| d(core_h.ref);
             gpa.destroy(st);
             return empty;
