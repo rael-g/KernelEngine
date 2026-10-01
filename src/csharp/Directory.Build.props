@@ -1,4 +1,10 @@
 <Project>
+
+  <PropertyGroup>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../build/artifacts'))</ArtifactsPath>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,15 +17,13 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/your-repo/KernelEngine</RepositoryUrl>
     <Version>0.1.0-alpha</Version>
-    <!-- Essential for NuGet package to include the native files in the right place -->
     <IncludeContentInPack>true</IncludeContentInPack>
 
-    <!-- Set to true to use PackageReference instead of ProjectReference for dependencies -->
     <UsePackageReferences Condition="'$(UsePackageReferences)' == ''">false</UsePackageReferences>
   </PropertyGroup>
 
-  <!-- Exclude automatically generated Native bindings from code coverage -->
   <ItemGroup Condition="$(MSBuildProjectName.Contains('.Native'))">
     <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
   </ItemGroup>
+
 </Project>

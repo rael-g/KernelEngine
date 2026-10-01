@@ -1,8 +1,8 @@
 # KernelEngine
 
-A microkernel game engine: a small ABI-stable C kernel surrounded by C++ plugin backends and a managed C# layer for game code.
+A microkernel game engine: ABI-stable C contracts, Zig plugin backends behind them, and a managed C# layer for game code.
 
-> **Branch state — single source of truth for in-flight work**: see [`docs/RuntimeArchitectureV2.md`](docs/RuntimeArchitectureV2.md) §17.6 (execution log + current tree state + next phases). This file describes the engine doctrine and conventions; the runtime architecture doc describes what's been built and what's next.
+> **This file carries doctrine and conventions — never status.** What is built, what is in flight, and what is planned live in `docs/kanban/`, which is deliberately **not versioned** (see [`docs/conventions/docs.md`](docs/conventions/docs.md) for why). Any claim here about how the code behaves is checkable against the path it names; where the two disagree, the code wins and this file is the bug.
 
 ---
 
@@ -10,17 +10,19 @@ A microkernel game engine: a small ABI-stable C kernel surrounded by C++ plugin 
 
 ### Native (Zig + vcpkg manifest mode)
 
-CMake is gone. The root `build.zig` is the only native build orchestrator: it resolves vcpkg directly (manifest mode — `vcpkg.json` + `vcpkg-configuration.json`, no toolchain file), then invokes every plugin's own `build.zig` with one shared `--prefix` so every `.so`/`.dll` converges into one output directory. Each plugin still owns its own `build.zig`, callable standalone the same way (see any `src/zig/<plugin>/build.zig` header comment for its options).
+The root `build.zig` is the only native build orchestrator: it resolves vcpkg directly (manifest mode — `vcpkg.json` + `vcpkg-configuration.json`, no toolchain file), then invokes every plugin's own `build.zig` with one shared `--prefix` so every `.so`/`.dll` converges into one output directory. Each plugin still owns its own `build.zig`, callable standalone the same way (see any `src/zig/<plugin>/build.zig` header comment for its options).
 
-vcpkg itself is fetched automatically (`.cache/vcpkg-<version>/`) — no manual install, no `VCPKG_ROOT` needed. Pass `-Dvcpkg-root=<path>` (or export `VCPKG_ROOT`) only to point at an existing vcpkg checkout instead.
+vcpkg itself is fetched automatically (`build/tools/vcpkg-<version>/`) — no manual install, no `VCPKG_ROOT` needed. Pass `-Dvcpkg-root=<path>` (or export `VCPKG_ROOT`) only to point at an existing vcpkg checkout instead.
 
 ```bash
-zig build --prefix build/native                     # configure + build + install, one step
-zig build test --prefix build/native                 # every plugin's own Zig tests
-build/native/bin/c_demo_01                           # run a C example (Linux name; c_demo_01.exe on Windows)
+zig build --prefix build/native --cache-dir build/zig-cache       # configure + build + install, one step
+zig build test --prefix build/native --cache-dir build/zig-cache  # every plugin's own Zig tests
+build/native/bin/c_demo_01                                        # run a C example (c_demo_01.exe on Windows)
 ```
 
-Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — no separate install step, and no build/CMake-preset directory split between "configure" and "install" locations. Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
+`--cache-dir` is not optional housekeeping: the root build passes it down to every sub-build, so omitting it scatters one cache per plugin directory. The `zig cc` wrappers in `vcpkg-triplets/` set `ZIG_LOCAL_CACHE_DIR` for the same reason — vcpkg's CMake runs them from the repo root, and `zig cc` caches into `$PWD/.zig-cache` unless told otherwise.
+
+Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native), `build/vcpkg-installed/` for the ports, `build/zig-cache/` for one shared cache across the root build and every sub-build. Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
 
 **Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
 
@@ -42,140 +44,115 @@ dotnet run scripts/regenerate_api.cs  # regenerate every kabic domain (ke_api.js
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
 ```
 
-Shaders compile to `src/zig/render/service/shaders/` (`.slang` sources) → generated WGSL under the Zig build's shader-gen directory, embedded into `ke_render_service` via `@embedFile`. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under `src/csharp/Native/`.
+Slang sources live with the pass that owns them (`src/zig/render/<pass>/shaders/`) plus the shared modules and authored materials under `src/shaders/`; they compile to WGSL into the build's shader-gen directory, and a pass loads them at runtime by logical name. `src/zig/render/service/shaders/` is the one exception — its single shader is embedded via `@embedFile`, because that has to exist before the module's own `zig build` starts. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under a project's `Native/`.
 
 **Known debt — no native/Zig coverage story.** `scripts/coverage.cs` only measures C#. Zig's own compiler has no source-coverage instrumentation. DWARF-based tools don't fill the gap either: `kcov` (which works via `libdw`, compiler-agnostic in principle) was tried directly against a Zig-compiled binary and produces silent 0% coverage — Zig 0.16 emits a line-table extended opcode `libdw` doesn't decode, confirmed by comparing against an identical `gcc`/`zig cc`-compiled C binary (which `kcov` measures correctly) and by inspecting the raw DWARF with `readelf --debug-dump=decodedline`. So the only native coverage signal is reading the tests, not measuring them.
 
 ### Running examples after a native rebuild
 
-Never pass `--no-build` to `dotnet run` after a `zig build`. The native DLL copy step (a `PreserveNewest` item in `NativeDependencies.targets`) runs only during a build; `dotnet run --no-build` silently keeps the stale DLL already in `bin/Debug/net10.0/` and runs the old C++. Always use `dotnet run` / `dotnet build` (no `--no-build`); the timestamp-based copy then refreshes the native side automatically.
+Never pass `--no-build` to `dotnet run` after a `zig build`. The native DLL copy step (a `PreserveNewest` item in `NativeDependencies.targets`) runs only during a build; `dotnet run --no-build` silently keeps the stale library already in `bin/Debug/net10.0/` and runs the old native code. Always use `dotnet run` / `dotnet build` (no `--no-build`); the timestamp-based copy then refreshes the native side automatically.
 
 ---
 
 ## Architecture — four layers
 
 ```
-Layer 4 — C# managed (src/csharp/)          Game code, opinionated framework, wrappers
-Layer 3 — C# native bindings (.../Native/)  ClangSharp-generated P/Invoke
-Layer 2 — C++ plugins (src/cpp/, src/c/ecs/flecs, src/c/runtime, src/c/framework)
-Layer 1 — C kernel (src/c/kernel/)          ABI-stable contracts (vtables)
+Layer 4 — C# managed          src/csharp/<domain>/KernelEngine.*/      game code, framework, wrappers
+Layer 3 — C# bindings         src/csharp/<domain>/*/Native/Generated/  ClangSharp + kabic output
+Layer 2 — plugins             src/zig/<domain>/<plugin>/               every implementation
+Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-stable vtables, headers only
 ```
 
-### Layer 1 — C kernel (`src/c/kernel/`)
+**`src/c/` contains no implementation** — a domain's contract directory holds headers and nothing else; `src/c/window/` is exactly one file, `window.h`. **`src/zig/` contains no contract** — it holds implementations and, in each plugin's `include/`, only the factory header that creates them.
 
-Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped (struct of function pointers). Public headers under `include/kernel_engine/kernel/<domain>/`; private impl under `src/<domain>/`.
+### Layer 1 — C contracts (`src/c/<domain>/`)
 
-Stable types:
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Fifteen domains: `asset`, `audio`, `configuration`, `ecs`, `input`, `logger`, `physics`, `render`, `resource_cache`, `runtime`, `scheduler`, `spatial`, `text`, `view`, `window`.
+
+One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `scheduler`? include `scheduler`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_logger_simple`, `ke_resource_cache_default`, …).
+
+Contracts worth knowing by name:
 - `ke_logger` / `ke_logger_sink` — pluggable logging
-- `ke_ecs` — language-agnostic ECS contract (entity lifetime + component storage + query). One implementation today: `KernelEngine.Ecs.Flecs` (flecs as storage-only, pipeline addons stripped).
-- `ke_runtime` — scheduler contract (phase loop + parallel waves + defer queue + fixed timestep). One implementation: in-house Bevy-style scheduler at `src/c/runtime/`.
-- `ke_system_ctx` — the only doorway to component memory inside a system body (R2.5c safety doctrine; see `docs/RuntimeArchitectureV2.md` §15).
-- `ke_render` / `ke_window` — vtable interfaces for renderer and window backends.
-- `ke_task_scheduler` — single shared worker pool (enkiTS impl) used by every parallel subsystem.
-- `ke_resource_cache` — generic refcount + path-keyed dedup primitive, kernel built-in (`src/c/kernel/src/resource_cache/`).
+- `ke_ecs` — entity lifetime + component storage + query, language-agnostic
+- `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
+- `ke_system_ctx` — the only doorway to component memory inside a system body
+- `ke_scheduler` — the single shared worker pool every parallel subsystem routes through
+- `ke_render` / `ke_window` — renderer and window backends
+- `ke_resource_cache` — refcount + path-keyed dedup
 
-No `ke_kernel` meta-target: consumers link specific domain impl `.so`s directly (e.g. `ke_logger_simple`, `ke_resource_cache_default`).
+### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
-### Layer 2 — Plugins
+Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty plugins are declared in the root `build.zig`; `grep 'ctx.plugin("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
-Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else the plugin exposes is a vtable returned by that factory.
+No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile (stb, miniaudio) come from vcpkg; tomlc99 is the one vendored library.
 
-Active plugins:
-- `src/c/runtime/` → `ke_runtime_create` — scheduler
-- `src/c/ecs/flecs/` → `ke_ecs_flecs_create` — flecs-backed storage
-- `src/c/framework/` → `ke_world_create`, `ke_asset_resolver_create`, `ke_scene_tree_create`, `ke_scene_loader_create`, `ke_input_actions_create` — the engine's opinionated composition layer (vocabulary + scene file format + lifecycle aggregator)
-- `src/zig/render/service/` + `src/zig/render/webgpu/` → `ke_render_service_create` / `ke_gpu_device_webgpu_create` — the render-v2 forward renderer (WebGPU via wgpu-native). The only renderer; the legacy bgfx backend was removed once every example had migrated (see `docs/RenderArchitectureV2.md`).
-- `src/cpp/window/glfw/` → `ke_window_glfw_create` — GLFW window
-- `src/cpp/asset/assimp/`, `src/cpp/asset/stb_image/` — asset loaders
-- `src/cpp/task_scheduler/enki/` → `ke_task_scheduler_enki_create` — enkiTS worker pool
-- `src/cpp/audio/miniaudio/`, `src/cpp/physics/box2d/`, `src/cpp/text/stb_truetype/` — domain backends
-
-Plugin vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `src/c/<plugin>/third_party/<lib>/` with a `VENDOR.md` recording upstream + license + sync date. Contained — never leaks to kernel or sibling plugins. Established precedent: tomlc99 inside `src/c/framework/third_party/tomlc99/`.
+Vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `<plugin>/third_party/<lib>/` with a `VENDOR.md` recording upstream, license and sync date. Contained — never leaks to a sibling plugin.
 
 #### Layer boundary rule (non-negotiable)
 
-- `src/c/kernel/include/` is the **sole** source of public engine API. Every interface, vtable, struct, enum, and function the engine exposes lives here. C ABI only.
-- Each plugin (`src/c/<plugin>/`, `src/cpp/<plugin>/`) exposes exactly **one factory per factory header** in `<plugin>/include/kernel_engine/<domain>/[<plugin>/]<name>_create.h`. Everything else is implementation detail (`.hpp` / `.c` / `.cpp` files under `src/`).
-- Plugin contract headers declare vtable shapes **only** — no `KE_*_API` export macros, no plain function decls. Exports live exclusively in the impl-side `_create.h` files. Domain-only contract dirs (no implementation left in them, fully migrated to Zig plugins elsewhere) live at `src/c/<domain>/kernel_engine/<domain>/*.h` — one `-I src/c/<domain>` per domain, so a consumer only sees the domains it explicitly asked for (want `scheduler`? include `scheduler`).
-- If a "generic utility" feels like it wants to live in a plugin's public header, it belongs in `src/c/kernel/` instead. Implement in C (use C11 `_Thread_local`, etc., not C++).
+- `src/c/` is the **sole** source of public engine API. Every interface, vtable, struct and enum the engine exposes lives there. C ABI only.
+- A plugin exposes exactly **one factory per factory header**, under `<plugin>/include/kernel_engine/<domain>/[<plugin>/]<name>.h`. Everything else is implementation detail under `<plugin>/src/`.
+- Contract headers declare vtable shapes **only** — no `KE_*_API` export macros, no plain function declarations. Exports live exclusively in the factory headers.
+- If a "generic utility" wants to live in a plugin's public header, it belongs in a contract directory instead.
 
-### Layer 3 — C# native bindings (`src/csharp/Native/`)
+### Layer 3 — C# bindings
 
-Auto-generated P/Invoke wrappers via ClangSharpPInvokeGenerator. **Never edit `Generated/` by hand.** Each plugin gets a corresponding bindings csproj:
+Generated P/Invoke, one `Native/` directory per managed project (28 of them), each driven by its own `.rsp`. **Never edit `Generated/` by hand** — regenerate with `dotnet run scripts/generate_bindings.cs`.
 
-- `KernelEngine.Kernel.Native` — wraps `ke_kernel`
-- `KernelEngine.Runtime` — wraps `ke_runtime`
-- `KernelEngine.Ecs.Flecs` — wraps the flecs ECS plugin
-- `KernelEngine.Render.Bgfx.Native`, `KernelEngine.Window.Glfw.Native`, `KernelEngine.Asset.Assimp.Native`, `KernelEngine.TaskScheduler.Enki.Native`
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Ten `scripts/check_*.cs` gates keep both honest against the headers.
 
-Regenerate with `dotnet run scripts/generate_bindings.cs`. Each project has a `.rsp` file controlling which headers are processed and which types are excluded.
+### Layer 4 — C# managed (`src/csharp/<domain>/`)
 
-### Layer 4 — C# managed (`src/csharp/`)
-
-Thin wrappers expose the native vtables as managed types. Game code talks to these.
-
-The composition pattern (current target shape) — a runtime module host:
+Thin wrappers expose the native vtables as managed types. Game code talks to these, and composes them by dependency injection from its own `Program.cs`:
 
 ```csharp
 var services = new ServiceCollection()
-    .AddKernel()
-    .AddLogger().AddConsoleSink()
-    .Add<IEcs, FlecsEcs>()
-    .Add<ITaskScheduler, EnkiTaskScheduler>()
+    .AddLogger()
+    .AddConsoleSink()
+    .Add<INativeEcs, FlecsEcs>()
+    .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "Title"))
-    .Add<IRuntimeModule>(new BgfxRenderModule(shaderPath: ..., vsync: true));
+    .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "Title"));
 
 using var sp = services.BuildServiceProvider();
 var window  = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 runtime.LoadModules(sp);
 
-while (!window.ShouldClose()) {
-    runtime.Tick(dt);
-}
+while (!window.ShouldClose()) runtime.Tick(dt);
 ```
 
-Game code becomes a runtime module too, registering its own components + systems via `IRuntimeModule.OnLoad(IRuntime)`. See `examples/csharp/01_runtime_clear_color/Program.cs` for the smallest working host.
+Game code becomes a runtime module too, registering its own components and systems via `IRuntimeModule.OnLoad`. The smallest working host is [`examples/csharp/00_runtime_minimal/Program.cs`](examples/csharp/00_runtime_minimal/Program.cs) — copy that, not this snippet.
+
+A service locator is forbidden: injection happens in the orchestration area, never by asking a container for a dependency from inside engine code.
 
 ---
 
 ## Threading model
 
-Two named workers exposed by the scheduler:
+There is one worker pool, behind `ke_scheduler`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it unless it asks to be pinned to an index. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md); read the pinning there before assuming any thread affinity.
 
-```
-ke.sim    — runtime tick loop; runs every sim system + the window/input poll
-ke.render — pinned render-thread work; WebGPU device/queue calls are made here only
-```
+**Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-`ke.main` from the older Application.cs model is folded into `ke.sim`. There is no separate input thread; GLFW poll runs at the top of each tick before the scheduler dispatches.
-
-**Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not `docs/`'. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
-
-`docs/RuntimeArchitectureV2.md` §16 describes a per-component double-buffered snapshot. Treat it as a design under consideration, not as a description of the code.
-
-**Worker pool**: a single shared `ke_task_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly. Every parallel subsystem (asset loading, PSO compile, audio mixing, render dispatch) routes through the same pool. flecs is built without its pipeline addon, so flecs itself never spawns a thread.
+**Worker pool**: a single shared `ke_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly, and every parallel subsystem routes through the same pool. The flecs plugin asks flecs for no threads (`ecs_init()` only).
 
 ---
 
 ## Coding conventions
 
-### C / C++
-- **Extensions**: `.h`/`.c` for C; `.hpp`/`.cpp` for C++.
-- **Naming**: C → `snake_case` with `ke_` prefix everywhere. C++ → `PascalCase` types (Google C++ Style).
-- **Namespaces (C++)**: `kernel_engine::<domain>::<subdomain>`. `using namespace` is forbidden in headers.
-- **Headers**: `#pragma once` always. Public API in `include/`; private impl headers next to `.cpp` files, never included externally.
-- **Formatting**: `BasedOnStyle: Microsoft` (`.clang-format` at root).
-- **Error handling**: C layer returns `ke_result`. No exceptions in C. All callers handle the result.
-- **Memory**: `ke_allocator` is an **internal implementation utility**, not a public API. C implementations use `ke_allocator_malloc` (or `arena`, `proxy`) internally — PRIVATE to each impl. Factory functions do **not** take `ke_allocator*` as a parameter. In debug builds, impls link `ke_allocator_proxy` PRIVATE and emit a leak report on destroy. Raw pointers are non-owning unless documented otherwise.
+### C (contracts) and Zig (implementations)
+- **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
+- **Naming**: `snake_case` with a `ke_` prefix on everything crossing the ABI.
+- **Headers**: `#pragma once` always. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
+- **Error handling**: a call that can fail takes `ke_error **out_error` and, on failure, fills it with `KE_ERROR_SET` and returns its failure sentinel (`false`, a null handle, an invalid id). All callers check the return.
+- **Memory**: each plugin owns its allocation, and the factory functions do **not** take an allocator parameter. Raw pointers are non-owning unless documented otherwise.
 - **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
 - **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
 
 ### C#
 - XML doc comments (`///`) on all `public` and `protected` members.
 - Generated bindings in `Generated/` — never edit manually.
-- `InternalsVisibleTo` is **banned**. Cross-binding access goes through public `Native` pointers, following the `Allocator.Native` precedent. Existing entries in `KernelEngine.Ecs.Flecs.csproj`, `KernelEngine.Runtime.csproj`, `KernelEngine.Kernel.csproj` are debt being cleaned up; new entries are rejected.
+- `InternalsVisibleTo` is **banned**. A native handle crosses assemblies through the public `Native` pointer of a generated `INative<Domain>` interface, implemented explicitly so the object itself exposes only managed methods — never through `internal` plus a friend list.
 
 ### Git / commits
 - Conventional Commits: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
@@ -197,31 +174,34 @@ ke.render — pinned render-thread work; WebGPU device/queue calls are made here
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
-5. **No mutex / condvar / `std::thread` in plugins.** The scheduler is the synchronization layer. Async completion uses `ke_task_scheduler->submit_to(thread, fn, ctx)` + `wait_for_task`. Producer-consumer ordering uses phase boundaries (register producer in phase N, consumer in phase N+1; the runtime guarantees the barrier). The legacy `ke_resource_queue` that reinvented a Future on `std::mutex` + `condition_variable` was deleted in C-phase 4.5 of the runtime arc.
+5. **No mutex / condvar / raw thread in plugins.** The scheduler is the synchronization layer. Async completion uses `ke_scheduler`'s submit-to-thread plus its wait. Producer-consumer ordering uses phase boundaries (register producer in phase N, consumer in phase N+1; the runtime guarantees the barrier). The legacy `ke_resource_queue` that reinvented a Future on `std::mutex` + `condition_variable` was deleted in C-phase 4.5 of the runtime arc.
 
-6. **`assert()` and `abort()` are banned everywhere in engine code.** The engine has `ke_error` — a robust, typed, thread-local error propagation system. Any condition that would be expressed as `assert(x)` must instead be expressed as a `ke_result` return + `KE_ERROR_SET`. Any path that would call `abort()` must translate to `ke_error` and return an error code to the caller. This includes `ke_thread_assert_current` (which uses `assert()` and must be replaced with a `ke_result`-returning check), internal defensive guards, and plugin boundaries. Delegating failure to the OS abort dialog when a proper error system exists is a hard violation.
+6. **`assert()` and `abort()` are banned everywhere in engine code.** The engine has `ke_error` — a robust, typed, thread-local error propagation system. Any condition that would be expressed as `assert(x)` must instead be expressed as a `KE_ERROR_SET` plus the call's failure sentinel. Any path that would call `abort()` must translate to a `ke_error` and return to the caller. This includes internal defensive guards and plugin boundaries. Delegating failure to the OS abort dialog when a proper error system exists is a hard violation.
 
-7. **Framework plugin is implemented in pure C.** `src/c/framework/` ships pure C only — no STL, no `new`/`delete`, no C++ standard library. tomlc99 (vendored) handles TOML parsing. The framework's public-facing surface is C-ABI vtable + factory functions, so C++ name-mangling at the implementation layer would only add friction for dynamic-language bindings (Lua, future Rust).
+7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its C-ABI vtables and factory headers (`world_create.h`, `scene_tree_create.h`, `scene_loader_create.h`, `script_host_create.h`, `signal_bus_create.h`, `asset_resolver_create.h`, `input_actions_create.h`). Being opinionated about vocabulary does not buy it a privileged path past the ABI: a dynamic-language binding must be able to reach the framework the same way it reaches the renderer.
 
 8. **No magic numbers — we are engine developers, not game developers.** A numeric constant is only allowed to stay a bare `const` when it is truly non-dynamic — implied by the algorithm itself, with no other value that would ever make sense (a 4x4 matrix, a quaternion's 4 components). Every other constant is a **game-tuning or workload-shape value**, and imposing it on the caller as a hardcoded ceiling is not our call to make. It must be a constructor parameter or params-struct field, with the current value kept only as the default for convenience. This applies especially to anything found to be a real limiting factor — a buffer size, a per-bucket cap, a grid resolution — where exceeding it produces a hard failure or visible artifact instead of graceful degradation. Stress tests exist to discover a *sane default*, not to justify a hardcoded ceiling; once a constant is shown to be limiting, promote it to a field rather than tuning the number in place. Don't flood constructors with parameters nobody sets — only promote what's actually been shown to matter.
 
-9. **The narrow, clean path always beats the wide, dirty one — and it pays back later, not immediately.** This project does not choose an architecture because it is easy today; it chooses the one that is *correct* even when the harder path costs more up front. The Zig migration (rewriting the native build orchestration end to end, unifying every plugin under one build system and one target-triplet model) and the vtable/`ke_result`-shaped C ABI headers were both expensive to do — and both are exactly why `kabic` could generate a real multi-language compiler pipeline on top of them without a second redesign, and why a future console port's cross-compilation story collapses to "one toolchain description, reused by every C/C++ codebase this project depends on" instead of N bespoke ones. Optimizing for what is easy to ship this week is what produces the workarounds this doctrine exists to prevent.
+9. **The narrow, clean path always beats the wide, dirty one — and it pays back later, not immediately.** This project does not choose an architecture because it is easy today; it chooses the one that is *correct* even when the harder path costs more up front. The Zig migration (rewriting the native build orchestration end to end, unifying every plugin under one build system and one target-triplet model) and the vtable-shaped C ABI headers were both expensive to do — and both are exactly why `kabic` could generate a real multi-language compiler pipeline on top of them without a second redesign, and why a future console port's cross-compilation story collapses to "one toolchain description, reused by every C/C++ codebase this project depends on" instead of N bespoke ones. Optimizing for what is easy to ship this week is what produces the workarounds this doctrine exists to prevent.
    - A one-off workaround to unblock a local, narrow problem is fine and expected — not everything is a referendum on the architecture.
-   - But **never stay attached to the existing architecture out of sunk cost.** If a design is shown to be wrong, refactor it — all the way, including a full rewrite, if that is what correctness requires. This project has already done that once (the entire native side was rewritten from CMake/C++ to Zig on `zig-migration`) and treats it as a normal, available tool, not a last resort.
+   - But **never stay attached to the existing architecture out of sunk cost.** If a design is shown to be wrong, refactor it — all the way, including a full rewrite, if that is what correctness requires. This project has already done that once — the entire native side was rewritten from CMake and C++ to Zig — and treats it as a normal, available tool, not a last resort.
    - When evaluating a new idea, the question is never "do we need this yet" (see rule 8's YAGNI note, which this generalizes) — it is "is this the right shape," independent of how much existing code would need to change to get there.
 
 ---
 
 ## Key documents
 
-| Doc | What it covers |
+Every document that mixed a contract with a moment was retired; `git log -- docs/` reaches all of
+them, and they are not a source for anything. What `docs/` holds is listed in
+[`docs/README.md`](docs/README.md), and the rules every one of them is written to are in
+[`docs/conventions/docs.md`](docs/conventions/docs.md).
+
+Where to look when this file is not enough:
+
+| question | where the answer actually is |
 |---|---|
-| [`docs/RuntimeArchitectureV2.md`](docs/RuntimeArchitectureV2.md) | The runtime contract (scheduler + ECS + module/system lifecycle + phase enum). §15 = script safety model. §16 = sim/render pipelining via component snapshot. §17 = V1 merge arc — **§17.6 is the live execution log + current branch state + next phases**. |
-| [`docs/RenderArchitectureV2.md`](docs/RenderArchitectureV2.md) | The future renderer design (`ke_gpu_device` WebGPU-style ABI, Slang shaders, three-mechanism PSO management, render-graph integration). Reconciled with runtime V2 (§9 integration, §11 culling, §12 non-goals). |
-| [`docs/SceneFileFormat.md`](docs/SceneFileFormat.md) | The `.scene.toml` reference: the one `[entity.<component>]` shape, the four keys that are not components, the snake_case rule that spans header/file/binding, how a node type name is qualified and disambiguated, and what fails a load. A contract, not a design note. |
-| [`docs/NodeArchitectureV1.md`](docs/NodeArchitectureV1.md) | The node scripting paradigm. Why class inheritance stops being the composition mechanism; the layer assignment (identity=OOP, storage=data-oriented, behavior contract=functional, body=procedural); the one rule everything derives from (every access is a parameter, node types have no fields); what `kabic`'s IR must not contain for a non-OOP backend to render it. Design under discussion, not a description of code. |
-| [`docs/KabicZigBackend.md`](docs/KabicZigBackend.md) | What generating a second language out of the same descriptions proved about `kabic`: that no header changed shape for one language, which tags looked C#-shaped and are not, and the defects each backend found in the other's output. Also records the one thing it does **not** establish — the Zig backend is wired into no build, so its green gate measures the backend and not the product. |
-| [`docs/EngineRoadmap.md`](docs/EngineRoadmap.md) | Product roadmap (M1–M5). What the engine does at each milestone + recommended external libraries per feature category. Read first to understand strategic direction. |
-| [`docs/Kanban.md`](docs/Kanban.md) | Active and pending work. Architectural principles at top; cards with Why/What/Acceptance/Steps. |
-| [`docs/Reference/`](docs/Reference/) | Consolidated engine reference (arc42-style chapters). Older snapshot of the architecture; runtime/render details have moved into the V2 docs above as those settled. |
-| [`docs/Development/ProjectGuidelines.md`](docs/Development/ProjectGuidelines.md) | Conventions and anti-patterns. Plugin architecture, naming, header discipline, C# layer rules. The reference for code review. |
+| what does a contract require? | the header in `src/c/<domain>/` — it is the API, not a description of one |
+| how does sim hand off to render? | `src/zig/runtime/src/runtime.zig` |
+| which plugins exist? | `grep 'ctx.plugin("' build.zig` |
+| what does a generated projection look like, and why? | `src/csharp/kabic/`, plus the `scripts/check_*.cs` gate that pins it |
+| what is being worked on? | `docs/kanban/` — unversioned, and the only place status is allowed |
