@@ -16,8 +16,27 @@ size is compared (`ke_ecs.h:45-48`). A table that describes bytes past the compo
 refused (`ecs_flecs.zig:283`), as is a size that differs from the first registration
 (`ecs_flecs.zig:297`).
 
+The first table a name is registered with is the one later registrations are compared to: the plugin
+records it (`rememberLayout`, `ecs_flecs.zig:171-186`; test `:725`), keeping the pointer rather than
+a copy, which is why the header requires the table to outlive the ecs (`ke_ecs.h:52-53`). Two tables
+differ when any field's type, offset, size or name differs, or when their lengths differ
+(`firstLayoutDiff`, `:146-153`). A conflict fails the call: `component_register` returns `0` and the
+error names the index of the first field that disagrees (`:304-312`; `ke_ecs.h:56-58`). A
+registrant that passes no table joins a name that has one, on size alone (`:714`).
+
 When a component is first attached to an entity, the plugin seeds the defaults the field table
 declares (`ecs_flecs.zig:402-408`); fields with no declared default stay zero.
+
+### A stale id is refused
+
+An entity id is flecs's own: the low 32 bits are an index, the high 32 a liveness counter that grows
+when the index is recycled (`flecs.h` `ecs_entity_t`, `build/vcpkg-installed/<triplet>/include/flecs.h:380-385`).
+An id whose entity was destroyed is therefore not alive even after its index is reused. The contract
+does not say what a stale id does; the plugin asks `ecs_is_alive` first and, for a dead id,
+`entity_destroy` and `component_remove` return without effect, and `component_add` and
+`component_get` return `NULL` (`ecs_flecs.zig:257`, `:396`, `:416`, `:424`). A reserved id has no
+counter, so the plugin records separately that it has been given its one life: a reserved entity that
+was destroyed is not revived by a later `component_add` (`ecs_flecs.zig:87-91`; test `:930`).
 
 ## What may run at the same time
 
@@ -47,9 +66,9 @@ array is smaller than the match count does not learn that (`ecs_flecs.zig:493-49
 
 ## Reserving an id from a parallel body — how the plugin meets the contract
 
-flecs' own id allocator walks a shared entity index, which is not safe under concurrent calls
-(`ecs_flecs.zig:209-214`). `entity_reserve` therefore never asks flecs. It hands out ids from a
-band the world is configured never to issue from:
+The contract forbids satisfying `entity_reserve` by forwarding to `entity_create`
+(`ke_ecs.h:129-131`), and `entityReserve` never calls into the flecs world (`ecs_flecs.zig:215-222`).
+It hands out ids from a band the world is configured never to issue from:
 
 - the band is `[reserve_low, world_id_base)`, where `reserve_low` is one past the largest id flecs
   had issued when the world was created (`ecs_flecs.zig:574`);
