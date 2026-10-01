@@ -54,67 +54,69 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
-        fn writeBytes(base: [*]u8, field: *const c.ke_component_field, src: []const u8) void {
-            if (src.len != field.size) return;
+        fn writeBytes(base: [*]u8, field: *const c.ke_component_field, src: []const u8) bool {
+            if (src.len != field.size) return false;
             @memcpy(base[field.offset..][0..src.len], src);
+            return true;
         }
 
-        fn writeValue(base: [*]u8, field: *const c.ke_component_field, value: anytype) void {
-            writeBytes(base, field, std.mem.asBytes(&value));
+        fn writeValue(base: [*]u8, field: *const c.ke_component_field, value: anytype) bool {
+            return writeBytes(base, field, std.mem.asBytes(&value));
         }
 
-        fn writeInt(base: [*]u8, field: *const c.ke_component_field, value: i64) void {
-            switch (field.size) {
+        fn writeInt(base: [*]u8, field: *const c.ke_component_field, value: i64) bool {
+            return switch (field.size) {
                 1 => writeBytes(base, field, std.mem.asBytes(&@as(u8, @truncate(@as(u64, @bitCast(value)))))),
                 2 => writeBytes(base, field, std.mem.asBytes(&@as(u16, @truncate(@as(u64, @bitCast(value)))))),
                 4 => writeBytes(base, field, std.mem.asBytes(&@as(u32, @truncate(@as(u64, @bitCast(value)))))),
                 8 => writeBytes(base, field, std.mem.asBytes(&@as(u64, @bitCast(value)))),
-                else => {},
-            }
+                else => false,
+            };
         }
 
-        pub fn write(component: ?*anyopaque, field: ?*const c.ke_component_field, value: ?*const c.ke_variant) void {
-            const base: [*]u8 = @ptrCast(component orelse return);
-            const f = field orelse return;
-            const v = value orelse return;
+        /// Writes `value` into `field` of `component`, coercing where the two kinds agree.
+        /// @return false when the value's kind cannot be held by the field; the component is untouched then.
+        pub fn write(component: ?*anyopaque, field: ?*const c.ke_component_field, value: ?*const c.ke_variant) bool {
+            const base: [*]u8 = @ptrCast(component orelse return false);
+            const f = field orelse return false;
+            const v = value orelse return false;
 
             switch (f.type) {
                 c.KE_VARIANT_FLOAT => {
-                    const x = asFloat(v) orelse return;
-                    if (f.size == 4) {
-                        writeValue(base, f, x);
-                    } else if (f.size == 8) {
-                        writeValue(base, f, @as(f64, x));
-                    }
+                    const x = asFloat(v) orelse return false;
+                    if (f.size == 4) return writeValue(base, f, x);
+                    if (f.size == 8) return writeValue(base, f, @as(f64, x));
+                    return false;
                 },
                 c.KE_VARIANT_INT => {
-                    const x = asInt(v) orelse return;
-                    writeInt(base, f, x);
+                    const x = asInt(v) orelse return false;
+                    return writeInt(base, f, x);
                 },
                 c.KE_VARIANT_BOOL => {
-                    const x = asBool(v) orelse return;
-                    writeInt(base, f, x);
+                    const x = asBool(v) orelse return false;
+                    return writeInt(base, f, x);
                 },
                 c.KE_VARIANT_VEC2 => {
-                    const x = asVec2(v) orelse return;
-                    writeValue(base, f, x);
+                    const x = asVec2(v) orelse return false;
+                    return writeValue(base, f, x);
                 },
                 c.KE_VARIANT_VEC3 => {
-                    const x = asVec3(v) orelse return;
-                    writeValue(base, f, x);
+                    const x = asVec3(v) orelse return false;
+                    return writeValue(base, f, x);
                 },
                 c.KE_VARIANT_VEC4, c.KE_VARIANT_QUAT => {
-                    const x = asVec4(v) orelse return;
-                    writeValue(base, f, x);
+                    const x = asVec4(v) orelse return false;
+                    return writeValue(base, f, x);
                 },
                 c.KE_VARIANT_STRING => {
-                    if (v.type != c.KE_VARIANT_STRING or v.unnamed_0.s == null or f.size == 0) return;
+                    if (v.type != c.KE_VARIANT_STRING or v.unnamed_0.s == null or f.size == 0) return false;
                     const src = std.mem.span(v.unnamed_0.s);
                     const n = @min(src.len, @as(usize, f.size) - 1);
                     @memcpy(base[f.offset..][0..n], src[0..n]);
                     base[f.offset + n] = 0;
+                    return true;
                 },
-                else => {},
+                else => return false,
             }
         }
 
@@ -123,7 +125,7 @@ pub fn Fields(comptime c: type) type {
             const table = fields orelse return;
             for (table[0..field_count]) |*f| {
                 if (f.default_value.type == c.KE_VARIANT_NULL) continue;
-                write(component, f, &f.default_value);
+                _ = write(component, f, &f.default_value);
             }
         }
     };

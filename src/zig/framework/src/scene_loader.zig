@@ -337,8 +337,12 @@ fn applyComponentBlock(
         return false;
     };
 
-    if (fields != null)
-        fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count);
+    if (fields != null) {
+        if (fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count)) |refusing| {
+            structural(world, out_error, "component '{s}' field '{s}' cannot hold the value authored for it", .{ comp_name, refusing.name });
+            return false;
+        }
+    }
     if (apply_fn) |f| {
         var apply_error: [*c]c.ke_error = null;
         if (!f(apply_ctx, comp, entries.ptr, @intCast(entries.len), &apply_error)) {
@@ -2040,6 +2044,27 @@ test "an error raised from Zig is recognised by ke_error_is as its own type and 
     E.fail(&err, .not_found, "gone", @src());
     try testing.expect(c.ke_error_is(err, &c.KE_ERROR_NOT_FOUND));
     try testing.expect(!c.ke_error_is(err, &c.KE_ERROR_IO));
+}
+
+test "a value of the wrong type for a known field fails the load instead of being skipped" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Eye"
+        \\[entity.camera]
+        \\fov = "wide"
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "fov") != null);
 }
 
 test "a loader is never created without a world" {

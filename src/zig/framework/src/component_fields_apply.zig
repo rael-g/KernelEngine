@@ -4,8 +4,8 @@ const std = @import("std");
 const c = @import("c.zig").c;
 const fields_rt = @import("component_fields").Fields(c);
 
-fn writeField(base: [*]u8, field: *const c.ke_component_field, v: *const c.ke_variant) void {
-    fields_rt.write(base, field, v);
+fn writeField(base: [*]u8, field: *const c.ke_component_field, v: *const c.ke_variant) bool {
+    return fields_rt.write(base, field, v);
 }
 
 fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
@@ -14,25 +14,27 @@ fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
 }
 
 /// Applies every entry the table describes; a duplicated key resolves to the
-/// last one authored.
+/// last one authored. Returns the first field that could not hold the value
+/// authored for it, or null when every entry was applied.
 pub fn apply(
     component: ?*anyopaque,
     entries: [*c]c.ke_variant_table_entry,
     count: u32,
     fields: [*]const c.ke_component_field,
     field_count: u32,
-) void {
-    const base: [*]u8 = @ptrCast(component orelse return);
-    if (entries == null or count == 0) return;
+) ?*const c.ke_component_field {
+    const base: [*]u8 = @ptrCast(component orelse return null);
+    if (entries == null or count == 0) return null;
 
     for (entries[0..count]) |*entry| {
         for (fields[0..field_count]) |*field| {
             if (!keyIs(entry.key, field.name)) continue;
-            writeField(base, field, &entry.value);
             entry.consumed = true;
+            if (!writeField(base, field, &entry.value)) return field;
             break;
         }
     }
+    return null;
 }
 
 /// Writes every field's declared default into a component.
@@ -64,10 +66,14 @@ const probe_fields = [_]c.ke_component_field{
     .{ .name = "label", .type = c.KE_VARIANT_STRING, .offset = @offsetOf(Probe, "label"), .size = 8 },
 };
 
-fn applyTo(p: *Probe, list: []const c.ke_variant_table_entry) void {
+fn applyRefused(p: *Probe, list: []const c.ke_variant_table_entry) ?*const c.ke_component_field {
     var buf: [8]c.ke_variant_table_entry = undefined;
     @memcpy(buf[0..list.len], list);
-    apply(p, &buf, @intCast(list.len), &probe_fields, probe_fields.len);
+    return apply(p, &buf, @intCast(list.len), &probe_fields, probe_fields.len);
+}
+
+fn applyTo(p: *Probe, list: []const c.ke_variant_table_entry) void {
+    _ = applyRefused(p, list);
 }
 
 fn vFloat(f: f64) c.ke_variant {
@@ -99,7 +105,7 @@ test "an authored value overrides the default it was seeded with" {
     var one = [_]c.ke_variant_table_entry{
         .{ .key = "amount", .value = vFloat(0.25) },
     };
-    apply(&p, &one, one.len, &seeded_fields, seeded_fields.len);
+    _ = apply(&p, &one, one.len, &seeded_fields, seeded_fields.len);
 
     try testing.expectEqual(@as(f32, 0.25), p.amount);
     try testing.expectEqual(@as(f32, 1.0), p.tint.w);
@@ -170,13 +176,15 @@ test "a key the table does not describe leaves the component untouched" {
     try testing.expectEqual(std.mem.zeroes(Probe), p);
 }
 
-test "a value whose type cannot be coerced is skipped, not written as garbage" {
+test "a value whose type cannot be coerced is refused by name, not written as garbage" {
     var p = std.mem.zeroes(Probe);
     p.amount = 1.5;
-    applyTo(&p, &.{
+    const refused = applyRefused(&p, &.{
         .{ .key = "amount", .value = .{ .type = c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "nope" } } },
     });
     try testing.expectEqual(@as(f32, 1.5), p.amount);
+    try testing.expect(refused != null);
+    try testing.expectEqualStrings("amount", std.mem.span(refused.?.name));
 }
 
 test "the last value authored for a duplicated key wins" {
