@@ -111,6 +111,7 @@ fn getDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
             .double => |v| return v,
+            .int => |v| return @floatFromInt(v),
             else => {},
         }
     }
@@ -325,8 +326,19 @@ test "type mismatch returns fallback" {
     defer h.destroy.?(h.ref);
     const c = h.ref;
     try std.testing.expect(c.*.set_int.?(c, "shadow", "resolution", 2048, null));
-    try std.testing.expectEqual(@as(f64, 7.0), c.*.get_double.?(c, "shadow", "resolution", 7.0));
     try std.testing.expectEqualStrings("x", std.mem.span(c.*.get_string.?(c, "shadow", "resolution", "x")));
+    try std.testing.expectEqual(true, c.*.get_bool.?(c, "shadow", "resolution", true));
+    try std.testing.expect(c.*.set_string.?(c, "shadow", "label", "text", null));
+    try std.testing.expectEqual(@as(f64, 7.0), c.*.get_double.?(c, "shadow", "label", 7.0));
+    try std.testing.expectEqual(@as(i64, 9), c.*.get_int.?(c, "shadow", "label", 9));
+}
+
+test "an integer written for a float key reads as that number, not the fallback" {
+    const h = ke_configuration_create(null);
+    defer h.destroy.?(h.ref);
+    const c = h.ref;
+    try std.testing.expect(c.*.set_int.?(c, "shadow", "frustum_size", 30, null));
+    try std.testing.expectEqual(@as(f64, 30.0), c.*.get_double.?(c, "shadow", "frustum_size", 20.0));
 }
 
 test "subscriber fires only on writes to its section" {
