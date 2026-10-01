@@ -2342,16 +2342,23 @@ public static class CSharpBackend
                 var bagLocal = cs.ExpandedParam is null ? null : Idioms.Ident(cs.ExpandedParam.Name!);
                 var call = string.Concat(NativeParams()
                     .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}" : CallArg(p))));
+                var fGenerics = cs.Blobs.Count == 0 ? ""
+                    : "<" + string.Join(", ", cs.Blobs.Select(bl => BlobTypeParam(bl.Blob))) + ">";
+                var fConstraints = string.Concat(cs.Blobs
+                    .Select(bl => $" where {BlobTypeParam(bl.Blob)} : unmanaged"));
                 Declare(o, decls, XmlDoc("    ", slot.Doc, DocParams(args),
                     byReturn ? null : slot.ReturnDoc, throwsOnFail: true).TrimEnd(),
-                    $"{retType} {name}({sig})");
+                    $"{retType} {name}{fGenerics}({sig}){fConstraints}");
                 o.Add("    {");
                 var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
                 var (fSeq, fSeqDepth) = SequencePrologue(model, cs.Sequences,
                     new string(' ', 8 + fDepth * 4), convention);
+                var (fBlob, fBlobDepth) = BlobPrologue(cs.Blobs,
+                    new string(' ', 8 + (fDepth + fSeqDepth) * 4));
                 o.AddRange(fPro);
                 o.AddRange(fSeq);
-                fDepth += fSeqDepth;
+                o.AddRange(fBlob);
+                fDepth += fSeqDepth + fBlobDepth;
                 var fInd = new string(' ', 8 + fDepth * 4);
                 var rooted = args.Where(p => p.Has("rooted")).ToList();
                 foreach (var rp in rooted)

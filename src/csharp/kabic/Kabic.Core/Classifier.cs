@@ -297,7 +297,7 @@ public static class Classifier
                 + " something the header says, so the projection for it has to be chosen rather"
                 + " than guessed at here.");
 
-        if (blobs.Count > 0 && shape is not SlotShape.Plain)
+        if (blobs.Count > 0 && shape is not (SlotShape.Plain or SlotShape.Fallible))
             throw new InvalidOperationException(
                 $"{slot.Name}: the slot takes an opaque payload and is projected as {shape}. The"
                 + " payload is spelled as the caller's own type, which makes the method generic, and"
