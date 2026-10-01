@@ -16,7 +16,7 @@ public unsafe interface INativePhysics2d
     ke_physics_2d* Native { get; }
 }
 
-/// <summary>ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins (Box2D for now). Not thread-safe — call all methods on the same thread.</summary>
+/// <summary>ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins. Not thread-safe — call all methods on the same thread.</summary>
 public unsafe partial class Physics2D : IDisposable, INativePhysics2d
 {
     private ke_physics_2d* _native;

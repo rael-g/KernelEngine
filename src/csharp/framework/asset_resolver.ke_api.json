@@ -67,7 +67,7 @@
           "name": "resolve_mesh",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Resolves a mesh path. Two shapes are supported today: \u0022res://primitives/{quad|plane|cube|sphere}\u0022 -\u003E baked primitive via ke_mesh_shape_bake (additional model-file extensions land when an asset loader is injected; .gltf/.fbx/.obj are not yet routed). Caller owns the result; release with free_mesh.",
+          "doc": "Resolves a mesh path. \u0022res://primitives/{quad|plane|cube|sphere}\u0022 names a baked primitive, built via ke_mesh_shape_bake; a path that names none fails. Caller owns the result; release with free_mesh.",
           "return_doc": null,
           "params": [
             {
@@ -251,7 +251,7 @@
           "name": "resolve_mesh_into",
           "returns": "ke_mesh_handle",
           "tags": [],
-          "doc": "Resolves and uploads a mesh, deduped by \u0060path\u0060. Today only the shapes under \u0022res://primitives/\u0022 that resolve_mesh understands; a broader path is a future-loader concern. KE_MESH_NONE on failure.",
+          "doc": "Resolves and uploads a mesh, deduped by \u0060path\u0060. Resolution is that of resolve_mesh. KE_MESH_NONE on failure.",
           "return_doc": null,
           "params": [
             {

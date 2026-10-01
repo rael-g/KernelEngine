@@ -37,10 +37,8 @@ extern "C"
                              ke_texture_data           *data);
 
         /**
-         * Resolves a mesh path. Two shapes are supported today:
-         * "res://primitives/{quad|plane|cube|sphere}" -> baked primitive via
-         * ke_mesh_shape_bake (additional model-file extensions land when an
-         * asset loader is injected; .gltf/.fbx/.obj are not yet routed).
+         * Resolves a mesh path. "res://primitives/{quad|plane|cube|sphere}" names a
+         * baked primitive, built via ke_mesh_shape_bake; a path that names none fails.
          * Caller owns the result; release with free_mesh.
          * @param path [utf8]
          * @param out [out] Receives the baked mesh vertex/index data on success.
@@ -96,9 +94,8 @@ extern "C"
                                                   ke_error **out_error);
 
         /**
-         * Resolves and uploads a mesh, deduped by `path`. Today only the
-         * shapes under "res://primitives/" that resolve_mesh understands; a
-         * broader path is a future-loader concern. KE_MESH_NONE on failure.
+         * Resolves and uploads a mesh, deduped by `path`. Resolution is that of
+         * resolve_mesh. KE_MESH_NONE on failure.
          * @param core [borrowed] The render service to upload into.
          * @param path [utf8]
          */

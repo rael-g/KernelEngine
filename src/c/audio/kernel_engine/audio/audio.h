@@ -16,9 +16,8 @@ extern "C"
 #define KE_AUDIO_SOUND_INVALID ((ke_audio_sound)0)
 
     /**
-     * Audio playback. Concrete implementations ship as separate plugins
-     * (miniaudio, FMOD, ...). Every slot is safe to call from a system body — backends
-     * marshal internally to their own audio thread.
+     * Audio playback. Concrete implementations ship as separate plugins.
+     * Every slot is safe to call from a system body.
      */
     typedef struct ke_audio
     {

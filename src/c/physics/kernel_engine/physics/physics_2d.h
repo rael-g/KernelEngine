@@ -48,8 +48,7 @@ extern "C"
     /**
      * ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a
      * game wanting multiple worlds creates multiple instances. Concrete implementations
-     * come from plugins (Box2D for now). Not thread-safe — call all methods on the same
-     * thread.
+     * come from plugins. Not thread-safe — call all methods on the same thread.
      */
     typedef struct ke_physics_2d
     {

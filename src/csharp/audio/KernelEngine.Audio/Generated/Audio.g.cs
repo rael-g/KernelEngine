@@ -15,7 +15,7 @@ public unsafe interface INativeAudio
     ke_audio* Native { get; }
 }
 
-/// <summary>Audio playback. Concrete implementations ship as separate plugins (miniaudio, FMOD, ...). Every slot is safe to call from a system body — backends marshal internally to their own audio thread.</summary>
+/// <summary>Audio playback. Concrete implementations ship as separate plugins. Every slot is safe to call from a system body.</summary>
 public unsafe partial class Audio : IDisposable, INativeAudio
 {
     private ke_audio* _native;
