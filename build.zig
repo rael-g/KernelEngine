@@ -508,6 +508,7 @@ pub fn build(b: *std.Build) void {
 
     const render_service = ctx.plugin("ke_render_service", "src/zig/render/service", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "handle-src", handle_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),

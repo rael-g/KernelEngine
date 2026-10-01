@@ -415,6 +415,10 @@ fn deadFrame(state: *CoreState) c.ke_render_service {
     return core;
 }
 
+test {
+    _ = slot_map;
+}
+
 test "a pass cannot be opened once the frame has no surface to draw into" {
     var state: CoreState = undefined;
     var core = deadFrame(&state);
