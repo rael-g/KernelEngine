@@ -12,10 +12,6 @@ namespace KernelEngine.Physics;
 /// back into the component and the transform it composes. Without this module a
 /// <c>Body2D</c> is storage that nothing advances.
 /// </summary>
-/// <remarks>
-/// Backend-agnostic — it drives whichever <see cref="IPhysics2D"/> is registered, so it
-/// is added alongside a backend (<c>AddBox2D</c>), never instead of one.
-/// </remarks>
 public sealed unsafe class Body2DModule : IRuntimeModule
 {
     private ke_physics_body2d_module_handle _handle;

@@ -3,13 +3,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 const device = @import("device.zig");
 
 pub const GlfwDevice = struct {
     window: ?*c.GLFWwindow = null,
-    /// Set for the duration of pollEvents; the GLFW callbacks read it back off
-    /// the window user pointer, so it must not be live outside that call.
     sink: ?device.EventSink = null,
 
     pub fn create() ?*GlfwDevice {

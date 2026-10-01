@@ -22,8 +22,6 @@ fn hasTangents(am: *const c.aiMesh) bool {
     return am.mTangents != null and am.mBitangents != null;
 }
 
-/// Builds a tangent perpendicular to `n` for meshes that carry none: cross with
-/// world-up, falling back to world-forward when the normal is near-vertical.
 fn fallbackTangent(nx: f32, ny: f32, nz: f32) [3]f32 {
     var ux: f32 = 0;
     var uy: f32 = 1;
@@ -130,9 +128,6 @@ pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *c.ke_mesh_d
     return true;
 }
 
-/// Assimp's AI_MATKEY_* macros are comma-separated (key, type, index) triples
-/// rather than values, so translate-c cannot expand them into call arguments.
-/// They are spelled out here against the same strings material.h defines.
 const MatKey = struct {
     key: [*:0]const u8,
     type: c_uint = 0,

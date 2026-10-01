@@ -67,7 +67,7 @@ Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-sta
 
 ### Layer 1 — C contracts (`src/c/<domain>/`)
 
-Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Fifteen domains: `asset`, `audio`, `configuration`, `ecs`, `input`, `logger`, `physics`, `render`, `resource_cache`, `runtime`, `scheduler`, `spatial`, `text`, `view`, `window`.
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Seventeen domains: `asset`, `audio`, `configuration`, `ecs`, `framework`, `input`, `logger`, `math`, `physics`, `render`, `resource_cache`, `runtime`, `scheduler`, `spatial`, `text`, `view`, `window`.
 
 One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `scheduler`? include `scheduler`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_logger_simple`, `ke_resource_cache_default`, …).
 
@@ -75,14 +75,14 @@ Contracts worth knowing by name:
 - `ke_logger` / `ke_logger_sink` — pluggable logging
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
 - `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
-- `ke_system_ctx` — the only doorway to component memory inside a system body
+- `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
 - `ke_scheduler` — the single shared worker pool every parallel subsystem routes through
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
-Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty plugins are declared in the root `build.zig`; `grep 'ctx.plugin("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
+Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty-one plugins are declared in the root `build.zig`; `grep 'ctx.plugin("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
 No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile (stb, miniaudio) come from vcpkg; tomlc99 is the one vendored library.
 
@@ -178,7 +178,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 6. **`assert()` and `abort()` are banned everywhere in engine code.** The engine has `ke_error` — a robust, typed, thread-local error propagation system. Any condition that would be expressed as `assert(x)` must instead be expressed as a `KE_ERROR_SET` plus the call's failure sentinel. Any path that would call `abort()` must translate to a `ke_error` and return to the caller. This includes internal defensive guards and plugin boundaries. Delegating failure to the OS abort dialog when a proper error system exists is a hard violation.
 
-7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its C-ABI vtables and factory headers (`world_create.h`, `scene_tree_create.h`, `scene_loader_create.h`, `script_host_create.h`, `signal_bus_create.h`, `asset_resolver_create.h`, `input_actions_create.h`). Being opinionated about vocabulary does not buy it a privileged path past the ABI: a dynamic-language binding must be able to reach the framework the same way it reaches the renderer.
+7. **The framework is a plugin like any other**, at `src/zig/framework/`, with its vtable contracts in `src/c/framework/` and reached only through them and its factory headers (`world_create.h`, `scene_tree_create.h`, `scene_loader_create.h`, `script_host_create.h`, `signal_bus_create.h`, `asset_resolver_create.h`, `input_actions_create.h`). Being opinionated about vocabulary does not buy it a privileged path past the ABI: a dynamic-language binding must be able to reach the framework the same way it reaches the renderer.
 
 8. **No magic numbers — we are engine developers, not game developers.** A numeric constant is only allowed to stay a bare `const` when it is truly non-dynamic — implied by the algorithm itself, with no other value that would ever make sense (a 4x4 matrix, a quaternion's 4 components). Every other constant is a **game-tuning or workload-shape value**, and imposing it on the caller as a hardcoded ceiling is not our call to make. It must be a constructor parameter or params-struct field, with the current value kept only as the default for convenience. This applies especially to anything found to be a real limiting factor — a buffer size, a per-bucket cap, a grid resolution — where exceeding it produces a hard failure or visible artifact instead of graceful degradation. Stress tests exist to discover a *sane default*, not to justify a hardcoded ceiling; once a constant is shown to be limiting, promote it to a field rather than tuning the number in place. Don't flood constructors with parameters nobody sets — only promote what's actually been shown to matter.
 

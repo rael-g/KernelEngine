@@ -30,7 +30,7 @@
           "name": "create_node",
           "returns": "ke_entity",
           "tags": [],
-          "doc": "Creates a node attached under \u0060parent\u0060, or under the root when \u0060parent\u0060 is KE_ENTITY_INVALID.",
+          "doc": "Creates a node attached under \u0060parent\u0060, or under the root when \u0060parent\u0060 is KE_ENTITY_INVALID. The node exists when the call returns.",
           "return_doc": null,
           "params": [
             {
@@ -48,12 +48,42 @@
               "doc": null
             },
             {
-              "name": "ctx",
-              "type": "ke_system_ctx *",
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "create_node_deferred",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "Records the creation of a node into \u0060commands\u0060, with the same placement as create_node. The id is usable as a reference at once; the node exists when \u0060commands\u0060 is applied. For a caller that may not touch the world, such as a system body.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "parent",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "commands",
+              "type": "ke_ecs_commands *",
               "tags": [
                 "ctx"
               ],
-              "doc": "The system context the call is running inside, which defers the structural change to the wave barrier. Null creates the node immediately."
+              "doc": null
             },
             {
               "name": "out_error",
@@ -68,7 +98,7 @@
           "name": "destroy_node",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent.",
+          "doc": "Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent. The node is gone when the call returns.",
           "return_doc": null,
           "params": [
             {
@@ -78,12 +108,34 @@
               "doc": null
             },
             {
-              "name": "ctx",
-              "type": "ke_system_ctx *",
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "destroy_node_deferred",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Records the destruction of a node and its descendants into \u0060commands\u0060, as destroy_node would do it when \u0060commands\u0060 is applied.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "commands",
+              "type": "ke_ecs_commands *",
               "tags": [
                 "ctx"
               ],
-              "doc": "The system context the call is running inside, which defers the teardown to the wave barrier. Null destroys the node immediately."
+              "doc": null
             },
             {
               "name": "out_error",

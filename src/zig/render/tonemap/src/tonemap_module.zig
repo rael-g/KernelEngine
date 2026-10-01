@@ -4,7 +4,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 pub const TonemapModule = struct {
     core: *c.ke_render_service = undefined,
@@ -34,12 +35,12 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const tm = moduleOf(user);
     const core = tm.core;
     const dev = tm.device;
 
-    const pc = core.*.begin_pass.?(core, ctx, &tm.io);
+    const pc = core.*.begin_pass.?(core, &tm.io);
     if (pc == null) return true;
 
     const hdr_view = pc.*.read.?(pc, "hdr");
@@ -155,6 +156,7 @@ export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const tm = gpa.create(TonemapModule) catch return empty;
     tm.* = .{};
     if (!setup(tm, dev, core_ref, logger, out_error)) {
+        destroyModule(tm);
         gpa.destroy(tm);
         return empty;
     }
@@ -170,4 +172,36 @@ export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(tm), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the tonemap pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    const h = ke_render_tonemap_create(rt.api(), core.api(), dev.api(), null, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a tonemap pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    const h = ke_render_tonemap_create(rt.api(), core.api(), dev.api(), null, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

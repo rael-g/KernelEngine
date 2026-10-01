@@ -1,42 +1,42 @@
 # How does a log event reach a sink?
 
-There is one logger, a vtable `ke_logger` created by `ke_logger_create`, and any number of sinks,
-`ke_logger_sink` values the logger owns (`src/c/logger/kernel_engine/logger/logger.h:28-70`). The
+There is one logger, a vtable `ke_logger` created by `ke_logger_create` (`src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h`), and any number of sinks,
+`ke_logger_sink` values the logger owns (`src/c/logger/kernel_engine/logger/logger.h:26-68`). The
 only implementation is `src/zig/logger/simple/src/logger_simple.zig`.
 
 ## The event
 
 A `ke_log_event` is three fields: an `int32_t level`, a `tag` and a `message`, both `const char *`
-(`logger.h:17-22`). It carries no timestamp, thread or source location. `tag` and `message` are
+(`logger.h:15-20`). It carries no timestamp, thread or source location. `tag` and `message` are
 valid only for the duration of the call that receives them, so a sink that wants to keep one copies
 it. `level` is a `ke_log_level`, `KE_LOG_LEVEL_TRACE` (0) through `KE_LOG_LEVEL_CRITICAL` (5)
-(`log_level.h:13-20`); `ke_log_level_to_string` maps any other value to `"UNKNOWN"`
-(`logger_simple.zig:103-112`).
+(`log_level.h:13-20`); the console sink prints any other value as `"UNKNOWN"`
+(`levelToString`, `logger_simple.zig:107-116`).
 
 ## The native path
 
 `ke_logger.log(self, event)` walks the sinks in the order they were added and calls `sink.log` on
-each one whose `min_level` is at or below `event.level` (`logger_simple.zig:34-44`). The filter is
+each one whose `min_level` is at or below `event.level` (`logger_simple.zig:38-48`). The filter is
 per sink; the logger has no level of its own. A sink whose `log` slot is null is skipped
-(`logger_simple.zig:41`), and a null logger or event returns without effect (`logger_simple.zig:35`).
-`flush` calls every sink's `flush` the same way (`logger_simple.zig:46-53`).
+(`logger_simple.zig:45`), and a null logger or event returns without effect (`logger_simple.zig:39`).
+`flush` calls every sink's `flush` the same way (`logger_simple.zig:50-57`).
 
 `add_sink` takes the sink by value and stores it. The logger holds at most `MAX_SINKS` of them,
 a constant of 8 behind a fixed array; the ninth call fails with `ke_error` "sink capacity exceeded"
-(`logger_simple.zig:16-19`, `:61-64`). `ke_logger_handle.destroy` calls each sink's `destroy` and
-frees the logger (`logger_simple.zig:23-32`). Nothing in the file synchronises: `log`, `add_sink` and
+(`logger_simple.zig:19-22`, `:63-66`). `ke_logger_handle.destroy` calls each sink's `destroy` and
+frees the logger (`logger_simple.zig:26-36`). Nothing in the file synchronises: `log`, `add_sink` and
 `destroy` read and write the same sink array without a lock.
 
 `ke_console_sink_create()` returns a ready sink with `min_level` `KE_LOG_LEVEL_TRACE`
-(`logger_simple.zig:93-101`). Its `log` writes `[LEVEL] tag: message` to standard error and flushes
-after each entry, with an empty string for a null tag or message (`logger_simple.zig:70-82`). It does
+(`logger_simple.zig:97-105`). Its `log` writes `[LEVEL] tag: message` to standard error and flushes
+after each entry, with an empty string for a null tag or message (`logger_simple.zig:74-86`). It does
 not read its own `min_level`; only the logger does.
 
 ## Who emits events
 
 A plugin that logs takes a borrowed `ke_logger *` in its params struct and calls the vtable
-directly: `lg.log.?(lg, &ev)` (`src/zig/asset/stb_image/src/stb_image_loader.zig:24-28`). The
-pointer is optional; a plugin handed none emits nothing (`stb_image_loader.zig:25`, and
+directly: `lg.log.?(lg, &ev)` (`src/zig/asset/stb_image/src/stb_image_loader.zig:25-29`). The
+pointer is optional; a plugin handed none emits nothing (`stb_image_loader.zig:26`, and
 `src/zig/asset/stb_image/include/kernel_engine/asset/stb_image/stb_image_loader.h:24`). Other
 plugins that emit this way include the render passes, `render_module`, assimp and miniaudio. Each
 sets its own `tag` and one level; there is no shared helper.
@@ -73,7 +73,7 @@ that native value's `min_level` and its `MinLevel` property (`ServiceCollectionE
 `Logger.AddSink(sink)`, which wraps it in a `NativeSinkAdapter` and registers a new native sink whose
 `min_level` is the `minLevel` argument, `Trace` by default (`ServiceCollectionExtensions.cs:16`,
 `Logger.Idiom.cs:44-45`). The native logger filters on that registered value
-(`logger_simple.zig:40`), and the adapter forwards to `ILoggerSink.Log`, never reading `MinLevel` or
+(`logger_simple.zig:44`), and the adapter forwards to `ILoggerSink.Log`, never reading `MinLevel` or
 the wrapped native `min_level`. `ILoggerSink.MinLevel` has no reader anywhere in `src/` or
 `examples/` (`grep -rn MinLevel src examples --include='*.cs'` finds the interface member, its one
 implementation and the doc comment). So `logging.console_level` and `AddConsoleSink(LogLevel)` are

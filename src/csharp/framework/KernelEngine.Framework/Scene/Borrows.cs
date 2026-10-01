@@ -21,11 +21,6 @@ public sealed class NodeNameAttribute : Attribute
 /// raises and nothing else: who listens is a fact of the scene, wired through the
 /// signal bus, so a listener can be added or removed without the emitter changing.
 /// </summary>
-/// <remarks>
-/// <typeparamref name="T"/>'s name and size are the signal's identity across
-/// languages, which is why the payload must be <c>unmanaged</c> — a managed
-/// payload would be a shape only this runtime could read.
-/// </remarks>
 public readonly ref struct Emit<T> where T : unmanaged
 {
     private readonly SignalBus? _bus;

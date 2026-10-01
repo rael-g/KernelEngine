@@ -7,7 +7,8 @@ const ke = @cImport({
     @cInclude("kernel_engine/configuration/configuration.h");
 });
 
-const gpa = @import("heap.zig").gpa;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const NONE: u32 = std.math.maxInt(u32);
 
@@ -378,4 +379,13 @@ test "null args rejected on write" {
     const c = h.ref;
     try std.testing.expect(!c.*.set_int.?(c, null, "k", 1, null));
     try std.testing.expect(!c.*.set_string.?(c, "s", "k", null, null));
+}
+
+test "creating, filling and destroying a configuration leaves no block allocated" {
+    const h = ke_configuration_create(null);
+    const cfg = h.ref;
+    try std.testing.expect(cfg.*.set_int.?(cfg, "shadow", "resolution", 2048, null));
+    try std.testing.expect(cfg.*.set_string.?(cfg, "render", "shader_path", "res/shaders", null));
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
 }

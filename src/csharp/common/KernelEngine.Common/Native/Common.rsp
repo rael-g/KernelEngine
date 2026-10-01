@@ -9,6 +9,8 @@ ke_common
 --include-directory
 ../../../../c/spatial
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --file
 Common.umbrella.h
@@ -16,7 +18,7 @@ Common.umbrella.h
 ../../../../c/resource_cache/kernel_engine/resource_cache/resource_cache.h
 ../../../../c/spatial/kernel_engine/spatial/transform.h
 ../../../../zig/common/include/kernel_engine/common/error.h
-../../../../zig/common/include/kernel_engine/common/math.h
+../../../../c/math/kernel_engine/math/math.h
 ../../../../zig/common/include/kernel_engine/common/types.h
 --methodClassName
 NativeMethods

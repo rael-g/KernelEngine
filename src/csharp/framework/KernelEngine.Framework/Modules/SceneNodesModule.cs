@@ -15,11 +15,6 @@ namespace KernelEngine.Framework;
 /// natively) — render's [entity.components.X] applies and node-type registrations
 /// live in <c>WebgpuRenderModule</c>, physics's in its own module, and so on.
 /// </summary>
-/// <remarks>
-/// Add <c>FrameworkModule</c> and every domain module (render, physics, audio, ...)
-/// before this one, so their OnLoad has already registered its own component
-/// applies and node types by the time the scene setup callback runs.
-/// </remarks>
 public sealed class SceneNodesModule : IRuntimeModule
 {
     private const uint SetupWorker = 1;
@@ -43,14 +38,9 @@ public sealed class SceneNodesModule : IRuntimeModule
     /// system the runtime chose not to slice reports one slice, so the range is the
     /// whole set and the caller needs no second code path.
     /// </summary>
-    /// <remarks>
-    /// Counted in entities rather than in archetype segments: instances of one node
-    /// type share an archetype, so a whole type is usually one segment, and splitting
-    /// by segment would hand every entity to a single slice and leave the rest idle.
-    /// </remarks>
     private static (int First, int Last) SliceOf(nint ctx, int count)
     {
-        var (index, slices) = KernelEngine.Runtime.SystemCtx.Slice(ctx);
+        var (index, slices) = KernelEngine.Runtime.SystemCtx.Of(ctx).Slice();
         if (slices <= 1) return (0, count);
 
         var per   = count / (int)slices;
@@ -160,7 +150,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                         return;
                     }
 
-                    var segments = KernelEngine.Runtime.SystemCtx.View(ctx, 0);
+                    var segments = KernelEngine.Runtime.SystemCtx.Of(ctx).View(0);
                     var total = 0;
                     for (int s = 0; s < segments.Length; s++)
                         total += segments[s].Entities.Length;

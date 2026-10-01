@@ -47,7 +47,7 @@ tags that decide a call's *shape* are read once, in `Classifier`:
 | tag | where it goes | what it means |
 |---|---|---|
 | `[out]` | param | written back by the callee (`Classifier.cs:254`) |
-| `[try]` | slot summary | a `false` return means not found: the C# backend projects `Try<Name>(..., out x)`, the Zig backend `?T` (`Classifier.cs:205`, `CSharpBackend.cs:2303-2312`, `ZigBackend.cs:637-639`) |
+| `[try]` | slot summary | a `false` return means not found: the C# backend projects `Try<Name>(..., out x)`, the Zig backend `?T` (`Classifier.cs:205`, `CSharpBackend.cs:2297-2306`, `ZigBackend.cs:621-623`) |
 | `[array_of:n]` | param, or the `@return` | pointer whose length is parameter `n`; on a return, the returned pointer is counted by `n` (`Classifier.cs:208-217`, `:240-252`) |
 | `[bytes_of:n]` | `void *` param | opaque payload bounded by byte count `n` (`Classifier.cs:219-238`) |
 | `[expand]` | param to a `_params` struct | the struct's fields stand in for the parameter (`Classifier.cs:162-179`) |
@@ -56,10 +56,10 @@ tags that decide a call's *shape* are read once, in `Classifier`:
 | `[callback]` | param | the parameter's type is a vtable the caller implements (`Classifier.cs:96-101`) |
 
 `[default:...]`, `[name:...]`, `[bool]` and `[output]` on a component field are read by the C
-backend (`CBackend.cs:109`, `:60`, `:148`, `:157`). The C# backend reads further tags that no other
+backend (`CBackend.cs:94`, `:60`, `:148`, `:157`). The C# backend reads further tags that no other
 backend does (`enum`, `node`, `base`, `closure`, `completion`, `view`, `value`, `utf8`, `idiom`, and
 others, all as `.Has("...")` / `.TagValue("...")` in `CSharpBackend.cs`), and the Zig backend reads
-`utf8`, `closure`, `default` and `optional` itself (`ZigBackend.cs:584`, `:723`, `:858`, `:333`).
+`utf8`, `closure`, `default` and `optional` itself (`ZigBackend.cs:568`, `:723`, `:858`, `:333`).
 
 ## `ke_api.json`
 
@@ -79,13 +79,13 @@ optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHead
 
 `Classifier.Classify(model, explicitProviders, explicitCallbacks, convention)` (`Classifier.cs:88`)
 decides what each struct is and what shape each slot has. `Convention.KernelEngine`
-(`Convention.cs:126-145`) holds the project's spellings, so the classifier states nothing about
+(`Convention.cs:106-125`) holds the project's spellings, so the classifier states nothing about
 `ke_`:
 
 - a vtable is a struct with slots that is not a handle (`_handle`) and not a parameter bag
   (`_params`); it is a *provider* when a `<name>_handle` struct or a `<name>_create` function exists
   (`Classifier.cs:93`, `:105-110`);
-- a slot is *fallible* when its last parameter is `ke_error**` (`Convention.cs:103`); the parameter
+- a slot is *fallible* when its last parameter is `ke_error**` (`Convention.cs:83`); the parameter
   is removed from the projected signature (`Classifier.cs:196-197`);
 - the resulting `SlotShape` is one of `Fallible`, `Try`, `ReturnsOutParam`, `TupleOutParams`,
   `Plain` (`Classifier.cs:4`, `:286-290`);
@@ -101,15 +101,15 @@ fails: a slot that answers, fails and writes a value (`Classifier.cs:293-298`), 
 | backend | driver | emits | when it cannot render a form |
 |---|---|---|---|
 | `Kabic.CSharpBackend` | `scripts/generate_csharp.cs` | enums, value structs, views, providers with a contract interface, callback interfaces, node types, free-function groups (`generate_csharp.cs:48-129`) | throws `InvalidOperationException`; no catch, so the domain run fails |
-| `Kabic.ZigBackend` | `scripts/generate_zig.cs` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:107-108`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:513`) and listed in the module's header comment (`ZigBackend.cs:126-131`); the other slots are still emitted |
-| `Kabic.CBackend` | `scripts/generate_c.cs` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:55-65`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:120-122`) |
+| `Kabic.ZigBackend` | `scripts/generate_zig.cs` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:91-92`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:497`) and listed in the module's header comment (`ZigBackend.cs:110-115`); the other slots are still emitted |
+| `Kabic.CBackend` | `scripts/generate_c.cs` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:40-50`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:105-107`) |
 
 The C backend leaves a field out of its tables when the field is `[output]` or has no scene-file
-spelling (`CBackend.cs:148`).
+spelling (`CBackend.cs:133`).
 
 The Zig backend refuses a raw callback, an opaque payload, a `[closure]` that names no state
 parameter, a consumer vtable with other than one untyped field, and a consumer slot that reports
-failure (`ZigBackend.cs:537-540`, `:723-738`, `:804-813`). It learns where a type from another
+failure (`ZigBackend.cs:521-524`, `:723-738`, `:804-813`). It learns where a type from another
 domain lives by reading the other domains' `ke_api.json` (`generate_zig.cs:44-55`); the manifest
 carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.yml` calls
 `generate_zig.cs`, so no generated Zig is in the tree.
@@ -124,7 +124,7 @@ runs nine of the ten (see `docs/conventions/ci.md`).
 | `check_api_drift.cs` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory (`check_api_drift.cs:62`, `:82`, `:102`) |
 | `check_reconstruction.cs` | any file `regenerate_api.cs --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
 | `check_api_coverage.cs` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `.rsp`, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
-| `check_out_params.cs` | a parameter named `out` or `out_*`, other than `out_error`, carries no `[out]` tag (`check_out_params.cs:61-72`); one exclusion is recorded |
+| `check_out_params.cs` | a parameter named `out` or `out_*`, other than `out_error`, carries no `[out]` tag (`check_out_params.cs:57-68`); one exclusion is recorded |
 | `check_generator_shapes.cs` | for a given synthetic header shape, the C# backend's text lacks a required fragment or holds a forbidden one; run with `--no-cache` so the current backend is the one checked |
 | `check_zig_shapes.cs` | the same, against the Zig backend (`check_zig_shapes.cs:26-33`) |
 | `check_generator_contract.cs` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |

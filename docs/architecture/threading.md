@@ -8,14 +8,14 @@ role.
 `ke_scheduler` (`src/c/scheduler/kernel_engine/scheduler/scheduler.h:39`) is a struct of six
 function pointers over an opaque handle. Its one implementation is enkiTS
 (`src/zig/scheduler/enki/src/enki_scheduler.zig`), created by `ke_scheduler_enki_create`
-(`enki_scheduler.zig:202`). The factory takes no worker-count parameter; the pool is whatever
-`enkiInitTaskScheduler` makes of the machine (`enki_scheduler.zig:216`).
+(`enki_scheduler.zig:195`). The factory takes no worker-count parameter; the pool is whatever
+`enkiInitTaskScheduler` makes of the machine (`enki_scheduler.zig:209`).
 
-`get_num_workers` reports enki's thread count minus one (`enki_scheduler.zig:182-188`).
+`get_num_workers` reports enki's thread count minus one (`enki_scheduler.zig:174-180`).
 
 Every subsystem that runs work in parallel goes through this one object. The runtime's wave
 dispatcher is a client like any other ([runtime.md](runtime.md#dispatch)); flecs is given no
-threads and no pipeline — the plugin only calls `ecs_init()` (`src/zig/ecs/flecs/src/ecs_flecs.zig:567`),
+threads and no pipeline — the plugin only calls `ecs_init()` (`src/zig/ecs/flecs/src/ecs_flecs.zig:540`),
 never `ecs_set_threads` or `ecs_progress`.
 
 ## A task
@@ -25,11 +25,11 @@ runs on the same worker right after the body; `dispatch_pinned` runs it on one n
 (`scheduler.h:48`, `57`, `82`). Each returns a `ke_task *`.
 
 - **`wait` consumes the task.** It blocks, then frees the task's storage before returning
-  (`enki_scheduler.zig:150-170`; the free is line 168). A task is waited on exactly once, and a
+  (`enki_scheduler.zig:142-162`; the free is line 168). A task is waited on exactly once, and a
   task that is never waited on is never freed.
-- `is_completed` only reads a flag (`enki_scheduler.zig:176-179`); it does not release anything.
+- `is_completed` only reads a flag (`enki_scheduler.zig:168-171`); it does not release anything.
 - `ke_task *` is a tagged pointer: the low bit records whether the task is pinned, so `wait` picks
-  the matching enkiTS call (`enki_scheduler.zig:12-59`). Callers must not interpret it.
+  the matching enkiTS call (`enki_scheduler.zig:12-51`). Callers must not interpret it.
 
 ### What a failing body returns
 
@@ -37,13 +37,13 @@ A body reports failure by writing an error **type** to `out_failure` (`scheduler
 a program-lifetime node; a `ke_error` lives in the failing thread's own storage and would be
 recycled before anyone read it ([abi.md](abi.md#what-the-error-record-holds)). `wait` builds a fresh
 error from the type on the waiting thread, with a message naming the slot, not the failure
-(`enki_scheduler.zig:169-172`; `scheduler.h:67-69`).
+(`enki_scheduler.zig:161-164`; `scheduler.h:67-69`).
 
 ## Pinning
 
 `dispatch_pinned` takes a worker index (`scheduler.h:78`). The index is enki's; the contract
 gives it no name and no meaning. The runtime reads `0` in a system's `pinned_thread` as "any
-worker" (`runtime.zig:624`), so a system can only be pinned to index 1 or above.
+worker" (`runtime.zig:607`), so a system can only be pinned to index 1 or above.
 
 Who pins, today:
 
@@ -64,7 +64,7 @@ registered as an unpinned `PreUpdate` system
 (`src/csharp/window/KernelEngine.Window.Glfw/GlfwWindowModule.cs:49`).
 
 The render phase is one task dispatched with `dispatch`, not `dispatch_pinned`
-(`runtime.zig:927`), and each render system inside it is dispatched into the same pool by the same
+(`runtime.zig:903`), and each render system inside it is dispatched into the same pool by the same
 wave code.
 
 ## Synchronization

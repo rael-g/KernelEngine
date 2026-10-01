@@ -5,7 +5,8 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const MAX_LIGHTS = 1_000_000;
 const UPLOAD_CHUNK = 1024;
@@ -46,8 +47,10 @@ const ClusterParams = extern struct {
 
 const ClusterModule = struct {
     core: *c.ke_render_service = undefined,
+    device: *c.ke_gpu_device = undefined,
     logger: ?*c.ke_logger = null,
     view_space: *c.ke_view_space = undefined,
+    camera: *c.ke_render_camera = undefined,
     point_light_cid: c.ke_component_id = undefined,
     spot_light_cid: c.ke_component_id = undefined,
     world_transform_cid: c.ke_component_id = undefined,
@@ -74,6 +77,7 @@ const ClusterModule = struct {
     cull_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
     cull_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     cull_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    cull_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     cull_io: c.ke_render_pass_io = undefined,
     cull_access: [6]c.ke_component_access = undefined,
     cull_queries: [3]c.ke_query_decl = undefined,
@@ -82,12 +86,6 @@ const ClusterModule = struct {
     point_overflow_warned: bool = false,
     spot_overflow_warned: bool = false,
 };
-
-fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
-    return zm.loadMat(&out.m);
-}
 
 fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: usize) void {
     const lg = logger orelse return;
@@ -111,7 +109,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         var chunk: [UPLOAD_CHUNK]PointLightGpu = undefined;
         var fill: u32 = 0;
         var segc: usize = 0;
-        const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+        const segs = ctx.?.view.?(ctx, 0, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
             const pls: [*c]const c.ke_point_light_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -145,7 +143,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         var chunk: [UPLOAD_CHUNK]SpotLightGpu = undefined;
         var fill: u32 = 0;
         var segc: usize = 0;
-        const segs = c.ke_system_ctx_view(ctx, 1, &segc);
+        const segs = ctx.?.view.?(ctx, 1, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
             const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -176,12 +174,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     }
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 2, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 2, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return true;
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
-    const pc = core.*.begin_pass.?(core, ctx, &cm.cull_io);
+    const pc = core.*.begin_pass.?(core, &cm.cull_io);
     if (pc == null) return true;
 
     var bw: u32 = 0;
@@ -190,13 +188,16 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
     const depth_from_view_z = cm.view_space.params.?(cm.view_space).depth_from_view_z;
+    var frustum: c.ke_camera_frustum = undefined;
+    cm.camera.perspective_frustum.?(cm.camera, cam, aspect, &frustum);
+    var view_m: c.ke_mat4 = undefined;
+    cm.camera.view.?(cm.camera, &cam_wt.matrix, &view_m);
     var params: ClusterParams = .{
         .grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
         .counts = .{ @floatFromInt(pn), @floatFromInt(sn), depth_from_view_z, 0.0 },
-        .proj = .{ std.math.tan(cam.fov * deg2rad * 0.5), aspect, cam.near_plane, cam.far_plane },
-        .view = undefined,
+        .proj = .{ frustum.tan_half_fov_y, frustum.aspect, frustum.near_plane, frustum.far_plane },
+        .view = view_m.m,
     };
-    zm.storeMat(params.view[0..], cameraView(cm.view_space, cam_wt));
     core.*.upload.?(core, cm.cull_uniform, 0, &params, @sizeOf(ClusterParams));
 
     uploadGrid(cm, bw, bh, cam.near_plane, cam.far_plane);
@@ -233,11 +234,13 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
              logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
              world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
-             frame_cid: c.ke_component_id, view_space: *c.ke_view_space,
+             frame_cid: c.ke_component_id, view_space: *c.ke_view_space, render_camera: *c.ke_render_camera,
              out_error: [*c][*c]c.ke_error) bool {
     cm.core = core;
+    cm.device = dev;
     cm.logger = logger;
     cm.view_space = view_space;
+    cm.camera = render_camera;
     cm.point_light_cid = point_light_cid;
     cm.spot_light_cid = spot_light_cid;
     cm.world_transform_cid = world_transform_cid;
@@ -321,6 +324,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entry_count = 7,
         .entries = &cull_bgl_entries,
     });
+    cm.cull_bgl = cull_bgl;
 
     cm.cull_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
@@ -386,8 +390,29 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+fn destroyModule(cm: *const ClusterModule) void {
+    const dev = cm.device;
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (cm.cull_pipeline != invalid) dev.destroy_pipeline.?(dev, cm.cull_pipeline);
+    if (cm.cull_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.cull_bind_group);
+    if (cm.cull_bgl != invalid) dev.destroy_bind_group_layout.?(dev, cm.cull_bgl);
+    if (cm.cull_uniform != invalid) dev.destroy_buffer.?(dev, cm.cull_uniform);
+    if (cm.fwd_light_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.fwd_light_bind_group);
+    if (cm.light_set_bgl != invalid) dev.destroy_bind_group_layout.?(dev, cm.light_set_bgl);
+    if (cm.cluster_grid_uniform != invalid) dev.destroy_buffer.?(dev, cm.cluster_grid_uniform);
+    const storage = [_]c.ke_gpu_buffer{
+        cm.point_lights_sb,  cm.spot_lights_sb,
+        cm.point_indices_sb, cm.point_counts_sb,
+        cm.spot_indices_sb,  cm.spot_counts_sb,
+    };
+    for (storage) |buffer| {
+        if (buffer != invalid) dev.destroy_buffer.?(dev, buffer);
+    }
+}
+
 fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
     const cm: *ClusterModule = @ptrCast(@alignCast(self orelse return));
+    destroyModule(cm);
     gpa.destroy(cm);
 }
 
@@ -397,17 +422,20 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
                                     point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
                                     world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
                                     frame_cid: c.ke_component_id, view_space: ?*c.ke_view_space,
+                                    render_camera: ?*c.ke_render_camera,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_cluster_handle {
     const empty = c.ke_render_cluster_handle{ .ref = null, .destroy = null };
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
     const vs = view_space orelse return empty;
+    const camera_api = render_camera orelse return empty;
 
     const cm = gpa.create(ClusterModule) catch return empty;
     cm.* = .{};
     if (!setup(cm, dev, core_ref, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-               point_light_cid, spot_light_cid, world_transform_cid, camera_cid, frame_cid, vs, out_error)) {
+               point_light_cid, spot_light_cid, world_transform_cid, camera_cid, frame_cid, vs, camera_api, out_error)) {
+        destroyModule(cm);
         gpa.destroy(cm);
         return empty;
     }
@@ -425,4 +453,40 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(cm), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the cluster pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a cluster pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

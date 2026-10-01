@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Framework.Native;
-using KernelEngine.Runtime.Native;
+using KernelEngine.Ecs.Native;
 
 namespace KernelEngine.Framework;
 
@@ -52,28 +52,48 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         get => Handle->root(Handle);
     }
 
-    /// <summary>Creates a node attached under `parent`, or under the root when `parent` is KE_ENTITY_INVALID.</summary>
-    /// <param name="ctx">The system context the call is running inside, which defers the structural change to the wave barrier. Null creates the node immediately.</param>
+    /// <summary>Creates a node attached under `parent`, or under the root when `parent` is KE_ENTITY_INVALID. The node exists when the call returns.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong CreateNode(string name, ulong parent, nint ctx)
+    public ulong CreateNode(string name, ulong parent)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
             ke_error* err = null;
-            var result = Handle->create_node(Handle, (sbyte*)namePtr, parent, (ke_system_ctx*)ctx, &err);
+            var result = Handle->create_node(Handle, (sbyte*)namePtr, parent, &err);
             if (err != null) throw KernelError.FromNative(err, "create_node");
             return result;
         }
     }
 
-    /// <summary>Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent.</summary>
-    /// <param name="ctx">The system context the call is running inside, which defers the teardown to the wave barrier. Null destroys the node immediately.</param>
+    /// <summary>Records the creation of a node into `commands`, with the same placement as create_node. The id is usable as a reference at once; the node exists when `commands` is applied. For a caller that may not touch the world, such as a system body.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public void DestroyNode(ulong entity, nint ctx)
+    public ulong CreateNodeDeferred(string name, ulong parent, nint commands)
+    {
+        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        fixed (byte* namePtr = nameBytes)
+        {
+            ke_error* err = null;
+            var result = Handle->create_node_deferred(Handle, (sbyte*)namePtr, parent, (ke_ecs_commands*)commands, &err);
+            if (err != null) throw KernelError.FromNative(err, "create_node_deferred");
+            return result;
+        }
+    }
+
+    /// <summary>Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent. The node is gone when the call returns.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    public void DestroyNode(ulong entity)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->destroy_node(Handle, entity, (ke_system_ctx*)ctx, &err), err, "destroy_node");
+        KernelError.ThrowIfFailed(Handle->destroy_node(Handle, entity, &err), err, "destroy_node");
+    }
+
+    /// <summary>Records the destruction of a node and its descendants into `commands`, as destroy_node would do it when `commands` is applied.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    public void DestroyNodeDeferred(ulong entity, nint commands)
+    {
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, (ke_ecs_commands*)commands, &err), err, "destroy_node_deferred");
     }
 
 

@@ -5,12 +5,6 @@ using System.IO;
 /// <summary>
 /// Locates engine build outputs for the sample programs.
 /// </summary>
-/// <remarks>
-/// Samples sit at varying depths under <c>examples/</c>, so the repository root
-/// is found by walking up from the assembly location rather than by counting
-/// parent segments — a fixed count silently resolves to the wrong directory for
-/// any sample nested one level deeper.
-/// </remarks>
 internal static class ExamplePaths
 {
     /// <summary>Directory holding the shaders compiled by the native build.</summary>

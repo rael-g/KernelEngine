@@ -16,11 +16,11 @@ plugin not declared there is not built.
 ## Layer 1 — a contract is a struct of function pointers
 
 A contract is a C struct whose members are function pointers plus an opaque `void *handle`
-(`ke_window`, `src/c/window/kernel_engine/window/window.h:18`). Callers never link against a symbol
+(`ke_window`, `src/c/window/kernel_engine/window/window.h:16`). Callers never link against a symbol
 to use it; they call through the pointer.
 
 Ownership travels in a second struct of the shape `{ ref, destroy }`
-(`ke_window_handle`, `window.h:48`): the factory returns the owner, and everything else that needs
+(`ke_window_handle`, `window.h:43`): the factory returns the owner, and everything else that needs
 the object receives the borrowed `ke_window *`.
 
 `src/c/` contains no `.c`, `.zig` or build file — only headers
@@ -29,7 +29,7 @@ the object receives the borrowed `ke_window *`.
 ## Layer 2 — a plugin exports one factory and nothing else
 
 A plugin is a directory with its own `build.zig`, compiled to one dynamic library
-(`src/zig/window/glfw/build.zig:46-52`). The only symbol the rest of the engine may link to is the
+(`src/zig/window/glfw/build.zig:48-54`). The only symbol the rest of the engine may link to is the
 factory, declared in the plugin's own `include/` and defined with `export fn`:
 
 - declaration: `src/zig/window/glfw/include/kernel_engine/window/glfw/glfw_window.h:34`
@@ -41,9 +41,32 @@ except through the vtable it returns.
 
 A plugin is configured by the root build, not by itself: the root `build.zig` runs each plugin's
 `zig build` with one shared `--prefix` so every library lands in one directory
-(`build.zig:866-894`), and passes each include path as a `-D` option
-(`src/zig/window/glfw/build.zig:8-14`). A plugin asks for exactly the domains it consumes, so a
+(`build.zig:911-939`), and passes each include path as a `-D` option
+(`src/zig/window/glfw/build.zig:9-15`). A plugin asks for exactly the domains it consumes, so a
 domain it did not ask for is not on its include path.
+
+### Source that plugins share
+
+Behavior two plugins both need is not put in a contract header. It is a Zig source file the root build
+hands to each consumer as a `-D<name>-src` option (`build.zig:57-61`), and the consumer imports it as a
+module. `src/zig/common/` holds `kerror.zig`, `heap.zig`, `component_fields.zig` and `stubs.zig`;
+`src/zig/render/common/` holds `handle.zig`. A shared file that touches C types is a
+function of the consumer's own `c` namespace, as in `@import("kerror").Errors(c)`, so the types it sees
+are the consumer's own. `stubs.zig` is the exception to "production code": it is imported only by a plugin's test module, and gives a unit test a stand-in for what the plugin is handed (a GPU device, a render service, an ecs, a runtime) so the plugin's factory can be called without the real implementation behind it. The stand-in device counts the resources it handed out and the ones returned, so a test can assert that a destroy gave back everything its create took. These files carry no tests of their own: the plugins that import them test them.
+
+### One allocator per plugin, and the leak check
+
+Every plugin allocates from `heap.gpa` (`heap.zig`): a wrapper over a `DebugAllocator` in a Debug
+build, which catches a double free or a free of the wrong length, and `smp_allocator` otherwise. The
+factories take no allocator, and a block is freed by the plugin that allocated it; memory a plugin
+hands out is released through that plugin's own `free_*` slot.
+
+The allocator is never reset. The first allocation registers one `atexit` callback, and that callback
+runs the leak check once, when the process or the library ends, logging every block still allocated
+with the stack that allocated it. `heap.leaks()` runs the same check on demand and returns the count,
+so a test can assert zero after it has destroyed what it created (`heap.expectNoLeaks`, which every plugin with a factory does in its own file, over `stubs.zig` where the factory is handed collaborators; the exceptions are the webgpu device, the glfw window and the assimp loader, which keeps its own allocator). The render module composes the real factories of ten other plugins, so its test links them and stands in only for the device, the ecs, the runtime and the world; a leak that no test asserts is
+reported only at exit, not as a test failure. The asset loader for assimp keeps a tracking allocator
+of its own and does not take part.
 
 ## Layer 3 — bindings are generated, never written
 

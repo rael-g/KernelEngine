@@ -21,6 +21,24 @@ public unsafe partial struct ke_input
     [NativeTypeName("void (*)(struct ke_input *, ke_input_snapshot *)")]
     public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, void> get_snapshot;
 
+    [NativeTypeName("ke_bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, byte> snapshot_is_key_down;
+
+    [NativeTypeName("ke_bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, byte> snapshot_is_key_pressed;
+
+    [NativeTypeName("ke_bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, byte> snapshot_is_key_released;
+
+    [NativeTypeName("ke_bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, byte> snapshot_is_mouse_button_down;
+
+    [NativeTypeName("ke_bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, byte> snapshot_is_mouse_button_pressed;
+
+    [NativeTypeName("ke_bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, byte> snapshot_is_mouse_button_released;
+
     [NativeTypeName("uint32_t (*)(struct ke_input *, ke_input_event *, uint32_t)")]
     public delegate* unmanaged[Cdecl]<ke_input*, ke_input_event*, uint, uint> drain_events;
 

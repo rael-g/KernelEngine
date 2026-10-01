@@ -11,7 +11,11 @@ ke_audio_module
 --include-directory
 ../../../../zig/audio/module/include
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
+--include-directory
+../../../../c/framework
 --include-directory
 ../../../../zig/framework/include
 --file

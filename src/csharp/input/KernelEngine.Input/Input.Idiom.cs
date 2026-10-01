@@ -18,7 +18,7 @@ public sealed unsafe partial class Input : IInput
         : this(logger is null ? null : logger.Native) { }
 
     /// <inheritdoc/>
-    public IInputReader CaptureSnapshot() => new SnapshotReader(GetSnapshot());
+    public IInputReader CaptureSnapshot() => new SnapshotReader(this, GetSnapshot());
 
     /// <inheritdoc/>
     public int DrainEvents(Span<InputEvent> buffer)
@@ -44,6 +44,9 @@ public sealed unsafe partial class Input : IInput
                 case InputEventKind.MouseButtonUp:
                     dst.Button = (MouseButton)n.code;
                     break;
+                case InputEventKind.MouseMove:
+                    dst.Position = new Vector2(n.x, n.y);
+                    break;
                 case InputEventKind.MouseScroll:
                     dst.Scroll = new Vector2(n.x, n.y);
                     break;
@@ -55,14 +58,34 @@ public sealed unsafe partial class Input : IInput
     /// <summary>Adapts a captured snapshot to the reader interface the sim tick consumes.</summary>
     private sealed class SnapshotReader : IInputReader, INativeInputReader
     {
-        private readonly ke_input_snapshot _data;
+        private readonly Input _owner;
+        private ke_input_snapshot _data;
 
-        public SnapshotReader(ke_input_snapshot data) => _data = data;
+        public SnapshotReader(Input owner, ke_input_snapshot data)
+        {
+            _owner = owner;
+            _data = data;
+        }
 
-        public bool IsKeyDown(Key key) => InputSnapshot.IsKeyDown(_data, key);
-        public bool IsKeyPressed(Key key) => InputSnapshot.IsKeyPressed(_data, key);
-        public bool IsKeyReleased(Key key) => InputSnapshot.IsKeyReleased(_data, key);
-        public bool IsMouseButtonDown(MouseButton button) => InputSnapshot.IsMouseButtonDown(_data, button);
+        public bool IsKeyDown(Key key)
+        {
+            fixed (ke_input_snapshot* p = &_data) return _owner.SnapshotIsKeyDown(p, key);
+        }
+
+        public bool IsKeyPressed(Key key)
+        {
+            fixed (ke_input_snapshot* p = &_data) return _owner.SnapshotIsKeyPressed(p, key);
+        }
+
+        public bool IsKeyReleased(Key key)
+        {
+            fixed (ke_input_snapshot* p = &_data) return _owner.SnapshotIsKeyReleased(p, key);
+        }
+
+        public bool IsMouseButtonDown(MouseButton button)
+        {
+            fixed (ke_input_snapshot* p = &_data) return _owner.SnapshotIsMouseButtonDown(p, button);
+        }
 
         public Vector2 MousePosition => new(_data.mouse_x, _data.mouse_y);
         public Vector2 MouseDelta => new(_data.mouse_dx, _data.mouse_dy);

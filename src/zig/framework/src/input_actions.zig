@@ -1,18 +1,15 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
-/// Action names are stored inline; longer names are truncated at load.
 const action_name_max = 64;
 
 const action_initial_capacity: u32 = 8;
 const binding_initial_capacity: u32 = 4;
 
-/// How many keys the snapshot's bitset can represent, taken from the bitset
-/// itself so the two can never disagree.
 const key_bit_count: c_int = @intCast(
     @typeInfo(@FieldType(c.ke_input_snapshot, "keys_down")).array.len * 64,
 );
@@ -107,8 +104,6 @@ fn lookupMouseButton(name: [*c]const u8) c_int {
     return -1;
 }
 
-/// Unknown type strings fall back to Button rather than failing the load — a
-/// typo should not take the whole input map down.
 fn parseActionType(s: [*c]const u8) c.ke_action_type {
     if (s == null) return c.KE_ACTION_TYPE_BUTTON;
     const t = std.mem.span(s);
@@ -174,8 +169,6 @@ fn stateOf(self: *c.ke_input_actions) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-/// Grows a malloc'd array to hold at least `needed` elements, doubling from
-/// `initial`. Returns null on allocation failure, leaving the old buffer intact.
 fn growArray(
     comptime T: type,
     buf: ?[*]T,
@@ -251,7 +244,6 @@ fn axisOf(down: bool) f32 {
 
 const Sample = struct { x: f32 = 0, y: f32 = 0, z: f32 = 0 };
 
-/// Returns the binding's contribution plus whether it is contributing at all.
 fn sampleBinding(b: *const Binding, snap: *const c.ke_input_snapshot) struct { Sample, bool } {
     var out: Sample = .{};
     switch (b.kind) {
@@ -270,7 +262,6 @@ fn sampleBinding(b: *const Binding, snap: *const c.ke_input_snapshot) struct { S
     return .{ out, out.x != 0.0 or out.y != 0.0 or out.z != 0.0 };
 }
 
-/// tomlc99 hands back malloc'd strings the caller must release.
 fn freeDatumStr(d: c.toml_datum_t) void {
     if (d.ok != 0 and d.u.s != null) std.c.free(d.u.s);
 }
@@ -1074,4 +1065,10 @@ test "a key held across two evaluations reports pressed only on the first" {
 
     _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
     try testing.expect(!a.api().was_action_pressed.?(a.api(), id));
+}
+
+test "creating and destroying the actions map leaves no block allocated" {
+    var actions = try Actions.init();
+    actions.deinit();
+    try heap.expectNoLeaks();
 }

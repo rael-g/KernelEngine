@@ -18,7 +18,6 @@ const FakeDevice = struct {
     destroy_calls: u32 = 0,
     last_title: ?[*:0]const u8 = null,
 
-    /// Replayed to the sink on the next pollEvents call.
     queued: []const device.Event = &.{},
 
     fn asDevice(self: *FakeDevice) device.Device {
@@ -127,8 +126,6 @@ fn makeCore(dev: *FakeDevice, input: ?*c.ke_input) *core_mod.Core {
     return core_mod.Core.create(dev.asDevice(), input).?;
 }
 
-/// Frees the core without running the device teardown the fake cannot survive
-/// (it is stack-owned), while still exercising the shutdown path.
 fn destroyCore(core: *core_mod.Core) void {
     core_mod.Core.destroyApi(core.toApi());
 }

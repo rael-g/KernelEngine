@@ -12,10 +12,6 @@ extern "C"
 {
 #endif
 
-/// Opaque — the runtime's per-system component funnel
-/// (kernel_engine/runtime/system_ctx.h).
-typedef struct ke_system_ctx ke_system_ctx;
-
 /// Opaque — the per-pass recording context
 /// (kernel_engine/render/service/pass_context.h).
 typedef struct ke_render_pass_ctx ke_render_pass_ctx;
@@ -92,9 +88,7 @@ struct ke_render_service
     ke_component_id (*cid)(struct ke_render_service *self, const char *name);
 
     /// Opens a pass's recording context, from inside a render system's body.
-    /// @param sys [ctx] The system context whose body is recording the pass.
     struct ke_render_pass_ctx *(*begin_pass)(struct ke_render_service *self,
-                                             ke_system_ctx *sys,
                                              const ke_render_pass_io *io);
     /// Closes a recording context opened by begin_pass.
     void (*end_pass)(struct ke_render_service *self, struct ke_render_pass_ctx *ctx);

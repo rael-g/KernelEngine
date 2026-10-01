@@ -5,15 +5,15 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
 const SkyboxModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    ndc: c.ke_ndc_convention = undefined,
-    view_space: *c.ke_view_space = undefined,
+    camera: *c.ke_render_camera = undefined,
 
     camera_cid: c.ke_component_id = undefined,
     world_transform_cid: c.ke_component_id = undefined,
@@ -31,18 +31,6 @@ const SkyboxModule = struct {
     queries: [2]c.ke_query_decl = undefined,
 };
 
-fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
-    return zm.loadMat(&out.m);
-}
-
-fn makePerspective(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, fovy: f32, aspect: f32, near: f32, far: f32) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.perspective.?(vs, fovy, aspect, near, far, &ndc, &out);
-    return zm.loadMat(&out.m);
-}
-
 inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
     return @alignCast(@ptrCast(user.?));
 }
@@ -53,13 +41,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const dev = sm.device;
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return true;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
-    const pc = core.*.begin_pass.?(core, ctx, &sm.io);
+    const pc = core.*.begin_pass.?(core, &sm.io);
     if (pc == null) return true;
 
     var bw: u32 = 0;
@@ -67,21 +55,17 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const view = cameraView(sm.view_space, cam_wt);
-    var vm: [16]f32 = undefined;
-    zm.storeMat(vm[0..], view);
-    vm[12] = 0;
-    vm[13] = 0;
-    vm[14] = 0;
-    const fov_rad = cam.fov * @as(f32, std.math.pi / 180.0);
-    const proj = makePerspective(sm.view_space, sm.ndc, fov_rad, aspect, cam.near_plane, cam.far_plane);
-    const sky_vp = zm.mul(zm.loadMat(vm[0..]), proj);
+    var view_m: c.ke_mat4 = undefined;
+    sm.camera.view_rotation.?(sm.camera, &cam_wt.matrix, &view_m);
+    var proj_m: c.ke_mat4 = undefined;
+    sm.camera.perspective_projection.?(sm.camera, cam, aspect, &proj_m);
+    const sky_vp = zm.mul(zm.loadMat(&view_m.m), zm.loadMat(&proj_m.m));
     var frame: SkyFrame = .{ .inv_sky_view_proj = undefined };
     zm.storeMat(frame.inv_sky_view_proj[0..], zm.inverse(sky_vp));
     core.*.upload.?(core, sm.frame_uniform, 0, &frame, @sizeOf(SkyFrame));
 
     var sky_segc: usize = 0;
-    const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
     const env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
@@ -120,12 +104,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 }
 
 fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
+         render_camera: *c.ke_render_camera, camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     sm.core = core;
     sm.device = dev;
-    sm.ndc = ndc;
-    sm.view_space = view_space;
+    sm.camera = render_camera;
     sm.camera_cid = camera_cid;
     sm.world_transform_cid = world_transform_cid;
     sm.skybox_cid = skybox_cid;
@@ -210,6 +193,10 @@ fn destroyModule(sm: *const SkyboxModule) void {
     const dev = sm.device;
     if (sm.bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, sm.bind_group);
+    if (sm.frame_uniform != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_buffer.?(dev, sm.frame_uniform);
+    if (sm.bgl != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group_layout.?(dev, sm.bgl);
 }
 
 fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
@@ -219,7 +206,7 @@ fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
 }
 
 export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                   device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
+                                   device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                    camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                    skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_skybox_handle {
@@ -227,11 +214,12 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
-    const vs = view_space orelse return empty;
+    const camera_api = render_camera orelse return empty;
 
     const sm = gpa.create(SkyboxModule) catch return empty;
     sm.* = .{};
-    if (!setup(sm, dev, core_ref, ndc, vs, camera_cid, world_transform_cid, skybox_cid, frame_cid, out_error)) {
+    if (!setup(sm, dev, core_ref, camera_api, camera_cid, world_transform_cid, skybox_cid, frame_cid, out_error)) {
+        destroyModule(sm);
         gpa.destroy(sm);
         return empty;
     }
@@ -249,4 +237,38 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(sm), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the skybox pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a skybox pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

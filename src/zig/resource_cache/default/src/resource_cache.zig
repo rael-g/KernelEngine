@@ -2,10 +2,12 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const c = @cImport({
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
+    @cInclude("kernel_engine/resource_cache/default/resource_cache_default_create.h");
 });
 
 const E = @import("kerror").Errors(c);
@@ -589,4 +591,12 @@ test "destroying the cache runs the destroy callback for every live resource" {
 
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i32, 2), marker);
+}
+
+test "creating, using and destroying a resource cache leaves no block allocated" {
+    const h = makeCountingCache();
+    try testing.expect(h.ref.*.register_resource.?(h.ref, 42, null));
+    try testing.expect(h.ref.*.release.?(h.ref, 42, null));
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
 }

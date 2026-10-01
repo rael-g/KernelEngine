@@ -7,6 +7,8 @@ ke_physics_2d_box2d
 --include-directory
 ../../../../c/physics
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../zig/common/include
 --include-directory
 ../../../../zig/physics/box2d/include

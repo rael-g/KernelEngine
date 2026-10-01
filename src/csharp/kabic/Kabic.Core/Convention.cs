@@ -4,26 +4,6 @@ namespace Kabic;
 /// The naming and shape conventions of the C ABI being compiled — everything
 /// `kabic` "knows" about its consumer that is NOT intrinsic to C itself.
 /// </summary>
-/// <remarks>
-/// <para>
-/// A C ABI does not say what a fallible call looks like, how ownership is
-/// expressed, or which function is a factory — those are a project's own
-/// vocabulary. `Classifier` needs that vocabulary to classify anything, but it
-/// should not *contain* it: with the rules inlined, a reader could not tell a
-/// structural inference (a vtable is a struct holding function pointers — true
-/// of any C ABI) from a project-specific spelling (a trailing `ke_error**`
-/// means fallible — true only here), and any consumer renaming its prefix would
-/// have to edit the classifier's logic.
-/// </para>
-/// <para>
-/// Deliberately still a hardcoded instance rather than a parameter: a second
-/// real consumer would be needed to know which axes genuinely vary, and
-/// inventing that shape from one data point risks getting it wrong. The debt is
-/// recorded in <c>docs/ScriptingArchitectureV3.md</c> — the eventual split is
-/// a `kabic` core that takes a <c>Convention</c> plus a thin per-project
-/// definition supplying one.
-/// </para>
-/// </remarks>
 public sealed class Convention
 {
     /// <summary>Prefix every public symbol in this ABI carries (<c>ke_input</c>, <c>ke_logger_create</c>).</summary>

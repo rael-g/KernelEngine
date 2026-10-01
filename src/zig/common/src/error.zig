@@ -8,9 +8,6 @@ const c = @cImport({
     @cInclude("stdio.h");
 });
 
-/// Suppresses the GPF/Watson, missing-DLL and file-open dialogs so the process
-/// can die quietly after printing. Declared here rather than pulled from std so
-/// the symbol this depends on is explicit and stable.
 const windows = struct {
     const SEM_FAILCRITICALERRORS: u32 = 0x0001;
     const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
@@ -20,11 +17,7 @@ const windows = struct {
 
 const names = @import("error_types.zig");
 
-/// Depth-2 ring: two slots, so wrapping an error (KE_ERROR_WRAP) keeps the inner
-/// error pointer valid while the outer one is being built.
 const slot_count = 2;
-/// Longest error message retained; anything past this is truncated, never
-/// allocated — a failing path must not depend on the allocator to report itself.
 const message_max = 512;
 
 export const KE_ERROR_GENERAL: c.ke_error_type = .{ .name = names.general, .parent = null };
@@ -88,20 +81,11 @@ export fn ke_error_last() callconv(.c) ?*const c.ke_error {
     return if (slots[last].type != null) &slots[last] else null;
 }
 
-/// `stderr` is a plain extern global on glibc but a macro expanding to a
-/// function call on the Windows UCRT (`__acrt_iob_func(2)`) — referencing
-/// `c.stderr` directly forces Zig to comptime-evaluate that call, which
-/// fails. Resolved at runtime instead; the `windows` branch is pruned at
-/// comptime on every other target, so `__acrt_iob_func` (Windows-only) never
-/// needs to resolve there.
 fn stderrFile() ?*c.FILE {
     if (@import("builtin").os.tag == .windows) return c.__acrt_iob_func(2);
     return c.stderr;
 }
 
-/// Prints the whole error chain to stderr and ends the process without going
-/// through abort(): no OS crash dialog, and the message is always readable
-/// first. The engine's only sanctioned give-up path.
 export fn ke_error_fatal(err_in: ?*const c.ke_error) callconv(.c) noreturn {
     if (@import("builtin").os.tag == .windows) {
         _ = windows.SetErrorMode(windows.SEM_FAILCRITICALERRORS |

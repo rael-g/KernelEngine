@@ -10,9 +10,11 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/service/render_service.h");
     @cInclude("kernel_engine/render/service/pass_context.h");
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
+    @cInclude("kernel_engine/resource_cache/default/resource_cache_default_create.h");
 });
 
-pub const gpa = @import("heap.zig").gpa;
+const heap = @import("heap");
+pub const gpa = heap.gpa;
 
 const resource_table = @import("resource_table.zig");
 const pass_recording = @import("pass_recording.zig");
@@ -100,11 +102,6 @@ pub const CoreState = struct {
     backbuffer_w: u32,
     backbuffer_h: u32,
 
-    /// Whether this frame has a surface to draw into. A window being closed takes
-    /// its surface with it, and acquiring the next texture starts failing while the
-    /// tick that asked for it is still running — so the answer has to gate every
-    /// pass rather than each pass asking on its own, which is how one unchecked
-    /// caller turns a handled failure into a null dereference inside the driver.
     frame_live: bool,
 
     cmd_encoders: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_encoder,
@@ -207,6 +204,7 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     st.mesh_store.deinit();
     st.shader_store.deinit();
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
+    if (st.material_bgl != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_bgl);
     st.pipeline_cache.destroyAll(st.device);
     gpa.free(st.upload_arena);
     gpa.free(@constCast(st.shader_dir));
@@ -409,9 +407,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
 
 const testing = std.testing;
 
-/// A core with nothing set but the one field these tests are about. Every path
-/// under test refuses before it reaches the device, and that is the property being
-/// checked: a frame with no surface must not travel far enough to need one.
 fn deadFrame(state: *CoreState) c.ke_render_service {
     state.frame_live = false;
     var core = std.mem.zeroes(c.ke_render_service);
@@ -419,12 +414,16 @@ fn deadFrame(state: *CoreState) c.ke_render_service {
     return core;
 }
 
+test {
+    _ = slot_map;
+}
+
 test "a pass cannot be opened once the frame has no surface to draw into" {
     var state: CoreState = undefined;
     var core = deadFrame(&state);
 
     var io = std.mem.zeroes(c.ke_render_pass_io);
-    try testing.expect(pass_recording.beginPass(&core, null, &io) == null);
+    try testing.expect(pass_recording.beginPass(&core, &io) == null);
 }
 
 test "a frame with no surface ends without submitting or presenting anything" {
@@ -432,4 +431,29 @@ test "a frame with no surface ends without submitting or presenting anything" {
     var core = deadFrame(&state);
 
     try testing.expectEqual(@as(c.ke_bool, 0), frame_lifecycle.endFrame(&core, null));
+}
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the render service leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const h = ke_render_service_create(dev.api(), ecs.api(), "shaders", null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a render service created without a shader directory is refused and leaves nothing behind" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const h = ke_render_service_create(dev.api(), ecs.api(), null, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

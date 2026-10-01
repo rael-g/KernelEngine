@@ -5,7 +5,8 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256;
@@ -31,15 +32,10 @@ const Draw = struct {
     view_depth: f32,
 };
 
-/// Orders by ascending view depth, which is farthest first under a right-handed
-/// view space.
 fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
     return a.view_depth < b.view_depth;
 }
 
-/// The draws this camera owes the transparent pass, farthest first: meshes whose
-/// layers the cull_mask names and whose material blends. Returns how many of
-/// `out` were filled.
 fn collectDraws(
     core: *c.ke_render_service,
     cam: *const c.ke_camera_component,
@@ -71,8 +67,7 @@ fn collectDraws(
 const ForwardModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    ndc: c.ke_ndc_convention = undefined,
-    view_space: *c.ke_view_space = undefined,
+    camera: *c.ke_render_camera = undefined,
     logger: ?*c.ke_logger = null,
 
     ibl_enabled: bool = true,
@@ -120,12 +115,6 @@ const ForwardModule = struct {
 const PASS_NAME = "forward";
 const DEFAULT_MATERIAL_SHADER = "standard";
 const MAX_SHADER_QUALIFIED = 128;
-
-fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
-    return zm.loadMat(&out.m);
-}
 
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
     const lg = logger orelse return;
@@ -180,13 +169,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const core = fwd.core;
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return true;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
-    const pc = core.*.begin_pass.?(core, ctx, &fwd.io);
+    const pc = core.*.begin_pass.?(core, &fwd.io);
     if (pc == null) return true;
 
     var bw: u32 = 0;
@@ -199,14 +188,15 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     enc.*.copy_texture_to_texture.?(enc, hdr_tex, hdr_opaque_tex, bw, bh);
 
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
-    const view = cameraView(fwd.view_space, cam_wt);
+    var view_m: c.ke_mat4 = undefined;
+    fwd.camera.view.?(fwd.camera, &cam_wt.matrix, &view_m);
     var proj_m: c.ke_mat4 = undefined;
-    c.ke_camera_projection(cam, aspect, fwd.view_space, &fwd.ndc, &proj_m);
-    const proj = zm.loadMat(&proj_m.m);
-    const view_proj = zm.mul(view, proj);
+    fwd.camera.projection.?(fwd.camera, cam, aspect, &proj_m);
+    const view = zm.loadMat(&view_m.m);
+    const view_proj = zm.mul(view, zm.loadMat(&proj_m.m));
 
     var sky_segc: usize = 0;
-    const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
@@ -228,7 +218,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     zm.storeMat(frame.view[0..], view);
 
     var li_segc: usize = 0;
-    const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
+    const li_segs = ctx.?.view.?(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
         const d: *const c.ke_directional_light_component = @ptrCast(@alignCast(li_segs[0].columns[0]));
         frame.light_dir = .{ d.direction.x, d.direction.y, d.direction.z, 0.0 };
@@ -237,7 +227,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         frame.shadow_params[2] = 1.0;
     }
     var am_segc: usize = 0;
-    const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
+    const am_segs = ctx.?.view.?(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
         const al: *const c.ke_ambient_light_component = @ptrCast(@alignCast(am_segs[0].columns[0]));
         frame.ambient = .{ al.color.x, al.color.y, al.color.z, 0.0 };
@@ -245,7 +235,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     core.*.upload.?(core, fwd.frame_uniform, 0, &frame, @sizeOf(PerFrame));
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 4, &segc);
+    const segs = ctx.?.view.?(ctx, 4, &segc);
     const draw_count = collectDraws(core, cam, view, segs, segc, fwd.draws[0..MAX_DRAWS]);
 
     const rp = pc.*.begin_render.?(pc);
@@ -284,15 +274,14 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 }
 
 fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, logger: ?*c.ke_logger, ibl_enabled: bool,
+         render_camera: *c.ke_render_camera, logger: ?*c.ke_logger, ibl_enabled: bool,
          mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
          light_cid: c.ke_component_id, ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
          frame_cid: c.ke_component_id,
          out_error: [*c][*c]c.ke_error) bool {
     fwd.core = core;
     fwd.device = dev;
-    fwd.ndc = ndc;
-    fwd.view_space = view_space;
+    fwd.camera = render_camera;
     fwd.logger = logger;
     fwd.ibl_enabled = ibl_enabled;
     fwd.mesh_cid = mesh_cid;
@@ -482,16 +471,25 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+fn destroyModule(fwd: *const ForwardModule) void {
+    const dev = fwd.device;
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (fwd.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
+    if (fwd.obj_bind_group != invalid) dev.destroy_bind_group.?(dev, fwd.obj_bind_group);
+    if (fwd.frame_uniform != invalid) dev.destroy_buffer.?(dev, fwd.frame_uniform);
+    if (fwd.obj_uniform != invalid) dev.destroy_buffer.?(dev, fwd.obj_uniform);
+    if (fwd.frame_bgl != invalid) dev.destroy_bind_group_layout.?(dev, fwd.frame_bgl);
+    if (fwd.obj_bgl != invalid) dev.destroy_bind_group_layout.?(dev, fwd.obj_bgl);
+}
+
 fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
     const fwd: *ForwardModule = @ptrCast(@alignCast(self orelse return));
-    const dev = fwd.device;
-    if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
+    destroyModule(fwd);
     gpa.destroy(fwd);
 }
 
 export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
+                                    device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                     logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
                                     mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, light_cid: c.ke_component_id,
@@ -502,13 +500,14 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
-    const vs = view_space orelse return empty;
+    const camera_api = render_camera orelse return empty;
 
     const fwd = gpa.create(ForwardModule) catch return empty;
     fwd.* = .{};
-    if (!setup(fwd, dev, core_ref, ndc, vs, logger, ibl_enabled != 0,
+    if (!setup(fwd, dev, core_ref, camera_api, logger, ibl_enabled != 0,
                mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
+        destroyModule(fwd);
         gpa.destroy(fwd);
         return empty;
     }
@@ -530,7 +529,6 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
 
 const testing = std.testing;
 
-/// Reports every material as blending except handle 0.
 fn blendUnlessZero(_: [*c]c.ke_render_service, m: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
     return if (m.bits == 0) c.KE_ALPHA_MODE_OPAQUE else c.KE_ALPHA_MODE_BLEND;
 }
@@ -681,4 +679,36 @@ test "meshes are gathered across every segment the query returned" {
     const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
 
     try testing.expectEqual(@as(u32, 2), n);
+}
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the forward pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, 7, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a forward pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, 7, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

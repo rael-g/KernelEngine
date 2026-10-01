@@ -11,7 +11,8 @@ const ke = @cImport({
     @cInclude("kernel_engine/configuration/configuration.h");
 });
 
-const gpa = @import("heap.zig").gpa;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 fn setErr(out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]const u8, src: std.builtin.SourceLocation) void {
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);

@@ -5,7 +5,8 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const MAX_DRAWS = 512;
 const UNIFORM_STRIDE = 256;
@@ -18,8 +19,6 @@ const default_params = c.ke_render_shadow_params{
     .far_plane = 50.0,
 };
 
-/// Each unset field falls back to the default, so a caller may name only what it
-/// wants to change.
 fn paramsOr(params: [*c]const c.ke_render_shadow_params) c.ke_render_shadow_params {
     const p = params orelse return default_params;
     return .{
@@ -37,6 +36,7 @@ const ShadowModule = struct {
     enabled: bool = false,
 
     core: *c.ke_render_service = undefined,
+    device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
     view_space: *c.ke_view_space = undefined,
     params: c.ke_render_shadow_params = default_params,
@@ -51,6 +51,8 @@ const ShadowModule = struct {
     lvp_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     obj_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    lvp_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 
     writes: [2][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
@@ -77,7 +79,7 @@ fn lightViewProj(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, p: c.ke_render_
 
 fn lightDirOf(ctx: ?*c.ke_system_ctx) ?zm.Vec {
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
     if (segc == 0 or segs[0].count == 0) return null;
     const dl: *const c.ke_directional_light_component = @ptrCast(@alignCast(segs[0].columns[0]));
     return zm.f32x4(dl.direction.x, dl.direction.y, dl.direction.z, 0.0);
@@ -98,7 +100,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     zm.storeMat(lvp_arr[0..], lvp);
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);
 
-    const pc = core.*.begin_pass.?(core, ctx, &sh.io);
+    const pc = core.*.begin_pass.?(core, &sh.io);
     if (pc == null) return true;
 
     const rp = pc.*.begin_render.?(pc);
@@ -107,7 +109,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 
     var draw_idx: u32 = 0;
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    const segs = ctx.?.view.?(ctx, 1, &segc);
     var s: usize = 0;
     while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -143,6 +145,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          out_error: [*c][*c]c.ke_error) bool {
     sh.enabled = enabled;
     sh.core = core;
+    sh.device = dev;
     sh.ndc = ndc;
     sh.view_space = view_space;
     sh.params = paramsOr(params);
@@ -187,8 +190,10 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     const sh_lvp_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
     const sh_lvp_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_lvp_entry });
+    sh.lvp_bgl = sh_lvp_bgl;
     const sh_obj_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 1, .view_dimension = 0 };
     const sh_obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_obj_entry });
+    sh.obj_bgl = sh_obj_bgl;
 
     const sh_attr = c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
     const sh_vbl = c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = &sh_attr };
@@ -251,8 +256,19 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+fn destroyModule(sh: *const ShadowModule) void {
+    const dev = sh.device;
+    if (sh.obj_bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, sh.obj_bg);
+    if (sh.lvp_bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, sh.lvp_bg);
+    if (sh.obj_uniform != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, sh.obj_uniform);
+    if (sh.lvp_uniform != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, sh.lvp_uniform);
+    if (sh.obj_bgl != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.obj_bgl);
+    if (sh.lvp_bgl != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.lvp_bgl);
+}
+
 fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
     const sh: *ShadowModule = @ptrCast(@alignCast(self orelse return));
+    destroyModule(sh);
     gpa.destroy(sh);
 }
 
@@ -272,6 +288,7 @@ export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     const sh = gpa.create(ShadowModule) catch return empty;
     sh.* = .{};
     if (!setup(sh, dev, core_ref, ndc, vs, enabled != 0, mesh_cid, world_transform_cid, light_cid, frame_cid, params, out_error)) {
+        destroyModule(sh);
         gpa.destroy(sh);
         return empty;
     }
@@ -291,4 +308,40 @@ export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     }
 
     return .{ .ref = @ptrCast(sh), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the shadow pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    const ndc = std.mem.zeroes(c.ke_ndc_convention);
+    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, 1, 1, 2, 3, 4, &default_params, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a shadow pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    const ndc = std.mem.zeroes(c.ke_ndc_convention);
+    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, 1, 1, 2, 3, 4, &default_params, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

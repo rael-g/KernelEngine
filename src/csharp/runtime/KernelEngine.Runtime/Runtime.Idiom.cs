@@ -36,3 +36,23 @@ public sealed unsafe partial class Runtime : IRuntime
     }
 
 }
+
+/// <summary>
+/// The part of <see cref="SystemCtx"/> that is not a slot: reaching the context a body was
+/// handed from its pointer, and the command queue the context carries as a field.
+/// </summary>
+public unsafe partial class SystemCtx
+{
+    /// <summary>
+    /// Wraps the context a system body was handed. The native side owns it and it means
+    /// nothing once the body returns, so the result must not be kept past the call.
+    /// </summary>
+    /// <param name="ctx">The context pointer the runtime passed to the body.</param>
+    public static SystemCtx Of(nint ctx) => Borrow((ke_system_ctx*)ctx);
+
+    /// <summary>
+    /// The queue this body records structural changes into, applied at the wave barrier.
+    /// Every operation on it fails in the render phase, which may not change structure.
+    /// </summary>
+    public EcsCommands Commands => EcsCommands.Borrow(_native->commands);
+}

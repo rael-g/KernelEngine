@@ -317,14 +317,6 @@
           "return_doc": null,
           "params": [
             {
-              "name": "sys",
-              "type": "ke_system_ctx *",
-              "tags": [
-                "ctx"
-              ],
-              "doc": "The system context whose body is recording the pass."
-            },
-            {
               "name": "io",
               "type": "const ke_render_pass_io *",
               "tags": [],

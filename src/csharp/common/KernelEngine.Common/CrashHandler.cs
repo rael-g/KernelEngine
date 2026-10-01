@@ -5,24 +5,9 @@ namespace KernelEngine.Common;
 
 /// <summary>
 /// Installs process-wide handlers that turn opaque native crashes (abort(),
-/// SEH access violation, bgfx debug assertions, etc.) into a clear diagnostic
+/// SEH access violation, debug assertions, etc.) into a clear diagnostic
 /// line on stderr plus a minidump file, instead of silent process death.
 /// </summary>
-/// <remarks>
-/// Register once at process startup before any native code that might assert
-/// or crash. Subsequent Register calls are no-ops (idempotent).
-/// <para>
-/// On Windows the handler chain is:
-/// <list type="number">
-///   <item><c>_set_abort_behavior</c> — routes <c>abort()</c> through Windows Error Reporting,
-///         which propagates as an SEH exception instead of dying silently.</item>
-///   <item><c>SetUnhandledExceptionFilter</c> — catches the SEH (or any other native fault)
-///         before the OS kills the process, prints a useful diagnostic to stderr.</item>
-///   <item><c>AppDomain.UnhandledException</c> — catches any managed exception that bubbled
-///         past every try/catch, prints the full stack trace.</item>
-/// </list>
-/// </para>
-/// </remarks>
 public static class CrashHandler
 {
     private static bool _registered;
@@ -161,7 +146,7 @@ public static class CrashHandler
 
         string name = code switch
         {
-            unchecked((int)0x80000003) => "STATUS_BREAKPOINT (bgfx debug assert / int3)",
+            unchecked((int)0x80000003) => "STATUS_BREAKPOINT (debug assert / int3)",
             unchecked((int)0xC0000005) => "STATUS_ACCESS_VIOLATION (null/dangling pointer)",
             unchecked((int)0xC00000FD) => "STATUS_STACK_OVERFLOW",
             unchecked((int)0x40010005) => "DBG_CONTROL_C",

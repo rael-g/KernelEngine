@@ -2,11 +2,10 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
-/// Longest signal name the bus stores.
 const name_max = 64;
 
 const unknown_size: u32 = c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN;
@@ -54,9 +53,6 @@ const State = struct {
 
     deliveries: []c.ke_signal_delivery,
     delivery_count: u32,
-    /// Whether delivery_count reflects the current event list. Reset by every
-    /// emit, so a consumer calling deliveries() twice gets one join, and a
-    /// consumer calling it after a later emit still sees that emit.
     joined: bool,
 };
 
@@ -558,4 +554,10 @@ test "a signal wired by name before its layout is declared still resolves to one
     var count: u32 = 0;
     _ = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 1), count);
+}
+
+test "creating and destroying a signal bus leaves no block allocated" {
+    const h = makeBus();
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
 }

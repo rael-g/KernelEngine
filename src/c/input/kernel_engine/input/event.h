@@ -31,11 +31,11 @@ extern "C"
     } ke_input_event_kind;
 
     /**
-     * @brief One discrete input event captured during ke.main's poll phase.
+     * @brief One discrete input event captured during the input poll.
      *
      * Flat layout (no anonymous unions) for friction-free C# P/Invoke binding.
      * Field interpretation depends on @c kind:
-     *   - KEY_DOWN / KEY_UP:           code = key code (GLFW codes)
+     *   - KEY_DOWN / KEY_UP:           code = a ke_key value
      *   - MOUSE_BUTTON_DOWN/UP:        code = button index
      *   - MOUSE_MOVE:                  x, y = absolute cursor position
      *   - MOUSE_SCROLL:                x, y = scroll delta x, y

@@ -11,15 +11,12 @@ const E = @import("kerror").Errors(c);
 
 const KE_MAX_QUERIES_PER_SYSTEM = 8;
 const KE_MAX_SEGMENTS_PER_QUERY = 32;
-/// One scratch set per phase. runtimeRunPhase is re-entrant across threads —
-/// the render phase is pipelined against the next tick's sim phases — so a
-/// single shared set would let two threads write the same buffers.
 const KE_RUNTIME_PHASE_COUNT = 7;
 const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 fn cAlloc(comptime T: type, n: usize) ?[*]T {
     if (n == 0) return null;
@@ -31,8 +28,6 @@ fn cFree(comptime T: type, p: ?[*]T, n: usize) void {
     if (p) |pp| heap.gpa.free(pp[0..n]);
 }
 
-/// For the byte-sized per-column buffers, whose element type is only known at
-/// runtime (it comes from the ECS's component_size).
 fn cAllocBytes(n: usize) ?*anyopaque {
     if (n == 0) return null;
     const slice = heap.gpa.alloc(u8, n) catch return null;
@@ -87,16 +82,24 @@ fn ctxOf(ptr: ?*c.ke_system_ctx) ?*CtxState {
     return @ptrCast(@alignCast(ctx.handle));
 }
 
-fn bindCtx(ctx: *c.ke_system_ctx, state: *CtxState) void {
+fn commandsOf(ptr: ?*c.ke_ecs_commands) ?*CtxState {
+    const cmds = ptr orelse return null;
+    return @ptrCast(@alignCast(cmds.handle));
+}
+
+fn bindCtx(ctx: *c.ke_system_ctx, commands: *c.ke_ecs_commands, state: *CtxState) void {
+    commands.* = .{
+        .handle = state,
+        .spawn = &commandsSpawn,
+        .attach = &commandsAttach,
+        .detach = &commandsDetach,
+        .despawn = &commandsDespawn,
+        .@"defer" = &commandsDefer,
+    };
+    ctx.commands = commands;
     ctx.handle = state;
-    ctx.view = &ke_system_ctx_view;
-    ctx.reserve = &ke_system_ctx_reserve;
-    ctx.@"defer" = &ke_system_ctx_defer;
-    ctx.spawn = &ke_system_ctx_spawn;
-    ctx.attach = &ke_system_ctx_attach;
-    ctx.detach = &ke_system_ctx_detach;
-    ctx.despawn = &ke_system_ctx_despawn;
-    ctx.slice = &ke_system_ctx_slice;
+    ctx.view = &ctxView;
+    ctx.slice = &ctxSlice;
 }
 
 fn termWrites(a: c.ke_component_access) bool {
@@ -153,7 +156,7 @@ fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_
     return false;
 }
 
-export fn ke_runtime_debug_compute_waves(
+fn debugComputeWaves(
     systems: [*c]const c.ke_runtime_system_params,
     system_count: u32,
     out_wave_assignments: [*c]u32,
@@ -194,7 +197,7 @@ export fn ke_runtime_debug_compute_waves(
     out_wave_count.* = current_wave + 1;
 }
 
-export fn ke_system_ctx_view(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
+fn ctxView(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
     if (out_count != null) out_count.* = 0;
     const s = ctxOf(ctx) orelse return null;
     if (s.seg_storage == null or query_index >= s.view_query_count) return null;
@@ -216,11 +219,6 @@ fn deferReserve(q: *DeferQueue, needed: usize) bool {
     return true;
 }
 
-/// Payloads are copied into one byte arena and later handed back to a callback
-/// that casts them to its own struct, so each has to start on an address that
-/// struct could legally live at. Without this an odd-sized payload leaves the
-/// next one misaligned, and the cast is undefined behaviour rather than a
-/// visible failure.
 const defer_arena_align: usize = 16;
 
 fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
@@ -246,56 +244,68 @@ fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
     return offset;
 }
 
-export fn ke_system_ctx_reserve(ctx: ?*c.ke_system_ctx) callconv(.c) c.ke_entity {
-    const s = ctxOf(ctx) orelse return c.KE_ENTITY_INVALID;
-    const ecs = s.ecs orelse return c.KE_ENTITY_INVALID;
-    const reserve = ecs.entity_reserve orelse return c.KE_ENTITY_INVALID;
-    return reserve(ecs);
+fn ctxSlice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
+    const s = ctxOf(ctx);
+    if (out_index != null) out_index.* = if (s) |st| st.slice_index else 0;
+    if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
 }
 
-export fn ke_system_ctx_defer(ctx: ?*c.ke_system_ctx, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize) callconv(.c) bool {
-    const s = ctxOf(ctx) orelse return false;
-    const q = s.defer_q orelse return false;
-    if (func == null) return false;
-    const offset = deferArenaPush(q, user, user_size);
-    if (offset == std.math.maxInt(usize)) return false;
-    if (!deferReserve(q, q.count + 1)) return false;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
-    cmd.kind = .callback;
-    cmd.fn_ = func;
-    cmd.attach_offset = offset;
-    cmd.attach_size = user_size;
-    return true;
+fn recordTarget(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferQueue {
+    const s = commandsOf(self) orelse {
+        E.fail(out_error, .invalid_argument, "invalid command queue", src);
+        return null;
+    };
+    return s.defer_q orelse {
+        E.fail(out_error, .not_supported, "this phase may not change structure", src);
+        return null;
+    };
 }
 
-/// Returns the id the entity will have, usable immediately — a system that spawns
-/// something almost always needs to give it components in the same body, and it
-/// can only name it if the id exists now. The entity itself enters the world at
-/// the wave barrier.
-export fn ke_system_ctx_spawn(ctx: ?*c.ke_system_ctx) callconv(.c) c.ke_entity {
-    const s = ctxOf(ctx) orelse return c.KE_ENTITY_INVALID;
-    const q = s.defer_q orelse return c.KE_ENTITY_INVALID;
-    const ecs = s.ecs orelse return c.KE_ENTITY_INVALID;
-    const reserve = ecs.entity_reserve orelse return c.KE_ENTITY_INVALID;
-    const entity = reserve(ecs);
-    if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
-    if (!deferReserve(q, q.count + 1)) return c.KE_ENTITY_INVALID;
+fn recordCommand(q: *DeferQueue, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferCommand {
+    if (!deferReserve(q, q.count + 1)) {
+        E.fail(out_error, .out_of_memory, "command queue is full", src);
+        return null;
+    }
     const cmd = &q.cmds.?[q.count];
     q.count += 1;
+    return cmd;
+}
+
+fn commandsSpawn(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_entity {
+    const q = recordTarget(self, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
+    const ecs = commandsOf(self).?.ecs orelse {
+        E.fail(out_error, .not_initialized, "no world", @src());
+        return c.KE_ENTITY_INVALID;
+    };
+    const entity = ecs.entity_reserve.?(ecs);
+    if (entity == c.KE_ENTITY_INVALID) {
+        E.fail(out_error, .out_of_memory, "entity id could not be reserved", @src());
+        return c.KE_ENTITY_INVALID;
+    }
+    const cmd = recordCommand(q, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
     cmd.kind = .spawn;
     cmd.entity = entity;
     return entity;
 }
 
-export fn ke_system_ctx_attach(ctx: ?*c.ke_system_ctx, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize) callconv(.c) bool {
-    const s = ctxOf(ctx) orelse return false;
-    const q = s.defer_q orelse return false;
+fn commandsAttach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const q = recordTarget(self, out_error, @src()) orelse return false;
+    if (size != 0) {
+        const ecs = commandsOf(self).?.ecs orelse {
+            E.fail(out_error, .not_initialized, "no world", @src());
+            return false;
+        };
+        if (size != ecs.component_size.?(ecs, cid)) {
+            E.fail(out_error, .invalid_argument, "payload size differs from the component size", @src());
+            return false;
+        }
+    }
     const offset = deferArenaPush(q, data, size);
-    if (offset == std.math.maxInt(usize)) return false;
-    if (!deferReserve(q, q.count + 1)) return false;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
+    if (offset == std.math.maxInt(usize)) {
+        E.fail(out_error, .out_of_memory, "command payload does not fit", @src());
+        return false;
+    }
+    const cmd = recordCommand(q, out_error, @src()) orelse return false;
     cmd.kind = .attach;
     cmd.entity = entity;
     cmd.cid = cid;
@@ -304,33 +314,40 @@ export fn ke_system_ctx_attach(ctx: ?*c.ke_system_ctx, entity: c.ke_entity, cid:
     return true;
 }
 
-export fn ke_system_ctx_detach(ctx: ?*c.ke_system_ctx, entity: c.ke_entity, cid: c.ke_component_id) callconv(.c) bool {
-    const s = ctxOf(ctx) orelse return false;
-    const q = s.defer_q orelse return false;
-    if (!deferReserve(q, q.count + 1)) return false;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
+fn commandsDetach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const q = recordTarget(self, out_error, @src()) orelse return false;
+    const cmd = recordCommand(q, out_error, @src()) orelse return false;
     cmd.kind = .detach;
     cmd.entity = entity;
     cmd.cid = cid;
     return true;
 }
 
-export fn ke_system_ctx_despawn(ctx: ?*c.ke_system_ctx, entity: c.ke_entity) callconv(.c) bool {
-    const s = ctxOf(ctx) orelse return false;
-    const q = s.defer_q orelse return false;
-    if (!deferReserve(q, q.count + 1)) return false;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
+fn commandsDespawn(self: ?*c.ke_ecs_commands, entity: c.ke_entity, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const q = recordTarget(self, out_error, @src()) orelse return false;
+    const cmd = recordCommand(q, out_error, @src()) orelse return false;
     cmd.kind = .despawn;
     cmd.entity = entity;
     return true;
 }
 
-export fn ke_system_ctx_slice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
-    const s = ctxOf(ctx);
-    if (out_index != null) out_index.* = if (s) |st| st.slice_index else 0;
-    if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
+fn commandsDefer(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const q = recordTarget(self, out_error, @src()) orelse return false;
+    if (func == null) {
+        E.fail(out_error, .invalid_argument, "no function to defer", @src());
+        return false;
+    }
+    const offset = deferArenaPush(q, user, user_size);
+    if (offset == std.math.maxInt(usize)) {
+        E.fail(out_error, .out_of_memory, "command payload does not fit", @src());
+        return false;
+    }
+    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+    cmd.kind = .callback;
+    cmd.fn_ = func;
+    cmd.attach_offset = offset;
+    cmd.attach_size = user_size;
+    return true;
 }
 
 var s_defer_applied_total: u32 = 0;
@@ -361,10 +378,10 @@ fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) void {
     q.arena_used = 0;
 }
 
-export fn ke_system_ctx_defer_applied_count() callconv(.c) u32 {
+fn deferAppliedCount() u32 {
     return s_defer_applied_total;
 }
-export fn ke_system_ctx_reset_defer_applied() callconv(.c) void {
+fn resetDeferApplied() void {
     s_defer_applied_total = 0;
 }
 
@@ -578,6 +595,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
 const TaskPkg = struct {
     state: CtxState,
     ctx: c.ke_system_ctx,
+    commands: c.ke_ecs_commands,
     execute: ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32, [*c][*c]c.ke_error) callconv(.c) bool,
     user_data: ?*anyopaque,
     dt: f32,
@@ -585,9 +603,6 @@ const TaskPkg = struct {
     allow_defer: bool,
 };
 
-/// What a body failed with, reduced to what survives leaving the worker that ran
-/// it: the type singleton, and the name of the system to blame. The ke_error the
-/// body filled belongs to that thread's slot and is gone by the time anyone asks.
 const PhaseFailure = struct {
     type: ?*const c.ke_error_type = null,
     system: [*c]const u8 = null,
@@ -677,7 +692,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
 
     const wave_assignments = (h.state.wave_assignments orelse return .{}) + base;
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(phase_params, phase_count, wave_assignments, &wave_count);
+    debugComputeWaves(phase_params, phase_count, wave_assignments, &wave_count);
 
     const pkgs = (h.state.phase_pkgs orelse return .{}) + base;
     const tasks = (h.state.phase_tasks orelse return .{}) + base;
@@ -707,7 +722,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
             var slice: u32 = 0;
             while (slice < slices) : (slice += 1) {
                 const pkg = &pkgs[wave_size];
-                bindCtx(&pkg.ctx, &pkg.state);
+                bindCtx(&pkg.ctx, &pkg.commands, &pkg.state);
                 pkg.state.ecs = h.state.ecs;
                 pkg.state.access_list = rs.params.access_list;
                 pkg.state.access_count = rs.params.access_count;
@@ -750,10 +765,6 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
     return failure;
 }
 
-/// How many concurrent slices one system's body is run as. A system that did not
-/// promise per-entity independence, or that is pinned to a named thread, is always
-/// one call; otherwise the entity set is split across the pool, never past the room
-/// left in the phase's package storage.
 fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: u32) u32 {
     if (room == 0) return 0;
     if (!p.per_entity or p.pinned_thread != 0) return 1;
@@ -870,9 +881,6 @@ fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) c
     }
 }
 
-/// Waits out the render phase dispatched by the previous tick and hands back what
-/// it failed with, which is carried on the job rather than in the runtime because
-/// that phase runs alongside the sim phases of the tick after it.
 fn runtimeJoinPendingRender(h: *RuntimeHandle) PhaseFailure {
     const task = h.state.pending_render_task orelse return .{};
     _ = h.state.scheduler.wait.?(h.state.scheduler, task, null);
@@ -980,8 +988,8 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
             cFree(RegisteredSystem, @ptrCast(rs), 1);
         }
         cFree(?*RegisteredSystem, systems, h.state.system_capacity);
-        freePhaseScratch(h);
     }
+    freePhaseScratch(h);
     cFree(RuntimeHandle, @ptrCast(h), 1);
 }
 
@@ -1165,7 +1173,7 @@ fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]
     const probe: *SliceProbe = @ptrCast(@alignCast(ud.?));
     var index: u32 = 99;
     var count: u32 = 99;
-    ke_system_ctx_slice(ctx, &index, &count);
+    ctx.?.slice.?(ctx, &index, &count);
     _ = probe.calls.fetchAdd(1, .acq_rel);
     probe.reported_count.store(count, .release);
     if (index < probe.seen.len) _ = probe.seen[index].fetchAdd(1, .acq_rel);
@@ -1627,7 +1635,7 @@ var g_extract_probe = ExtractProbe{};
 
 fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs == null) return true;
     for (0..seg_count) |s| {
         const col: [*]i32 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
@@ -1638,7 +1646,7 @@ fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c
 
 fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs != null and seg_count > 0 and segs[0].count > 0) {
         if (segs[0].columns[0]) |col| {
             const typed: [*]const i32 = @ptrCast(@alignCast(col));
@@ -1705,7 +1713,7 @@ var g_extract_pv_runs = Counter.init(0);
 
 fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs != null) {
         for (0..seg_count) |s| {
             const pc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
@@ -1770,7 +1778,7 @@ fn waveSystem(list: [*c]const c.ke_component_access, count: u32) c.ke_runtime_sy
 test "no systems produce no waves" {
     var assignments = [_]u32{ 99, 99, 99, 99 };
     var wave_count: u32 = 99;
-    ke_runtime_debug_compute_waves(null, 0, &assignments, &wave_count);
+    debugComputeWaves(null, 0, &assignments, &wave_count);
     try testing.expectEqual(@as(u32, 0), wave_count);
 }
 
@@ -1780,7 +1788,7 @@ test "a single system occupies one wave" {
 
     var assignments = [_]u32{99};
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 1, &assignments, &wave_count);
+    debugComputeWaves(&sys, 1, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 1), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1793,7 +1801,7 @@ test "systems writing different components share a wave" {
 
     var assignments = [_]u32{ 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+    debugComputeWaves(&sys, 2, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 1), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1807,7 +1815,7 @@ test "two systems writing the same component land in different waves" {
 
     var assignments = [_]u32{ 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+    debugComputeWaves(&sys, 2, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 2), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1821,7 +1829,7 @@ test "a writer and a reader of the same component land in different waves" {
 
     var assignments = [_]u32{ 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+    debugComputeWaves(&sys, 2, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 2), wave_count);
 }
@@ -1833,7 +1841,7 @@ test "two readers of the same component share a wave" {
 
     var assignments = [_]u32{ 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+    debugComputeWaves(&sys, 2, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 1), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1854,7 +1862,7 @@ test "a chain of conflicts groups greedily" {
 
     var assignments = [_]u32{ 99, 99, 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 4, &assignments, &wave_count);
+    debugComputeWaves(&sys, 4, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 3), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1886,7 +1894,7 @@ test "the clear shadow and cull access shape lands in one wave" {
 
     var assignments = [_]u32{ 99, 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 3, &assignments, &wave_count);
+    debugComputeWaves(&sys, 3, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 1), wave_count);
     try testing.expectEqual(assignments[0], assignments[1]);
@@ -1901,7 +1909,8 @@ const SpawnProbe = struct {
 
 fn spawnerBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const probe: *SpawnProbe = @ptrCast(@alignCast(ud.?));
-    for (&probe.ids) |*slot| slot.* = ke_system_ctx_spawn(ctx);
+    const cmds = ctx.?.commands;
+    for (&probe.ids) |*slot| slot.* = cmds.*.spawn.?(cmds, null);
     _ = probe.calls.fetchAdd(1, .acq_rel);
     return true;
 }
@@ -1910,7 +1919,7 @@ test "a deferred spawn is applied at the wave barrier" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    ke_system_ctx_reset_defer_applied();
+    resetDeferApplied();
 
     var probe = SpawnProbe{};
     var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
@@ -1920,7 +1929,7 @@ test "a deferred spawn is applied at the wave barrier" {
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
-    try testing.expectEqual(@as(u32, 3), ke_system_ctx_defer_applied_count());
+    try testing.expectEqual(@as(u32, 3), deferAppliedCount());
 }
 
 test "spawn hands the system body an id it can actually use" {
@@ -1962,14 +1971,16 @@ test "an entity spawned with no components still exists after the barrier" {
 
 const MutatorProbe = struct {
     payload: u8 = 'X',
+    cid: c.ke_component_id = 0,
     ok: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 };
 
 fn mutatorBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const probe: *MutatorProbe = @ptrCast(@alignCast(ud.?));
-    const attached = ke_system_ctx_attach(ctx, 42, 5, &probe.payload, 1);
-    const detached = ke_system_ctx_detach(ctx, 42, 5);
-    const despawned = ke_system_ctx_despawn(ctx, 42);
+    const cmds = ctx.?.commands;
+    const attached = cmds.*.attach.?(cmds, 42, probe.cid, &probe.payload, 1, null);
+    const detached = cmds.*.detach.?(cmds, 42, probe.cid, null);
+    const despawned = cmds.*.despawn.?(cmds, 42, null);
     probe.ok.store(attached and detached and despawned, .release);
     return true;
 }
@@ -1978,9 +1989,10 @@ test "deferred attach detach and despawn are applied at the barrier" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    ke_system_ctx_reset_defer_applied();
+    resetDeferApplied();
 
     var probe = MutatorProbe{};
+    probe.cid = f.ecs().component_register.?(f.ecs(), "mutator_probe", 1, null, 0, null);
     var sys = systemParams("Mutator", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &mutatorBody;
@@ -1988,19 +2000,82 @@ test "deferred attach detach and despawn are applied at the barrier" {
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expect(probe.ok.load(.acquire));
-    try testing.expectEqual(@as(u32, 3), ke_system_ctx_defer_applied_count());
+    try testing.expectEqual(@as(u32, 3), deferAppliedCount());
 }
 
 fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
-    _ = ke_system_ctx_spawn(ctx);
+    const cmds = ctx.?.commands;
+    _ = cmds.*.spawn.?(cmds, null);
     return true;
+}
+
+const RefusalProbe = struct {
+    cid: c.ke_component_id = 0,
+    wrong_size_refused: bool = false,
+    wrong_size_error: ?*const c.ke_error_type = null,
+    render_refused: bool = false,
+    render_error: ?*const c.ke_error_type = null,
+};
+
+fn wrongSizeBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const probe: *RefusalProbe = @ptrCast(@alignCast(ud.?));
+    const cmds = ctx.?.commands;
+    var payload: [8]u8 = undefined;
+    var err: [*c]c.ke_error = null;
+    probe.wrong_size_refused = !cmds.*.attach.?(cmds, 42, probe.cid, &payload, payload.len, &err);
+    if (err != null) probe.wrong_size_error = err.*.type;
+    return true;
+}
+
+fn renderBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const probe: *RefusalProbe = @ptrCast(@alignCast(ud.?));
+    const cmds = ctx.?.commands;
+    var err: [*c]c.ke_error = null;
+    probe.render_refused = cmds.*.spawn.?(cmds, &err) == c.KE_ENTITY_INVALID;
+    if (err != null) probe.render_error = err.*.type;
+    return true;
+}
+
+test "an attach whose payload size differs from the component size is refused with an error" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    resetDeferApplied();
+
+    var probe = RefusalProbe{};
+    probe.cid = f.ecs().component_register.?(f.ecs(), "refusal_probe", 1, null, 0, null);
+    var sys = systemParams("WrongSize", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &wrongSizeBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    try testing.expect(probe.wrong_size_refused);
+    try testing.expect(probe.wrong_size_error == E.typeOf(.invalid_argument));
+    try testing.expectEqual(@as(u32, 0), deferAppliedCount());
+}
+
+test "the render phase refuses to record a structural change" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var probe = RefusalProbe{};
+    var sys = systemParams("RenderSpawner", c.KE_PHASE_RENDER);
+    sys.user_data = &probe;
+    sys.execute = &renderBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    f.flushRender();
+    try testing.expect(probe.render_refused);
+    try testing.expect(probe.render_error == E.typeOf(.not_supported));
 }
 
 test "the defer queue drains between ticks" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    ke_system_ctx_reset_defer_applied();
+    resetDeferApplied();
 
     var sys = systemParams("RepeatSpawner", c.KE_PHASE_UPDATE);
     sys.execute = &repeatSpawnerBody;
@@ -2008,7 +2083,7 @@ test "the defer queue drains between ticks" {
 
     for (0..5) |_| try testing.expect(f.tick(1.0 / 60.0));
 
-    try testing.expectEqual(@as(u32, 5), ke_system_ctx_defer_applied_count());
+    try testing.expectEqual(@as(u32, 5), deferAppliedCount());
 }
 
 test "a zero size component registers as a usable tag" {
@@ -2038,7 +2113,7 @@ test "a zero size component registers as a usable tag" {
 
 fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs == null) return true;
 
     var sink: f32 = 0.0;
@@ -2083,7 +2158,7 @@ test "two readers sharing a wave read the same storage without conflicting" {
     const sysz = [_]c.ke_runtime_system_params{ a, b };
     var waves = [_]u32{ 0, 0 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sysz, 2, &waves, &wave_count);
+    debugComputeWaves(&sysz, 2, &waves, &wave_count);
     try testing.expectEqual(waves[0], waves[1]);
 
     for (0..300) |_| try testing.expect(f.tick(1.0 / 60.0));
@@ -2093,7 +2168,7 @@ var g_pv_sum: f64 = 0.0;
 
 fn posVelBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs == null) return true;
     for (0..seg_count) |s| {
         const pc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
@@ -2138,4 +2213,20 @@ test "a multi term query hands back aligned columns" {
     g_pv_sum = 0.0;
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expectEqual(expect, g_pv_sum);
+}
+
+test "creating, ticking and destroying a runtime leaves no block allocated" {
+    var f = try Fixture.init();
+    var sys = systemParams("LeakProbe", c.KE_PHASE_UPDATE);
+    sys.execute = &repeatSpawnerBody;
+    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(f.tick(1.0 / 60.0));
+    f.deinit();
+    try heap.expectNoLeaks();
+}
+
+test "a runtime with no system registered leaves no block allocated" {
+    var f = try Fixture.init();
+    f.deinit();
+    try heap.expectNoLeaks();
 }

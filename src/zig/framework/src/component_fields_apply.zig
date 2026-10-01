@@ -2,9 +2,10 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
+const fields_rt = @import("component_fields").Fields(c);
 
 fn writeField(base: [*]u8, field: *const c.ke_component_field, v: *const c.ke_variant) void {
-    c.ke_component_field_write(base, field, v);
+    fields_rt.write(base, field, v);
 }
 
 fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
@@ -40,7 +41,7 @@ pub fn seedDefaults(
     fields: [*]const c.ke_component_field,
     field_count: u32,
 ) void {
-    c.ke_component_fields_seed_defaults(component, fields, field_count);
+    fields_rt.seedDefaults(component, fields, field_count);
 }
 
 const testing = std.testing;
@@ -124,6 +125,15 @@ test "an integer authored for a float field is coerced, and the reverse" {
     });
     try testing.expectEqual(@as(f32, 3.0), p.amount);
     try testing.expectEqual(@as(i32, 9), p.count);
+}
+
+test "a float that is not a number authored for an integer field writes zero" {
+    var p = std.mem.zeroes(Probe);
+    p.count = 7;
+    applyTo(&p, &.{
+        .{ .key = "count", .value = vFloat(std.math.nan(f64)) },
+    });
+    try testing.expectEqual(@as(i32, 0), p.count);
 }
 
 test "a color authored with three components is opaque, not transparent" {

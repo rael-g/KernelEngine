@@ -1,14 +1,12 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
 const apply = @import("components_apply.zig");
 
-/// Starting size of the apply registry; it doubles on demand, so this only
-/// trades a little memory against a few early reallocs.
 const apply_initial_capacity: u32 = 16;
 
 const ApplyEntry = struct {
@@ -43,13 +41,11 @@ fn stateOf(self: *c.ke_world) *State {
 }
 
 /// The logger the world was built with, for plugin-internal diagnostics.
-/// Not a vtable slot: it is this plugin talking to itself, not ABI surface.
 pub fn loggerOf(self: *c.ke_world) ?*c.ke_logger {
     return stateOf(self).logger;
 }
 
 /// The signal bus the world was built with, for plugin-internal wiring.
-/// Not a vtable slot, same reasoning as loggerOf.
 pub fn signalBusOf(self: *c.ke_world) ?*c.ke_signal_bus {
     return stateOf(self).signal_bus;
 }
@@ -69,9 +65,6 @@ fn worldSceneTree(self_in: ?*c.ke_world) callconv(.c) ?*c.ke_scene_tree {
     return stateOf(self).scene_tree;
 }
 
-/// The entry for `cid`, appending an empty one when the component has none yet.
-/// Both registration slots share it, so a component can carry a generated field
-/// table and a callback for what the table cannot describe.
 fn entryFor(s: *State, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) ?*ApplyEntry {
     if (s.apply_registry) |reg| {
         for (reg[0..s.apply_count]) |*entry| {
@@ -184,9 +177,6 @@ fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     heap.gpa.destroy(@as(*Block, @fieldParentPtr("state", s)));
 }
 
-/// Registers a built-in component with the ecs and wires up its apply callback.
-/// Registers unconditionally, so a name already known is checked against the
-/// layout registered for it. False when the ecs refuses the registration.
 fn registerBuiltin(
     world: *c.ke_world,
     e: *c.ke_ecs,
@@ -375,4 +365,19 @@ test "two worlds never share the ecs, and destroying one leaves the other alive"
     try testing.expect(b2 != b);
 
     hb.destroy.?(hb.ref);
+}
+
+test "creating and destroying a world leaves no block allocated" {
+    var ecs: StubEcs = undefined;
+    stubEcsInit(&ecs);
+    var runtime = std.mem.zeroes(c.ke_runtime);
+
+    var params = std.mem.zeroes(c.ke_world_params);
+    params.ecs = &ecs.vtable;
+    params.runtime = &runtime;
+    params.project_root = "res/";
+
+    const h = ke_world_create(&params, null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
 }

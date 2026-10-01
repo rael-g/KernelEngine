@@ -6,7 +6,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const component_fields = @import("component_fields").Fields(c);
+const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
@@ -54,27 +55,18 @@ const QueryCacheEntry = struct {
     query: ?*c.ecs_query_t,
 };
 
-/// The field table a component was first registered with. Borrowed: it must
-/// outlive the ecs.
 const LayoutEntry = struct {
     cid: c.ke_component_id,
     fields: [*]const c.ke_component_field,
     field_count: u32,
 };
 
-/// A multi-term query registered via query_register — the parallel-safe read path.
-/// query_resolve walks it single-threaded into ke_ecs_segment lists; the wave
-/// bodies then read those segments as plain memory (no flecs call).
 const RegisteredQuery = struct {
     query: ?*c.ecs_query_t,
     elem_sizes: [c.KE_QUERY_MAX_TERMS]usize,
     term_count: usize,
 };
 
-/// First id flecs' own allocator may issue. Everything between the ids the world
-/// is born with and this mark is the pool entity_reserve draws from. The world's
-/// side is unbounded; only the reserve pool is sized, which is why the split
-/// doubles as its capacity and is overridable through the params.
 const default_world_id_base: u32 = 1 << 20;
 
 const State = struct {
@@ -84,10 +76,6 @@ const State = struct {
     reserve_low: u32,
     reserve_end: u32,
     reserve_next: std.atomic.Value(u32),
-    /// One bit per pool slot, recording that the id has already been given its
-    /// one life. flecs cannot answer this: deleting an id outside its active
-    /// range removes every trace of it, so asking the world whether an id ever
-    /// existed reports the same "no" for one never used and one destroyed.
     materialized: ?[]u8,
 
     queries: ?[*]QueryCacheEntry,
@@ -140,9 +128,6 @@ fn nameEquals(a: [*c]const u8, b: [*c]const u8) bool {
     return std.mem.orderZ(u8, @ptrCast(a), @ptrCast(b)) == .eq;
 }
 
-/// The index of the first field the two tables describe differently, or null when
-/// they agree. Name, type, offset and size all count. Differing lengths disagree
-/// at the first index the shorter one lacks.
 fn firstLayoutDiff(a: []const c.ke_component_field, b: []const c.ke_component_field) ?usize {
     const common = @min(a.len, b.len);
     for (0..common) |i| {
@@ -152,7 +137,6 @@ fn firstLayoutDiff(a: []const c.ke_component_field, b: []const c.ke_component_fi
     return if (a.len != b.len) common else null;
 }
 
-/// Whether every field the table describes lands inside `element_size`.
 fn layoutFitsSize(fields: []const c.ke_component_field, element_size: usize) bool {
     for (fields) |f| {
         if (@as(usize, f.offset) + @as(usize, f.size) > element_size) return false;
@@ -191,7 +175,6 @@ fn rememberLayout(
 
 threadlocal var layout_msg_buf: [256]u8 = undefined;
 
-/// Formats into a thread-local buffer, which the returned pointer borrows.
 fn layoutMessage(comptime fmt: []const u8, args: anytype) [*c]const u8 {
     const dst = layout_msg_buf[0 .. layout_msg_buf.len - 1];
     const written = std.fmt.bufPrint(dst, fmt, args) catch dst;
@@ -206,12 +189,6 @@ fn entityCreate(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     return @intCast(c.ecs_new(s.world));
 }
 
-/// Hands out an id without touching the world, which is the whole point: this is
-/// the one entity operation a system body may call from a parallel wave, and
-/// flecs' own id allocator walks a shared entity index that corrupts under
-/// concurrent use. The id comes from a band flecs is configured never to issue
-/// from, so the two allocators cannot meet, and the world learns about it later —
-/// see `materializeReserved`. Returns 0 once the pool is spent.
 fn entityReserve(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     const self = self_in orelse return 0;
     if (self.handle == null) return 0;
@@ -221,11 +198,6 @@ fn entityReserve(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     return @as(c.ke_entity, s.reserve_low) + offset;
 }
 
-/// Brings a reserved id into the world the first time anything is attached to it.
-///
-/// Only reachable single-threaded: the runtime flushes its defer queue after the
-/// wave barrier, so this runs where a world mutation is safe. An id outside the
-/// pool was issued by flecs and is already as alive as it will ever be.
 fn entityMaterialize(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or entity == 0) return;
@@ -403,7 +375,7 @@ fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_compon
     const slot = c.ecs_get_mut_id(s.world, @intCast(entity), @intCast(component));
     if (!already_had) {
         if (layoutOf(s, component)) |fields| {
-            c.ke_component_fields_seed_defaults(slot, fields.ptr, @intCast(fields.len));
+            component_fields.seedDefaults(slot, fields.ptr, @intCast(fields.len));
         }
     }
     return slot;
@@ -652,8 +624,6 @@ fn field(name: [*c]const u8, t: c.ke_variant_type, offset: u32, size: u32) c.ke_
     };
 }
 
-/// A pair the size check alone cannot separate: same total, same field sizes,
-/// only the meaning of each half swapped.
 const swapped_a = [_]c.ke_component_field{
     field("layers", c.KE_VARIANT_INT, 0, 4),
     field("ior", c.KE_VARIANT_FLOAT, 4, 4),
@@ -757,13 +727,6 @@ test "componentRegister is idempotent for a repeated identical size" {
     try testing.expect(out_error == null);
 }
 
-/// Test-only entry point for abort_probe.zig. Installs the real os_api hooks
-/// (the same call ke_ecs_flecs_create makes) and forces the exact assertion
-/// componentAdd exists to prevent — asking flecs directly for the mutable
-/// storage of a zero-size tag — proving the whole chain (real internal
-/// assertion -> installed hooks -> E.fatal -> process exit) without exposing
-/// anything through the public C surface, which has no path left to reach a
-/// flecs assert once the wrapper's own guards are in the way. Never returns.
 pub fn debugTriggerRealFlecsAssertion() void {
     installFlecsOsApi();
 
@@ -1010,4 +973,13 @@ test "a component registered without a field table still attaches zeroed" {
     const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
 
     try testing.expectEqual(@as(u32, 0), v.layers);
+}
+
+test "creating, filling and destroying an ecs leaves no block allocated" {
+    const handle = ke_ecs_flecs_create(null, null);
+    const cid = handle.ref.*.component_register.?(handle.ref, "leak_probe", 8, null, 0, null);
+    const e = handle.ref.*.entity_create.?(handle.ref);
+    try testing.expect(handle.ref.*.component_add.?(handle.ref, e, cid) != null);
+    handle.destroy.?(handle.ref);
+    try heap.expectNoLeaks();
 }

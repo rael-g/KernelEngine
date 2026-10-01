@@ -5,7 +5,8 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const PASS_NAME = "gbuffer";
 const DEFAULT_MATERIAL_SHADER = "standard";
@@ -23,8 +24,6 @@ const Draw = struct {
     world: *const c.ke_world_transform_component,
 };
 
-/// The meshes this camera owes the opaque pass: those whose layers the cull_mask
-/// names and whose material does not blend. Returns how many of `out` were filled.
 fn collectDraws(
     core: *c.ke_render_service,
     cam: *const c.ke_camera_component,
@@ -51,8 +50,7 @@ fn collectDraws(
 const GBufferModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    ndc: c.ke_ndc_convention = undefined,
-    view_space: *c.ke_view_space = undefined,
+    camera: *c.ke_render_camera = undefined,
 
     mesh_cid: c.ke_component_id = undefined,
     world_transform_cid: c.ke_component_id = undefined,
@@ -65,6 +63,7 @@ const GBufferModule = struct {
     empty_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 
     writes: [4][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
@@ -87,12 +86,6 @@ const GBufferModule = struct {
 
 const rc_MAX_SHADER_QUALIFIED = 128;
 
-fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
-    return zm.loadMat(&out.m);
-}
-
 inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
     return @alignCast(@ptrCast(user.?));
 }
@@ -102,9 +95,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const core = gb.core;
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
 
-    const pc = core.*.begin_pass.?(core, ctx, &gb.io);
+    const pc = core.*.begin_pass.?(core, &gb.io);
     if (pc == null) return true;
 
     if (cam_segc == 0 or cam_segs[0].count == 0) {
@@ -122,17 +115,17 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const view = cameraView(gb.view_space, cam_wt);
+    var view_m: c.ke_mat4 = undefined;
+    gb.camera.view.?(gb.camera, &cam_wt.matrix, &view_m);
     var proj_m: c.ke_mat4 = undefined;
-    c.ke_camera_projection(cam, aspect, gb.view_space, &gb.ndc, &proj_m);
-    const proj = zm.loadMat(&proj_m.m);
-    const view_proj = zm.mul(view, proj);
+    gb.camera.projection.?(gb.camera, cam, aspect, &proj_m);
+    const view_proj = zm.mul(zm.loadMat(&view_m.m), zm.loadMat(&proj_m.m));
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0);
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    const segs = ctx.?.view.?(ctx, 1, &segc);
     var selected: [MAX_DRAWS]Draw = undefined;
     const selected_count = collectDraws(core, cam, segs, segc, selected[0..]);
 
@@ -171,12 +164,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 }
 
 fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
+         render_camera: *c.ke_render_camera, mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          camera_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     gb.core = core;
     gb.device = dev;
-    gb.ndc = ndc;
-    gb.view_space = view_space;
+    gb.camera = render_camera;
     gb.mesh_cid = mesh_cid;
     gb.world_transform_cid = world_transform_cid;
     gb.camera_cid = camera_cid;
@@ -203,6 +195,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entry_count = 1,
         .entries = &obj_bgl_entry,
     });
+    gb.obj_bgl = obj_bgl;
 
     gb.attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -329,13 +322,24 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+fn destroyModule(gb: *const GBufferModule) void {
+    const dev = gb.device;
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (gb.obj_bind_group != invalid) dev.destroy_bind_group.?(dev, gb.obj_bind_group);
+    if (gb.obj_uniform != invalid) dev.destroy_buffer.?(dev, gb.obj_uniform);
+    if (gb.obj_bgl != invalid) dev.destroy_bind_group_layout.?(dev, gb.obj_bgl);
+    if (gb.empty_bg != invalid) dev.destroy_bind_group.?(dev, gb.empty_bg);
+    if (gb.empty_bgl != invalid) dev.destroy_bind_group_layout.?(dev, gb.empty_bgl);
+}
+
 fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
     const gb: *GBufferModule = @ptrCast(@alignCast(self orelse return));
+    destroyModule(gb);
     gpa.destroy(gb);
 }
 
 export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
+                                    device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                     mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_gbuffer_handle {
@@ -343,11 +347,12 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
-    const vs = view_space orelse return empty;
+    const camera_api = render_camera orelse return empty;
 
     const gb = gpa.create(GBufferModule) catch return empty;
     gb.* = .{};
-    if (!setup(gb, dev, core_ref, ndc, vs, mesh_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
+    if (!setup(gb, dev, core_ref, camera_api, mesh_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
+        destroyModule(gb);
         gpa.destroy(gb);
         return empty;
     }
@@ -369,7 +374,6 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
 
 const testing = std.testing;
 
-/// Reports every material as opaque except handle 0.
 fn opaqueUnlessZero(_: [*c]c.ke_render_service, m: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
     return if (m.bits == 0) c.KE_ALPHA_MODE_BLEND else c.KE_ALPHA_MODE_OPAQUE;
 }
@@ -464,4 +468,36 @@ test "meshes are gathered across every segment the query returned" {
 
     var out: [8]Draw = undefined;
     try testing.expectEqual(@as(u32, 2), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
+}
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the gbuffer pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a gbuffer pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

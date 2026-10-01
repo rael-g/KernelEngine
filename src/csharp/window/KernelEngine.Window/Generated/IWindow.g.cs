@@ -13,9 +13,6 @@ public interface IWindow : IDisposable
     /// <summary>Processes pending OS events. Call once per frame.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     void PollEvents();
-    /// <summary>Presents the back buffer. Call once per frame, after rendering.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
-    void SwapBuffers();
     /// <summary>Retrieves the current client-area size in pixels.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     (int Width, int Height) GetSize();

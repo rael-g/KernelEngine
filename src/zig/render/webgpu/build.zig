@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common  = b.option([]const u8, "ke-common-include", "Path to kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir",        "Dir containing ke_common import lib")      orelse @panic("-Dke-lib-dir required");
     const ke_render  = b.option([]const u8, "ke-render-include", "Path to kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
     const ke_window  = b.option([]const u8, "ke-window-include", "Path to kernel_engine/window include dir") orelse @panic("-Dke-window-include required");
@@ -18,6 +19,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
 
     mod.addIncludePath(.{ .cwd_relative = ke_common });
     mod.addIncludePath(.{ .cwd_relative = ke_render });
@@ -50,6 +52,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     test_mod.addIncludePath(.{ .cwd_relative = ke_common });
     test_mod.addIncludePath(.{ .cwd_relative = ke_render });
     test_mod.addIncludePath(.{ .cwd_relative = ke_window });

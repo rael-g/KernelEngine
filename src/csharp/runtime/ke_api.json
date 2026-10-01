@@ -201,7 +201,7 @@
             "array_of:access_count",
             "default:empty"
           ],
-          "doc": "Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and entity-keyed reads via ke_system_ctx_get. Declaring nothing is not \u0022no opinion\u0022 -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage says so."
+          "doc": "Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and component access made without a query. Declaring nothing is not \u0022no opinion\u0022 -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage says so."
         },
         {
           "name": "access_count",
@@ -388,7 +388,7 @@
     },
     {
       "name": "ke_system_ctx",
-      "doc": "The operations a system body may perform on its own context, invoked through the ke_system_ctx it receives. \u0060handle\u0060 is runtime-private. The free ke_system_ctx_* functions below wrap these slots.",
+      "doc": "What one call of a system body is given to work with: the entities its queries resolved to, which share of them it owns, and the queue it records structural changes into. It exists for the duration of the call and means nothing outside it. \u0060handle\u0060 is runtime-private.",
       "tags": [],
       "fields": [
         {
@@ -396,6 +396,12 @@
           "type": "void *",
           "tags": [],
           "doc": null
+        },
+        {
+          "name": "commands",
+          "type": "ke_ecs_commands *",
+          "tags": [],
+          "doc": "The queue this body records structural changes into, applied at the wave barrier. In the render phase the queue refuses every operation, because that phase reads an extracted snapshot and may not change structure."
         }
       ],
       "slots": [
@@ -403,7 +409,7 @@
           "name": "view",
           "returns": "const ke_ecs_segment *",
           "tags": [],
-          "doc": null,
+          "doc": "The system body\u0027s only path to component memory. Returns the resolved archetype segments for the system\u0027s query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call: the segments were resolved single-threaded before the wave, because an ECS iterator allocates from storage shared across the wave\u0027s parallel systems. Returns NULL for an out-of-range index or a system that declared no queries.",
           "return_doc": null,
           "params": [
             {
@@ -427,128 +433,10 @@
           "receiver": "ke_system_ctx *"
         },
         {
-          "name": "reserve",
-          "returns": "ke_entity",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [],
-          "receiver": "ke_system_ctx *"
-        },
-        {
-          "name": "defer",
-          "returns": "_Bool",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [
-            {
-              "name": "fn",
-              "type": "ke_defer_fn",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "user",
-              "type": "const void *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "user_size",
-              "type": "size_t",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "ke_system_ctx *"
-        },
-        {
-          "name": "spawn",
-          "returns": "ke_entity",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [],
-          "receiver": "ke_system_ctx *"
-        },
-        {
-          "name": "attach",
-          "returns": "_Bool",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [
-            {
-              "name": "entity",
-              "type": "ke_entity",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "cid",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "data",
-              "type": "const void *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "size",
-              "type": "size_t",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "ke_system_ctx *"
-        },
-        {
-          "name": "detach",
-          "returns": "_Bool",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [
-            {
-              "name": "entity",
-              "type": "ke_entity",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "cid",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "ke_system_ctx *"
-        },
-        {
-          "name": "despawn",
-          "returns": "_Bool",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [
-            {
-              "name": "entity",
-              "type": "ke_entity",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "ke_system_ctx *"
-        },
-        {
           "name": "slice",
           "returns": "void",
           "tags": [],
-          "doc": null,
+          "doc": "Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1, so a body written against this reads the whole set without asking whether it was sliced.",
           "return_doc": null,
           "params": [
             {
@@ -574,277 +462,6 @@
     }
   ],
   "functions": [
-    {
-      "name": "ke_system_ctx_defer_applied_count",
-      "returns": "uint32_t",
-      "doc": null,
-      "return_doc": null,
-      "params": []
-    },
-    {
-      "name": "ke_system_ctx_reset_defer_applied",
-      "returns": "void",
-      "doc": null,
-      "return_doc": null,
-      "params": []
-    },
-    {
-      "name": "ke_runtime_debug_compute_waves",
-      "returns": "void",
-      "doc": null,
-      "return_doc": null,
-      "params": [
-        {
-          "name": "systems",
-          "type": "const ke_runtime_system_params *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "system_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "out_wave_assignments",
-          "type": "uint32_t *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "out_wave_count",
-          "type": "uint32_t *",
-          "tags": [
-            "out"
-          ],
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_system_ctx_view",
-      "returns": "const ke_ecs_segment *",
-      "doc": "The system body\u0027s only path to component memory. Returns the resolved archetype segments for the system\u0027s query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call \u2014 the segments were resolved single-threaded before the wave, because an ECS iterator allocates from storage shared across the wave\u0027s parallel systems. Returns NULL for an out-of-range index or a system that declared no queries.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "ctx",
-          "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
-          "doc": null
-        },
-        {
-          "name": "query_index",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "out_count",
-          "type": "size_t *",
-          "tags": [
-            "out"
-          ],
-          "doc": null
-        }
-      ],
-      "return_tags": [
-        "array_of:out_count"
-      ]
-    },
-    {
-      "name": "ke_system_ctx_slice",
-      "returns": "void",
-      "doc": "Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1, so a body written against this reads the whole set without asking whether it was sliced. A context of zero reports index 0 of count 1, which is what a caller outside a system needs to read its whole set unconditionally.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "ctx",
-          "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
-          "doc": null
-        },
-        {
-          "name": "out_index",
-          "type": "uint32_t *",
-          "tags": [
-            "out"
-          ],
-          "doc": null
-        },
-        {
-          "name": "out_count",
-          "type": "uint32_t *",
-          "tags": [
-            "out"
-          ],
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_system_ctx_reserve",
-      "returns": "ke_entity",
-      "doc": "Reserves an entity id usable immediately, callable during a parallel wave. The id may be referenced at once; components given via attach land at the wave barrier. A context of zero reserves nothing and answers KE_ENTITY_INVALID.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "ctx",
-          "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_system_ctx_defer",
-      "returns": "_Bool",
-      "doc": "Enqueues a structural mutation to run at the wave barrier, for work the fixed spawn/attach/despawn verbs cannot express. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call. False on OOM.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "ctx",
-          "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
-          "doc": null
-        },
-        {
-          "name": "fn",
-          "type": "ke_defer_fn",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "user",
-          "type": "const void *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "user_size",
-          "type": "size_t",
-          "tags": [],
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_system_ctx_spawn",
-      "returns": "ke_entity",
-      "doc": null,
-      "return_doc": null,
-      "params": [
-        {
-          "name": "ctx",
-          "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_system_ctx_attach",
-      "returns": "_Bool",
-      "doc": "Deferred-attaches \u0060size\u0060 bytes of \u0060data\u0060 as component \u0060cid\u0060 of \u0060entity\u0060, applied at the wave barrier. The bytes are copied, so the caller\u0027s buffer need not outlive the call. False for a context of zero, which is the caller\u0027s signal to use its immediate path instead.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "ctx",
-          "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
-          "doc": null
-        },
-        {
-          "name": "entity",
-          "type": "ke_entity",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "cid",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "data",
-          "type": "const void *",
-          "tags": [
-            "bytes_of:size"
-          ],
-          "doc": null
-        },
-        {
-          "name": "size",
-          "type": "size_t",
-          "tags": [],
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_system_ctx_detach",
-      "returns": "_Bool",
-      "doc": null,
-      "return_doc": null,
-      "params": [
-        {
-          "name": "ctx",
-          "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
-          "doc": null
-        },
-        {
-          "name": "entity",
-          "type": "ke_entity",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "cid",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_system_ctx_despawn",
-      "returns": "_Bool",
-      "doc": null,
-      "return_doc": null,
-      "params": [
-        {
-          "name": "ctx",
-          "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
-          "doc": null
-        },
-        {
-          "name": "entity",
-          "type": "ke_entity",
-          "tags": [],
-          "doc": null
-        }
-      ]
-    },
     {
       "name": "ke_runtime_create",
       "returns": "ke_runtime_handle",
@@ -965,25 +582,6 @@
           "doc": "Set when the body cannot finish its work; the tick fails with it."
         }
       ]
-    },
-    {
-      "name": "ke_defer_fn",
-      "returns": "void",
-      "doc": "A structural operation run serially at the wave barrier. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world.",
-      "lanes": [
-        {
-          "name": null,
-          "type": "ke_ecs *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": null,
-          "type": "void *",
-          "tags": [],
-          "doc": null
-        }
-      ]
     }
   ],
   "type_aliases": {
@@ -993,7 +591,6 @@
     "ke_system_id": "uint64_t",
     "ke_module_load_fn": "_Bool (*)(ke_runtime *, void *, ke_error **)",
     "ke_module_unload_fn": "void (*)(ke_runtime *, void *)",
-    "ke_system_execute_fn": "_Bool (*)(ke_system_ctx *, void *, float, ke_error **)",
-    "ke_defer_fn": "void (*)(ke_ecs *, void *)"
+    "ke_system_execute_fn": "_Bool (*)(ke_system_ctx *, void *, float, ke_error **)"
   }
 }

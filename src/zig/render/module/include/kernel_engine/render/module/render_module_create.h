@@ -40,6 +40,9 @@ typedef struct ke_render_feature_params
     ke_bool enable_ibl;
 } ke_render_feature_params;
 
+/// The asset_resolver argument is borrowed and may be NULL. It turns an authored
+/// path into an uploaded texture; where the host wires none, a sprite that names a
+/// file draws untextured instead of failing the load.
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_world *world, ke_bool default_passes, struct ke_logger *logger,

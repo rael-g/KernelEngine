@@ -10,8 +10,6 @@ extern "C"
 {
 #endif
 
-#define KE_ID_FONT_LOADER "ke_font_loader"
-
     /** Per-glyph layout + atlas-sampling info, in pixels at the baked size.
      * `bearing_x` shifts the quad right of the pen; `bearing_y` shifts up from the baseline.
      * `width`/`height` is the quad size; `u0,v0,u1,v1` is the source rect in the atlas. */

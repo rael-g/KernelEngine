@@ -240,7 +240,8 @@ fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
     };
 }
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) GpuError!wgpu.WGPUSurface {
     const native = window.get_native_handle.?(window) orelse return GpuError.SurfaceCreationFailed;

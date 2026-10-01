@@ -87,6 +87,54 @@ public unsafe partial class Input : IDisposable, INativeInput
         return result;
     }
 
+    /// <summary>Returns true while the key is held down in a snapshot.</summary>
+    /// <param name="snapshot">Snapshot to read.</param>
+    /// <param name="key">Key to query. Out-of-range codes read as false.</param>
+    public bool SnapshotIsKeyDown(ke_input_snapshot* snapshot, Key key)
+    {
+        return Handle->snapshot_is_key_down(Handle, snapshot, (int)key) != 0;
+    }
+
+    /// <summary>Returns true if the key transitioned to down during the snapshot's frame.</summary>
+    /// <param name="snapshot">Snapshot to read.</param>
+    /// <param name="key">Key to query. Out-of-range codes read as false.</param>
+    public bool SnapshotIsKeyPressed(ke_input_snapshot* snapshot, Key key)
+    {
+        return Handle->snapshot_is_key_pressed(Handle, snapshot, (int)key) != 0;
+    }
+
+    /// <summary>Returns true if the key transitioned to up during the snapshot's frame.</summary>
+    /// <param name="snapshot">Snapshot to read.</param>
+    /// <param name="key">Key to query. Out-of-range codes read as false.</param>
+    public bool SnapshotIsKeyReleased(ke_input_snapshot* snapshot, Key key)
+    {
+        return Handle->snapshot_is_key_released(Handle, snapshot, (int)key) != 0;
+    }
+
+    /// <summary>Returns true while the mouse button is held down in a snapshot.</summary>
+    /// <param name="snapshot">Snapshot to read.</param>
+    /// <param name="button">Button to query. Out-of-range indices read as false.</param>
+    public bool SnapshotIsMouseButtonDown(ke_input_snapshot* snapshot, MouseButton button)
+    {
+        return Handle->snapshot_is_mouse_button_down(Handle, snapshot, (int)button) != 0;
+    }
+
+    /// <summary>Returns true if the mouse button transitioned to down during the snapshot's frame.</summary>
+    /// <param name="snapshot">Snapshot to read.</param>
+    /// <param name="button">Button to query. Out-of-range indices read as false.</param>
+    public bool SnapshotIsMouseButtonPressed(ke_input_snapshot* snapshot, MouseButton button)
+    {
+        return Handle->snapshot_is_mouse_button_pressed(Handle, snapshot, (int)button) != 0;
+    }
+
+    /// <summary>Returns true if the mouse button transitioned to up during the snapshot's frame.</summary>
+    /// <param name="snapshot">Snapshot to read.</param>
+    /// <param name="button">Button to query. Out-of-range indices read as false.</param>
+    public bool SnapshotIsMouseButtonReleased(ke_input_snapshot* snapshot, MouseButton button)
+    {
+        return Handle->snapshot_is_mouse_button_released(Handle, snapshot, (int)button) != 0;
+    }
+
     /// <summary>Drains pending discrete events and clears the queue. Events beyond the buffer capacity are dropped. Must run on the same thread as the sinks below.</summary>
     /// <param name="outBuf">Receives the drained events.</param>
     /// <returns>Number of events written.</returns>

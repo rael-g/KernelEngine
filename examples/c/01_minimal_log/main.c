@@ -1,5 +1,6 @@
 ﻿#include <kernel_engine/common/error.h>
-#include "../common/example_console_sink.h"
+#include <kernel_engine/logger/simple/logger_simple_create.h>
+#include <kernel_engine/logger/simple/console_sink_create.h>
 #include <stdio.h>
 
 int main(void)
@@ -11,7 +12,7 @@ int main(void)
 
     if (logger_h.ref)
     {
-        logger->add_sink(logger, ke_example_console_sink(KE_LOG_LEVEL_TRACE), NULL);
+        logger->add_sink(logger, ke_console_sink_create(), NULL);
 
         ke_log_event ev = {KE_LOG_LEVEL_INFO, "app", "Hello from C Minimal Log!"};
         logger->log(logger, &ev);

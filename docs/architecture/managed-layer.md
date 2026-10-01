@@ -63,7 +63,7 @@ later. The generated wrapper turns it into a C function pointer and a context po
    (`RegisterSystemExecuteTrampoline`, `:244-262`). It runs on whichever worker the engine picked
    ([threading.md](threading.md#where-an-ordinary-system-body-runs)), so state a body needs per thread
    is `[ThreadStatic]`: the running system's context is
-   (`ScriptHost._systemCtx`, `Scene/ScriptHost.Idiom.cs:63-87`);
+   (`ScriptHost._systemCtx`, `Scene/ScriptHost.Idiom.cs:57-81`);
 3. the system body receives the context as an opaque `nint` and passes it back to the entry points that
    take one (`SystemExecute(nint ctx, float dt)`,
    `src/csharp/runtime/KernelEngine.Runtime.Abstractions/Generated/IRuntime.g.cs:19`).
@@ -71,7 +71,7 @@ later. The generated wrapper turns it into a C function pointer and a context po
 Which slots become trampolines, and how, is declared by tags in the header, not chosen by the
 generator: `[closure:user_data]` names the context lane, `[retained:return]` says the handler outlives
 the call, `[teardown]` marks a hook with no error lane (`src/c/runtime/kernel_engine/runtime/runtime.h:75-80`;
-`CSharpBackend.cs:1482-1618`).
+`CSharpBackend.cs:1476-1612`).
 
 ### What a handler's exception does
 
@@ -105,7 +105,7 @@ The two scheduler entry points that are not generated have their own channel
 through the static event `Scheduler.UnobservedDispatchFailure` (`:22-41`, `:49`) and is lost if
 nothing subscribes. A module that must know its pinned work finished blocks on its own
 `ManualResetEventSlim` and carries the exception itself
-(`Modules/SceneNodesModule.cs:185-194`, `Modules/SceneRouterModule.cs:56-70`).
+(`Modules/SceneNodesModule.cs:175-184`, `Modules/SceneRouterModule.cs:56-70`).
 
 ## Composing a game: `IRuntimeModule`
 
@@ -124,7 +124,7 @@ A module is the unit game and engine code are loaded in. `IRuntimeModule`
 `LoadModules` (`RuntimeStartup.cs:25-36`) gets every `IRuntimeModule` from the provider, sorts them,
 and calls `runtime.RegisterModule(name, onLoad, onUnload)` for each, so a module's `OnLoad` has run by the
 time `RegisterModule` returns (native `register_module` calls `on_load` synchronously,
-`src/zig/runtime/src/runtime.zig:465`).
+`src/zig/runtime/src/runtime.zig:451`).
 
 ### Load order
 

@@ -7,11 +7,6 @@ namespace KernelEngine;
 /// Managed snapshot of a native <c>ke_error_type</c> node, including its parent chain.
 /// Copied at the boundary — holds no native pointer, so it's safe to surface to game code.
 /// </summary>
-/// <remarks>
-/// Error types form a hierarchy via <see cref="Parent"/> (e.g. <c>KE_FLECS_NULL_ERROR</c>
-/// descends from <c>KE_NULL_ERROR</c>). <see cref="Is"/> walks that chain so a caller can
-/// match either the specific type or any ancestor — mirroring the native <c>ke_error_is()</c>.
-/// </remarks>
 public sealed class KernelErrorType
 {
     /// <summary>The type's name, e.g. <c>"KE_ERROR_NOT_FOUND"</c>.</summary>

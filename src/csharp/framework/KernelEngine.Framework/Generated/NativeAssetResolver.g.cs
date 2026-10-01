@@ -68,7 +68,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         Handle->free_texture(Handle, data);
     }
 
-    /// <summary>Resolves a mesh path. Two shapes are supported today: "res://primitives/{quad|plane|cube|sphere}" -&gt; baked primitive via ke_mesh_shape_bake (additional model-file extensions land when an asset loader is injected; .gltf/.fbx/.obj are not yet routed). Caller owns the result; release with free_mesh.</summary>
+    /// <summary>Resolves a mesh path. "res://primitives/{quad|plane|cube|sphere}" names a baked primitive, built via ke_mesh_shape_bake; a path that names none fails. Caller owns the result; release with free_mesh.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_mesh_shape_data ResolveMesh(string path)
     {
@@ -137,7 +137,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         }
     }
 
-    /// <summary>Resolves and uploads a mesh, deduped by `path`. Today only the shapes under "res://primitives/" that resolve_mesh understands; a broader path is a future-loader concern. KE_MESH_NONE on failure.</summary>
+    /// <summary>Resolves and uploads a mesh, deduped by `path`. Resolution is that of resolve_mesh. KE_MESH_NONE on failure.</summary>
     /// <param name="core">The render service to upload into.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     public ke_mesh_handle ResolveMeshInto(ke_render_service* core, string path)

@@ -1,6 +1,5 @@
 // Shadow-depth pass — renders shadow casters from the directional light's point
-// of view into an R32F map (depth written to the red channel). Translated from
-// the legacy bgfx vs_shadow/fs_shadow. Set 0 = light view-proj (per frame),
+// of view into an R32F map (depth written to the red channel). Set 0 = light view-proj (per frame),
 // set 2 = per-object model (dynamic offset) — same set indices as the forward
 // so the per-object ring is reused.
 

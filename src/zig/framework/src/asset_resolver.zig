@@ -1,7 +1,8 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const handles = @import("handle").Handles(c);
+const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
@@ -10,7 +11,6 @@ const mesh_shape = @import("mesh_shape.zig");
 const res_prefix = "res://";
 const primitive_prefix = "res://primitives/";
 
-/// Longest resolved filesystem path this resolver will produce.
 const path_buf_max = 1024;
 
 const State = struct {
@@ -35,7 +35,6 @@ fn fileExists(path: [*:0]const u8) bool {
     return true;
 }
 
-/// Copies `src` into `dst` truncating to fit, always NUL-terminating.
 fn copyStringClamped(dst: []u8, src: []const u8) void {
     if (dst.len == 0) return;
     const n = @min(src.len, dst.len - 1);
@@ -43,8 +42,6 @@ fn copyStringClamped(dst: []u8, src: []const u8) void {
     dst[n] = 0;
 }
 
-/// Joins root and remainder, inserting a '/' only when neither side supplies
-/// one. Truncates to fit `out`.
 fn joinPath(out: []u8, root: []const u8, remainder: []const u8) void {
     if (out.len == 0) return;
     const need_sep = root.len > 0 and
@@ -69,7 +66,6 @@ fn joinPath(out: []u8, root: []const u8, remainder: []const u8) void {
     out[i] = 0;
 }
 
-/// res://x -> project_root/x ; anything else passes through unchanged.
 fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
     const p = std.mem.span(path);
     if (std.mem.startsWith(u8, p, res_prefix)) {
@@ -84,7 +80,6 @@ fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
     copyStringClamped(out, p);
 }
 
-/// Reads a numeric TOML key that may be written as either a float or an int.
 fn tomlNumberIn(tab: ?*c.toml_table_t, key: [*c]const u8) ?f32 {
     const d = c.toml_double_in(tab, key);
     if (d.ok != 0) return @floatCast(d.u.d);
@@ -101,8 +96,6 @@ fn tomlNumberAt(arr: ?*c.toml_array_t, idx: c_int) ?f32 {
     return null;
 }
 
-/// Parses a `.material` TOML file. Defaults applied for missing keys. Returns
-/// false on missing/unparseable file or absent [material] section.
 fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
     out.base_color[0] = 1.0;
     out.base_color[1] = 1.0;
@@ -354,8 +347,6 @@ fn vtResolveTextureInto(
     return h;
 }
 
-/// ke_render_service's vertex-buffer layout is 11 floats (pos3+nrm3+uv2+tan3);
-/// ke_vertex carries a 12th (bitangent-sign tw) the GPU pipeline never binds.
 const gpu_floats_per_vertex = 11;
 
 fn vtResolveMeshInto(
@@ -449,12 +440,12 @@ fn vtResolveMaterialInto(
     var albedo = c.KE_TEXTURE_NONE;
     if (spec.albedo_path[0] != 0) {
         albedo = vtResolveTextureInto(self, core, @ptrCast(&spec.albedo_path), out_error);
-        if (!c.ke_texture_is_valid(albedo)) return c.KE_MATERIAL_NONE;
+        if (albedo.bits == c.KE_HANDLE_NONE) return c.KE_MATERIAL_NONE;
     }
     var normal = c.KE_TEXTURE_NONE;
     if (spec.normal_path[0] != 0) {
         normal = vtResolveTextureInto(self, core, @ptrCast(&spec.normal_path), out_error);
-        if (!c.ke_texture_is_valid(normal)) return c.KE_MATERIAL_NONE;
+        if (normal.bits == c.KE_HANDLE_NONE) return c.KE_MATERIAL_NONE;
     }
 
     return core.create_material.?(
@@ -1090,18 +1081,24 @@ test "the none handle of every render resource is all bits zero" {
     try testing.expectEqual(@as(u32, 0), c.KE_SHADOW_MAP_NONE.bits);
 
     const zeroed = std.mem.zeroes(c.ke_mesh_handle);
-    try testing.expect(!c.ke_mesh_is_valid(zeroed));
+    try testing.expectEqual(@as(u32, c.KE_HANDLE_NONE), zeroed.bits);
 }
 
 test "a live handle is never zero, not even at index zero" {
     for (0..8) |index| {
-        const bits = c.ke_handle_make(@intCast(index), c.KE_HANDLE_GENERATION_FIRST);
+        const bits = handles.make(@intCast(index), c.KE_HANDLE_GENERATION_FIRST);
         const h = c.ke_mesh_handle{ .bits = bits };
-        try testing.expect(c.ke_mesh_is_valid(h));
-        try testing.expectEqual(@as(u32, @intCast(index)), c.ke_handle_index(h.bits));
+        try testing.expect(h.bits != c.KE_HANDLE_NONE);
+        try testing.expectEqual(@as(u32, @intCast(index)), handles.index(h.bits));
         try testing.expectEqual(
             @as(u32, c.KE_HANDLE_GENERATION_FIRST),
-            c.ke_handle_generation(h.bits),
+            handles.generation(h.bits),
         );
     }
+}
+
+test "creating and destroying a resolver leaves no block allocated" {
+    const h = ke_asset_resolver_create(null, null, null, null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
 }

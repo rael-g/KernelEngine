@@ -1,16 +1,12 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
-/// Longest script type name the host stores.
 const name_max = 96;
 
-/// Components one script type may declare. A type is a component set, and a set
-/// this wide already exceeds what a query can carry, so the ceiling is reached
-/// long after the one that actually binds.
 const components_max = 16;
 
 const default_max_types = 64;
@@ -22,22 +18,13 @@ const ScriptType = struct {
     component_count: u32,
     reach: c.ke_script_reach,
 
-    /// The entities bound as this type, in binding order. Kept beside the bindings
-    /// rather than derived by sweeping the world: a host that must ask "which
-    /// entities are yours" every tick would pay a scan for an answer the bind call
-    /// already knew.
     entities: std.ArrayList(c.ke_entity),
 };
 
-/// What an entity carries once a runtime binds an object to it. Living in the ECS
-/// rather than in a table beside it is what makes the lookup O(1) and what lets a
-/// query see which entities are scripted at all.
 const Binding = extern struct {
     type_id: c.ke_script_type_id,
     instance: ?*anyopaque,
 
-    /// Where this entity sits in its type's entity list, so unbinding costs the same
-    /// whether a type has three instances or thirty thousand.
     slot: u32,
 };
 
@@ -832,4 +819,12 @@ test "a node is not its own ancestor" {
     try testing.expect(h.host().bind.?(h.host(), node, field, &marker, null));
 
     try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), node, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, null));
+}
+
+test "creating and destroying a script host leaves no block allocated" {
+    var h: Harness = undefined;
+    try h.init();
+    _ = try h.declare("LeakProbe", c.KE_SCRIPT_REACH_SELF);
+    h.deinit();
+    try heap.expectNoLeaks();
 }

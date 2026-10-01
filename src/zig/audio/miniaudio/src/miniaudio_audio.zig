@@ -4,7 +4,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const ma = @cImport({
     @cInclude("miniaudio.h");
@@ -14,6 +15,7 @@ const c = @cImport({
     @cInclude("kernel_engine/audio/miniaudio/miniaudio_audio.h");
     @cInclude("kernel_engine/logger/logger.h");
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
+    @cInclude("kernel_engine/resource_cache/default/resource_cache_default_create.h");
 });
 
 const E = @import("kerror").Errors(c);
@@ -302,4 +304,11 @@ test "the master volume accepts the full unit range" {
 test "playing through a null backend returns false" {
     const ok = audioPlay(null, c.KE_AUDIO_SOUND_INVALID, 1.0, 0, null);
     try testing.expect(!ok);
+}
+
+test "creating and destroying the audio backend leaves no block allocated" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
 }

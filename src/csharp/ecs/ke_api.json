@@ -418,13 +418,195 @@
           "receiver": "ke_ecs *"
         }
       ]
+    },
+    {
+      "name": "ke_ecs_commands",
+      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording is what makes these operations callable from code that must not touch the world: a system body running beside other systems records, and the runtime applies every body\u0027s queue while nothing else runs. An implementation that cannot accept an operation fails it with the reason in \u0060out_error\u0060 and leaves the queue unchanged.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "spawn",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.",
+          "return_doc": "KE_ENTITY_INVALID when the operation could not be recorded.",
+          "params": [
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "attach",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Records giving \u0060entity\u0060 the component \u0060cid\u0060, initialised from \u0060size\u0060 bytes of \u0060data\u0060. The bytes are copied, so the caller\u0027s buffer need not outlive the call. \u0060size\u0060 must equal the registered size of \u0060cid\u0060, or be 0 to attach the component without copying bytes into it.",
+          "return_doc": "false when the operation could not be recorded.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "detach",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Records removing component \u0060cid\u0060 from \u0060entity\u0060.",
+          "return_doc": "false when the operation could not be recorded.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "despawn",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Records destroying \u0060entity\u0060.",
+          "return_doc": "false when the operation could not be recorded.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "defer",
+          "returns": "_Bool",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Records a structural operation for work the fixed verbs above cannot express. \u0060fn\u0060 runs when the queue is applied, in order with the other operations. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call.",
+          "return_doc": "false when the operation could not be recorded.",
+          "params": [
+            {
+              "name": "fn",
+              "type": "ke_defer_fn",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:user_size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "user_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        }
+      ]
     }
   ],
   "functions": [],
-  "callbacks": [],
+  "callbacks": [
+    {
+      "name": "ke_defer_fn",
+      "returns": "void",
+      "doc": "A structural operation applied when the queue holding it is drained. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world.",
+      "lanes": [
+        {
+          "name": null,
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": null,
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
-    "ke_query_id": "uint64_t"
+    "ke_query_id": "uint64_t",
+    "ke_defer_fn": "void (*)(ke_ecs *, void *)"
   }
 }

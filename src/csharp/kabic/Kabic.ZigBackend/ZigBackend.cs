@@ -8,22 +8,6 @@ using System.Text;
 /// rather than imported from the header, and a projection over it whose signatures
 /// are Zig's own (error unions, optionals, slices, sentinel-terminated strings).
 /// </summary>
-/// <remarks>
-/// <para>
-/// Declares the ABI instead of reaching for <c>@cImport</c> on purpose. Importing
-/// the header is what makes a Zig consumer feel it is calling a C library: every
-/// pointer arrives as <c>[*c]</c>, which is both nullable and many-item, so the
-/// compiler stops distinguishing "one value" from "an array" and stops catching a
-/// missing null check. A declared ABI says which of the two each pointer is, and
-/// the projection above it can then be total rather than defensive.
-/// </para>
-/// <para>
-/// Emits no <c>comptime</c> machinery. The projection is one wrapper struct per
-/// vtable with plain methods, which is the shape a C programmer reading Zig would
-/// write. Whether a richer rendering is worth it is a question for after the
-/// signatures are right, not before.
-/// </para>
-/// </remarks>
 public sealed class ZigBackend
 {
     readonly ApiModel model;

@@ -4,7 +4,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const c = @import("cimport.zig").c;
 
-var gpa = std.heap.c_allocator;
+const heap = @import("heap");
+var gpa = heap.gpa;
 
 const Module = struct {
     physics: *c.ke_physics_2d,
@@ -30,7 +31,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
     const p = m.physics;
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
 
     var s: usize = 0;
     while (s < segc) : (s += 1) {
@@ -92,7 +93,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
 
 fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const cols: [*c]c.ke_collider2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -115,7 +116,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
     defer bodies.deinit();
 
     var segc: usize = 0;
-    var segs = c.ke_system_ctx_view(ctx, 2, &segc);
+    var segs = ctx.?.view.?(ctx, 2, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const hs: [*c]c.ke_hierarchy_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -128,7 +129,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
         }
     }
 
-    segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    segs = ctx.?.view.?(ctx, 1, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
         const bs: [*c]c.ke_body2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -142,7 +143,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
         }
     }
 
-    segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    segs = ctx.?.view.?(ctx, 0, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
         const cols: [*c]c.ke_collider2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -174,9 +175,6 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
     return true;
 }
 
-/// Climbs the hierarchy from a shape to the nearest entity that owns a body.
-/// Bounded by the parent map's size so a hierarchy corrupted into a cycle
-/// terminates rather than hanging the tick.
 fn findBody(
     parents: *std.AutoHashMap(c.ke_entity, c.ke_entity),
     bodies: *std.AutoHashMap(c.ke_entity, c.ke_body_2d),
@@ -256,8 +254,6 @@ export fn ke_physics_body2d_module_create(
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
 
-/// Registers a generated field table, taking its length from the array type so
-/// the count can never drift from the table it describes.
 fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
@@ -273,4 +269,48 @@ export fn ke_physics_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) 
     registerFields(w, body_cid, &c.ke_body2d_component_fields);
     registerFields(w, collider_cid, &c.ke_collider2d_component_fields);
     return true;
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the body2d module leaves no block allocated and registers its two systems" {
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var physics = std.mem.zeroes(c.ke_physics_2d);
+
+    var params = std.mem.zeroes(c.ke_physics_body2d_module_params);
+    params.runtime = rt.api();
+    params.ecs = ecs.api();
+    params.physics = &physics;
+
+    const h = ke_physics_body2d_module_create(&params, null);
+    try testing.expect(h.ref != null);
+    try testing.expectEqual(@as(u32, 2), rt.registered);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}
+
+test "a body2d module missing its runtime, ecs or physics is refused" {
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var physics = std.mem.zeroes(c.ke_physics_2d);
+
+    var params = std.mem.zeroes(c.ke_physics_body2d_module_params);
+    try testing.expect(ke_physics_body2d_module_create(null, null).ref == null);
+    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    params.runtime = rt.api();
+    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    params.ecs = ecs.api();
+    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    params.physics = &physics;
+    const h = ke_physics_body2d_module_create(&params, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
 }

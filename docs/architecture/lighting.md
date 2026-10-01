@@ -26,44 +26,44 @@ The choice is made by which resource the pass binds, not by compiling a differen
 
 - **Shadows.** `ke_render_feature_params.enable_shadows` (`render_module_create.h`) decides whether the
   shadow module declares the `shadow_map` resource and registers its system
-  (`shadow_module.zig:158-160`, `:279`). A shading pass asks the service for `shadow_map` and falls
+  (`shadow_module.zig:157-159`, `:279`). A shading pass asks the service for `shadow_map` and falls
   back to the white texture when none was declared
-  (`deferred_lighting_module.zig:80-81`, `forward_module.zig:152-153`). The `shadow_lvp` uniform is
-  published whether or not shadows are enabled (`shadow_module.zig:154-156`).
+  (`deferred_lighting_module.zig:74-75`, `forward_module.zig:141-142`). The `shadow_lvp` uniform is
+  published whether or not shadows are enabled (`shadow_module.zig:153-155`).
 - **IBL.** `enable_ibl` false binds the black default cubemap at binding 7; true binds the cubemap of
   the first `ke_skybox_component`, and a frame with no skybox component resolves the none-handle to
-  the same black cubemap (`deferred_lighting_module.zig:84`, `:136-143`;
+  the same black cubemap (`deferred_lighting_module.zig:78`, `:136-143`;
   `asset_upload.zig:160-165`). The skybox pass reads the same cubemap for the background.
 - **Dynamic lights.** The cull pass always runs and always writes its per-cluster counts; with no
   point or spot lights every count is zero.
 
-A pass rebuilds its frame bind group when the skybox cubemap changes (`deferred_lighting_module.zig:140-143`).
+A pass rebuilds its frame bind group when the skybox cubemap changes (`deferred_lighting_module.zig:135-138`).
 
 ## Which light components are read
 
 | component | which entities | where it is read |
 |---|---|---|
-| directional light | the first one only | shading passes and the shadow pass (`deferred_lighting_module.zig:158-166`, `shadow_module.zig:78-84`) |
-| ambient light | the first one only; overrides the ambient field of the directional light | `deferred_lighting_module.zig:167-172` |
-| point, spot light | every one, up to the cull pass's cap | `cluster_module.zig:109-176` |
+| directional light | the first one only | shading passes and the shadow pass (`deferred_lighting_module.zig:153-161`, `shadow_module.zig:77-83`) |
+| ambient light | the first one only; overrides the ambient field of the directional light | `deferred_lighting_module.zig:162-167` |
+| point, spot light | every one, up to the cull pass's cap | `cluster_module.zig:105-172` |
 
 The directional light's contribution is gated by `frame.shadow_params.z`, which the pass sets to `1`
-when a directional light exists (`deferred_lighting_module.zig:165`; read at
+when a directional light exists (`deferred_lighting_module.zig:160`; read at
 `deferred_lighting.slang:89`). The name does not mean "shadows are on".
 
 Point and spot lights cast no shadows: they reach a surface only through
 `accumulate_clustered_lights`, and the shadow pass queries the directional light and the meshes
-(`shadow_module.zig:245-250`).
+(`shadow_module.zig:244-249`).
 
 ## The single directional shadow map
 
 The shadow system runs in command slot 1 and renders every mesh from the directional light's point
 of view into two attachments, an `RGBA16_FLOAT` map holding the depth in its red channel and a
-`D32_FLOAT` depth buffer (`shadow_module.zig:160-180`, `shadow.slang:28-38`). The light's view and
+`D32_FLOAT` depth buffer (`shadow_module.zig:159-179`, `shadow.slang:28-38`). The light's view and
 projection come from the view space ([view-space.md](view-space.md#the-directional-lights-view)).
 
 `ke_render_shadow_params` carries `resolution`, `light_distance`, `extent`, `near_plane` and
-`far_plane`; a zero field falls back to 1024, 25, 20, 0.1 and 50 (`shadow_module.zig:13-32`). Unset
+`far_plane`; a zero field falls back to 1024, 25, 20, 0.1 and 50 (`shadow_module.zig:14-31`). Unset
 means zero, so a caller can name only what it changes.
 
 The lookup is one tap (`shadow_feature.slang:30-38`): project the world position by `lightVP`, return
@@ -77,17 +77,17 @@ are not.
 A compute pass divides the view frustum into a grid of `grid_x * grid_y * grid_z` clusters and records,
 for each, which point and spot lights touch it. `ke_render_cluster_params` sets the grid and
 `max_lights_per_cluster`; zero fields fall back to 32 x 18 x 24 and 256
-(`render_module.zig:14-17`, `:199-209`).
+(`render_module.zig:15-18`, `:199-209`).
 
-Each frame the system (`cluster_module.zig:104-211`):
+Each frame the system (`cluster_module.zig:100-210`):
 
 1. Copies every point and spot light into storage buffers, 1024 at a time, from the lights'
-   components and world transforms (`UPLOAD_CHUNK`, `cluster_module.zig:11`). Each buffer holds at most
+   components and world transforms (`UPLOAD_CHUNK`, `cluster_module.zig:12`). Each buffer holds at most
    `MAX_LIGHTS` = 1,000,000 entries; past that, further lights are dropped and a warning is logged once
-   per kind (`cluster_module.zig:10`, `:137-140`, `:173-176`).
+   per kind (`cluster_module.zig:11`, `:137-140`, `:173-176`).
 2. Reads the first camera and uploads `tan(fov / 2)`, the aspect, near, far, the view matrix and
-   `depth_from_view_z` (`cluster_module.zig:192-200`).
-3. Records one dispatch of `ceil(num_clusters / 64)` workgroups (`cluster_module.zig:204-208`).
+   `depth_from_view_z` (`cluster_module.zig:188-199`).
+3. Records one dispatch of `ceil(num_clusters / 64)` workgroups (`cluster_module.zig:203-207`).
 
 One thread handles one cluster (`cluster_cull.slang:36-44`). It derives the cluster's slice
 boundaries exponentially, `near * (far / near)^(iz / numZ)`, builds the view-space box of the cluster's

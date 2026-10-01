@@ -53,10 +53,10 @@ typedef uint32_t ke_gpu_texture_aspect;
 typedef uint32_t ke_gpu_texture_usage;
 #define KE_GPU_TEXTURE_USAGE_COPY_SRC     0x01u
 #define KE_GPU_TEXTURE_USAGE_COPY_DST     0x02u
-#define KE_GPU_TEXTURE_USAGE_SAMPLED      0x04u  ///< TextureBinding
-#define KE_GPU_TEXTURE_USAGE_STORAGE      0x08u  ///< StorageBinding
-#define KE_GPU_TEXTURE_USAGE_COLOR_ATTACH 0x10u  ///< RenderAttachment
-#define KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH 0x20u  ///< also maps to RenderAttachment in WebGPU
+#define KE_GPU_TEXTURE_USAGE_SAMPLED      0x04u  ///< Bound for sampling
+#define KE_GPU_TEXTURE_USAGE_STORAGE      0x08u  ///< Bound as storage
+#define KE_GPU_TEXTURE_USAGE_COLOR_ATTACH 0x10u  ///< Written as a color attachment
+#define KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH 0x20u  ///< Written as a depth attachment
 
 typedef uint32_t ke_gpu_buffer_usage;
 #define KE_GPU_BUFFER_USAGE_MAP_READ  0x0001u

@@ -80,7 +80,7 @@ int main(void)
 
         if (!core.ref->begin_frame(core.ref, &err)) continue;
 
-        ke_render_pass_ctx *pc = core.ref->begin_pass(core.ref, NULL, &io);
+        ke_render_pass_ctx *pc = core.ref->begin_pass(core.ref, &io);
         ke_gpu_render_pass *rp = pc->begin_render(pc);
         rp->set_pipeline(rp, pipeline);
         rp->draw(rp, 3, 1, 0, 0);

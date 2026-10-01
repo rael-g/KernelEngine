@@ -1,14 +1,10 @@
 const c = @import("cimport.zig").c;
 
-/// Registers a generated field table, taking its length from the array type so
-/// the count can never drift from the table it describes.
 fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
 }
 
-/// Registers a component with the generated table describing its layout, taking
-/// the field count from the table.
 fn registerComponent(
     e: *c.ke_ecs,
     name: [*c]const u8,

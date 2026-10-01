@@ -7,7 +7,8 @@ const label_resolve = @import("label_resolve.zig");
 
 pub const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const ExecFn = ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32, [*c][*c]c.ke_error) callconv(.c) bool;
 
@@ -45,14 +46,13 @@ const ModuleState = struct {
 
     view_space: c.ke_view_space_handle,
     owns_view_space: bool,
+    camera: c.ke_render_camera_handle,
 };
 
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
     return @alignCast(@ptrCast(user.?));
 }
 
-/// Registers a component with the generated table describing its layout, taking
-/// the field count from the table.
 fn registerComponent(
     e: *c.ke_ecs,
     name: [*c]const u8,
@@ -69,9 +69,9 @@ fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.k
     return true;
 }
 
-fn clearSys(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
-    const pc = st.core.ref.*.begin_pass.?(st.core.ref, ctx, &st.io);
+    const pc = st.core.ref.*.begin_pass.?(st.core.ref, &st.io);
     if (pc == null) return true;
     const rp = pc.*.begin_render.?(pc);
     rp.*.end.?(rp);
@@ -125,6 +125,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.gbuffer.destroy) |d| d(st.gbuffer.ref);
     if (st.shadow.destroy) |d| d(st.shadow.ref);
     if (st.cluster.destroy) |d| d(st.cluster.ref);
+    if (st.camera.destroy) |d| d(st.camera.ref);
     if (st.core.destroy) |d| d(st.core.ref);
     if (st.owns_view_space) {
         if (st.view_space.destroy) |d| d(st.view_space.ref);
@@ -164,8 +165,6 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     return true;
 }
 
-/// Registers a generated field table, taking its length from the array type so
-/// the count can never drift from the table it describes.
 fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
@@ -217,6 +216,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.ui = .{ .ref = null, .destroy = null };
     st.view_space = .{ .ref = null, .destroy = null };
     st.owns_view_space = false;
+    st.camera = .{ .ref = null, .destroy = null };
     const shadow_enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
     const ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
     st.logger = logger;
@@ -250,14 +250,18 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             st.owns_view_space = true;
         }
         const vs = st.view_space.ref orelse {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         };
         if (ndc.clip_left_handed == 0) {
             c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: no projection builds a right-handed clip space", @src().file, @intCast(@src().line), null);
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
+            return empty;
+        }
+
+        st.camera = c.ke_render_camera_create(vs, &ndc, out_error);
+        if (st.camera.ref == null) {
+            destroyModule(@ptrCast(st));
             return empty;
         }
 
@@ -308,56 +312,48 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, @intFromBool(shadow_enabled),
                                               mesh_cid, world_transform_cid, light_cid, st.frame_cid, shadow_params, out_error);
         if (st.shadow.ref == null) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         }
 
         st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-                                                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, vs, out_error);
+                                                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, vs, st.camera.ref, out_error);
         if (st.cluster.ref == null) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         }
 
-        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, ndc, vs, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
+        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, st.camera.ref, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.gbuffer.ref == null) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         }
 
-        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, ndc, vs, logger, @intFromBool(ibl_enabled),
+        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
                                                             camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         }
-        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, ndc, vs, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
+        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, st.camera.ref, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.skybox.ref == null) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         }
-        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, ndc, vs, logger, @intFromBool(ibl_enabled),
+        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
                                                 mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         }
         st.tonemap = c.ke_render_tonemap_create(rt, st.core.ref, dev, logger, out_error);
         if (st.tonemap.ref == null) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         }
         st.ui = c.ke_render_ui_create(rt, e, st.core.ref, dev, ndc, bb_cid, 8, out_error);
         if (st.ui.ref == null) {
-            if (core_h.destroy) |d| d(core_h.ref);
-            gpa.destroy(st);
+            destroyModule(@ptrCast(st));
             return empty;
         }
 
@@ -380,4 +376,103 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     }
 
     return .{ .ref = @ptrCast(st), .destroy = destroyModule };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+const authored_shaders = [_][]const u8{
+    "cluster_cull.cs.wgsl",
+    "standard.gbuffer.vs.wgsl",
+    "standard.gbuffer.fs.wgsl",
+    "standard.forward.vs.wgsl",
+    "standard.forward.fs.wgsl",
+    "deferred_lighting.vs.wgsl",
+    "deferred_lighting.fs.wgsl",
+    "shadow.vs.wgsl",
+    "shadow.fs.wgsl",
+    "skybox.vs.wgsl",
+    "skybox.fs.wgsl",
+    "tonemap.vs.wgsl",
+    "tonemap.fs.wgsl",
+    "ui.vs.wgsl",
+    "ui.fs.wgsl",
+};
+
+const Rig = struct {
+    dev: Stubs.Device,
+    ecs: Stubs.Ecs,
+    rt: Stubs.Runtime,
+    world: Stubs.World,
+    shaders: std.testing.TmpDir,
+    shader_dir: [std.fs.max_path_bytes]u8,
+
+    fn init(self: *Rig) !void {
+        self.dev.init();
+        self.ecs.init();
+        self.rt.init();
+        self.world.init();
+        self.shaders = std.testing.tmpDir(.{});
+        errdefer self.shaders.cleanup();
+        for (authored_shaders) |name| {
+            try self.shaders.dir.writeFile(testing.io, .{ .sub_path = name, .data = "// stand-in" });
+        }
+        const dir = try std.fmt.bufPrint(&self.shader_dir, ".zig-cache/tmp/{s}", .{self.shaders.sub_path});
+        self.shader_dir[dir.len] = 0;
+    }
+
+    fn deinit(self: *Rig) void {
+        self.shaders.cleanup();
+    }
+
+    fn create(self: *Rig) c.ke_render_module_handle {
+        const dir: [*:0]const u8 = @ptrCast(&self.shader_dir);
+        return ke_render_module_create(self.rt.api(), self.ecs.api(), self.dev.api(), self.world.api(), 1, null, null, null, null, null, null, dir, null);
+    }
+};
+
+test "creating and destroying the render module with its default passes leaves no block allocated and no GPU resource live" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    const h = rig.create();
+    try testing.expect(h.ref != null);
+    try testing.expect(rig.rt.registered > 0);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), rig.dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a render module that fails at any GPU resource it creates gives back everything it had created before" {
+    var full: Rig = undefined;
+    try full.init();
+    defer full.deinit();
+    const whole = full.create();
+    try testing.expect(whole.ref != null);
+    whole.destroy.?(whole.ref);
+    const fallible_total = full.dev.fallible_created;
+    try testing.expect(fallible_total > 0);
+
+    var budget: u32 = 0;
+    while (budget < fallible_total) : (budget += 1) {
+        var rig: Rig = undefined;
+        try rig.init();
+        defer rig.deinit();
+        rig.dev.fallible_budget = budget;
+        const h = rig.create();
+        if (h.ref != null) h.destroy.?(h.ref);
+        try testing.expectEqual(@as(i64, 0), rig.dev.live);
+        try heap.expectNoLeaks();
+    }
+}
+
+test "a render module without a runtime, an ecs or a device is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    try testing.expect(ke_render_module_create(null, rig.ecs.api(), rig.dev.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(rig.rt.api(), null, rig.dev.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(rig.rt.api(), rig.ecs.api(), null, null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
+    try heap.expectNoLeaks();
 }

@@ -17,6 +17,7 @@
     <NativeDep Include="ke_render_skybox" />
     <NativeDep Include="ke_render_ui" />
     <NativeDep Include="ke_render_gbuffer" />
+    <NativeDep Include="ke_render_camera" />
     <NativeDep Include="ke_render_shadow" />
     <NativeDep Include="ke_render_cluster" />
     <NativeDep Include="ke_render_deferred_lighting" />

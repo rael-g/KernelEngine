@@ -11,16 +11,13 @@ extern "C"
 {
 #endif
 
-#define KE_ID_AUDIO "ke_audio"
-
     /** Opaque sound identifier owned by an audio backend. 0 is reserved as "invalid". */
     typedef uint32_t ke_audio_sound;
 #define KE_AUDIO_SOUND_INVALID ((ke_audio_sound)0)
 
     /**
-     * Audio playback. Concrete implementations ship as separate plugins
-     * (miniaudio, FMOD, ...). Every slot is safe to call from ke.sim — backends
-     * marshal internally to their own audio thread.
+     * Audio playback. Concrete implementations ship as separate plugins.
+     * Every slot is safe to call from a system body.
      */
     typedef struct ke_audio
     {

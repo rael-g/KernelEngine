@@ -8,6 +8,11 @@ pub fn build(b: *std.Build) void {
         b.pathJoin(&.{ b.build_root.path.?, "..", "common", "third_party", "tomlc99" });
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const component_fields_src = b.option([]const u8, "component-fields-src", "path to the shared Zig component_fields.zig") orelse @panic("-Dcomponent-fields-src required");
+    const handle_src = b.option([]const u8, "handle-src", "path to the shared Zig handle.zig") orelse @panic("-Dhandle-src required");
+    const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
+    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
+    const ke_framework = b.option([]const u8, "ke-framework-include", "kernel_engine/framework include dir") orelse @panic("-Dke-framework-include required");
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
     const ke_spatial = b.option([]const u8, "ke-spatial-include", "kernel_engine/spatial include dir") orelse @panic("-Dke-spatial-include required");
     const ke_input = b.option([]const u8, "ke-input-include", "kernel_engine/input include dir") orelse @panic("-Dke-input-include required");
@@ -28,12 +33,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
+    mod.addImport("component_fields", b.createModule(.{ .root_source_file = .{ .cwd_relative = component_fields_src }, .target = target, .optimize = optimize }));
+    mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
+    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    inline for (.{ ke_common, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_runtime", .{});
     addTomlc99(b, mod, tomlc99_dir);
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);
@@ -59,14 +66,16 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .link_libc = true,
         });
-        inline for (.{ ke_common, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
+        test_mod.addImport("component_fields", b.createModule(.{ .root_source_file = .{ .cwd_relative = component_fields_src }, .target = target, .optimize = optimize }));
+        test_mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
+        test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+        inline for (.{ ke_common, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
             test_mod.addIncludePath(.{ .cwd_relative = inc });
         }
         if (ke_audio) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
         if (ke_physics) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
         test_mod.addIncludePath(b.path("include"));
         test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-        test_mod.linkSystemLibrary("ke_runtime", .{});
         addTomlc99(b, test_mod, tomlc99_dir);
         test_mod.addImport("kerror", b.createModule(.{
             .root_source_file = .{ .cwd_relative = kerror_src },
@@ -79,10 +88,6 @@ pub fn build(b: *std.Build) void {
     }
 }
 
-/// Wires the shared vendored tomlc99 into `mod`: its include dir plus
-/// `toml.c`, compiled with -fno-sanitize=undefined because Zig's Debug build
-/// enables UBSan on the C it compiles and this third-party source carries UB
-/// that is not ours to fix.
 pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
     mod.addIncludePath(.{ .cwd_relative = dir });
     mod.addCSourceFile(.{

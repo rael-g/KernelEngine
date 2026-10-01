@@ -151,8 +151,5 @@
   "vtables": [],
   "functions": [],
   "callbacks": [],
-  "type_aliases": {
-    "float_t": "float",
-    "double_t": "double"
-  }
+  "type_aliases": {}
 }

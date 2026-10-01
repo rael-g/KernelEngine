@@ -10,9 +10,8 @@ extern "C"
 #endif
 
     /** ABI-stable vtable for decoding 2D images (PNG/JPG/...) from disk into RGBA8.
-     * Concrete implementations are provided as separate plugins (e.g., stb_image);
-     * async dispatch is the caller's responsibility (C# side wraps with Task.Run on a
-     * worker), so this contract stays minimal. */
+     * Concrete implementations are provided as separate plugins;
+     * async dispatch is the caller's responsibility, so this contract stays minimal. */
     typedef struct ke_image_loader
     {
         void *handle;

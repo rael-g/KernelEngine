@@ -9,11 +9,17 @@ public unsafe partial struct ke_scene_tree
     [NativeTypeName("ke_entity (*)(struct ke_scene_tree *)")]
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, ulong> root;
 
-    [NativeTypeName("ke_entity (*)(struct ke_scene_tree *, const char *, ke_entity, ke_system_ctx *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_scene_tree*, sbyte*, ulong, KernelEngine.Runtime.Native.ke_system_ctx*, KernelEngine.Common.Native.ke_error**, ulong> create_node;
+    [NativeTypeName("ke_entity (*)(struct ke_scene_tree *, const char *, ke_entity, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_tree*, sbyte*, ulong, KernelEngine.Common.Native.ke_error**, ulong> create_node;
 
-    [NativeTypeName("bool (*)(struct ke_scene_tree *, ke_entity, ke_system_ctx *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_scene_tree*, ulong, KernelEngine.Runtime.Native.ke_system_ctx*, KernelEngine.Common.Native.ke_error**, bool> destroy_node;
+    [NativeTypeName("ke_entity (*)(struct ke_scene_tree *, const char *, ke_entity, ke_ecs_commands *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_tree*, sbyte*, ulong, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Common.Native.ke_error**, ulong> create_node_deferred;
+
+    [NativeTypeName("bool (*)(struct ke_scene_tree *, ke_entity, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_tree*, ulong, KernelEngine.Common.Native.ke_error**, bool> destroy_node;
+
+    [NativeTypeName("bool (*)(struct ke_scene_tree *, ke_entity, ke_ecs_commands *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_tree*, ulong, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Common.Native.ke_error**, bool> destroy_node_deferred;
 
     [NativeTypeName("void (*)(struct ke_scene_tree *)")]
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, void> destroy_all;

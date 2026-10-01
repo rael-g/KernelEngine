@@ -1,14 +1,12 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
 const mat4 = @import("mat4.zig");
 
-/// Name capacity is dictated by the name component itself, so a deferred
-/// create's inline copy can never truncate differently from the final write.
 const name_max = @typeInfo(@FieldType(c.ke_name_component, "name")).array.len;
 
 const State = struct {
@@ -47,14 +45,12 @@ fn getWorldTransform(s: *State, e: c.ke_entity) ?*c.ke_world_transform_component
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.world_transform_cid)));
 }
 
-/// Resolves an existing component cid by name, registering it when absent.
 fn ensureComponent(ecs: *c.ke_ecs, name: [*c]const u8, size: usize) c.ke_component_id {
     var meta: c.ke_component_meta = undefined;
     if (ecs.component_lookup.?(ecs, name, &meta, null)) return meta.cid;
     return ecs.component_register.?(ecs, name, size, null, 0, null);
 }
 
-/// Writes `src` into a fixed-size component name field, truncating to fit.
 fn writeName(dst: []u8, src: [*c]const u8) void {
     if (src == null or src[0] == 0) {
         dst[0] = 0;
@@ -99,8 +95,6 @@ fn vtNextSibling(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c
     return h.next_sibling;
 }
 
-/// Attaches the scene-graph components to an entity and prepends it into its
-/// parent's child list. Valid only where structural changes are legal.
 fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) bool {
     if (s.ecs.component_add.?(s.ecs, entity, s.world_transform_cid) == null or
         s.ecs.component_add.?(s.ecs, entity, s.hierarchy_cid) == null or
@@ -159,7 +153,6 @@ fn vtCreateNode(
     self_in: ?*c.ke_scene_tree,
     name: [*c]const u8,
     parent_in: c.ke_entity,
-    ctx_in: ?*c.ke_system_ctx,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_entity {
     _ = out_error;
@@ -168,24 +161,39 @@ fn vtCreateNode(
     const s = stateOf(self);
     const parent = if (parent_in == c.KE_ENTITY_INVALID) s.root else parent_in;
 
-    if (ctx_in) |ctx| {
-        const entity = ctx.reserve.?(ctx);
-        if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
-        var pc: PendingCreate = .{
-            .s = s,
-            .entity = entity,
-            .parent = parent,
-            .name = undefined,
-        };
-        writeName(&pc.name, name);
-        if (!ctx.@"defer".?(ctx, cbCreateNode, &pc, @sizeOf(PendingCreate)))
-            return c.KE_ENTITY_INVALID;
-        return entity;
-    }
-
     const entity = s.ecs.entity_create.?(s.ecs);
     if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
     if (!populateNode(s, entity, name, parent)) return c.KE_ENTITY_INVALID;
+    return entity;
+}
+
+fn vtCreateNodeDeferred(
+    self_in: ?*c.ke_scene_tree,
+    name: [*c]const u8,
+    parent_in: c.ke_entity,
+    commands: ?*c.ke_ecs_commands,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) c.ke_entity {
+    const self = self_in orelse return c.KE_ENTITY_INVALID;
+    const cmds = commands orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return c.KE_ENTITY_INVALID;
+    };
+    if (self.handle == null) return c.KE_ENTITY_INVALID;
+    const s = stateOf(self);
+    const parent = if (parent_in == c.KE_ENTITY_INVALID) s.root else parent_in;
+
+    const entity = cmds.spawn.?(cmds, out_error);
+    if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
+    var pc: PendingCreate = .{
+        .s = s,
+        .entity = entity,
+        .parent = parent,
+        .name = undefined,
+    };
+    writeName(&pc.name, name);
+    if (!cmds.@"defer".?(cmds, cbCreateNode, &pc, @sizeOf(PendingCreate), out_error))
+        return c.KE_ENTITY_INVALID;
     return entity;
 }
 
@@ -258,8 +266,6 @@ fn destroyEntitiesRecursive(s: *State, e: c.ke_entity) void {
     s.ecs.entity_destroy.?(s.ecs, e);
 }
 
-/// Unlinks from the parent's child list, then destroys the subtree. The
-/// structural part is legal only outside a wave or at the wave barrier.
 fn destroySubtree(s: *State, entity: c.ke_entity) void {
     const h = getHierarchy(s, entity) orelse return;
     const h_prev = h.prev_sibling;
@@ -293,38 +299,46 @@ fn cbDestroyNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
     destroySubtree(p.s, p.entity);
 }
 
-fn vtDestroyNode(
-    self_in: ?*c.ke_scene_tree,
-    entity: c.ke_entity,
-    ctx_in: ?*c.ke_system_ctx,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
+fn checkDestroyable(self_in: ?*c.ke_scene_tree, entity: c.ke_entity, out_error: [*c][*c]c.ke_error) ?*State {
     const self = self_in orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
+        return null;
     };
     if (self.handle == null or entity == c.KE_ENTITY_INVALID) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
+        return null;
     }
     const s = stateOf(self);
-
     if (getHierarchy(s, entity) == null) {
         E.fail(out_error, .not_found, "entity not found", @src());
-        return false;
+        return null;
     }
+    return s;
+}
 
-    if (ctx_in) |ctx| {
-        var pd: PendingDestroy = .{ .s = s, .entity = entity };
-        if (!ctx.@"defer".?(ctx, cbDestroyNode, &pd, @sizeOf(PendingDestroy))) {
-            E.fail(out_error, .out_of_memory, "defer failed", @src());
-            return false;
-        }
-        return true;
-    }
-
+fn vtDestroyNode(
+    self_in: ?*c.ke_scene_tree,
+    entity: c.ke_entity,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const s = checkDestroyable(self_in, entity, out_error) orelse return false;
     destroySubtree(s, entity);
     return true;
+}
+
+fn vtDestroyNodeDeferred(
+    self_in: ?*c.ke_scene_tree,
+    entity: c.ke_entity,
+    commands: ?*c.ke_ecs_commands,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const cmds = commands orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    };
+    const s = checkDestroyable(self_in, entity, out_error) orelse return false;
+    var pd: PendingDestroy = .{ .s = s, .entity = entity };
+    return cmds.@"defer".?(cmds, cbDestroyNode, &pd, @sizeOf(PendingDestroy), out_error);
 }
 
 fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
@@ -454,7 +468,9 @@ export fn ke_scene_tree_create(
     s.api.handle = s;
     s.api.root = vtRoot;
     s.api.create_node = vtCreateNode;
+    s.api.create_node_deferred = vtCreateNodeDeferred;
     s.api.destroy_node = vtDestroyNode;
+    s.api.destroy_node_deferred = vtDestroyNodeDeferred;
     s.api.destroy_all = vtDestroyAll;
     s.api.find_node = vtFindNode;
     s.api.parent = vtParent;
@@ -486,9 +502,6 @@ const FakeComponent = struct {
     size: usize,
 };
 
-/// Exposed so a sibling implementation defined over the scene graph — the script
-/// host resolving a node's relatives — can be tested against a real tree instead
-/// of a second stand-in that would drift from this one.
 pub const FakeEcs = struct {
     vtable: c.ke_ecs,
     arena: std.heap.ArenaAllocator,
@@ -655,7 +668,7 @@ pub const Fixture = struct {
 
     pub fn create(self: *Fixture, name: [*c]const u8, parent: c.ke_entity) c.ke_entity {
         const t = self.tree();
-        return t.*.create_node.?(t, name, parent, null, null);
+        return t.*.create_node.?(t, name, parent, null);
     }
 
     fn find(self: *Fixture, path: [*c]const u8) c.ke_entity {
@@ -926,13 +939,95 @@ test "repeated slashes collapse instead of failing the walk" {
     try testing.expectEqual(a, f.find("//A///"));
 }
 
+const RecordingCommands = struct {
+    vtable: c.ke_ecs_commands,
+    ecs: *c.ke_ecs,
+    fns: [4]c.ke_defer_fn = undefined,
+    payloads: [4][@max(@sizeOf(PendingCreate), @sizeOf(PendingDestroy))]u8 = undefined,
+    count: usize = 0,
+
+    fn of(self: ?*c.ke_ecs_commands) *RecordingCommands {
+        return @ptrCast(@alignCast(self.?.handle));
+    }
+
+    fn spawn(self: ?*c.ke_ecs_commands, _: [*c][*c]c.ke_error) callconv(.c) c.ke_entity {
+        const r = of(self);
+        return r.ecs.entity_reserve.?(r.ecs);
+    }
+
+    fn defer_(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, size: usize, _: [*c][*c]c.ke_error) callconv(.c) bool {
+        const r = of(self);
+        if (r.count == r.fns.len) return false;
+        r.fns[r.count] = func;
+        @memcpy(r.payloads[r.count][0..size], @as([*]const u8, @ptrCast(user.?))[0..size]);
+        r.count += 1;
+        return true;
+    }
+
+    fn init(ecs: *c.ke_ecs) RecordingCommands {
+        var r: RecordingCommands = .{ .vtable = std.mem.zeroes(c.ke_ecs_commands), .ecs = ecs };
+        r.vtable.spawn = spawn;
+        r.vtable.@"defer" = defer_;
+        return r;
+    }
+
+    fn bind(self: *RecordingCommands) *c.ke_ecs_commands {
+        self.vtable.handle = self;
+        return &self.vtable;
+    }
+
+    fn apply(self: *RecordingCommands) void {
+        for (0..self.count) |i| self.fns[i].?(self.ecs, &self.payloads[i]);
+        self.count = 0;
+    }
+};
+
+test "a deferred create exists only once the recorded commands are applied" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var rec = RecordingCommands.init(&f.ecs.vtable);
+    const t = f.tree();
+    const e = t.*.create_node_deferred.?(t, "Later", c.KE_ENTITY_INVALID, rec.bind(), null);
+    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Later"));
+
+    rec.apply();
+    try testing.expectEqual(e, f.find("Later"));
+}
+
+test "a deferred destroy removes the node only once the recorded commands are applied" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const node = f.create("Doomed", c.KE_ENTITY_INVALID);
+    var rec = RecordingCommands.init(&f.ecs.vtable);
+    const t = f.tree();
+    try testing.expect(t.*.destroy_node_deferred.?(t, node, rec.bind(), null));
+    try testing.expectEqual(node, f.find("Doomed"));
+
+    rec.apply();
+    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Doomed"));
+}
+
+test "a deferred create without a command queue is refused" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const t = f.tree();
+    try testing.expectEqual(c.KE_ENTITY_INVALID, t.*.create_node_deferred.?(t, "X", c.KE_ENTITY_INVALID, null, null));
+}
+
 test "destroying the invalid entity is refused" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
 
     const t = f.tree();
-    try testing.expect(!t.*.destroy_node.?(t, c.KE_ENTITY_INVALID, null, null));
+    try testing.expect(!t.*.destroy_node.?(t, c.KE_ENTITY_INVALID, null));
 }
 
 test "destroying a node takes its whole subtree with it" {
@@ -945,7 +1040,7 @@ test "destroying a node takes its whole subtree with it" {
     _ = f.create("Enemy", world);
 
     const t = f.tree();
-    try testing.expect(t.*.destroy_node.?(t, world, null, null));
+    try testing.expect(t.*.destroy_node.?(t, world, null));
     try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("World"));
     try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Player"));
     try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Enemy"));
@@ -958,7 +1053,7 @@ test "a destroyed node is unlinked from its parent" {
 
     const child = f.create("X", c.KE_ENTITY_INVALID);
     const t = f.tree();
-    try testing.expect(t.*.destroy_node.?(t, child, null, null));
+    try testing.expect(t.*.destroy_node.?(t, child, null));
     try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("X"));
 }
 
@@ -972,7 +1067,7 @@ test "destroying a middle sibling leaves the chain walkable on both sides" {
     _ = f.create("3", c.KE_ENTITY_INVALID);
 
     const t = f.tree();
-    try testing.expect(t.*.destroy_node.?(t, c2, null, null));
+    try testing.expect(t.*.destroy_node.?(t, c2, null));
 
     try testing.expect(f.find("1") != c.KE_ENTITY_INVALID);
     try testing.expect(f.find("3") != c.KE_ENTITY_INVALID);
@@ -1106,4 +1201,13 @@ test "a tree refused for a missing ecs names the shared invalid-argument type" {
     try testing.expect(err != null);
     try testing.expect(err.*.type != null);
     try testing.expectEqual(E.typeOf(.invalid_argument), err.*.type);
+}
+
+test "creating nodes and destroying the tree leaves no block allocated" {
+    var f: Fixture = undefined;
+    try f.init();
+    const world = f.create("World", c.KE_ENTITY_INVALID);
+    _ = f.create("Player", world);
+    f.deinit();
+    try heap.expectNoLeaks();
 }

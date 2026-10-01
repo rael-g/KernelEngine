@@ -5,7 +5,8 @@ const zm = @import("zmath");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const DeferredFrame = extern struct {
     camera_pos: [4]f32,
@@ -21,8 +22,7 @@ const DeferredFrame = extern struct {
 const DeferredLightingModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    ndc: c.ke_ndc_convention = undefined,
-    view_space: *c.ke_view_space = undefined,
+    camera: *c.ke_render_camera = undefined,
     logger: ?*c.ke_logger = null,
     ibl_enabled: bool = true,
 
@@ -49,12 +49,6 @@ const DeferredLightingModule = struct {
     queries: [4]c.ke_query_decl = undefined,
     access_count: u32 = 0,
 };
-
-fn cameraView(vs: *c.ke_view_space, cam_wt: *const c.ke_world_transform_component) zm.Mat {
-    var out: c.ke_mat4 = undefined;
-    vs.view_from_transform.?(vs, &cam_wt.matrix, &out);
-    return zm.loadMat(&out.m);
-}
 
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
     const lg = logger orelse return;
@@ -106,9 +100,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const dev = dl.device;
 
     var cam_segc: usize = 0;
-    const cam_segs = c.ke_system_ctx_view(ctx, 0, &cam_segc);
+    const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
 
-    const pc = core.*.begin_pass.?(core, ctx, &dl.io);
+    const pc = core.*.begin_pass.?(core, &dl.io);
     if (pc == null) return true;
     if (cam_segc == 0 or cam_segs[0].count == 0) {
         const rp0 = pc.*.begin_render.?(pc);
@@ -124,15 +118,16 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const view = cameraView(dl.view_space, cam_wt);
+    var view_m: c.ke_mat4 = undefined;
+    dl.camera.view.?(dl.camera, &cam_wt.matrix, &view_m);
     var proj_m: c.ke_mat4 = undefined;
-    c.ke_camera_projection(cam, aspect, dl.view_space, &dl.ndc, &proj_m);
-    const proj = zm.loadMat(&proj_m.m);
-    const view_proj = zm.mul(view, proj);
+    dl.camera.projection.?(dl.camera, cam, aspect, &proj_m);
+    const view = zm.loadMat(&view_m.m);
+    const view_proj = zm.mul(view, zm.loadMat(&proj_m.m));
     const inv_vp = zm.inverse(view_proj);
 
     var sky_segc: usize = 0;
-    const sky_segs = c.ke_system_ctx_view(ctx, 1, &sky_segc);
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
     const want_env: c.ke_texture_handle = if (sky_segc != 0 and sky_segs[0].count != 0)
         (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
@@ -156,7 +151,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     zm.storeMat(frame.inv_view_proj[0..], inv_vp);
 
     var li_segc: usize = 0;
-    const li_segs = c.ke_system_ctx_view(ctx, 2, &li_segc);
+    const li_segs = ctx.?.view.?(ctx, 2, &li_segc);
     if (li_segc != 0 and li_segs[0].count != 0) {
         const d: *const c.ke_directional_light_component = @ptrCast(@alignCast(li_segs[0].columns[0]));
         frame.light_dir = .{ d.direction.x, d.direction.y, d.direction.z, 0.0 };
@@ -165,7 +160,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         frame.shadow_params[2] = 1.0;
     }
     var am_segc: usize = 0;
-    const am_segs = c.ke_system_ctx_view(ctx, 3, &am_segc);
+    const am_segs = ctx.?.view.?(ctx, 3, &am_segc);
     if (am_segc != 0 and am_segs[0].count != 0) {
         const al: *const c.ke_ambient_light_component = @ptrCast(@alignCast(am_segs[0].columns[0]));
         frame.ambient = .{ al.color.x, al.color.y, al.color.z, 0.0 };
@@ -210,14 +205,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 }
 
 fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, logger: ?*c.ke_logger, ibl_enabled: bool,
+         render_camera: *c.ke_render_camera, logger: ?*c.ke_logger, ibl_enabled: bool,
          camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
          ambient_cid: c.ke_component_id, skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
          out_error: [*c][*c]c.ke_error) bool {
     dl.core = core;
     dl.device = dev;
-    dl.ndc = ndc;
-    dl.view_space = view_space;
+    dl.camera = render_camera;
     dl.logger = logger;
     dl.ibl_enabled = ibl_enabled;
     dl.camera_cid = camera_cid;
@@ -368,16 +362,26 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     return true;
 }
 
+fn destroyModule(dl: *const DeferredLightingModule) void {
+    const dev = dl.device;
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (dl.gbuf_bind_group != invalid) dev.destroy_bind_group.?(dev, dl.gbuf_bind_group);
+    if (dl.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, dl.frame_bind_group);
+    if (dl.empty_bg != invalid) dev.destroy_bind_group.?(dev, dl.empty_bg);
+    if (dl.frame_uniform != invalid) dev.destroy_buffer.?(dev, dl.frame_uniform);
+    if (dl.gbuf_bgl != invalid) dev.destroy_bind_group_layout.?(dev, dl.gbuf_bgl);
+    if (dl.frame_bgl != invalid) dev.destroy_bind_group_layout.?(dev, dl.frame_bgl);
+    if (dl.empty_bgl != invalid) dev.destroy_bind_group_layout.?(dev, dl.empty_bgl);
+}
+
 fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
     const dl: *DeferredLightingModule = @ptrCast(@alignCast(self orelse return));
-    const dev = dl.device;
-    if (dl.gbuf_bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, dl.gbuf_bind_group);
+    destroyModule(dl);
     gpa.destroy(dl);
 }
 
 export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                              device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
+                                              device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                               logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
                                               camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                               light_cid: c.ke_component_id, ambient_cid: c.ke_component_id,
@@ -387,13 +391,14 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
-    const vs = view_space orelse return empty;
+    const camera_api = render_camera orelse return empty;
 
     const dl = gpa.create(DeferredLightingModule) catch return empty;
     dl.* = .{};
-    if (!setup(dl, dev, core_ref, ndc, vs, logger, ibl_enabled != 0,
+    if (!setup(dl, dev, core_ref, camera_api, logger, ibl_enabled != 0,
                camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
+        destroyModule(dl);
         gpa.destroy(dl);
         return empty;
     }
@@ -411,4 +416,38 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(dl), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the deferred lighting pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a deferred lighting pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

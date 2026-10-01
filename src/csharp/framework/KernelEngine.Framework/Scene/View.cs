@@ -7,12 +7,6 @@ namespace KernelEngine.Framework;
 /// The funnel through which a <see cref="Node"/>'s per-frame logic observes
 /// and mutates the world. Passed by ref to <see cref="Node.OnUpdate"/>.
 /// </summary>
-/// <remarks>
-/// A <c>ref struct</c> by design: it cannot be boxed, captured in a closure,
-/// stored in a field, or escape the stack frame of the method that received it.
-/// This is the structural guarantee that script-side code cannot smuggle world
-/// access past the engine's safety rules.
-/// </remarks>
 public readonly ref struct View
 {
     /// <summary>Time since the previous tick, in seconds.</summary>
@@ -29,11 +23,14 @@ public readonly ref struct View
     private readonly IInputReader? _input;
 
     /// <summary>
-    /// The native system context for this tick. Opaque handle forwarded to
-    /// structural operations (node create/destroy) so they defer safely to the
-    /// wave barrier. Zero outside a running system.
+    /// The queue this tick's structural changes are recorded into, applied at the
+    /// wave barrier.
     /// </summary>
-    internal nint SystemContext { get; }
+    /// <exception cref="InvalidOperationException">The view was not made inside a running system.</exception>
+    internal KernelEngine.Ecs.EcsCommands Commands =>
+        _commands ?? throw new InvalidOperationException("This view does not belong to a running system.");
+
+    private readonly KernelEngine.Ecs.EcsCommands? _commands;
 
     /// <summary>
     /// True if the given key was held down when input was last sampled.
@@ -53,6 +50,6 @@ public readonly ref struct View
         ScriptHost     = scriptHost;
         DeltaTime     = deltaTime;
         _input        = input;
-        SystemContext = systemCtx;
+        _commands     = systemCtx == 0 ? null : KernelEngine.Runtime.SystemCtx.Of(systemCtx).Commands;
     }
 }

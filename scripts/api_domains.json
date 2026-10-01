@@ -7,10 +7,13 @@
         "src/c/input/kernel_engine/input/input.h",
         "src/c/input/kernel_engine/input/snapshot.h",
         "src/c/input/kernel_engine/input/event.h",
-        "src/c/input/kernel_engine/input/key.h"
+        "src/c/input/kernel_engine/input/key.h",
+        "src/zig/input/default/include/kernel_engine/input/default/input_default_create.h"
       ],
       "includeDirs": [
         "src/c/input",
+        "src/zig/input/default/include",
+        "src/c/math",
         "src/zig/common/include",
         "src/c/ecs"
       ],
@@ -31,6 +34,7 @@
       ],
       "includeDirs": [
         "src/c/window",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/window/ke_api.json",
@@ -43,10 +47,14 @@
       "name": "logger",
       "headers": [
         "src/c/logger/kernel_engine/logger/logger.h",
-        "src/c/logger/kernel_engine/logger/log_level.h"
+        "src/c/logger/kernel_engine/logger/log_level.h",
+        "src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h",
+        "src/zig/logger/simple/include/kernel_engine/logger/simple/console_sink_create.h"
       ],
       "includeDirs": [
         "src/c/logger",
+        "src/zig/logger/simple/include",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/logger/ke_api.json",
@@ -64,6 +72,7 @@
       ],
       "includeDirs": [
         "src/c/scheduler",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/scheduler/ke_api.json",
@@ -75,18 +84,23 @@
     {
       "_comment": "The scheduler contract. register_system's params carry queries + access_list, which the wave builder orders on; a hand-written IRuntime had omitted them, so every C#-registered system declared zero access and the wave builder saw zero conflicts. Generating the surface from the header is what keeps that from drifting again. system_ctx.h rides along because the execute callback's first parameter is a ke_system_ctx*.",
       "name": "runtime",
+      "providers": [
+        "ke_system_ctx"
+      ],
       "headers": [
         "src/c/runtime/kernel_engine/runtime/runtime.h",
         "src/c/runtime/kernel_engine/runtime/system_ctx.h",
-        "src/c/runtime/kernel_engine/runtime/runtime_create.h"
+        "src/zig/runtime/include/kernel_engine/runtime/runtime_create.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
         "src/c/runtime",
+        "src/zig/runtime/include",
         "src/c/ecs",
         "src/c/scheduler",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/runtime/ke_api.json",
@@ -102,13 +116,18 @@
     },
     {
       "name": "ecs",
+      "providers": [
+        "ke_ecs_commands"
+      ],
       "headers": [
         "src/c/ecs/kernel_engine/ecs/ke_ecs.h",
         "src/c/ecs/kernel_engine/ecs/ecs.h",
+        "src/c/ecs/kernel_engine/ecs/commands.h",
         "src/c/ecs/kernel_engine/ecs/component_field.h"
       ],
       "includeDirs": [
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/ecs/ke_api.json",
@@ -124,6 +143,7 @@
       ],
       "includeDirs": [
         "src/c/audio",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/audio/ke_api.json",
@@ -139,6 +159,7 @@
       ],
       "includeDirs": [
         "src/c/physics",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/physics/ke_api.json",
@@ -157,6 +178,7 @@
       "includeDirs": [
         "src/c/physics",
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "composeHeaders": [
@@ -187,6 +209,7 @@
       "includeDirs": [
         "src/c/audio",
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "composeHeaders": [
@@ -214,6 +237,7 @@
       ],
       "includeDirs": [
         "src/c/text",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/text/ke_api.json",
@@ -236,6 +260,7 @@
       "includeDirs": [
         "src/c/render",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/render/ke_api.json",
@@ -253,6 +278,7 @@
         "src/c/asset",
         "src/c/scheduler",
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "composeHeaders": [ "src/c/asset/kernel_engine/asset/mesh_data.h" ],
@@ -271,6 +297,7 @@
       "includeDirs": [
         "src/c/asset",
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "composeHeaders": [
@@ -292,6 +319,7 @@
       "includeDirs": [
         "src/c/asset",
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/asset/image_loader.ke_api.json",
@@ -316,6 +344,7 @@
         "src/c/render",
         "src/c/text",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/asset_resolver.ke_api.json",
@@ -336,6 +365,7 @@
       ],
       "includeDirs": [
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/spatial.ke_api.json",
@@ -356,17 +386,19 @@
     {
       "name": "world",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/world.h"
+        "src/c/framework/kernel_engine/framework/world.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
         "src/c/runtime",
         "src/c/scheduler",
         "src/c/logger",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/world.ke_api.json",
@@ -381,16 +413,18 @@
     {
       "name": "scene_tree",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/scene_tree.h"
+        "src/c/framework/kernel_engine/framework/scene_tree.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
         "src/c/render",
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/scene_tree.ke_api.json",
@@ -398,20 +432,22 @@
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
       "usings": [
-        "KernelEngine.Runtime.Native"
+        "KernelEngine.Ecs.Native"
       ]
     },
     {
       "name": "scene_loader",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/scene_loader.h"
+        "src/c/framework/kernel_engine/framework/scene_loader.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/scene_loader.ke_api.json",
@@ -424,14 +460,16 @@
       "_comment": "The signal bus. Emission is a frame's event, connection is durable data; the vtable is what lets a node in any language be either end of a wire.",
       "name": "signal_bus",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/signal_bus.h"
+        "src/c/framework/kernel_engine/framework/signal_bus.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/signal_bus.ke_api.json",
@@ -444,14 +482,16 @@
       "_comment": "The entity-to-script binding. Every scripting runtime otherwise keeps this map itself, which is what makes a node authored in one language invisible to another.",
       "name": "script_host",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/script_host.h"
+        "src/c/framework/kernel_engine/framework/script_host.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/script_host.ke_api.json",
@@ -469,6 +509,7 @@
       "includeDirs": [
         "src/c/render",
         "src/c/spatial",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/render/components.ke_api.json",
@@ -495,6 +536,7 @@
       ],
       "includeDirs": [
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include",
         "src/c/spatial"
       ],
@@ -517,11 +559,13 @@
     {
       "name": "input_actions",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/input_actions.h"
+        "src/c/framework/kernel_engine/framework/input_actions.h"
       ],
       "includeDirs": [
+        "src/c/framework",
         "src/zig/framework/include",
         "src/c/input",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/framework/input_actions.ke_api.json",
@@ -539,6 +583,7 @@
       ],
       "includeDirs": [
         "src/c/render",
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/common/mesh.ke_api.json",
@@ -550,9 +595,10 @@
     {
       "name": "math",
       "headers": [
-        "src/zig/common/include/kernel_engine/common/math.h"
+        "src/c/math/kernel_engine/math/math.h"
       ],
       "includeDirs": [
+        "src/c/math",
         "src/zig/common/include"
       ],
       "apiJson": "src/csharp/common/math.ke_api.json",
@@ -635,7 +681,7 @@
       "headers": [
         "src/zig/common/include/kernel_engine/common/types.h",
         "src/zig/common/include/kernel_engine/common/error.h",
-        "src/zig/common/include/kernel_engine/common/math.h",
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ],
@@ -696,19 +742,19 @@
       "project": "src/csharp/framework/KernelEngine.Framework",
       "namespace": "KernelEngine.Framework.Native",
       "headers": [
-        "src/zig/framework/include/kernel_engine/framework/components.h",
-        "src/zig/framework/include/kernel_engine/framework/scene_tree.h",
-        "src/zig/framework/include/kernel_engine/framework/world.h",
-        "src/zig/framework/include/kernel_engine/framework/input_actions.h",
-        "src/zig/framework/include/kernel_engine/framework/scene_loader.h",
+        "src/c/framework/kernel_engine/framework/components.h",
+        "src/c/framework/kernel_engine/framework/scene_tree.h",
+        "src/c/framework/kernel_engine/framework/world.h",
+        "src/c/framework/kernel_engine/framework/input_actions.h",
+        "src/c/framework/kernel_engine/framework/scene_loader.h",
         "src/zig/framework/include/kernel_engine/framework/world_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h",
         "src/zig/framework/include/kernel_engine/framework/input_actions_create.h",
-        "src/zig/framework/include/kernel_engine/framework/signal_bus.h",
+        "src/c/framework/kernel_engine/framework/signal_bus.h",
         "src/zig/framework/include/kernel_engine/framework/signal_bus_create.h",
         "src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h",
-        "src/zig/framework/include/kernel_engine/framework/script_host.h",
+        "src/c/framework/kernel_engine/framework/script_host.h",
         "src/zig/framework/include/kernel_engine/framework/script_host_create.h"
       ],
       "library": "ke_framework",
@@ -725,7 +771,8 @@
         "src/c/input/kernel_engine/input/key.h",
         "src/c/input/kernel_engine/input/snapshot.h",
         "src/c/input/kernel_engine/input/event.h",
-        "src/c/input/kernel_engine/input/input.h"
+        "src/c/input/kernel_engine/input/input.h",
+        "src/zig/input/default/include/kernel_engine/input/default/input_default_create.h"
       ],
       "library": "ke_input_default",
       "output": "Generated/Input/"
@@ -736,7 +783,9 @@
       "namespace": "KernelEngine.Logger.Native",
       "headers": [
         "src/c/logger/kernel_engine/logger/log_level.h",
-        "src/c/logger/kernel_engine/logger/logger.h"
+        "src/c/logger/kernel_engine/logger/logger.h",
+        "src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h",
+        "src/zig/logger/simple/include/kernel_engine/logger/simple/console_sink_create.h"
       ],
       "library": "ke_logger_simple",
       "output": "Generated/Logger/"
@@ -808,7 +857,7 @@
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
         "src/c/render/kernel_engine/render/gpu/gpu_device.h"
       ],
-      "library": "ke_render_bgfx",
+      "library": "ke_render_service",
       "output": "Generated/Render/"
     },
     {
@@ -818,12 +867,9 @@
       "headers": [
         "src/c/runtime/kernel_engine/runtime/runtime.h",
         "src/c/runtime/kernel_engine/runtime/system_ctx.h",
-        "src/c/runtime/kernel_engine/runtime/runtime_create.h"
+        "src/zig/runtime/include/kernel_engine/runtime/runtime_create.h"
       ],
       "library": "ke_runtime",
-      "additional": [
-        "-DKE_RUNTIME_STATIC"
-      ],
       "output": "Generated/Runtime/"
     },
     {

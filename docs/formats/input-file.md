@@ -1,12 +1,12 @@
 # What does an input file say, and what does the loader do with it?
 
 An input file is TOML, conventionally named `actions.input` (`examples/csharp/games/pong/actions.input`),
-parsed with tomlc99 by `ke_input_actions.load` (`vtLoad`, `src/zig/framework/src/input_actions.zig:330`).
+parsed with tomlc99 by `ke_input_actions.load` (`vtLoad`, `src/zig/framework/src/input_actions.zig:321`).
 It binds named actions to keys and mouse buttons. How the bindings are evaluated each tick is in
 `architecture/input.md`.
 
 What the loader **fails** on: a missing or unopenable file (`KE_ERROR_NOT_FOUND`), a file tomlc99
-cannot parse (`KE_ERROR_IO`), and an allocation failure (`input_actions.zig:346-356`, `366-368`,
+cannot parse (`KE_ERROR_IO`), and an allocation failure (`input_actions.zig:337-347`, `366-368`,
 `387-390`).
 
 What it **ignores without a word**: everything listed under "What is skipped" below. In particular a
@@ -29,7 +29,7 @@ bindings = [
 ```
 
 Each table directly under `[action]` is one action, and its name is the table's name
-(`input_actions.zig:359-364`). A file with no `[action]` table loads successfully and defines nothing
+(`input_actions.zig:350-355`). A file with no `[action]` table loads successfully and defines nothing
 (`:359`). Anything else at the top level is read by nothing. Action names are stored in 64 bytes;
 a longer name is truncated at 63 characters (`:9`, `231-235`).
 
@@ -78,7 +78,7 @@ are `Left`, `Right` and `Middle` (`:86-90`); buttons 4 to 8 of `ke_mouse_button`
 
 ## What an action evaluates to
 
-Per action, per `evaluate`, over its bindings (`input_actions.zig:553-578`):
+Per action, per `evaluate`, over its bindings (`input_actions.zig:544-569`):
 
 - A binding is *active* when its contribution is non-zero. The action is active when any binding is.
 - A **Button** that is active reads `x = 1`.

@@ -733,7 +733,7 @@
   "structs": [
     {
       "name": "ke_input_snapshot",
-      "doc": "Frozen snapshot of all input state for a single frame. Passed from ke.main to ke.sim so reads are consistent and thread-safe. The key fields are bitsets. Read them through the accessors below rather than indexing directly: the packing is a detail of this contract, and a caller that reimplements it silently breaks if the packing ever changes.",
+      "doc": "Frozen snapshot of all input state for a single frame. Passed from the input poll to its readers so reads are consistent and thread-safe. The key fields are bitsets. Read them through the snapshot_is_* slots of ke_input rather than indexing directly: the packing is a detail of this contract, and a caller that reimplements it silently breaks if the packing ever changes.",
       "tags": [],
       "fields": [
         {
@@ -812,7 +812,7 @@
     },
     {
       "name": "ke_input_event",
-      "doc": "One discrete input event captured during ke.main\u0027s poll phase. Flat layout (no anonymous unions) for friction-free C# P/Invoke binding. Field interpretation depends on kind: - KEY_DOWN / KEY_UP: code = key code (GLFW codes) - MOUSE_BUTTON_DOWN/UP: code = button index - MOUSE_MOVE: x, y = absolute cursor position - MOUSE_SCROLL: x, y = scroll delta x, y",
+      "doc": "One discrete input event captured during the input poll. Flat layout (no anonymous unions) for friction-free C# P/Invoke binding. Field interpretation depends on kind: - KEY_DOWN / KEY_UP: code = a ke_key value - MOUSE_BUTTON_DOWN/UP: code = button index - MOUSE_MOVE: x, y = absolute cursor position - MOUSE_SCROLL: x, y = scroll delta x, y",
       "tags": [],
       "fields": [
         {
@@ -940,6 +940,162 @@
                 "out"
               ],
               "doc": "Receives the snapshot."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "snapshot_is_key_down",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true while the key is held down in a snapshot.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "const ke_input_snapshot *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Snapshot to read."
+            },
+            {
+              "name": "key",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_key"
+              ],
+              "doc": "Key to query. Out-of-range codes read as false."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "snapshot_is_key_pressed",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true if the key transitioned to down during the snapshot\u0027s frame.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "const ke_input_snapshot *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Snapshot to read."
+            },
+            {
+              "name": "key",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_key"
+              ],
+              "doc": "Key to query. Out-of-range codes read as false."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "snapshot_is_key_released",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true if the key transitioned to up during the snapshot\u0027s frame.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "const ke_input_snapshot *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Snapshot to read."
+            },
+            {
+              "name": "key",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_key"
+              ],
+              "doc": "Key to query. Out-of-range codes read as false."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "snapshot_is_mouse_button_down",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true while the mouse button is held down in a snapshot.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "const ke_input_snapshot *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Snapshot to read."
+            },
+            {
+              "name": "button",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_mouse_button"
+              ],
+              "doc": "Button to query. Out-of-range indices read as false."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "snapshot_is_mouse_button_pressed",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true if the mouse button transitioned to down during the snapshot\u0027s frame.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "const ke_input_snapshot *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Snapshot to read."
+            },
+            {
+              "name": "button",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_mouse_button"
+              ],
+              "doc": "Button to query. Out-of-range indices read as false."
+            }
+          ],
+          "receiver": "struct ke_input *"
+        },
+        {
+          "name": "snapshot_is_mouse_button_released",
+          "returns": "ke_bool",
+          "tags": [],
+          "doc": "Returns true if the mouse button transitioned to up during the snapshot\u0027s frame.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "const ke_input_snapshot *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Snapshot to read."
+            },
+            {
+              "name": "button",
+              "type": "int32_t",
+              "tags": [
+                "enum:ke_mouse_button"
+              ],
+              "doc": "Button to query. Out-of-range indices read as false."
             }
           ],
           "receiver": "struct ke_input *"
@@ -1103,150 +1259,6 @@
     }
   ],
   "functions": [
-    {
-      "name": "ke_input_snapshot_is_key_down",
-      "returns": "ke_bool",
-      "doc": "Returns true while the key is held down.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "snapshot",
-          "type": "const ke_input_snapshot *",
-          "tags": [
-            "borrowed"
-          ],
-          "doc": "Snapshot to read."
-        },
-        {
-          "name": "key",
-          "type": "int32_t",
-          "tags": [
-            "enum:ke_key"
-          ],
-          "doc": "Key to query. Out-of-range codes read as false."
-        }
-      ]
-    },
-    {
-      "name": "ke_input_snapshot_is_key_pressed",
-      "returns": "ke_bool",
-      "doc": "Returns true if the key transitioned to down during the snapshot\u0027s frame.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "snapshot",
-          "type": "const ke_input_snapshot *",
-          "tags": [
-            "borrowed"
-          ],
-          "doc": "Snapshot to read."
-        },
-        {
-          "name": "key",
-          "type": "int32_t",
-          "tags": [
-            "enum:ke_key"
-          ],
-          "doc": "Key to query. Out-of-range codes read as false."
-        }
-      ]
-    },
-    {
-      "name": "ke_input_snapshot_is_key_released",
-      "returns": "ke_bool",
-      "doc": "Returns true if the key transitioned to up during the snapshot\u0027s frame.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "snapshot",
-          "type": "const ke_input_snapshot *",
-          "tags": [
-            "borrowed"
-          ],
-          "doc": "Snapshot to read."
-        },
-        {
-          "name": "key",
-          "type": "int32_t",
-          "tags": [
-            "enum:ke_key"
-          ],
-          "doc": "Key to query. Out-of-range codes read as false."
-        }
-      ]
-    },
-    {
-      "name": "ke_input_snapshot_is_mouse_button_down",
-      "returns": "ke_bool",
-      "doc": "Returns true while the mouse button is held down.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "snapshot",
-          "type": "const ke_input_snapshot *",
-          "tags": [
-            "borrowed"
-          ],
-          "doc": "Snapshot to read."
-        },
-        {
-          "name": "button",
-          "type": "int32_t",
-          "tags": [
-            "enum:ke_mouse_button"
-          ],
-          "doc": "Button to query. Out-of-range indices read as false."
-        }
-      ]
-    },
-    {
-      "name": "ke_input_snapshot_is_mouse_button_pressed",
-      "returns": "ke_bool",
-      "doc": "Returns true if the mouse button transitioned to down during the snapshot\u0027s frame.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "snapshot",
-          "type": "const ke_input_snapshot *",
-          "tags": [
-            "borrowed"
-          ],
-          "doc": "Snapshot to read."
-        },
-        {
-          "name": "button",
-          "type": "int32_t",
-          "tags": [
-            "enum:ke_mouse_button"
-          ],
-          "doc": "Button to query. Out-of-range indices read as false."
-        }
-      ]
-    },
-    {
-      "name": "ke_input_snapshot_is_mouse_button_released",
-      "returns": "ke_bool",
-      "doc": "Returns true if the mouse button transitioned to up during the snapshot\u0027s frame.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "snapshot",
-          "type": "const ke_input_snapshot *",
-          "tags": [
-            "borrowed"
-          ],
-          "doc": "Snapshot to read."
-        },
-        {
-          "name": "button",
-          "type": "int32_t",
-          "tags": [
-            "enum:ke_mouse_button"
-          ],
-          "doc": "Button to query. Out-of-range indices read as false."
-        }
-      ]
-    },
     {
       "name": "ke_input_create",
       "returns": "ke_input_handle",

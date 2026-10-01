@@ -2,7 +2,7 @@
 
 /// <summary>
 /// Thread-local accessor for the input reader of the current simulation frame.
-/// The Framework sets this once at the start of every ke.sim tick; game code (typically
+/// The Framework sets this once at the start of every tick; game code (typically
 /// <c>Node.Update</c>) reads <see cref="Current"/> to poll keys/buttons/mouse.
 /// Lives in Abstractions so any layer can read it without referencing the Kernel concrete.
 /// </summary>

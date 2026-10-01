@@ -10,7 +10,7 @@ public interface IImageLoader : IDisposable
     IImageData LoadImage(string path);
 
     /// <summary>
-    /// Decodes an image on a worker thread (so ke.sim doesn't block on disk I/O + decode).
+    /// Decodes an image on a worker thread (so the calling system doesn't block on disk I/O + decode).
     /// Caller disposes the returned <see cref="IImageData"/>.
     /// </summary>
     Task<IImageData> LoadImageAsync(string path);

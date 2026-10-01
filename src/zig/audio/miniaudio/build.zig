@@ -5,9 +5,11 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const ke_audio = b.option([]const u8, "ke-audio-include", "kernel_engine/audio include dir") orelse @panic("-Dke-audio-include required");
     const ke_resource_cache = b.option([]const u8, "ke-resource-cache-include", "kernel_engine/resource_cache include dir") orelse @panic("-Dke-resource-cache-include required");
+    const ke_resource_cache_default = b.option([]const u8, "ke-resource-cache-default-include", "ke_resource_cache_default factory include dir") orelse @panic("-Dke-resource-cache-default-include required");
     const ke_self = b.option([]const u8, "ke-self-include", "this plugin's include dir") orelse @panic("-Dke-self-include required");
     const miniaudio_include = b.option([]const u8, "miniaudio-include", "vcpkg miniaudio.h include dir") orelse @panic("-Dminiaudio-include required");
     const ke_resource_cache_lib_dir = b.option([]const u8, "ke-resource-cache-lib-dir", "dir with ke_resource_cache_default import lib") orelse @panic("-Dke-resource-cache-lib-dir required");
@@ -20,7 +22,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_self, miniaudio_include }) |inc| {
+    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_resource_cache_default, ke_self, miniaudio_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addCSourceFile(.{ .file = b.path("src/miniaudio_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
@@ -50,7 +53,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_self, miniaudio_include }) |inc| {
+    test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_resource_cache_default, ke_self, miniaudio_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addCSourceFile(.{ .file = b.path("src/miniaudio_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });

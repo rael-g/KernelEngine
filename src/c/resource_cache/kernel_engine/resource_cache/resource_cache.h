@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/resource_cache/resource_cache_export.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -65,10 +64,6 @@ extern "C"
         ke_resource_cache *ref;
         void (*destroy)(ke_resource_cache *self);
     } ke_resource_cache_handle;
-
-    KE_RESOURCE_CACHE_API ke_resource_cache_handle ke_resource_cache_create(
-        const ke_resource_cache_params *params,
-        ke_error                       **out_error);
 
 #ifdef __cplusplus
 }

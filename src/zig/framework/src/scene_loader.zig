@@ -1,15 +1,13 @@
 const std = @import("std");
 
 const c = @import("c.zig").c;
-const heap = @import("heap.zig");
+const heap = @import("heap");
 const world_impl = @import("world.zig");
 const fields_apply = @import("component_fields_apply.zig");
 
 const E = @import("kerror").Errors(c);
 
-/// Longest project root / scene directory path the loader tracks.
 const path_max = 512;
-/// Longest resolved scene path handed to fopen.
 const resolved_path_max = 1024;
 
 const res_prefix = "res://";
@@ -52,8 +50,6 @@ fn stateOf(self: *c.ke_scene_loader) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-/// The world's getters return C-style pointers; narrow them to Zig optionals
-/// so callers can use `orelse`.
 fn ecsOf(world: *c.ke_world) ?*c.ke_ecs {
     const e = world.ecs.?(world);
     return if (e == null) null else e;
@@ -92,7 +88,6 @@ fn variantTable(t: *const c.ke_variant_table) c.ke_variant {
     return .{ .type = c.KE_VARIANT_TABLE, .unnamed_0 = .{ .t = t } };
 }
 
-/// Numeric arrays become vec2/vec3/vec4 by element count; anything else is null.
 fn variantFromArray(arr: *c.toml_array_t) c.ke_variant {
     const n = c.toml_array_nelem(arr);
     var comps = [_]f32{ 0, 0, 0, 0 };
@@ -113,8 +108,6 @@ fn variantFromArray(arr: *c.toml_array_t) c.ke_variant {
     return variantNull();
 }
 
-/// Inline TOML tables convert recursively; strings and nested tables are copied
-/// into the arena so they outlive the parsed TOML tree.
 fn variantFromTable(s: *State, tbl: *c.toml_table_t) c.ke_variant {
     const n: usize = @intCast(c.toml_table_nkval(tbl) + c.toml_table_ntab(tbl) + c.toml_table_narr(tbl));
     const entries = s.arena.allocArray(c.ke_variant_table_entry, n) orelse return variantNull();
@@ -135,7 +128,6 @@ fn variantFromTable(s: *State, tbl: *c.toml_table_t) c.ke_variant {
     return variantTable(&vtbl_mem[0]);
 }
 
-/// Reads the value at `key` through whichever typed accessor matches.
 fn readVarIn(s: *State, tbl: *c.toml_table_t, key: [*c]const u8) c.ke_variant {
     const ds = c.toml_string_in(tbl, key);
     if (ds.ok != 0) {
@@ -178,8 +170,6 @@ fn writeJoined(out: []u8, parts: []const []const u8) void {
     out[i] = 0;
 }
 
-/// res:// resolves against the project root; absolute paths pass through;
-/// everything else is relative to the referring scene's directory.
 fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8, out: []u8) void {
     if (std.mem.startsWith(u8, ref, res_prefix)) {
         const rest = ref[res_prefix.len..];
@@ -201,11 +191,6 @@ fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8, out: []u8
 
 const type_name_max = 128;
 
-/// Rewrites a node type name into the one spelling the engine resolves by:
-/// `+` becomes `.`, and each word boundary inside an identifier becomes `_`,
-/// so `Pong.Ball`, `Pong+Ball` and `pong.ball` all name the same type. Returns
-/// null when the result would not fit, leaving the caller to reject the name
-/// rather than dispatch a truncated one.
 fn normalizeTypeName(name: [*c]const u8, out: *[type_name_max]u8) ?[*:0]const u8 {
     if (name == null) return null;
     const src = std.mem.sliceTo(name, 0);
@@ -271,7 +256,6 @@ fn tableEntryCount(tbl: *c.toml_table_t) usize {
     return @intCast(c.toml_table_nkval(tbl) + c.toml_table_narr(tbl) + c.toml_table_ntab(tbl));
 }
 
-/// Builds an arena-backed entry list for every key in `tbl`.
 fn buildEntries(s: *State, tbl: *c.toml_table_t) ?[]c.ke_variant_table_entry {
     const n = tableEntryCount(tbl);
     if (n == 0) return null;
@@ -297,11 +281,6 @@ fn log(world: *c.ke_world, level: c_int, comptime fmt: []const u8, args: anytype
     if (lg.log) |f| f(lg, &ev);
 }
 
-fn warn(world: *c.ke_world, comptime fmt: []const u8, args: anytype) void {
-    log(world, c.KE_LOG_LEVEL_WARNING, fmt, args);
-}
-
-/// Reports a structural fault and fails the load.
 fn structural(
     world: *c.ke_world,
     out_error: [*c][*c]c.ke_error,
@@ -380,14 +359,10 @@ fn applyComponentBlock(
     return true;
 }
 
-/// A connection is authored as an array of tables, so a plain table by that name
-/// only ever reaches here written in the singular. Wiring is not something a file
-/// may ask for and not get, so the spelling is corrected rather than skipped.
 fn reservedBlockMiswritten(key: [*c]const u8) bool {
     return std.mem.eql(u8, std.mem.span(key), "connect");
 }
 
-/// A retired block shape, and what to write instead.
 fn retiredBlock(key: [*c]const u8) ?[]const u8 {
     const k = std.mem.span(key);
     if (std.mem.eql(u8, k, "components")) return "write [entity.<component>] directly";
@@ -395,14 +370,12 @@ fn retiredBlock(key: [*c]const u8) ?[]const u8 {
     return null;
 }
 
-/// Components the scene tree owns, which a scene may not author.
 fn internalComponent(key: [*c]const u8) bool {
     const k = std.mem.span(key);
     return std.mem.eql(u8, k, c.KE_COMPONENT_NAME_NAME) or
         std.mem.eql(u8, k, c.KE_COMPONENT_NAME_HIERARCHY);
 }
 
-/// Applies every `[entity.<component_name>]` block on one table.
 fn applyComponentBlocks(
     s: *State,
     entity: c.ke_entity,
@@ -430,13 +403,6 @@ fn applyComponentBlocks(
     return true;
 }
 
-/// Wires the `[[entity.connect]]` blocks one entity declares.
-///
-/// Resolved in a pass after every entity in the file exists, because a listener
-/// is as often declared below the emitter as above it, and requiring one order
-/// would make the wiring depend on file layout rather than on what it says.
-/// Wires the connect blocks one entity declares. A connection that resolves to
-/// nothing fails the load.
 fn applyConnections(
     s: *State,
     source: c.ke_entity,
@@ -490,9 +456,6 @@ fn applyConnections(
     return true;
 }
 
-/// Name -> entity map for resolving `parent = "..."` back-references within one
-/// scene file. Grows on demand: a scene may declare any number of named
-/// entities, and silently dropping late ones would break their children.
 const NameMap = struct {
     const Entry = struct { name: [*:0]u8, entity: c.ke_entity };
 
@@ -599,7 +562,7 @@ fn processEntity(
         return true;
     }
 
-    const entity = tree.create_node.?(tree, effective_name, parent, null, out_error);
+    const entity = tree.create_node.?(tree, effective_name, parent, out_error);
     if (entity == c.KE_ENTITY_INVALID) {
         E.fail(out_error, .out_of_memory, "failed to create node", @src());
         return false;
@@ -2586,4 +2549,11 @@ test "a connect written as a single table instead of an array fails the load" {
 
     _ = try f.declaredSignal("Poke");
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "creating and destroying a scene loader with its world leaves no block allocated" {
+    var f: Fixture = undefined;
+    try f.init();
+    f.deinit();
+    try heap.expectNoLeaks();
 }

@@ -7,12 +7,6 @@ namespace KernelEngine.Framework;
 /// The node-shaped face of the script host: spawning, destroying and reaching nodes,
 /// in the object vocabulary this language speaks.
 /// </summary>
-/// <remarks>
-/// It lives on the host rather than beside it because the host already owns what the
-/// questions are about — which entity carries which instance, which entities a type
-/// has, what a borrow resolves to. A separate class over the same facts is a second
-/// place to keep them in step, which is what this one used to be.
-/// </remarks>
 public unsafe partial class ScriptHost : ISignalDeclarer
 {
     private World              _world = null!;
@@ -60,12 +54,12 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         }
     }
 
-    [ThreadStatic] private static nint _systemCtx;
+    [ThreadStatic] private static KernelEngine.Ecs.EcsCommands? _commands;
 
     /// <summary>
     /// Scopes <see cref="AddNode{T}"/>/<see cref="DestroyNode"/> to a running
-    /// system's context for the duration of the returned handle, so structural
-    /// changes defer to the wave barrier. Restores the prior value on dispose.
+    /// system's command queue for the duration of the returned handle, so structural
+    /// changes defer to the wave barrier. Restores the prior queue on dispose.
     /// <para>
     /// The context belongs to the thread running the system, not to the world: the
     /// scheduler runs the systems of one wave concurrently, and a world-wide field
@@ -77,22 +71,15 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
     internal readonly ref struct SystemCtxScope
     {
-        private readonly nint _previous;
+        private readonly KernelEngine.Ecs.EcsCommands? _previous;
         public SystemCtxScope(nint ctx)
         {
-            _previous  = _systemCtx;
-            _systemCtx = ctx;
+            _previous = _commands;
+            _commands = ctx == 0 ? null : KernelEngine.Runtime.SystemCtx.Of(ctx).Commands;
         }
-        public void Dispose() => _systemCtx = _previous;
+        public void Dispose() => _commands = _previous;
     }
 
-    /// <remarks>
-    /// Announced after the binding reaches the host, never before: what the announcement
-    /// carries is a type, and the first thing a listener does with a type is ask for an
-    /// instance of it. A node the host has not been told about yet is a type with no
-    /// instances, and the listener would be reading an empty answer about a node that
-    /// exists.
-    /// </remarks>
     private void AnnounceBehavior(Node node)
     {
         if (!node.HasBehavior) return;
@@ -131,12 +118,6 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// Two ids answering is ambiguity the same way two nodes of one id are, so neither is
     /// resolved by picking whichever type registered first.
     /// </summary>
-    /// <remarks>
-    /// An ancestor borrow across several ids is decided here instead: the slot answers
-    /// with an entity and not with its depth, so which of several candidates is nearest
-    /// cannot be read off the answers. Widening the slot to say so would be modelling
-    /// inheritance in a contract that has none.
-    /// </remarks>
     internal Node? Borrow(Node owner, Type wanted, string name, ScriptBorrow reach)
     {
         var ids = ScriptTypesAssignableTo(wanted);
@@ -231,6 +212,17 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// Registers a node in the world: creates a native entity via the scene tree,
     /// binds the node to it, and lets the subclass materialize its components.
     /// </summary>
+    private ulong CreateEntity(string name, Node? parent)
+    {
+        var parentEntity = parent?.Entity ?? 0;
+        return _commands is { } commands
+            ? _world.SceneTree.CreateNodeDeferred(name, parentEntity, CommandsHandle(commands))
+            : _world.SceneTree.CreateNode(name, parentEntity);
+    }
+
+    private static unsafe nint CommandsHandle(KernelEngine.Ecs.EcsCommands commands) =>
+        (nint)((KernelEngine.Ecs.INativeEcsCommands)commands).Native;
+
     public T AddNode<T>(T node, string name = "", Node? parent = null) where T : Node
     {
         if (node.IsBound)
@@ -239,7 +231,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
             throw new InvalidOperationException(
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
-        var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
+        var entity = CreateEntity(name, parent);
         node.BindToScene(this, entity);
         BindScript(node);
         return node;
@@ -258,7 +250,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
             throw new InvalidOperationException(
                 $"Cannot attach '{name}' to parent '{parent.Name}' — parent belongs to a different world.");
 
-        var entity = _world.SceneTree.CreateNode(name, parent?.Entity ?? 0, _systemCtx);
+        var entity = CreateEntity(name, parent);
         node.PreBind(this, entity);
         BindScript(node);
     }
@@ -338,7 +330,10 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
         UnbindScript(node.Entity);
         _signals?.ForgetEntity(node.Entity);
-        _world.SceneTree.DestroyNode(node.Entity, _systemCtx);
+        if (_commands is { } commands)
+            _world.SceneTree.DestroyNodeDeferred(node.Entity, CommandsHandle(commands));
+        else
+            _world.SceneTree.DestroyNode(node.Entity);
         node.UnbindFromScene();
     }
 
@@ -430,11 +425,12 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// </summary>
     public void SetByCid<T>(ulong entity, uint cid, in T value) where T : unmanaged
     {
-        if (_systemCtx != 0)
+        if (_commands is { } commands)
         {
             var existing = _ecs.GetComponent<T>(entity, cid);
             if (!existing.IsEmpty) { existing[0] = value; return; }
-            if (Runtime.SystemCtx.Attach(_systemCtx, entity, cid, in value)) return;
+            commands.Attach(entity, cid, in value);
+            return;
         }
         var sp = _ecs.AddComponent<T>(entity, cid);
         if (!sp.IsEmpty) sp[0] = value;
@@ -456,8 +452,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     /// call doesn't already own by binding (e.g. queuing a UI quad) — <see cref="View"/>
     /// keeps its context internal, so this is the only path to it.
     /// </summary>
-    public bool Attach<T>(in View view, ulong entity, uint cid, in T value) where T : unmanaged =>
-        KernelEngine.Runtime.SystemCtx.Attach(view.SystemContext, entity, cid, in value);
+    public void Attach<T>(in View view, ulong entity, uint cid, in T value) where T : unmanaged =>
+        view.Commands.Attach(entity, cid, in value);
 
     /// <summary>Resolves the cid a component is registered under, or throws when the name is unknown.</summary>
     public uint CidOfName(string name) =>

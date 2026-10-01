@@ -16,9 +16,6 @@ const Vertex = extern struct {
 pub const State = struct {
     core: *c.ke_render_service,
     mesh_cid: c.ke_component_id,
-    /// Borrowed, optional: turns an authored path into an uploaded texture. Null
-    /// where the host wired no loader, and a sprite naming a file then draws
-    /// untextured rather than failing a frame.
     resolver: ?*c.ke_asset_resolver,
 };
 
@@ -56,10 +53,9 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
     return core.upload_mesh.?(core, k, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, null);
 }
 
-/// Uploads the image the sprite names, once.
 fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle {
     if (sp.texture[0] == 0) return c.KE_TEXTURE_NONE;
-    if (c.ke_texture_is_valid(sp.texture_handle)) return sp.texture_handle;
+    if (sp.texture_handle.bits != c.KE_HANDLE_NONE) return sp.texture_handle;
 
     const resolver = st.resolver orelse return c.KE_TEXTURE_NONE;
     sp.texture_handle = resolver.resolve_texture_into.?(resolver, st.core, &sp.texture, null);
@@ -92,11 +88,11 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
     );
 }
 
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
-    var segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    var segs = ctx.?.view.?(ctx, 0, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const sprites: [*c]c.ke_sprite2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -110,7 +106,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
         }
     }
 
-    segs = c.ke_system_ctx_view(ctx, 1, &segc);
+    segs = ctx.?.view.?(ctx, 1, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
         const sprites: [*c]c.ke_sprite2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
@@ -118,7 +114,8 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
         while (i < segs[s].count) : (i += 1) {
             if (sprites[i].attached != 0) continue;
             sprites[i].attached = 1;
-            _ = c.ke_system_ctx_attach(ctx, segs[s].entities[i], st.mesh_cid, null, 0);
+            const commands = ctx.?.commands;
+            if (!commands.*.attach.?(commands, segs[s].entities[i], st.mesh_cid, null, 0, out_error)) return false;
         }
     }
     return true;

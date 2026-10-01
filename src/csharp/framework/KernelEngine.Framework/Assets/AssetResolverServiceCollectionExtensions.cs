@@ -7,10 +7,6 @@ namespace KernelEngine.Framework;
 /// Registers the asset resolver: the thing that turns a path a scene authored into
 /// an uploaded GPU handle.
 /// </summary>
-/// <remarks>
-/// The loaders are read from the container when present; without them the resolver
-/// resolves nothing.
-/// </remarks>
 public static class AssetResolverServiceCollectionExtensions
 {
     /// <summary>Registers <see cref="NativeAssetResolver"/> as a singleton.</summary>

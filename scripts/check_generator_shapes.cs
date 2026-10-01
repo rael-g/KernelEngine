@@ -165,6 +165,20 @@ ExpectFreeFunctions("an opaque payload counted in bytes takes the caller's own t
                + " (nuint)sizeof(TData));"],
     absent: ["public static bool Attach(nint"]);
 
+// The same pair on a slot that reports failure through its error lane: the method stays
+// generic over the caller's type and the throwing happens after the pinned call returns.
+Expect("an opaque payload on a fallible slot takes the caller's own type",
+    Vtable("ke_probe", Slot("attach", "bool",
+        Param("entity", "uint64_t"),
+        Param("data", "const void *", "bytes_of:size"),
+        Param("size", "size_t"),
+        Param("out_error", "ke_error **"))),
+    contains: ["public void Attach<TData>(ulong entity, in TData data) where TData : unmanaged",
+               "fixed (TData* dataPtr = &data)",
+               "(void*)dataPtr, (nuint)sizeof(TData), &err",
+               "KernelError.ThrowIfFailed("],
+    absent: ["public void Attach(ulong"]);
+
 // The same tag on a pointer that already names its type. Deriving the count from a type
 // parameter there would let the caller name a second type over bytes the declaration has
 // already spoken for.

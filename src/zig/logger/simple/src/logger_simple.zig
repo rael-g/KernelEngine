@@ -3,11 +3,14 @@ const testing = std.testing;
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const gpa = std.heap.c_allocator;
+const heap = @import("heap");
+const gpa = heap.gpa;
 
 const c = @cImport({
     @cInclude("kernel_engine/logger/logger.h");
     @cInclude("kernel_engine/logger/log_level.h");
+    @cInclude("kernel_engine/logger/simple/logger_simple_create.h");
+    @cInclude("kernel_engine/logger/simple/console_sink_create.h");
     @cInclude("stdio.h");
 });
 
@@ -68,7 +71,7 @@ fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c
 }
 
 fn consoleSinkWrite(stream: *c.FILE, event: *const c.ke_log_event) void {
-    const label = ke_log_level_to_string(event.level);
+    const label = levelToString(event.level);
     const tag: [*c]const u8 = if (event.tag != null) event.tag else "";
     const message: [*c]const u8 = if (event.message != null) event.message else "";
     _ = c.fprintf(stream, "[%s] %s: %s\n", label, tag, message);
@@ -100,7 +103,7 @@ export fn ke_console_sink_create() callconv(.c) c.ke_logger_sink {
     };
 }
 
-export fn ke_log_level_to_string(level: i32) callconv(.c) [*c]const u8 {
+fn levelToString(level: i32) [*c]const u8 {
     return switch (level) {
         c.KE_LOG_LEVEL_TRACE => "TRACE",
         c.KE_LOG_LEVEL_DEBUG => "DEBUG",
@@ -322,14 +325,20 @@ test "destroy calls each sink destroy fn" {
     try testing.expectEqual(@as(i32, 1), counter);
 }
 
-test "ke_log_level_to_string(KE_LOG_LEVEL_INFO) is INFO" {
-    try testing.expectEqualStrings("INFO", std.mem.span(ke_log_level_to_string(c.KE_LOG_LEVEL_INFO)));
+test "levelToString(KE_LOG_LEVEL_INFO) is INFO" {
+    try testing.expectEqualStrings("INFO", std.mem.span(levelToString(c.KE_LOG_LEVEL_INFO)));
 }
 
-test "ke_log_level_to_string(-1) is UNKNOWN" {
-    try testing.expectEqualStrings("UNKNOWN", std.mem.span(ke_log_level_to_string(-1)));
+test "levelToString(-1) is UNKNOWN" {
+    try testing.expectEqualStrings("UNKNOWN", std.mem.span(levelToString(-1)));
 }
 
-test "ke_log_level_to_string(6) is UNKNOWN" {
-    try testing.expectEqualStrings("UNKNOWN", std.mem.span(ke_log_level_to_string(6)));
+test "levelToString(6) is UNKNOWN" {
+    try testing.expectEqualStrings("UNKNOWN", std.mem.span(levelToString(6)));
+}
+
+test "creating and destroying a logger leaves no block allocated" {
+    const h = ke_logger_create(null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
 }

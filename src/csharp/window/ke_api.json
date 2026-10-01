@@ -79,22 +79,6 @@
           "receiver": "struct ke_window *"
         },
         {
-          "name": "swap_buffers",
-          "returns": "_Bool",
-          "tags": [],
-          "doc": "Presents the back buffer. Call once per frame, after rendering.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_window *"
-        },
-        {
           "name": "get_size",
           "returns": "_Bool",
           "tags": [],

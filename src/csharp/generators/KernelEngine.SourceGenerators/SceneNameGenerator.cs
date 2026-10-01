@@ -12,24 +12,6 @@ namespace KernelEngine.SourceGenerators;
 /// Emits one type per <c>.scene.toml</c> file in the project, so a scene can be named
 /// to <c>ISceneRouter.LoadScene&lt;T&gt;()</c> by type instead of by string.
 /// </summary>
-/// <remarks>
-/// <para>
-/// A scene file is a prefab with an identity, and the compiler can only help with
-/// an identity it knows the name of. Spelled as a string, a typo is a scene that
-/// silently fails to load at runtime, and renaming the file leaves every caller
-/// compiling happily against a name that no longer exists.
-/// </para>
-/// <para>
-/// Scene types land in a <c>.Scenes</c> child namespace rather than the project's
-/// own: a scene very often shares its name with the node it is built around
-/// (<c>Ball.scene.toml</c> next to <c>class Ball</c>), and putting both in one
-/// namespace would make the collision the caller's problem.
-/// </para>
-/// <para>
-/// The project opts in by listing its scenes as additional files:
-/// <c>&lt;AdditionalFiles Include="scenes/**/*.scene.toml" /&gt;</c>.
-/// </para>
-/// </remarks>
 [Generator]
 public sealed class SceneNameGenerator : IIncrementalGenerator
 {

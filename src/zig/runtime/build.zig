@@ -5,6 +5,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
+    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
     const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
@@ -18,12 +20,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    inline for (.{ ke_common, ke_ecs, ke_scheduler, ke_runtime }) |inc| {
+    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    inline for (.{ ke_common, ke_math, ke_ecs, ke_scheduler, ke_runtime }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);
-    mod.addCMacro("KE_RUNTIME_EXPORT", "");
+    mod.addIncludePath(b.path("include"));
+    mod.addCMacro("KE_RUNTIME_CREATE_EXPORT", "");
 
     const lib = b.addLibrary(.{
         .name = "ke_runtime",
@@ -44,7 +48,8 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .link_libc = true,
         });
-        inline for (.{ ke_common, ke_ecs, ke_scheduler, ke_runtime }) |inc| {
+        test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+        inline for (.{ ke_common, ke_math, ke_ecs, ke_scheduler, ke_runtime }) |inc| {
             test_mod.addIncludePath(.{ .cwd_relative = inc });
         }
         test_mod.addImport("kerror", b.createModule(.{
@@ -52,7 +57,8 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }));
-        test_mod.addCMacro("KE_RUNTIME_EXPORT", "");
+        test_mod.addIncludePath(b.path("include"));
+        test_mod.addCMacro("KE_RUNTIME_CREATE_EXPORT", "");
         test_mod.addLibraryPath(.{ .cwd_relative = lib_dir });
         test_mod.addRPath(.{ .cwd_relative = lib_dir });
         test_mod.linkSystemLibrary("ke_ecs_flecs", .{});

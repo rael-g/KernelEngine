@@ -5,6 +5,7 @@
 #include <kernel_engine/logger/logger.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/render/camera.h>
 #include <kernel_engine/view/view_space.h>
 #include <kernel_engine/runtime/runtime.h>
 
@@ -40,6 +41,7 @@ extern "C"
         ke_component_id point_light_cid, ke_component_id spot_light_cid,
         ke_component_id world_transform_cid, ke_component_id camera_cid,
         ke_component_id frame_cid, ke_view_space *view_space,
+        ke_render_camera *camera,
         ke_error **out_error);
 
 #ifdef __cplusplus

@@ -6,15 +6,10 @@ const std = @import("std");
 pub const State = struct {
     core: *c.ke_render_service,
     ui: *c.ke_render_ui,
-    /// Borrowed, optional.
     resolver: ?*c.ke_asset_resolver,
-    /// Borrowed, optional.
     logger: ?*c.ke_logger = null,
 };
 
-/// Reports a label that named a font the engine could not produce. Staying quiet
-/// draws the label as nothing, which reads on screen as an empty scene rather
-/// than as the failure it is.
 fn reportUnresolved(st: *State, path: []const u8, reason: []const u8) void {
     const lg = st.logger orelse return;
     var buf: [320]u8 = undefined;
@@ -23,9 +18,6 @@ fn reportUnresolved(st: *State, path: []const u8, reason: []const u8) void {
     lg.log.?(lg, &ev);
 }
 
-/// Bakes and registers the font, keyed by every parameter of the bake. A failure
-/// answers KE_UI_FONT_FAILED, which both stops the retry and records that the
-/// label asked for something it did not get.
 fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     const path = std.mem.sliceTo(&l.font, 0);
 
@@ -58,7 +50,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     defer resolver.free_font.?(resolver, d);
 
     const atlas = st.core.upload_texture.?(st.core, key.ptr, d.atlas_width, d.atlas_height, d.atlas_rgba, null);
-    if (!c.ke_texture_is_valid(atlas)) {
+    if (atlas.bits == c.KE_HANDLE_NONE) {
         reportUnresolved(st, path, "its glyph atlas could not be uploaded");
         return c.KE_UI_FONT_FAILED;
     }
@@ -75,7 +67,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
-    const segs = c.ke_system_ctx_view(ctx, 0, &segc);
+    const segs = ctx.?.view.?(ctx, 0, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const labels: [*c]c.ke_label_component = @ptrCast(@alignCast(segs[s].columns[0]));

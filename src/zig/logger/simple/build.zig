@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
@@ -14,6 +15,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     inline for (.{ ke_common, ke_logger }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
@@ -23,7 +25,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     mod.addImport("kerror", kerror_mod);
-    mod.addCMacro("KE_LOGGER_EXPORT", "");
+    mod.addIncludePath(b.path("include"));
+    mod.addCMacro("KE_LOGGER_SIMPLE_EXPORT", "");
 
     const lib = b.addLibrary(.{
         .name = "ke_logger_simple",
@@ -42,6 +45,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     inline for (.{ ke_common, ke_logger }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
@@ -50,7 +54,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }));
-    test_mod.addCMacro("KE_LOGGER_EXPORT", "");
+    test_mod.addIncludePath(b.path("include"));
+    test_mod.addCMacro("KE_LOGGER_SIMPLE_EXPORT", "");
 
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
