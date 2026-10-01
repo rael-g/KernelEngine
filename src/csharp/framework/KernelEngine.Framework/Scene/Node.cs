@@ -140,8 +140,8 @@ public abstract class Node
     /// For a component this node's own type does not declare — one the node
     /// produces each tick for another domain's pass to read.
     /// </summary>
-    protected bool Attach<T>(in View view, uint cid, in T value) where T : unmanaged =>
-        KernelEngine.Runtime.SystemCtx.Attach(view.SystemContext, Entity, cid, in value);
+    protected void Attach<T>(in View view, uint cid, in T value) where T : unmanaged =>
+        view.Commands.Attach(Entity, cid, in value);
 
     /// <summary>
     /// Removes this node and everything under it from the world. Destroying a

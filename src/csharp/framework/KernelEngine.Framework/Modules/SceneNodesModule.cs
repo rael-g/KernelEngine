@@ -40,7 +40,7 @@ public sealed class SceneNodesModule : IRuntimeModule
     /// </summary>
     private static (int First, int Last) SliceOf(nint ctx, int count)
     {
-        var (index, slices) = KernelEngine.Runtime.SystemCtx.Slice(ctx);
+        var (index, slices) = KernelEngine.Runtime.SystemCtx.Of(ctx).Slice();
         if (slices <= 1) return (0, count);
 
         var per   = count / (int)slices;
@@ -150,7 +150,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                         return;
                     }
 
-                    var segments = KernelEngine.Runtime.SystemCtx.View(ctx, 0);
+                    var segments = KernelEngine.Runtime.SystemCtx.Of(ctx).View(0);
                     var total = 0;
                     for (int s = 0; s < segments.Length; s++)
                         total += segments[s].Entities.Length;

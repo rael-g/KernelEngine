@@ -98,14 +98,8 @@ fn bindCtx(ctx: *c.ke_system_ctx, commands: *c.ke_ecs_commands, state: *CtxState
     };
     ctx.commands = commands;
     ctx.handle = state;
-    ctx.view = &ke_system_ctx_view;
-    ctx.reserve = &ke_system_ctx_reserve;
-    ctx.@"defer" = &ke_system_ctx_defer;
-    ctx.spawn = &ke_system_ctx_spawn;
-    ctx.attach = &ke_system_ctx_attach;
-    ctx.detach = &ke_system_ctx_detach;
-    ctx.despawn = &ke_system_ctx_despawn;
-    ctx.slice = &ke_system_ctx_slice;
+    ctx.view = &ctxView;
+    ctx.slice = &ctxSlice;
 }
 
 fn termWrites(a: c.ke_component_access) bool {
@@ -203,7 +197,7 @@ fn debugComputeWaves(
     out_wave_count.* = current_wave + 1;
 }
 
-export fn ke_system_ctx_view(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
+fn ctxView(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
     if (out_count != null) out_count.* = 0;
     const s = ctxOf(ctx) orelse return null;
     if (s.seg_storage == null or query_index >= s.view_query_count) return null;
@@ -250,84 +244,7 @@ fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
     return offset;
 }
 
-export fn ke_system_ctx_reserve(ctx: ?*c.ke_system_ctx) callconv(.c) c.ke_entity {
-    const s = ctxOf(ctx) orelse return c.KE_ENTITY_INVALID;
-    const ecs = s.ecs orelse return c.KE_ENTITY_INVALID;
-    const reserve = ecs.entity_reserve orelse return c.KE_ENTITY_INVALID;
-    return reserve(ecs);
-}
-
-export fn ke_system_ctx_defer(ctx: ?*c.ke_system_ctx, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize) callconv(.c) bool {
-    const s = ctxOf(ctx) orelse return false;
-    const q = s.defer_q orelse return false;
-    if (func == null) return false;
-    const offset = deferArenaPush(q, user, user_size);
-    if (offset == std.math.maxInt(usize)) return false;
-    if (!deferReserve(q, q.count + 1)) return false;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
-    cmd.kind = .callback;
-    cmd.fn_ = func;
-    cmd.attach_offset = offset;
-    cmd.attach_size = user_size;
-    return true;
-}
-
-export fn ke_system_ctx_spawn(ctx: ?*c.ke_system_ctx) callconv(.c) c.ke_entity {
-    const s = ctxOf(ctx) orelse return c.KE_ENTITY_INVALID;
-    const q = s.defer_q orelse return c.KE_ENTITY_INVALID;
-    const ecs = s.ecs orelse return c.KE_ENTITY_INVALID;
-    const reserve = ecs.entity_reserve orelse return c.KE_ENTITY_INVALID;
-    const entity = reserve(ecs);
-    if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
-    if (!deferReserve(q, q.count + 1)) return c.KE_ENTITY_INVALID;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
-    cmd.kind = .spawn;
-    cmd.entity = entity;
-    return entity;
-}
-
-export fn ke_system_ctx_attach(ctx: ?*c.ke_system_ctx, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize) callconv(.c) bool {
-    const s = ctxOf(ctx) orelse return false;
-    const q = s.defer_q orelse return false;
-    const offset = deferArenaPush(q, data, size);
-    if (offset == std.math.maxInt(usize)) return false;
-    if (!deferReserve(q, q.count + 1)) return false;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
-    cmd.kind = .attach;
-    cmd.entity = entity;
-    cmd.cid = cid;
-    cmd.attach_offset = offset;
-    cmd.attach_size = size;
-    return true;
-}
-
-export fn ke_system_ctx_detach(ctx: ?*c.ke_system_ctx, entity: c.ke_entity, cid: c.ke_component_id) callconv(.c) bool {
-    const s = ctxOf(ctx) orelse return false;
-    const q = s.defer_q orelse return false;
-    if (!deferReserve(q, q.count + 1)) return false;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
-    cmd.kind = .detach;
-    cmd.entity = entity;
-    cmd.cid = cid;
-    return true;
-}
-
-export fn ke_system_ctx_despawn(ctx: ?*c.ke_system_ctx, entity: c.ke_entity) callconv(.c) bool {
-    const s = ctxOf(ctx) orelse return false;
-    const q = s.defer_q orelse return false;
-    if (!deferReserve(q, q.count + 1)) return false;
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
-    cmd.kind = .despawn;
-    cmd.entity = entity;
-    return true;
-}
-
-export fn ke_system_ctx_slice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
+fn ctxSlice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
     const s = ctxOf(ctx);
     if (out_index != null) out_index.* = if (s) |st| st.slice_index else 0;
     if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
@@ -1258,7 +1175,7 @@ fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]
     const probe: *SliceProbe = @ptrCast(@alignCast(ud.?));
     var index: u32 = 99;
     var count: u32 = 99;
-    ke_system_ctx_slice(ctx, &index, &count);
+    ctx.?.slice.?(ctx, &index, &count);
     _ = probe.calls.fetchAdd(1, .acq_rel);
     probe.reported_count.store(count, .release);
     if (index < probe.seen.len) _ = probe.seen[index].fetchAdd(1, .acq_rel);
@@ -1720,7 +1637,7 @@ var g_extract_probe = ExtractProbe{};
 
 fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs == null) return true;
     for (0..seg_count) |s| {
         const col: [*]i32 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
@@ -1731,7 +1648,7 @@ fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c
 
 fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs != null and seg_count > 0 and segs[0].count > 0) {
         if (segs[0].columns[0]) |col| {
             const typed: [*]const i32 = @ptrCast(@alignCast(col));
@@ -1798,7 +1715,7 @@ var g_extract_pv_runs = Counter.init(0);
 
 fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs != null) {
         for (0..seg_count) |s| {
             const pc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
@@ -2198,7 +2115,7 @@ test "a zero size component registers as a usable tag" {
 
 fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs == null) return true;
 
     var sink: f32 = 0.0;
@@ -2253,7 +2170,7 @@ var g_pv_sum: f64 = 0.0;
 
 fn posVelBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     var seg_count: usize = 0;
-    const segs = ke_system_ctx_view(ctx, 0, &seg_count);
+    const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs == null) return true;
     for (0..seg_count) |s| {
         const pc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));

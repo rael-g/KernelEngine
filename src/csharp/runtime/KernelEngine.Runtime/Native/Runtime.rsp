@@ -22,8 +22,6 @@ Runtime.umbrella.h
 ../../../../c/runtime/kernel_engine/runtime/runtime.h
 ../../../../zig/runtime/include/kernel_engine/runtime/runtime_create.h
 ../../../../c/runtime/kernel_engine/runtime/system_ctx.h
---additional
--DKE_RUNTIME_STATIC
 --methodClassName
 NativeMethods
 --prefixStrip
@@ -32,11 +30,13 @@ ke_
 *=KernelEngine.Common.Native
 --remap
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
+ke_ecs_commands=KernelEngine.Ecs.Native.ke_ecs_commands
 ke_ecs_segment=KernelEngine.Ecs.Native.ke_ecs_segment
 ke_error=KernelEngine.Common.Native.ke_error
 ke_scheduler=KernelEngine.Scheduler.Native.ke_scheduler
 --exclude
 ke_ecs
+ke_ecs_commands
 ke_ecs_segment
 ke_error
 ke_scheduler

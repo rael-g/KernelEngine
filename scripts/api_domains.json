@@ -84,6 +84,9 @@
     {
       "_comment": "The scheduler contract. register_system's params carry queries + access_list, which the wave builder orders on; a hand-written IRuntime had omitted them, so every C#-registered system declared zero access and the wave builder saw zero conflicts. Generating the surface from the header is what keeps that from drifting again. system_ctx.h rides along because the execute callback's first parameter is a ke_system_ctx*.",
       "name": "runtime",
+      "providers": [
+        "ke_system_ctx"
+      ],
       "headers": [
         "src/c/runtime/kernel_engine/runtime/runtime.h",
         "src/c/runtime/kernel_engine/runtime/system_ctx.h",
@@ -113,9 +116,13 @@
     },
     {
       "name": "ecs",
+      "providers": [
+        "ke_ecs_commands"
+      ],
       "headers": [
         "src/c/ecs/kernel_engine/ecs/ke_ecs.h",
         "src/c/ecs/kernel_engine/ecs/ecs.h",
+        "src/c/ecs/kernel_engine/ecs/commands.h",
         "src/c/ecs/kernel_engine/ecs/component_field.h"
       ],
       "includeDirs": [
@@ -425,7 +432,7 @@
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
       "usings": [
-        "KernelEngine.Runtime.Native"
+        "KernelEngine.Ecs.Native"
       ]
     },
     {
@@ -863,9 +870,6 @@
         "src/zig/runtime/include/kernel_engine/runtime/runtime_create.h"
       ],
       "library": "ke_runtime",
-      "additional": [
-        "-DKE_RUNTIME_STATIC"
-      ],
       "output": "Generated/Runtime/"
     },
     {

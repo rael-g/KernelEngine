@@ -65,6 +65,7 @@ foreach (var dRaw in domains)
         "--api", apiJson, "--namespace", d["namespace"]!.GetValue<string>(),
         "--native-namespace", d["nativeNamespace"]!.GetValue<string>(),
         "--out", outDir, "--contract-out", contractDir, "--domain", name };
+    foreach (var v in d["providers"]?.AsArray() ?? []) genArgs.AddRange(["--provider", v!.GetValue<string>()]);
     foreach (var u in d["usings"]?.AsArray() ?? []) genArgs.AddRange(["--using", u!.GetValue<string>()]);
     if (d["library"] is JsonNode lib) genArgs.AddRange(["--library", lib.GetValue<string>()]);
 

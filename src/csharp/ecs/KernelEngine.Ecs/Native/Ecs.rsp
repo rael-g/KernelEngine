@@ -13,6 +13,7 @@ ke_ecs_flecs
 --file
 Ecs.umbrella.h
 --traverse
+../../../../c/ecs/kernel_engine/ecs/commands.h
 ../../../../c/ecs/kernel_engine/ecs/component_field.h
 ../../../../c/ecs/kernel_engine/ecs/ecs.h
 ../../../../c/ecs/kernel_engine/ecs/ke_ecs.h

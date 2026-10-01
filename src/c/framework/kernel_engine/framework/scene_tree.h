@@ -3,14 +3,13 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/ecs/commands.h>
 #include <kernel_engine/framework/components.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-    typedef struct ke_system_ctx ke_system_ctx;
 
     typedef struct ke_scene_tree
     {
@@ -21,20 +20,34 @@ extern "C"
 
         /**
          * Creates a node attached under `parent`, or under the root when `parent` is
-         * KE_ENTITY_INVALID.
+         * KE_ENTITY_INVALID. The node exists when the call returns.
          * @param name [utf8]
-         * @param ctx  [ctx] The system context the call is running inside, which defers the
-         *             structural change to the wave barrier. Null creates the node immediately.
          */
-        ke_entity (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_system_ctx *ctx, ke_error **out_error);
+        ke_entity (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_error **out_error);
+
+        /**
+         * Records the creation of a node into `commands`, with the same placement as
+         * create_node. The id is usable as a reference at once; the node exists when
+         * `commands` is applied. For a caller that may not touch the world, such as a
+         * system body.
+         * @param name [utf8]
+         * @param commands [ctx]
+         */
+        ke_entity (*create_node_deferred)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_ecs_commands *commands, ke_error **out_error);
 
         /**
          * Destroys a node and all its descendants, firing each on_destroy hook in
-         * post-order so a child is torn down before its parent.
-         * @param ctx [ctx] The system context the call is running inside, which defers the
-         *            teardown to the wave barrier. Null destroys the node immediately.
+         * post-order so a child is torn down before its parent. The node is gone when
+         * the call returns.
          */
-        bool (*destroy_node)(struct ke_scene_tree *self, ke_entity entity, ke_system_ctx *ctx, ke_error **out_error);
+        bool (*destroy_node)(struct ke_scene_tree *self, ke_entity entity, ke_error **out_error);
+
+        /**
+         * Records the destruction of a node and its descendants into `commands`, as
+         * destroy_node would do it when `commands` is applied.
+         * @param commands [ctx]
+         */
+        bool (*destroy_node_deferred)(struct ke_scene_tree *self, ke_entity entity, ke_ecs_commands *commands, ke_error **out_error);
 
         void (*destroy_all)(struct ke_scene_tree *self);
 

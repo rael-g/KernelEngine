@@ -16,7 +16,7 @@ typedef struct ke_ecs_commands ke_ecs_commands;
 /// the copy of the payload passed to defer; `ecs` is the live world.
 typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
 
-/// [interface] A queue of structural mutations. Every operation records its intent and
+/// A queue of structural mutations. Every operation records its intent and
 /// returns; none changes the world while it runs. The queue is applied, in the order the
 /// operations were recorded, by whoever owns it, and an operation's effect is not
 /// observable before then. A caller needing a change visible at once uses ke_ecs, which
@@ -53,7 +53,7 @@ struct ke_ecs_commands {
     /// @return false when the operation could not be recorded.
     bool (*despawn)(ke_ecs_commands *self, ke_entity entity, ke_error **out_error);
 
-    /// Records a structural operation for work the fixed verbs above cannot express. `fn`
+    /// [idiom] Records a structural operation for work the fixed verbs above cannot express. `fn`
     /// runs when the queue is applied, in order with the other operations.
     /// `user_size` bytes of `user` are copied, so the caller's buffer need not outlive
     /// the call.

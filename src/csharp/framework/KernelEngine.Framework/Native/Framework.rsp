@@ -53,6 +53,7 @@ ke_
 ke_asset_resolver_handle=KernelEngine.Asset.Native.ke_asset_resolver_handle
 ke_component_field=KernelEngine.Ecs.Native.ke_component_field
 ke_ecs=KernelEngine.Ecs.Native.ke_ecs
+ke_ecs_commands=KernelEngine.Ecs.Native.ke_ecs_commands
 ke_error=KernelEngine.Common.Native.ke_error
 ke_font_loader=KernelEngine.Text.Native.ke_font_loader
 ke_image_loader=KernelEngine.Asset.Native.ke_image_loader
@@ -68,6 +69,7 @@ ke_variant_table_entry=KernelEngine.Ecs.Native.ke_variant_table_entry
 ke_asset_resolver_handle
 ke_component_field
 ke_ecs
+ke_ecs_commands
 ke_error
 ke_font_loader
 ke_image_loader

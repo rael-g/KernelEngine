@@ -562,7 +562,7 @@ fn processEntity(
         return true;
     }
 
-    const entity = tree.create_node.?(tree, effective_name, parent, null, out_error);
+    const entity = tree.create_node.?(tree, effective_name, parent, out_error);
     if (entity == c.KE_ENTITY_INVALID) {
         E.fail(out_error, .out_of_memory, "failed to create node", @src());
         return false;
