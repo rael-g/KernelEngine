@@ -58,6 +58,7 @@ pub fn build(b: *std.Build) void {
     const heap_src = b.pathJoin(&.{ src_zig, "common/heap.zig" });
     const component_fields_src = b.pathJoin(&.{ src_zig, "common/component_fields.zig" });
     const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
+    const stubs_src = b.pathJoin(&.{ src_zig, "common/stubs.zig" });
     const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
@@ -335,6 +336,7 @@ pub fn build(b: *std.Build) void {
     const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
     const tonemap = ctx.plugin("ke_render_tonemap", "src/zig/render/tonemap", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
@@ -343,10 +345,11 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/tonemap/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step }, .no_tests);
+    }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step }, .has_tests);
 
     const physics_body2d = ctx.plugin("ke_physics_body2d", "src/zig/physics/body2d", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -357,7 +360,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-framework-include", b.pathJoin(&.{ src_c, "framework" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "physics/body2d/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step }, .no_tests);
+    }, &.{ &common.step, &runtime.step }, .has_tests);
 
     const audio_module = ctx.plugin("ke_audio_module", "src/zig/audio/module", &.{
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
@@ -375,6 +378,7 @@ pub fn build(b: *std.Build) void {
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
     const skybox = ctx.plugin("ke_render_skybox", "src/zig/render/skybox", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -384,12 +388,13 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/skybox/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &skybox_vs.step, &skybox_fs.step }, .no_tests);
+    }, &.{ &common.step, &runtime.step, &skybox_vs.step, &skybox_fs.step }, .has_tests);
 
     const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
     const ui = ctx.plugin("ke_render_ui", "src/zig/render/ui", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "handle-src", handle_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
@@ -400,12 +405,13 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-text-include", b.pathJoin(&.{ src_c, "text" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/ui/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &ui_vs.step, &ui_fs.step }, .no_tests);
+    }, &.{ &common.step, &runtime.step, &ui_vs.step, &ui_fs.step }, .has_tests);
 
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
     const shadow = ctx.plugin("ke_render_shadow", "src/zig/render/shadow", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -415,11 +421,12 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-view-include", b.pathJoin(&.{ src_c, "view" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/shadow/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &shadow_vs.step, &shadow_fs.step }, .no_tests);
+    }, &.{ &common.step, &runtime.step, &shadow_vs.step, &shadow_fs.step }, .has_tests);
 
     const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{});
     const cluster = ctx.plugin("ke_render_cluster", "src/zig/render/cluster", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -430,13 +437,14 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/cluster/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &cluster_cs.step }, .no_tests);
+    }, &.{ &common.step, &runtime.step, &cluster_cs.step }, .has_tests);
 
     const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
     const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
     const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
     const deferred_lighting = ctx.plugin("ke_render_deferred_lighting", "src/zig/render/deferred_lighting", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -447,7 +455,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-logger-include", b.pathJoin(&.{ src_c, "logger" })),
         argF(b, "ke-self-include", b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" })),
         argF(b, "ke-lib-dir", lib_dir),
-    }, &.{ &common.step, &runtime.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .no_tests);
+    }, &.{ &common.step, &runtime.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .has_tests);
 
     const materials_dirs = [_][]const u8{
         b.pathJoin(&.{ shader_lib_dir, "materials" }),
@@ -464,6 +472,7 @@ pub fn build(b: *std.Build) void {
     );
     const gbuffer = ctx.plugin("ke_render_gbuffer", "src/zig/render/gbuffer", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -486,6 +495,7 @@ pub fn build(b: *std.Build) void {
     );
     const forward = ctx.plugin("ke_render_forward", "src/zig/render/forward", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-ecs-include", b.pathJoin(&.{ src_c, "ecs" })),
@@ -508,6 +518,7 @@ pub fn build(b: *std.Build) void {
 
     const render_service = ctx.plugin("ke_render_service", "src/zig/render/service", &.{
         argF(b, "heap-src", heap_src),
+        argF(b, "stubs-src", stubs_src),
         argF(b, "handle-src", handle_src),
         argF(b, "ke-math-include", b.pathJoin(&.{ src_c, "math" })),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),

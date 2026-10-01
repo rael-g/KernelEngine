@@ -193,6 +193,10 @@ fn destroyModule(sm: *const SkyboxModule) void {
     const dev = sm.device;
     if (sm.bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, sm.bind_group);
+    if (sm.frame_uniform != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_buffer.?(dev, sm.frame_uniform);
+    if (sm.bgl != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group_layout.?(dev, sm.bgl);
 }
 
 fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
@@ -215,6 +219,7 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     const sm = gpa.create(SkyboxModule) catch return empty;
     sm.* = .{};
     if (!setup(sm, dev, core_ref, camera_api, camera_cid, world_transform_cid, skybox_cid, frame_cid, out_error)) {
+        destroyModule(sm);
         gpa.destroy(sm);
         return empty;
     }
@@ -232,4 +237,38 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(sm), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the skybox pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a skybox pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

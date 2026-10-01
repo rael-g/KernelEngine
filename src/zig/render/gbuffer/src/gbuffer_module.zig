@@ -63,6 +63,7 @@ const GBufferModule = struct {
     empty_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 
     writes: [4][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
@@ -194,6 +195,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entry_count = 1,
         .entries = &obj_bgl_entry,
     });
+    gb.obj_bgl = obj_bgl;
 
     gb.attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -320,8 +322,19 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+fn destroyModule(gb: *const GBufferModule) void {
+    const dev = gb.device;
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (gb.obj_bind_group != invalid) dev.destroy_bind_group.?(dev, gb.obj_bind_group);
+    if (gb.obj_uniform != invalid) dev.destroy_buffer.?(dev, gb.obj_uniform);
+    if (gb.obj_bgl != invalid) dev.destroy_bind_group_layout.?(dev, gb.obj_bgl);
+    if (gb.empty_bg != invalid) dev.destroy_bind_group.?(dev, gb.empty_bg);
+    if (gb.empty_bgl != invalid) dev.destroy_bind_group_layout.?(dev, gb.empty_bgl);
+}
+
 fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
     const gb: *GBufferModule = @ptrCast(@alignCast(self orelse return));
+    destroyModule(gb);
     gpa.destroy(gb);
 }
 
@@ -339,6 +352,7 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const gb = gpa.create(GBufferModule) catch return empty;
     gb.* = .{};
     if (!setup(gb, dev, core_ref, camera_api, mesh_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
+        destroyModule(gb);
         gpa.destroy(gb);
         return empty;
     }
@@ -454,4 +468,36 @@ test "meshes are gathered across every segment the query returned" {
 
     var out: [8]Draw = undefined;
     try testing.expectEqual(@as(u32, 2), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
+}
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the gbuffer pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a gbuffer pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

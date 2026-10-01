@@ -52,9 +52,9 @@ const UiState = struct {
 
     vertices: [MAX_UI_QUADS * 6]UiVertex = undefined,
     batches: [MAX_UI_BATCHES]UiBatch = undefined,
-    bind_group_cache: [MAX_UI_TEXTURES]c.ke_gpu_bind_group = undefined,
+    bind_group_cache: [MAX_UI_TEXTURES]c.ke_gpu_bind_group = [_]c.ke_gpu_bind_group{c.KE_GPU_INVALID_HANDLE} ** MAX_UI_TEXTURES,
 
-    fonts: [MAX_UI_FONTS]UiFont = undefined,
+    fonts: [MAX_UI_FONTS]UiFont = [_]UiFont{.{}} ** MAX_UI_FONTS,
 
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
@@ -422,8 +422,6 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, out_error);
     if (ui.vbo == c.KE_GPU_INVALID_HANDLE) return false;
 
-    for (&ui.bind_group_cache) |*e| e.* = c.KE_GPU_INVALID_HANDLE;
-    for (&ui.fonts) |*f| f.* = .{};
 
     ui.writes = .{"backbuffer"};
     ui.io = std.mem.zeroes(c.ke_render_pass_io);
@@ -439,8 +437,12 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
 fn destroyState(ui: *const UiState) void {
     const dev = ui.device;
-    if (ui.frame_bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, ui.frame_bind_group);
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (ui.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, ui.frame_bind_group);
+    if (ui.frame_uniform != invalid) dev.destroy_buffer.?(dev, ui.frame_uniform);
+    if (ui.vbo != invalid) dev.destroy_buffer.?(dev, ui.vbo);
+    if (ui.bgl_frame != invalid) dev.destroy_bind_group_layout.?(dev, ui.bgl_frame);
+    if (ui.bgl_tex != invalid) dev.destroy_bind_group_layout.?(dev, ui.bgl_tex);
     for (ui.bind_group_cache) |bg| {
         if (bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, bg);
     }
@@ -472,6 +474,7 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     ui.* = .{};
     ui.api = .{ .handle = ui, .load_font = uiLoadFont };
     if (!setup(ui, dev, core_ref, ndc, bb_cid, cmd_slot, out_error)) {
+        destroyState(ui);
         gpa.destroy(ui);
         return empty;
     }
@@ -510,4 +513,42 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     _ = rt.register_system.?(rt, &shape_params, null);
 
     return .{ .ref = @ptrCast(&ui.api), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the ui pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const ndc = std.mem.zeroes(c.ke_ndc_convention);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a ui pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const ndc = std.mem.zeroes(c.ke_ndc_convention);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

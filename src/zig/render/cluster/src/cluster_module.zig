@@ -47,6 +47,7 @@ const ClusterParams = extern struct {
 
 const ClusterModule = struct {
     core: *c.ke_render_service = undefined,
+    device: *c.ke_gpu_device = undefined,
     logger: ?*c.ke_logger = null,
     view_space: *c.ke_view_space = undefined,
     camera: *c.ke_render_camera = undefined,
@@ -76,6 +77,7 @@ const ClusterModule = struct {
     cull_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
     cull_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     cull_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    cull_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     cull_io: c.ke_render_pass_io = undefined,
     cull_access: [6]c.ke_component_access = undefined,
     cull_queries: [3]c.ke_query_decl = undefined,
@@ -235,6 +237,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
              frame_cid: c.ke_component_id, view_space: *c.ke_view_space, render_camera: *c.ke_render_camera,
              out_error: [*c][*c]c.ke_error) bool {
     cm.core = core;
+    cm.device = dev;
     cm.logger = logger;
     cm.view_space = view_space;
     cm.camera = render_camera;
@@ -321,6 +324,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .entry_count = 7,
         .entries = &cull_bgl_entries,
     });
+    cm.cull_bgl = cull_bgl;
 
     cm.cull_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .initial_data = null,
@@ -386,8 +390,29 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+fn destroyModule(cm: *const ClusterModule) void {
+    const dev = cm.device;
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (cm.cull_pipeline != invalid) dev.destroy_pipeline.?(dev, cm.cull_pipeline);
+    if (cm.cull_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.cull_bind_group);
+    if (cm.cull_bgl != invalid) dev.destroy_bind_group_layout.?(dev, cm.cull_bgl);
+    if (cm.cull_uniform != invalid) dev.destroy_buffer.?(dev, cm.cull_uniform);
+    if (cm.fwd_light_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.fwd_light_bind_group);
+    if (cm.light_set_bgl != invalid) dev.destroy_bind_group_layout.?(dev, cm.light_set_bgl);
+    if (cm.cluster_grid_uniform != invalid) dev.destroy_buffer.?(dev, cm.cluster_grid_uniform);
+    const storage = [_]c.ke_gpu_buffer{
+        cm.point_lights_sb,  cm.spot_lights_sb,
+        cm.point_indices_sb, cm.point_counts_sb,
+        cm.spot_indices_sb,  cm.spot_counts_sb,
+    };
+    for (storage) |buffer| {
+        if (buffer != invalid) dev.destroy_buffer.?(dev, buffer);
+    }
+}
+
 fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
     const cm: *ClusterModule = @ptrCast(@alignCast(self orelse return));
+    destroyModule(cm);
     gpa.destroy(cm);
 }
 
@@ -410,6 +435,7 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     cm.* = .{};
     if (!setup(cm, dev, core_ref, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, frame_cid, vs, camera_api, out_error)) {
+        destroyModule(cm);
         gpa.destroy(cm);
         return empty;
     }
@@ -427,4 +453,40 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(cm), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the cluster pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a cluster pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const ke_common    = b.option([]const u8, "ke-common-include",    "kernel_engine/common include dir")    orelse @panic("-Dke-common-include required");
     const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
+    const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
     const handle_src = b.option([]const u8, "handle-src", "path to the shared Zig handle.zig") orelse @panic("-Dhandle-src required");
     const ke_ecs       = b.option([]const u8, "ke-ecs-include",       "kernel_engine/ecs include dir")       orelse @panic("-Dke-ecs-include required");
     const ke_runtime   = b.option([]const u8, "ke-runtime-include",   "kernel_engine/runtime include dir")   orelse @panic("-Dke-runtime-include required");
@@ -60,6 +61,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
     test_mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
     inline for (.{ ke_common, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_resource_cache, ke_resource_cache_default, ke_text, ke_logger, ke_self }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });

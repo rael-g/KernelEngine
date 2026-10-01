@@ -270,3 +270,47 @@ export fn ke_physics_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) 
     registerFields(w, collider_cid, &c.ke_collider2d_component_fields);
     return true;
 }
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the body2d module leaves no block allocated and registers its two systems" {
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var physics = std.mem.zeroes(c.ke_physics_2d);
+
+    var params = std.mem.zeroes(c.ke_physics_body2d_module_params);
+    params.runtime = rt.api();
+    params.ecs = ecs.api();
+    params.physics = &physics;
+
+    const h = ke_physics_body2d_module_create(&params, null);
+    try testing.expect(h.ref != null);
+    try testing.expectEqual(@as(u32, 2), rt.registered);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}
+
+test "a body2d module missing its runtime, ecs or physics is refused" {
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var physics = std.mem.zeroes(c.ke_physics_2d);
+
+    var params = std.mem.zeroes(c.ke_physics_body2d_module_params);
+    try testing.expect(ke_physics_body2d_module_create(null, null).ref == null);
+    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    params.runtime = rt.api();
+    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    params.ecs = ecs.api();
+    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    params.physics = &physics;
+    const h = ke_physics_body2d_module_create(&params, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}

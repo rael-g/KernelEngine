@@ -362,11 +362,21 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     return true;
 }
 
+fn destroyModule(dl: *const DeferredLightingModule) void {
+    const dev = dl.device;
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (dl.gbuf_bind_group != invalid) dev.destroy_bind_group.?(dev, dl.gbuf_bind_group);
+    if (dl.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, dl.frame_bind_group);
+    if (dl.empty_bg != invalid) dev.destroy_bind_group.?(dev, dl.empty_bg);
+    if (dl.frame_uniform != invalid) dev.destroy_buffer.?(dev, dl.frame_uniform);
+    if (dl.gbuf_bgl != invalid) dev.destroy_bind_group_layout.?(dev, dl.gbuf_bgl);
+    if (dl.frame_bgl != invalid) dev.destroy_bind_group_layout.?(dev, dl.frame_bgl);
+    if (dl.empty_bgl != invalid) dev.destroy_bind_group_layout.?(dev, dl.empty_bgl);
+}
+
 fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
     const dl: *DeferredLightingModule = @ptrCast(@alignCast(self orelse return));
-    const dev = dl.device;
-    if (dl.gbuf_bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, dl.gbuf_bind_group);
+    destroyModule(dl);
     gpa.destroy(dl);
 }
 
@@ -388,6 +398,7 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     if (!setup(dl, dev, core_ref, camera_api, logger, ibl_enabled != 0,
                camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
+        destroyModule(dl);
         gpa.destroy(dl);
         return empty;
     }
@@ -405,4 +416,38 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     _ = rt.register_system.?(rt, &params, null);
 
     return .{ .ref = @ptrCast(dl), .destroy = destroyHandle };
+}
+
+const testing = std.testing;
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the deferred lighting pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a deferred lighting pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

@@ -471,11 +471,20 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+fn destroyModule(fwd: *const ForwardModule) void {
+    const dev = fwd.device;
+    const invalid = c.KE_GPU_INVALID_HANDLE;
+    if (fwd.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
+    if (fwd.obj_bind_group != invalid) dev.destroy_bind_group.?(dev, fwd.obj_bind_group);
+    if (fwd.frame_uniform != invalid) dev.destroy_buffer.?(dev, fwd.frame_uniform);
+    if (fwd.obj_uniform != invalid) dev.destroy_buffer.?(dev, fwd.obj_uniform);
+    if (fwd.frame_bgl != invalid) dev.destroy_bind_group_layout.?(dev, fwd.frame_bgl);
+    if (fwd.obj_bgl != invalid) dev.destroy_bind_group_layout.?(dev, fwd.obj_bgl);
+}
+
 fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
     const fwd: *ForwardModule = @ptrCast(@alignCast(self orelse return));
-    const dev = fwd.device;
-    if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
+    destroyModule(fwd);
     gpa.destroy(fwd);
 }
 
@@ -498,6 +507,7 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     if (!setup(fwd, dev, core_ref, camera_api, logger, ibl_enabled != 0,
                mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, frame_cid, out_error))
     {
+        destroyModule(fwd);
         gpa.destroy(fwd);
         return empty;
     }
@@ -669,4 +679,36 @@ test "meshes are gathered across every segment the query returned" {
     const n = collectDraws(&svc, &cam, zm.identity(), &segs, segs.len, out[0..]);
 
     try testing.expectEqual(@as(u32, 2), n);
+}
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the forward pass leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, 7, null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a forward pass whose shader fails to load releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    core.shader_loads_fail = true;
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, 7, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }

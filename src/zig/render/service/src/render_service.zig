@@ -204,6 +204,7 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     st.mesh_store.deinit();
     st.shader_store.deinit();
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
+    if (st.material_bgl != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_bgl);
     st.pipeline_cache.destroyAll(st.device);
     gpa.free(st.upload_arena);
     gpa.free(@constCast(st.shader_dir));
@@ -430,4 +431,29 @@ test "a frame with no surface ends without submitting or presenting anything" {
     var core = deadFrame(&state);
 
     try testing.expectEqual(@as(c.ke_bool, 0), frame_lifecycle.endFrame(&core, null));
+}
+
+const Stubs = @import("stubs").Stubs(c);
+
+test "creating and destroying the render service leaves no block allocated and no GPU resource live" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const h = ke_render_service_create(dev.api(), ecs.api(), "shaders", null);
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a render service created without a shader directory is refused and leaves nothing behind" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const h = ke_render_service_create(dev.api(), ecs.api(), null, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }
