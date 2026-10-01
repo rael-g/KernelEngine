@@ -375,6 +375,7 @@ var view_sprites: [1]c.ke_sprite2d_component = undefined;
 var view_meshes: [1]c.ke_mesh_component = undefined;
 var view_entities: [1]c.ke_entity = .{1};
 var view_segment: c.ke_ecs_segment = undefined;
+var view_columns: [2]?*anyopaque = undefined;
 
 fn fakeView(_: [*c]c.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
     if (index != 0) {
@@ -384,8 +385,9 @@ fn fakeView(_: [*c]c.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.
     view_segment = std.mem.zeroes(c.ke_ecs_segment);
     view_segment.count = 1;
     view_segment.entities = &view_entities;
-    view_segment.columns[0] = &view_sprites;
-    view_segment.columns[1] = &view_meshes;
+    view_columns = .{ &view_sprites, &view_meshes };
+    view_segment.columns = &view_columns[0];
+    view_segment.column_count = 2;
     out_count.* = 1;
     return &view_segment;
 }

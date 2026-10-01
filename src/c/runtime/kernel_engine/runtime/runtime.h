@@ -47,14 +47,6 @@ typedef struct ke_component_access {
     ke_access       access;
 } ke_component_access;
 
-/// [value] A query a system reads through: a tuple of components (matched together) with
-/// the access mode the scheduler uses to order waves. Resolved into archetype
-/// segments before the wave; the system body reads them via ke_system_ctx_view.
-typedef struct ke_query_decl {
-    ke_component_access terms[KE_QUERY_MAX_TERMS];
-    uint32_t            term_count;
-} ke_query_decl;
-
 /// Registers the module's components and systems against the runtime it is being
 /// loaded into. Runs inside register_module, before that call returns.
 /// @param runtime   [self] The runtime the module is being loaded into.
@@ -114,11 +106,18 @@ typedef struct ke_runtime_system_params {
     /// [closure:user_data, retained:return] The body itself.
     ke_system_execute_fn execute;
 
-    /// [array_of:query_count, default:empty] Queries the system reads through. The runtime
-    /// registers them, derives the scheduling access list from their terms, and resolves
-    /// them into segments the body reads via ke_system_ctx_view.
-    const ke_query_decl *queries;
-    uint32_t             query_count;
+    /// [array_of:query_term_count, default:empty] The terms of every query the system reads
+    /// through, one query after another. A query is a tuple of components matched together,
+    /// each with the access mode the scheduler orders waves by. The runtime registers the
+    /// queries, derives the scheduling access list from their terms, and resolves them into
+    /// segments the body reads via ke_system_ctx_view.
+    const ke_component_access *query_terms;
+    uint32_t                   query_term_count;
+
+    /// [array_of:query_count, default:empty] How many of query_terms each query takes, in
+    /// order. They sum to query_term_count, and no query is empty.
+    const uint32_t *query_widths;
+    uint32_t        query_count;
 
     /// [array_of:access_count, default:empty] Cids the system touches that no query term
     /// covers, folded into the derived set so the wave-builder still orders on them:

@@ -33,8 +33,8 @@ public unsafe partial struct ke_ecs
     [NativeTypeName("ke_query_id (*)(struct ke_ecs *, const ke_component_id *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, uint*, nuint, ulong> query_register;
 
-    [NativeTypeName("void (*)(struct ke_ecs *, ke_query_id, ke_ecs_segment *, size_t, size_t *)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, ke_ecs_segment*, nuint, nuint*, void> query_resolve;
+    [NativeTypeName("void (*)(struct ke_ecs *, ke_query_id, ke_ecs_segment *, size_t, void **, size_t *)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, ke_ecs_segment*, nuint, void**, nuint*, void> query_resolve;
 
     [NativeTypeName("ke_entity (*)(struct ke_ecs *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, ulong> entity_reserve;

@@ -80,7 +80,8 @@ const ClusterModule = struct {
     cull_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     cull_io: c.ke_render_pass_io = undefined,
     cull_access: [6]c.ke_component_access = undefined,
-    cull_queries: [3]c.ke_query_decl = undefined,
+    cull_queries_terms: [6]c.ke_component_access = undefined,
+    cull_queries_widths: [3]u32 = undefined,
     clusters_cid: c.ke_component_id = undefined,
 
     point_overflow_warned: bool = false,
@@ -377,16 +378,8 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
 
     const rd = c.KE_ACCESS_READ;
-    cm.cull_queries = std.mem.zeroes([3]c.ke_query_decl);
-    cm.cull_queries[0].terms[0] = .{ .cid = cm.point_light_cid, .access = rd };
-    cm.cull_queries[0].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
-    cm.cull_queries[0].term_count = 2;
-    cm.cull_queries[1].terms[0] = .{ .cid = cm.spot_light_cid, .access = rd };
-    cm.cull_queries[1].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
-    cm.cull_queries[1].term_count = 2;
-    cm.cull_queries[2].terms[0] = .{ .cid = cm.camera_cid, .access = rd };
-    cm.cull_queries[2].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
-    cm.cull_queries[2].term_count = 2;
+    cm.cull_queries_terms = .{ .{ .cid = cm.point_light_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd }, .{ .cid = cm.spot_light_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd }, .{ .cid = cm.camera_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd } };
+    cm.cull_queries_widths = .{ 2, 2, 2 };
     return true;
 }
 
@@ -443,8 +436,10 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.cull";
     params.phase = c.KE_PHASE_RENDER;
-    params.queries = &cm.cull_queries;
-    params.query_count = cm.cull_queries.len;
+    params.query_terms = &cm.cull_queries_terms;
+    params.query_term_count = cm.cull_queries_terms.len;
+    params.query_widths = &cm.cull_queries_widths;
+    params.query_count = cm.cull_queries_widths.len;
     params.access_list = &cm.cull_access;
     params.access_count = cm.cull_access.len;
     params.pinned_thread = 0;

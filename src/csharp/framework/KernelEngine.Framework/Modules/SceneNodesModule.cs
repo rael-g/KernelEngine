@@ -131,17 +131,15 @@ public sealed class SceneNodesModule : IRuntimeModule
                 if (!owned.ContainsKey(cid))
                     access.Add(Touches(cid, isWrite));
 
-            var queries = terms.Length is > 0 and <= QueryDecl.TermsCapacity ? new[] { Query(terms) } : null;
-            if (queries is null)
-                foreach (var (cid, isWrite) in owned)
-                    access.Add(Touches(cid, isWrite));
+            var widths = terms.Length > 0 ? new[] { (uint)terms.Length } : [];
+            var queried = widths.Length > 0;
 
             runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (ctx, dt) =>
             {
                 var view = new View(scriptHost, dt, _inputSnapshot, ctx);
                 using (scriptHost.EnterSystem(ctx))
                 {
-                    if (queries is null)
+                    if (!queried)
                     {
                         var behaviors = scriptHost.BehaviorsOf(type);
                         var (from, upto) = SliceOf(ctx, behaviors.Count);
@@ -169,7 +167,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                         }
                     }
                 }
-            }, queries: queries ?? [], accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
+            }, queryTerms: terms, queryWidths: widths, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };
 
         var done = new System.Threading.ManualResetEventSlim(false);
@@ -186,13 +184,6 @@ public sealed class SceneNodesModule : IRuntimeModule
 
     private static ComponentAccess Touches(uint cid, bool writes) =>
         new() { Cid = cid, Access = writes ? RuntimeAccess.Write : RuntimeAccess.Read };
-
-    private static QueryDecl Query(ComponentAccess[] terms)
-    {
-        var decl = new QueryDecl { TermCount = (uint)terms.Length };
-        for (var i = 0; i < terms.Length; i++) decl.Terms[i] = terms[i];
-        return decl;
-    }
 
     /// <summary>
     /// Registers every signal any known node type emits or handles, before the first

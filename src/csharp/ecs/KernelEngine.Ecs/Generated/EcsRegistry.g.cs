@@ -129,13 +129,14 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
 
     /// <summary>Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.</summary>
     /// <param name="outSegments">Receives the matched segments.</param>
-    public nuint QueryResolveRaw(ulong query, Span<ke_ecs_segment> outSegments)
+    public (nint Columns, nuint Count) QueryResolveRaw(ulong query, Span<ke_ecs_segment> outSegments)
     {
         fixed (ke_ecs_segment* outSegmentsPtr = outSegments)
         {
-            nuint result;
-            Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, &result);
-            return result;
+            nint columns;
+            nuint count;
+            Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, (void**)&columns, &count);
+            return (columns, count);
         }
     }
 

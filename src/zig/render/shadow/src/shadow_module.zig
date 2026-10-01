@@ -57,7 +57,8 @@ const ShadowModule = struct {
     writes: [2][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
-    queries: [2]c.ke_query_decl = undefined,
+    queries_terms: [3]c.ke_component_access = undefined,
+    queries_widths: [2]u32 = undefined,
 };
 
 fn lightViewProj(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, p: c.ke_render_shadow_params, ldir_in: zm.Vec) zm.Mat {
@@ -247,12 +248,8 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
 
     const rd = c.KE_ACCESS_READ;
-    sh.queries = std.mem.zeroes([2]c.ke_query_decl);
-    sh.queries[0].terms[0] = .{ .cid = light_cid, .access = rd };
-    sh.queries[0].term_count = 1;
-    sh.queries[1].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    sh.queries[1].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    sh.queries[1].term_count = 2;
+    sh.queries_terms = .{ .{ .cid = light_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
+    sh.queries_widths = .{ 1, 2 };
     return true;
 }
 
@@ -297,8 +294,10 @@ export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
         var sys_params = std.mem.zeroes(c.ke_runtime_system_params);
         sys_params.name = "render.shadow";
         sys_params.phase = c.KE_PHASE_RENDER;
-        sys_params.queries = &sh.queries;
-        sys_params.query_count = sh.queries.len;
+        sys_params.query_terms = &sh.queries_terms;
+        sys_params.query_term_count = sh.queries_terms.len;
+        sys_params.query_widths = &sh.queries_widths;
+        sys_params.query_count = sh.queries_widths.len;
         sys_params.access_list = &sh.access;
         sys_params.access_count = sh.access.len;
         sys_params.pinned_thread = 0;

@@ -63,7 +63,7 @@ const LayoutEntry = struct {
 
 const RegisteredQuery = struct {
     query: ?*c.ecs_query_t,
-    elem_sizes: [c.KE_QUERY_MAX_TERMS]usize,
+    elem_sizes: []usize,
     term_count: usize,
 };
 
@@ -409,17 +409,22 @@ fn componentSize(self_in: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usize
 
 fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_count: usize) callconv(.c) c.ke_query_id {
     const self = self_in orelse return c.KE_QUERY_INVALID;
-    if (self.handle == null or cids == null or cid_count == 0 or cid_count > c.KE_QUERY_MAX_TERMS)
+    var desc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
+    if (self.handle == null or cids == null or cid_count == 0 or cid_count > desc.terms.len)
         return c.KE_QUERY_INVALID;
     const s = stateOf(self);
 
-    var desc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
     for (0..cid_count) |i| desc.terms[i].id = @intCast(cids[i]);
     const q = c.ecs_query_init(s.world, &desc) orelse return c.KE_QUERY_INVALID;
+    const elem_sizes = heap.gpa.alloc(usize, cid_count) catch {
+        c.ecs_query_fini(q);
+        return c.KE_QUERY_INVALID;
+    };
 
     if (s.rquery_count == s.rquery_capacity) {
         const new_cap: usize = if (s.rquery_capacity != 0) s.rquery_capacity * 2 else 8;
         const new_buf = heap.gpa.alloc(RegisteredQuery, new_cap) catch {
+            heap.gpa.free(elem_sizes);
             c.ecs_query_fini(q);
             return c.KE_QUERY_INVALID;
         };
@@ -434,6 +439,7 @@ fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_cou
     const rq = &s.rqueries.?[s.rquery_count];
     rq.query = q;
     rq.term_count = cid_count;
+    rq.elem_sizes = elem_sizes;
     for (0..cid_count) |i| {
         const ti = c.ecs_get_type_info(s.world, @intCast(cids[i]));
         rq.elem_sizes[i] = if (ti != null) @intCast(ti.*.size) else 0;
@@ -448,11 +454,12 @@ fn queryResolve(
     query: c.ke_query_id,
     out_segments: [*c]c.ke_ecs_segment,
     max_segments: usize,
+    out_columns: [*c]?*anyopaque,
     out_count: [*c]usize,
 ) callconv(.c) void {
     if (out_count != null) out_count.* = 0;
     const self = self_in orelse return;
-    if (self.handle == null or query == c.KE_QUERY_INVALID or out_segments == null or max_segments == 0) return;
+    if (self.handle == null or query == c.KE_QUERY_INVALID or out_segments == null or out_columns == null or max_segments == 0) return;
     const s = stateOf(self);
     const idx: usize = @intCast(query - 1);
     if (idx >= s.rquery_count) return;
@@ -469,9 +476,11 @@ fn queryResolve(
         const dst = &out_segments[seg];
         dst.entities = @ptrCast(it.entities);
         dst.count = @intCast(it.count);
+        const cols = out_columns + seg * rq.term_count;
         for (0..rq.term_count) |t|
-            dst.columns[t] = if (rq.elem_sizes[t] != 0) c.ecs_field_w_size(&it, rq.elem_sizes[t], @intCast(t)) else null;
-        for (rq.term_count..c.KE_QUERY_MAX_TERMS) |t| dst.columns[t] = null;
+            cols[t] = if (rq.elem_sizes[t] != 0) c.ecs_field_w_size(&it, rq.elem_sizes[t], @intCast(t)) else null;
+        dst.columns = cols;
+        dst.column_count = @intCast(rq.term_count);
         seg += 1;
     }
     if (out_count != null) out_count.* = seg;
@@ -491,6 +500,7 @@ fn destroy(self_in: ?*c.ke_ecs) callconv(.c) void {
     if (s.rqueries) |rqs| {
         for (0..s.rquery_count) |i| {
             if (rqs[i].query) |q| c.ecs_query_fini(q);
+            heap.gpa.free(rqs[i].elem_sizes);
         }
         heap.gpa.free(rqs[0..s.rquery_capacity]);
     }
@@ -998,13 +1008,40 @@ test "resolving a query into too small an array reports every segment it matches
     try testing.expect(query != c.KE_QUERY_INVALID);
 
     var small: [4]c.ke_ecs_segment = undefined;
+    var small_columns: [4]?*anyopaque = undefined;
     var count: usize = 0;
-    e.query_resolve.?(handle.ref, query, &small, small.len, &count);
+    e.query_resolve.?(handle.ref, query, &small, small.len, &small_columns, &count);
     try testing.expectEqual(@as(usize, 16), count);
 
     var roomy: [32]c.ke_ecs_segment = undefined;
-    e.query_resolve.?(handle.ref, query, &roomy, roomy.len, &count);
+    var roomy_columns: [32]?*anyopaque = undefined;
+    e.query_resolve.?(handle.ref, query, &roomy, roomy.len, &roomy_columns, &count);
     try testing.expectEqual(@as(usize, 16), count);
+}
+
+test "a query over twelve components resolves with a column for each" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    var cids: [12]c.ke_component_id = undefined;
+    const names = [_][*:0]const u8{ "wide_0", "wide_1", "wide_2", "wide_3", "wide_4", "wide_5", "wide_6", "wide_7", "wide_8", "wide_9", "wide_10", "wide_11" };
+    for (&cids, names) |*cid, name| cid.* = e.component_register.?(handle.ref, name, 4, null, 0, null);
+
+    const entity = e.entity_create.?(handle.ref);
+    for (cids) |cid| try testing.expect(e.component_add.?(handle.ref, entity, cid) != null);
+
+    const query = e.query_register.?(handle.ref, &cids, cids.len);
+    try testing.expect(query != c.KE_QUERY_INVALID);
+
+    var segs: [4]c.ke_ecs_segment = undefined;
+    var columns: [4 * cids.len]?*anyopaque = undefined;
+    var count: usize = 0;
+    e.query_resolve.?(handle.ref, query, &segs, segs.len, &columns, &count);
+
+    try testing.expectEqual(@as(usize, 1), count);
+    try testing.expectEqual(@as(u32, 12), segs[0].column_count);
+    for (0..12) |t| try testing.expect(segs[0].columns[t] != null);
 }
 
 test "creating, filling and destroying an ecs leaves no block allocated" {

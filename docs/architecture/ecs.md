@@ -54,12 +54,13 @@ wave, and by applying a wave's structural changes only after its barrier
 
 ## Queries
 
-A query is a tuple of component ids, at most `KE_QUERY_MAX_TERMS` (8) long
-(`ke_ecs.h:16`; refused past it at `ecs_flecs.zig:412`). `query_resolve` fills an array of
-**segments**, one per archetype the query matches. A segment is the matched entities plus one column
-pointer per term, in registration order, all aligned with the entity array; a tag's column is
-`NULL` (`ke_ecs.h:18-29`; `ecs_flecs.zig:473`). Column pointers are plain memory that stays valid
-until the next structural change (`ke_ecs.h:22`).
+A query is a tuple of component ids of any length the backend can match; the flecs plugin refuses
+a tuple longer than flecs's own term limit. `query_resolve` fills an array of **segments**, one per
+archetype the query matches, and a second array the segments' columns point into, `cid_count` entries
+per segment. A segment is the matched entities plus a pointer to its columns, one base pointer per
+term in registration order, all aligned with the entity array; a tag's column is `NULL`
+(`ke_ecs.h`, `ecs_flecs.zig`). Column pointers are plain memory that stays valid until the next
+structural change.
 
 `query_resolve` fills at most `max_segments` and reports how many segments the query matches; a
 count above `max_segments` tells the caller its array was too small, and the runtime fails the tick

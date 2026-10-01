@@ -92,25 +92,24 @@ ke_scheduler_handle size=16 align=8
 ke_component_access size=8 align=4
   cid 0
   access 4
-ke_query_decl size=68 align=4
-  terms 0
-  term_count 64
 ke_runtime_module_params size=32 align=8
   name 0
   user_data 8
   on_load 16
   on_unload 24
-ke_runtime_system_params size=72 align=8
+ke_runtime_system_params size=88 align=8
   name 0
   phase 8
   user_data 16
   execute 24
-  queries 32
-  query_count 40
-  access_list 48
-  access_count 56
-  pinned_thread 60
-  per_entity 64
+  query_terms 32
+  query_term_count 40
+  query_widths 48
+  query_count 56
+  access_list 64
+  access_count 72
+  pinned_thread 76
+  per_entity 80
 ke_runtime_params size=12 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
@@ -144,10 +143,11 @@ ke_component_meta size=32 align=8
   size 8
   fields 16
   field_count 24
-ke_ecs_segment size=80 align=8
+ke_ecs_segment size=32 align=8
   entities 0
-  columns 8
-  count 72
+  count 8
+  columns 16
+  column_count 24
 ke_ecs size=104 align=8
   handle 0
   entity_create 8

@@ -29,10 +29,13 @@ const ModuleState = struct {
     begin_access: [2]c.ke_component_access,
     clear_access: [2]c.ke_component_access,
     end_access: [2]c.ke_component_access,
-    mesh_resolve_queries: [1]c.ke_query_decl,
-    sprite_resolve_queries: [2]c.ke_query_decl,
+    mesh_resolve_queries_terms: [1]c.ke_component_access,
+    mesh_resolve_queries_widths: [1]u32,
+    sprite_resolve_queries_terms: [3]c.ke_component_access,
+    sprite_resolve_queries_widths: [2]u32,
     sprite_resolve_state: sprite_resolve.State,
-    label_resolve_queries: [1]c.ke_query_decl,
+    label_resolve_queries_terms: [1]c.ke_component_access,
+    label_resolve_queries_widths: [1]u32,
     label_resolve_state: label_resolve.State,
 
     shadow: c.ke_render_shadow_handle,
@@ -84,14 +87,11 @@ fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][
 }
 
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
-               queries: [*c]const c.ke_query_decl, query_count: u32,
                access: [*c]const c.ke_component_access, access_count: u32,
                user: anytype, exec: ExecFn, out_error: [*c][*c]c.ke_error) bool {
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = name;
     params.phase = c.KE_PHASE_RENDER;
-    params.queries = queries;
-    params.query_count = query_count;
     params.access_list = access;
     params.access_count = access_count;
     params.pinned_thread = 0;
@@ -280,13 +280,15 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         _ = ke_render_register_scene_apply(e, world);
 
-        st.mesh_resolve_queries[0].terms[0] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE };
-        st.mesh_resolve_queries[0].term_count = 1;
+        st.mesh_resolve_queries_terms = .{ .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE } };
+        st.mesh_resolve_queries_widths = .{ 1 };
         var mesh_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
         mesh_resolve_params.name = "render.mesh.resolve";
         mesh_resolve_params.phase = c.KE_PHASE_UPDATE;
-        mesh_resolve_params.queries = &st.mesh_resolve_queries;
-        mesh_resolve_params.query_count = st.mesh_resolve_queries.len;
+        mesh_resolve_params.query_terms = &st.mesh_resolve_queries_terms;
+        mesh_resolve_params.query_term_count = st.mesh_resolve_queries_terms.len;
+        mesh_resolve_params.query_widths = &st.mesh_resolve_queries_widths;
+        mesh_resolve_params.query_count = st.mesh_resolve_queries_widths.len;
         mesh_resolve_params.pinned_thread = 0;
         mesh_resolve_params.user_data = st.core.ref;
         mesh_resolve_params.execute = mesh_resolve.system;
@@ -296,17 +298,15 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
         st.sprite_resolve_state = .{ .core = st.core.ref, .mesh_cid = mesh_cid, .resolver = asset_resolver };
-        st.sprite_resolve_queries = std.mem.zeroes([2]c.ke_query_decl);
-        st.sprite_resolve_queries[0].terms[0] = .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE };
-        st.sprite_resolve_queries[0].terms[1] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE };
-        st.sprite_resolve_queries[0].term_count = 2;
-        st.sprite_resolve_queries[1].terms[0] = .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE };
-        st.sprite_resolve_queries[1].term_count = 1;
+        st.sprite_resolve_queries_terms = .{ .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE }, .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE }, .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE } };
+        st.sprite_resolve_queries_widths = .{ 2, 1 };
         var sprite_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
         sprite_resolve_params.name = "render.sprite2d.resolve";
         sprite_resolve_params.phase = c.KE_PHASE_UPDATE;
-        sprite_resolve_params.queries = &st.sprite_resolve_queries;
-        sprite_resolve_params.query_count = st.sprite_resolve_queries.len;
+        sprite_resolve_params.query_terms = &st.sprite_resolve_queries_terms;
+        sprite_resolve_params.query_term_count = st.sprite_resolve_queries_terms.len;
+        sprite_resolve_params.query_widths = &st.sprite_resolve_queries_widths;
+        sprite_resolve_params.query_count = st.sprite_resolve_queries_widths.len;
         sprite_resolve_params.pinned_thread = 0;
         sprite_resolve_params.user_data = &st.sprite_resolve_state;
         sprite_resolve_params.execute = sprite_resolve.system;
@@ -314,10 +314,10 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return failCreate(rt, mark, st);
         }
 
-        if (!registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys, out_error)) {
+        if (!registerSys(rt, "render.begin_frame", &st.begin_access, st.begin_access.len, st, beginFrameSys, out_error)) {
             return failCreate(rt, mark, st);
         }
-        if (!registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys, out_error)) {
+        if (!registerSys(rt, "render.clear", &st.clear_access, st.clear_access.len, st, clearSys, out_error)) {
             return failCreate(rt, mark, st);
         }
 
@@ -363,14 +363,15 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         const label_cid = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields);
         st.label_resolve_state = .{ .core = st.core.ref, .ui = st.ui.ref, .resolver = asset_resolver, .logger = logger };
-        st.label_resolve_queries = std.mem.zeroes([1]c.ke_query_decl);
-        st.label_resolve_queries[0].terms[0] = .{ .cid = label_cid, .access = c.KE_ACCESS_WRITE };
-        st.label_resolve_queries[0].term_count = 1;
+        st.label_resolve_queries_terms = .{ .{ .cid = label_cid, .access = c.KE_ACCESS_WRITE } };
+        st.label_resolve_queries_widths = .{ 1 };
         var label_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
         label_resolve_params.name = "render.label.resolve";
         label_resolve_params.phase = c.KE_PHASE_UPDATE;
-        label_resolve_params.queries = &st.label_resolve_queries;
-        label_resolve_params.query_count = st.label_resolve_queries.len;
+        label_resolve_params.query_terms = &st.label_resolve_queries_terms;
+        label_resolve_params.query_term_count = st.label_resolve_queries_terms.len;
+        label_resolve_params.query_widths = &st.label_resolve_queries_widths;
+        label_resolve_params.query_count = st.label_resolve_queries_widths.len;
         label_resolve_params.pinned_thread = 0;
         label_resolve_params.user_data = &st.label_resolve_state;
         label_resolve_params.execute = label_resolve.system;
@@ -378,7 +379,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return failCreate(rt, mark, st);
         }
 
-        if (!registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys, out_error)) {
+        if (!registerSys(rt, "render.end_frame", &st.end_access, st.end_access.len, st, endFrameSys, out_error)) {
             return failCreate(rt, mark, st);
         }
     }

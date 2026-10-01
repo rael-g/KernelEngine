@@ -46,7 +46,8 @@ const DeferredLightingModule = struct {
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [13]c.ke_component_access = undefined,
-    queries: [4]c.ke_query_decl = undefined,
+    queries_terms: [5]c.ke_component_access = undefined,
+    queries_widths: [4]u32 = undefined,
     access_count: u32 = 0,
 };
 
@@ -349,16 +350,8 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.access_count = ac;
 
     const rd = c.KE_ACCESS_READ;
-    dl.queries = std.mem.zeroes([4]c.ke_query_decl);
-    dl.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    dl.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    dl.queries[0].term_count = 2;
-    dl.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
-    dl.queries[1].term_count = 1;
-    dl.queries[2].terms[0] = .{ .cid = light_cid, .access = rd };
-    dl.queries[2].term_count = 1;
-    dl.queries[3].terms[0] = .{ .cid = ambient_cid, .access = rd };
-    dl.queries[3].term_count = 1;
+    dl.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd }, .{ .cid = light_cid, .access = rd }, .{ .cid = ambient_cid, .access = rd } };
+    dl.queries_widths = .{ 2, 1, 1, 1 };
     return true;
 }
 
@@ -406,8 +399,10 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.deferred_lighting";
     params.phase = c.KE_PHASE_RENDER;
-    params.queries = &dl.queries;
-    params.query_count = dl.queries.len;
+    params.query_terms = &dl.queries_terms;
+    params.query_term_count = dl.queries_terms.len;
+    params.query_widths = &dl.queries_widths;
+    params.query_count = dl.queries_widths.len;
     params.access_list = &dl.access;
     params.access_count = dl.access_count;
     params.pinned_thread = 0;

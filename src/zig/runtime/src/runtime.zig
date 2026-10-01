@@ -12,7 +12,6 @@ const E = @import("kerror").Errors(c);
 const initial_segments_per_query = 4;
 const resolve_attempts = 3;
 const KE_RUNTIME_PHASE_COUNT = 7;
-const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
@@ -109,14 +108,11 @@ fn termWrites(a: c.ke_component_access) bool {
 fn paramsAccesses(p: *const c.ke_runtime_system_params, cid: c.ke_component_id, out_writes: *bool) bool {
     var any = false;
     var writes = false;
-    if (p.queries) |queries| {
-        for (0..p.query_count) |q| {
-            const qd = &queries[q];
-            for (0..qd.term_count) |t| {
-                if (qd.terms[t].cid == cid) {
-                    any = true;
-                    if (termWrites(qd.terms[t])) writes = true;
-                }
+    if (p.query_terms) |terms| {
+        for (0..p.query_term_count) |t| {
+            if (terms[t].cid == cid) {
+                any = true;
+                if (termWrites(terms[t])) writes = true;
             }
         }
     }
@@ -138,13 +134,10 @@ fn conflictOnTerm(b: *const c.ke_runtime_system_params, cid: c.ke_component_id, 
 }
 
 fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_system_params) bool {
-    if (a.queries) |queries| {
-        for (0..a.query_count) |q| {
-            const qd = &queries[q];
-            for (0..qd.term_count) |t| {
-                const a_writes = termWrites(qd.terms[t]);
-                if (conflictOnTerm(b, qd.terms[t].cid, a_writes)) return true;
-            }
+    if (a.query_terms) |terms| {
+        for (0..a.query_term_count) |t| {
+            const a_writes = termWrites(terms[t]);
+            if (conflictOnTerm(b, terms[t].cid, a_writes)) return true;
         }
     }
     if (a.access_list) |list| {
@@ -385,11 +378,17 @@ fn resetDeferApplied() void {
     s_defer_applied_total = 0;
 }
 
+const QueryDecl = struct {
+    terms: [*]const c.ke_component_access,
+    term_count: u32,
+};
+
 const ExtractedQuery = struct {
     seg: c.ke_ecs_segment,
     entities_buf: ?[*]c.ke_entity,
-    col_bufs: [MAX_TERMS]?*anyopaque,
-    col_elem_size: [MAX_TERMS]usize,
+    col_bufs: []?*anyopaque,
+    col_elem_size: []usize,
+    col_ptrs: []?*anyopaque,
     capacity: usize,
     elem_sizes_cached: bool,
 };
@@ -397,28 +396,36 @@ const ExtractedQuery = struct {
 const SegBuf = struct {
     ptr: ?[*]c.ke_ecs_segment = null,
     cap: usize = 0,
+    cols: ?[*]?*anyopaque = null,
+    cols_cap: usize = 0,
 
     fn free(self: *SegBuf) void {
         cFree(c.ke_ecs_segment, self.ptr, self.cap);
+        cFree(?*anyopaque, self.cols, self.cols_cap);
         self.* = .{};
     }
 
-    fn reserve(self: *SegBuf, needed: usize) bool {
-        if (needed <= self.cap) return true;
-        const bigger = cAlloc(c.ke_ecs_segment, needed) orelse return false;
+    fn reserve(self: *SegBuf, needed: usize, terms: usize) bool {
+        if (needed <= self.cap and needed * terms <= self.cols_cap) return true;
+        const segments = cAlloc(c.ke_ecs_segment, needed) orelse return false;
+        const columns = cAlloc(?*anyopaque, needed * terms) orelse {
+            cFree(c.ke_ecs_segment, segments, needed);
+            return false;
+        };
         cFree(c.ke_ecs_segment, self.ptr, self.cap);
-        self.* = .{ .ptr = bigger, .cap = needed };
+        cFree(?*anyopaque, self.cols, self.cols_cap);
+        self.* = .{ .ptr = segments, .cap = needed, .cols = columns, .cols_cap = needed * terms };
         return true;
     }
 };
 
-fn resolveInto(ecs: *c.ke_ecs, query: c.ke_query_id, buf: *SegBuf) ?usize {
-    if (!buf.reserve(initial_segments_per_query)) return null;
+fn resolveInto(ecs: *c.ke_ecs, query: c.ke_query_id, buf: *SegBuf, terms: usize) ?usize {
+    if (!buf.reserve(initial_segments_per_query, terms)) return null;
     for (0..resolve_attempts) |_| {
         var matched: usize = 0;
-        ecs.query_resolve.?(ecs, query, buf.ptr, buf.cap, &matched);
+        ecs.query_resolve.?(ecs, query, buf.ptr, buf.cap, buf.cols, &matched);
         if (matched <= buf.cap) return matched;
-        if (!buf.reserve(matched)) return null;
+        if (!buf.reserve(matched, terms)) return null;
     }
     return null;
 }
@@ -427,7 +434,7 @@ const RegisteredSystem = struct {
     id: u64,
     pending_next: ?*RegisteredSystem,
     params: c.ke_runtime_system_params,
-    query_decls: []c.ke_query_decl,
+    query_decls: []QueryDecl,
     query_ids: []c.ke_query_id,
     query_count: u32,
     segs: []SegBuf,
@@ -435,6 +442,7 @@ const RegisteredSystem = struct {
     seg_counts: []usize,
     extracted: []ExtractedQuery,
     derived_access: []c.ke_component_access,
+    term_storage: []c.ke_component_access,
     derived_access_count: u32,
     name_storage: ?[]u8,
     access_storage: ?[]c.ke_component_access,
@@ -450,28 +458,39 @@ fn allocZeroed(comptime T: type, n: usize) ?[]T {
     return slice;
 }
 
-fn allocQueryStorage(rs: *RegisteredSystem, query_count: usize, access_count: usize) bool {
-    rs.query_decls = allocZeroed(c.ke_query_decl, query_count) orelse return false;
+fn allocQueryStorage(rs: *RegisteredSystem, widths: [*c]const u32, query_count: usize, total_terms: usize, access_count: usize) bool {
+    rs.term_storage = allocZeroed(c.ke_component_access, total_terms) orelse return false;
+    rs.query_decls = allocZeroed(QueryDecl, query_count) orelse return false;
     rs.query_ids = allocZeroed(c.ke_query_id, query_count) orelse return false;
     rs.segs = allocZeroed(SegBuf, query_count) orelse return false;
     rs.seg_ptrs = allocZeroed(?[*]const c.ke_ecs_segment, query_count) orelse return false;
     rs.seg_counts = allocZeroed(usize, query_count) orelse return false;
     rs.extracted = allocZeroed(ExtractedQuery, query_count) orelse return false;
-    rs.derived_access = allocZeroed(c.ke_component_access, query_count * MAX_TERMS + access_count) orelse return false;
+    rs.derived_access = allocZeroed(c.ke_component_access, total_terms + access_count) orelse return false;
+    for (rs.extracted, 0..) |*eq, q| {
+        const terms = widths[q];
+        eq.col_bufs = allocZeroed(?*anyopaque, terms) orelse return false;
+        eq.col_elem_size = allocZeroed(usize, terms) orelse return false;
+        eq.col_ptrs = allocZeroed(?*anyopaque, terms) orelse return false;
+    }
     return true;
 }
 
 fn releaseSystem(rs: *RegisteredSystem) void {
     for (rs.extracted) |*eq| {
         if (eq.entities_buf) |eb| cFree(c.ke_entity, eb, eq.capacity);
-        for (0..MAX_TERMS) |t| {
-            if (eq.col_bufs[t]) |cb| cFreeBytes(cb, eq.col_elem_size[t] *% eq.capacity);
+        for (eq.col_bufs, 0..) |col, t| {
+            if (col) |cb| cFreeBytes(cb, eq.col_elem_size[t] *% eq.capacity);
         }
+        freeSlice(?*anyopaque, eq.col_bufs);
+        freeSlice(usize, eq.col_elem_size);
+        freeSlice(?*anyopaque, eq.col_ptrs);
     }
+    freeSlice(c.ke_component_access, rs.term_storage);
     if (rs.name_storage) |n| heap.gpa.free(n);
     if (rs.access_storage) |a| heap.gpa.free(a);
     for (rs.segs) |*buf| buf.free();
-    freeSlice(c.ke_query_decl, rs.query_decls);
+    freeSlice(QueryDecl, rs.query_decls);
     freeSlice(c.ke_query_id, rs.query_ids);
     freeSlice(SegBuf, rs.segs);
     freeSlice(?[*]const c.ke_ecs_segment, rs.seg_ptrs);
@@ -584,12 +603,22 @@ fn mergeAccess(rs: *RegisteredSystem, want: c.ke_component_access) void {
 }
 
 fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
-    if (p.*.queries != null) {
+    var total_terms: usize = 0;
+    if (p.*.query_count > 0) {
+        if (p.*.query_widths == null) {
+            E.fail(out_error, .invalid_argument, "queries are declared without their widths", @src());
+            return null;
+        }
         for (0..p.*.query_count) |q| {
-            if (p.*.queries[q].term_count > MAX_TERMS) {
-                E.fail(out_error, .invalid_argument, "query declares more terms than a query can hold", @src());
+            if (p.*.query_widths[q] == 0) {
+                E.fail(out_error, .invalid_argument, "a query declares no terms", @src());
                 return null;
             }
+            total_terms += p.*.query_widths[q];
+        }
+        if (total_terms != p.*.query_term_count or p.*.query_terms == null) {
+            E.fail(out_error, .invalid_argument, "the query widths do not sum to the number of query terms", @src());
+            return null;
         }
     }
 
@@ -609,6 +638,7 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
     rs.seg_counts = &.{};
     rs.extracted = &.{};
     rs.derived_access = &.{};
+    rs.term_storage = &.{};
     rs.derived_access_count = 0;
     rs.name_storage = null;
     rs.access_storage = null;
@@ -626,19 +656,23 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
         rs.params.name = @ptrCast(copy.ptr);
     }
 
-    if (p.*.queries != null and p.*.query_count > 0) {
+    if (p.*.query_count > 0) {
         const qn = p.*.query_count;
-        if (!allocQueryStorage(rs, qn, p.*.access_count)) {
+        if (!allocQueryStorage(rs, p.*.query_widths, qn, total_terms, p.*.access_count)) {
             releaseSystem(rs);
             E.fail(out_error, .out_of_memory, "query storage allocation failed", @src());
             return null;
         }
 
+        var term_at: usize = 0;
         for (0..qn) |q| {
-            const qd = &p.*.queries[q];
-            rs.query_decls[q] = qd.*;
+            const width = p.*.query_widths[q];
+            const owned = rs.term_storage[term_at..][0..width];
+            @memcpy(owned, p.*.query_terms[term_at..][0..width]);
+            term_at += width;
+            rs.query_decls[q] = .{ .terms = owned.ptr, .term_count = width };
             rs.query_ids[q] = c.KE_QUERY_INVALID;
-            for (0..qd.term_count) |t| mergeAccess(rs, qd.terms[t]);
+            for (owned) |term| mergeAccess(rs, term);
         }
         rs.query_count = qn;
 
@@ -646,11 +680,13 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
 
         rs.params.access_list = rs.derived_access.ptr;
         rs.params.access_count = rs.derived_access_count;
-        rs.params.queries = null;
+        rs.params.query_terms = null;
+        rs.params.query_term_count = 0;
+        rs.params.query_widths = null;
         rs.params.query_count = 0;
 
         for (0..qn) |q| {
-            if (!rs.segs[q].reserve(initial_segments_per_query)) {
+            if (!rs.segs[q].reserve(initial_segments_per_query, rs.query_decls[q].term_count)) {
                 releaseSystem(rs);
                 E.fail(out_error, .out_of_memory, "query segment storage allocation failed", @src());
                 return null;
@@ -928,7 +964,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
 
             if (rs.query_count > 0 and phase != c.KE_PHASE_RENDER and h.state.ecs.query_resolve != null) {
                 for (0..rs.query_count) |q| {
-                    rs.seg_counts[q] = resolveInto(h.state.ecs, rs.query_ids[q], &rs.segs[q]) orelse return segmentAllocationFailed(rs);
+                    rs.seg_counts[q] = resolveInto(h.state.ecs, rs.query_ids[q], &rs.segs[q], rs.query_decls[q].term_count) orelse return segmentAllocationFailed(rs);
                     rs.seg_ptrs[q] = rs.segs[q].ptr;
                 }
             }
@@ -989,25 +1025,31 @@ fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: 
     return @min(workers, room);
 }
 
-fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) void {
-    if (h.state.ecs.query_register == null) return;
+fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) ?*RegisteredSystem {
+    if (h.state.ecs.query_register == null) return null;
     for (first..last) |si| {
         const rs = h.state.systems.?[si].?;
         for (0..rs.query_count) |q| {
             const qd = &rs.query_decls[q];
-            var cids: [MAX_TERMS]c.ke_component_id = undefined;
+            const cids = heap.gpa.alloc(c.ke_component_id, qd.term_count) catch return rs;
+            defer heap.gpa.free(cids);
             for (0..qd.term_count) |t| cids[t] = qd.terms[t].cid;
-            rs.query_ids[q] = h.state.ecs.query_register.?(h.state.ecs, &cids, qd.term_count);
+            rs.query_ids[q] = h.state.ecs.query_register.?(h.state.ecs, cids.ptr, qd.term_count);
+            if (rs.query_ids[q] == c.KE_QUERY_INVALID) return rs;
         }
     }
+    return null;
 }
 
-fn runtimePrepareSystems(h: *RuntimeHandle) void {
-    if (h.state.systems_prepared >= h.state.system_count) return;
+fn runtimePrepareSystems(h: *RuntimeHandle) PhaseFailure {
+    if (h.state.systems_prepared >= h.state.system_count) return .{};
     const first = h.state.systems_prepared;
     const last = h.state.system_count;
-    runtimeBindQueries(h, first, last);
+    if (runtimeBindQueries(h, first, last)) |refused| {
+        return .{ .type = E.typeOf(.invalid_argument), .system = refused.params.name };
+    }
     h.state.systems_prepared = last;
+    return .{};
 }
 
 fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
@@ -1030,7 +1072,7 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
             }
 
             var raw_count: usize = 0;
-            raw_count = resolveInto(h.state.ecs, rs.query_ids[q], scratch) orelse return segmentAllocationFailed(rs);
+            raw_count = resolveInto(h.state.ecs, rs.query_ids[q], scratch, qd.term_count) orelse return segmentAllocationFailed(rs);
             const raw = scratch.ptr.?;
 
             var total: usize = 0;
@@ -1077,10 +1119,10 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
             eq.seg.entities = if (eq.entities_buf) |eb| eb else null;
             eq.seg.count = written;
             for (0..qd.term_count) |t| {
-                eq.seg.columns[t] = if (eq.col_elem_size[t] != 0) eq.col_bufs[t] else null;
+                eq.col_ptrs[t] = if (eq.col_elem_size[t] != 0) eq.col_bufs[t] else null;
             }
-            var t2: usize = qd.term_count;
-            while (t2 < MAX_TERMS) : (t2 += 1) eq.seg.columns[t2] = null;
+            eq.seg.columns = eq.col_ptrs.ptr;
+            eq.seg.column_count = qd.term_count;
 
             rs.segs[q].ptr.?[0] = eq.seg;
             rs.seg_ptrs[q] = rs.segs[q].ptr;
@@ -1131,9 +1173,8 @@ fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error)
     }
     const h = handleOf(self.?);
 
-    runtimePrepareSystems(h);
-    var failure = PhaseFailure{};
-    if (!h.state.started) {
+    var failure = runtimePrepareSystems(h);
+    if (failure.type == null and !h.state.started) {
         h.state.started = true;
         failure = runtimeRunPhase(h, c.KE_PHASE_STARTUP, 0.0);
     }
@@ -1332,6 +1373,13 @@ const Fixture = struct {
         _ = self.rt().flush_render.?(self.rt(), null);
     }
 };
+
+fn withQueries(sys: *c.ke_runtime_system_params, terms: []const c.ke_component_access, widths: []const u32) void {
+    sys.query_terms = terms.ptr;
+    sys.query_term_count = @intCast(terms.len);
+    sys.query_widths = widths.ptr;
+    sys.query_count = @intCast(widths.len);
+}
 
 fn access(cid: u32, mode: c_int) c.ke_component_access {
     return .{ .cid = cid, .access = @intCast(mode) };
@@ -1712,16 +1760,12 @@ test "a system declaring twenty queries is resolved and viewed through every one
     try r.init();
     defer r.bare.deinit();
 
-    var queries: [20]c.ke_query_decl = undefined;
-    for (&queries) |*q| {
-        q.* = std.mem.zeroes(c.ke_query_decl);
-        q.terms[0] = access(1, c.KE_ACCESS_READ);
-        q.term_count = 1;
-    }
+    var terms: [20]c.ke_component_access = undefined;
+    const widths = [_]u32{1} ** 20;
+    for (&terms) |*t| t.* = access(1, c.KE_ACCESS_READ);
     var sys = systemParams("Greedy", c.KE_PHASE_UPDATE);
     sys.execute = &lastQueryBody;
-    sys.queries = &queries;
-    sys.query_count = queries.len;
+    withQueries(&sys, &terms, &widths);
     try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
 
     seen_segments = 0;
@@ -1729,17 +1773,61 @@ test "a system declaring twenty queries is resolved and viewed through every one
     try testing.expectEqual(@as(usize, many_segments), seen_segments);
 }
 
-test "a query declaring more terms than a query can hold is refused instead of truncated" {
+fn termCountBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    var count: usize = 0;
+    const segs = ctx.?.view.?(ctx, 0, &count);
+    seen_segments = count;
+    seen_entities = if (count > 0) segs[0].column_count else 0;
+    return true;
+}
+
+test "a query of twelve terms is registered and its segments carry twelve columns" {
+    var r = InlineRuntime{};
+    r.bare.ecs.query_register = @ptrCast(&fakeQueryRegister);
+    r.bare.ecs.query_resolve = @ptrCast(&fakeQueryResolveMany);
+    r.bare.ecs.component_size = @ptrCast(&fakeComponentSize);
+    try r.init();
+    defer r.bare.deinit();
+
+    var terms: [12]c.ke_component_access = undefined;
+    for (&terms, 0..) |*t, i| t.* = access(@intCast(i + 1), c.KE_ACCESS_READ);
+    var sys = systemParams("Wide", c.KE_PHASE_UPDATE);
+    sys.execute = &termCountBody;
+    withQueries(&sys, &terms, &[_]u32{ terms.len });
+    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+
+    fake_term_count = 12;
+    defer fake_term_count = 1;
+    seen_segments = 0;
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, many_segments), seen_segments);
+    try testing.expectEqual(@as(usize, 12), seen_entities);
+}
+
+test "query widths that do not add up to the terms given are refused" {
     var b = BareRuntime{};
     try b.init();
     defer b.deinit();
 
-    var q = std.mem.zeroes(c.ke_query_decl);
-    q.term_count = MAX_TERMS + 1;
-    var sys = systemParams("Wide", c.KE_PHASE_UPDATE);
+    var sys = systemParams("Mismatched", c.KE_PHASE_UPDATE);
     sys.execute = &noopBody;
-    sys.queries = &q;
-    sys.query_count = 1;
+    var terms = [_]c.ke_component_access{ access(1, c.KE_ACCESS_READ), access(2, c.KE_ACCESS_READ) };
+    withQueries(&sys, &terms, &[_]u32{1});
+
+    var err: [*c]c.ke_error = null;
+    try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
+    try testing.expect(err != null);
+}
+
+test "a query declaring no terms is refused" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var sys = systemParams("Empty", c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    var terms = [_]c.ke_component_access{};
+    withQueries(&sys, &terms, &[_]u32{0});
 
     var err: [*c]c.ke_error = null;
     try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
@@ -1859,12 +1947,17 @@ var many_column: [1]u32 = .{9};
 var seen_segments: usize = 0;
 var seen_entities: usize = 0;
 
-fn fakeQueryResolveMany(_: ?*c.ke_ecs, _: c.ke_query_id, out: [*c]c.ke_ecs_segment, max: usize, out_count: [*c]usize) callconv(.c) void {
+var fake_term_count: usize = 1;
+
+fn fakeQueryResolveMany(_: ?*c.ke_ecs, _: c.ke_query_id, out: [*c]c.ke_ecs_segment, max: usize, out_columns: [*c]?*anyopaque, out_count: [*c]usize) callconv(.c) void {
     for (0..@min(max, many_segments)) |i| {
+        const cols = out_columns + i * fake_term_count;
+        for (0..fake_term_count) |t| cols[t] = &many_column;
         out[i] = std.mem.zeroes(c.ke_ecs_segment);
         out[i].count = 1;
         out[i].entities = &many_entity;
-        out[i].columns[0] = &many_column;
+        out[i].columns = cols;
+        out[i].column_count = @intCast(fake_term_count);
     }
     out_count.* = many_segments;
 }
@@ -1887,13 +1980,10 @@ fn manySegmentRuntime(r: *InlineRuntime, phase: c_int) !void {
     r.bare.ecs.query_resolve = @ptrCast(&fakeQueryResolveMany);
     r.bare.ecs.component_size = @ptrCast(&fakeComponentSize);
     try r.init();
-    var q = std.mem.zeroes(c.ke_query_decl);
-    q.terms[0] = access(1, c.KE_ACCESS_READ);
-    q.term_count = 1;
+    const terms = [_]c.ke_component_access{access(1, c.KE_ACCESS_READ)};
     var sys = systemParams("Fragmented", phase);
     sys.execute = &viewBody;
-    sys.queries = &q;
-    sys.query_count = 1;
+    withQueries(&sys, &terms, &[_]u32{ terms.len });
     try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
     seen_segments = 0;
     seen_entities = 0;
@@ -2364,23 +2454,17 @@ test "the render extract carries this tick's sim write" {
     g_extract_probe.seen_ptr.store(0, .release);
     g_extract_probe.runs.store(0, .release);
 
-    var wq = std.mem.zeroes(c.ke_query_decl);
-    wq.terms[0] = access(cid, c.KE_ACCESS_WRITE);
-    wq.term_count = 1;
+    const wterms = [_]c.ke_component_access{access(cid, c.KE_ACCESS_WRITE)};
 
     var sim = systemParams("SimWriter", c.KE_PHASE_UPDATE);
-    sim.queries = &wq;
-    sim.query_count = 1;
+    withQueries(&sim, &wterms, &[_]u32{ wterms.len });
     sim.execute = &extractSimWriter;
     try testing.expect(f.rt().register_system.?(f.rt(), &sim, null) != 0);
 
-    var rq = std.mem.zeroes(c.ke_query_decl);
-    rq.terms[0] = access(cid, c.KE_ACCESS_READ);
-    rq.term_count = 1;
+    const rterms = [_]c.ke_component_access{access(cid, c.KE_ACCESS_READ)};
 
     var rnd = systemParams("RenderReader", c.KE_PHASE_RENDER);
-    rnd.queries = &rq;
-    rnd.query_count = 1;
+    withQueries(&rnd, &rterms, &[_]u32{ rterms.len });
     rnd.execute = &extractRenderReader;
     try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
 
@@ -2438,14 +2522,10 @@ test "the render extract keeps multi term columns aligned" {
         expect += @as(f64, @floatFromInt(i)) + @as(f64, @floatFromInt(i * 2));
     }
 
-    var rq = std.mem.zeroes(c.ke_query_decl);
-    rq.terms[0] = access(pos, c.KE_ACCESS_READ);
-    rq.terms[1] = access(vel, c.KE_ACCESS_READ);
-    rq.term_count = 2;
+    const rterms = [_]c.ke_component_access{ access(pos, c.KE_ACCESS_READ), access(vel, c.KE_ACCESS_READ) };
 
     var rnd = systemParams("RenderPosVel", c.KE_PHASE_RENDER);
-    rnd.queries = &rq;
-    rnd.query_count = 1;
+    withQueries(&rnd, &rterms, &[_]u32{ rterms.len });
     rnd.execute = &extractPosVelReader;
     try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
 
@@ -2795,8 +2875,9 @@ test "a zero size component registers as a usable tag" {
     try testing.expect(q != c.KE_QUERY_INVALID);
 
     var segs = std.mem.zeroes([8]c.ke_ecs_segment);
+    var columns: [8]?*anyopaque = undefined;
     var seg_count: usize = 0;
-    ecs.query_resolve.?(ecs, q, &segs, 8, &seg_count);
+    ecs.query_resolve.?(ecs, q, &segs, 8, &columns, &seg_count);
 
     var total: usize = 0;
     for (0..seg_count) |i| total += segs[i].count;
@@ -2832,13 +2913,10 @@ test "two readers sharing a wave read the same storage without conflicting" {
         p.z = 0.0;
     }
 
-    var read_pos = std.mem.zeroes(c.ke_query_decl);
-    read_pos.terms[0] = access(pos, c.KE_ACCESS_READ);
-    read_pos.term_count = 1;
+    const read_terms = [_]c.ke_component_access{access(pos, c.KE_ACCESS_READ)};
 
     var a = systemParams("ReaderA", c.KE_PHASE_UPDATE);
-    a.queries = &read_pos;
-    a.query_count = 1;
+    withQueries(&a, &read_terms, &[_]u32{ read_terms.len });
     a.execute = &parallelReaderBody;
 
     var b = a;
@@ -2891,14 +2969,10 @@ test "a multi term query hands back aligned columns" {
         expect += @as(f64, @floatFromInt(i)) + @as(f64, @floatFromInt(i * 2));
     }
 
-    var q = std.mem.zeroes(c.ke_query_decl);
-    q.terms[0] = access(pos, c.KE_ACCESS_READ);
-    q.terms[1] = access(vel, c.KE_ACCESS_READ);
-    q.term_count = 2;
+    const q_terms = [_]c.ke_component_access{ access(pos, c.KE_ACCESS_READ), access(vel, c.KE_ACCESS_READ) };
 
     var s = systemParams("PosVel", c.KE_PHASE_UPDATE);
-    s.queries = &q;
-    s.query_count = 1;
+    withQueries(&s, &q_terms, &[_]u32{ q_terms.len });
     s.execute = &posVelBody;
     try testing.expect(f.rt().register_system.?(f.rt(), &s, null) != 0);
 

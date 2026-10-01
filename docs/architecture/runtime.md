@@ -134,7 +134,7 @@ its pointers are then replaced by the runtime's own storage, and one is not:
 
 - **queries**: when the system declares at least one, each declaration is copied into the system
   record, and the access list is merged with the queries' terms into the runtime's own array
-  (`:519-562`); `access_list` then points into that record's merged array and `queries` is cleared (`:562-565`);
+  ; `access_list` then points into that record's merged array and the query fields are cleared;
 - **access list with no queries**: the merge is inside the same branch, so a system that declares
   no query keeps the **caller's** `access_list` pointer, and the wave builder reads it again every
   time its phase runs (`:666-680`, `systemsConflict`, `:137-154`);
@@ -161,5 +161,6 @@ Each query starts with room for a few segments; when `query_resolve` reports mor
 buffer holds, the runtime grows the buffer to that count and resolves again, before the wave is
 dispatched, so no body ever holds a buffer that moves. The render extraction scratch grows the same
 way. The only failure left is an allocation failure, which fails the tick with `out_of_memory`. A
-query's width is the one fixed number: `KE_QUERY_MAX_TERMS`, the length of the column array inside
-`ke_ecs_segment`.
+query's width is not capped either: `ke_runtime_system_params` carries the terms of every query
+back to back in `query_terms`, and `query_widths` says how many each takes. A query that the ecs
+cannot register fails the tick naming the system.

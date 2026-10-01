@@ -69,7 +69,8 @@ const GBufferModule = struct {
     io: c.ke_render_pass_io = undefined,
     access: [8]c.ke_component_access = undefined,
     access_count: u32 = 0,
-    queries: [2]c.ke_query_decl = undefined,
+    queries_terms: [4]c.ke_component_access = undefined,
+    queries_widths: [2]u32 = undefined,
 
     fn resolvePipeline(gb: *GBufferModule, shader: [*c]const u8) bool {
         var name_buf: [rc_MAX_SHADER_QUALIFIED]u8 = undefined;
@@ -312,13 +313,8 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     gb.access_count = 8;
 
     const rd = c.KE_ACCESS_READ;
-    gb.queries = std.mem.zeroes([2]c.ke_query_decl);
-    gb.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    gb.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    gb.queries[0].term_count = 2;
-    gb.queries[1].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    gb.queries[1].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    gb.queries[1].term_count = 2;
+    gb.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
+    gb.queries_widths = .{ 2, 2 };
     return true;
 }
 
@@ -360,8 +356,10 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.gbuffer";
     params.phase = c.KE_PHASE_RENDER;
-    params.queries = &gb.queries;
-    params.query_count = gb.queries.len;
+    params.query_terms = &gb.queries_terms;
+    params.query_term_count = gb.queries_terms.len;
+    params.query_widths = &gb.queries_widths;
+    params.query_count = gb.queries_widths.len;
     params.access_list = &gb.access;
     params.access_count = gb.access_count;
     params.pinned_thread = 0;
@@ -401,10 +399,17 @@ fn meshOn(layers: u32) c.ke_mesh_component {
     return m;
 }
 
+var column_pool: [8][2]?*anyopaque = undefined;
+var column_pool_next: usize = 0;
+
 fn oneSegment(meshes: []const c.ke_mesh_component, wts: []const c.ke_world_transform_component) c.ke_ecs_segment {
     var seg = std.mem.zeroes(c.ke_ecs_segment);
-    seg.columns[0] = @constCast(@ptrCast(meshes.ptr));
-    seg.columns[1] = @constCast(@ptrCast(wts.ptr));
+    const cols = &column_pool[column_pool_next % column_pool.len];
+    column_pool_next += 1;
+    cols[0] = @constCast(@ptrCast(meshes.ptr));
+    cols[1] = @constCast(@ptrCast(wts.ptr));
+    seg.columns = &cols[0];
+    seg.column_count = 2;
     seg.count = meshes.len;
     return seg;
 }

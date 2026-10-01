@@ -97,7 +97,8 @@ const ForwardModule = struct {
     io: c.ke_render_pass_io = undefined,
     access: [12]c.ke_component_access = undefined,
     access_count: u32 = 0,
-    queries: [5]c.ke_query_decl = undefined,
+    queries_terms: [7]c.ke_component_access = undefined,
+    queries_widths: [5]u32 = undefined,
 
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
         var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
@@ -455,19 +456,8 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.access_count = ac;
 
     const rd = c.KE_ACCESS_READ;
-    fwd.queries = std.mem.zeroes([5]c.ke_query_decl);
-    fwd.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    fwd.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    fwd.queries[0].term_count = 2;
-    fwd.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
-    fwd.queries[1].term_count = 1;
-    fwd.queries[2].terms[0] = .{ .cid = light_cid, .access = rd };
-    fwd.queries[2].term_count = 1;
-    fwd.queries[3].terms[0] = .{ .cid = ambient_cid, .access = rd };
-    fwd.queries[3].term_count = 1;
-    fwd.queries[4].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    fwd.queries[4].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    fwd.queries[4].term_count = 2;
+    fwd.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd }, .{ .cid = light_cid, .access = rd }, .{ .cid = ambient_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
+    fwd.queries_widths = .{ 2, 1, 1, 1, 2 };
     return true;
 }
 
@@ -515,8 +505,10 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.forward_transparent";
     params.phase = c.KE_PHASE_RENDER;
-    params.queries = &fwd.queries;
-    params.query_count = fwd.queries.len;
+    params.query_terms = &fwd.queries_terms;
+    params.query_term_count = fwd.queries_terms.len;
+    params.query_widths = &fwd.queries_widths;
+    params.query_count = fwd.queries_widths.len;
     params.access_list = &fwd.access;
     params.access_count = fwd.access_count;
     params.pinned_thread = 0;
@@ -562,10 +554,17 @@ fn transformAt(z: f32) c.ke_world_transform_component {
     return wt;
 }
 
+var column_pool: [8][2]?*anyopaque = undefined;
+var column_pool_next: usize = 0;
+
 fn oneSegment(meshes: []const c.ke_mesh_component, wts: []const c.ke_world_transform_component) c.ke_ecs_segment {
     var seg = std.mem.zeroes(c.ke_ecs_segment);
-    seg.columns[0] = @constCast(@ptrCast(meshes.ptr));
-    seg.columns[1] = @constCast(@ptrCast(wts.ptr));
+    const cols = &column_pool[column_pool_next % column_pool.len];
+    column_pool_next += 1;
+    cols[0] = @constCast(@ptrCast(meshes.ptr));
+    cols[1] = @constCast(@ptrCast(wts.ptr));
+    seg.columns = &cols[0];
+    seg.column_count = 2;
     seg.count = meshes.len;
     return seg;
 }

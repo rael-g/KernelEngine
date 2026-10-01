@@ -10,8 +10,10 @@ var gpa = heap.gpa;
 const Module = struct {
     physics: *c.ke_physics_2d,
     logger: ?*c.ke_logger = null,
-    body_queries: [1]c.ke_query_decl = undefined,
-    collider_queries: [3]c.ke_query_decl = undefined,
+    body_queries_terms: [2]c.ke_component_access = undefined,
+    body_queries_widths: [1]u32 = undefined,
+    collider_queries_terms: [4]c.ke_component_access = undefined,
+    collider_queries_widths: [3]u32 = undefined,
 };
 
 fn moduleOf(user: ?*anyopaque) *Module {
@@ -215,17 +217,16 @@ export fn ke_physics_body2d_module_create(
 
     const rd = c.KE_ACCESS_READ;
     const wr = c.KE_ACCESS_WRITE;
-
-    m.body_queries = std.mem.zeroes([1]c.ke_query_decl);
-    m.body_queries[0].terms[0] = .{ .cid = body_cid, .access = wr };
-    m.body_queries[0].terms[1] = .{ .cid = transform_cid, .access = wr };
-    m.body_queries[0].term_count = 2;
+    m.body_queries_terms = .{ .{ .cid = body_cid, .access = wr }, .{ .cid = transform_cid, .access = wr } };
+    m.body_queries_widths = .{ 2 };
 
     var sp = std.mem.zeroes(c.ke_runtime_system_params);
     sp.name = "physics.body2d";
     sp.phase = c.KE_PHASE_UPDATE;
-    sp.queries = &m.body_queries;
-    sp.query_count = m.body_queries.len;
+    sp.query_terms = &m.body_queries_terms;
+    sp.query_term_count = m.body_queries_terms.len;
+    sp.query_widths = &m.body_queries_widths;
+    sp.query_count = m.body_queries_widths.len;
     sp.pinned_thread = 0;
     sp.user_data = m;
     sp.execute = bodySystem;
@@ -234,21 +235,16 @@ export fn ke_physics_body2d_module_create(
         gpa.destroy(m);
         return empty;
     }
-
-    m.collider_queries = std.mem.zeroes([3]c.ke_query_decl);
-    m.collider_queries[0].terms[0] = .{ .cid = collider_cid, .access = wr };
-    m.collider_queries[0].terms[1] = .{ .cid = transform_cid, .access = rd };
-    m.collider_queries[0].term_count = 2;
-    m.collider_queries[1].terms[0] = .{ .cid = body_cid, .access = rd };
-    m.collider_queries[1].term_count = 1;
-    m.collider_queries[2].terms[0] = .{ .cid = hierarchy_cid, .access = rd };
-    m.collider_queries[2].term_count = 1;
+    m.collider_queries_terms = .{ .{ .cid = collider_cid, .access = wr }, .{ .cid = transform_cid, .access = rd }, .{ .cid = body_cid, .access = rd }, .{ .cid = hierarchy_cid, .access = rd } };
+    m.collider_queries_widths = .{ 2, 1, 1 };
 
     var cp = std.mem.zeroes(c.ke_runtime_system_params);
     cp.name = "physics.collider2d";
     cp.phase = c.KE_PHASE_UPDATE;
-    cp.queries = &m.collider_queries;
-    cp.query_count = m.collider_queries.len;
+    cp.query_terms = &m.collider_queries_terms;
+    cp.query_term_count = m.collider_queries_terms.len;
+    cp.query_widths = &m.collider_queries_widths;
+    cp.query_count = m.collider_queries_widths.len;
     cp.pinned_thread = 0;
     cp.user_data = m;
     cp.execute = colliderSystem;

@@ -8,4 +8,7 @@ public unsafe partial struct ke_ecs_segment
 {
     /// <summary>The entities this segment matched.</summary>
     public readonly ReadOnlySpan<ulong> Entities => entities == null ? default : new ReadOnlySpan<ulong>(entities, (int)count);
+
+    /// <summary>One base pointer per query term.</summary>
+    public readonly ReadOnlySpan<nint> Columns => columns == null ? default : new ReadOnlySpan<nint>(columns, (int)column_count);
 }
