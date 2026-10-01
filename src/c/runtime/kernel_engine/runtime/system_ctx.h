@@ -45,15 +45,6 @@ struct ke_system_ctx {
     void (*slice)(ke_system_ctx *self, uint32_t *out_index, uint32_t *out_count);
 };
 
-KE_RUNTIME_API uint32_t ke_system_ctx_defer_applied_count(void);
-KE_RUNTIME_API void     ke_system_ctx_reset_defer_applied(void);
-
-/// @param out_wave_count [out]
-KE_RUNTIME_API void ke_runtime_debug_compute_waves(const ke_runtime_system_params *systems,
-                                                     uint32_t                        system_count,
-                                                     uint32_t                       *out_wave_assignments,
-                                                     uint32_t                       *out_wave_count);
-
 /// The system body's only path to component memory. Returns the resolved
 /// archetype segments for the system's query at query_index (the order the
 /// queries were declared in ke_runtime_system_params). Sets *out_count to the

@@ -10,10 +10,6 @@ var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(rootDir, "scripts", 
 
 var excluded = new Dictionary<string, string>
 {
-    ["ke_runtime_debug_compute_waves(out_wave_assignments)"] =
-        "caller-allocated buffer, not a single written-back value: [out] would project "
-        + "one uint where the callee fills system_count of them, and no backend renders "
-        + "a writable span yet",
 };
 
 var offenders = new List<string>();

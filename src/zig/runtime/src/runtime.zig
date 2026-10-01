@@ -153,7 +153,7 @@ fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_
     return false;
 }
 
-export fn ke_runtime_debug_compute_waves(
+fn debugComputeWaves(
     systems: [*c]const c.ke_runtime_system_params,
     system_count: u32,
     out_wave_assignments: [*c]u32,
@@ -361,10 +361,10 @@ fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) void {
     q.arena_used = 0;
 }
 
-export fn ke_system_ctx_defer_applied_count() callconv(.c) u32 {
+fn deferAppliedCount() u32 {
     return s_defer_applied_total;
 }
-export fn ke_system_ctx_reset_defer_applied() callconv(.c) void {
+fn resetDeferApplied() void {
     s_defer_applied_total = 0;
 }
 
@@ -677,7 +677,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
 
     const wave_assignments = (h.state.wave_assignments orelse return .{}) + base;
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(phase_params, phase_count, wave_assignments, &wave_count);
+    debugComputeWaves(phase_params, phase_count, wave_assignments, &wave_count);
 
     const pkgs = (h.state.phase_pkgs orelse return .{}) + base;
     const tasks = (h.state.phase_tasks orelse return .{}) + base;
@@ -1770,7 +1770,7 @@ fn waveSystem(list: [*c]const c.ke_component_access, count: u32) c.ke_runtime_sy
 test "no systems produce no waves" {
     var assignments = [_]u32{ 99, 99, 99, 99 };
     var wave_count: u32 = 99;
-    ke_runtime_debug_compute_waves(null, 0, &assignments, &wave_count);
+    debugComputeWaves(null, 0, &assignments, &wave_count);
     try testing.expectEqual(@as(u32, 0), wave_count);
 }
 
@@ -1780,7 +1780,7 @@ test "a single system occupies one wave" {
 
     var assignments = [_]u32{99};
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 1, &assignments, &wave_count);
+    debugComputeWaves(&sys, 1, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 1), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1793,7 +1793,7 @@ test "systems writing different components share a wave" {
 
     var assignments = [_]u32{ 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+    debugComputeWaves(&sys, 2, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 1), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1807,7 +1807,7 @@ test "two systems writing the same component land in different waves" {
 
     var assignments = [_]u32{ 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+    debugComputeWaves(&sys, 2, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 2), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1821,7 +1821,7 @@ test "a writer and a reader of the same component land in different waves" {
 
     var assignments = [_]u32{ 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+    debugComputeWaves(&sys, 2, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 2), wave_count);
 }
@@ -1833,7 +1833,7 @@ test "two readers of the same component share a wave" {
 
     var assignments = [_]u32{ 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 2, &assignments, &wave_count);
+    debugComputeWaves(&sys, 2, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 1), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1854,7 +1854,7 @@ test "a chain of conflicts groups greedily" {
 
     var assignments = [_]u32{ 99, 99, 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 4, &assignments, &wave_count);
+    debugComputeWaves(&sys, 4, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 3), wave_count);
     try testing.expectEqual(@as(u32, 0), assignments[0]);
@@ -1886,7 +1886,7 @@ test "the clear shadow and cull access shape lands in one wave" {
 
     var assignments = [_]u32{ 99, 99, 99 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sys, 3, &assignments, &wave_count);
+    debugComputeWaves(&sys, 3, &assignments, &wave_count);
 
     try testing.expectEqual(@as(u32, 1), wave_count);
     try testing.expectEqual(assignments[0], assignments[1]);
@@ -1910,7 +1910,7 @@ test "a deferred spawn is applied at the wave barrier" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    ke_system_ctx_reset_defer_applied();
+    resetDeferApplied();
 
     var probe = SpawnProbe{};
     var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
@@ -1920,7 +1920,7 @@ test "a deferred spawn is applied at the wave barrier" {
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
-    try testing.expectEqual(@as(u32, 3), ke_system_ctx_defer_applied_count());
+    try testing.expectEqual(@as(u32, 3), deferAppliedCount());
 }
 
 test "spawn hands the system body an id it can actually use" {
@@ -1978,7 +1978,7 @@ test "deferred attach detach and despawn are applied at the barrier" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    ke_system_ctx_reset_defer_applied();
+    resetDeferApplied();
 
     var probe = MutatorProbe{};
     var sys = systemParams("Mutator", c.KE_PHASE_UPDATE);
@@ -1988,7 +1988,7 @@ test "deferred attach detach and despawn are applied at the barrier" {
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expect(probe.ok.load(.acquire));
-    try testing.expectEqual(@as(u32, 3), ke_system_ctx_defer_applied_count());
+    try testing.expectEqual(@as(u32, 3), deferAppliedCount());
 }
 
 fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -2000,7 +2000,7 @@ test "the defer queue drains between ticks" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    ke_system_ctx_reset_defer_applied();
+    resetDeferApplied();
 
     var sys = systemParams("RepeatSpawner", c.KE_PHASE_UPDATE);
     sys.execute = &repeatSpawnerBody;
@@ -2008,7 +2008,7 @@ test "the defer queue drains between ticks" {
 
     for (0..5) |_| try testing.expect(f.tick(1.0 / 60.0));
 
-    try testing.expectEqual(@as(u32, 5), ke_system_ctx_defer_applied_count());
+    try testing.expectEqual(@as(u32, 5), deferAppliedCount());
 }
 
 test "a zero size component registers as a usable tag" {
@@ -2083,7 +2083,7 @@ test "two readers sharing a wave read the same storage without conflicting" {
     const sysz = [_]c.ke_runtime_system_params{ a, b };
     var waves = [_]u32{ 0, 0 };
     var wave_count: u32 = 0;
-    ke_runtime_debug_compute_waves(&sysz, 2, &waves, &wave_count);
+    debugComputeWaves(&sysz, 2, &waves, &wave_count);
     try testing.expectEqual(waves[0], waves[1]);
 
     for (0..300) |_| try testing.expect(f.tick(1.0 / 60.0));

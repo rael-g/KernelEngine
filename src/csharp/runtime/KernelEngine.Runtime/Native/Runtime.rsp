@@ -9,6 +9,8 @@ ke_runtime
 --include-directory
 ../../../../c/runtime
 --include-directory
+../../../../zig/runtime/include
+--include-directory
 ../../../../c/scheduler
 --include-directory
 ../../../../zig/common/include
@@ -16,7 +18,7 @@ ke_runtime
 Runtime.umbrella.h
 --traverse
 ../../../../c/runtime/kernel_engine/runtime/runtime.h
-../../../../c/runtime/kernel_engine/runtime/runtime_create.h
+../../../../zig/runtime/include/kernel_engine/runtime/runtime_create.h
 ../../../../c/runtime/kernel_engine/runtime/system_ctx.h
 --additional
 -DKE_RUNTIME_STATIC

@@ -35,7 +35,7 @@ ends at a barrier. Two systems conflict when they name the same component and at
 writes it (`runtime.h:37-41`; `systemsConflict`, `runtime.zig:137-154`). The access a system names
 is the union of its queries' terms and its `access_list` (`runtime.zig:106-130`).
 
-Wave assignment is greedy and in registration order (`ke_runtime_debug_compute_waves`,
+Wave assignment is greedy and in registration order (`debugComputeWaves`,
 `runtime.zig:156-194`): a system joins the current wave unless it conflicts with a system already in
 it, in which case it opens the next wave. A closed wave is never reopened, so a later system can
 never overtake an earlier one it does not conflict with.

@@ -575,54 +575,6 @@
   ],
   "functions": [
     {
-      "name": "ke_system_ctx_defer_applied_count",
-      "returns": "uint32_t",
-      "doc": null,
-      "return_doc": null,
-      "params": []
-    },
-    {
-      "name": "ke_system_ctx_reset_defer_applied",
-      "returns": "void",
-      "doc": null,
-      "return_doc": null,
-      "params": []
-    },
-    {
-      "name": "ke_runtime_debug_compute_waves",
-      "returns": "void",
-      "doc": null,
-      "return_doc": null,
-      "params": [
-        {
-          "name": "systems",
-          "type": "const ke_runtime_system_params *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "system_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "out_wave_assignments",
-          "type": "uint32_t *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "out_wave_count",
-          "type": "uint32_t *",
-          "tags": [
-            "out"
-          ],
-          "doc": null
-        }
-      ]
-    },
-    {
       "name": "ke_system_ctx_view",
       "returns": "const ke_ecs_segment *",
       "doc": "The system body\u0027s only path to component memory. Returns the resolved archetype segments for the system\u0027s query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call \u2014 the segments were resolved single-threaded before the wave, because an ECS iterator allocates from storage shared across the wave\u0027s parallel systems. Returns NULL for an out-of-range index or a system that declared no queries.",

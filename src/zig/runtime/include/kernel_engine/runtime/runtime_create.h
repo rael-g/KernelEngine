@@ -10,6 +10,14 @@
 extern "C" {
 #endif
 
+#ifndef KE_RUNTIME_CREATE_API
+#  ifdef KE_RUNTIME_CREATE_EXPORT
+#    define KE_RUNTIME_CREATE_API KE_EXPORT
+#  else
+#    define KE_RUNTIME_CREATE_API KE_IMPORT
+#  endif
+#endif
+
 typedef struct ke_runtime_params {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60.
     float fixed_dt;
@@ -22,10 +30,10 @@ typedef struct ke_runtime_params {
     uint32_t max_systems_per_phase;
 } ke_runtime_params;
 
-KE_RUNTIME_API ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,
-                                                   ke_scheduler            *scheduler,
-                                                   const ke_runtime_params *params,
-                                                   ke_error               **out_error);
+KE_RUNTIME_CREATE_API ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,
+                                                          ke_scheduler            *scheduler,
+                                                          const ke_runtime_params *params,
+                                                          ke_error               **out_error);
 
 #ifdef __cplusplus
 }

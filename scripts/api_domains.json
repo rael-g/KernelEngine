@@ -83,13 +83,14 @@
       "headers": [
         "src/c/runtime/kernel_engine/runtime/runtime.h",
         "src/c/runtime/kernel_engine/runtime/system_ctx.h",
-        "src/c/runtime/kernel_engine/runtime/runtime_create.h"
+        "src/zig/runtime/include/kernel_engine/runtime/runtime_create.h"
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
         "src/c/runtime",
+        "src/zig/runtime/include",
         "src/c/ecs",
         "src/c/scheduler",
         "src/zig/common/include"
@@ -826,7 +827,7 @@
       "headers": [
         "src/c/runtime/kernel_engine/runtime/runtime.h",
         "src/c/runtime/kernel_engine/runtime/system_ctx.h",
-        "src/c/runtime/kernel_engine/runtime/runtime_create.h"
+        "src/zig/runtime/include/kernel_engine/runtime/runtime_create.h"
       ],
       "library": "ke_runtime",
       "additional": [

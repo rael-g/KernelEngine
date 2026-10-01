@@ -5,16 +5,6 @@ namespace KernelEngine.Runtime.Native;
 
 public static unsafe partial class NativeMethods
 {
-    [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_defer_applied_count", ExactSpelling = true)]
-    [return: NativeTypeName("uint32_t")]
-    public static extern uint system_ctx_defer_applied_count();
-
-    [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_reset_defer_applied", ExactSpelling = true)]
-    public static extern void system_ctx_reset_defer_applied();
-
-    [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_runtime_debug_compute_waves", ExactSpelling = true)]
-    public static extern void runtime_debug_compute_waves([NativeTypeName("const ke_runtime_system_params *")] ke_runtime_system_params* systems, [NativeTypeName("uint32_t")] uint system_count, [NativeTypeName("uint32_t *")] uint* out_wave_assignments, [NativeTypeName("uint32_t *")] uint* out_wave_count);
-
     [DllImport("ke_runtime", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_system_ctx_view", ExactSpelling = true)]
     [return: NativeTypeName("const ke_ecs_segment *")]
     public static extern KernelEngine.Ecs.Native.ke_ecs_segment* system_ctx_view(ke_system_ctx* ctx, [NativeTypeName("uint32_t")] uint query_index, [NativeTypeName("size_t *")] nuint* out_count);

@@ -25,7 +25,9 @@ pub fn build(b: *std.Build) void {
     }
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);
+    mod.addIncludePath(b.path("include"));
     mod.addCMacro("KE_RUNTIME_EXPORT", "");
+    mod.addCMacro("KE_RUNTIME_CREATE_EXPORT", "");
 
     const lib = b.addLibrary(.{
         .name = "ke_runtime",
@@ -55,7 +57,9 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }));
+        test_mod.addIncludePath(b.path("include"));
         test_mod.addCMacro("KE_RUNTIME_EXPORT", "");
+        test_mod.addCMacro("KE_RUNTIME_CREATE_EXPORT", "");
         test_mod.addLibraryPath(.{ .cwd_relative = lib_dir });
         test_mod.addRPath(.{ .cwd_relative = lib_dir });
         test_mod.linkSystemLibrary("ke_ecs_flecs", .{});
