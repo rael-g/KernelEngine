@@ -61,7 +61,7 @@ The shadow pass does not use materials: its own shader reads only the position a
   (`asset_upload.zig:203-225`, `render_service.zig:384-392`).
 - An unknown handle resolves to the built-in white material (`render_service.zig:152-155`).
 
-The mesh component's `alpha_mode` is `OPAQUE`, `MASK` or `BLEND` (`handles.h:46-51`) and the material
+The mesh component's `alpha_mode` is `OPAQUE`, `MASK` or `BLEND` (`handles.h:29-34`) and the material
 stores it. It decides the pass: `OPAQUE` and `MASK` go to the gbuffer pass and `BLEND` to the forward
 pass ([render.md](render.md#opaque-and-transparent-surfaces-take-different-passes)).
 
@@ -71,10 +71,10 @@ For each draw a consuming pass:
 
 1. Asks the service for the material's shader name (`material_shader`).
 2. Loads `<name>.<pass>` as a vertex and a fragment module and writes them into its pipeline template
-   (`gbuffer_module.zig:73-82`, `forward_module.zig:102-112`). If either file is missing the draw is
+   (`gbuffer_module.zig:74-83`, `forward_module.zig:103-113`). If either file is missing the draw is
    skipped.
 3. Asks the pipeline cache for the pipeline ([pipeline-cache.md](pipeline-cache.md)).
-4. Binds the material's bind group at set 1 (`gbuffer_module.zig:158-160`, `forward_module.zig:269-271`)
+4. Binds the material's bind group at set 1 (`gbuffer_module.zig:159-161`, `forward_module.zig:270-272`)
    and the object's transform at set 2.
 
 Everything about the pipeline except the two modules is fixed by the pass: vertex layout, blend state,
@@ -88,6 +88,6 @@ one from the values authored on the mesh itself: colour, roughness, alpha mode, 
 metallic fixed at `0` and the default shader (`mesh_resolve.zig:151-175`, run in `KE_PHASE_UPDATE`,
 `render_module.zig:274-282`). A mesh authored in a scene therefore draws with `standard`.
 The in-tree callers of `create_material` that exist outside that system pass no shader either
-(`asset_resolver.zig:450-463`, `sprite_resolve.zig:74-86`); the way to pick an authored material is the
+(`asset_resolver.zig:451-464`, `sprite_resolve.zig:74-86`); the way to pick an authored material is the
 `shader` argument of `create_material`, which game code reaches through the render resources wrapper
 (`examples/csharp/03_pbr_directional/Program.cs:43-44`).

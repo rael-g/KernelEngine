@@ -47,7 +47,7 @@ A scene file spells four kinds of name, and the loader treats them differently.
 | written as | names | matched how |
 |---|---|---|
 | `[entity.<name>]` | a component | **as written**, against the names modules registered (`scene_loader.zig:310`) |
-| a key inside a block | a field of that component | as written, against the field table (`component_fields_apply.zig:17-35`) |
+| a key inside a block | a field of that component | as written, against the field table (`component_fields_apply.zig:18-36`) |
 | `type = "<name>"` | a node type | **normalized**, qualified name first, then short name |
 | `signal = "<name>"` | a signal | as written, against the signals declared to the bus (`scene_loader.zig:446`) |
 | `parent`, `target` | an entity of the same file | as written (`NameMap.get`, `:522-527`) |
@@ -112,7 +112,7 @@ table (`scene_loader.zig:91-145`). An array of two, three or four-or-more number
 A block key is applied in up to three ways, and they do not fail alike.
 
 1. **The generated field table.** The key is matched to a field and the value written by the field's
-   type (`component_fields_apply.zig:17-35`). A value the field cannot take writes nothing, and the key
+   type (`component_fields_apply.zig:18-36`). A value the field cannot take writes nothing, and the key
    is **claimed** all the same, so no "no field" error follows.
 2. **An apply callback**, for what a table cannot describe. It claims the keys it owns
    (`keyIs`, `components_apply.zig:15-21`), and a value outside its domain fails the load with the

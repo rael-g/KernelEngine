@@ -28,27 +28,27 @@ The choice is made by which resource the pass binds, not by compiling a differen
   shadow module declares the `shadow_map` resource and registers its system
   (`shadow_module.zig:156-158`, `:279`). A shading pass asks the service for `shadow_map` and falls
   back to the white texture when none was declared
-  (`deferred_lighting_module.zig:80-81`, `forward_module.zig:147-148`). The `shadow_lvp` uniform is
+  (`deferred_lighting_module.zig:81-82`, `forward_module.zig:148-149`). The `shadow_lvp` uniform is
   published whether or not shadows are enabled (`shadow_module.zig:152-154`).
 - **IBL.** `enable_ibl` false binds the black default cubemap at binding 7; true binds the cubemap of
   the first `ke_skybox_component`, and a frame with no skybox component resolves the none-handle to
-  the same black cubemap (`deferred_lighting_module.zig:84`, `:136-143`;
+  the same black cubemap (`deferred_lighting_module.zig:85`, `:136-143`;
   `asset_upload.zig:160-165`). The skybox pass reads the same cubemap for the background.
 - **Dynamic lights.** The cull pass always runs and always writes its per-cluster counts; with no
   point or spot lights every count is zero.
 
-A pass rebuilds its frame bind group when the skybox cubemap changes (`deferred_lighting_module.zig:140-143`).
+A pass rebuilds its frame bind group when the skybox cubemap changes (`deferred_lighting_module.zig:141-144`).
 
 ## Which light components are read
 
 | component | which entities | where it is read |
 |---|---|---|
-| directional light | the first one only | shading passes and the shadow pass (`deferred_lighting_module.zig:158-166`, `shadow_module.zig:76-82`) |
-| ambient light | the first one only; overrides the ambient field of the directional light | `deferred_lighting_module.zig:167-172` |
+| directional light | the first one only | shading passes and the shadow pass (`deferred_lighting_module.zig:159-167`, `shadow_module.zig:76-82`) |
+| ambient light | the first one only; overrides the ambient field of the directional light | `deferred_lighting_module.zig:168-173` |
 | point, spot light | every one, up to the cull pass's cap | `cluster_module.zig:109-176` |
 
 The directional light's contribution is gated by `frame.shadow_params.z`, which the pass sets to `1`
-when a directional light exists (`deferred_lighting_module.zig:165`; read at
+when a directional light exists (`deferred_lighting_module.zig:166`; read at
 `deferred_lighting.slang:89`). The name does not mean "shadows are on".
 
 Point and spot lights cast no shadows: they reach a surface only through

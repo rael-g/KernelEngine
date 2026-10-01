@@ -10,32 +10,32 @@ remembers what it uploaded by key (`src/zig/render/service/src/asset_upload.zig`
 ## The resolver
 
 `ke_asset_resolver_create(image_loader, font_loader, project_root)` takes borrowed loaders and a root,
-each of which may be null (`asset_resolver_create.h`; `asset_resolver.zig:475-510`). It has two
+each of which may be null (`asset_resolver_create.h`; `asset_resolver.zig:476-511`). It has two
 families of slot.
 
 **`resolve_*` decode and return data the caller frees**: `resolve_texture` (RGBA8 through the image
 loader), `resolve_mesh`, `resolve_material`, `resolve_font`. Texture, mesh and font each have a
 `free_*` slot; `resolve_material` fills a caller-owned `ke_material_spec` and has none
-(`asset_resolver.h`, `asset_resolver.zig:499-505`). They touch no GPU.
+(`asset_resolver.h`, `asset_resolver.zig:500-506`). They touch no GPU.
 
 - A path starting with `res://` has that prefix replaced by the project root, joined with a `/` only when neither side already supplies one; any
   other path is used as given. With no root, a `res://` path keeps only what follows the prefix
-  (`resolvePath`, `joinPath`, `asset_resolver.zig:44-80`). The result is clamped to 1024 bytes (`:14`).
+  (`resolvePath`, `joinPath`, `asset_resolver.zig:45-81`). The result is clamped to 1024 bytes (`:14`).
 - `resolve_texture` and `resolve_font` fail with `KE_ERROR_INVALID_ARGUMENT` when their loader is
   null, with `KE_ERROR_NOT_FOUND` when the file cannot be opened, and otherwise return what the loader
-  returns (`asset_resolver.zig:158-188`, `273-315`).
+  returns (`asset_resolver.zig:159-189`, `273-315`).
 - `resolve_mesh` accepts one shape of path, `res://primitives/{quad|plane|cube|sphere}`, which it bakes
   with `ke_mesh_shape_bake_internal`. Anything else is `KE_ERROR_NOT_FOUND`; no model file extension is
-  routed (`asset_resolver.zig:199-233`; contract text at `asset_resolver.h`, `resolve_mesh`).
+  routed (`asset_resolver.zig:200-234`; contract text at `asset_resolver.h`, `resolve_mesh`).
 - `resolve_material` parses a TOML file with a `[material]` table: `base_color` (array of up to
   four numbers), `metallic`, `roughness`, `alpha_cutoff`, `ior`, `distortion_strength`, `albedo`,
   `normal` (paths, kept as strings) and `alpha_mode` (`"MASK"` or `"BLEND"`; anything else is opaque).
   Missing keys take the defaults set at the top of `parseMaterialFile`. A missing file, a parse
-  failure and a file without `[material]` all report `KE_ERROR_IO` (`asset_resolver.zig:98-156`,
+  failure and a file without `[material]` all report `KE_ERROR_IO` (`asset_resolver.zig:99-157`,
   `249-271`).
 
 **`resolve_*_into` do the whole trip.** They take the render service and return a handle:
-`resolve_texture_into`, `resolve_mesh_into`, `resolve_material_into` (`asset_resolver.zig:318-465`).
+`resolve_texture_into`, `resolve_mesh_into`, `resolve_material_into` (`asset_resolver.zig:319-466`).
 Each starts with the service's `try_get_*` on the authored path. A hit returns the existing handle and
 decodes nothing. A miss runs the matching `resolve_*`, converts if needed, and uploads under the same
 path as the key:
@@ -118,5 +118,5 @@ base directory (`src/csharp/framework/KernelEngine.Framework/Assets/AssetResolve
 
 No import step, cache on disk, manifest, watcher or hot reload sits between a path and its pixels:
 every miss decodes the source file synchronously on the calling thread, and the upload that follows
-is a direct call (`asset_resolver.zig:337-346`). Nothing frees a cached resource except a `release`
+is a direct call (`asset_resolver.zig:338-347`). Nothing frees a cached resource except a `release`
 that reaches zero.

@@ -15,7 +15,7 @@ function pointers over an opaque handle. Its one implementation is enkiTS
 
 Every subsystem that runs work in parallel goes through this one object. The runtime's wave
 dispatcher is a client like any other ([runtime.md](runtime.md#dispatch)); flecs is given no
-threads and no pipeline — the plugin only calls `ecs_init()` (`src/zig/ecs/flecs/src/ecs_flecs.zig:538`),
+threads and no pipeline — the plugin only calls `ecs_init()` (`src/zig/ecs/flecs/src/ecs_flecs.zig:539`),
 never `ecs_set_threads` or `ecs_progress`.
 
 ## A task

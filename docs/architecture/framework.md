@@ -75,10 +75,10 @@ src/zig/framework/src/world.zig` shows them assigned at `world.zig:221` and `235
 ## The project root
 
 A project root is passed separately to three pieces — the world, the scene loader, the asset
-resolver — and each keeps its own copy: the resolver duplicates it (`asset_resolver.zig:491`), the
+resolver — and each keeps its own copy: the resolver duplicates it (`asset_resolver.zig:492`), the
 loader copies it into a fixed buffer (`scene_loader.zig:41`, `776-783`), the world stores the
 pointer. The resolver rewrites `res://x` to `<project_root>/x` and passes any other path through
-unchanged (`asset_resolver.zig:68-72`).
+unchanged (`asset_resolver.zig:69-73`).
 
 ## What a node type declares to the script host
 

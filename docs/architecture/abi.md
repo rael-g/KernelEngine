@@ -83,7 +83,7 @@ The managed side matches by name, walking `Parent`
 
 `ke_error_fatal` prints the chain and terminates (`error.h:83-94`); the header reserves it for a
 caller that has an error and nowhere left to send it. The one engine call site is the flecs abort
-hook (`src/zig/ecs/flecs/src/ecs_flecs.zig:37`, [ecs.md](ecs.md#what-a-flecs-internal-failure-does)).
+hook (`src/zig/ecs/flecs/src/ecs_flecs.zig:38`, [ecs.md](ecs.md#what-a-flecs-internal-failure-does)).
 
 ## Booleans
 
@@ -106,18 +106,19 @@ The ABI names a resource by a number, not a pointer, and the numbers do not all 
 
 A render resource handle is a one-member struct, `{ uint32_t bits }`, one struct type per kind —
 `ke_mesh_handle`, `ke_texture_handle`, `ke_material_handle`, `ke_cubemap_handle`,
-`ke_shadow_map_handle` (`src/c/render/kernel_engine/render/handles.h:40-44`) and `ke_ui_font_handle`
+`ke_shadow_map_handle` (`src/c/render/kernel_engine/render/handles.h:23-27`) and `ke_ui_font_handle`
 (`src/c/render/kernel_engine/render/ui/components.h:13-16`). Distinct struct types make passing a mesh
 where a texture belongs a compile error in C; the managed projection keeps that with one
 `readonly record struct` per kind it names — mesh, texture, material, shadow map, font
 (`src/csharp/render/KernelEngine.Render.Abstractions/Handles.cs:3-32`).
 
 `bits` packs a **20-bit index** in the low bits and a **12-bit generation** above it
-(`KE_HANDLE_INDEX_BITS`, `KE_HANDLE_GENERATION_BITS`, `ke_handle_make`, `handles.h:12-38`). The lowest
+(`KE_HANDLE_INDEX_BITS`, `KE_HANDLE_GENERATION_BITS`, `handles.h:11-12`). The lowest
 generation a live handle carries is `1`, and `KE_HANDLE_NONE` is `0`, so a handle with all bits
 zero is "none" and a component whose handle field was never written reads as none
-(`handles.h:19-22`; `KE_MESH_NONE` etc., `:54-58`). Each kind has an `_is_valid` that compares against
-`KE_HANDLE_NONE` (`:61-70`).
+(`handles.h:18-21`; `KE_MESH_NONE` etc., `:37-41`). A handle is valid when its `bits` differ from
+`KE_HANDLE_NONE`. The header carries the constants only; the plugins that pack or unpack a handle share
+`src/zig/render/common/handle.zig`.
 
 The one implementation, the render service's slot map, repeats the packing constants in its own source
 (`src/zig/render/service/src/slot_map.zig:5-24`) and enforces the rules the header implies:
@@ -130,7 +131,7 @@ whatever reused the slot (`:34-78`).
 
 | identifier | none / invalid | where |
 |---|---|---|
-| `ke_mesh_handle`, `ke_texture_handle`, `ke_material_handle`, `ke_cubemap_handle`, `ke_shadow_map_handle`, `ke_ui_font_handle` | `0` | `handles.h:22`; `ui/components.h:19` |
+| `ke_mesh_handle`, `ke_texture_handle`, `ke_material_handle`, `ke_cubemap_handle`, `ke_shadow_map_handle`, `ke_ui_font_handle` | `0` | `handles.h:21`; `ui/components.h:19` |
 | `ke_entity` | `0` (`KE_ENTITY_INVALID`) | `src/c/ecs/kernel_engine/ecs/ecs.h:13-14` |
 | `ke_query_id` | `0` | `ke_ecs.h:14-15` |
 | `ke_audio_sound`, `ke_body_2d` | `0` | `audio.h:15-16`; `physics_2d.h:14-15` |
@@ -139,7 +140,7 @@ whatever reused the slot (`:34-78`).
 | `ke_resource_handle` | `UINT32_MAX` | `src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h:13-15` |
 | `ke_configuration_subscription` | `UINT32_MAX` | `src/c/configuration/kernel_engine/configuration/configuration.h:15` |
 | `ke_gpu_buffer`, `ke_gpu_texture`, and the other 64-bit GPU ids | `UINT64_MAX` (`KE_GPU_INVALID_HANDLE`) | `gpu_device.h:15-16`; `gpu_enums.h:239` |
-| `ke_component_id` | `KE_COMPONENT_INVALID` is `(ke_component_id)-1`, but `component_register` reports failure with `0` and every component entry point refuses `0` | `ecs.h:16-17`; `ke_ecs.h:58`; `ecs_flecs.zig:364`, `:414`, `:422` |
+| `ke_component_id` | `KE_COMPONENT_INVALID` is `(ke_component_id)-1`, but `component_register` reports failure with `0` and every component entry point refuses `0` | `ecs.h:16-17`; `ke_ecs.h:58`; `ecs_flecs.zig:365`, `:414`, `:422` |
 | signal ids | none: the first signal registered is id `0`, and a lookup that finds nothing returns `false` | `src/zig/framework/src/signal_bus.zig:107-111`, `:119-134` |
 
 So "a zeroed value means none" holds for the render handles, entities, queries, sounds, bodies and

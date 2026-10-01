@@ -70,45 +70,45 @@ Each pass chooses its own slot, as a literal in its own plugin:
 | 0 | clear | `render_module.zig:223` |
 | 1 | shadow | `shadow_module.zig:232` |
 | 2 | cluster cull | `cluster_module.zig:365` |
-| 3 | gbuffer | `gbuffer_module.zig:305` |
-| 4 | deferred lighting | `deferred_lighting_module.zig:324` |
+| 3 | gbuffer | `gbuffer_module.zig:306` |
+| 4 | deferred lighting | `deferred_lighting_module.zig:325` |
 | 5 | skybox | `skybox_module.zig:188` |
-| 6 | forward | `forward_module.zig:432` |
+| 6 | forward | `forward_module.zig:433` |
 | 7 | tonemap | `tonemap_module.zig:124` |
-| caller's | UI | `ui_module.zig:430`, a parameter of its setup |
+| caller's | UI | `ui_module.zig:431`, a parameter of its setup |
 
 What reaches the GPU is ordered by slot whatever order the bodies ran in.
 
 ## Opaque and transparent surfaces take different passes
 
 A mesh's material carries an `alpha_mode` of `OPAQUE`, `MASK` or `BLEND`
-(`src/c/render/kernel_engine/render/handles.h:46-51`), and each mesh also has `layers` that a camera's
+(`src/c/render/kernel_engine/render/handles.h:29-34`), and each mesh also has `layers` that a camera's
 `cull_mask` must overlap. The two drawing passes split the meshes between them by asking the service
 `material_alpha_mode`:
 
 | pass | draws | how |
 |---|---|---|
-| gbuffer | every mesh whose mode is not `BLEND` | encodes albedo, normal, roughness, emissive into the G-buffer and writes `depth` (`gbuffer_module.zig:26-45`, `:301-307`) |
-| deferred lighting | no mesh: a fullscreen triangle | reads the G-buffer and `depth`, shades every texel, writes `hdr` (`deferred_lighting_module.zig:317-324`) |
+| gbuffer | every mesh whose mode is not `BLEND` | encodes albedo, normal, roughness, emissive into the G-buffer and writes `depth` (`gbuffer_module.zig:27-46`, `:301-307`) |
+| deferred lighting | no mesh: a fullscreen triangle | reads the G-buffer and `depth`, shades every texel, writes `hdr` (`deferred_lighting_module.zig:318-325`) |
 | skybox | no mesh | loads `hdr`, reads `depth`, fills the texels geometry left empty (`skybox_module.zig:180-188`) |
-| forward | every mesh whose mode is `BLEND`, sorted farthest first | blends into `hdr`, depth-testing against `depth` without writing it (`forward_module.zig:34-62`, `:350-366`) |
+| forward | every mesh whose mode is `BLEND`, sorted farthest first | blends into `hdr`, depth-testing against `depth` without writing it (`forward_module.zig:35-63`, `:350-366`) |
 
 The order the four run in is fixed by their command slots (3, 4, 5, 6) and by their access lists: all
 four write `hdr` or `depth`, so the runtime never puts two of them in one wave.
 
 Before the forward pass opens its render pass it copies `hdr` into a second texture, `hdr_opaque`
-(`forward_module.zig:194`). The refraction term of a blended surface samples that copy, since it cannot
+(`forward_module.zig:195`). The refraction term of a blended surface samples that copy, since it cannot
 sample the target it is writing. The shading both passes share is in [lighting.md](lighting.md); how a
 material becomes a pipeline for each of them is in [materials.md](materials.md).
 
 ## What a camera component means
 
 Each pass takes the **first** camera in its query, the first row of the first segment
-(`gbuffer_module.zig:115`, `forward_module.zig:181`), and builds its own view and projection from
+(`gbuffer_module.zig:116`, `forward_module.zig:182`), and builds its own view and projection from
 that camera's world transform and component through the view space
 ([view-space.md](view-space.md#how-a-camera-component-becomes-a-projection)). A camera's `cull_mask` is
 compared with each mesh's `layers`; a mesh is drawn only if they share a bit
-(`gbuffer_module.zig:40`). With no camera the gbuffer and deferred-lighting passes still open and close
+(`gbuffer_module.zig:41`). With no camera the gbuffer and deferred-lighting passes still open and close
 an empty render pass; the forward and cluster passes return without recording.
 
 ## How the host composes the passes
@@ -155,7 +155,7 @@ buffer with the device's `write_buffer` before it submits anything (`frame_lifec
 arena is dropped without an error.
 
 **The rest of the device is reachable.** `encoder()` returns the slot's raw command encoder, which the
-forward pass uses for its texture copy (`forward_module.zig:194`). `query_ext(name)` forwards to the
+forward pass uses for its texture copy (`forward_module.zig:195`). `query_ext(name)` forwards to the
 device's `query_extension` (`pass_recording.zig:162-165`). Storage buffers, indirect commands and storage
 textures are part of the device contract itself, described in [gpu-device.md](gpu-device.md); pipeline
 requests go through [pipeline-cache.md](pipeline-cache.md).

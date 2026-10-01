@@ -26,7 +26,7 @@ render service stores the answer when it is created (`render_service.zig:273`).
 
 Only two of the three flags have a reader. `z_zero_to_one` picks the depth-range variant of the
 builder and `y_flip` negates the y row (`view_space.zig:113-117`, `:134`, `:160`); the UI pass reads
-`y_flip` for its own orthographic projection (`ui_module.zig:296`). `clip_left_handed` is read in one
+`y_flip` for its own orthographic projection (`ui_module.zig:297`). `clip_left_handed` is read in one
 place: the render module refuses to be created when the device reports it as `0`
 (`render_module.zig:253`). No projection builder branches on it.
 
@@ -77,21 +77,21 @@ the cluster pass also receives the device's convention (`render_module.zig:304-3
 
 ## How a camera component becomes a projection
 
-`ke_camera_projection` (`src/c/render/kernel_engine/render/camera.h:21-39`) is a header-only helper
+`Camera(c).projection` (`src/zig/render/common/camera.zig:5-20`) is a Zig source shared by the passes
 over a `ke_camera_component` (`components.h:15-25`):
 
 - `orthographic != 0`: the visible height is `orthographic_size * 2`, the width is that times the
   aspect, and `view_space->orthographic` builds the matrix with the component's near and far
-  planes (`camera.h:28-34`).
-- Otherwise: `fov` is read **in degrees**, converted with a literal factor, and handed to
-  `view_space->perspective` (`camera.h:36-37`).
+  planes (`camera.zig:12-16`).
+- Otherwise: `fov` is read **in degrees**, converted to radians, and handed to
+  `view_space->perspective` (`camera.zig:18-19`).
 
 The component defaults are `fov` 60, `near_plane` 0.1, `far_plane` 1000, `orthographic_size` 5
 (`components.h:15-20`, `component_fields.h:19`).
 
 The gbuffer, deferred-lighting and forward passes all call it
-(`gbuffer_module.zig:125`, `deferred_lighting_module.zig:129`, `forward_module.zig:199`), each
-building its view with `view_from_transform` (`gbuffer_module.zig:88-92` and the same three-line
+(`gbuffer_module.zig:126`, `deferred_lighting_module.zig:130`, `forward_module.zig:200`), each
+building its view with `view_from_transform` (`gbuffer_module.zig:89-93` and the same three-line
 helper in the other passes). Three passes do not use it:
 
 - the skybox pass always builds a perspective projection from `fov`, whatever `orthographic` says,
