@@ -451,6 +451,7 @@ const RuntimeState = struct {
     fixed_accumulator: f32,
     started: bool,
     in_tick: std.atomic.Value(bool),
+    in_render: std.atomic.Value(bool),
     pending_systems: std.atomic.Value(?*RegisteredSystem),
     max_systems_per_phase: u32,
     phase_indices: ?[*]u32,
@@ -647,7 +648,7 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
 
     const rs = buildSystem(p, out_error) orelse return 0;
     rs.id = @atomicRmw(u64, &h.state.next_system_id, .Add, 1, .monotonic) + 1;
-    if (h.state.in_tick.load(.acquire)) {
+    if (h.state.in_tick.load(.acquire) or h.state.in_render.load(.acquire)) {
         var head = h.state.pending_systems.load(.acquire);
         while (true) {
             rs.pending_next = head;
@@ -799,6 +800,8 @@ fn segmentOverflow(rs: *const RegisteredSystem) PhaseFailure {
 }
 
 fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
+    if (phase == c.KE_PHASE_RENDER) h.state.in_render.store(true, .release);
+    defer if (phase == c.KE_PHASE_RENDER) h.state.in_render.store(false, .release);
     if (h.state.system_count == 0) return .{};
 
     const cap: usize = h.state.max_systems_per_phase;
@@ -1872,6 +1875,36 @@ test "a system registered from a body mid-tick starts running on the next tick" 
     try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
     try testing.expectEqual(@as(u32, 1), m.late_runs);
     try testing.expectEqual(m.late_id, r.rt().last_system.?(r.rt()));
+}
+
+fn renderRegisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const m: *MidTick = @ptrCast(@alignCast(ud.?));
+    if (m.registered) return true;
+    m.registered = true;
+    var late = systemParams("LateFromRender", c.KE_PHASE_UPDATE);
+    late.execute = &lateBody;
+    late.user_data = m;
+    m.late_id = m.rt.register_system.?(m.rt, &late, null);
+    return true;
+}
+
+test "a system registered from a render body is queued instead of waiting on the render phase it runs in" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var m = MidTick{ .rt = r.rt() };
+    var first = systemParams("RenderRegisters", c.KE_PHASE_RENDER);
+    first.execute = &renderRegisteringBody;
+    first.user_data = &m;
+    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(m.late_id != 0);
+    try testing.expectEqual(@as(u32, 0), m.late_runs);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 1), m.late_runs);
 }
 
 test "creating a runtime without an ecs is refused" {

@@ -148,7 +148,7 @@ the access list likewise when the system has no query.
 
 ## Registering a system while a tick runs
 
-`register_system` called from a body does not touch the system table, which other threads are reading.
+`register_system` called from a body of any phase, render included, does not touch the system table, which other threads are reading.
 It builds the system, takes its id, and pushes it on a lock-free stack. The next `tick` applies the
 stack, in registration order, before its first phase, after joining a render phase still running
 against the table. `unregister_system` fails with `not_supported` while a tick runs.
