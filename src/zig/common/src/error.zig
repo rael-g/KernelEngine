@@ -29,12 +29,17 @@ export const KE_ERROR_NOT_INITIALIZED: c.ke_error_type = .{ .name = names.not_in
 export const KE_ERROR_NOT_SUPPORTED: c.ke_error_type = .{ .name = names.not_supported, .parent = null };
 export const KE_ERROR_ALREADY_EXISTS: c.ke_error_type = .{ .name = names.already_exists, .parent = null };
 
+fn sameName(a: *const c.ke_error_type, b: *const c.ke_error_type) bool {
+    if (a.name == null or b.name == null) return false;
+    return std.mem.eql(u8, std.mem.span(a.name), std.mem.span(b.name));
+}
+
 export fn ke_error_is(err_in: ?*const c.ke_error, type_in: ?*const c.ke_error_type) callconv(.c) bool {
     const err = err_in orelse return false;
     const wanted = type_in orelse return false;
     var t: ?*const c.ke_error_type = @ptrCast(err.type);
     while (t) |node| {
-        if (node == wanted) return true;
+        if (node == wanted or sameName(node, wanted)) return true;
         t = @ptrCast(node.parent);
     }
     return false;

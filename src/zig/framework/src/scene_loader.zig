@@ -2004,6 +2004,44 @@ test "the reason an apply callback rejects a value reaches the caller instead of
     try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "fathoms") != null);
 }
 
+noinline fn clobberStack(depth: u32) void {
+    var junk: [1024]u8 = undefined;
+    @memset(&junk, 'X');
+    std.mem.doNotOptimizeAway(&junk);
+    if (depth > 0) clobberStack(depth - 1);
+    std.mem.doNotOptimizeAway(&junk);
+}
+
+test "the message of a structural scene error survives the stack that formatted it" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Test"
+        \\[entity.nobody_registered_this]
+        \\x = 1
+        \\
+    );
+
+    var err: [*c]c.ke_error = null;
+    const loader = f.loader_h.ref.?;
+    try testing.expect(!loader.*.load.?(loader, try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(err != null);
+    clobberStack(64);
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "nobody_registered_this") != null);
+}
+
+test "an error raised from Zig is recognised by ke_error_is as its own type and its category" {
+    var err: [*c]c.ke_error = null;
+    E.fail(&err, .not_found, "gone", @src());
+    try testing.expect(c.ke_error_is(err, &c.KE_ERROR_NOT_FOUND));
+    try testing.expect(!c.ke_error_is(err, &c.KE_ERROR_IO));
+}
+
 test "a loader is never created without a world" {
     try testing.expect(ke_scene_loader_create(null, null, null).ref == null);
 }

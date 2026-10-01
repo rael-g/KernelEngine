@@ -54,7 +54,18 @@ pub fn Errors(comptime c: type) type {
             return &types[@intFromEnum(kind)];
         }
 
+        const message_max = 512;
         threadlocal var slot: c.ke_error = undefined;
+        threadlocal var message: [message_max]u8 = undefined;
+
+        fn own(msg: [*c]const u8) [*c]const u8 {
+            if (msg == null) return null;
+            const text = std.mem.span(msg);
+            const n = @min(text.len, message_max - 1);
+            std.mem.copyForwards(u8, message[0..n], text[0..n]);
+            message[n] = 0;
+            return &message;
+        }
 
         /// Fill the C error ABI at an exported boundary: point *out_error (when
         /// non-null) at a thread-local ke_error describing `kind` with `msg`,
@@ -62,7 +73,7 @@ pub fn Errors(comptime c: type) type {
         pub fn fail(out_error: [*c][*c]c.ke_error, kind: Kind, msg: [*c]const u8, src: std.builtin.SourceLocation) void {
             slot = .{
                 .type = &types[@intFromEnum(kind)],
-                .message = msg,
+                .message = own(msg),
                 .file = src.file,
                 .line = @intCast(src.line),
                 .cause = null,
@@ -77,7 +88,7 @@ pub fn Errors(comptime c: type) type {
                             msg: [*c]const u8, src: std.builtin.SourceLocation) void {
             slot = .{
                 .type = error_type,
-                .message = msg,
+                .message = own(msg),
                 .file = src.file,
                 .line = @intCast(src.line),
                 .cause = null,
