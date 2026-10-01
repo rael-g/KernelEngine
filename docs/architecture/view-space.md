@@ -22,13 +22,13 @@ an argument.
 
 A device returns it from `get_ndc_convention` (`gpu_device.h:336`). The WebGPU backend answers
 `z_zero_to_one = 1`, `y_flip = 0`, `clip_left_handed = 1` (`gpu_device_webgpu.zig:709-711`), and the
-render service stores the answer when it is created (`render_service.zig:278`).
+render service stores the answer when it is created (`render_service.zig:273`).
 
 Only two of the three flags have a reader. `z_zero_to_one` picks the depth-range variant of the
-builder and `y_flip` negates the y row (`view_space.zig:116-120`, `:134`, `:160`); the UI pass reads
+builder and `y_flip` negates the y row (`view_space.zig:113-117`, `:134`, `:160`); the UI pass reads
 `y_flip` for its own orthographic projection (`ui_module.zig:296`). `clip_left_handed` is read in one
 place: the render module refuses to be created when the device reports it as `0`
-(`render_module.zig:257`). No projection builder branches on it.
+(`render_module.zig:253`). No projection builder branches on it.
 
 ## What `ke_view_space` offers
 
@@ -48,32 +48,32 @@ one is making its own choice (`view_space.h:27-32`).
 ### Two plugins, one implementation
 
 `src/zig/view/space` builds one library, `ke_view_space` (`build.zig:298`), with two factories,
-`ke_view_space_rh_create` and `ke_view_space_lh_create` (`view_space.zig:199-209`; headers
+`ke_view_space_rh_create` and `ke_view_space_lh_create` (`view_space.zig:196-206`; headers
 `view_space_rh_create.h`, `view_space_lh_create.h`). They differ in a single `Handedness` value held
-in the state (`view_space.zig:14-19`), and every slot switches on it:
+in the state (`view_space.zig:13-18`), and every slot switches on it:
 
 - **Facing.** The right-handed space looks down `-z`, the left-handed one down `+z`. `params` reports
-  that as `depth_from_view_z` = `-1` or `+1` (`view_space.zig:34-41`), so a consumer can turn a
+  that as `depth_from_view_z` = `-1` or `+1` (`view_space.zig:33-40`), so a consumer can turn a
   view-space z into a positive depth without knowing which space it holds.
 - **View from a transform.** The rotation basis of the camera's world matrix gives its local axes;
   the camera faces along local `+z` negated in the right-handed space and along local `+z` in the
-  left-handed one (`view_space.zig:102-111`). A matrix whose off-diagonal rotation terms are all
+  left-handed one (`view_space.zig:101-110`). A matrix whose off-diagonal rotation terms are all
   near zero is treated as carrying no rotation and the camera aims at the world origin
-  (`view_space.zig:90-100`).
+  (`view_space.zig:89-99`).
 - **Projection.** The builder is the matching zmath variant: `perspectiveFovRh` or `perspectiveFovLh`
   for `z_zero_to_one`, the `...Gl` variant otherwise, and likewise for the orthographic builders
-  (`view_space.zig:135-144`, `:161-170`). `y_flip` then negates the y row (`view_space.zig:116-120`).
+  (`view_space.zig:132-141`, `:161-170`). `y_flip` then negates the y row (`view_space.zig:113-117`).
 
 The tests pin the shared guarantee: a surface in front of the camera has positive
 `depth_from_view_z * z` in both spaces and the far point is deeper than the near one
-(`view_space.zig:225-240`).
+(`view_space.zig:222-237`).
 
 ### Which one the engine uses
 
 The render module takes an optional `ke_view_space` as a parameter; when none is supplied it creates
-the right-handed one and owns it (`render_module.zig:246-250`). The shadow, cluster, gbuffer,
+the right-handed one and owns it (`render_module.zig:242-246`). The shadow, cluster, gbuffer,
 deferred-lighting, skybox and forward passes receive that one pointer, and every one of them except
-the cluster pass also receives the device's convention (`render_module.zig:308-346`).
+the cluster pass also receives the device's convention (`render_module.zig:304-342`).
 
 ## How a camera component becomes a projection
 
@@ -90,8 +90,8 @@ The component defaults are `fov` 60, `near_plane` 0.1, `far_plane` 1000, `orthog
 (`components.h:15-20`, `component_fields.h:19`).
 
 The gbuffer, deferred-lighting and forward passes all call it
-(`gbuffer_module.zig:127`, `deferred_lighting_module.zig:129`, `forward_module.zig:204`), each
-building its view with `view_from_transform` (`gbuffer_module.zig:90-94` and the same three-line
+(`gbuffer_module.zig:125`, `deferred_lighting_module.zig:129`, `forward_module.zig:199`), each
+building its view with `view_from_transform` (`gbuffer_module.zig:88-92` and the same three-line
 helper in the other passes). Three passes do not use it:
 
 - the skybox pass always builds a perspective projection from `fov`, whatever `orthographic` says,
@@ -104,5 +104,5 @@ helper in the other passes). Three passes do not use it:
 
 The shadow pass places an eye `light_distance` units back along the light's direction from the world
 origin, looks at the origin with `look_at`, and builds a square `orthographic(extent, extent, near,
-far)` in the device's clip (`shadow_module.zig:61-76`). The up vector switches to `+z` when the
-light is within about 8 degrees of vertical (`shadow_module.zig:66-69`).
+far)` in the device's clip (`shadow_module.zig:59-74`). The up vector switches to `+z` when the
+light is within about 8 degrees of vertical (`shadow_module.zig:64-67`).

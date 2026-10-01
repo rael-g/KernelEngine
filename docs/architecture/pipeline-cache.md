@@ -15,7 +15,7 @@ colour target formats. Two requests with equal keys share one entry.
 The vertex layout contributes the **address** of the `vertex_buffers` array, not what it contains
 (`pipeline_cache.zig:15`, `:35`). A pass that wants its requests to hit the same entry keeps its layout
 in storage that outlives the request, as the gbuffer and forward passes do by holding it in their module
-state (`gbuffer_module.zig:62-63`, `forward_module.zig:88-89`).
+state (`gbuffer_module.zig:60-61`, `forward_module.zig:83-84`).
 
 ## One request, step by step
 
@@ -57,13 +57,13 @@ Finished compile tasks are reaped when the device presents (`gpu_device_webgpu.z
 
 Destroying the render service first calls the device's `flush_pipeline_compiles`, which waits for every
 compile still in flight, and only then destroys the cache's pipelines
-(`render_service.zig:193`, `:210`). The order is the contract: a callback writes into a cache entry, so
+(`render_service.zig:188`, `:210`). The order is the contract: a callback writes into a cache entry, so
 the cache cannot be destroyed while one may still run (`gpu_device.h:350-355`).
 
 ## Who calls it
 
 Every pass that draws asks for its pipeline through this cache rather than the device: the shadow pass
-at setup and every frame (`shadow_module.zig:105`, `:215`), the gbuffer and forward passes for each draw
+at setup and every frame (`shadow_module.zig:103`, `:215`), the gbuffer and forward passes for each draw
 after loading the material's modules ([materials.md](materials.md#how-a-pass-draws-with-it)), and the
 deferred-lighting pass (`deferred_lighting_module.zig:201`). The cull pass is a compute pass and uses
 `create_compute_pipeline` directly (`cluster_module.zig:352`); the cache holds render pipelines only.

@@ -124,7 +124,7 @@ A module is the unit game and engine code are loaded in. `IRuntimeModule`
 `LoadModules` (`RuntimeStartup.cs:25-36`) gets every `IRuntimeModule` from the provider, sorts them,
 and calls `runtime.RegisterModule(name, onLoad, onUnload)` for each, so a module's `OnLoad` has run by the
 time `RegisterModule` returns (native `register_module` calls `on_load` synchronously,
-`src/zig/runtime/src/runtime.zig:465`).
+`src/zig/runtime/src/runtime.zig:451`).
 
 ### Load order
 

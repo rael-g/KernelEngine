@@ -86,8 +86,8 @@ state, so an edge visible in one is visible in all of them in that tick.
 
 Nothing declares an order between them. Both name no component, so `systemsConflict` reports no
 conflict with anything and the greedy wave rule keeps them in one wave unless a conflicting system
-registered between them opens a new one (`src/zig/runtime/src/runtime.zig:137-191`, `680`). A wave's tasks
-are all dispatched before any is waited on (`runtime.zig:620-641`). So a `Glfw.PollEvents` sink call
+registered between them opens a new one (`src/zig/runtime/src/runtime.zig:132-186`, `680`). A wave's tasks
+are all dispatched before any is waited on (`runtime.zig:603-624`). So a `Glfw.PollEvents` sink call
 and the `update` + `get_snapshot` of `Scene.Input` can interleave. Per the edge rule above, a press
 whose sink call lands before `update` in the same tick has its `pressed` flag cleared and never
 appears in a snapshot; its `down` flag stays, so `IsKeyDown` and every action binding (which reads
@@ -96,9 +96,9 @@ appears in a snapshot; its `down` flag stays, so `IsKeyDown` and every action bi
 ## Actions are not edges of the snapshot
 
 The action layer reads the snapshot's `keys_down` and `mouse_buttons_down` bitsets and nothing else
-(`src/zig/framework/src/input_actions.zig:237-246`, `255-271`). It derives its own `pressed` and
+(`src/zig/framework/src/input_actions.zig:230-239`, `255-271`). It derives its own `pressed` and
 `released` by comparing the value of the previous `evaluate` call with this one
-(`input_actions.zig:553-557`, `623-633`). Its edges therefore last until the next `evaluate`, and a
+(`input_actions.zig:544-548`, `623-633`). Its edges therefore last until the next `evaluate`, and a
 key pressed and released between two evaluations is not seen at all, where the snapshot's
 `keys_pressed` would have it.
 
@@ -110,7 +110,7 @@ code; polling is the only managed read path.
 When an `IActionEvaluator` is registered but no `IInput` is, `Scene.Input` still calls `Evaluate`
 with a null reader; the managed map forwards a null snapshot and the native call fails with
 `KE_ERROR_INVALID_ARGUMENT` (`SceneNodesModule.cs:84-86`, `InputActionMap.cs:44`,
-`input_actions.zig:541-544`), which the generated wrapper throws.
+`input_actions.zig:532-535`), which the generated wrapper throws.
 
 ## What nothing reads
 

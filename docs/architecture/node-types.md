@@ -31,7 +31,7 @@ driven from `scripts/generate_csharp.cs:98-105`). What it writes:
 The component name is the same string the native module registers the component under: the header
 that tags the struct also generates `KE_COMPONENT_NAME_CAMERA "camera"`
 (`src/c/render/kernel_engine/render/component_fields.h:9`), and the render module registers by that
-macro (`src/zig/render/module/src/render_module.zig:142`).
+macro (`src/zig/render/module/src/render_module.zig:140`).
 
 ## From a class: partial properties and behavior
 
@@ -88,9 +88,9 @@ Three namespaces are involved, and they are not normalized the same way.
 
 | what | name | where it is resolved |
 |---|---|---|
-| the node's own component, for a block `[entity.<name>]` | the registered component name, matched exactly | `component_lookup` in the loader (`src/zig/framework/src/scene_loader.zig:327`) |
+| the node's own component, for a block `[entity.<name>]` | the registered component name, matched exactly | `component_lookup` in the loader (`src/zig/framework/src/scene_loader.zig:310`) |
 | the node type, for `type = "<name>"` | normalized, qualified first then short | `NodeTypeRegistry.Resolve` |
-| a signal, for `signal = "<name>"` | the payload struct's own name, matched exactly | `signal_lookup` (`scene_loader.zig:476`) |
+| a signal, for `signal = "<name>"` | the payload struct's own name, matched exactly | `signal_lookup` (`scene_loader.zig:446`) |
 
 A game node's own block key is `SnakeCase(class name)`; its property keys inside the block are
 `SnakeCase(property name)` (`NodePropertyGenerator.cs:410`).
@@ -112,15 +112,15 @@ into `.` and starts a new `_`-separated word at an uppercase letter unless the p
 `Sprite2D` is `sprite2d`, `HTTPServer` is `http_server`.
 
 The native loader applies the same rule to the `type` string **before** calling the factory
-(`normalizeTypeName`, `scene_loader.zig:209-244`, applied in `dispatchScript`, `:246-268`; tests at
+(`normalizeTypeName`, `scene_loader.zig:194-229`, applied in `dispatchScript`, `:246-268`; tests at
 `:1898-1932`), so the factory receives `pong.ball` whichever casing the scene wrote. A name whose normalized form does not
 fit in 128 bytes is refused. With no factory registered, a `type` key is ignored
-(`scene_loader.zig:252`).
+(`scene_loader.zig:237`).
 
 ## What binding a typed entity does
 
 The scene loader creates the entity, applies its component blocks, and only then calls the script
-factory (`processEntity`, `scene_loader.zig:541-628`, blocks at `:608`, factory at `:615`). The
+factory (`processEntity`, `scene_loader.zig:508-595`, blocks at `:608`, factory at `:615`). The
 managed factory registered by `SceneRouterModule` (`Modules/SceneRouterModule.cs:49-54`):
 
 1. resolves the type name through the registry;
@@ -195,13 +195,13 @@ is cached, and a borrow is a `ref struct` that cannot be stored. `ScriptHost.Bor
 from it (`ScriptTypesAssignableTo`, `:114-126`; the native `resolve` matches one exact id,
 `script_host.h:175`). It answers `null` when nothing matches and also when two nodes do, so an
 ambiguous borrow is unbound rather than arbitrary. `Ancestor` is the nearest match walking up
-(`src/zig/framework/src/script_host.zig:342-352`); with several candidate ids the walk is done
+(`src/zig/framework/src/script_host.zig:329-339`); with several candidate ids the walk is done
 managed (`ScriptHost.Idiom.cs:125-131`).
 
 `Emit<T>` (`Scene/Borrows.cs:24`) is the right to raise signal `T` from this node. `T` must be
 `unmanaged`. The signal's name is `typeof(T).Name` and its size `sizeof(T)`
 (`Generated/SignalBus.g.cs:121-128`), the pair the bus treats as identity; a second registration of
-the name with another size fails (`src/zig/framework/src/signal_bus.zig:95-102`). `Send` queues the
+the name with another size fails (`src/zig/framework/src/signal_bus.zig:91-98`). `Send` queues the
 payload on the bus; delivery happens in `PostUpdate`, in the system `Scene.Signals.Deliver`
 (`SceneNodesModule.cs:97-104`).
 

@@ -52,7 +52,7 @@ error.
 - `query_extension(name)` returns a typed extension vtable or null. One extension is defined,
   `ke_gpu_surface_ext` (`gpu_surface_ext.h`): acquire the current swapchain view, reconfigure after a
   resize, report the current size. It exists only when the device was created with a window. The render
-  service looks it up at creation (`render_service.zig:236-240`) and passes lookups through to its passes
+  service looks it up at creation (`render_service.zig:231-235`) and passes lookups through to its passes
   as `ke_render_pass_ctx::query_ext` (`pass_recording.zig:162-165`).
 
 ## Storage, compute and indirect

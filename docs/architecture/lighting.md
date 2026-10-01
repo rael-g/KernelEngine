@@ -26,10 +26,10 @@ The choice is made by which resource the pass binds, not by compiling a differen
 
 - **Shadows.** `ke_render_feature_params.enable_shadows` (`render_module_create.h`) decides whether the
   shadow module declares the `shadow_map` resource and registers its system
-  (`shadow_module.zig:158-160`, `:279`). A shading pass asks the service for `shadow_map` and falls
+  (`shadow_module.zig:156-158`, `:279`). A shading pass asks the service for `shadow_map` and falls
   back to the white texture when none was declared
-  (`deferred_lighting_module.zig:80-81`, `forward_module.zig:152-153`). The `shadow_lvp` uniform is
-  published whether or not shadows are enabled (`shadow_module.zig:154-156`).
+  (`deferred_lighting_module.zig:80-81`, `forward_module.zig:147-148`). The `shadow_lvp` uniform is
+  published whether or not shadows are enabled (`shadow_module.zig:152-154`).
 - **IBL.** `enable_ibl` false binds the black default cubemap at binding 7; true binds the cubemap of
   the first `ke_skybox_component`, and a frame with no skybox component resolves the none-handle to
   the same black cubemap (`deferred_lighting_module.zig:84`, `:136-143`;
@@ -43,7 +43,7 @@ A pass rebuilds its frame bind group when the skybox cubemap changes (`deferred_
 
 | component | which entities | where it is read |
 |---|---|---|
-| directional light | the first one only | shading passes and the shadow pass (`deferred_lighting_module.zig:158-166`, `shadow_module.zig:78-84`) |
+| directional light | the first one only | shading passes and the shadow pass (`deferred_lighting_module.zig:158-166`, `shadow_module.zig:76-82`) |
 | ambient light | the first one only; overrides the ambient field of the directional light | `deferred_lighting_module.zig:167-172` |
 | point, spot light | every one, up to the cull pass's cap | `cluster_module.zig:109-176` |
 
@@ -53,17 +53,17 @@ when a directional light exists (`deferred_lighting_module.zig:165`; read at
 
 Point and spot lights cast no shadows: they reach a surface only through
 `accumulate_clustered_lights`, and the shadow pass queries the directional light and the meshes
-(`shadow_module.zig:245-250`).
+(`shadow_module.zig:243-248`).
 
 ## The single directional shadow map
 
 The shadow system runs in command slot 1 and renders every mesh from the directional light's point
 of view into two attachments, an `RGBA16_FLOAT` map holding the depth in its red channel and a
-`D32_FLOAT` depth buffer (`shadow_module.zig:160-180`, `shadow.slang:28-38`). The light's view and
+`D32_FLOAT` depth buffer (`shadow_module.zig:158-178`, `shadow.slang:28-38`). The light's view and
 projection come from the view space ([view-space.md](view-space.md#the-directional-lights-view)).
 
 `ke_render_shadow_params` carries `resolution`, `light_distance`, `extent`, `near_plane` and
-`far_plane`; a zero field falls back to 1024, 25, 20, 0.1 and 50 (`shadow_module.zig:13-32`). Unset
+`far_plane`; a zero field falls back to 1024, 25, 20, 0.1 and 50 (`shadow_module.zig:13-30`). Unset
 means zero, so a caller can name only what it changes.
 
 The lookup is one tap (`shadow_feature.slang:30-38`): project the world position by `lightVP`, return

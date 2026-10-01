@@ -58,9 +58,9 @@ There is no result-code type. `grep -rn ke_result src` finds nothing.
 (`src/zig/common/include/kernel_engine/common/error.h:41`). It lives in per-thread storage:
 
 - two slots per thread, so wrapping an error with `KE_ERROR_WRAP` keeps the inner one valid while
-  the outer is built (`src/zig/common/src/error.zig:25`);
+  the outer is built (`src/zig/common/src/error.zig:20`);
 - the message is copied into the slot and truncated at 512 bytes, never allocated, so a failing path
-  does not depend on the allocator (`error.zig:28`, `error.zig:65`).
+  does not depend on the allocator (`error.zig:21`, `error.zig:58`).
 
 A pointer to a `ke_error` is therefore valid until the next two failures **on the same thread**
 (`error.h:38-40`). Copy what must outlive that.
@@ -70,11 +70,11 @@ A pointer to a `ke_error` is therefore valid until the next two failures **on th
 `ke_error_type` is a node with a `name` and a `parent` (`error.h:30-33`). Types form a tree; a domain
 declares its own beside its own API and points `parent` at a generic root
 (`error.h:12-32`). `ke_error_is` walks from the error's type up through `parent`, comparing node
-addresses (`error.zig:39-47`).
+addresses (`error.zig:32-40`).
 
-The eight generic roots are exported by `ke_common` (`error.zig:30-37`). A Zig plugin that cannot
-link `ke_common` fills the error through `Errors(c).fail` in `src/zig/common/kerror.zig:84`, which
-uses a set of type nodes of its own (`kerror.zig:64-67`).
+The eight generic roots are exported by `ke_common` (`error.zig:23-30`). A Zig plugin that cannot
+link `ke_common` fills the error through `Errors(c).fail` in `src/zig/common/kerror.zig:62`, which
+uses a set of type nodes of its own (`kerror.zig:46-49`).
 
 The managed side matches by name, walking `Parent`
 (`src/csharp/common/KernelEngine.Common/KernelErrorType.cs:26-32`).
@@ -135,12 +135,12 @@ whatever reused the slot (`:34-78`).
 | `ke_query_id` | `0` | `ke_ecs.h:14-15` |
 | `ke_audio_sound`, `ke_body_2d` | `0` | `audio.h:15-16`; `physics_2d.h:14-15` |
 | `ke_script_type_id` | `0` | `script_host.h:35` |
-| `ke_module_id`, `ke_system_id` | `0` is what a refused registration returns | `runtime.h:17-18`, `runtime.zig:437-441`, `:465-468` |
+| `ke_module_id`, `ke_system_id` | `0` is what a refused registration returns | `runtime.h:17-18`, `runtime.zig:423-427`, `:465-468` |
 | `ke_resource_handle` | `UINT32_MAX` | `src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h:13-15` |
 | `ke_configuration_subscription` | `UINT32_MAX` | `src/c/configuration/kernel_engine/configuration/configuration.h:15` |
 | `ke_gpu_buffer`, `ke_gpu_texture`, and the other 64-bit GPU ids | `UINT64_MAX` (`KE_GPU_INVALID_HANDLE`) | `gpu_device.h:15-16`; `gpu_enums.h:239` |
-| `ke_component_id` | `KE_COMPONENT_INVALID` is `(ke_component_id)-1`, but `component_register` reports failure with `0` and every component entry point refuses `0` | `ecs.h:16-17`; `ke_ecs.h:58`; `ecs_flecs.zig:393`, `:414`, `:422` |
-| signal ids | none: the first signal registered is id `0`, and a lookup that finds nothing returns `false` | `src/zig/framework/src/signal_bus.zig:111-115`, `:119-134` |
+| `ke_component_id` | `KE_COMPONENT_INVALID` is `(ke_component_id)-1`, but `component_register` reports failure with `0` and every component entry point refuses `0` | `ecs.h:16-17`; `ke_ecs.h:58`; `ecs_flecs.zig:364`, `:414`, `:422` |
+| signal ids | none: the first signal registered is id `0`, and a lookup that finds nothing returns `false` | `src/zig/framework/src/signal_bus.zig:107-111`, `:119-134` |
 
 So "a zeroed value means none" holds for the render handles, entities, queries, sounds, bodies and
 script types, and does **not** hold for resource handles, configuration subscriptions, GPU ids or

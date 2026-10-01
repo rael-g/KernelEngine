@@ -15,24 +15,24 @@ entity (`src/c/physics/kernel_engine/physics/components.h`). `ke_collider2d_comp
 and `mask`, and `attached`. Both are scene-authorable by the keys in
 `src/c/physics/kernel_engine/physics/component_fields.h`; `body` is not in the field table, `attached`
 is. A body entity also needs a `transform2d`: the system's query requires both
-(`body2d_module.zig:222-225`). A collider is its own entity, a descendant of the body's entity, as in
+(`body2d_module.zig:219-222`). A collider is its own entity, a descendant of the body's entity, as in
 `examples/csharp/games/pong/scenes/Paddle.scene.toml`.
 
 ## The world
 
 One `ke_physics_2d` is one world. The contract says it is not thread-safe and must be called from one
 thread (`physics_2d.h`, the `ke_physics_2d` doc). `step(dt)` accepts any `dt`; the Box2D plugin passes
-it straight to `b2World_Step` with four sub-steps (`box2d_physics.zig:14`, `64-68`). A handle is the body's index plus one, so `0` stays `KE_BODY_2D_INVALID`; slots are not reused
-(`box2d_physics.zig:50-56`, `109-117`).
+it straight to `b2World_Step` with four sub-steps (`box2d_physics.zig:12`, `64-68`). A handle is the body's index plus one, so `0` stays `KE_BODY_2D_INVALID`; slots are not reused
+(`box2d_physics.zig:44-50`, `109-117`).
 The world is created and given its gravity by the managed `AddBox2D`, which reads
 `[runtime.physics_2d] gravity_x/gravity_y` (`formats/project-file.md`).
 
 ## The two systems
 
 `ke_physics_body2d_module_create` registers both in `KE_PHASE_UPDATE`, unpinned
-(`body2d_module.zig:227-254`); the managed `Body2DModule` calls it in `OnLoad` and then calls
+(`body2d_module.zig:224-251`); the managed `Body2DModule` calls it in `OnLoad` and then calls
 `ke_physics_register_scene_apply`, which registers the two field tables
-(`src/csharp/physics/KernelEngine.Physics/Body2DModule.cs:28-52`, `body2d_module.zig:266-273`). Without that
+(`src/csharp/physics/KernelEngine.Physics/Body2DModule.cs:28-52`, `body2d_module.zig:261-268`). Without that
 module a `Body2D` is storage nothing advances.
 
 `physics.body2d` reads and writes `body2d` and `transform2d`; `physics.collider2d` reads `body2d`,
@@ -51,7 +51,7 @@ The collider system therefore sees, in the same tick, the handles the body syste
    overwrites it (`:58-63`). This is how a script's write reaches the world: it changes the
    component, and the next tick of this system copies it in.
 3. **Step.** `step(dt)` runs once, with the `dt` of the `Update` phase (`:67`), which is the tick's
-   own `dt`, not the fixed step ([runtime.md](runtime.md#fixed-timestep); `runtime.zig:909`).
+   own `dt`, not the fixed step ([runtime.md](runtime.md#fixed-timestep); `runtime.zig:885`).
 4. **Pull.** For each body with a handle, the world's position, angle, linear velocity and angular
    velocity overwrite the component's, and position and angle are written into the entity's
    `transform2d` (`:69-89`). The transform is set to the body's world position and angle directly; no
