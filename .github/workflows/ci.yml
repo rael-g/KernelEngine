@@ -32,6 +32,7 @@ jobs:
             exe: '.exe'
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
 
     # One shell on both platforms, so a path or a binary name never differs by
     # runner rather than by intent.

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const abi_stamp = @import("scripts/abi_stamp.zig");
 
@@ -27,11 +28,12 @@ pub fn build(b: *std.Build) void {
     const vcpkg_bin_asset = if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg-glibc";
     const vcpkg_bin_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_bin_asset });
     const vcpkg_bundle_tar = b.pathJoin(&.{ vcpkg_root, "bundle.tar.gz" });
+    const tar_local = if (builtin.os.tag == .windows) " --force-local" else "";
     const vcpkg_fetch = b.addSystemCommand(&.{
         "sh", "-c",
         b.fmt(
-            "mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && tar -xzf '{s}' -C '{s}' && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
-            .{ vcpkg_root, vcpkg_exe, vcpkg_bundle_tar, vcpkg_bundle_url, vcpkg_bundle_tar, vcpkg_root, vcpkg_exe, vcpkg_bin_url, vcpkg_exe },
+            "mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && tar{s} -xzf '{s}' -C '{s}' && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
+            .{ vcpkg_root, vcpkg_exe, vcpkg_bundle_tar, vcpkg_bundle_url, tar_local, vcpkg_bundle_tar, vcpkg_root, vcpkg_exe, vcpkg_bin_url, vcpkg_exe },
         ),
     });
 
