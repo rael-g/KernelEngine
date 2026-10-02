@@ -30,7 +30,7 @@ time a domain is migrated or a header changes.
 - [ ] `[try]` is on any slot where a boolean return means found/not-found,
       not succeeded/failed.
 
-## 2. Extraction (`extract_api.cs`)
+## 2. Extraction (`scripts/extract_api.cs`, or `regenerate_api.cs --domain <name>`)
 
 - [ ] Run twice with the exact same arguments; diff the two `ke_api.json`
       outputs. They must be byte-identical. A diff here means a path-identity
@@ -126,29 +126,13 @@ Any change to `Kabic.Core` or `Kabic.CSharpBackend` can affect every
 previously migrated domain, not just the one being worked on.
 
 ```bash
-# regenerate every domain listed in scripts/api_domains.json
-python3 - <<'PY'
-import json
-d = json.load(open('scripts/api_domains.json'))
-for dom in d['domains']:
-    headers = ' '.join(dom['headers'])
-    includes = ' '.join(f'-I {i}' for i in dom['includeDirs'])
-    aux = ' '.join(f'--aux {a}' for a in dom.get('auxHeaders', []))
-    print(f"dotnet run scripts/extract_api.cs -- --out {dom['apiJson']} {includes} {aux} {headers}")
-    usings = ' '.join(f'--using {u}' for u in dom.get('usings', []))
-    lib = dom.get('library')
-    absdir = dom.get('abstractionsOutDir')
-    print(f"dotnet run scripts/generate_csharp.cs -- --api {dom['apiJson']} --namespace {dom['namespace']} "
-          f"--native-namespace {dom['nativeNamespace']} --out {dom['outDir']} "
-          + (f"--enums-out {absdir} " if absdir else "")
-          + usings + (f" --library {lib}" if lib else ""))
-PY
+dotnet run scripts/regenerate_api.cs
 ```
 
 - [ ] `git status` shows no unexpected diffs in domains other than the one
       being changed. Any diff there means the change had a broader effect —
       read it before deciding it's safe.
-- [ ] Clear `~/.local/share/dotnet/runfile/{extract_api,generate_csharp,check_api_drift}-*`
+- [ ] Clear `~/.local/share/dotnet/runfile/{regenerate_api,check_api_drift}-*`
       before any of the above if a kabic source file changed. The file-based
       `dotnet run` cache does not reliably invalidate on `#:project`-referenced
       file changes.
@@ -160,8 +144,8 @@ Run in this order; do not skip any step because an earlier one passed:
 1. `dotnet build KernelEngine.slnx` — zero errors.
 2. `dotnet test KernelEngine.slnx` — all pass, count matches or exceeds the
    prior run (a silently-dropped test file is not a passing run).
-3. `dotnet run scripts/check_api_drift.cs` — "No drift detected."
-4. `zig build --prefix build/native` — zero errors.
+3. `dotnet run scripts/verify.cs -- gates` — every `check_*.cs`, `check_api_drift` included, green.
+4. `zig build --prefix build/native --cache-dir build/zig-cache` — zero errors.
 5. If the domain has any live usage in an example or test that exercises the
    changed slot at runtime (not just at compile time), run it. A shape can
    compile correctly and still marshal the wrong bytes.
@@ -175,7 +159,7 @@ Run in this order; do not skip any step because an earlier one passed:
 - A previous domain's generated file being byte-identical after a kabic
   change is evidence the change didn't affect THAT shape — it says nothing
   about a shape combination that domain never exercised.
-- The tag vocabulary in `docs/ScriptingArchitectureV3.md` §5.2 is not
+- The tag vocabulary (the tags `Kabic.Frontend` recognises) is not
   closed. A new domain can need a new tag. If a slot's meaning cannot be
   expressed with the existing vocabulary, add a tag — do not force an
   existing tag to mean something it wasn't defined to mean.

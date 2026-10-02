@@ -4,7 +4,6 @@ using System.Diagnostics;
 
 string? input = null, output = null, name = null, target = "wgsl", entry = null, stage = null, slangcOverride = null;
 var includes = new List<string>();
-var raw = false;
 
 for (var i = 0; i < args.Length; i++)
 {
@@ -17,7 +16,6 @@ for (var i = 0; i < args.Length; i++)
         case "--entry": entry = args[++i]; break;
         case "--stage": stage = args[++i]; break;
         case "--include": includes.Add(args[++i]); break;
-        case "--raw": raw = true; break;
         case "--slangc": slangcOverride = args[++i]; break;
         default:
             Console.Error.WriteLine($"Unknown argument: {args[i]}");
@@ -30,9 +28,9 @@ if (input is null || output is null)
     Console.Error.WriteLine("Error: --input and --output are required.");
     return 1;
 }
-if (!raw && name is null)
+if (name is null)
 {
-    Console.Error.WriteLine("Error: --name is required unless --raw is set.");
+    Console.Error.WriteLine("Error: --name is required.");
     return 1;
 }
 
@@ -69,7 +67,7 @@ if (process.ExitCode != 0)
 }
 
 Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
-await File.WriteAllTextAsync(output, raw ? stdout : EmbedCString(name!, stdout));
+await File.WriteAllTextAsync(output, EmbedCString(name, stdout));
 return 0;
 
 static string? FindSlangc()
