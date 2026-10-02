@@ -653,9 +653,15 @@ pub fn build(b: *std.Build) void {
         argF(b, "libs", b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") })),
     }, &.{&gpu_device_webgpu.step});
 
+    const compile_slang_dir = b.pathJoin(&.{ root, "build", "tools", "compile_slang" });
+    const compile_slang_dll = b.pathJoin(&.{ compile_slang_dir, "compile_slang.dll" });
+    const compile_slang_build = b.addSystemCommand(&.{ "dotnet", "build", b.pathJoin(&.{ root, "scripts/compile_slang.cs" }), "-o", compile_slang_dir, "--nologo", "-v", "q" });
+    compile_slang_build.expectExitCode(0);
+    compile_slang_build.has_side_effects = true;
+
     const demo06 = ctx.example("c_demo_06", "examples/c/06_triangle", &.{
         argF(b, "shader-name", "triangle"),
-        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "compile-slang", compile_slang_dll),
         argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "06_triangle" })),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -676,7 +682,7 @@ pub fn build(b: *std.Build) void {
 
     const demo07 = ctx.example("c_demo_07", "examples/c/07_uniform", &.{
         argF(b, "shader-name", "rotate"),
-        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "compile-slang", compile_slang_dll),
         argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "07_uniform" })),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -698,7 +704,7 @@ pub fn build(b: *std.Build) void {
 
     const demo08 = ctx.example("c_demo_08", "examples/c/08_vertex_buffer", &.{
         argF(b, "shader-name", "mesh"),
-        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "compile-slang", compile_slang_dll),
         argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "08_vertex_buffer" })),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -719,7 +725,7 @@ pub fn build(b: *std.Build) void {
 
     const demo09 = ctx.example("c_demo_09", "examples/c/09_texture", &.{
         argF(b, "shader-name", "tex"),
-        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "compile-slang", compile_slang_dll),
         argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "09_texture" })),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -740,7 +746,7 @@ pub fn build(b: *std.Build) void {
 
     const demo10 = ctx.example("c_demo_10", "examples/c/10_depth", &.{
         argF(b, "shader-name", "depth"),
-        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "compile-slang", compile_slang_dll),
         argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "10_depth" })),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -760,7 +766,7 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo12 = ctx.example("c_demo_12", "examples/c/12_render_service", &.{
-        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "compile-slang", compile_slang_dll),
         argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "12_render_service" })),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -869,7 +875,7 @@ pub fn build(b: *std.Build) void {
     const all_examples = [_]*std.Build.Step.Run{
         demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14,
     };
-    for ([_]*std.Build.Step.Run{ demo06, demo07, demo08, demo09, demo10, demo12 }) |e| ctx.serializeDotnet(&e.step);
+    for ([_]*std.Build.Step.Run{ demo06, demo07, demo08, demo09, demo10, demo12 }) |e| e.step.dependOn(&compile_slang_build.step);
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
 }
 

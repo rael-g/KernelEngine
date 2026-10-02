@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const compile_slang = b.option([]const u8, "compile-slang", "path to scripts/compile_slang.cs") orelse @panic("-Dcompile-slang required");
+    const compile_slang = b.option([]const u8, "compile-slang", "path to the built compile_slang.dll") orelse @panic("-Dcompile-slang required");
     const slangc = b.option([]const u8, "slangc", "path to the fetched slangc executable") orelse @panic("-Dslangc required");
     const shader_name = b.option([]const u8, "shader-name", "base name of the .slang file holding vs_main and fs_main") orelse @panic("-Dshader-name required");
     const shader_out_dir = b.option([]const u8, "shader-out-dir", "directory to write generated shader headers into") orelse @panic("-Dshader-out-dir required");
@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) void {
     const frag_header = b.pathJoin(&.{ shader_out_dir, b.fmt("{s}_fs_wgsl.h", .{shader_name}) });
 
     const gen_vert = b.addSystemCommand(&.{
-        "dotnet",   "run",                                          compile_slang,
+        "dotnet",   compile_slang,
         "--slangc", slangc,                                         "--input",
         b.pathFromRoot(b.fmt("{s}.slang", .{shader_name})),         "--output",
         vert_header, "--name",                                      b.fmt("{s}_vs_wgsl", .{shader_name}),
@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
         "vs_main",  "--stage",                                      "vertex",
     });
     const gen_frag = b.addSystemCommand(&.{
-        "dotnet",   "run",                                          compile_slang,
+        "dotnet",   compile_slang,
         "--slangc", slangc,                                         "--input",
         b.pathFromRoot(b.fmt("{s}.slang", .{shader_name})),         "--output",
         frag_header, "--name",                                      b.fmt("{s}_fs_wgsl", .{shader_name}),
