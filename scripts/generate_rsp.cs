@@ -18,6 +18,7 @@ var includeRoots = Directory.EnumerateDirectories(Path.Combine(rootDir, "src"), 
     .Where(p => p is not null && !p.Contains(".zig-cache"))
     .Select(p => p!)
     .Distinct()
+    .Order(StringComparer.Ordinal)
     .ToList();
 
 string Repo(string abs) => Path.GetRelativePath(rootDir, abs).Replace('\\', '/');
@@ -59,19 +60,21 @@ var aliasRx  = new Regex(@"^\s*typedef\s+[\w \*]+?\s+(ke_\w+)\s*;", RegexOptions
 
 var declaredIn = new Dictionary<string, string>(StringComparer.Ordinal);
 var aliases    = new HashSet<string>(StringComparer.Ordinal);
-foreach (var header in Directory.EnumerateFiles(Path.Combine(rootDir, "src"), "*.h", SearchOption.AllDirectories))
-{
-    if (header.Contains(".zig-cache") || !header.Replace('\\', '/').Contains("/kernel_engine/")) continue;
-    var text = File.ReadAllText(header);
+var sourceHeaders = Directory.EnumerateFiles(Path.Combine(rootDir, "src"), "*.h", SearchOption.AllDirectories)
+    .Where(h => !h.Contains(".zig-cache") && h.Replace('\\', '/').Contains("/kernel_engine/"))
+    .Order(StringComparer.Ordinal)
+    .ToList();
+var sourceTexts = sourceHeaders.ToDictionary(h => h, File.ReadAllText);
+foreach (var header in sourceHeaders)
     foreach (var rx in declRx)
-        foreach (Match m in rx.Matches(text))
+        foreach (Match m in rx.Matches(sourceTexts[header]))
             declaredIn.TryAdd(m.Groups[1].Value, header);
-    foreach (Match m in opaqueRx.Matches(text))
-        if (text.Contains("} " + m.Groups[1].Value + ";", StringComparison.Ordinal) || !declaredIn.ContainsKey(m.Groups[1].Value))
-            declaredIn.TryAdd(m.Groups[1].Value, header);
-    foreach (Match m in aliasRx.Matches(text))
+foreach (var header in sourceHeaders)
+    foreach (Match m in opaqueRx.Matches(sourceTexts[header]))
+        declaredIn.TryAdd(m.Groups[1].Value, header);
+foreach (var header in sourceHeaders)
+    foreach (Match m in aliasRx.Matches(sourceTexts[header]))
         if (!declaredIn.ContainsKey(m.Groups[1].Value)) aliases.Add(m.Groups[1].Value);
-}
 
 var ownHeaders = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 var owner      = new Dictionary<string, string>(StringComparer.Ordinal);

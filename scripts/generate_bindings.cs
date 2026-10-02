@@ -22,8 +22,7 @@ var extraArgs = new[] { "-a", $"-resource-dir={resourceDir}", "-r", "uint64_t=ul
 Dictionary<string, string>? env = null;
 if (!OperatingSystem.IsWindows())
 {
-    var nugetPackages = Environment.GetEnvironmentVariable("NUGET_PACKAGES")
-        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
+    var nugetPackages = Environment.GetEnvironmentVariable("NUGET_PACKAGES") ?? GlobalPackagesFolder(csharpDir);
     var libclangDir = Path.Combine(nugetPackages, "clangsharppinvokegenerator.linux-x64", "21.1.8.2", "tools", "any", "linux-x64");
     if (Directory.Exists(libclangDir))
     {
@@ -189,6 +188,16 @@ static async Task EnsureClangResourceDir(string resourceDir, string clangVersion
         var bytes = await http.GetByteArrayAsync(url);
         await File.WriteAllBytesAsync(Path.Combine(includeDir, name), bytes);
     }
+}
+
+static string GlobalPackagesFolder(string workingDirectory)
+{
+    var result = Run(["dotnet", "nuget", "locals", "global-packages", "--list"], workingDirectory, quiet: true);
+    const string Prefix = "global-packages:";
+    foreach (var line in result.Stdout.Split('\n'))
+        if (line.Trim() is var trimmed && trimmed.StartsWith(Prefix, StringComparison.Ordinal))
+            return trimmed[Prefix.Length..].Trim();
+    return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
 }
 
 static (int ExitCode, string Stdout, string Stderr) Run(string[] command, string cwd, Dictionary<string, string>? env = null, bool quiet = false)

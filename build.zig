@@ -29,11 +29,14 @@ pub fn build(b: *std.Build) void {
     const vcpkg_bin_asset = if (host_windows) "vcpkg.exe" else "vcpkg-glibc";
     const vcpkg_bin_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_bin_asset });
     const vcpkg_name = if (host_windows) "vcpkg.exe" else "vcpkg";
+    const vcpkg_archives = b.pathJoin(&.{ root, "build", "vcpkg-archives" });
+    const vcpkg_registries = b.pathJoin(&.{ root, "build", "vcpkg-registries" });
+    const zig_global_cache_dir = b.pathJoin(&.{ root, "build", "zig-global" });
     const vcpkg_fetch = b.addSystemCommand(&.{
         "sh", "-c",
         b.fmt(
-            "mkdir -p '{s}' && ([ -f '{s}' ] || (cd '{s}' && curl -fsSL -o bundle.tar.gz '{s}' && tar -xzf bundle.tar.gz && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
-            .{ vcpkg_root, vcpkg_exe, vcpkg_root, vcpkg_bundle_url, vcpkg_name, vcpkg_bin_url, vcpkg_name },
+            "mkdir -p '{s}' '{s}' '{s}' && ([ -f '{s}' ] || (cd '{s}' && curl -fsSL -o bundle.tar.gz '{s}' && tar -xzf bundle.tar.gz && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
+            .{ vcpkg_root, vcpkg_archives, vcpkg_registries, vcpkg_exe, vcpkg_root, vcpkg_bundle_url, vcpkg_name, vcpkg_bin_url, vcpkg_name },
         ),
     });
 
@@ -54,6 +57,9 @@ pub fn build(b: *std.Build) void {
     }) catch @panic("OOM");
     const vcpkg_install = b.addSystemCommand(vcpkg_install_args.items);
     vcpkg_install.setEnvironmentVariable("ZIG_LOCAL_CACHE_DIR", zig_cache_dir);
+    vcpkg_install.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", zig_global_cache_dir);
+    vcpkg_install.setEnvironmentVariable("VCPKG_DEFAULT_BINARY_CACHE", vcpkg_archives);
+    vcpkg_install.setEnvironmentVariable("X_VCPKG_REGISTRIES_CACHE", vcpkg_registries);
     vcpkg_install.step.dependOn(&vcpkg_fetch.step);
 
     const ports_digest = portsDigest(b, root, &.{ vcpkg_tool_version, @import("builtin").zig_version_string, triplet, host_triplet });
@@ -105,6 +111,7 @@ pub fn build(b: *std.Build) void {
         .zig_exe = b.graph.zig_exe,
         .prefix = absolute_prefix,
         .cache_dir = zig_cache_dir,
+        .global_cache_dir = zig_global_cache_dir,
         .release_flag = if (debug) "--release=off" else "--release=fast",
         .vcpkg_step = ports_step,
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
@@ -905,6 +912,7 @@ const Ctx = struct {
     /// Every sub-invocation is told to cache here, so one build tree holds one
     /// cache instead of one per plugin directory.
     cache_dir: []const u8,
+    global_cache_dir: []const u8,
     release_flag: []const u8,
     vcpkg_step: *std.Build.Step,
     target_arg: []const u8,
@@ -1033,7 +1041,7 @@ const Ctx = struct {
         const b = ctx.b;
         const cwd = b.pathJoin(&.{ b.build_root.path.?, dir });
         const child_cache = b.pathJoin(&.{ ctx.cache_dir, "plugins", name });
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix, "--cache-dir", child_cache });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix, "--cache-dir", child_cache, "--global-cache-dir", ctx.global_cache_dir });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
@@ -1048,7 +1056,7 @@ const Ctx = struct {
         switch (tests) {
             .no_tests => {},
             .has_tests => {
-                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix, "--cache-dir", child_cache });
+                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix, "--cache-dir", child_cache, "--global-cache-dir", ctx.global_cache_dir });
                 t.addArgs(extra_args);
                 t.addArg(ctx.release_flag);
                 if (ctx.target_arg.len != 0) t.addArg(ctx.target_arg);
@@ -1073,7 +1081,7 @@ const Ctx = struct {
     fn example(ctx: *Ctx, demo_name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step) *std.Build.Step.Run {
         const b = ctx.b;
         const own_prefix = b.pathJoin(&.{ ctx.prefix, "examples-out", demo_name });
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix, "--cache-dir", b.pathJoin(&.{ ctx.cache_dir, "plugins", demo_name }) });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix, "--cache-dir", b.pathJoin(&.{ ctx.cache_dir, "plugins", demo_name }), "--global-cache-dir", ctx.global_cache_dir });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
