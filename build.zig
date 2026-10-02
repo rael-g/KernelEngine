@@ -869,6 +869,7 @@ pub fn build(b: *std.Build) void {
     const all_examples = [_]*std.Build.Step.Run{
         demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14,
     };
+    for ([_]*std.Build.Step.Run{ demo06, demo07, demo08, demo09, demo10, demo12 }) |e| ctx.serializeDotnet(&e.step);
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
 }
 
@@ -889,6 +890,12 @@ const Ctx = struct {
     slang_step: *std.Build.Step,
     plugins_step: *std.Build.Step,
     test_step: *std.Build.Step,
+    dotnet_tail: ?*std.Build.Step = null,
+
+    fn serializeDotnet(ctx: *Ctx, step: *std.Build.Step) void {
+        if (ctx.dotnet_tail) |tail| step.dependOn(tail);
+        ctx.dotnet_tail = step;
+    }
 
     fn addSlangInputs(ctx: *Ctx, run: *std.Build.Step.Run, dir_path: []const u8) void {
         const b = ctx.b;
@@ -980,6 +987,7 @@ const Ctx = struct {
                     template,     "--output",    wrapper,
                 });
                 gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
+                ctx.serializeDotnet(&gen_wrapper.step);
 
                 const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
                 vs.step.dependOn(&gen_wrapper.step);
