@@ -5,11 +5,11 @@ KernelEngine.Physics.Native
 --libraryPath
 ke_physics_box2d
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../c/physics
 --include-directory
 ../../../../c/spatial
---include-directory
-../../../../c/math
 --include-directory
 ../../../../zig/common/include
 --file

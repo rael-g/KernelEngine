@@ -7,8 +7,6 @@ ke_configuration
 --include-directory
 ../../../../c/configuration
 --include-directory
-../../../../c/math
---include-directory
 ../../../../zig/common/include
 --include-directory
 ../../../../zig/configuration/include

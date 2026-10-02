@@ -730,6 +730,7 @@
       "namespace": "KernelEngine.Ecs.Native",
       "headers": [
         "src/c/ecs/kernel_engine/ecs/variant.h",
+        "src/c/ecs/kernel_engine/ecs/commands.h",
         "src/c/ecs/kernel_engine/ecs/component_field.h",
         "src/c/ecs/kernel_engine/ecs/ecs.h",
         "src/c/ecs/kernel_engine/ecs/ke_ecs.h"
@@ -845,7 +846,7 @@
     },
     {
       "name": "Render",
-      "project": "src/csharp/render/KernelEngine.Render",
+      "project": "src/csharp/render/KernelEngine.Render.Native",
       "namespace": "KernelEngine.Render.Native",
       "headers": [
         "src/c/render/kernel_engine/render/handles.h",

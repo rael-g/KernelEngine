@@ -7,8 +7,6 @@ ke_scheduler_enki
 --include-directory
 ../../../../c/scheduler
 --include-directory
-../../../../c/math
---include-directory
 ../../../../zig/common/include
 --file
 ../../../../c/scheduler/kernel_engine/scheduler/scheduler.h
@@ -20,6 +18,12 @@ NativeMethods
 ke_
 --with-using
 *=KernelEngine.Common.Native
+--remap
+ke_error=KernelEngine.Common.Native.ke_error
+ke_error_type=KernelEngine.Common.Native.ke_error_type
+--exclude
+ke_error
+ke_error_type
 --config
 multi-file
 latest-codegen

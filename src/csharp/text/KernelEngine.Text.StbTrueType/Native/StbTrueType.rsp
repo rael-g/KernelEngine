@@ -7,8 +7,6 @@ ke_text_stb_truetype
 --include-directory
 ../../../../c/text
 --include-directory
-../../../../c/math
---include-directory
 ../../../../zig/common/include
 --include-directory
 ../../../../zig/text/stb_truetype/include

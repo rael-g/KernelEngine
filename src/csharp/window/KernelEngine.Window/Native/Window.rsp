@@ -7,8 +7,6 @@ ke_window_glfw
 --include-directory
 ../../../../c/window
 --include-directory
-../../../../c/math
---include-directory
 ../../../../zig/common/include
 --file
 ../../../../c/window/kernel_engine/window/window.h
