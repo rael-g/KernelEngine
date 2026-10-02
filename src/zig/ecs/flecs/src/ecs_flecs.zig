@@ -374,6 +374,8 @@ fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_compon
 
     const slot = c.ecs_get_mut_id(s.world, @intCast(entity), @intCast(component));
     if (!already_had) {
+        const bytes: [*]u8 = @ptrCast(slot);
+        @memset(bytes[0..@intCast(ti.*.size)], 0);
         if (layoutOf(s, component)) |fields| {
             component_fields.seedDefaults(slot, fields.ptr, @intCast(fields.len));
         }
@@ -981,6 +983,23 @@ test "a component registered without a field table still attaches zeroed" {
     const cid = e.component_register.?(handle.ref, "untabled", @sizeOf(Layered), null, 0, null);
     const entity = e.entity_create.?(handle.ref);
     const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
+
+    try testing.expectEqual(@as(u32, 0), v.layers);
+}
+
+test "a component attached over memory a destroyed entity dirtied still arrives zeroed" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const cid = e.component_register.?(handle.ref, "recycled", @sizeOf(Layered), null, 0, null);
+    const first = e.entity_create.?(handle.ref);
+    const dirty: [*]u8 = @ptrCast(e.component_add.?(handle.ref, first, cid).?);
+    @memset(dirty[0..@sizeOf(Layered)], 0xAA);
+    e.entity_destroy.?(handle.ref, first);
+
+    const second = e.entity_create.?(handle.ref);
+    const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, second, cid).?));
 
     try testing.expectEqual(@as(u32, 0), v.layers);
 }
