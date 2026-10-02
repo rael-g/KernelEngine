@@ -6,12 +6,15 @@ and invokes every plugin's own `build.zig` as a separate `zig build` (`Ctx.plugi
 
 ## Where output goes
 
-Everything a build fetches or produces is under `build/` (`build.zig:15-16`, `36`):
+Everything a build fetches or produces is under `build/`, with two exceptions the tools do not let a repository relocate: the small markers `dotnet run` keeps for each script under `~/.local/share/dotnet/runfile`, and NuGet's HTTP cache under `~/.local/share/NuGet`:
 
 | directory | holds |
 |---|---|
 | `build/tools/` | fetched toolchains: vcpkg, `slangc`, wgpu-native |
 | `build/vcpkg-installed/<triplet>/` | the ports vcpkg installed |
+| `build/vcpkg-archives/`, `build/vcpkg-registries/` | vcpkg's binary archives of compiled ports and its registry checkouts; the root build gives `vcpkg install` these paths through `VCPKG_DEFAULT_BINARY_CACHE` and `X_VCPKG_REGISTRIES_CACHE` |
+| `build/zig-global/` | Zig's global cache; every `zig build` the root build launches, and the vcpkg ports' `zig cc`, are given it, and `scripts/verify.cs` passes it to the root build |
+| `build/nuget/packages/` | NuGet's global packages folder, set by `nuget.config` at the repository root |
 | `build/zig-cache/` | the root build's Zig cache; `plugins/<name>/` inside it is one cache per plugin, test and example build |
 | `<--prefix>/lib`, `/bin`, `/gen` | plugin libraries, executables, generated shader output |
 
