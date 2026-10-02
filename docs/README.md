@@ -36,5 +36,6 @@ is in the code, and `CLAUDE.md`'s closing table says where to start looking.
 
 - [How does the build turn the tree into libraries, and where does everything land?](conventions/build.md)
 - [What does CI run on a push, and what does it leave out?](conventions/ci.md)
+- [How does work reach main?](conventions/git.md)
 - [How is this project's documentation written?](conventions/docs.md)
 - [How does a managed project get the native libraries it calls?](conventions/managed-build.md)

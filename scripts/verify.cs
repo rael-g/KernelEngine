@@ -65,6 +65,7 @@ int Run(Step step)
     info.Environment["LD_LIBRARY_PATH"] = string.IsNullOrEmpty(existing) ? lib : $"{lib}{separator}{existing}";
     var path = Environment.GetEnvironmentVariable("PATH");
     info.Environment["PATH"] = string.IsNullOrEmpty(path) ? lib : $"{lib}{separator}{path}";
+    info.Environment["NUGET_HTTP_CACHE_PATH"] = Path.Combine(rootDir, "build", "nuget", "http-cache");
     var windowsLib = Path.Combine(rootDir, "build", "cross-windows", "lib");
     info.Environment["WINEPATH"] = OperatingSystem.IsWindows() ? windowsLib : "Z:" + windowsLib.Replace('/', '\\');
     using var process = Process.Start(info)!;

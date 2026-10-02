@@ -6,7 +6,7 @@ and invokes every plugin's own `build.zig` as a separate `zig build` (`Ctx.plugi
 
 ## Where output goes
 
-Everything a build fetches or produces is under `build/`, with two exceptions the tools do not let a repository relocate: the small markers `dotnet run` keeps for each script under `~/.local/share/dotnet/runfile`, and NuGet's HTTP cache under `~/.local/share/NuGet`:
+Everything a build fetches or produces is under `build/`, with two exceptions: the small markers `dotnet run` keeps for each script under `~/.local/share/dotnet/runfile`, which the tool does not let a repository relocate, and NuGet's HTTP cache, which only a command run through `scripts/verify.cs` keeps under `build/nuget/http-cache` (`NUGET_HTTP_CACHE_PATH`, set for every child process there; a `dotnet build` typed by hand writes to `~/.local/share/NuGet`):
 
 | directory | holds |
 |---|---|
@@ -15,6 +15,7 @@ Everything a build fetches or produces is under `build/`, with two exceptions th
 | `build/vcpkg-archives/`, `build/vcpkg-registries/` | vcpkg's binary archives of compiled ports and its registry checkouts; the root build gives `vcpkg install` these paths through `VCPKG_DEFAULT_BINARY_CACHE` and `X_VCPKG_REGISTRIES_CACHE` |
 | `build/zig-global/` | Zig's global cache; every `zig build` the root build launches, and the vcpkg ports' `zig cc`, are given it, and `scripts/verify.cs` passes it to the root build |
 | `build/nuget/packages/` | NuGet's global packages folder, set by `nuget.config` at the repository root |
+| `build/nuget/http-cache/` | NuGet's HTTP cache, set by `scripts/verify.cs` for the commands it runs |
 | `build/zig-cache/` | the root build's Zig cache; `plugins/<name>/` inside it is one cache per plugin, test and example build |
 | `<--prefix>/lib`, `/bin`, `/gen` | plugin libraries, executables, generated shader output |
 
