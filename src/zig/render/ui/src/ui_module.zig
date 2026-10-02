@@ -59,9 +59,11 @@ const UiState = struct {
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [1]c.ke_component_access = undefined,
+    queries_terms: [2]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
     quad_cid: c.ke_component_id = 0,
     label_cid: c.ke_component_id = 0,
+    label_shape_queries_terms: [1]c.ke_component_access = undefined,
     label_shape_queries: [1]c.ke_query_decl = undefined,
 };
 
@@ -480,12 +482,10 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     }
 
     ui.quad_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_UI_QUAD, @sizeOf(UiQuadComponent), &c.ke_ui_quad_component_fields, c.ke_ui_quad_component_fields.len, null);
-    ui.queries[0].terms[0] = .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ };
-    ui.queries[0].term_count = 1;
 
     ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), &c.ke_label_component_fields, c.ke_label_component_fields.len, null);
-    ui.queries[1].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ };
-    ui.queries[1].term_count = 1;
+    ui.queries_terms = .{ .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ }, .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ } };
+    ui.queries = .{ .{ .terms = &ui.queries_terms[0], .term_count = 1 }, .{ .terms = &ui.queries_terms[1], .term_count = 1 } };
 
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.ui";
@@ -497,10 +497,15 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     params.pinned_thread = 0;
     params.user_data = ui;
     params.execute = system;
-    _ = rt.register_system.?(rt, &params, null);
+    const first_system = rt.register_system.?(rt, &params, out_error);
+    if (first_system == 0) {
+        destroyState(ui);
+        gpa.destroy(ui);
+        return empty;
+    }
 
-    ui.label_shape_queries[0].terms[0] = .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE };
-    ui.label_shape_queries[0].term_count = 1;
+    ui.label_shape_queries_terms = .{ .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE } };
+    ui.label_shape_queries = .{ .{ .terms = &ui.label_shape_queries_terms[0], .term_count = 1 } };
 
     var shape_params = std.mem.zeroes(c.ke_runtime_system_params);
     shape_params.name = "render.ui.labels";
@@ -510,7 +515,12 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     shape_params.pinned_thread = 0;
     shape_params.user_data = ui;
     shape_params.execute = labelShapeSystem;
-    _ = rt.register_system.?(rt, &shape_params, null);
+    if (rt.register_system.?(rt, &shape_params, out_error) == 0) {
+        _ = rt.unregister_system.?(rt, first_system, null);
+        destroyState(ui);
+        gpa.destroy(ui);
+        return empty;
+    }
 
     return .{ .ref = @ptrCast(&ui.api), .destroy = destroyHandle };
 }
@@ -549,6 +559,41 @@ test "a ui pass whose shader fails to load releases what it had created" {
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
     const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
     try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a ui pass the runtime refuses to register releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 0;
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const ndc = std.mem.zeroes(c.ke_ndc_convention);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a ui pass the runtime refuses its second system takes the first one back" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 1;
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const ndc = std.mem.zeroes(c.ke_ndc_convention);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(u32, 0), rt.live_count);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
 }

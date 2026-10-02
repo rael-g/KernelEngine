@@ -7,27 +7,27 @@
         {
           "name": "KE_PHASE_STARTUP",
           "value": 0,
-          "doc": null
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_PRE_UPDATE",
           "value": 1,
-          "doc": null
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_FIXED_UPDATE",
           "value": 2,
-          "doc": null
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_UPDATE",
           "value": 3,
-          "doc": null
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_POST_UPDATE",
           "value": 4,
-          "doc": null
+          "doc": "Runs once, before the other phases of the first tick."
         },
         {
           "name": "KE_PHASE_RENDER",
@@ -37,7 +37,7 @@
         {
           "name": "KE_PHASE_SHUTDOWN",
           "value": 6,
-          "doc": "Runs asynchronously against the next tick\u0027s sim phases. Its systems read extracted query results, never live storage, and may not mutate structure."
+          "doc": "Runs once when the runtime is destroyed, if a tick ever ran. A failure of its bodies is not reported."
         }
       ]
     },
@@ -82,16 +82,18 @@
     },
     {
       "name": "ke_query_decl",
-      "doc": "A query a system reads through: a tuple of components (matched together) with the access mode the scheduler uses to order waves. Resolved into archetype segments before the wave; the system body reads them via ke_system_ctx_view.",
+      "doc": "A query a system reads through: a tuple of components matched together, each with the access mode the scheduler orders waves by. The terms are read while register_system runs, and the runtime keeps its own copy.",
       "tags": [
-        "value"
+        "borrowed"
       ],
       "fields": [
         {
           "name": "terms",
-          "type": "ke_component_access[8]",
-          "tags": [],
-          "doc": null
+          "type": "const ke_component_access *",
+          "tags": [
+            "array_of:term_count"
+          ],
+          "doc": "The terms the query matches together."
         },
         {
           "name": "term_count",
@@ -297,7 +299,7 @@
           "name": "register_system",
           "returns": "ke_system_id",
           "tags": [],
-          "doc": "Registers a system body against the phase and the component access it declares.",
+          "doc": "Registers a system body against the phase and the component access it declares. Registered from a body, the system takes effect with the next tick and a refusal is not reported.",
           "return_doc": "0 when the system was refused.",
           "params": [
             {
@@ -315,6 +317,37 @@
               "doc": null
             }
           ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "unregister_system",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.",
+          "return_doc": "false when no system has that id.",
+          "params": [
+            {
+              "name": "id",
+              "type": "ke_system_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "last_system",
+          "returns": "ke_system_id",
+          "tags": [],
+          "doc": "The id of the system registered last and still registered, or 0 when there is none.",
+          "return_doc": null,
+          "params": [],
           "receiver": "ke_runtime *"
         },
         {

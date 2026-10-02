@@ -40,9 +40,12 @@ public static class CSharpBackend
         return (lines, depth);
     }
 
-    /// Emits the `fixed` pinning prologue for every pointer+count pair, returning the
-    /// lines and the number of braces the caller must close. Composes with the [utf8]
-    /// prologue: both only open blocks, in whatever order the caller emits them.
+    /// Emits the pinning prologue for every pointer+count pair, returning the lines and the
+    /// number of blocks the caller must close. Composes with the [utf8] prologue: both only
+    /// open blocks, in whatever order the caller emits them. A sequence of <c>[borrowed]</c>
+    /// structs opens two -- the <c>try</c> its pins are released from, and the <c>fixed</c>
+    /// over the native elements built from them -- which is what <see cref="SequenceClosers"/>
+    /// closes.
     static (List<string> Lines, int Depth) SequencePrologue(ApiModel model,
         IEnumerable<SequencePair> seqs, string indent, Convention convention)
     {
@@ -52,11 +55,90 @@ public static class CSharpBackend
         {
             var n = Idioms.Ident(s.Seq.Name!);
             var at = indent + new string(' ', depth * 4);
+            if (BorrowedOf(model, s.Seq) is { } borrowed)
+            {
+                var native = CsType(model, CTypes.Deref(s.Seq.Type));
+                lines.Add($"{at}var {n}Pins = new System.Buffers.MemoryHandle[{n}.Length];");
+                lines.Add($"{at}var {n}Native = new {native}[{n}.Length];");
+                lines.Add($"{at}try");
+                lines.Add($"{at}{{");
+                foreach (var l in BorrowedFill(model, borrowed, n, convention))
+                    lines.Add($"{at}    {l}");
+                lines.Add($"{at}    fixed ({native}* {n}Ptr = {n}Native)");
+                lines.Add($"{at}    {{");
+                depth += 2;
+                continue;
+            }
             lines.Add($"{at}fixed ({SequenceElement(model, s, convention)}* {n}Ptr = {n})");
             lines.Add($"{at}{{");
             depth++;
         }
         return (lines, depth);
+    }
+
+    /// The blocks <see cref="SequencePrologue"/> opened, outermost first, each as the lines
+    /// that close it. A pin is released where the <c>try</c> ends, so a call that threw lets
+    /// go of what it held exactly as one that returned does.
+    static List<string[]> SequenceClosers(ApiModel model, IEnumerable<SequencePair> seqs)
+    {
+        var closers = new List<string[]>();
+        foreach (var s in seqs)
+        {
+            if (BorrowedOf(model, s.Seq) is null) { closers.Add(["}"]); continue; }
+
+            var n = Idioms.Ident(s.Seq.Name!);
+            closers.Add([
+                "}", "finally", "{",
+                $"    for (var {n}At = 0; {n}At < {n}Pins.Length; {n}At++) {n}Pins[{n}At].Dispose();",
+                "}"]);
+            closers.Add(["}"]);
+        }
+        return closers;
+    }
+
+    /// Closes every block a call's prologues opened, innermost first. The blocks from
+    /// <paramref name="seqAt"/> on are the sequences', which may end in more than a brace.
+    static void CloseScopes(List<string> o, int depth, int seqAt, IReadOnlyList<string[]> sequences)
+    {
+        for (var d = depth; d > 0; d--)
+        {
+            var pad = new string(' ', 4 + d * 4);
+            var inSeq = d - 1 - seqAt;
+            var lines = inSeq >= 0 && inSeq < sequences.Count ? sequences[inSeq] : ["}"];
+            foreach (var l in lines) o.Add(pad + l);
+        }
+    }
+
+    /// The <c>[borrowed]</c> struct a sequence's elements are, or null for any other element.
+    static ApiStruct? BorrowedOf(ApiModel model, ApiParam seq)
+    {
+        if (!CTypes.IsPointer(seq.Type)) return null;
+        var element = StripQualifiers(CTypes.Deref(seq.Type)).Trim();
+        return model.Structs.FirstOrDefault(v => v.Name == element && IsBorrowed(v));
+    }
+
+    /// The loop building a native element out of each managed one: its memory pinned for
+    /// the call, the pointer and the count taken from the memory, so the two cannot disagree.
+    static IEnumerable<string> BorrowedFill(ApiModel model, ApiStruct b, string n, Convention convention)
+    {
+        var at = $"{n}At";
+        yield return $"for (var {at} = 0; {at} < {n}.Length; {at}++)";
+        yield return "{";
+        foreach (var f in b.Fields)
+        {
+            var native = $"{n}Native[{at}].{f.Name}";
+            var mirror = $"{n}[{at}].{Idioms.Pascal(f.Name)}";
+            if (f.Has("array_of"))
+            {
+                var count = b.Fields.First(x => x.Name == f.TagValue("array_of"));
+                yield return $"    {n}Pins[{at}] = {mirror}.Pin();";
+                yield return $"    {native} = ({CsType(model, f.Type)}){n}Pins[{at}].Pointer;";
+                yield return $"    {n}Native[{at}].{count.Name} = ({CsType(model, count.Type)}){mirror}.Length;";
+            }
+            else if (!b.Fields.Any(x => x.TagValue("array_of") == f.Name))
+                yield return $"    {native} = {mirror};";
+        }
+        yield return "}";
     }
 
     /// The element type a sequence parameter is spelled with. A <c>[value]</c> element
@@ -72,6 +154,7 @@ public static class CSharpBackend
     static string SequenceArg(ApiModel model, SequencePair s, Convention convention)
     {
         var n = Idioms.Ident(s.Seq.Name!);
+        if (BorrowedOf(model, s.Seq) is not null) return $"{n}Ptr";
         var native = CsType(model, CTypes.Deref(s.Seq.Type));
         return SequenceElement(model, s, convention) == native ? $"{n}Ptr" : $"({native}*){n}Ptr";
     }
@@ -915,6 +998,75 @@ public static class CSharpBackend
         !s.External && !s.IsVtable && (s.Has("value") || s.Has("node"));
 
     /// <summary>
+    /// Whether a struct is one a caller builds and the native side only reads while a call
+    /// lasts. <c>[value]</c> refuses a pointer field because it would make the lifetime of what
+    /// it reaches someone else's question; here the lifetime is stated -- the call -- so the
+    /// pointer is projected as memory the caller keeps alive for it.
+    /// </summary>
+    public static bool IsBorrowed(ApiStruct s) => !s.External && !s.IsVtable && s.Has("borrowed");
+
+    /// <summary>
+    /// Emits the managed side of a <c>[borrowed]</c> struct: each counted pointer is memory
+    /// whose length is the count, and the count itself is not a field -- it is read off the
+    /// memory when the call is made, so it cannot disagree with what it bounds.
+    /// </summary>
+    public static string RenderBorrowed(ApiModel model, ApiStruct s, string ns,
+        IEnumerable<string> extraUsings, Convention convention)
+    {
+        var counts = new HashSet<string>();
+        var fields = new List<string>();
+        foreach (var f in s.Fields)
+        {
+            if (!CTypes.IsPointer(f.Type)) continue;
+
+            var countName = f.TagValue("array_of")
+                ?? throw new InvalidOperationException(
+                    $"{s.Name}.{f.Name}: a pointer in a [borrowed] struct is memory the call reads, and"
+                    + " one that names no count has no extent to read -- tag it [array_of:<count field>].");
+            var count = s.Fields.FirstOrDefault(x => x.Name == countName)
+                ?? throw new InvalidOperationException(
+                    $"{s.Name}.{f.Name}: [array_of:{countName}] names a length field the struct does not declare");
+            counts.Add(count.Name);
+
+            var element = ValueTypeName(model, StripQualifiers(CTypes.Deref(f.Type)), convention);
+            if (!string.IsNullOrEmpty(f.Doc)) fields.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
+            fields.Add($"    public ReadOnlyMemory<{element}> {Idioms.Pascal(f.Name)};");
+        }
+
+        foreach (var f in s.Fields.Where(x => !CTypes.IsPointer(x.Type) && !counts.Contains(x.Name)))
+        {
+            var type = ValueFieldType(model, s, f, convention);
+            if (type != CsType(model, f.Type))
+                throw new InvalidOperationException(
+                    $"{s.Name}.{f.Name}: a [borrowed] struct is rebuilt field by field into the native one,"
+                    + $" so a scalar has to be spelled the same on both sides and {type} is not {CsType(model, f.Type)}.");
+            if (!string.IsNullOrEmpty(f.Doc)) fields.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
+            fields.Add($"    public {type} {Idioms.Pascal(f.Name)};");
+        }
+
+        var borrowsAType = s.Fields.Any(f =>
+        {
+            var named = StripQualifiers(CTypes.IsPointer(f.Type) ? CTypes.Deref(f.Type) : f.Type).Trim();
+            return model.Enums.Any(e => e.Name == named && e.External)
+                || model.Structs.Any(v => v.Name == named && v.External);
+        });
+
+        var o = new List<string> { Header, "using System;" };
+        if (borrowsAType) foreach (var u in extraUsings) o.Add($"using {u};");
+        o.Add("");
+        o.Add($"namespace {ns};\n");
+        o.Add(s.Doc is not null
+            ? XmlDoc("", s.Doc).TrimEnd()
+            : $"/// <summary>Mirrors <c>{s.Name}</c>, for the length of one call.</summary>");
+        o.Add($"public partial struct {Idioms.TypeName(s.Name, convention)}");
+        o.Add("{");
+        o.AddRange(fields);
+        o.Add("}");
+        o.Add("");
+        return string.Join('\n', o);
+    }
+
+    /// <summary>
     /// The fixed-size array a <c>[value]</c> field describes, or null when it describes a
     /// single element. A managed struct cannot spell <c>T[8]</c> inline for a <c>T</c> that
     /// is itself a struct, so the arity moves into an <c>[InlineArray]</c> wrapper that
@@ -945,7 +1097,7 @@ public static class CSharpBackend
     static string ValueTypeName(ApiModel model, string cType, Convention convention) =>
         NamedMatrixTypes.TryGetValue(cType.Trim(), out var mat) ? mat
         : NamedHandleTypes.TryGetValue(cType.Trim(), out var handle) ? handle
-        : model.Structs.Any(v => v.Name == cType.Trim() && IsValue(v))
+        : model.Structs.Any(v => v.Name == cType.Trim() && (IsValue(v) || IsBorrowed(v)))
         || model.Enums.Any(e => e.Name == cType.Trim())
             ? Idioms.TypeName(cType.Trim(), convention)
             : CsType(model, cType);
@@ -964,7 +1116,9 @@ public static class CSharpBackend
             throw new InvalidOperationException(
                 $"{s.Name}.{f.Name}: [value] describes data a caller holds, and a pointer"
                 + " field makes the lifetime of that data someone else's question. Describe"
-                + " the pointer as a sequence on the slot that hands it out instead.");
+                + " the pointer as a sequence on the slot that hands it out instead, or, when"
+                + " it only has to outlive the call that takes the struct, declare the struct"
+                + " [borrowed].");
 
         if (VectorArity(f.Type) is int n) return $"Vector{n}";
         if (NamedVectorTypes.TryGetValue(f.Type.Trim(), out var v)) return v.CsType;
@@ -1195,7 +1349,7 @@ public static class CSharpBackend
             o.Add("    /// over there stops the collector from moving or reclaiming the object; the");
             o.Add("    /// handle is what makes the pointer mean anything by the time it comes back.");
             o.Add("    /// </summary>");
-            o.Add($"    private readonly Dictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
+            o.Add($"    private readonly System.Collections.Concurrent.ConcurrentDictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
         }
 
         foreach (var cg in closureGroups.Where(c => c.Lifetime == ClosureLifetime.Retained))
@@ -2236,7 +2390,9 @@ public static class CSharpBackend
                     new string(' ', 8 + roDepth * 4), convention);
                 o.AddRange(roPro);
                 o.AddRange(roSeq);
+                var roSeqAt = roDepth;
                 roDepth += roSeqDepth;
+                var roClosers = SequenceClosers(model, cs.Sequences);
                 var roInd = new string(' ', 8 + roDepth * 4);
                 o.Add($"{roInd}{OutLocal(model, cs.OutParam!, convention)} result;");
                 if (cs.Fallible)
@@ -2249,7 +2405,7 @@ public static class CSharpBackend
                     o.Add($"{roInd}Handle->{slot.Name}(Handle{nativeArgs});");
                 }
                 o.Add($"{roInd}return {OutRead(cs.OutParam!, "result")};");
-                for (var d = roDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
+                CloseScopes(o, roDepth, roSeqAt, roClosers);
                 o.Add("    }");
                 o.Add("");
                 return;
@@ -2275,7 +2431,9 @@ public static class CSharpBackend
                     new string(' ', 8 + tuDepth * 4), convention);
                 o.AddRange(tuPro);
                 o.AddRange(tuSeq);
+                var tuSeqAt = tuDepth;
                 tuDepth += tuSeqDepth;
+                var tuClosers = SequenceClosers(model, cs.Sequences);
                 var tuInd = new string(' ', 8 + tuDepth * 4);
                 foreach (var (p, n) in cs.OutParams.Zip(locals))
                     o.Add($"{tuInd}{OutLocal(model, p, convention)} {n};");
@@ -2289,7 +2447,7 @@ public static class CSharpBackend
                     o.Add($"{tuInd}Handle->{slot.Name}(Handle{callArgs});");
                 }
                 o.Add($"{tuInd}return ({string.Join(", ", cs.OutParams.Zip(locals, OutRead))});");
-                for (var d = tuDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
+                CloseScopes(o, tuDepth, tuSeqAt, tuClosers);
                 o.Add("    }");
                 o.Add("");
                 return;
@@ -2313,7 +2471,9 @@ public static class CSharpBackend
                     new string(' ', 8 + tDepth * 4), convention);
                 o.AddRange(tPro);
                 o.AddRange(tSeq);
+                var tSeqAt = tDepth;
                 tDepth += tSeqDepth;
+                var tClosers = SequenceClosers(model, cs.Sequences);
                 var tInd = new string(' ', 8 + tDepth * 4);
                 var tryArgs = NativeParams()
                     .Select(p => outs.Contains(p)
@@ -2326,7 +2486,7 @@ public static class CSharpBackend
                     o.Add($"{tInd}{Idioms.Ident(WrittenName(op))} = "
                         + $"{OutRead(op, $"{Idioms.Ident(WrittenName(op))}Local")};");
                 o.Add($"{tInd}return found;");
-                for (var d = tDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
+                CloseScopes(o, tDepth, tSeqAt, tClosers);
                 o.Add("    }");
                 o.Add("");
                 return;
@@ -2358,7 +2518,9 @@ public static class CSharpBackend
                 o.AddRange(fPro);
                 o.AddRange(fSeq);
                 o.AddRange(fBlob);
+                var fSeqAt = fDepth;
                 fDepth += fSeqDepth + fBlobDepth;
+                var fClosers = SequenceClosers(model, cs.Sequences);
                 var fInd = new string(' ', 8 + fDepth * 4);
                 var rooted = args.Where(p => p.Has("rooted")).ToList();
                 foreach (var rp in rooted)
@@ -2473,7 +2635,7 @@ public static class CSharpBackend
                         }
                     }
                     if (capture == "result") o.Add($"{fInd}return result;");
-                    for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
+                    CloseScopes(o, fDepth, fSeqAt, fClosers);
                     o.Add("    }");
                     o.Add("");
                     foreach (var g in groups.Where(x => x.UsesState)) RenderClosureState(o, g);
@@ -2521,7 +2683,7 @@ public static class CSharpBackend
                         o.Add($"{fInd}if (err != null) throw KernelError.FromNative(err, \"{slot.Name}\");");
                     o.Add($"{fInd}return {(ownedReturn is null ? "result" : $"new {ownedReturn.TypeName}(this, result)")};");
                 }
-                for (var d = fDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
+                CloseScopes(o, fDepth, fSeqAt, fClosers);
                 o.Add("    }");
                 o.Add("");
                 return;
@@ -2561,7 +2723,9 @@ public static class CSharpBackend
                 o.AddRange(pPro);
                 o.AddRange(pSeq);
                 o.AddRange(pBlob);
+                var pSeqAt = pDepth;
                 pDepth += pSeqDepth + pBlobDepth;
+                var pClosers = SequenceClosers(model, cs.Sequences);
                 var pInd = new string(' ', 8 + pDepth * 4);
                 foreach (var op in cs.TrailingOuts)
                     o.Add($"{pInd}{OutLocal(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
@@ -2583,7 +2747,7 @@ public static class CSharpBackend
                     o.Add($"{pInd}{pCall};");
                     if (slot.TagValue("unroots") is string freedKey)
                     {
-                        o.Add($"{pInd}if (_rooted.Remove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
+                        o.Add($"{pInd}if (_rooted.TryRemove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
                     }
                 }
                 else if (pHolds)
@@ -2594,7 +2758,7 @@ public static class CSharpBackend
                     o.Add($"{pInd}{Idioms.Ident(WrittenName(op))} = "
                         + $"{OutRead(op, $"{Idioms.Ident(WrittenName(op))}Local")};");
                 if (retType != "void" && pHolds) o.Add($"{pInd}return result;");
-                for (var d = pDepth; d > 0; d--) o.Add(new string(' ', 4 + d * 4) + "}");
+                CloseScopes(o, pDepth, pSeqAt, pClosers);
                 o.Add("    }");
                 o.Add("");
                 return;

@@ -13,7 +13,6 @@ extern "C"
     /** A component tuple registered once and resolved into archetype segments. */
     typedef uint64_t ke_query_id;
 #define KE_QUERY_INVALID ((ke_query_id)0)
-#define KE_QUERY_MAX_TERMS 8
 
     /**
      * One archetype's slice of a query match: the matched entities, plus one
@@ -24,8 +23,9 @@ extern "C"
     typedef struct ke_ecs_segment
     {
         const ke_entity *entities; ///< [array_of:count] The entities this segment matched.
-        void            *columns[KE_QUERY_MAX_TERMS];
         size_t           count;
+        void           **columns; ///< [array_of:column_count] One base pointer per query term.
+        uint32_t         column_count;
     } ke_ecs_segment;
 
     /** Entity lifetime plus component storage: the engine's ECS contract. */
@@ -112,12 +112,17 @@ extern "C"
          * backend state.
          * @param out_segments [out,array_of:max_segments] Receives the matched segments.
          * @param max_segments Capacity of out_segments.
-         * @param out_count [out] Receives how many segments were written.
+         * @param out_columns [out] Backing store of the segments' columns: segment i's columns
+         *        are the cid_count entries starting at index i * cid_count, cid_count being
+         *        the length of the tuple the query was registered with.
+         * @param out_count [out] Receives how many segments the query matches; above
+         *        max_segments, out_segments holds only the first max_segments of them.
          */
         void (*query_resolve)(struct ke_ecs   *self,
                               ke_query_id       query,
                               ke_ecs_segment   *out_segments,
                               size_t            max_segments,
+                              void            **out_columns,
                               size_t           *out_count);
 
         /**

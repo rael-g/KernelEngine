@@ -152,11 +152,11 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
     if (mc.material.bits != c.KE_HANDLE_NONE) return;
     const bc = mc.base_color;
 
-    var key: cache_key.Key("inline", 8) = .{};
+    var key: cache_key.Key("inline", 9) = .{};
     const k = key.init(.{
         bitsOf(bc.x),         bitsOf(bc.y),        bitsOf(bc.z),
         bitsOf(bc.w),         bitsOf(mc.roughness), mc.alpha_mode,
-        bitsOf(mc.alpha_cutoff), bitsOf(mc.ior),
+        bitsOf(mc.alpha_cutoff), bitsOf(mc.ior),       bitsOf(mc.distortion_strength),
     });
 
     mc.material = core.create_material.?(
@@ -321,6 +321,25 @@ test "the sphere primitive names its own tessellation in its key" {
     try testing.expectEqualStrings("primitive:sphere:0.5:24:32", Recorder.meshKey());
     try testing.expectEqual(@as(usize, (sphere_rings + 1) * (sphere_segments + 1)), Recorder.vertex_count);
     try testing.expectEqual(@as(u32, sphere_rings * sphere_segments * 6), Recorder.index_count);
+}
+
+test "two inline materials differing only in distortion strength get different keys" {
+    var svc = recordingService();
+
+    Recorder.reset();
+    var calm = meshNamed("quad");
+    calm.distortion_strength = 0.0;
+    resolveMaterial(&svc, &calm);
+    var calm_key: [192]u8 = undefined;
+    const calm_len = Recorder.material_key_len;
+    @memcpy(calm_key[0..calm_len], Recorder.materialKey());
+
+    Recorder.reset();
+    var wavy = meshNamed("quad");
+    wavy.distortion_strength = 0.5;
+    resolveMaterial(&svc, &wavy);
+
+    try testing.expect(!std.mem.eql(u8, calm_key[0..calm_len], Recorder.materialKey()));
 }
 
 test "a primitive nobody implements resolves to no mesh rather than a wrong one" {

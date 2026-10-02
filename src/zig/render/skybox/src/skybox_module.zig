@@ -28,6 +28,7 @@ const SkyboxModule = struct {
     reads: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
+    queries_terms: [3]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
 };
 
@@ -180,12 +181,8 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
 
     const rd = c.KE_ACCESS_READ;
-    sm.queries = std.mem.zeroes([2]c.ke_query_decl);
-    sm.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    sm.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    sm.queries[0].term_count = 2;
-    sm.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
-    sm.queries[1].term_count = 1;
+    sm.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd } };
+    sm.queries = .{ .{ .terms = &sm.queries_terms[0], .term_count = 2 }, .{ .terms = &sm.queries_terms[2], .term_count = 1 } };
     return true;
 }
 
@@ -234,7 +231,11 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     params.pinned_thread = 0;
     params.user_data = sm;
     params.execute = system;
-    _ = rt.register_system.?(rt, &params, null);
+    if (rt.register_system.?(rt, &params, out_error) == 0) {
+        destroyModule(sm);
+        gpa.destroy(sm);
+        return empty;
+    }
 
     return .{ .ref = @ptrCast(sm), .destroy = destroyHandle };
 }
@@ -266,6 +267,21 @@ test "a skybox pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a skybox pass the runtime refuses to register releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 0;
     var camera = std.mem.zeroes(c.ke_render_camera);
     const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
     try testing.expect(h.ref == null);

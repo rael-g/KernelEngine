@@ -131,7 +131,7 @@ The callbacks the engine ships:
 | `transform` | `rotation_euler` | three numbers, **degrees** | the quaternion `rotation` (`components_apply.zig:64-85`) |
 | `transform` | `scale` as `[x, y]` | two numbers | `scale.z` is set to `1` (`components_apply.zig:80-82`) |
 | `transform2d` | `rotation` | a number, **degrees** | radians (`components_apply.zig:45-63`) |
-| `camera` | `fov_degrees` | a number strictly between 0 and 180 | `fov`, multiplied by pi/180 (`src/zig/render/module/src/component_apply.zig:28-50`) |
+| `camera` | `fov_degrees` | a number strictly between 0 and 180 | `fov`, which the camera reads in degrees (`src/zig/render/module/src/component_apply.zig`) |
 | `mesh`, `sprite2d` | `alpha_mode` | the string `'opaque'`, `'mask'` or `'blend'` | the enumerator (`component_apply.zig:51-92`) |
 
 Outside its domain, each of the rotation, field-of-view and alpha keys fails the load: a

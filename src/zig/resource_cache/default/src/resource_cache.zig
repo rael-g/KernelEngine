@@ -30,6 +30,13 @@ const Slot = struct {
     key: u64 = 0,
     refcount: u32 = 0,
     handle: u32 = 0,
+    text: ?[:0]u8 = null,
+
+    fn matches(slot: *const Slot, text: ?[*:0]const u8) bool {
+        const want = text orelse return true;
+        const have = slot.text orelse return false;
+        return std.mem.eql(u8, have, std.mem.span(want));
+    }
 };
 
 const Table = struct {
@@ -44,7 +51,18 @@ const Table = struct {
         return .{ .slots = slots, .capacity = initial_capacity, .occupied = 0, .active = 0 };
     }
 
+    fn drop(t: *Table, slot: *Slot) void {
+        if (slot.text) |text| gpa.free(text);
+        slot.text = null;
+        slot.key = RC_TOMBSTONE;
+        t.active -= 1;
+    }
+
     fn deinit(t: *Table) void {
+        for (t.slots) |*slot| {
+            if (slot.text) |text| gpa.free(text);
+            slot.text = null;
+        }
         if (t.slots.len != 0) gpa.free(t.slots);
         t.slots = &.{};
         t.capacity = 0;
@@ -53,6 +71,10 @@ const Table = struct {
     }
 
     fn probe(t: *const Table, key: u64, found: *bool) usize {
+        return t.probeText(key, null, found);
+    }
+
+    fn probeText(t: *const Table, key: u64, text: ?[*:0]const u8, found: *bool) usize {
         const mask = t.capacity - 1;
         var index = @as(usize, @intCast(key & mask));
         var first_tombstone: usize = std.math.maxInt(usize);
@@ -65,7 +87,7 @@ const Table = struct {
             }
             if (s.key == RC_TOMBSTONE) {
                 if (first_tombstone == std.math.maxInt(usize)) first_tombstone = index;
-            } else if (s.key == key) {
+            } else if (s.key == key and s.matches(text)) {
                 found.* = true;
                 return index;
             }
@@ -166,10 +188,7 @@ fn vtRetain(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error
 
 fn evictPathsForHandle(s: *State, handle: c.ke_resource_handle) void {
     for (s.paths.slots) |*p| {
-        if (p.key != RC_EMPTY and p.key != RC_TOMBSTONE and p.handle == handle) {
-            p.key = RC_TOMBSTONE;
-            s.paths.active -= 1;
-        }
+        if (p.key != RC_EMPTY and p.key != RC_TOMBSTONE and p.handle == handle) s.paths.drop(p);
     }
 }
 
@@ -208,13 +227,12 @@ fn vtTryGetCached(self: ?*c.ke_resource_cache, key: [*c]const u8, out_handle: [*
     if (self == null or key == null or out_handle == null) return false;
     const s = stateOf(self.?);
     var found = false;
-    const idx = s.paths.probe(keyFromPath(key), &found);
+    const idx = s.paths.probeText(keyFromPath(key), key, &found);
     if (!found) return false;
 
     const h = s.paths.slots[idx].handle;
     if (!vtRetain(self, h, null)) {
-        s.paths.slots[idx].key = RC_TOMBSTONE;
-        s.paths.active -= 1;
+        s.paths.drop(&s.paths.slots[idx]);
         return false;
     }
     out_handle.* = h;
@@ -234,15 +252,19 @@ fn vtCacheInsert(self: ?*c.ke_resource_cache, key: [*c]const u8, handle: c.ke_re
 
     var found = false;
     const k = keyFromPath(key);
-    const idx = s.paths.probe(k, &found);
+    const idx = s.paths.probeText(k, key, &found);
     if (found) {
         E.fail(out_error, .already_exists, "key already in cache; call try_get_cached first", @src());
         return false;
     }
 
+    const text = gpa.dupeZ(u8, std.mem.span(@as([*:0]const u8, key))) catch {
+        E.fail(out_error, .out_of_memory, "path copy allocation failed", @src());
+        return false;
+    };
     if (s.paths.slots[idx].key == RC_EMPTY) s.paths.occupied += 1;
     s.paths.active += 1;
-    s.paths.slots[idx] = .{ .key = k, .refcount = 0, .handle = handle };
+    s.paths.slots[idx] = .{ .key = k, .refcount = 0, .handle = handle, .text = text };
     return true;
 }
 
@@ -250,10 +272,9 @@ fn vtCacheEvict(self: ?*c.ke_resource_cache, key: [*c]const u8) callconv(.c) voi
     if (self == null or key == null) return;
     const s = stateOf(self.?);
     var found = false;
-    const idx = s.paths.probe(keyFromPath(key), &found);
+    const idx = s.paths.probeText(keyFromPath(key), key, &found);
     if (!found) return;
-    s.paths.slots[idx].key = RC_TOMBSTONE;
-    s.paths.active -= 1;
+    s.paths.drop(&s.paths.slots[idx]);
 }
 
 fn vtDestroy(self: ?*c.ke_resource_cache) callconv(.c) void {
@@ -599,4 +620,28 @@ test "creating, using and destroying a resource cache leaves no block allocated"
     try testing.expect(h.ref.*.release.?(h.ref, 42, null));
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
+}
+
+test "two different paths whose hashes collide stay two different entries" {
+    try testing.expectEqual(hashString("!B"), hashString("\"!"));
+
+    const h = makeCountingCache();
+    defer h.destroy.?(h.ref);
+
+    try testing.expect(h.ref.*.register_resource.?(h.ref, 1, null));
+    try testing.expect(h.ref.*.register_resource.?(h.ref, 2, null));
+    try testing.expect(h.ref.*.cache_insert.?(h.ref, "!B", 1, null));
+
+    var found: c.ke_resource_handle = c.KE_RESOURCE_HANDLE_NONE;
+    try testing.expect(!h.ref.*.try_get_cached.?(h.ref, "\"!", &found));
+    try testing.expect(h.ref.*.cache_insert.?(h.ref, "\"!", 2, null));
+
+    try testing.expect(h.ref.*.try_get_cached.?(h.ref, "!B", &found));
+    try testing.expectEqual(@as(c.ke_resource_handle, 1), found);
+    try testing.expect(h.ref.*.try_get_cached.?(h.ref, "\"!", &found));
+    try testing.expectEqual(@as(c.ke_resource_handle, 2), found);
+
+    h.ref.*.cache_evict.?(h.ref, "!B");
+    try testing.expect(!h.ref.*.try_get_cached.?(h.ref, "!B", &found));
+    try testing.expect(h.ref.*.try_get_cached.?(h.ref, "\"!", &found));
 }

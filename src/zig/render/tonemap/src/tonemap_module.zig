@@ -169,7 +169,11 @@ export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.pinned_thread = 0;
     params.user_data = tm;
     params.execute = system;
-    _ = rt.register_system.?(rt, &params, null);
+    if (rt.register_system.?(rt, &params, out_error) == 0) {
+        destroyModule(tm);
+        gpa.destroy(tm);
+        return empty;
+    }
 
     return .{ .ref = @ptrCast(tm), .destroy = destroyHandle };
 }
@@ -200,6 +204,20 @@ test "a tonemap pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
+    const h = ke_render_tonemap_create(rt.api(), core.api(), dev.api(), null, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a tonemap pass the runtime refuses to register releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 0;
     const h = ke_render_tonemap_create(rt.api(), core.api(), dev.api(), null, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);

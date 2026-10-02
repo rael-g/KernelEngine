@@ -57,6 +57,7 @@ const ShadowModule = struct {
     writes: [2][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
+    queries_terms: [3]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
 };
 
@@ -247,12 +248,8 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
 
     const rd = c.KE_ACCESS_READ;
-    sh.queries = std.mem.zeroes([2]c.ke_query_decl);
-    sh.queries[0].terms[0] = .{ .cid = light_cid, .access = rd };
-    sh.queries[0].term_count = 1;
-    sh.queries[1].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    sh.queries[1].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    sh.queries[1].term_count = 2;
+    sh.queries_terms = .{ .{ .cid = light_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
+    sh.queries = .{ .{ .terms = &sh.queries_terms[0], .term_count = 1 }, .{ .terms = &sh.queries_terms[1], .term_count = 2 } };
     return true;
 }
 
@@ -304,7 +301,11 @@ export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
         sys_params.pinned_thread = 0;
         sys_params.user_data = sh;
         sys_params.execute = system;
-        _ = rt.register_system.?(rt, &sys_params, null);
+        if (rt.register_system.?(rt, &sys_params, out_error) == 0) {
+            destroyModule(sh);
+            gpa.destroy(sh);
+            return empty;
+        }
     }
 
     return .{ .ref = @ptrCast(sh), .destroy = destroyHandle };
@@ -338,6 +339,22 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    const ndc = std.mem.zeroes(c.ke_ndc_convention);
+    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, 1, 1, 2, 3, 4, &default_params, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a shadow pass the runtime refuses to register releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 0;
     var view_space = std.mem.zeroes(c.ke_view_space);
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
     const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, 1, 1, 2, 3, 4, &default_params, null);

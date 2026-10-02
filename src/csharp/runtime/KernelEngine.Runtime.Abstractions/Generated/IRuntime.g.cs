@@ -27,7 +27,7 @@ public interface IRuntime : IDisposable
     /// <param name="onUnload">Releases what the load acquired. A module that acquired nothing leaves it out.</param>
     /// <exception cref="KernelError">The native call failed.</exception>
     ulong RegisterModule(string name, ModuleLoad? onLoad, ModuleUnload? onUnload = null);
-    /// <summary>Registers a system body against the phase and the component access it declares.</summary>
+    /// <summary>Registers a system body against the phase and the component access it declares. Registered from a body, the system takes effect with the next tick and a refusal is not reported.</summary>
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
     /// <param name="phase">Which phase of the tick the body runs in.</param>
     /// <param name="execute">The body itself.</param>
@@ -38,6 +38,11 @@ public interface IRuntime : IDisposable
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
     ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false);
+    /// <summary>Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    void UnregisterSystem(ulong id);
+    /// <summary>The id of the system registered last and still registered, or 0 when there is none.</summary>
+    ulong LastSystem();
     /// <summary>Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body's error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="KernelError">The native call failed.</exception>
     void Tick(float dt);

@@ -197,7 +197,16 @@ fn bind(
         E.fail(out_error, .invalid_argument, "script host is null", @src());
         return false;
     };
-    const s = stateOf(self);
+    return bindNow(stateOf(self), entity, type_id, instance, out_error);
+}
+
+fn bindNow(
+    s: *State,
+    entity: c.ke_entity,
+    type_id: c.ke_script_type_id,
+    instance: ?*anyopaque,
+    out_error: [*c][*c]c.ke_error,
+) bool {
     const t = typeAt(s, type_id) orelse {
         E.fail(out_error, .not_found, "script type id was never registered", @src());
         return false;
@@ -228,9 +237,81 @@ fn bind(
     return true;
 }
 
+const PendingBind = struct {
+    s: *State,
+    entity: c.ke_entity,
+    type_id: c.ke_script_type_id,
+    instance: ?*anyopaque,
+};
+
+const PendingUnbind = struct {
+    s: *State,
+    entity: c.ke_entity,
+};
+
+fn cbBind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
+    const p: *const PendingBind = @ptrCast(@alignCast(user.?));
+    _ = bindNow(p.s, p.entity, p.type_id, p.instance, null);
+}
+
+fn cbUnbind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
+    const p: *const PendingUnbind = @ptrCast(@alignCast(user.?));
+    unbindNow(p.s, p.entity);
+}
+
+fn bindDeferred(
+    self_in: ?*c.ke_script_host,
+    entity: c.ke_entity,
+    type_id: c.ke_script_type_id,
+    instance: ?*anyopaque,
+    commands: ?*c.ke_ecs_commands,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "script host is null", @src());
+        return false;
+    };
+    const cmds = commands orelse {
+        E.fail(out_error, .invalid_argument, "a deferred bind needs a command queue", @src());
+        return false;
+    };
+    const s = stateOf(self);
+    if (typeAt(s, type_id) == null) {
+        E.fail(out_error, .not_found, "script type id was never registered", @src());
+        return false;
+    }
+    if (entity == c.KE_ENTITY_INVALID) {
+        E.fail(out_error, .invalid_argument, "cannot bind an instance to an invalid entity", @src());
+        return false;
+    }
+    var pending: PendingBind = .{ .s = s, .entity = entity, .type_id = type_id, .instance = instance };
+    return cmds.@"defer".?(cmds, cbBind, &pending, @sizeOf(PendingBind), out_error);
+}
+
+fn unbindDeferred(
+    self_in: ?*c.ke_script_host,
+    entity: c.ke_entity,
+    commands: ?*c.ke_ecs_commands,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "script host is null", @src());
+        return false;
+    };
+    const cmds = commands orelse {
+        E.fail(out_error, .invalid_argument, "a deferred unbind needs a command queue", @src());
+        return false;
+    };
+    var pending: PendingUnbind = .{ .s = stateOf(self), .entity = entity };
+    return cmds.@"defer".?(cmds, cbUnbind, &pending, @sizeOf(PendingUnbind), out_error);
+}
+
 fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
-    const s = stateOf(self);
+    unbindNow(stateOf(self), entity);
+}
+
+fn unbindNow(s: *State, entity: c.ke_entity) void {
     const b = bindingOf(s, entity) orelse return;
     if (typeAt(s, b.type_id)) |t| {
         if (b.slot < t.entities.items.len) {
@@ -418,6 +499,8 @@ pub export fn ke_script_host_create(
         .type_reach = &typeReach,
         .bind = &bind,
         .unbind = &unbind,
+        .bind_deferred = &bindDeferred,
+        .unbind_deferred = &unbindDeferred,
         .instance_of = &instanceOf,
         .instance_count = &instanceCount,
         .instances = &instances,
@@ -576,6 +659,48 @@ test "instance count follows bind and unbind" {
     h.host().unbind.?(h.host(), a);
     try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
     try testing.expect(!h.host().instance_of.?(h.host(), a, null, null));
+}
+
+test "a deferred bind and unbind take effect only once the recorded commands are applied" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const a = h.tree.create("Left", 0);
+    var ma: u32 = 1;
+    var rec = scene_tree.RecordingCommands.init(&h.tree.ecs.vtable);
+
+    try testing.expect(h.host().bind_deferred.?(h.host(), a, id, &ma, rec.bind(), null));
+    try testing.expectEqual(@as(u32, 0), h.host().instance_count.?(h.host(), id));
+    try testing.expect(!h.host().instance_of.?(h.host(), a, null, null));
+
+    rec.apply();
+    try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
+    var seen: ?*anyopaque = null;
+    try testing.expect(h.host().instance_of.?(h.host(), a, null, &seen));
+    try testing.expectEqual(@as(?*anyopaque, &ma), seen);
+
+    try testing.expect(h.host().unbind_deferred.?(h.host(), a, rec.bind(), null));
+    try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
+    rec.apply();
+    try testing.expectEqual(@as(u32, 0), h.host().instance_count.?(h.host(), id));
+}
+
+test "a deferred bind without a command queue, a type, or an entity is refused" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const a = h.tree.create("Left", 0);
+    var m: u32 = 1;
+    var rec = scene_tree.RecordingCommands.init(&h.tree.ecs.vtable);
+
+    try testing.expect(!h.host().bind_deferred.?(h.host(), a, id, &m, null, null));
+    try testing.expect(!h.host().bind_deferred.?(h.host(), a, 9999, &m, rec.bind(), null));
+    try testing.expect(!h.host().bind_deferred.?(h.host(), c.KE_ENTITY_INVALID, id, &m, rec.bind(), null));
+    try testing.expect(!h.host().unbind_deferred.?(h.host(), a, null, null));
 }
 
 test "a type lists the entities bound to it" {

@@ -177,7 +177,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         }
     }
 
-    /// <summary>Registers a system body against the phase and the component access it declares.</summary>
+    /// <summary>Registers a system body against the phase and the component access it declares. Registered from a body, the system takes effect with the next tick and a refusal is not reported.</summary>
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
     /// <param name="phase">Which phase of the tick the body runs in.</param>
     /// <param name="execute">The body itself.</param>
@@ -192,43 +192,58 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            fixed (QueryDecl* queriesPtr = queries)
+            var queriesPins = new System.Buffers.MemoryHandle[queries.Length];
+            var queriesNative = new ke_query_decl[queries.Length];
+            try
             {
-                fixed (ComponentAccess* accessListPtr = accessList)
+                for (var queriesAt = 0; queriesAt < queries.Length; queriesAt++)
                 {
-                    var executeHandle = execute is null
-                        ? default
-                        : GCHandle.Alloc(new RegisterSystemClosures { Owner = this, Execute = execute });
-                    ke_runtime_system_params p = default;
-                    p.name = (sbyte*)namePtr;
-                    p.phase = (ke_phase)phase;
-                    p.user_data = (void*)GCHandle.ToIntPtr(executeHandle);
-                    p.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, ke_error**, bool>)&RegisterSystemExecuteTrampoline;
-                    p.queries = (ke_query_decl*)queriesPtr;
-                    p.query_count = (uint)queries.Length;
-                    p.access_list = (ke_component_access*)accessListPtr;
-                    p.access_count = (uint)accessList.Length;
-                    p.pinned_thread = pinnedThread;
-                    p.per_entity = perEntity;
-                    ke_error* err = null;
-                    ulong result;
-                    try
-                    {
-                        result = Handle->register_system(Handle, &p, &err);
-                    }
-                    catch
-                    {
-                        if (executeHandle.IsAllocated) executeHandle.Free();
-                        throw;
-                    }
-                    if (err != null)
-                    {
-                        if (executeHandle.IsAllocated) executeHandle.Free();
-                        throw KernelError.FromNative(err, "register_system");
-                    }
-                    if (executeHandle.IsAllocated) _retainedExecute[result] = executeHandle;
-                    return result;
+                    queriesPins[queriesAt] = queries[queriesAt].Terms.Pin();
+                    queriesNative[queriesAt].terms = (ke_component_access*)queriesPins[queriesAt].Pointer;
+                    queriesNative[queriesAt].term_count = (uint)queries[queriesAt].Terms.Length;
                 }
+                fixed (ke_query_decl* queriesPtr = queriesNative)
+                {
+                    fixed (ComponentAccess* accessListPtr = accessList)
+                    {
+                        var executeHandle = execute is null
+                            ? default
+                            : GCHandle.Alloc(new RegisterSystemClosures { Owner = this, Execute = execute });
+                        ke_runtime_system_params p = default;
+                        p.name = (sbyte*)namePtr;
+                        p.phase = (ke_phase)phase;
+                        p.user_data = (void*)GCHandle.ToIntPtr(executeHandle);
+                        p.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, ke_error**, bool>)&RegisterSystemExecuteTrampoline;
+                        p.queries = queriesPtr;
+                        p.query_count = (uint)queries.Length;
+                        p.access_list = (ke_component_access*)accessListPtr;
+                        p.access_count = (uint)accessList.Length;
+                        p.pinned_thread = pinnedThread;
+                        p.per_entity = perEntity;
+                        ke_error* err = null;
+                        ulong result;
+                        try
+                        {
+                            result = Handle->register_system(Handle, &p, &err);
+                        }
+                        catch
+                        {
+                            if (executeHandle.IsAllocated) executeHandle.Free();
+                            throw;
+                        }
+                        if (err != null)
+                        {
+                            if (executeHandle.IsAllocated) executeHandle.Free();
+                            throw KernelError.FromNative(err, "register_system");
+                        }
+                        if (executeHandle.IsAllocated) _retainedExecute[result] = executeHandle;
+                        return result;
+                    }
+                }
+            }
+            finally
+            {
+                for (var queriesAt = 0; queriesAt < queriesPins.Length; queriesAt++) queriesPins[queriesAt].Dispose();
             }
         }
     }
@@ -259,6 +274,20 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
             KernelError.ToNative(arg3, ex, "ke_system_execute_fn");
             return false;
         }
+    }
+
+    /// <summary>Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.</summary>
+    /// <exception cref="KernelError">The native call failed.</exception>
+    public void UnregisterSystem(ulong id)
+    {
+        ke_error* err = null;
+        KernelError.ThrowIfFailed(Handle->unregister_system(Handle, id, &err), err, "unregister_system");
+    }
+
+    /// <summary>The id of the system registered last and still registered, or 0 when there is none.</summary>
+    public ulong LastSystem()
+    {
+        return Handle->last_system(Handle);
     }
 
     /// <summary>Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body's error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.</summary>

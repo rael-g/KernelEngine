@@ -80,6 +80,7 @@ const ClusterModule = struct {
     cull_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     cull_io: c.ke_render_pass_io = undefined,
     cull_access: [6]c.ke_component_access = undefined,
+    cull_queries_terms: [6]c.ke_component_access = undefined,
     cull_queries: [3]c.ke_query_decl = undefined,
     clusters_cid: c.ke_component_id = undefined,
 
@@ -377,16 +378,8 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
 
     const rd = c.KE_ACCESS_READ;
-    cm.cull_queries = std.mem.zeroes([3]c.ke_query_decl);
-    cm.cull_queries[0].terms[0] = .{ .cid = cm.point_light_cid, .access = rd };
-    cm.cull_queries[0].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
-    cm.cull_queries[0].term_count = 2;
-    cm.cull_queries[1].terms[0] = .{ .cid = cm.spot_light_cid, .access = rd };
-    cm.cull_queries[1].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
-    cm.cull_queries[1].term_count = 2;
-    cm.cull_queries[2].terms[0] = .{ .cid = cm.camera_cid, .access = rd };
-    cm.cull_queries[2].terms[1] = .{ .cid = cm.world_transform_cid, .access = rd };
-    cm.cull_queries[2].term_count = 2;
+    cm.cull_queries_terms = .{ .{ .cid = cm.point_light_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd }, .{ .cid = cm.spot_light_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd }, .{ .cid = cm.camera_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd } };
+    cm.cull_queries = .{ .{ .terms = &cm.cull_queries_terms[0], .term_count = 2 }, .{ .terms = &cm.cull_queries_terms[2], .term_count = 2 }, .{ .terms = &cm.cull_queries_terms[4], .term_count = 2 } };
     return true;
 }
 
@@ -450,7 +443,11 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.pinned_thread = 0;
     params.user_data = cm;
     params.execute = system;
-    _ = rt.register_system.?(rt, &params, null);
+    if (rt.register_system.?(rt, &params, out_error) == 0) {
+        destroyModule(cm);
+        gpa.destroy(cm);
+        return empty;
+    }
 
     return .{ .ref = @ptrCast(cm), .destroy = destroyHandle };
 }
@@ -483,6 +480,22 @@ test "a cluster pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    var view_space = std.mem.zeroes(c.ke_view_space);
+    const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a cluster pass the runtime refuses to register releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 0;
     var camera = std.mem.zeroes(c.ke_render_camera);
     var view_space = std.mem.zeroes(c.ke_view_space);
     const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);

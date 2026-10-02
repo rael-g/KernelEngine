@@ -76,6 +76,7 @@ pub fn build(b: *std.Build) void {
         if (ke_physics) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
         test_mod.addIncludePath(b.path("include"));
         test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+        test_mod.linkSystemLibrary("ke_common", .{});
         addTomlc99(b, test_mod, tomlc99_dir);
         test_mod.addImport("kerror", b.createModule(.{
             .root_source_file = .{ .cwd_relative = kerror_src },

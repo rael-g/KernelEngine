@@ -17,6 +17,8 @@ const State = struct {
     order: std.ArrayList(c.ke_entity) = .empty,
     stack: std.ArrayList(c.ke_entity) = .empty,
 
+    queries_terms: [1]c.ke_component_access = undefined,
+
     queries: [1]c.ke_query_decl = undefined,
     access: [4]c.ke_component_access = undefined,
 };
@@ -147,10 +149,8 @@ export fn ke_scene_hierarchy_create(
         .world_transform_cid = world_transform_meta.cid,
         .hierarchy_cid = hierarchy_meta.cid,
     };
-
-    s.queries = std.mem.zeroes([1]c.ke_query_decl);
-    s.queries[0].terms[0] = .{ .cid = s.hierarchy_cid, .access = c.KE_ACCESS_READ };
-    s.queries[0].term_count = 1;
+    s.queries_terms = .{ .{ .cid = s.hierarchy_cid, .access = c.KE_ACCESS_READ } };
+    s.queries = .{ .{ .terms = &s.queries_terms[0], .term_count = 1 } };
 
     s.access = .{
         .{ .cid = s.hierarchy_cid, .access = c.KE_ACCESS_READ },

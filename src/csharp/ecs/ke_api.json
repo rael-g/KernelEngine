@@ -83,14 +83,22 @@
           "doc": "The entities this segment matched."
         },
         {
-          "name": "columns",
-          "type": "void *[8]",
+          "name": "count",
+          "type": "size_t",
           "tags": [],
           "doc": null
         },
         {
-          "name": "count",
-          "type": "size_t",
+          "name": "columns",
+          "type": "void **",
+          "tags": [
+            "array_of:column_count"
+          ],
+          "doc": "One base pointer per query term."
+        },
+        {
+          "name": "column_count",
+          "type": "uint32_t",
           "tags": [],
           "doc": null
         }
@@ -358,12 +366,20 @@
               "doc": "Capacity of out_segments."
             },
             {
+              "name": "out_columns",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Backing store of the segments\u0027 columns: segment i\u0027s columns are the cid_count entries starting at index i * cid_count, cid_count being the length of the tuple the query was registered with."
+            },
+            {
               "name": "out_count",
               "type": "size_t *",
               "tags": [
                 "out"
               ],
-              "doc": "Receives how many segments were written."
+              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them."
             }
           ],
           "receiver": "struct ke_ecs *"

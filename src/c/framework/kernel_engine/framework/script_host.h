@@ -6,6 +6,7 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/ecs/commands.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -134,6 +135,25 @@ extern "C"
         /// [unroots:entity] Drops the binding for `entity`, if any. The instance
         /// itself is the binding runtime's to release.
         void (*unbind)(struct ke_script_host *self, ke_entity entity);
+
+        /// [idiom] Records bind into `commands`; the binding takes effect when `commands`
+        /// is applied. A bind that fails at that point is dropped.
+        /// @param instance [rooted:entity]
+        /// @param commands [ctx]
+        bool (*bind_deferred)(struct ke_script_host *self,
+                              ke_entity              entity,
+                              ke_script_type_id      type,
+                              void                  *instance,
+                              ke_ecs_commands       *commands,
+                              ke_error             **out_error);
+
+        /// [idiom] Records unbind into `commands`; the binding is dropped when `commands`
+        /// is applied.
+        /// @param commands [ctx]
+        bool (*unbind_deferred)(struct ke_script_host *self,
+                                ke_entity              entity,
+                                ke_ecs_commands       *commands,
+                                ke_error             **out_error);
 
         /// [try] The instance bound to `entity`. False when none is, which is the
         /// normal answer rather than a failure: an entity a scene made without a

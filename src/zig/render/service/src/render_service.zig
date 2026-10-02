@@ -457,3 +457,75 @@ test "a render service created without a shader directory is refused and leaves 
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
 }
+
+
+const stress_keys = 64;
+const stress_threads = 8;
+const stress_rounds = 4;
+
+const Stress = struct {
+    svc: *c.ke_render_service,
+    params: *[stress_keys]c.ke_gpu_render_pipeline_params,
+
+    fn run(self: *const Stress) void {
+        for (0..stress_rounds) |_| {
+            for (self.params) |*p| _ = pipeline_cache.getOrCreatePipeline(self.svc, p);
+        }
+    }
+};
+
+test "pipelines requested from several threads at once settle on one answer per key and leak nothing" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const h = ke_render_service_create(dev.api(), ecs.api(), "shaders", null);
+    try testing.expect(h.ref != null);
+
+    var params: [stress_keys]c.ke_gpu_render_pipeline_params = undefined;
+    for (&params, 0..) |*p, i| {
+        p.* = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+        p.vertex_module = i + 1;
+        p.fragment_module = i + 1000;
+        p.color_target_count = 1;
+    }
+
+    const stress = Stress{ .svc = h.ref.?, .params = &params };
+    var threads: [stress_threads]std.Thread = undefined;
+    for (&threads) |*t| t.* = try std.Thread.spawn(.{}, Stress.run, .{&stress});
+    for (threads) |t| t.join();
+
+    for (&params) |*p| {
+        const first = pipeline_cache.getOrCreatePipeline(h.ref, p);
+        try testing.expect(first != c.KE_GPU_INVALID_HANDLE);
+        try testing.expectEqual(first, pipeline_cache.getOrCreatePipeline(h.ref, p));
+    }
+
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a pipeline is answered with its fallback first and with the compiled one afterwards" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    const h = ke_render_service_create(dev.api(), ecs.api(), "shaders", null);
+    try testing.expect(h.ref != null);
+
+    var p = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    p.vertex_module = 5;
+    p.fragment_module = 6;
+    p.color_target_count = 1;
+
+    const fallback = pipeline_cache.getOrCreatePipeline(h.ref, &p);
+    const compiled = pipeline_cache.getOrCreatePipeline(h.ref, &p);
+    try testing.expect(fallback != c.KE_GPU_INVALID_HANDLE);
+    try testing.expect(compiled != fallback);
+    try testing.expectEqual(compiled, pipeline_cache.getOrCreatePipeline(h.ref, &p));
+
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}

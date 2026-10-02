@@ -22,7 +22,7 @@ describes.
 | native build | `zig build --prefix build/native --cache-dir build/zig-cache` (`ci.yml:76`) | both |
 | native tests | `zig build test --prefix build/native --cache-dir build/zig-cache` (`ci.yml:83`) | both |
 | managed tests | `dotnet test KernelEngine.slnx` (`ci.yml:86`) | both |
-| gates | nine `dotnet run scripts/check_*.cs` (`ci.yml:94-104`) | Linux only |
+| gates | ten `dotnet run scripts/check_*.cs` | Linux only |
 
 The vcpkg cache only speeds the run up: a miss is repopulated by the build itself, because the build
 fetches vcpkg into `build/tools` and installs ports into `build/vcpkg-installed` on its own
@@ -32,7 +32,7 @@ fetches vcpkg into `build/tools` and installs ports into `build/vcpkg-installed`
 compiled, and runs the three projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The nine gates are `check_api_coverage`, `check_api_drift`, `check_component_fields`,
+The ten gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_component_fields`,
 `check_generator_contract`, `check_generator_shapes`, `check_managed_handwritten`,
 `check_out_params`, `check_reconstruction` and `check_zig_shapes`; `check_generator_shapes` and
 `check_zig_shapes` are run with `--no-cache` (`ci.yml:100`, `:104`). What each one fails on is in

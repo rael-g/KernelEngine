@@ -9,10 +9,9 @@ const c = @cImport({
 
 const E = @import("kerror").Errors(c);
 
-const KE_MAX_QUERIES_PER_SYSTEM = 8;
-const KE_MAX_SEGMENTS_PER_QUERY = 32;
+const initial_segments_per_query = 4;
+const resolve_attempts = 3;
 const KE_RUNTIME_PHASE_COUNT = 7;
-const MAX_TERMS = c.KE_QUERY_MAX_TERMS;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
@@ -70,7 +69,7 @@ const CtxState = struct {
     access_count: u32,
     system_name: [*c]const u8,
     defer_q: ?*DeferQueue,
-    seg_storage: ?[*]const c.ke_ecs_segment,
+    seg_ptrs: ?[*]const ?[*]const c.ke_ecs_segment,
     seg_counts: ?[*]const usize,
     view_query_count: u32,
     slice_index: u32,
@@ -111,11 +110,11 @@ fn paramsAccesses(p: *const c.ke_runtime_system_params, cid: c.ke_component_id, 
     var writes = false;
     if (p.queries) |queries| {
         for (0..p.query_count) |q| {
-            const qd = &queries[q];
-            for (0..qd.term_count) |t| {
-                if (qd.terms[t].cid == cid) {
+            const terms = queries[q].terms orelse continue;
+            for (0..queries[q].term_count) |t| {
+                if (terms[t].cid == cid) {
                     any = true;
-                    if (termWrites(qd.terms[t])) writes = true;
+                    if (termWrites(terms[t])) writes = true;
                 }
             }
         }
@@ -140,10 +139,10 @@ fn conflictOnTerm(b: *const c.ke_runtime_system_params, cid: c.ke_component_id, 
 fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_system_params) bool {
     if (a.queries) |queries| {
         for (0..a.query_count) |q| {
-            const qd = &queries[q];
-            for (0..qd.term_count) |t| {
-                const a_writes = termWrites(qd.terms[t]);
-                if (conflictOnTerm(b, qd.terms[t].cid, a_writes)) return true;
+            const terms = queries[q].terms orelse continue;
+            for (0..queries[q].term_count) |t| {
+                const a_writes = termWrites(terms[t]);
+                if (conflictOnTerm(b, terms[t].cid, a_writes)) return true;
             }
         }
     }
@@ -200,9 +199,9 @@ fn debugComputeWaves(
 fn ctxView(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
     if (out_count != null) out_count.* = 0;
     const s = ctxOf(ctx) orelse return null;
-    if (s.seg_storage == null or query_index >= s.view_query_count) return null;
+    if (s.seg_ptrs == null or query_index >= s.view_query_count) return null;
     if (out_count != null) out_count.* = s.seg_counts.?[query_index];
-    return &s.seg_storage.?[@as(usize, query_index) * KE_MAX_SEGMENTS_PER_QUERY];
+    return s.seg_ptrs.?[query_index];
 }
 
 fn deferReserve(q: *DeferQueue, needed: usize) bool {
@@ -385,26 +384,127 @@ fn resetDeferApplied() void {
     s_defer_applied_total = 0;
 }
 
+const QueryDecl = struct {
+    terms: [*]const c.ke_component_access,
+    term_count: u32,
+};
+
 const ExtractedQuery = struct {
     seg: c.ke_ecs_segment,
     entities_buf: ?[*]c.ke_entity,
-    col_bufs: [MAX_TERMS]?*anyopaque,
-    col_elem_size: [MAX_TERMS]usize,
+    col_bufs: []?*anyopaque,
+    col_elem_size: []usize,
+    col_ptrs: []?*anyopaque,
     capacity: usize,
     elem_sizes_cached: bool,
 };
 
-const RegisteredSystem = struct {
-    params: c.ke_runtime_system_params,
-    query_decls: [KE_MAX_QUERIES_PER_SYSTEM]c.ke_query_decl,
-    query_ids: [KE_MAX_QUERIES_PER_SYSTEM]c.ke_query_id,
-    query_count: u32,
-    seg_storage: ?[*]c.ke_ecs_segment,
-    seg_counts: [KE_MAX_QUERIES_PER_SYSTEM]usize,
-    extracted: [KE_MAX_QUERIES_PER_SYSTEM]ExtractedQuery,
-    derived_access: [KE_MAX_QUERIES_PER_SYSTEM * MAX_TERMS]c.ke_component_access,
-    derived_access_count: u32,
+const SegBuf = struct {
+    ptr: ?[*]c.ke_ecs_segment = null,
+    cap: usize = 0,
+    cols: ?[*]?*anyopaque = null,
+    cols_cap: usize = 0,
+
+    fn free(self: *SegBuf) void {
+        cFree(c.ke_ecs_segment, self.ptr, self.cap);
+        cFree(?*anyopaque, self.cols, self.cols_cap);
+        self.* = .{};
+    }
+
+    fn reserve(self: *SegBuf, needed: usize, terms: usize) bool {
+        if (needed <= self.cap and needed * terms <= self.cols_cap) return true;
+        const segments = cAlloc(c.ke_ecs_segment, needed) orelse return false;
+        const columns = cAlloc(?*anyopaque, needed * terms) orelse {
+            cFree(c.ke_ecs_segment, segments, needed);
+            return false;
+        };
+        cFree(c.ke_ecs_segment, self.ptr, self.cap);
+        cFree(?*anyopaque, self.cols, self.cols_cap);
+        self.* = .{ .ptr = segments, .cap = needed, .cols = columns, .cols_cap = needed * terms };
+        return true;
+    }
 };
+
+fn resolveInto(ecs: *c.ke_ecs, query: c.ke_query_id, buf: *SegBuf, terms: usize) ?usize {
+    if (!buf.reserve(initial_segments_per_query, terms)) return null;
+    for (0..resolve_attempts) |_| {
+        var matched: usize = 0;
+        ecs.query_resolve.?(ecs, query, buf.ptr, buf.cap, buf.cols, &matched);
+        if (matched <= buf.cap) return matched;
+        if (!buf.reserve(matched, terms)) return null;
+    }
+    return null;
+}
+
+const RegisteredSystem = struct {
+    id: u64,
+    pending_next: ?*RegisteredSystem,
+    params: c.ke_runtime_system_params,
+    query_decls: []QueryDecl,
+    query_ids: []c.ke_query_id,
+    query_count: u32,
+    segs: []SegBuf,
+    seg_ptrs: []?[*]const c.ke_ecs_segment,
+    seg_counts: []usize,
+    extracted: []ExtractedQuery,
+    derived_access: []c.ke_component_access,
+    term_storage: []c.ke_component_access,
+    derived_access_count: u32,
+    name_storage: ?[]u8,
+    access_storage: ?[]c.ke_component_access,
+};
+
+fn freeSlice(comptime T: type, slice: []T) void {
+    if (slice.len != 0) heap.gpa.free(slice);
+}
+
+fn allocZeroed(comptime T: type, n: usize) ?[]T {
+    const slice = heap.gpa.alloc(T, n) catch return null;
+    @memset(std.mem.sliceAsBytes(slice), 0);
+    return slice;
+}
+
+fn allocQueryStorage(rs: *RegisteredSystem, queries: [*c]const c.ke_query_decl, query_count: usize, total_terms: usize, access_count: usize) bool {
+    rs.term_storage = allocZeroed(c.ke_component_access, total_terms) orelse return false;
+    rs.query_decls = allocZeroed(QueryDecl, query_count) orelse return false;
+    rs.query_ids = allocZeroed(c.ke_query_id, query_count) orelse return false;
+    rs.segs = allocZeroed(SegBuf, query_count) orelse return false;
+    rs.seg_ptrs = allocZeroed(?[*]const c.ke_ecs_segment, query_count) orelse return false;
+    rs.seg_counts = allocZeroed(usize, query_count) orelse return false;
+    rs.extracted = allocZeroed(ExtractedQuery, query_count) orelse return false;
+    rs.derived_access = allocZeroed(c.ke_component_access, total_terms + access_count) orelse return false;
+    for (rs.extracted, 0..) |*eq, q| {
+        const terms = queries[q].term_count;
+        eq.col_bufs = allocZeroed(?*anyopaque, terms) orelse return false;
+        eq.col_elem_size = allocZeroed(usize, terms) orelse return false;
+        eq.col_ptrs = allocZeroed(?*anyopaque, terms) orelse return false;
+    }
+    return true;
+}
+
+fn releaseSystem(rs: *RegisteredSystem) void {
+    for (rs.extracted) |*eq| {
+        if (eq.entities_buf) |eb| cFree(c.ke_entity, eb, eq.capacity);
+        for (eq.col_bufs, 0..) |col, t| {
+            if (col) |cb| cFreeBytes(cb, eq.col_elem_size[t] *% eq.capacity);
+        }
+        freeSlice(?*anyopaque, eq.col_bufs);
+        freeSlice(usize, eq.col_elem_size);
+        freeSlice(?*anyopaque, eq.col_ptrs);
+    }
+    freeSlice(c.ke_component_access, rs.term_storage);
+    if (rs.name_storage) |n| heap.gpa.free(n);
+    if (rs.access_storage) |a| heap.gpa.free(a);
+    for (rs.segs) |*buf| buf.free();
+    freeSlice(QueryDecl, rs.query_decls);
+    freeSlice(c.ke_query_id, rs.query_ids);
+    freeSlice(SegBuf, rs.segs);
+    freeSlice(?[*]const c.ke_ecs_segment, rs.seg_ptrs);
+    freeSlice(usize, rs.seg_counts);
+    freeSlice(ExtractedQuery, rs.extracted);
+    freeSlice(c.ke_component_access, rs.derived_access);
+    cFree(RegisteredSystem, @ptrCast(rs), 1);
+}
 
 const RegisteredModule = struct {
     user_data: ?*anyopaque,
@@ -415,6 +515,11 @@ const RenderJob = struct {
     h: *RuntimeHandle,
     dt: f32,
     failure: PhaseFailure = .{},
+};
+
+const PendingRemoval = struct {
+    id: c.ke_system_id,
+    next: ?*PendingRemoval,
 };
 
 const RuntimeState = struct {
@@ -431,7 +536,13 @@ const RuntimeState = struct {
     fixed_dt: f32,
     fixed_dt_max_accum: f32,
     fixed_accumulator: f32,
+    started: bool,
+    in_tick: std.atomic.Value(bool),
+    in_render: std.atomic.Value(bool),
+    pending_systems: std.atomic.Value(?*RegisteredSystem),
+    pending_removals: std.atomic.Value(?*PendingRemoval),
     max_systems_per_phase: u32,
+    extract_scratch: SegBuf,
     phase_indices: ?[*]u32,
     phase_params: ?[*]c.ke_runtime_system_params,
     wave_assignments: ?[*]u32,
@@ -486,27 +597,132 @@ fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_
     return id;
 }
 
-fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
-    if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return 0;
+fn mergeAccess(rs: *RegisteredSystem, want: c.ke_component_access) void {
+    for (0..rs.derived_access_count) |d| {
+        if (rs.derived_access[d].cid == want.cid) {
+            rs.derived_access[d].access |= want.access;
+            return;
+        }
     }
-    const h = handleOf(self.?);
+    rs.derived_access[rs.derived_access_count] = want;
+    rs.derived_access_count += 1;
+}
 
+fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
+    var total_terms: usize = 0;
+    if (p.*.query_count > 0) {
+        if (p.*.queries == null) {
+            E.fail(out_error, .invalid_argument, "queries are counted but not given", @src());
+            return null;
+        }
+        for (0..p.*.query_count) |q| {
+            const decl = p.*.queries[q];
+            if (decl.term_count == 0 or decl.terms == null) {
+                E.fail(out_error, .invalid_argument, "a query declares no terms", @src());
+                return null;
+            }
+            total_terms += decl.term_count;
+        }
+    }
+
+    const rs_mem = cAlloc(RegisteredSystem, 1) orelse {
+        E.fail(out_error, .out_of_memory, "registered_system allocation failed", @src());
+        return null;
+    };
+    const rs = &rs_mem[0];
+    rs.params = p.*;
+    rs.id = 0;
+    rs.pending_next = null;
+    rs.query_count = 0;
+    rs.query_decls = &.{};
+    rs.query_ids = &.{};
+    rs.segs = &.{};
+    rs.seg_ptrs = &.{};
+    rs.seg_counts = &.{};
+    rs.extracted = &.{};
+    rs.derived_access = &.{};
+    rs.term_storage = &.{};
+    rs.derived_access_count = 0;
+    rs.name_storage = null;
+    rs.access_storage = null;
+
+    if (p.*.name != null) {
+        const text = std.mem.span(p.*.name);
+        const copy = heap.gpa.alloc(u8, text.len + 1) catch {
+            releaseSystem(rs);
+            E.fail(out_error, .out_of_memory, "system name allocation failed", @src());
+            return null;
+        };
+        @memcpy(copy[0..text.len], text);
+        copy[text.len] = 0;
+        rs.name_storage = copy;
+        rs.params.name = @ptrCast(copy.ptr);
+    }
+
+    if (p.*.query_count > 0) {
+        const qn = p.*.query_count;
+        if (!allocQueryStorage(rs, p.*.queries, qn, total_terms, p.*.access_count)) {
+            releaseSystem(rs);
+            E.fail(out_error, .out_of_memory, "query storage allocation failed", @src());
+            return null;
+        }
+
+        var term_at: usize = 0;
+        for (0..qn) |q| {
+            const decl = p.*.queries[q];
+            const owned = rs.term_storage[term_at..][0..decl.term_count];
+            @memcpy(owned, decl.terms[0..decl.term_count]);
+            term_at += decl.term_count;
+            rs.query_decls[q] = .{ .terms = owned.ptr, .term_count = decl.term_count };
+            rs.query_ids[q] = c.KE_QUERY_INVALID;
+            for (owned) |term| mergeAccess(rs, term);
+        }
+        rs.query_count = qn;
+
+        for (0..p.*.access_count) |i| mergeAccess(rs, p.*.access_list[i]);
+
+        rs.params.access_list = rs.derived_access.ptr;
+        rs.params.access_count = rs.derived_access_count;
+        rs.params.queries = null;
+        rs.params.query_count = 0;
+
+        for (0..qn) |q| {
+            if (!rs.segs[q].reserve(initial_segments_per_query, rs.query_decls[q].term_count)) {
+                releaseSystem(rs);
+                E.fail(out_error, .out_of_memory, "query segment storage allocation failed", @src());
+                return null;
+            }
+            rs.seg_ptrs[q] = rs.segs[q].ptr;
+        }
+    } else if (p.*.access_list != null and p.*.access_count > 0) {
+        const copy = heap.gpa.alloc(c.ke_component_access, p.*.access_count) catch {
+            releaseSystem(rs);
+            E.fail(out_error, .out_of_memory, "system access list allocation failed", @src());
+            return null;
+        };
+        @memcpy(copy, p.*.access_list[0..p.*.access_count]);
+        rs.access_storage = copy;
+        rs.params.access_list = copy.ptr;
+    }
+
+    return rs;
+}
+
+fn appendSystem(h: *RuntimeHandle, rs: *RegisteredSystem, out_error: [*c][*c]c.ke_error) bool {
     var in_phase: u32 = 0;
     for (0..h.state.system_count) |si| {
-        if (h.state.systems.?[si].?.params.phase == p.*.phase) in_phase += 1;
+        if (h.state.systems.?[si].?.params.phase == rs.params.phase) in_phase += 1;
     }
     if (in_phase >= h.state.max_systems_per_phase) {
         E.fail(out_error, .out_of_memory, "phase is at its max_systems_per_phase limit", @src());
-        return 0;
+        return false;
     }
 
     if (h.state.system_count == h.state.system_capacity) {
         const new_cap: usize = if (h.state.system_capacity != 0) h.state.system_capacity * 2 else 4;
         const new_buf = cAlloc(?*RegisteredSystem, new_cap) orelse {
             E.fail(out_error, .out_of_memory, "system array allocation failed", @src());
-            return 0;
+            return false;
         };
         if (h.state.systems) |old| {
             @memcpy(new_buf[0..h.state.system_count], old[0..h.state.system_count]);
@@ -516,80 +732,113 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
         h.state.system_capacity = new_cap;
     }
 
-    const rs_mem = cAlloc(RegisteredSystem, 1) orelse {
-        E.fail(out_error, .out_of_memory, "registered_system allocation failed", @src());
-        return 0;
-    };
-    const rs = &rs_mem[0];
     h.state.systems.?[h.state.system_count] = rs;
     h.state.system_count += 1;
+    return true;
+}
 
-    rs.params = p.*;
-    rs.query_count = 0;
-    rs.seg_storage = null;
-    rs.derived_access_count = 0;
-    @memset(std.mem.asBytes(&rs.extracted), 0);
+fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
+    if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return 0;
+    }
+    const h = handleOf(self.?);
 
-    if (p.*.queries != null and p.*.query_count > 0) {
-        var qn = p.*.query_count;
-        if (qn > KE_MAX_QUERIES_PER_SYSTEM) qn = KE_MAX_QUERIES_PER_SYSTEM;
-
-        for (0..qn) |q| {
-            const qd = &p.*.queries[q];
-            var tn = qd.term_count;
-            if (tn > MAX_TERMS) tn = MAX_TERMS;
-
-            rs.query_decls[q] = qd.*;
-            rs.query_decls[q].term_count = tn;
-            rs.query_ids[q] = c.KE_QUERY_INVALID;
-
-            for (0..tn) |t| {
-                var found = false;
-                for (0..rs.derived_access_count) |d| {
-                    if (rs.derived_access[d].cid == qd.terms[t].cid) {
-                        rs.derived_access[d].access |= qd.terms[t].access;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found and rs.derived_access_count < KE_MAX_QUERIES_PER_SYSTEM * MAX_TERMS) {
-                    rs.derived_access[rs.derived_access_count].cid = qd.terms[t].cid;
-                    rs.derived_access[rs.derived_access_count].access = qd.terms[t].access;
-                    rs.derived_access_count += 1;
-                }
-            }
+    const rs = buildSystem(p, out_error) orelse return 0;
+    rs.id = @atomicRmw(u64, &h.state.next_system_id, .Add, 1, .monotonic) + 1;
+    if (h.state.in_tick.load(.acquire) or h.state.in_render.load(.acquire)) {
+        var head = h.state.pending_systems.load(.acquire);
+        while (true) {
+            rs.pending_next = head;
+            head = h.state.pending_systems.cmpxchgWeak(head, rs, .release, .acquire) orelse return rs.id;
         }
-        rs.query_count = qn;
+    }
+    _ = runtimeJoinPendingRender(h);
+    if (!appendSystem(h, rs, out_error)) {
+        releaseSystem(rs);
+        return 0;
+    }
+    return rs.id;
+}
 
-        for (0..p.*.access_count) |i| {
-            var found = false;
-            for (0..rs.derived_access_count) |d| {
-                if (rs.derived_access[d].cid == p.*.access_list[i].cid) {
-                    rs.derived_access[d].access |= p.*.access_list[i].access;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found and rs.derived_access_count < KE_MAX_QUERIES_PER_SYSTEM * MAX_TERMS) {
-                rs.derived_access[rs.derived_access_count] = p.*.access_list[i];
-                rs.derived_access_count += 1;
-            }
-        }
-
-        rs.params.access_list = &rs.derived_access;
-        rs.params.access_count = rs.derived_access_count;
-        rs.params.queries = null;
-        rs.params.query_count = 0;
-
-        rs.seg_storage = cAlloc(c.ke_ecs_segment, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY) orelse {
-            h.state.system_count -= 1;
-            E.fail(out_error, .out_of_memory, "query segment storage allocation failed", @src());
-            return 0;
-        };
+fn applyPendingSystems(h: *RuntimeHandle) void {
+    var stack = h.state.pending_systems.swap(null, .acq_rel);
+    var removals = h.state.pending_removals.swap(null, .acq_rel);
+    if (stack == null and removals == null) return;
+    _ = runtimeJoinPendingRender(h);
+    var reversed: ?*RegisteredSystem = null;
+    while (stack) |rs| {
+        stack = rs.pending_next;
+        rs.pending_next = reversed;
+        reversed = rs;
+    }
+    while (reversed) |rs| {
+        reversed = rs.pending_next;
+        rs.pending_next = null;
+        if (!appendSystem(h, rs, null)) releaseSystem(rs);
     }
 
-    h.state.next_system_id += 1;
-    return h.state.next_system_id;
+    var reversed_removals: ?*PendingRemoval = null;
+    while (removals) |r| {
+        removals = r.next;
+        r.next = reversed_removals;
+        reversed_removals = r;
+    }
+    while (reversed_removals) |r| {
+        reversed_removals = r.next;
+        _ = removeSystemNow(h, r.id);
+        cFree(PendingRemoval, @ptrCast(r), 1);
+    }
+}
+
+fn removeSystemNow(h: *RuntimeHandle, id: c.ke_system_id) bool {
+    const systems = h.state.systems orelse return false;
+    for (0..h.state.system_count) |i| {
+        if (systems[i].?.id != id) continue;
+        releaseSystem(systems[i].?);
+        var j = i;
+        while (j + 1 < h.state.system_count) : (j += 1) systems[j] = systems[j + 1];
+        h.state.system_count -= 1;
+        if (i < h.state.systems_prepared) h.state.systems_prepared -= 1;
+        return true;
+    }
+    return false;
+}
+
+fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (self == null or self.?.handle == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const h = handleOf(self.?);
+    if (id == 0 or id > @atomicLoad(u64, &h.state.next_system_id, .monotonic)) {
+        E.fail(out_error, .not_found, "no system has that id", @src());
+        return false;
+    }
+    if (h.state.in_tick.load(.acquire) or h.state.in_render.load(.acquire)) {
+        const node = cAlloc(PendingRemoval, 1) orelse {
+            E.fail(out_error, .out_of_memory, "removal record allocation failed", @src());
+            return false;
+        };
+        node[0] = .{ .id = id, .next = null };
+        var head = h.state.pending_removals.load(.acquire);
+        while (true) {
+            node[0].next = head;
+            head = h.state.pending_removals.cmpxchgWeak(head, &node[0], .release, .acquire) orelse return true;
+        }
+    }
+    _ = runtimeJoinPendingRender(h);
+    if (removeSystemNow(h, id)) return true;
+    E.fail(out_error, .not_found, "no system has that id", @src());
+    return false;
+}
+
+fn runtimeLastSystem(self: ?*c.ke_runtime) callconv(.c) c.ke_system_id {
+    if (self == null or self.?.handle == null) return 0;
+    const h = handleOf(self.?);
+    const systems = h.state.systems orelse return 0;
+    if (h.state.system_count == 0) return 0;
+    return systems[h.state.system_count - 1].?.id;
 }
 
 const TaskPkg = struct {
@@ -656,6 +905,7 @@ fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
 }
 
 fn freePhaseScratch(h: *RuntimeHandle) void {
+    h.state.extract_scratch.free();
     const n: usize = @as(usize, h.state.max_systems_per_phase) * KE_RUNTIME_PHASE_COUNT;
     cFree(u32, h.state.phase_indices, n);
     cFree(c.ke_runtime_system_params, h.state.phase_params, n);
@@ -671,7 +921,13 @@ fn freePhaseScratch(h: *RuntimeHandle) void {
     h.state.phase_pinned = null;
 }
 
+fn segmentAllocationFailed(rs: *const RegisteredSystem) PhaseFailure {
+    return .{ .type = E.typeOf(.out_of_memory), .system = rs.params.name };
+}
+
 fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
+    if (phase == c.KE_PHASE_RENDER) h.state.in_render.store(true, .release);
+    defer if (phase == c.KE_PHASE_RENDER) h.state.in_render.store(false, .release);
     if (h.state.system_count == 0) return .{};
 
     const cap: usize = h.state.max_systems_per_phase;
@@ -707,14 +963,10 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
             if (wave_assignments[k] != w) continue;
             const rs = h.state.systems.?[phase_indices[k]].?;
 
-            if (rs.query_count > 0 and rs.seg_storage != null) {
-                if (phase != c.KE_PHASE_RENDER and h.state.ecs.query_resolve != null) {
-                    for (0..rs.query_count) |q| {
-                        const dst = &rs.seg_storage.?[q * KE_MAX_SEGMENTS_PER_QUERY];
-                        var cnt: usize = 0;
-                        h.state.ecs.query_resolve.?(h.state.ecs, rs.query_ids[q], dst, KE_MAX_SEGMENTS_PER_QUERY, &cnt);
-                        rs.seg_counts[q] = cnt;
-                    }
+            if (rs.query_count > 0 and phase != c.KE_PHASE_RENDER and h.state.ecs.query_resolve != null) {
+                for (0..rs.query_count) |q| {
+                    rs.seg_counts[q] = resolveInto(h.state.ecs, rs.query_ids[q], &rs.segs[q], rs.query_decls[q].term_count) orelse return segmentAllocationFailed(rs);
+                    rs.seg_ptrs[q] = rs.segs[q].ptr;
                 }
             }
 
@@ -731,12 +983,12 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
                 pkg.state.slice_index = slice;
                 pkg.state.slice_count = slices;
 
-                if (rs.query_count > 0 and rs.seg_storage != null) {
-                    pkg.state.seg_storage = rs.seg_storage;
-                    pkg.state.seg_counts = &rs.seg_counts;
+                if (rs.query_count > 0) {
+                    pkg.state.seg_ptrs = rs.seg_ptrs.ptr;
+                    pkg.state.seg_counts = rs.seg_counts.ptr;
                     pkg.state.view_query_count = rs.query_count;
                 } else {
-                    pkg.state.seg_storage = null;
+                    pkg.state.seg_ptrs = null;
                     pkg.state.seg_counts = null;
                     pkg.state.view_query_count = 0;
                 }
@@ -774,30 +1026,36 @@ fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: 
     return @min(workers, room);
 }
 
-fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) void {
-    if (h.state.ecs.query_register == null) return;
+fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) ?*RegisteredSystem {
+    if (h.state.ecs.query_register == null) return null;
     for (first..last) |si| {
         const rs = h.state.systems.?[si].?;
         for (0..rs.query_count) |q| {
             const qd = &rs.query_decls[q];
-            var cids: [MAX_TERMS]c.ke_component_id = undefined;
+            const cids = heap.gpa.alloc(c.ke_component_id, qd.term_count) catch return rs;
+            defer heap.gpa.free(cids);
             for (0..qd.term_count) |t| cids[t] = qd.terms[t].cid;
-            rs.query_ids[q] = h.state.ecs.query_register.?(h.state.ecs, &cids, qd.term_count);
+            rs.query_ids[q] = h.state.ecs.query_register.?(h.state.ecs, cids.ptr, qd.term_count);
+            if (rs.query_ids[q] == c.KE_QUERY_INVALID) return rs;
         }
     }
+    return null;
 }
 
-fn runtimePrepareSystems(h: *RuntimeHandle) void {
-    if (h.state.systems_prepared >= h.state.system_count) return;
+fn runtimePrepareSystems(h: *RuntimeHandle) PhaseFailure {
+    if (h.state.systems_prepared >= h.state.system_count) return .{};
     const first = h.state.systems_prepared;
     const last = h.state.system_count;
-    runtimeBindQueries(h, first, last);
+    if (runtimeBindQueries(h, first, last)) |refused| {
+        return .{ .type = E.typeOf(.invalid_argument), .system = refused.params.name };
+    }
     h.state.systems_prepared = last;
+    return .{};
 }
 
-fn runtimeExtractRenderState(h: *RuntimeHandle) void {
-    if (h.state.ecs.query_resolve == null) return;
-    var raw: [KE_MAX_SEGMENTS_PER_QUERY]c.ke_ecs_segment = undefined;
+fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
+    if (h.state.ecs.query_resolve == null) return .{};
+    const scratch = &h.state.extract_scratch;
 
     for (0..h.state.system_count) |si| {
         const rs = h.state.systems.?[si].?;
@@ -815,7 +1073,8 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
             }
 
             var raw_count: usize = 0;
-            h.state.ecs.query_resolve.?(h.state.ecs, rs.query_ids[q], &raw, KE_MAX_SEGMENTS_PER_QUERY, &raw_count);
+            raw_count = resolveInto(h.state.ecs, rs.query_ids[q], scratch, qd.term_count) orelse return segmentAllocationFailed(rs);
+            const raw = scratch.ptr.?;
 
             var total: usize = 0;
             for (0..raw_count) |s| total += raw[s].count;
@@ -830,12 +1089,13 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
 
                     for (0..qd.term_count) |t| {
                         if (eq.col_elem_size[t] == 0) continue;
-                        const new_col = cAllocBytes(eq.col_elem_size[t] *% new_cap) orelse continue;
+                        const new_col = cAllocBytes(eq.col_elem_size[t] *% new_cap) orelse return segmentAllocationFailed(rs);
                         if (eq.col_bufs[t]) |oldc| cFreeBytes(oldc, eq.col_elem_size[t] *% eq.capacity);
                         eq.col_bufs[t] = new_col;
                     }
                     eq.capacity = new_cap;
                 }
+                if (total > eq.capacity) return segmentAllocationFailed(rs);
             }
 
             const cap = eq.capacity;
@@ -860,17 +1120,17 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) void {
             eq.seg.entities = if (eq.entities_buf) |eb| eb else null;
             eq.seg.count = written;
             for (0..qd.term_count) |t| {
-                eq.seg.columns[t] = if (eq.col_elem_size[t] != 0) eq.col_bufs[t] else null;
+                eq.col_ptrs[t] = if (eq.col_elem_size[t] != 0) eq.col_bufs[t] else null;
             }
-            var t2: usize = qd.term_count;
-            while (t2 < MAX_TERMS) : (t2 += 1) eq.seg.columns[t2] = null;
+            eq.seg.columns = eq.col_ptrs.ptr;
+            eq.seg.column_count = qd.term_count;
 
-            if (rs.seg_storage) |ss| {
-                ss[q * KE_MAX_SEGMENTS_PER_QUERY] = eq.seg;
-                rs.seg_counts[q] = if (written > 0) 1 else 0;
-            }
+            rs.segs[q].ptr.?[0] = eq.seg;
+            rs.seg_ptrs[q] = rs.segs[q].ptr;
+            rs.seg_counts[q] = if (written > 0) 1 else 0;
         }
     }
+    return .{};
 }
 
 fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
@@ -896,14 +1156,30 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
+    const h = handleOf(self.?);
+    applyPendingSystems(h);
+    h.state.in_tick.store(true, .release);
+    defer h.state.in_tick.store(false, .release);
+    return runtimeTickBody(self, dt, out_error);
+}
+
+fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) bool {
+    if (self == null or self.?.handle == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
     if (dt < 0.0) {
         E.fail(out_error, .invalid_argument, "negative dt", @src());
         return false;
     }
     const h = handleOf(self.?);
 
-    runtimePrepareSystems(h);
-    var failure = runtimeRunPhase(h, c.KE_PHASE_PRE_UPDATE, dt);
+    var failure = runtimePrepareSystems(h);
+    if (failure.type == null and !h.state.started) {
+        h.state.started = true;
+        failure = runtimeRunPhase(h, c.KE_PHASE_STARTUP, 0.0);
+    }
+    if (failure.type == null) failure = runtimeRunPhase(h, c.KE_PHASE_PRE_UPDATE, dt);
 
     h.state.fixed_accumulator += dt;
     if (h.state.fixed_accumulator > h.state.fixed_dt_max_accum) {
@@ -923,7 +1199,11 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
         return false;
     }
 
-    runtimeExtractRenderState(h);
+    failure = runtimeExtractRenderState(h);
+    if (failure.type) |t| {
+        E.failWithType(out_error, t, failure.system orelse "render extraction failed", @src());
+        return false;
+    }
 
     if (h.state.render_job == null) {
         if (cAlloc(RenderJob, 1)) |rj| h.state.render_job = &rj[0];
@@ -963,6 +1243,8 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
 
     _ = runtimeJoinPendingRender(h);
 
+    if (h.state.started) _ = runtimeRunPhase(h, c.KE_PHASE_SHUTDOWN, 0.0);
+
     if (h.state.modules) |modules| {
         var i = h.state.module_count;
         while (i > 0) {
@@ -974,18 +1256,21 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
 
     if (h.state.render_job) |rj| cFree(RenderJob, @ptrCast(rj), 1);
 
+    var stranded_removals = h.state.pending_removals.swap(null, .acq_rel);
+    while (stranded_removals) |r| {
+        stranded_removals = r.next;
+        cFree(PendingRemoval, @ptrCast(r), 1);
+    }
+    var stranded = h.state.pending_systems.swap(null, .acq_rel);
+    while (stranded) |rs| {
+        stranded = rs.pending_next;
+        releaseSystem(rs);
+    }
+
     if (h.state.systems) |systems| {
         for (0..h.state.system_count) |i| {
             const rs = systems[i].?;
-            if (rs.seg_storage) |ss| cFree(c.ke_ecs_segment, ss, KE_MAX_QUERIES_PER_SYSTEM * KE_MAX_SEGMENTS_PER_QUERY);
-            for (0..KE_MAX_QUERIES_PER_SYSTEM) |q| {
-                const eq = &rs.extracted[q];
-                if (eq.entities_buf) |eb| cFree(c.ke_entity, eb, eq.capacity);
-                for (0..MAX_TERMS) |t| {
-                    if (eq.col_bufs[t]) |cb| cFreeBytes(cb, eq.col_elem_size[t] *% eq.capacity);
-                }
-            }
-            cFree(RegisteredSystem, @ptrCast(rs), 1);
+            releaseSystem(rs);
         }
         cFree(?*RegisteredSystem, systems, h.state.system_capacity);
     }
@@ -1015,6 +1300,7 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 
     const max_per_phase: u32 = if (params != null and params.*.max_systems_per_phase > 0) params.*.max_systems_per_phase else 256;
     h.state.max_systems_per_phase = max_per_phase;
+    h.state.extract_scratch = .{};
     const n: usize = @as(usize, max_per_phase) * KE_RUNTIME_PHASE_COUNT;
     h.state.phase_indices = cAlloc(u32, n);
     h.state.phase_params = cAlloc(c.ke_runtime_system_params, n);
@@ -1034,6 +1320,8 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
     h.api.handle = h;
     h.api.register_module = &runtimeRegisterModule;
     h.api.register_system = &runtimeRegisterSystem;
+    h.api.unregister_system = &runtimeUnregisterSystem;
+    h.api.last_system = &runtimeLastSystem;
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
 
@@ -1086,6 +1374,15 @@ const Fixture = struct {
         _ = self.rt().flush_render.?(self.rt(), null);
     }
 };
+
+fn queryOf(terms: []const c.ke_component_access) c.ke_query_decl {
+    return .{ .terms = terms.ptr, .term_count = @intCast(terms.len) };
+}
+
+fn withQueries(sys: *c.ke_runtime_system_params, decls: []const c.ke_query_decl) void {
+    sys.queries = decls.ptr;
+    sys.query_count = @intCast(decls.len);
+}
 
 fn access(cid: u32, mode: c_int) c.ke_component_access {
     return .{ .cid = cid, .access = @intCast(mode) };
@@ -1386,6 +1683,497 @@ test "registering a system with no execute body is refused" {
     try testing.expectEqual(@as(c.ke_system_id, 0), f.rt().register_system.?(f.rt(), &sys, null));
 }
 
+const BareRuntime = struct {
+    ecs: c.ke_ecs = std.mem.zeroes(c.ke_ecs),
+    scheduler: c.ke_scheduler = std.mem.zeroes(c.ke_scheduler),
+    runtime_h: c.ke_runtime_handle = undefined,
+
+    fn init(self: *BareRuntime) !void {
+        var rp = std.mem.zeroes(c.ke_runtime_params);
+        self.runtime_h = ke_runtime_create(&self.ecs, &self.scheduler, &rp, null);
+        try testing.expect(self.runtime_h.ref != null);
+    }
+
+    fn deinit(self: *BareRuntime) void {
+        self.runtime_h.destroy.?(self.runtime_h.ref.?);
+    }
+
+    fn rt(self: *BareRuntime) *c.ke_runtime {
+        return @ptrCast(self.runtime_h.ref);
+    }
+
+    fn registered(self: *BareRuntime, index: usize) *RegisteredSystem {
+        return handleOf(self.rt()).state.systems.?[index].?;
+    }
+};
+
+fn noopBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    return true;
+}
+
+fn scribble(bytes: []u8) void {
+    @memset(bytes, 'X');
+}
+
+test "a registered system keeps its own copy of the name" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var name_buf = [_]u8{ 'M', 'o', 'v', 'e', 0 };
+    var sys = systemParams(@ptrCast(&name_buf), c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    try testing.expect(b.rt().register_system.?(b.rt(), &sys, null) != 0);
+    scribble(&name_buf);
+
+    try testing.expectEqualStrings("Move", std.mem.span(b.registered(0).params.name));
+}
+
+test "a registered system keeps its own copy of the access list when it declares no query" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var list = [_]c.ke_component_access{ access(7, c.KE_ACCESS_WRITE), access(9, c.KE_ACCESS_READ) };
+    var sys = systemParams("Plain", c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    sys.access_list = &list;
+    sys.access_count = list.len;
+    try testing.expect(b.rt().register_system.?(b.rt(), &sys, null) != 0);
+    scribble(std.mem.sliceAsBytes(&list));
+
+    const kept = b.registered(0).params;
+    try testing.expectEqual(@as(usize, 2), @as(usize, kept.access_count));
+    try testing.expectEqual(@as(c.ke_component_id, 7), kept.access_list[0].cid);
+    try testing.expectEqual(@as(c.ke_component_id, 9), kept.access_list[1].cid);
+}
+
+fn lastQueryBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    var count: usize = 0;
+    _ = ctx.?.view.?(ctx, 19, &count);
+    seen_segments = count;
+    return true;
+}
+
+test "a system declaring twenty queries is resolved and viewed through every one of them" {
+    var r = InlineRuntime{};
+    r.bare.ecs.query_register = @ptrCast(&fakeQueryRegister);
+    r.bare.ecs.query_resolve = @ptrCast(&fakeQueryResolveMany);
+    r.bare.ecs.component_size = @ptrCast(&fakeComponentSize);
+    try r.init();
+    defer r.bare.deinit();
+
+    var terms: [20]c.ke_component_access = undefined;
+    var decls: [20]c.ke_query_decl = undefined;
+    for (&terms, &decls) |*t, *d| {
+        t.* = access(1, c.KE_ACCESS_READ);
+        d.* = queryOf(t[0..1]);
+    }
+    var sys = systemParams("Greedy", c.KE_PHASE_UPDATE);
+    sys.execute = &lastQueryBody;
+    withQueries(&sys, &decls);
+    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+
+    seen_segments = 0;
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, many_segments), seen_segments);
+}
+
+fn termCountBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    var count: usize = 0;
+    const segs = ctx.?.view.?(ctx, 0, &count);
+    seen_segments = count;
+    seen_entities = if (count > 0) segs[0].column_count else 0;
+    return true;
+}
+
+test "a query of twelve terms is registered and its segments carry twelve columns" {
+    var r = InlineRuntime{};
+    r.bare.ecs.query_register = @ptrCast(&fakeQueryRegister);
+    r.bare.ecs.query_resolve = @ptrCast(&fakeQueryResolveMany);
+    r.bare.ecs.component_size = @ptrCast(&fakeComponentSize);
+    try r.init();
+    defer r.bare.deinit();
+
+    var terms: [12]c.ke_component_access = undefined;
+    for (&terms, 0..) |*t, i| t.* = access(@intCast(i + 1), c.KE_ACCESS_READ);
+    var sys = systemParams("Wide", c.KE_PHASE_UPDATE);
+    sys.execute = &termCountBody;
+    withQueries(&sys, &.{queryOf(&terms)});
+    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+
+    fake_term_count = 12;
+    defer fake_term_count = 1;
+    seen_segments = 0;
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, many_segments), seen_segments);
+    try testing.expectEqual(@as(usize, 12), seen_entities);
+}
+
+test "a query counting terms it does not point at is refused" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var sys = systemParams("Dangling", c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    const decls = [_]c.ke_query_decl{.{ .terms = null, .term_count = 2 }};
+    withQueries(&sys, &decls);
+
+    var err: [*c]c.ke_error = null;
+    try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
+    try testing.expect(err != null);
+}
+
+test "a query declaring no terms is refused" {
+    var b = BareRuntime{};
+    try b.init();
+    defer b.deinit();
+
+    var sys = systemParams("Empty", c.KE_PHASE_UPDATE);
+    sys.execute = &noopBody;
+    var terms = [_]c.ke_component_access{};
+    withQueries(&sys, &.{queryOf(&terms)});
+
+    var err: [*c]c.ke_error = null;
+    try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
+    try testing.expect(err != null);
+}
+
+var inline_failure: ?*const c.ke_error_type = null;
+var inline_token: u8 = 0;
+
+fn inlineDispatch(_: [*c]c.ke_scheduler, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
+    inline_failure = null;
+    func.?(data, &inline_failure);
+    return @ptrCast(&inline_token);
+}
+
+fn inlineDispatchPinned(self: [*c]c.ke_scheduler, _: u32, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
+    return inlineDispatch(self, func, data);
+}
+
+fn inlineWait(_: [*c]c.ke_scheduler, _: ?*c.ke_task, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (inline_failure) |t| {
+        E.failWithType(out_error, t, "inline task failed", @src());
+        return false;
+    }
+    return true;
+}
+
+const InlineRuntime = struct {
+    bare: BareRuntime = .{},
+
+    fn init(self: *InlineRuntime) !void {
+        self.bare.scheduler.dispatch = @ptrCast(&inlineDispatch);
+        self.bare.scheduler.dispatch_pinned = @ptrCast(&inlineDispatchPinned);
+        self.bare.scheduler.wait = @ptrCast(&inlineWait);
+        try self.bare.init();
+    }
+
+    fn rt(self: *InlineRuntime) *c.ke_runtime {
+        return self.bare.rt();
+    }
+};
+
+const PhaseLog = struct {
+    seen: [16]c_int = undefined,
+    count: usize = 0,
+};
+
+fn phaseLogBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    _ = ctx;
+    const entry: *const PhaseLogEntry = @ptrCast(@alignCast(ud.?));
+    entry.log.seen[entry.log.count] = entry.phase;
+    entry.log.count += 1;
+    return true;
+}
+
+const PhaseLogEntry = struct {
+    log: *PhaseLog,
+    phase: c_int,
+};
+
+test "the startup phase runs once, before the first tick's other phases" {
+    var r = InlineRuntime{};
+    try r.init();
+
+    var log = PhaseLog{};
+    const phases = [_]c_int{ c.KE_PHASE_UPDATE, c.KE_PHASE_STARTUP, c.KE_PHASE_PRE_UPDATE };
+    var entries: [phases.len]PhaseLogEntry = undefined;
+    for (phases, 0..) |ph, i| {
+        entries[i] = .{ .log = &log, .phase = ph };
+        var sys = systemParams("Logged", ph);
+        sys.execute = &phaseLogBody;
+        sys.user_data = &entries[i];
+        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    }
+
+    for (0..3) |_| try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    r.bare.deinit();
+
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_STARTUP), log.seen[0]);
+    var startups: usize = 0;
+    for (log.seen[0..log.count]) |ph| {
+        if (ph == c.KE_PHASE_STARTUP) startups += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), startups);
+}
+
+test "the shutdown phase runs once when the runtime is destroyed, after every tick" {
+    var r = InlineRuntime{};
+    try r.init();
+
+    var log = PhaseLog{};
+    const phases = [_]c_int{ c.KE_PHASE_SHUTDOWN, c.KE_PHASE_UPDATE };
+    var entries: [phases.len]PhaseLogEntry = undefined;
+    for (phases, 0..) |ph, i| {
+        entries[i] = .{ .log = &log, .phase = ph };
+        var sys = systemParams("Logged", ph);
+        sys.execute = &phaseLogBody;
+        sys.user_data = &entries[i];
+        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    }
+
+    for (0..2) |_| try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, 2), log.count);
+    r.bare.deinit();
+
+    try testing.expectEqual(@as(usize, 3), log.count);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_SHUTDOWN), log.seen[2]);
+}
+
+fn fakeQueryRegister(_: ?*c.ke_ecs, _: [*c]const c.ke_component_id, _: usize) callconv(.c) c.ke_query_id {
+    return 1;
+}
+
+const many_segments = 100;
+var many_entity: [1]c.ke_entity = .{7};
+var many_column: [1]u32 = .{9};
+var seen_segments: usize = 0;
+var seen_entities: usize = 0;
+
+var fake_term_count: usize = 1;
+
+fn fakeQueryResolveMany(_: ?*c.ke_ecs, _: c.ke_query_id, out: [*c]c.ke_ecs_segment, max: usize, out_columns: [*c]?*anyopaque, out_count: [*c]usize) callconv(.c) void {
+    for (0..@min(max, many_segments)) |i| {
+        const cols = out_columns + i * fake_term_count;
+        for (0..fake_term_count) |t| cols[t] = &many_column;
+        out[i] = std.mem.zeroes(c.ke_ecs_segment);
+        out[i].count = 1;
+        out[i].entities = &many_entity;
+        out[i].columns = cols;
+        out[i].column_count = @intCast(fake_term_count);
+    }
+    out_count.* = many_segments;
+}
+
+fn fakeComponentSize(_: ?*c.ke_ecs, _: c.ke_component_id) callconv(.c) usize {
+    return 4;
+}
+
+fn viewBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    var count: usize = 0;
+    const segs = ctx.?.view.?(ctx, 0, &count);
+    seen_segments = count;
+    seen_entities = 0;
+    for (0..count) |i| seen_entities += segs[i].count;
+    return true;
+}
+
+fn manySegmentRuntime(r: *InlineRuntime, phase: c_int) !void {
+    r.bare.ecs.query_register = @ptrCast(&fakeQueryRegister);
+    r.bare.ecs.query_resolve = @ptrCast(&fakeQueryResolveMany);
+    r.bare.ecs.component_size = @ptrCast(&fakeComponentSize);
+    try r.init();
+    const terms = [_]c.ke_component_access{access(1, c.KE_ACCESS_READ)};
+    var sys = systemParams("Fragmented", phase);
+    sys.execute = &viewBody;
+    withQueries(&sys, &.{queryOf(&terms)});
+    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    seen_segments = 0;
+    seen_entities = 0;
+}
+
+test "a sim query matching more segments than its buffer starts with is resolved into a bigger one and seen whole" {
+    var r = InlineRuntime{};
+    try manySegmentRuntime(&r, c.KE_PHASE_UPDATE);
+    defer r.bare.deinit();
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, many_segments), seen_segments);
+    try testing.expectEqual(@as(usize, many_segments), seen_entities);
+}
+
+test "a render query matching more segments than the extraction scratch starts with is extracted whole" {
+    var r = InlineRuntime{};
+    try manySegmentRuntime(&r, c.KE_PHASE_RENDER);
+    defer r.bare.deinit();
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, 1), seen_segments);
+    try testing.expectEqual(@as(usize, many_segments), seen_entities);
+}
+
+test "an unregistered system no longer runs and the others keep running" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var log = PhaseLog{};
+    var entries: [3]PhaseLogEntry = undefined;
+    var ids: [3]c.ke_system_id = undefined;
+    const phases = [_]c_int{ c.KE_PHASE_PRE_UPDATE, c.KE_PHASE_UPDATE, c.KE_PHASE_POST_UPDATE };
+    for (phases, 0..) |ph, i| {
+        entries[i] = .{ .log = &log, .phase = ph };
+        var sys = systemParams("Logged", ph);
+        sys.execute = &phaseLogBody;
+        sys.user_data = &entries[i];
+        ids[i] = r.rt().register_system.?(r.rt(), &sys, null);
+        try testing.expect(ids[i] != 0);
+    }
+
+    try testing.expectEqual(ids[2], r.rt().last_system.?(r.rt()));
+    try testing.expect(r.rt().unregister_system.?(r.rt(), ids[1], null));
+    try testing.expectEqual(ids[2], r.rt().last_system.?(r.rt()));
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!r.rt().unregister_system.?(r.rt(), ids[1], &err));
+    try testing.expect(err != null);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(usize, 2), log.count);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_PRE_UPDATE), log.seen[0]);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_POST_UPDATE), log.seen[1]);
+}
+
+const MidTick = struct {
+    rt: *c.ke_runtime,
+    registered: bool = false,
+    late_runs: u32 = 0,
+    unregister_accepted: bool = false,
+    keep: bool = false,
+    late_id: c.ke_system_id = 0,
+};
+
+fn lateBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const m: *MidTick = @ptrCast(@alignCast(ud.?));
+    m.late_runs += 1;
+    return true;
+}
+
+fn registeringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const m: *MidTick = @ptrCast(@alignCast(ud.?));
+    if (m.registered) return true;
+    m.registered = true;
+    var late = systemParams("Late", c.KE_PHASE_UPDATE);
+    late.execute = &lateBody;
+    late.user_data = m;
+    m.late_id = m.rt.register_system.?(m.rt, &late, null);
+    if (!m.keep) m.unregister_accepted = m.rt.unregister_system.?(m.rt, m.late_id, null);
+    return true;
+}
+
+test "a system registered and unregistered by the same body never runs" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var m = MidTick{ .rt = r.rt() };
+    var first = systemParams("Registers", c.KE_PHASE_UPDATE);
+    first.execute = &registeringBody;
+    first.user_data = &m;
+    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(m.late_id != 0);
+    try testing.expect(m.unregister_accepted);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 0), m.late_runs);
+}
+
+test "a system registered from a body mid-tick starts running on the next tick" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var m = MidTick{ .rt = r.rt(), .keep = true };
+    var first = systemParams("Registers", c.KE_PHASE_UPDATE);
+    first.execute = &registeringBody;
+    first.user_data = &m;
+    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(m.late_id != 0);
+    try testing.expectEqual(@as(u32, 0), m.late_runs);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 1), m.late_runs);
+    try testing.expectEqual(m.late_id, r.rt().last_system.?(r.rt()));
+}
+
+fn unregisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const m: *MidTick = @ptrCast(@alignCast(ud.?));
+    if (m.registered) return true;
+    m.registered = true;
+    m.unregister_accepted = m.rt.unregister_system.?(m.rt, m.late_id, null);
+    return true;
+}
+
+test "a system unregistered from a body stops running from the next tick, and its removal is not lost" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var m = MidTick{ .rt = r.rt() };
+    var late = systemParams("Doomed", c.KE_PHASE_PRE_UPDATE);
+    late.execute = &lateBody;
+    late.user_data = &m;
+    m.late_id = r.rt().register_system.?(r.rt(), &late, null);
+    var killer = systemParams("Killer", c.KE_PHASE_UPDATE);
+    killer.execute = &unregisteringBody;
+    killer.user_data = &m;
+    try testing.expect(r.rt().register_system.?(r.rt(), &killer, null) != 0);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 1), m.late_runs);
+    try testing.expect(m.unregister_accepted);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 1), m.late_runs);
+}
+
+fn renderRegisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    const m: *MidTick = @ptrCast(@alignCast(ud.?));
+    if (m.registered) return true;
+    m.registered = true;
+    var late = systemParams("LateFromRender", c.KE_PHASE_UPDATE);
+    late.execute = &lateBody;
+    late.user_data = m;
+    m.late_id = m.rt.register_system.?(m.rt, &late, null);
+    return true;
+}
+
+test "a system registered from a render body is queued instead of waiting on the render phase it runs in" {
+    var r = InlineRuntime{};
+    try r.init();
+    defer r.bare.deinit();
+
+    var m = MidTick{ .rt = r.rt() };
+    var first = systemParams("RenderRegisters", c.KE_PHASE_RENDER);
+    first.execute = &renderRegisteringBody;
+    first.user_data = &m;
+    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(m.late_id != 0);
+    try testing.expectEqual(@as(u32, 0), m.late_runs);
+
+    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expectEqual(@as(u32, 1), m.late_runs);
+}
+
 test "creating a runtime without an ecs is refused" {
     var f = try Fixture.init();
     defer f.deinit();
@@ -1672,23 +2460,17 @@ test "the render extract carries this tick's sim write" {
     g_extract_probe.seen_ptr.store(0, .release);
     g_extract_probe.runs.store(0, .release);
 
-    var wq = std.mem.zeroes(c.ke_query_decl);
-    wq.terms[0] = access(cid, c.KE_ACCESS_WRITE);
-    wq.term_count = 1;
+    const wterms = [_]c.ke_component_access{access(cid, c.KE_ACCESS_WRITE)};
 
     var sim = systemParams("SimWriter", c.KE_PHASE_UPDATE);
-    sim.queries = &wq;
-    sim.query_count = 1;
+    withQueries(&sim, &.{queryOf(&wterms)});
     sim.execute = &extractSimWriter;
     try testing.expect(f.rt().register_system.?(f.rt(), &sim, null) != 0);
 
-    var rq = std.mem.zeroes(c.ke_query_decl);
-    rq.terms[0] = access(cid, c.KE_ACCESS_READ);
-    rq.term_count = 1;
+    const rterms = [_]c.ke_component_access{access(cid, c.KE_ACCESS_READ)};
 
     var rnd = systemParams("RenderReader", c.KE_PHASE_RENDER);
-    rnd.queries = &rq;
-    rnd.query_count = 1;
+    withQueries(&rnd, &.{queryOf(&rterms)});
     rnd.execute = &extractRenderReader;
     try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
 
@@ -1746,14 +2528,10 @@ test "the render extract keeps multi term columns aligned" {
         expect += @as(f64, @floatFromInt(i)) + @as(f64, @floatFromInt(i * 2));
     }
 
-    var rq = std.mem.zeroes(c.ke_query_decl);
-    rq.terms[0] = access(pos, c.KE_ACCESS_READ);
-    rq.terms[1] = access(vel, c.KE_ACCESS_READ);
-    rq.term_count = 2;
+    const rterms = [_]c.ke_component_access{ access(pos, c.KE_ACCESS_READ), access(vel, c.KE_ACCESS_READ) };
 
     var rnd = systemParams("RenderPosVel", c.KE_PHASE_RENDER);
-    rnd.queries = &rq;
-    rnd.query_count = 1;
+    withQueries(&rnd, &.{queryOf(&rterms)});
     rnd.execute = &extractPosVelReader;
     try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
 
@@ -2103,8 +2881,9 @@ test "a zero size component registers as a usable tag" {
     try testing.expect(q != c.KE_QUERY_INVALID);
 
     var segs = std.mem.zeroes([8]c.ke_ecs_segment);
+    var columns: [8]?*anyopaque = undefined;
     var seg_count: usize = 0;
-    ecs.query_resolve.?(ecs, q, &segs, 8, &seg_count);
+    ecs.query_resolve.?(ecs, q, &segs, 8, &columns, &seg_count);
 
     var total: usize = 0;
     for (0..seg_count) |i| total += segs[i].count;
@@ -2140,13 +2919,10 @@ test "two readers sharing a wave read the same storage without conflicting" {
         p.z = 0.0;
     }
 
-    var read_pos = std.mem.zeroes(c.ke_query_decl);
-    read_pos.terms[0] = access(pos, c.KE_ACCESS_READ);
-    read_pos.term_count = 1;
+    const read_terms = [_]c.ke_component_access{access(pos, c.KE_ACCESS_READ)};
 
     var a = systemParams("ReaderA", c.KE_PHASE_UPDATE);
-    a.queries = &read_pos;
-    a.query_count = 1;
+    withQueries(&a, &.{queryOf(&read_terms)});
     a.execute = &parallelReaderBody;
 
     var b = a;
@@ -2199,14 +2975,10 @@ test "a multi term query hands back aligned columns" {
         expect += @as(f64, @floatFromInt(i)) + @as(f64, @floatFromInt(i * 2));
     }
 
-    var q = std.mem.zeroes(c.ke_query_decl);
-    q.terms[0] = access(pos, c.KE_ACCESS_READ);
-    q.terms[1] = access(vel, c.KE_ACCESS_READ);
-    q.term_count = 2;
+    const q_terms = [_]c.ke_component_access{ access(pos, c.KE_ACCESS_READ), access(vel, c.KE_ACCESS_READ) };
 
     var s = systemParams("PosVel", c.KE_PHASE_UPDATE);
-    s.queries = &q;
-    s.query_count = 1;
+    withQueries(&s, &.{queryOf(&q_terms)});
     s.execute = &posVelBody;
     try testing.expect(f.rt().register_system.?(f.rt(), &s, null) != 0);
 

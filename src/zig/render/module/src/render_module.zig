@@ -29,9 +29,12 @@ const ModuleState = struct {
     begin_access: [2]c.ke_component_access,
     clear_access: [2]c.ke_component_access,
     end_access: [2]c.ke_component_access,
+    mesh_resolve_queries_terms: [1]c.ke_component_access,
     mesh_resolve_queries: [1]c.ke_query_decl,
+    sprite_resolve_queries_terms: [3]c.ke_component_access,
     sprite_resolve_queries: [2]c.ke_query_decl,
     sprite_resolve_state: sprite_resolve.State,
+    label_resolve_queries_terms: [1]c.ke_component_access,
     label_resolve_queries: [1]c.ke_query_decl,
     label_resolve_state: label_resolve.State,
 
@@ -63,10 +66,9 @@ fn registerComponent(
     return e.component_register.?(e, name, @sizeOf(T), table, @intCast(fields.len), null);
 }
 
-fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
-    _ = st.core.ref.*.begin_frame.?(st.core.ref, null);
-    return true;
+    return st.core.ref.*.begin_frame.?(st.core.ref, out_error) != 0;
 }
 
 fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -79,27 +81,23 @@ fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
-fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
-    _ = st.core.ref.*.end_frame.?(st.core.ref, null);
-    return true;
+    return st.core.ref.*.end_frame.?(st.core.ref, out_error) != 0;
 }
 
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
-               queries: [*c]const c.ke_query_decl, query_count: u32,
                access: [*c]const c.ke_component_access, access_count: u32,
-               user: anytype, exec: ExecFn) void {
+               user: anytype, exec: ExecFn, out_error: [*c][*c]c.ke_error) bool {
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = name;
     params.phase = c.KE_PHASE_RENDER;
-    params.queries = queries;
-    params.query_count = query_count;
     params.access_list = access;
     params.access_count = access_count;
     params.pinned_thread = 0;
     params.user_data = user;
     params.execute = exec;
-    _ = rt.register_system.?(rt, &params, null);
+    return rt.register_system.?(rt, &params, out_error) != 0;
 }
 
 export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.ke_render_service {
@@ -170,6 +168,14 @@ fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
 }
 
+fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_render_module_handle {
+    while (rt.last_system.?(rt) > mark) {
+        if (!rt.unregister_system.?(rt, rt.last_system.?(rt), null)) break;
+    }
+    destroyModule(@ptrCast(st));
+    return empty;
+}
+
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
                                   world: ?*c.ke_world, default_passes: c.ke_bool, logger: ?*c.ke_logger,
                                   asset_resolver: ?*c.ke_asset_resolver,
@@ -181,6 +187,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     const rt = runtime orelse return empty;
     const e = ecs orelse return empty;
     const dev = device orelse return empty;
+    const mark = rt.last_system.?(rt);
 
     const core_h = c.ke_render_service_create(dev, e, shader_dir, out_error);
     if (core_h.ref == null) return empty;
@@ -250,19 +257,16 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             st.owns_view_space = true;
         }
         const vs = st.view_space.ref orelse {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         };
         if (ndc.clip_left_handed == 0) {
             c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: no projection builds a right-handed clip space", @src().file, @intCast(@src().line), null);
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.camera = c.ke_render_camera_create(vs, &ndc, out_error);
         if (st.camera.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         const mesh_cid = registerComponent(e, c.KE_COMPONENT_NAME_MESH, c.ke_mesh_component, &c.ke_mesh_component_fields);
@@ -276,8 +280,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         _ = ke_render_register_scene_apply(e, world);
 
-        st.mesh_resolve_queries[0].terms[0] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE };
-        st.mesh_resolve_queries[0].term_count = 1;
+        st.mesh_resolve_queries_terms = .{ .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE } };
+        st.mesh_resolve_queries = .{ .{ .terms = &st.mesh_resolve_queries_terms[0], .term_count = 1 } };
         var mesh_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
         mesh_resolve_params.name = "render.mesh.resolve";
         mesh_resolve_params.phase = c.KE_PHASE_UPDATE;
@@ -286,16 +290,14 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         mesh_resolve_params.pinned_thread = 0;
         mesh_resolve_params.user_data = st.core.ref;
         mesh_resolve_params.execute = mesh_resolve.system;
-        _ = rt.register_system.?(rt, &mesh_resolve_params, null);
+        if (rt.register_system.?(rt, &mesh_resolve_params, out_error) == 0) {
+            return failCreate(rt, mark, st);
+        }
 
         const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
         st.sprite_resolve_state = .{ .core = st.core.ref, .mesh_cid = mesh_cid, .resolver = asset_resolver };
-        st.sprite_resolve_queries = std.mem.zeroes([2]c.ke_query_decl);
-        st.sprite_resolve_queries[0].terms[0] = .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE };
-        st.sprite_resolve_queries[0].terms[1] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE };
-        st.sprite_resolve_queries[0].term_count = 2;
-        st.sprite_resolve_queries[1].terms[0] = .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE };
-        st.sprite_resolve_queries[1].term_count = 1;
+        st.sprite_resolve_queries_terms = .{ .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE }, .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE }, .{ .cid = sprite_cid, .access = c.KE_ACCESS_WRITE } };
+        st.sprite_resolve_queries = .{ .{ .terms = &st.sprite_resolve_queries_terms[0], .term_count = 2 }, .{ .terms = &st.sprite_resolve_queries_terms[2], .term_count = 1 } };
         var sprite_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
         sprite_resolve_params.name = "render.sprite2d.resolve";
         sprite_resolve_params.phase = c.KE_PHASE_UPDATE;
@@ -304,64 +306,61 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         sprite_resolve_params.pinned_thread = 0;
         sprite_resolve_params.user_data = &st.sprite_resolve_state;
         sprite_resolve_params.execute = sprite_resolve.system;
-        _ = rt.register_system.?(rt, &sprite_resolve_params, null);
+        if (rt.register_system.?(rt, &sprite_resolve_params, out_error) == 0) {
+            return failCreate(rt, mark, st);
+        }
 
-        registerSys(rt, "render.begin_frame", null, 0, &st.begin_access, st.begin_access.len, st, beginFrameSys);
-        registerSys(rt, "render.clear", null, 0, &st.clear_access, st.clear_access.len, st, clearSys);
+        if (!registerSys(rt, "render.begin_frame", &st.begin_access, st.begin_access.len, st, beginFrameSys, out_error)) {
+            return failCreate(rt, mark, st);
+        }
+        if (!registerSys(rt, "render.clear", &st.clear_access, st.clear_access.len, st, clearSys, out_error)) {
+            return failCreate(rt, mark, st);
+        }
 
         st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, @intFromBool(shadow_enabled),
                                               mesh_cid, world_transform_cid, light_cid, st.frame_cid, shadow_params, out_error);
         if (st.shadow.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
                                                 point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, vs, st.camera.ref, out_error);
         if (st.cluster.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, st.camera.ref, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.gbuffer.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
                                                             camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, st.camera.ref, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.skybox.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
                                                 mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         st.tonemap = c.ke_render_tonemap_create(rt, st.core.ref, dev, logger, out_error);
         if (st.tonemap.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
         st.ui = c.ke_render_ui_create(rt, e, st.core.ref, dev, ndc, bb_cid, 8, out_error);
         if (st.ui.ref == null) {
-            destroyModule(@ptrCast(st));
-            return empty;
+            return failCreate(rt, mark, st);
         }
 
         const label_cid = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields);
         st.label_resolve_state = .{ .core = st.core.ref, .ui = st.ui.ref, .resolver = asset_resolver, .logger = logger };
-        st.label_resolve_queries = std.mem.zeroes([1]c.ke_query_decl);
-        st.label_resolve_queries[0].terms[0] = .{ .cid = label_cid, .access = c.KE_ACCESS_WRITE };
-        st.label_resolve_queries[0].term_count = 1;
+        st.label_resolve_queries_terms = .{ .{ .cid = label_cid, .access = c.KE_ACCESS_WRITE } };
+        st.label_resolve_queries = .{ .{ .terms = &st.label_resolve_queries_terms[0], .term_count = 1 } };
         var label_resolve_params = std.mem.zeroes(c.ke_runtime_system_params);
         label_resolve_params.name = "render.label.resolve";
         label_resolve_params.phase = c.KE_PHASE_UPDATE;
@@ -370,9 +369,13 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         label_resolve_params.pinned_thread = 0;
         label_resolve_params.user_data = &st.label_resolve_state;
         label_resolve_params.execute = label_resolve.system;
-        _ = rt.register_system.?(rt, &label_resolve_params, null);
+        if (rt.register_system.?(rt, &label_resolve_params, out_error) == 0) {
+            return failCreate(rt, mark, st);
+        }
 
-        registerSys(rt, "render.end_frame", null, 0, &st.end_access, st.end_access.len, st, endFrameSys);
+        if (!registerSys(rt, "render.end_frame", &st.end_access, st.end_access.len, st, endFrameSys, out_error)) {
+            return failCreate(rt, mark, st);
+        }
     }
 
     return .{ .ref = @ptrCast(st), .destroy = destroyModule };
@@ -465,6 +468,52 @@ test "a render module that fails at any GPU resource it creates gives back every
         try testing.expectEqual(@as(i64, 0), rig.dev.live);
         try heap.expectNoLeaks();
     }
+}
+
+test "a render module whose runtime refuses any one system registration fails the create and gives back what it had created" {
+    var full: Rig = undefined;
+    try full.init();
+    const h = full.create();
+    try testing.expect(h.ref != null);
+    const system_total = full.rt.registered;
+    h.destroy.?(h.ref);
+    full.deinit();
+    try testing.expect(system_total > 0);
+
+    var limit: u32 = 0;
+    while (limit < system_total) : (limit += 1) {
+        var rig: Rig = undefined;
+        try rig.init();
+        defer rig.deinit();
+        rig.rt.limit = limit;
+        const failed = rig.create();
+        try testing.expect(failed.ref == null);
+        try testing.expectEqual(@as(u32, 0), rig.rt.live_count);
+        try testing.expectEqual(@as(i64, 0), rig.dev.live);
+        try heap.expectNoLeaks();
+    }
+}
+
+fn failingFrame(_: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
+    c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "no backbuffer", @src().file, @intCast(@src().line), null);
+    return 0;
+}
+
+test "a frame the service cannot begin or end fails the render phase with the service's own error" {
+    var svc = std.mem.zeroes(c.ke_render_service);
+    svc.begin_frame = failingFrame;
+    svc.end_frame = failingFrame;
+    var st: ModuleState = undefined;
+    st.core = .{ .ref = &svc, .destroy = null };
+
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!beginFrameSys(null, &st, 0.0, &err));
+    try testing.expect(err != null);
+    try testing.expectEqualStrings("no backbuffer", std.mem.span(err.*.message));
+
+    err = null;
+    try testing.expect(!endFrameSys(null, &st, 0.0, &err));
+    try testing.expect(err != null);
 }
 
 test "a render module without a runtime, an ecs or a device is refused" {

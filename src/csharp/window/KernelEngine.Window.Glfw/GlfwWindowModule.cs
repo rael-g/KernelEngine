@@ -6,8 +6,8 @@ namespace KernelEngine.Window.Glfw;
 
 /// <summary>
 /// GLFW window as an <see cref="IRuntimeModule"/>. Registers <see cref="IWindow"/>
-/// during Configure and adds the PollEvents system to PreUpdate during OnLoad.
-/// The runtime never knows what GLFW is — it sees an opaque module.
+/// during Configure. The host polls events: it calls <see cref="IWindow.PollEvents"/> on
+/// the window's thread before each <c>Tick</c>.
 /// </summary>
 public sealed class GlfwWindowModule : IRuntimeModule
 {
@@ -43,12 +43,5 @@ public sealed class GlfwWindowModule : IRuntimeModule
             services.AddGlfwWindow();
     }
 
-    public void OnLoad(IRuntime runtime, IServiceProvider services)
-    {
-        var window = services.GetRequiredService<IWindow>();
-        runtime.RegisterSystem("Glfw.PollEvents", RuntimePhase.PreUpdate, (_, _) =>
-        {
-            window.PollEvents();
-        });
-    }
+    public void OnLoad(IRuntime runtime, IServiceProvider services) { }
 }

@@ -47,10 +47,8 @@ pub fn Stubs(comptime c: type) type {
 
             fn mint(self: ?*c.ke_gpu_device) u64 {
                 const d = of(self);
-                const h = d.next;
-                d.next += 1;
-                d.live += 1;
-                return h;
+                _ = @atomicRmw(i64, &d.live, .Add, 1, .monotonic);
+                return @atomicRmw(u64, &d.next, .Add, 1, .monotonic);
             }
 
             fn spendFallible(self: ?*c.ke_gpu_device) bool {
@@ -122,7 +120,7 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn destroyHandle(self: ?*c.ke_gpu_device, _: u64) callconv(.c) void {
-                of(self).live -= 1;
+                _ = @atomicRmw(i64, &of(self).live, .Sub, 1, .monotonic);
             }
         };
 
@@ -233,11 +231,16 @@ pub fn Stubs(comptime c: type) type {
         pub const Runtime = struct {
             vtable: c.ke_runtime,
             registered: u32,
+            limit: u32,
+            live: [64]u64,
+            live_count: u32,
 
             pub fn init(self: *Runtime) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_runtime), .registered = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_runtime), .registered = 0, .limit = std.math.maxInt(u32), .live = undefined, .live_count = 0 };
                 self.vtable.handle = self;
                 self.vtable.register_system = &registerSystem;
+                self.vtable.unregister_system = &unregisterSystem;
+                self.vtable.last_system = &lastSystem;
             }
 
             pub fn api(self: *Runtime) *c.ke_runtime {
@@ -246,8 +249,28 @@ pub fn Stubs(comptime c: type) type {
 
             fn registerSystem(self: ?*c.ke_runtime, _: [*c]const c.ke_runtime_system_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
                 const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
+                if (rt.registered >= rt.limit) return 0;
                 rt.registered += 1;
+                rt.live[rt.live_count] = rt.registered;
+                rt.live_count += 1;
                 return rt.registered;
+            }
+
+            fn unregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
+                for (0..rt.live_count) |i| {
+                    if (rt.live[i] != id) continue;
+                    var j = i;
+                    while (j + 1 < rt.live_count) : (j += 1) rt.live[j] = rt.live[j + 1];
+                    rt.live_count -= 1;
+                    return true;
+                }
+                return false;
+            }
+
+            fn lastSystem(self: ?*c.ke_runtime) callconv(.c) c.ke_system_id {
+                const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
+                return if (rt.live_count == 0) 0 else rt.live[rt.live_count - 1];
             }
         };
 

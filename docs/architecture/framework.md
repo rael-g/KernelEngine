@@ -107,6 +107,13 @@ these registration fails (`:9`, `:14`, `:16`, `:113-120`, `:142-145`).
 swapping the last entity of the type into the vacated slot (`:244-261`), so `instances` is not in
 binding order once anything has been unbound.
 
+`bind` and `unbind` change the host at once and belong to code that no other body runs beside: the
+scene loader and startup. A system body uses `bind_deferred` and `unbind_deferred`, which record the
+change into the body's `ke_ecs_commands`; the host changes when the runtime applies that queue at the
+wave barrier, so `instances` is never rewritten while a body reads it. The managed projection picks
+between the two by whether a system context is current, and frees the root of an unbound node two
+ticks after it was recorded.
+
 `resolve(owner, type, name, reach)` answers a borrow: the one entity of that type, optionally of that
 name, found **below** the owner depth-first, **above** it nearest-first, or **anywhere** the type is
 bound. When two entities qualify it returns none and reports `KE_SCRIPT_RESOLVE_AMBIGUOUS`; the ancestor

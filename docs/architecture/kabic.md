@@ -57,7 +57,7 @@ tags that decide a call's *shape* are read once, in `Classifier`:
 
 `[default:...]`, `[name:...]`, `[bool]` and `[output]` on a component field are read by the C
 backend (`CBackend.cs:94`, `:60`, `:148`, `:157`). The C# backend reads further tags that no other
-backend does (`enum`, `node`, `base`, `closure`, `completion`, `view`, `value`, `utf8`, `idiom`, and
+backend does (`enum`, `node`, `base`, `closure`, `completion`, `view`, `value`, `borrowed`, `utf8`, `idiom`, and
 others, all as `.Has("...")` / `.TagValue("...")` in `CSharpBackend.cs`), and the Zig backend reads
 `utf8`, `closure`, `default` and `optional` itself (`ZigBackend.cs:568`, `:723`, `:858`, `:333`).
 
@@ -117,11 +117,12 @@ carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.ym
 ## The gates
 
 Each gate is a file-based `dotnet run scripts/<name>.cs` that exits non-zero on failure. `ci.yml`
-runs nine of the ten (see `docs/conventions/ci.md`).
+runs ten of the eleven (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
-| `check_api_drift.cs` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory (`check_api_drift.cs:62`, `:82`, `:102`) |
+| `check_api_drift.cs` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory; exits 1 for that. When the extraction or generation itself cannot run it exits 2 and says it compared nothing, because that is a broken tool, not drift |
+| `check_abi_layout.cs` | the size, alignment or a member offset of any struct or vtable the contract headers declare differs from `scripts/abi_layout.snapshot`, which a C compiler probe regenerates; an intended change is recorded with `-- --update` |
 | `check_reconstruction.cs` | any file `regenerate_api.cs --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
 | `check_api_coverage.cs` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `.rsp`, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
 | `check_out_params.cs` | a parameter named `out` or `out_*`, other than `out_error`, carries no `[out]` tag (`check_out_params.cs:57-68`); one exclusion is recorded |

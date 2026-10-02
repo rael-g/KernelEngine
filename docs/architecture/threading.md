@@ -59,9 +59,8 @@ headers (`grep -rn 'ke\.sim' src/c src/zig`) and nowhere in a function that disp
 ## Where an ordinary system body runs
 
 On whichever worker takes its task, unless `pinned_thread` is non-zero
-([runtime.md](runtime.md#dispatch)). That includes the window's event poll: `Glfw.PollEvents` is
-registered as an unpinned `PreUpdate` system
-(`src/csharp/window/KernelEngine.Window.Glfw/GlfwWindowModule.cs:49`).
+([runtime.md](runtime.md#dispatch)). The window's event poll is not one of them: GLFW delivers events to the thread that
+created the window, so the host calls `window.PollEvents()` on that thread before each `Tick`.
 
 The render phase is one task dispatched with `dispatch`, not `dispatch_pinned`
 (`runtime.zig:903`), and each render system inside it is dispatched into the same pool by the same

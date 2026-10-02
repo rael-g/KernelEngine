@@ -29,11 +29,11 @@ const PerFrame = extern struct {
 const Draw = struct {
     mesh: *const c.ke_mesh_component,
     world: *const c.ke_world_transform_component,
-    view_depth: f32,
+    view_distance_sq: f32,
 };
 
 fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
-    return a.view_depth < b.view_depth;
+    return a.view_distance_sq > b.view_distance_sq;
 }
 
 fn collectDraws(
@@ -56,7 +56,7 @@ fn collectDraws(
             const wm = wts[i].matrix.m;
             const wp = zm.f32x4(wm[12], wm[13], wm[14], 1.0);
             const view_pos = zm.mul(wp, view);
-            out[count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]), .view_depth = view_pos[2] };
+            out[count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]), .view_distance_sq = view_pos[0] * view_pos[0] + view_pos[1] * view_pos[1] + view_pos[2] * view_pos[2] };
             count += 1;
         }
     }
@@ -97,6 +97,7 @@ const ForwardModule = struct {
     io: c.ke_render_pass_io = undefined,
     access: [12]c.ke_component_access = undefined,
     access_count: u32 = 0,
+    queries_terms: [7]c.ke_component_access = undefined,
     queries: [5]c.ke_query_decl = undefined,
 
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
@@ -455,19 +456,8 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.access_count = ac;
 
     const rd = c.KE_ACCESS_READ;
-    fwd.queries = std.mem.zeroes([5]c.ke_query_decl);
-    fwd.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    fwd.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    fwd.queries[0].term_count = 2;
-    fwd.queries[1].terms[0] = .{ .cid = skybox_cid, .access = rd };
-    fwd.queries[1].term_count = 1;
-    fwd.queries[2].terms[0] = .{ .cid = light_cid, .access = rd };
-    fwd.queries[2].term_count = 1;
-    fwd.queries[3].terms[0] = .{ .cid = ambient_cid, .access = rd };
-    fwd.queries[3].term_count = 1;
-    fwd.queries[4].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    fwd.queries[4].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    fwd.queries[4].term_count = 2;
+    fwd.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd }, .{ .cid = light_cid, .access = rd }, .{ .cid = ambient_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
+    fwd.queries = .{ .{ .terms = &fwd.queries_terms[0], .term_count = 2 }, .{ .terms = &fwd.queries_terms[2], .term_count = 1 }, .{ .terms = &fwd.queries_terms[3], .term_count = 1 }, .{ .terms = &fwd.queries_terms[4], .term_count = 1 }, .{ .terms = &fwd.queries_terms[5], .term_count = 2 } };
     return true;
 }
 
@@ -522,7 +512,11 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.pinned_thread = 0;
     params.user_data = fwd;
     params.execute = system;
-    _ = rt.register_system.?(rt, &params, null);
+    if (rt.register_system.?(rt, &params, out_error) == 0) {
+        destroyModule(fwd);
+        gpa.destroy(fwd);
+        return empty;
+    }
 
     return .{ .ref = @ptrCast(fwd), .destroy = destroyHandle };
 }
@@ -558,10 +552,17 @@ fn transformAt(z: f32) c.ke_world_transform_component {
     return wt;
 }
 
+var column_pool: [8][2]?*anyopaque = undefined;
+var column_pool_next: usize = 0;
+
 fn oneSegment(meshes: []const c.ke_mesh_component, wts: []const c.ke_world_transform_component) c.ke_ecs_segment {
     var seg = std.mem.zeroes(c.ke_ecs_segment);
-    seg.columns[0] = @constCast(@ptrCast(meshes.ptr));
-    seg.columns[1] = @constCast(@ptrCast(wts.ptr));
+    const cols = &column_pool[column_pool_next % column_pool.len];
+    column_pool_next += 1;
+    cols[0] = @constCast(@ptrCast(meshes.ptr));
+    cols[1] = @constCast(@ptrCast(wts.ptr));
+    seg.columns = &cols[0];
+    seg.column_count = 2;
     seg.count = meshes.len;
     return seg;
 }
@@ -653,6 +654,24 @@ test "the culled draws come back farthest first, so blending composites back to 
     try testing.expectEqual(@as(u32, 0b001), out[2].mesh.layers);
 }
 
+test "draws come back farthest first under a left handed view too" {
+    var svc = blendingService();
+    const cam = cameraSeeing(0b111);
+    const meshes = [_]c.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
+    const wts = [_]c.ke_world_transform_component{ transformAt(2), transformAt(9), transformAt(5) };
+    const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
+
+    const eye_at_origin = zm.lookAtLh(zm.f32x4(0, 0, 0, 1), zm.f32x4(0, 0, 1, 1), zm.f32x4(0, 1, 0, 0));
+
+    var out: [8]Draw = undefined;
+    const n = collectDraws(&svc, &cam, eye_at_origin, &segs, segs.len, out[0..]);
+
+    try testing.expectEqual(@as(u32, 3), n);
+    try testing.expectEqual(@as(u32, 0b010), out[0].mesh.layers);
+    try testing.expectEqual(@as(u32, 0b100), out[1].mesh.layers);
+    try testing.expectEqual(@as(u32, 0b001), out[2].mesh.layers);
+}
+
 test "collection stops at the caller's capacity instead of writing past it" {
     var svc = blendingService();
     const cam = cameraSeeing(0b001);
@@ -706,6 +725,21 @@ test "a forward pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, 7, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a forward pass the runtime refuses to register releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 0;
     var camera = std.mem.zeroes(c.ke_render_camera);
     const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), &camera, null, 0, 1, 2, 3, 4, 5, 6, 7, null);
     try testing.expect(h.ref == null);

@@ -24,6 +24,12 @@ public unsafe partial struct ke_script_host
     [NativeTypeName("void (*)(struct ke_script_host *, ke_entity)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, void> unbind;
 
+    [NativeTypeName("bool (*)(struct ke_script_host *, ke_entity, ke_script_type_id, void *, ke_ecs_commands *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, void*, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Common.Native.ke_error**, bool> bind_deferred;
+
+    [NativeTypeName("bool (*)(struct ke_script_host *, ke_entity, ke_ecs_commands *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Common.Native.ke_error**, bool> unbind_deferred;
+
     [NativeTypeName("bool (*)(struct ke_script_host *, ke_entity, ke_script_type_id *, void **)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint*, void**, bool> instance_of;
 

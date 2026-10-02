@@ -5,17 +5,19 @@ what that function and the ones it calls do; where they disagree with it, it is 
 
 ## Phases, in the order `tick` runs them
 
-`ke_phase` has seven values (`src/c/runtime/kernel_engine/runtime/runtime.h:20-30`). `tick` runs
-five of them, in this order:
+`ke_phase` has seven values (`src/c/runtime/kernel_engine/runtime/runtime.h`). The first `tick`
+runs `KE_PHASE_STARTUP` once, before anything else. Every tick then runs, in this order:
 
-1. `KE_PHASE_PRE_UPDATE` (`runtime.zig:874`)
-2. `KE_PHASE_FIXED_UPDATE`, zero or more times (`runtime.zig:880-883`)
-3. `KE_PHASE_UPDATE` (`runtime.zig:885`)
-4. `KE_PHASE_POST_UPDATE` (`runtime.zig:886`)
-5. `KE_PHASE_RENDER`, dispatched and not awaited (`runtime.zig:903`)
+1. `KE_PHASE_PRE_UPDATE`
+2. `KE_PHASE_FIXED_UPDATE`, zero or more times
+3. `KE_PHASE_UPDATE`
+4. `KE_PHASE_POST_UPDATE`
+5. `KE_PHASE_RENDER`, dispatched and not awaited
 
-No function in `runtime.zig` runs `KE_PHASE_STARTUP` or `KE_PHASE_SHUTDOWN`
-(`grep -n 'PHASE_STARTUP\|PHASE_SHUTDOWN' src/zig/runtime/src/runtime.zig` prints nothing).
+`KE_PHASE_SHUTDOWN` runs once from the runtime's destroy, if a tick ever started it, after the
+pending render phase is joined and before the modules unload. A failure there cannot be reported,
+because destroy returns nothing. `grep -n 'PHASE_STARTUP\|PHASE_SHUTDOWN' src/zig/runtime/src/runtime.zig`
+finds where each runs.
 
 A phase that fails stops the tick: each later sim phase is guarded by `failure.type == null`
 (`runtime.zig:880`, `909`, `910`), and inside a phase no wave starts after a failed one (`runtime.zig:731`).
@@ -132,7 +134,7 @@ its pointers are then replaced by the runtime's own storage, and one is not:
 
 - **queries**: when the system declares at least one, each declaration is copied into the system
   record, and the access list is merged with the queries' terms into the runtime's own array
-  (`:519-562`); `access_list` then points into that record's merged array and `queries` is cleared (`:562-565`);
+  ; `access_list` then points into that record's merged array and the query fields are cleared;
 - **access list with no queries**: the merge is inside the same branch, so a system that declares
   no query keeps the **caller's** `access_list` pointer, and the wave builder reads it again every
   time its phase runs (`:666-680`, `systemsConflict`, `:137-154`);
@@ -143,3 +145,21 @@ its pointers are then replaced by the runtime's own storage, and one is not:
 The contract says what the name is for (`runtime.h:102`) and not how long it must stay valid, so
 what a caller must keep alive is read off the code above: the name for as long as the runtime can tick, and
 the access list likewise when the system has no query.
+
+## Registering a system while a tick runs
+
+`register_system` called from a body of any phase, render included, does not touch the system table, which other threads are reading.
+It builds the system, takes its id, and pushes it on a lock-free stack. The next `tick` applies the
+stack, in registration order, before its first phase, after joining a render phase still running
+against the table. `unregister_system` from a body is queued the same way and applied after the
+registrations of that stack.
+
+## How many segments and queries there are
+
+Neither is capped. A system's per-query storage is allocated from the number of queries it declares.
+Each query starts with room for a few segments; when `query_resolve` reports more matches than the
+buffer holds, the runtime grows the buffer to that count and resolves again, before the wave is
+dispatched, so no body ever holds a buffer that moves. The render extraction scratch grows the same
+way. The only failure left is an allocation failure, which fails the tick with `out_of_memory`. A
+query's width is not capped either: each `ke_query_decl` in `ke_runtime_system_params` carries as many
+terms as it declares. A query that the ecs cannot register fails the tick naming the system.

@@ -15,15 +15,12 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
     private readonly HashSet<Type> _announcedBehaviors = new();
 
-    private readonly Dictionary<Type, uint> _scriptTypes = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, uint> _scriptTypes = new();
+    private readonly object _typeGate = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(long Epoch, System.Runtime.InteropServices.GCHandle Handle)> _retired = new();
+    private long _epoch;
 
-    /// <summary>
-    /// Raised the first time a node of a given type registers behavior. The host
-    /// listens so it can give that type its own runtime system: behavior access is a
-    /// property of the node type, so one system per type is what lets the scheduler
-    /// see the reach instead of lumping every script into one opaque system.
-    /// </summary>
-    internal event Action<Type>? BehaviorTypeAdded;
+    internal event Action<Type, Node>? BehaviorTypeAdded;
 
     /// <summary>
     /// The bound nodes of one type, read from the script host rather than from a list
@@ -84,12 +81,14 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     {
         if (!node.HasBehavior) return;
         var type = node.GetType();
-        if (_announcedBehaviors.Add(type)) BehaviorTypeAdded?.Invoke(type);
+        bool first;
+        lock (_announcedBehaviors) first = _announcedBehaviors.Add(type);
+        if (first) BehaviorTypeAdded?.Invoke(type, node);
     }
 
     private uint _nativeTransformCid;
 
-    private readonly Dictionary<Type, (int Stamp, uint[] Ids)> _assignableTypes = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (int Stamp, uint[] Ids)> _assignableTypes = new();
 
     /// <summary>
     /// The script type ids whose node type is <paramref name="wanted"/> or derives from
@@ -266,7 +265,15 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     {
         var clr = node.GetType();
         if (_scriptTypes.TryGetValue(clr, out var existing)) return existing;
+        lock (_typeGate)
+        {
+            if (_scriptTypes.TryGetValue(clr, out existing)) return existing;
+            return RegisterTypeFor(clr, node);
+        }
+    }
 
+    private uint RegisterTypeFor(Type clr, Node node)
+    {
         var uses = new List<NodeComponentUse>();
         node.CollectBehaviorComponents(uses);
 
@@ -283,11 +290,44 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
     private void BindScript(Node node)
     {
-        Bind(node.Entity, ScriptTypeOf(node), node);
+        var type = ScriptTypeOf(node);
+        if (_commands is { } commands) BindDeferred(node.Entity, type, node, commands);
+        else Bind(node.Entity, type, node);
         AnnounceBehavior(node);
     }
 
-    private void UnbindScript(ulong entity) => Unbind(entity);
+    private void BindDeferred(ulong entity, uint type, Node node, KernelEngine.Ecs.EcsCommands commands)
+    {
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(node);
+        KernelEngine.Common.Native.ke_error* err = null;
+        if (!Handle->bind_deferred(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(handle),
+                (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands), &err))
+        {
+            handle.Free();
+            throw KernelError.FromNative(err, "bind_deferred");
+        }
+        _rooted[entity] = handle;
+    }
+
+    private void UnbindScript(ulong entity)
+    {
+        if (_commands is not { } commands)
+        {
+            Unbind(entity);
+            return;
+        }
+        KernelEngine.Common.Native.ke_error* err = null;
+        if (!Handle->unbind_deferred(Handle, entity, (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands), &err))
+            throw KernelError.FromNative(err, "unbind_deferred");
+        if (_rooted.TryRemove(entity, out var handle)) _retired.Enqueue((Interlocked.Read(ref _epoch), handle));
+    }
+
+    internal void ReleaseRetired()
+    {
+        var now = Interlocked.Increment(ref _epoch);
+        while (_retired.TryPeek(out var next) && next.Epoch + 2 <= now && _retired.TryDequeue(out var due))
+            due.Handle.Free();
+    }
 
     /// <summary>
     /// The node bound to <paramref name="entity"/>, or null when none is. Null is the

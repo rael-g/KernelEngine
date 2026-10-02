@@ -18,6 +18,7 @@ var domains = manifest["domains"]!.AsArray();
 Console.WriteLine("Checking for ke_api.json drift (headers vs. generated C#)...");
 
 var driftDetected = false;
+var checkFailed = false;
 var tmpRoot = Path.Combine(Path.GetTempPath(), "ke_api_drift_" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(tmpRoot);
 
@@ -54,8 +55,8 @@ try
 
         if (!RunDotnet(extractArgs, out var extractErr))
         {
-            Console.WriteLine($"[!] {name}: extraction failed:\n{extractErr}");
-            driftDetected = true;
+            Console.WriteLine($"[?] {name}: could not extract the headers, so nothing was compared:\n{extractErr}");
+            checkFailed = true;
             continue;
         }
 
@@ -74,8 +75,8 @@ try
 
         if (!RunDotnet(genArgs, out var genErr))
         {
-            Console.WriteLine($"[!] {name}: generation failed:\n{genErr}");
-            driftDetected = true;
+            Console.WriteLine($"[?] {name}: could not generate the C#, so nothing was compared:\n{genErr}");
+            checkFailed = true;
             continue;
         }
 
@@ -96,8 +97,8 @@ try
 
             if (!RunDotnet(cArgs, out var cErr))
             {
-                Console.WriteLine($"[!] {name}: C field table generation failed:\n{cErr}");
-                driftDetected = true;
+                Console.WriteLine($"[?] {name}: could not generate the C field table, so nothing was compared:\n{cErr}");
+                checkFailed = true;
             }
             else if (!FilesEqual(tmpCFile, committedCFile))
             {
@@ -118,6 +119,12 @@ if (driftDetected)
     Console.WriteLine("\nDrift detected. Regenerate with:");
     Console.WriteLine("  dotnet run scripts/regenerate_api.cs");
     return 1;
+}
+
+if (checkFailed)
+{
+    Console.WriteLine("\nThe check could not run to completion; it says nothing about drift.");
+    return 2;
 }
 
 Console.WriteLine("No drift detected.");

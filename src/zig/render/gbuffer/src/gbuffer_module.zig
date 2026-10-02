@@ -69,6 +69,7 @@ const GBufferModule = struct {
     io: c.ke_render_pass_io = undefined,
     access: [8]c.ke_component_access = undefined,
     access_count: u32 = 0,
+    queries_terms: [4]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
 
     fn resolvePipeline(gb: *GBufferModule, shader: [*c]const u8) bool {
@@ -312,13 +313,8 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     gb.access_count = 8;
 
     const rd = c.KE_ACCESS_READ;
-    gb.queries = std.mem.zeroes([2]c.ke_query_decl);
-    gb.queries[0].terms[0] = .{ .cid = camera_cid, .access = rd };
-    gb.queries[0].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    gb.queries[0].term_count = 2;
-    gb.queries[1].terms[0] = .{ .cid = mesh_cid, .access = rd };
-    gb.queries[1].terms[1] = .{ .cid = world_transform_cid, .access = rd };
-    gb.queries[1].term_count = 2;
+    gb.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
+    gb.queries = .{ .{ .terms = &gb.queries_terms[0], .term_count = 2 }, .{ .terms = &gb.queries_terms[2], .term_count = 2 } };
     return true;
 }
 
@@ -367,7 +363,11 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     params.pinned_thread = 0;
     params.user_data = gb;
     params.execute = system;
-    _ = rt.register_system.?(rt, &params, null);
+    if (rt.register_system.?(rt, &params, out_error) == 0) {
+        destroyModule(gb);
+        gpa.destroy(gb);
+        return empty;
+    }
 
     return .{ .ref = @ptrCast(gb), .destroy = destroyHandle };
 }
@@ -397,10 +397,17 @@ fn meshOn(layers: u32) c.ke_mesh_component {
     return m;
 }
 
+var column_pool: [8][2]?*anyopaque = undefined;
+var column_pool_next: usize = 0;
+
 fn oneSegment(meshes: []const c.ke_mesh_component, wts: []const c.ke_world_transform_component) c.ke_ecs_segment {
     var seg = std.mem.zeroes(c.ke_ecs_segment);
-    seg.columns[0] = @constCast(@ptrCast(meshes.ptr));
-    seg.columns[1] = @constCast(@ptrCast(wts.ptr));
+    const cols = &column_pool[column_pool_next % column_pool.len];
+    column_pool_next += 1;
+    cols[0] = @constCast(@ptrCast(meshes.ptr));
+    cols[1] = @constCast(@ptrCast(wts.ptr));
+    seg.columns = &cols[0];
+    seg.column_count = 2;
     seg.count = meshes.len;
     return seg;
 }
@@ -495,6 +502,21 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
+    var camera = std.mem.zeroes(c.ke_render_camera);
+    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a gbuffer pass the runtime refuses to register releases what it had created" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    rt.limit = 0;
     var camera = std.mem.zeroes(c.ke_render_camera);
     const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
     try testing.expect(h.ref == null);
