@@ -8,7 +8,7 @@ the failure record that crosses the C ABI is in [abi.md](abi.md#how-a-failure-co
 ## A wrapper owns one pointer
 
 kabic generates one class per vtable from the contract header, into `Generated/<Name>.g.cs`
-(`scripts/generate_csharp.cs:82-90`). `Runtime` is the pattern
+(`Kabic.Pipeline/Generation.cs:74-84`). `Runtime` is the pattern
 (`src/csharp/runtime/KernelEngine.Runtime/Generated/Runtime.g.cs`):
 
 - the pointer is a **private** field, `_native`, with the factory's `destroy` slot beside it

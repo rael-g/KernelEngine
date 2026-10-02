@@ -13,10 +13,10 @@ header.h --zig cc ast-dump--> Kabic.Frontend --> ke_api.json --> Kabic.Core (Cla
 
 ## What it reads
 
-`scripts/extract_api.cs` writes one throwaway translation unit that `#include`s the domain's headers
+`Kabic.Pipeline.Extraction` writes one throwaway translation unit that `#include`s the domain's headers
 and runs `zig cc -Xclang -ast-dump=json -fsyntax-only -fparse-all-comments` over it
-(`extract_api.cs:51`, `:115`). A header that fails to parse stops the run
-(`extract_api.cs:126-130`). `Kabic.Frontend.Extractor` keeps only nodes from the listed files
+(`Extraction.cs:28`, `:79`). A header that fails to parse stops the run
+(`Extraction.cs:95`). `Kabic.Frontend.Extractor` keeps only nodes from the listed files
 (`Extractor.cs:19-36`):
 
 | input | what is kept |
@@ -38,7 +38,7 @@ Meaning that C types cannot carry is written in the doc comment, as bracketed ta
 `DocParser.Parse` peels leading `[a,b:c]` blocks off the text and splits each on commas
 (`DocParser.cs:9`, `:49-55`); `ApiParam.Has` and `TagValue` match `name` or `name:value`
 (`ApiModel.cs:6-7`). A `@param` naming something that is not a parameter fails extraction
-(`Extractor.cs:147`, `:246`; `extract_api.cs:69-73` prints each and exits 1).
+(`Extractor.cs:147`, `:246`; `Extraction.cs:42-44` raises them all as one failure).
 
 A tag exists in a backend only if that backend names it, and a backend ignores the rest: the Zig
 backend never reads `[rooted]` (`grep -c rooted Kabic.ZigBackend/ZigBackend.cs` prints `0`). The
@@ -72,8 +72,9 @@ of what a backend can know.
 `scripts/api_domains.json` is the hand-written manifest. Each entry of `domains` names the
 `headers`, `includeDirs`, `apiJson`, the C# `namespace` and `nativeNamespace`, the `outDir`, and
 optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHeaders` and `cOut`
-(the C field-table target). `scripts/regenerate_api.cs` walks it: extract, then
-`generate_csharp.cs`, then `generate_c.cs` for entries with `cOut` (`regenerate_api.cs:26-92`).
+(the C field-table target). `scripts/regenerate_api.cs` walks it in one process: it extracts every domain in parallel
+(`Regeneration.ExtractAll`), then generates the C# and, for entries with `cOut`, the C field table
+(`Regeneration.GenerateOne`, `Regeneration.cs:31-38`).
 
 ## The Classifier
 
@@ -100,9 +101,9 @@ fails: a slot that answers, fails and writes a value (`Classifier.cs:293-298`), 
 
 | backend | driver | emits | when it cannot render a form |
 |---|---|---|---|
-| `Kabic.CSharpBackend` | `scripts/generate_csharp.cs` | enums, value structs, views, providers with a contract interface, callback interfaces, node types, free-function groups (`generate_csharp.cs:48-129`) | throws `InvalidOperationException`; no catch, so the domain run fails |
+| `Kabic.CSharpBackend` | `Kabic.Pipeline.Generation.CSharp` | enums, value structs, views, providers with a contract interface, callback interfaces, node types, free-function groups (`Generation.cs:21-115`) | throws `InvalidOperationException`; no catch, so the domain run fails |
 | `Kabic.ZigBackend` | `scripts/generate_zig.cs` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:91-92`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:497`) and listed in the module's header comment (`ZigBackend.cs:110-115`); the other slots are still emitted |
-| `Kabic.CBackend` | `scripts/generate_c.cs` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:40-50`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:105-107`) |
+| `Kabic.CBackend` | `Kabic.Pipeline.Generation.CFieldTable` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:40-50`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:105-107`) |
 
 The C backend leaves a field out of its tables when the field is `[output]` or has no scene-file
 spelling (`CBackend.cs:133`).

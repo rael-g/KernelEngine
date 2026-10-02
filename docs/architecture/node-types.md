@@ -10,7 +10,7 @@ it at bind time. There are two ways to declare one, and both end in the same Ros
 A component struct whose doc carries `[node:Name]` becomes a class `Name`
 (`src/c/render/kernel_engine/render/components.h:14`, `[node:Camera,base:Node3D,value]`). kabic
 emits it (`CSharpBackend.RenderNodeType`, `src/csharp/kabic/Kabic.CSharpBackend/CSharpBackend.cs:432`,
-driven from `scripts/generate_csharp.cs:98-105`). What it writes:
+driven from `Kabic.Pipeline/Generation.cs:90-106`). What it writes:
 
 - `[GeneratedNodeComponent(typeof(<state>), "<component name>")]` on a `public partial class`
   (`CSharpBackend.cs:447-448`; the attribute is `Scene/GeneratedNodeComponentAttribute.cs:17`). The
@@ -25,7 +25,7 @@ driven from `scripts/generate_csharp.cs:98-105`). What it writes:
   included; a name that is not, or a `+`-joined list, fails generation (`BaseNodeOf`, `:502-513`).
   Without `base:` the class derives from `Node`.
 - One registrar per domain, `Add<Domain>NodeTypes`, calling `services.AddNodeType<T>()` for every
-  `[node:]` struct (`RenderNodeTypeRegistrar`, `:476-495`; `scripts/generate_csharp.cs:107-117`).
+  `[node:]` struct (`RenderNodeTypeRegistrar`, `:476-495`; `Kabic.Pipeline/Generation.cs:99-106`).
   `SceneNodesModule.Configure` calls the spatial one (`Modules/SceneNodesModule.cs:53`).
 
 The component name is the same string the native module registers the component under: the header
