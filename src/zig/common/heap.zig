@@ -2,22 +2,9 @@ const std = @import("std");
 
 const tracking = @import("builtin").mode == .Debug;
 
-extern "c" fn atexit(callback: *const fn () callconv(.c) void) c_int;
-
 var debug_instance: std.heap.DebugAllocator(.{ .thread_safe = true }) = .init;
-var exit_hook = std.atomic.Value(bool).init(false);
-
-fn reportLeaksAtExit() callconv(.c) void {
-    _ = debug_instance.deinit();
-}
-
-fn registerExitHook() void {
-    if (exit_hook.swap(true, .acq_rel)) return;
-    _ = atexit(&reportLeaksAtExit);
-}
 
 fn trackedAlloc(_: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
-    registerExitHook();
     const inner = debug_instance.allocator();
     return inner.vtable.alloc(inner.ptr, len, alignment, ret_addr);
 }

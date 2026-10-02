@@ -61,12 +61,16 @@ build, which catches a double free or a free of the wrong length, and `smp_alloc
 factories take no allocator, and a block is freed by the plugin that allocated it; memory a plugin
 hands out is released through that plugin's own `free_*` slot.
 
-The allocator is never reset. The first allocation registers one `atexit` callback, and that callback
-runs the leak check once, when the process or the library ends, logging every block still allocated
-with the stack that allocated it. `heap.leaks()` runs the same check on demand and returns the count,
-so a test can assert zero after it has destroyed what it created (`heap.expectNoLeaks`, which every plugin with a factory does in its own file, over `stubs.zig` where the factory is handed collaborators; the exceptions are the webgpu device, the glfw window and the assimp loader, which keeps its own allocator). The render module composes the real factories of ten other plugins, so its test links them and stands in only for the device, the ecs, the runtime and the world; a leak that no test asserts is
-reported only at exit, not as a test failure. The asset loader for assimp keeps a tracking allocator
-of its own and does not take part.
+The allocator is never reset, and nothing runs when the process ends: a plugin library cannot rely on
+the C runtime's exit callbacks, because a plugin DLL's entry point on Windows does not initialise that
+runtime. The leak check is `heap.leaks()`, which returns how many blocks are still allocated and logs
+each with the stack that allocated it, and `heap.expectNoLeaks`, which a test calls after destroying
+what it created. Every plugin that allocates from `heap.gpa` has such a test in its own file, over
+`stubs.zig` where the factory is handed collaborators; the webgpu device's test also passes when no GPU
+is present, since the failing create must not leak either. The render module composes the real
+factories of ten other plugins, so its test links them and stands in only for the device, the ecs, the
+runtime and the world. A leak that no test asserts is not reported. The asset loader for assimp keeps a
+tracking allocator of its own and does not take part.
 
 ## Layer 3 — bindings are generated, never written
 

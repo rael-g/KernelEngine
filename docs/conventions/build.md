@@ -96,12 +96,6 @@ is involved (`vcpkg-triplets/x64-windows-zig.cmake:11`, `vcpkg-triplets/zig-ming
 `vcpkg-triplets/zig-cc.cmd:4`). Static archives keep the GNU `lib*.a` naming; assimp's `zlib` and
 `minizip` archives are named `libzs.a` and `libminizips[d].a` there (`build.zig:219-230`).
 
-A plugin DLL's entry point is Zig's, which skips the mingw C runtime start-up, so any C runtime facility a
-plugin reaches, `atexit` included, works on a real Windows runtime only after that start-up has run. Every
-plugin root module that imports `heap` re-exports the mingw entry point as
-`pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;`, and `scripts/check_dll_startup.cs`
-fails when one does not. Wine tolerates the omission, so a Wine run does not prove it.
-
 A plugin library is installed under Zig's own per-target name: `<name>.dll` on Windows, with no `lib`
 prefix, and `lib<name>.so` elsewhere (`build.zig:977-981`). After every plugin and the wgpu-native
 copy are built, the root copies every `*.dll` from `lib/` into `bin/` as well, so that an executable
