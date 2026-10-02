@@ -334,8 +334,8 @@ pub fn build(b: *std.Build) void {
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
 
-    const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
-    const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
+    const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{}, null);
+    const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{}, null);
     const tonemap = ctx.plugin("ke_render_tonemap", "src/zig/render/tonemap", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -376,8 +376,8 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step }, .no_tests);
 
-    const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
-    const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
+    const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
+    const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
     const skybox = ctx.plugin("ke_render_skybox", "src/zig/render/skybox", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -392,8 +392,8 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &skybox_vs.step, &skybox_fs.step }, .has_tests);
 
-    const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
-    const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
+    const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{}, null);
+    const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{}, null);
     const ui = ctx.plugin("ke_render_ui", "src/zig/render/ui", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -409,8 +409,8 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &ui_vs.step, &ui_fs.step }, .has_tests);
 
-    const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
-    const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
+    const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
+    const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
     const shadow = ctx.plugin("ke_render_shadow", "src/zig/render/shadow", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -425,7 +425,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step }, .has_tests);
 
-    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{});
+    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{}, null);
     const cluster = ctx.plugin("ke_render_cluster", "src/zig/render/cluster", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -442,8 +442,8 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step, &cluster_cs.step }, .has_tests);
 
     const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
-    const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
-    const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
+    const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes, null);
+    const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes, null);
     const deferred_lighting = ctx.plugin("ke_render_deferred_lighting", "src/zig/render/deferred_lighting", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -513,8 +513,8 @@ pub fn build(b: *std.Build) void {
 
     const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
     const magenta_slang = b.pathJoin(&.{ src_zig, "render/service/shaders/magenta.slang" });
-    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{});
-    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, service_gen_dir, &.{});
+    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{}, null);
+    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, service_gen_dir, &.{}, null);
     const magenta_vs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.vs.wgsl" });
     const magenta_fs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.fs.wgsl" });
 
@@ -885,7 +885,7 @@ const Ctx = struct {
     /// (render/service's own embedded fallback shader is the one exception —
     /// handled separately, since @embedFile needs the file before that
     /// module's own `zig build` even starts).
-    fn shader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8) *std.Build.Step.Run {
+    fn shader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8, after: ?*std.Build.Step) *std.Build.Step.InstallFile {
         const b = ctx.b;
         const suffix = if (std.mem.eql(u8, stage, "vertex"))
             "vs"
@@ -893,18 +893,21 @@ const Ctx = struct {
             "fs"
         else
             "cs";
-        const out_file = b.pathJoin(&.{ out_dir, b.fmt("{s}.{s}.wgsl", .{ name, suffix }) });
-        const run = b.addSystemCommand(&.{
-            "dotnet",   "run",          b.pathJoin(&.{ ctx.root, "scripts/compile_slang.cs" }),
-            "--slangc", ctx.slangc_exe, "--raw",
-            "--target", "wgsl",         "--entry",
-            entry,      "--stage",      stage,
-        });
+        const file_name = b.fmt("{s}.{s}.wgsl", .{ name, suffix });
+        const run = b.addSystemCommand(&.{ ctx.slangc_exe, "-target", "wgsl", "-entry", entry, "-stage", stage });
         run.step.dependOn(ctx.slang_step);
-        for (includes) |inc| run.addArgs(&.{ "--include", inc });
-        run.addArgs(&.{ "--input", input, "--output", out_file });
+        if (after) |a| run.step.dependOn(a);
+        for (includes) |inc| run.addArgs(&.{ "-I", inc });
+        run.addFileArg(.{ .cwd_relative = input });
+        run.addArg("-o");
+        const compiled = run.addOutputFileArg(file_name);
+        run.addArg("-depfile");
+        _ = run.addDepFileOutputArg(b.fmt("{s}.d", .{file_name}));
         run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));
-        return run;
+
+        if (!std.mem.startsWith(u8, out_dir, ctx.prefix)) @panic("shader output directory is outside the install prefix");
+        const relative = std.mem.trimStart(u8, out_dir[ctx.prefix.len..], "/\\");
+        return b.addInstallFileWithDir(compiled, .{ .custom = relative }, file_name);
     }
 
     /// Compiles every authored material × `pass`: glob every materials
@@ -920,9 +923,9 @@ const Ctx = struct {
         includes: []const []const u8,
         out_dir: []const u8,
         materials_dirs: []const []const u8,
-    ) []const *std.Build.Step.Run {
+    ) []const *std.Build.Step.InstallFile {
         const b = ctx.b;
-        var steps: std.ArrayList(*std.Build.Step.Run) = .empty;
+        var steps: std.ArrayList(*std.Build.Step.InstallFile) = .empty;
         const gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", pass });
 
         var wrapper_includes: std.ArrayList([]const u8) = .empty;
@@ -951,9 +954,9 @@ const Ctx = struct {
                 });
                 gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
 
-                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items);
+                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, null);
                 vs.step.dependOn(&gen_wrapper.step);
-                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items);
+                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items, null);
                 fs.step.dependOn(&gen_wrapper.step);
 
                 steps.append(b.allocator, vs) catch @panic("OOM");
