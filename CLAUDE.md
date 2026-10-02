@@ -141,6 +141,11 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ## Coding conventions
 
+### Comments
+- No comments in any file: source, scripts, workflows, shaders, build files. The code and its names carry the meaning.
+- The one exception is API documentation on a public declaration (`///` and `<summary>` in C#, Doxygen in C and Zig headers). It states the contract: what a caller passes, what it gets back, what fails.
+- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. Rationale belongs in the commit message; a mechanism belongs in `docs/`.
+
 ### C (contracts) and Zig (implementations)
 - **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
 - **Naming**: `snake_case` with a `ke_` prefix on everything crossing the ABI.
@@ -151,7 +156,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
 
 ### C#
-- XML doc comments (`///`) on all `public` and `protected` members.
+- XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments).
 - Generated bindings in `Generated/` — never edit manually.
 - `InternalsVisibleTo` is **banned**. A native handle crosses assemblies through the public `Native` pointer of a generated `INative<Domain>` interface, implemented explicitly so the object itself exposes only managed methods — never through `internal` plus a friend list.
 
@@ -192,10 +197,10 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ## Key documents
 
-Every document that mixed a contract with a moment was retired; `git log -- docs/` reaches all of
-them, and they are not a source for anything. What `docs/` holds is listed in
-[`docs/README.md`](docs/README.md), and the rules every one of them is written to are in
-[`docs/conventions/docs.md`](docs/conventions/docs.md).
+`docs/` holds contracts and mechanisms and nothing else; what it holds is listed in
+[`docs/README.md`](docs/README.md), and the rules every one of its documents is written to are in
+[`docs/conventions/docs.md`](docs/conventions/docs.md). Anything that describes a moment lives in the
+unversioned kanban.
 
 Where to look when this file is not enough:
 
