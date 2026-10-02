@@ -890,6 +890,21 @@ const Ctx = struct {
     plugins_step: *std.Build.Step,
     test_step: *std.Build.Step,
 
+    fn addSlangInputs(ctx: *Ctx, run: *std.Build.Step.Run, dir_path: []const u8) void {
+        const b = ctx.b;
+        var threaded: std.Io.Threaded = .init(b.allocator, .{});
+        defer threaded.deinit();
+        const io = threaded.io();
+        var dir = std.Io.Dir.openDirAbsolute(io, dir_path, .{ .iterate = true }) catch return;
+        defer dir.close(io);
+        var walker = dir.walk(b.allocator) catch @panic("OOM");
+        defer walker.deinit();
+        while (walker.next(io) catch null) |entry| {
+            if (entry.kind != .file or !std.mem.endsWith(u8, entry.basename, ".slang")) continue;
+            run.addFileInput(.{ .cwd_relative = b.pathJoin(&.{ dir_path, entry.path }) });
+        }
+    }
+
     /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs.
     /// Every render pass loads its shaders at runtime by logical name via
     /// ke_render_service::load_shader, so the output always lands in the one
@@ -913,8 +928,8 @@ const Ctx = struct {
         run.addFileArg(.{ .cwd_relative = input });
         run.addArg("-o");
         const compiled = run.addOutputFileArg(file_name);
-        run.addArg("-depfile");
-        _ = run.addDepFileOutputArg(b.fmt("{s}.d", .{file_name}));
+        ctx.addSlangInputs(run, std.fs.path.dirname(input) orelse ".");
+        for (includes) |inc| ctx.addSlangInputs(run, inc);
         run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));
 
         if (!std.mem.startsWith(u8, out_dir, ctx.prefix)) @panic("shader output directory is outside the install prefix");
@@ -966,9 +981,9 @@ const Ctx = struct {
                 });
                 gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
 
-                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, null);
+                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
                 vs.step.dependOn(&gen_wrapper.step);
-                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items, null);
+                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
                 fs.step.dependOn(&gen_wrapper.step);
 
                 steps.append(b.allocator, vs) catch @panic("OOM");
