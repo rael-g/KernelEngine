@@ -53,6 +53,7 @@ pub fn build(b: *std.Build) void {
         b.fmt("--host-triplet={s}", .{host_triplet}),
     }) catch @panic("OOM");
     const vcpkg_install = b.addSystemCommand(vcpkg_install_args.items);
+    vcpkg_install.setEnvironmentVariable("ZIG_LOCAL_CACHE_DIR", zig_cache_dir);
     vcpkg_install.step.dependOn(&vcpkg_fetch.step);
 
     const ports_digest = portsDigest(b, root, &.{ vcpkg_tool_version, @import("builtin").zig_version_string, triplet, host_triplet });

@@ -88,12 +88,14 @@ The root `build.zig` separates what runs on the machine doing the build (the **h
 | vcpkg binary | host | `vcpkg.exe` | `vcpkg` (the `glibc` asset) |
 | `slangc` | host | `slang-<ver>-windows-x86_64`, `slangc.exe` | `slang-<ver>-linux-x86_64` |
 
-That split is what lets a Linux host build the Windows target: `dotnet run scripts/verify.cs -- cross-windows` runs `zig build -Dtarget=x86_64-windows-gnu` into `build/cross-windows`, with the ports installed under their own root, `build/vcpkg-installed-x64-windows-zig`, because a vcpkg manifest root keeps one triplet's packages and installing another would remove the first. On a Linux host the mingw toolchain file picks the `zig-cc-mingw.sh` wrappers; on a Windows host it picks the `.cmd` ones. It compiles and links every plugin, example and DLL; it does not run any of them, and it cannot reproduce what the Windows runner image brings (its `tar`, its `ccache`).
+That split is what lets a Linux host build the Windows target: `dotnet run scripts/verify.cs -- cross-windows` runs `zig build -Dtarget=x86_64-windows-gnu` into `build/cross-windows`, with the ports installed under their own root, `build/vcpkg-installed-x64-windows-zig`, because a vcpkg manifest root keeps one triplet's packages and installing another would remove the first. It compiles and links every plugin, example and DLL; it does not run any of them, and it cannot reproduce what the Windows runner image brings (its `tar`, its `ccache`).
 
-Every plugin is told `-Dtarget=x86_64-windows-gnu` (`build.zig:89`), and the Windows triplet builds
-vcpkg ports with `zig cc` through a mingw-style toolchain file, so no Visual Studio or Windows SDK
-is involved (`vcpkg-triplets/x64-windows-zig.cmake:11`, `vcpkg-triplets/zig-mingw-toolchain.cmake:10-13`,
-`vcpkg-triplets/zig-cc.cmd:4`). Static archives keep the GNU `lib*.a` naming; assimp's `zlib` and
+Every plugin is told `-Dtarget=x86_64-windows-gnu`, and the Windows triplet builds vcpkg ports with
+`zig cc` through a mingw-style toolchain file, so no Visual Studio or Windows SDK is involved. Both
+toolchain files include `vcpkg-triplets/zig-common.cmake`, which names `zig` as the C and C++ compiler
+with `cc` and `c++` as its leading argument and archives with `zig ar`, so there is no wrapper script
+per command and none per shell; they add only the target system and, for Windows, `-target
+x86_64-windows-gnu`. Static archives keep the GNU `lib*.a` naming; assimp's `zlib` and
 `minizip` archives are named `libzs.a` and `libminizips[d].a` there (`build.zig:219-230`).
 
 A plugin library is installed under Zig's own per-target name: `<name>.dll` on Windows, with no `lib`
