@@ -12,14 +12,15 @@ Everything a build fetches or produces is under `build/` (`build.zig:15-16`, `36
 |---|---|
 | `build/tools/` | fetched toolchains: vcpkg, `slangc`, wgpu-native |
 | `build/vcpkg-installed/<triplet>/` | the ports vcpkg installed |
-| `build/zig-cache/` | one Zig cache for the root build and every plugin build |
+| `build/zig-cache/` | the root build's Zig cache; `plugins/<name>/` inside it is one cache per plugin, test and example build |
 | `<--prefix>/lib`, `/bin`, `/gen` | plugin libraries, executables, generated shader output |
 
 `--prefix` is the install root the caller picks; every plugin build is invoked with that same prefix
 (`build.zig:914`) and installs its library under `lib` (`src/zig/window/glfw/build.zig:54-56`), so all
 plugin libraries converge in one `lib/`. `Ctx.cache_dir` is the fixed
-`build/zig-cache` path passed to every sub-build as `--cache-dir` (`build.zig:16`, `86`, `914`),
-whatever `--cache-dir` the caller gave the root.
+`build/zig-cache` path (`build.zig:18`, `91`), whatever `--cache-dir` the caller gave the root; each
+sub-build gets `<cache_dir>/plugins/<name>` as its `--cache-dir` (`build.zig:976`, `992`, `1016`).
+Sub-builds that shared one cache serialized on its manifest lock, so the caches are separate.
 
 ## Which headers the libraries were built from
 

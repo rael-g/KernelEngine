@@ -973,24 +973,28 @@ const Ctx = struct {
     fn plugin(ctx: *Ctx, name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step, tests: Tests) *std.Build.Step.Run {
         const b = ctx.b;
         const cwd = b.pathJoin(&.{ b.build_root.path.?, dir });
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix, "--cache-dir", ctx.cache_dir });
+        const child_cache = b.pathJoin(&.{ ctx.cache_dir, "plugins", name });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix, "--cache-dir", child_cache });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
         run.setCwd(.{ .cwd_relative = cwd });
         run.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| run.step.dependOn(d);
+        run.expectExitCode(0);
+        run.has_side_effects = true;
         run.setName(b.fmt("build {s} (Zig)", .{name}));
         ctx.plugins_step.dependOn(&run.step);
 
         switch (tests) {
             .no_tests => {},
             .has_tests => {
-                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix, "--cache-dir", ctx.cache_dir });
+                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix, "--cache-dir", child_cache });
                 t.addArgs(extra_args);
                 t.addArg(ctx.release_flag);
                 if (ctx.target_arg.len != 0) t.addArg(ctx.target_arg);
                 t.setCwd(.{ .cwd_relative = cwd });
+                t.expectExitCode(0);
                 t.has_side_effects = true;
                 t.step.dependOn(ctx.plugins_step);
                 t.setName(b.fmt("test {s} (Zig)", .{name}));
@@ -1009,13 +1013,15 @@ const Ctx = struct {
     fn example(ctx: *Ctx, demo_name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step) *std.Build.Step.Run {
         const b = ctx.b;
         const own_prefix = b.pathJoin(&.{ ctx.prefix, "examples-out", demo_name });
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix, "--cache-dir", ctx.cache_dir });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix, "--cache-dir", b.pathJoin(&.{ ctx.cache_dir, "plugins", demo_name }) });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
         run.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.build_root.path.?, dir }) });
         run.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| run.step.dependOn(d);
+        run.expectExitCode(0);
+        run.has_side_effects = true;
         run.setName(b.fmt("build {s} (Zig)", .{demo_name}));
 
         const copy = b.addSystemCommand(&.{
