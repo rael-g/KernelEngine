@@ -115,3 +115,23 @@ jobs:
       - name: Gates
         if: runner.os == 'Linux'
         run: dotnet run scripts/verify.cs -- gates
+
+  main-history:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Only merge commits reach main
+        env:
+          RANGE: ${{ github.event.before }}..${{ github.sha }}
+        run: |
+          direct=$(git log --first-parent --no-merges --format='%h %s' "$RANGE")
+          untyped=$(git log --first-parent --merges --format='%h %s' "$RANGE" | grep -vE '^[0-9a-f]+ (feat|fix|refactor|docs|test|chore)(\([a-z0-9-]+\))?: [^ ]' || true)
+          bodied=$(for h in $(git log --first-parent --merges --format=%h "$RANGE"); do [ -z "$(git show -s --format=%b "$h")" ] || echo "$h"; done)
+          [ -z "$direct" ] || { echo "direct commits on main:"; echo "$direct"; }
+          [ -z "$untyped" ] || { echo "merge subjects that are not one-line conventional commits:"; echo "$untyped"; }
+          [ -z "$bodied" ] || { echo "merge commits with a body:"; echo "$bodied"; }
+          [ -z "$direct$untyped$bodied" ]

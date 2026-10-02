@@ -1,7 +1,7 @@
 # What does CI run on a push, and what does it leave out?
 
-One workflow, `.github/workflows/ci.yml`, with one job, `build-and-test`. It runs on a push to any
-branch and on every pull request. A newer run for the same workflow and ref cancels the older one,
+One workflow, `.github/workflows/ci.yml`, with two jobs: `build-and-test`, which runs on a push to any
+branch and on every pull request, and `main-history`, which runs on a push to `main` only. A newer run for the same workflow and ref cancels the older one,
 and a job is stopped after 45 minutes.
 
 ## Where it runs
@@ -53,6 +53,15 @@ listed in the workflow, so a gate added under `scripts/` runs without the workfl
 generator would answer about the wrong generator. What each one fails on is in
 `docs/architecture/kabic.md`. They are Linux-only: they compare generated text against headers and
 read no compiler or linker output, so the answer cannot differ by runner.
+
+## What `main-history` checks
+
+`main` takes only merge commits, each a one-line Conventional Commit with no body, so the changelog
+is read from `git log --first-parent`. For the commits a push adds, the job fails when one on the
+first-parent line is not a merge, when a merge subject is not `feat`, `fix`, `refactor`, `docs`,
+`test` or `chore` followed by a summary, or when a merge has a body. It runs after the push, so it
+reports a violation and does not prevent one; the local `ci_local` run and the habit of merging
+with `--no-ff` are what prevent it.
 
 ## What it leaves out
 
