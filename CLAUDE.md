@@ -164,7 +164,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - Conventional Commits: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
 - One commit per logical task. Stage files selectively — never `git add .`.
 - Commit messages are a single line. No multi-line body. No `Co-Authored-By` footer.
-- Work reaches `main` only as a `--no-ff` merge commit with a one-line message, after `scripts/ci_local.cs` passes on it; see [`docs/conventions/git.md`](docs/conventions/git.md).
+- `main` takes one-line commits after `scripts/ci_local.cs` passes on it; work of several commits goes through a branch and a `--no-ff` merge. See [`docs/conventions/git.md`](docs/conventions/git.md).
 
 ---
 

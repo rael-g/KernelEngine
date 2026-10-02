@@ -56,12 +56,10 @@ read no compiler or linker output, so the answer cannot differ by runner.
 
 ## What `main-history` checks
 
-`main` takes only merge commits, each a one-line Conventional Commit with no body, so the changelog
-is read from `git log --first-parent`. For the commits a push adds, the job fails when one on the
-first-parent line is not a merge, when a merge subject is not `feat`, `fix`, `refactor`, `docs`,
-`test` or `chore` followed by a summary, or when a merge has a body. It runs after the push, so it
-reports a violation and does not prevent one; the local `ci_local` run and the habit of merging
-with `--no-ff` are what prevent it.
+Every commit on `main` is a one-line Conventional Commit (`docs/conventions/git.md`), so the changelog is
+read from the messages. For the commits a push adds to the first-parent line, the job fails when a subject
+is not `feat`, `fix`, `refactor`, `docs`, `test` or `chore` followed by a summary, or when a commit has a
+body. It runs after the push, so it reports a violation and does not prevent one.
 
 ## What it leaves out
 
