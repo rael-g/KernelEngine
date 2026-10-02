@@ -70,6 +70,12 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'src/csharp/dotnet-tools.json') }}
           restore-keys: nuget-${{ runner.os }}-
 
+      - name: Time the Zig compiler wrapper
+        if: runner.os == 'Windows'
+        run: |
+          echo 'int main(void){return 0;}' > probe.c
+          for i in 1 2 3; do /usr/bin/time -f "%es" vcpkg-triplets/zig-cc.cmd -c probe.c -o probe.o 2>&1 || ( time vcpkg-triplets/zig-cc.cmd -c probe.c -o probe.o ) 2>&1 | grep real; done
+
       - name: Build native
         run: dotnet run scripts/verify.cs -- build
 
