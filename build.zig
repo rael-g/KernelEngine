@@ -653,6 +653,8 @@ pub fn build(b: *std.Build) void {
 
     const demo06 = ctx.example("c_demo_06", "examples/c/06_triangle", &.{
         argF(b, "shader-name", "triangle"),
+        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "06_triangle" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -668,10 +670,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo07 = ctx.example("c_demo_07", "examples/c/07_uniform", &.{
         argF(b, "shader-name", "rotate"),
+        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "07_uniform" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -688,10 +692,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
         "-Dlink-m=true",
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo08 = ctx.example("c_demo_08", "examples/c/08_vertex_buffer", &.{
         argF(b, "shader-name", "mesh"),
+        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "08_vertex_buffer" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -707,10 +713,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo09 = ctx.example("c_demo_09", "examples/c/09_texture", &.{
         argF(b, "shader-name", "tex"),
+        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "09_texture" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -726,10 +734,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo10 = ctx.example("c_demo_10", "examples/c/10_depth", &.{
         argF(b, "shader-name", "depth"),
+        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "10_depth" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -745,7 +755,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo12 = ctx.example("c_demo_12", "examples/c/12_render_service", &.{
         argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
