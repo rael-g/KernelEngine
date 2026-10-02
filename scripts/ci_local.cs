@@ -43,6 +43,13 @@ try
         if (new FileInfo(Path.Combine(checkout, ".ke-ci.patch")).Length > 0
             && Run("git", "-C", checkout, "apply", ".ke-ci.patch") != 0) return 1;
         File.Delete(Path.Combine(checkout, ".ke-ci.patch"));
+        foreach (var untracked in Output("git", "-C", rootDir, "ls-files", "--others", "--exclude-standard", "-z").Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var destination = Path.Combine(checkout, untracked);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(Path.Combine(rootDir, untracked), destination, overwrite: true);
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(destination, File.GetUnixFileMode(Path.Combine(rootDir, untracked)));
+        }
     }
     else if (Run("git", "clone", "--no-hardlinks", "--quiet", rootDir, checkout) != 0) return 1;
 
@@ -74,6 +81,16 @@ static int Run(string command, params string[] arguments)
     using var process = Process.Start(info)!;
     process.WaitForExit();
     return process.ExitCode;
+}
+
+static string Output(string command, params string[] arguments)
+{
+    var info = new ProcessStartInfo(command) { RedirectStandardOutput = true };
+    foreach (var a in arguments) info.ArgumentList.Add(a);
+    using var process = Process.Start(info)!;
+    var text = process.StandardOutput.ReadToEnd();
+    process.WaitForExit();
+    return text;
 }
 
 static bool Succeeds(string command, params string[] arguments)
