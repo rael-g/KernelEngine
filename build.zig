@@ -653,18 +653,6 @@ pub fn build(b: *std.Build) void {
 
     const examples_gen = b.pathJoin(&.{ ctx.prefix, "gen", "examples" });
 
-    {
-        var threaded: std.Io.Threaded = .init(b.allocator, .{});
-        defer threaded.deinit();
-        const io = threaded.io();
-        for ([_][]const u8{ "06_triangle", "07_uniform", "08_vertex_buffer", "09_texture", "10_depth" }) |name| {
-            std.Io.Dir.cwd().createDirPath(io, b.pathJoin(&.{ examples_gen, name })) catch |err| switch (err) {
-                error.PathAlreadyExists => {},
-                else => @panic("failed to create example shader-out-dir"),
-            };
-        }
-    }
-
     const demo05 = ctx.example("c_demo_05", "examples/c/05_gpu_device", &.{
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "math" }),
