@@ -98,7 +98,7 @@ const ForwardModule = struct {
     access: [12]c.ke_component_access = undefined,
     access_count: u32 = 0,
     queries_terms: [7]c.ke_component_access = undefined,
-    queries_widths: [5]u32 = undefined,
+    queries: [5]c.ke_query_decl = undefined,
 
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
         var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
@@ -457,7 +457,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     const rd = c.KE_ACCESS_READ;
     fwd.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd }, .{ .cid = light_cid, .access = rd }, .{ .cid = ambient_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
-    fwd.queries_widths = .{ 2, 1, 1, 1, 2 };
+    fwd.queries = .{ .{ .terms = &fwd.queries_terms[0], .term_count = 2 }, .{ .terms = &fwd.queries_terms[2], .term_count = 1 }, .{ .terms = &fwd.queries_terms[3], .term_count = 1 }, .{ .terms = &fwd.queries_terms[4], .term_count = 1 }, .{ .terms = &fwd.queries_terms[5], .term_count = 2 } };
     return true;
 }
 
@@ -505,10 +505,8 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.forward_transparent";
     params.phase = c.KE_PHASE_RENDER;
-    params.query_terms = &fwd.queries_terms;
-    params.query_term_count = fwd.queries_terms.len;
-    params.query_widths = &fwd.queries_widths;
-    params.query_count = fwd.queries_widths.len;
+    params.queries = &fwd.queries;
+    params.query_count = fwd.queries.len;
     params.access_list = &fwd.access;
     params.access_count = fwd.access_count;
     params.pinned_thread = 0;

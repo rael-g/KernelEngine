@@ -29,7 +29,7 @@ const SkyboxModule = struct {
     io: c.ke_render_pass_io = undefined,
     access: [6]c.ke_component_access = undefined,
     queries_terms: [3]c.ke_component_access = undefined,
-    queries_widths: [2]u32 = undefined,
+    queries: [2]c.ke_query_decl = undefined,
 };
 
 inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
@@ -182,7 +182,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     const rd = c.KE_ACCESS_READ;
     sm.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd } };
-    sm.queries_widths = .{ 2, 1 };
+    sm.queries = .{ .{ .terms = &sm.queries_terms[0], .term_count = 2 }, .{ .terms = &sm.queries_terms[2], .term_count = 1 } };
     return true;
 }
 
@@ -224,10 +224,8 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.skybox";
     params.phase = c.KE_PHASE_RENDER;
-    params.query_terms = &sm.queries_terms;
-    params.query_term_count = sm.queries_terms.len;
-    params.query_widths = &sm.queries_widths;
-    params.query_count = sm.queries_widths.len;
+    params.queries = &sm.queries;
+    params.query_count = sm.queries.len;
     params.access_list = &sm.access;
     params.access_count = sm.access.len;
     params.pinned_thread = 0;

@@ -60,11 +60,11 @@ const UiState = struct {
     io: c.ke_render_pass_io = undefined,
     access: [1]c.ke_component_access = undefined,
     queries_terms: [2]c.ke_component_access = undefined,
-    queries_widths: [2]u32 = undefined,
+    queries: [2]c.ke_query_decl = undefined,
     quad_cid: c.ke_component_id = 0,
     label_cid: c.ke_component_id = 0,
     label_shape_queries_terms: [1]c.ke_component_access = undefined,
-    label_shape_queries_widths: [1]u32 = undefined,
+    label_shape_queries: [1]c.ke_query_decl = undefined,
 };
 
 fn stateOf(self: [*c]c.ke_render_ui) *UiState {
@@ -485,15 +485,13 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
 
     ui.label_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_LABEL, @sizeOf(c.ke_label_component), &c.ke_label_component_fields, c.ke_label_component_fields.len, null);
     ui.queries_terms = .{ .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ }, .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ } };
-    ui.queries_widths = .{ 1, 1 };
+    ui.queries = .{ .{ .terms = &ui.queries_terms[0], .term_count = 1 }, .{ .terms = &ui.queries_terms[1], .term_count = 1 } };
 
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.ui";
     params.phase = c.KE_PHASE_RENDER;
-    params.query_terms = &ui.queries_terms;
-    params.query_term_count = ui.queries_terms.len;
-    params.query_widths = &ui.queries_widths;
-    params.query_count = ui.queries_widths.len;
+    params.queries = &ui.queries;
+    params.query_count = ui.queries.len;
     params.access_list = &ui.access;
     params.access_count = ui.access.len;
     params.pinned_thread = 0;
@@ -507,15 +505,13 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     }
 
     ui.label_shape_queries_terms = .{ .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE } };
-    ui.label_shape_queries_widths = .{ 1 };
+    ui.label_shape_queries = .{ .{ .terms = &ui.label_shape_queries_terms[0], .term_count = 1 } };
 
     var shape_params = std.mem.zeroes(c.ke_runtime_system_params);
     shape_params.name = "render.ui.labels";
     shape_params.phase = c.KE_PHASE_UPDATE;
-    shape_params.query_terms = &ui.label_shape_queries_terms;
-    shape_params.query_term_count = ui.label_shape_queries_terms.len;
-    shape_params.query_widths = &ui.label_shape_queries_widths;
-    shape_params.query_count = ui.label_shape_queries_widths.len;
+    shape_params.queries = &ui.label_shape_queries;
+    shape_params.query_count = ui.label_shape_queries.len;
     shape_params.pinned_thread = 0;
     shape_params.user_data = ui;
     shape_params.execute = labelShapeSystem;

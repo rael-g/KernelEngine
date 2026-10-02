@@ -1044,8 +1044,15 @@ public static class CSharpBackend
             fields.Add($"    public {type} {Idioms.Pascal(f.Name)};");
         }
 
+        var borrowsAType = s.Fields.Any(f =>
+        {
+            var named = StripQualifiers(CTypes.IsPointer(f.Type) ? CTypes.Deref(f.Type) : f.Type).Trim();
+            return model.Enums.Any(e => e.Name == named && e.External)
+                || model.Structs.Any(v => v.Name == named && v.External);
+        });
+
         var o = new List<string> { Header, "using System;" };
-        foreach (var u in extraUsings) o.Add($"using {u};");
+        if (borrowsAType) foreach (var u in extraUsings) o.Add($"using {u};");
         o.Add("");
         o.Add($"namespace {ns};\n");
         o.Add(s.Doc is not null

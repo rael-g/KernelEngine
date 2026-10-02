@@ -70,7 +70,7 @@ const GBufferModule = struct {
     access: [8]c.ke_component_access = undefined,
     access_count: u32 = 0,
     queries_terms: [4]c.ke_component_access = undefined,
-    queries_widths: [2]u32 = undefined,
+    queries: [2]c.ke_query_decl = undefined,
 
     fn resolvePipeline(gb: *GBufferModule, shader: [*c]const u8) bool {
         var name_buf: [rc_MAX_SHADER_QUALIFIED]u8 = undefined;
@@ -314,7 +314,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     const rd = c.KE_ACCESS_READ;
     gb.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
-    gb.queries_widths = .{ 2, 2 };
+    gb.queries = .{ .{ .terms = &gb.queries_terms[0], .term_count = 2 }, .{ .terms = &gb.queries_terms[2], .term_count = 2 } };
     return true;
 }
 
@@ -356,10 +356,8 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.gbuffer";
     params.phase = c.KE_PHASE_RENDER;
-    params.query_terms = &gb.queries_terms;
-    params.query_term_count = gb.queries_terms.len;
-    params.query_widths = &gb.queries_widths;
-    params.query_count = gb.queries_widths.len;
+    params.queries = &gb.queries;
+    params.query_count = gb.queries.len;
     params.access_list = &gb.access;
     params.access_count = gb.access_count;
     params.pinned_thread = 0;

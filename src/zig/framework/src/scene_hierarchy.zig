@@ -19,7 +19,7 @@ const State = struct {
 
     queries_terms: [1]c.ke_component_access = undefined,
 
-    queries_widths: [1]u32 = undefined,
+    queries: [1]c.ke_query_decl = undefined,
     access: [4]c.ke_component_access = undefined,
 };
 
@@ -150,7 +150,7 @@ export fn ke_scene_hierarchy_create(
         .hierarchy_cid = hierarchy_meta.cid,
     };
     s.queries_terms = .{ .{ .cid = s.hierarchy_cid, .access = c.KE_ACCESS_READ } };
-    s.queries_widths = .{ 1 };
+    s.queries = .{ .{ .terms = &s.queries_terms[0], .term_count = 1 } };
 
     s.access = .{
         .{ .cid = s.hierarchy_cid, .access = c.KE_ACCESS_READ },
@@ -162,10 +162,8 @@ export fn ke_scene_hierarchy_create(
     var propagate = std.mem.zeroes(c.ke_runtime_system_params);
     propagate.name = "scene.propagate_transforms";
     propagate.phase = c.KE_PHASE_POST_UPDATE;
-    propagate.query_terms = &s.queries_terms;
-    propagate.query_term_count = s.queries_terms.len;
-    propagate.query_widths = &s.queries_widths;
-    propagate.query_count = s.queries_widths.len;
+    propagate.queries = &s.queries;
+    propagate.query_count = s.queries.len;
     propagate.access_list = &s.access;
     propagate.access_count = s.access.len;
     propagate.user_data = s;

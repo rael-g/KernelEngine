@@ -181,21 +181,28 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
     /// <param name="phase">Which phase of the tick the body runs in.</param>
     /// <param name="execute">The body itself.</param>
-    /// <param name="queryTerms">The terms of every query the system reads through, one query after another. A query is a tuple of components matched together, each with the access mode the scheduler orders waves by. The runtime registers the queries, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view.</param>
-    /// <param name="queryWidths">How many of query_terms each query takes, in order. They sum to query_term_count, and no query is empty.</param>
+    /// <param name="queries">Queries the system reads through. The runtime registers them, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view.</param>
     /// <param name="accessList">Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and component access made without a query. Declaring nothing is not "no opinion" -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage says so.</param>
     /// <param name="pinnedThread">The worker the body must run on, or 0 to let any wave thread take it.</param>
     /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="KernelError">The native call failed.</exception>
-    public ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<ComponentAccess> queryTerms = default, Span<uint> queryWidths = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false)
+    public ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            fixed (ComponentAccess* queryTermsPtr = queryTerms)
+            var queriesPins = new System.Buffers.MemoryHandle[queries.Length];
+            var queriesNative = new ke_query_decl[queries.Length];
+            try
             {
-                fixed (uint* queryWidthsPtr = queryWidths)
+                for (var queriesAt = 0; queriesAt < queries.Length; queriesAt++)
+                {
+                    queriesPins[queriesAt] = queries[queriesAt].Terms.Pin();
+                    queriesNative[queriesAt].terms = (ke_component_access*)queriesPins[queriesAt].Pointer;
+                    queriesNative[queriesAt].term_count = (uint)queries[queriesAt].Terms.Length;
+                }
+                fixed (ke_query_decl* queriesPtr = queriesNative)
                 {
                     fixed (ComponentAccess* accessListPtr = accessList)
                     {
@@ -207,10 +214,8 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
                         p.phase = (ke_phase)phase;
                         p.user_data = (void*)GCHandle.ToIntPtr(executeHandle);
                         p.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, ke_error**, bool>)&RegisterSystemExecuteTrampoline;
-                        p.query_terms = (ke_component_access*)queryTermsPtr;
-                        p.query_term_count = (uint)queryTerms.Length;
-                        p.query_widths = queryWidthsPtr;
-                        p.query_count = (uint)queryWidths.Length;
+                        p.queries = queriesPtr;
+                        p.query_count = (uint)queries.Length;
                         p.access_list = (ke_component_access*)accessListPtr;
                         p.access_count = (uint)accessList.Length;
                         p.pinned_thread = pinnedThread;
@@ -235,6 +240,10 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
                         return result;
                     }
                 }
+            }
+            finally
+            {
+                for (var queriesAt = 0; queriesAt < queriesPins.Length; queriesAt++) queriesPins[queriesAt].Dispose();
             }
         }
     }

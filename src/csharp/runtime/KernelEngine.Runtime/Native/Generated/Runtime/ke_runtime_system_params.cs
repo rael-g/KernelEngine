@@ -14,14 +14,8 @@ public unsafe partial struct ke_runtime_system_params
     [NativeTypeName("ke_system_execute_fn")]
     public delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, KernelEngine.Common.Native.ke_error**, bool> execute;
 
-    [NativeTypeName("const ke_component_access *")]
-    public ke_component_access* query_terms;
-
-    [NativeTypeName("uint32_t")]
-    public uint query_term_count;
-
-    [NativeTypeName("const uint32_t *")]
-    public uint* query_widths;
+    [NativeTypeName("const ke_query_decl *")]
+    public ke_query_decl* queries;
 
     [NativeTypeName("uint32_t")]
     public uint query_count;

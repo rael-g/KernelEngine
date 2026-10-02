@@ -81,6 +81,29 @@
       ]
     },
     {
+      "name": "ke_query_decl",
+      "doc": "A query a system reads through: a tuple of components matched together, each with the access mode the scheduler orders waves by. The terms are read while register_system runs, and the runtime keeps its own copy.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "terms",
+          "type": "const ke_component_access *",
+          "tags": [
+            "array_of:term_count"
+          ],
+          "doc": "The terms the query matches together."
+        },
+        {
+          "name": "term_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
       "name": "ke_runtime_module_params",
       "doc": null,
       "tags": [],
@@ -159,28 +182,13 @@
           "doc": "The body itself."
         },
         {
-          "name": "query_terms",
-          "type": "const ke_component_access *",
-          "tags": [
-            "array_of:query_term_count",
-            "default:empty"
-          ],
-          "doc": "The terms of every query the system reads through, one query after another. A query is a tuple of components matched together, each with the access mode the scheduler orders waves by. The runtime registers the queries, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view."
-        },
-        {
-          "name": "query_term_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "query_widths",
-          "type": "const uint32_t *",
+          "name": "queries",
+          "type": "const ke_query_decl *",
           "tags": [
             "array_of:query_count",
             "default:empty"
           ],
-          "doc": "How many of query_terms each query takes, in order. They sum to query_term_count, and no query is empty."
+          "doc": "Queries the system reads through. The runtime registers them, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view."
         },
         {
           "name": "query_count",

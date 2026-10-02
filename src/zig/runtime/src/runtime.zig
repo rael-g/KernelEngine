@@ -108,11 +108,14 @@ fn termWrites(a: c.ke_component_access) bool {
 fn paramsAccesses(p: *const c.ke_runtime_system_params, cid: c.ke_component_id, out_writes: *bool) bool {
     var any = false;
     var writes = false;
-    if (p.query_terms) |terms| {
-        for (0..p.query_term_count) |t| {
-            if (terms[t].cid == cid) {
-                any = true;
-                if (termWrites(terms[t])) writes = true;
+    if (p.queries) |queries| {
+        for (0..p.query_count) |q| {
+            const terms = queries[q].terms orelse continue;
+            for (0..queries[q].term_count) |t| {
+                if (terms[t].cid == cid) {
+                    any = true;
+                    if (termWrites(terms[t])) writes = true;
+                }
             }
         }
     }
@@ -134,10 +137,13 @@ fn conflictOnTerm(b: *const c.ke_runtime_system_params, cid: c.ke_component_id, 
 }
 
 fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_system_params) bool {
-    if (a.query_terms) |terms| {
-        for (0..a.query_term_count) |t| {
-            const a_writes = termWrites(terms[t]);
-            if (conflictOnTerm(b, terms[t].cid, a_writes)) return true;
+    if (a.queries) |queries| {
+        for (0..a.query_count) |q| {
+            const terms = queries[q].terms orelse continue;
+            for (0..queries[q].term_count) |t| {
+                const a_writes = termWrites(terms[t]);
+                if (conflictOnTerm(b, terms[t].cid, a_writes)) return true;
+            }
         }
     }
     if (a.access_list) |list| {
@@ -458,7 +464,7 @@ fn allocZeroed(comptime T: type, n: usize) ?[]T {
     return slice;
 }
 
-fn allocQueryStorage(rs: *RegisteredSystem, widths: [*c]const u32, query_count: usize, total_terms: usize, access_count: usize) bool {
+fn allocQueryStorage(rs: *RegisteredSystem, queries: [*c]const c.ke_query_decl, query_count: usize, total_terms: usize, access_count: usize) bool {
     rs.term_storage = allocZeroed(c.ke_component_access, total_terms) orelse return false;
     rs.query_decls = allocZeroed(QueryDecl, query_count) orelse return false;
     rs.query_ids = allocZeroed(c.ke_query_id, query_count) orelse return false;
@@ -468,7 +474,7 @@ fn allocQueryStorage(rs: *RegisteredSystem, widths: [*c]const u32, query_count: 
     rs.extracted = allocZeroed(ExtractedQuery, query_count) orelse return false;
     rs.derived_access = allocZeroed(c.ke_component_access, total_terms + access_count) orelse return false;
     for (rs.extracted, 0..) |*eq, q| {
-        const terms = widths[q];
+        const terms = queries[q].term_count;
         eq.col_bufs = allocZeroed(?*anyopaque, terms) orelse return false;
         eq.col_elem_size = allocZeroed(usize, terms) orelse return false;
         eq.col_ptrs = allocZeroed(?*anyopaque, terms) orelse return false;
@@ -605,20 +611,17 @@ fn mergeAccess(rs: *RegisteredSystem, want: c.ke_component_access) void {
 fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
     var total_terms: usize = 0;
     if (p.*.query_count > 0) {
-        if (p.*.query_widths == null) {
-            E.fail(out_error, .invalid_argument, "queries are declared without their widths", @src());
+        if (p.*.queries == null) {
+            E.fail(out_error, .invalid_argument, "queries are counted but not given", @src());
             return null;
         }
         for (0..p.*.query_count) |q| {
-            if (p.*.query_widths[q] == 0) {
+            const decl = p.*.queries[q];
+            if (decl.term_count == 0 or decl.terms == null) {
                 E.fail(out_error, .invalid_argument, "a query declares no terms", @src());
                 return null;
             }
-            total_terms += p.*.query_widths[q];
-        }
-        if (total_terms != p.*.query_term_count or p.*.query_terms == null) {
-            E.fail(out_error, .invalid_argument, "the query widths do not sum to the number of query terms", @src());
-            return null;
+            total_terms += decl.term_count;
         }
     }
 
@@ -658,7 +661,7 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
 
     if (p.*.query_count > 0) {
         const qn = p.*.query_count;
-        if (!allocQueryStorage(rs, p.*.query_widths, qn, total_terms, p.*.access_count)) {
+        if (!allocQueryStorage(rs, p.*.queries, qn, total_terms, p.*.access_count)) {
             releaseSystem(rs);
             E.fail(out_error, .out_of_memory, "query storage allocation failed", @src());
             return null;
@@ -666,11 +669,11 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
 
         var term_at: usize = 0;
         for (0..qn) |q| {
-            const width = p.*.query_widths[q];
-            const owned = rs.term_storage[term_at..][0..width];
-            @memcpy(owned, p.*.query_terms[term_at..][0..width]);
-            term_at += width;
-            rs.query_decls[q] = .{ .terms = owned.ptr, .term_count = width };
+            const decl = p.*.queries[q];
+            const owned = rs.term_storage[term_at..][0..decl.term_count];
+            @memcpy(owned, decl.terms[0..decl.term_count]);
+            term_at += decl.term_count;
+            rs.query_decls[q] = .{ .terms = owned.ptr, .term_count = decl.term_count };
             rs.query_ids[q] = c.KE_QUERY_INVALID;
             for (owned) |term| mergeAccess(rs, term);
         }
@@ -680,9 +683,7 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
 
         rs.params.access_list = rs.derived_access.ptr;
         rs.params.access_count = rs.derived_access_count;
-        rs.params.query_terms = null;
-        rs.params.query_term_count = 0;
-        rs.params.query_widths = null;
+        rs.params.queries = null;
         rs.params.query_count = 0;
 
         for (0..qn) |q| {
@@ -1374,11 +1375,13 @@ const Fixture = struct {
     }
 };
 
-fn withQueries(sys: *c.ke_runtime_system_params, terms: []const c.ke_component_access, widths: []const u32) void {
-    sys.query_terms = terms.ptr;
-    sys.query_term_count = @intCast(terms.len);
-    sys.query_widths = widths.ptr;
-    sys.query_count = @intCast(widths.len);
+fn queryOf(terms: []const c.ke_component_access) c.ke_query_decl {
+    return .{ .terms = terms.ptr, .term_count = @intCast(terms.len) };
+}
+
+fn withQueries(sys: *c.ke_runtime_system_params, decls: []const c.ke_query_decl) void {
+    sys.queries = decls.ptr;
+    sys.query_count = @intCast(decls.len);
 }
 
 fn access(cid: u32, mode: c_int) c.ke_component_access {
@@ -1761,11 +1764,14 @@ test "a system declaring twenty queries is resolved and viewed through every one
     defer r.bare.deinit();
 
     var terms: [20]c.ke_component_access = undefined;
-    const widths = [_]u32{1} ** 20;
-    for (&terms) |*t| t.* = access(1, c.KE_ACCESS_READ);
+    var decls: [20]c.ke_query_decl = undefined;
+    for (&terms, &decls) |*t, *d| {
+        t.* = access(1, c.KE_ACCESS_READ);
+        d.* = queryOf(t[0..1]);
+    }
     var sys = systemParams("Greedy", c.KE_PHASE_UPDATE);
     sys.execute = &lastQueryBody;
-    withQueries(&sys, &terms, &widths);
+    withQueries(&sys, &decls);
     try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
 
     seen_segments = 0;
@@ -1793,7 +1799,7 @@ test "a query of twelve terms is registered and its segments carry twelve column
     for (&terms, 0..) |*t, i| t.* = access(@intCast(i + 1), c.KE_ACCESS_READ);
     var sys = systemParams("Wide", c.KE_PHASE_UPDATE);
     sys.execute = &termCountBody;
-    withQueries(&sys, &terms, &[_]u32{ terms.len });
+    withQueries(&sys, &.{queryOf(&terms)});
     try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
 
     fake_term_count = 12;
@@ -1804,15 +1810,15 @@ test "a query of twelve terms is registered and its segments carry twelve column
     try testing.expectEqual(@as(usize, 12), seen_entities);
 }
 
-test "query widths that do not add up to the terms given are refused" {
+test "a query counting terms it does not point at is refused" {
     var b = BareRuntime{};
     try b.init();
     defer b.deinit();
 
-    var sys = systemParams("Mismatched", c.KE_PHASE_UPDATE);
+    var sys = systemParams("Dangling", c.KE_PHASE_UPDATE);
     sys.execute = &noopBody;
-    var terms = [_]c.ke_component_access{ access(1, c.KE_ACCESS_READ), access(2, c.KE_ACCESS_READ) };
-    withQueries(&sys, &terms, &[_]u32{1});
+    const decls = [_]c.ke_query_decl{.{ .terms = null, .term_count = 2 }};
+    withQueries(&sys, &decls);
 
     var err: [*c]c.ke_error = null;
     try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
@@ -1827,7 +1833,7 @@ test "a query declaring no terms is refused" {
     var sys = systemParams("Empty", c.KE_PHASE_UPDATE);
     sys.execute = &noopBody;
     var terms = [_]c.ke_component_access{};
-    withQueries(&sys, &terms, &[_]u32{0});
+    withQueries(&sys, &.{queryOf(&terms)});
 
     var err: [*c]c.ke_error = null;
     try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
@@ -1983,7 +1989,7 @@ fn manySegmentRuntime(r: *InlineRuntime, phase: c_int) !void {
     const terms = [_]c.ke_component_access{access(1, c.KE_ACCESS_READ)};
     var sys = systemParams("Fragmented", phase);
     sys.execute = &viewBody;
-    withQueries(&sys, &terms, &[_]u32{ terms.len });
+    withQueries(&sys, &.{queryOf(&terms)});
     try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
     seen_segments = 0;
     seen_entities = 0;
@@ -2457,14 +2463,14 @@ test "the render extract carries this tick's sim write" {
     const wterms = [_]c.ke_component_access{access(cid, c.KE_ACCESS_WRITE)};
 
     var sim = systemParams("SimWriter", c.KE_PHASE_UPDATE);
-    withQueries(&sim, &wterms, &[_]u32{ wterms.len });
+    withQueries(&sim, &.{queryOf(&wterms)});
     sim.execute = &extractSimWriter;
     try testing.expect(f.rt().register_system.?(f.rt(), &sim, null) != 0);
 
     const rterms = [_]c.ke_component_access{access(cid, c.KE_ACCESS_READ)};
 
     var rnd = systemParams("RenderReader", c.KE_PHASE_RENDER);
-    withQueries(&rnd, &rterms, &[_]u32{ rterms.len });
+    withQueries(&rnd, &.{queryOf(&rterms)});
     rnd.execute = &extractRenderReader;
     try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
 
@@ -2525,7 +2531,7 @@ test "the render extract keeps multi term columns aligned" {
     const rterms = [_]c.ke_component_access{ access(pos, c.KE_ACCESS_READ), access(vel, c.KE_ACCESS_READ) };
 
     var rnd = systemParams("RenderPosVel", c.KE_PHASE_RENDER);
-    withQueries(&rnd, &rterms, &[_]u32{ rterms.len });
+    withQueries(&rnd, &.{queryOf(&rterms)});
     rnd.execute = &extractPosVelReader;
     try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
 
@@ -2916,7 +2922,7 @@ test "two readers sharing a wave read the same storage without conflicting" {
     const read_terms = [_]c.ke_component_access{access(pos, c.KE_ACCESS_READ)};
 
     var a = systemParams("ReaderA", c.KE_PHASE_UPDATE);
-    withQueries(&a, &read_terms, &[_]u32{ read_terms.len });
+    withQueries(&a, &.{queryOf(&read_terms)});
     a.execute = &parallelReaderBody;
 
     var b = a;
@@ -2972,7 +2978,7 @@ test "a multi term query hands back aligned columns" {
     const q_terms = [_]c.ke_component_access{ access(pos, c.KE_ACCESS_READ), access(vel, c.KE_ACCESS_READ) };
 
     var s = systemParams("PosVel", c.KE_PHASE_UPDATE);
-    withQueries(&s, &q_terms, &[_]u32{ q_terms.len });
+    withQueries(&s, &.{queryOf(&q_terms)});
     s.execute = &posVelBody;
     try testing.expect(f.rt().register_system.?(f.rt(), &s, null) != 0);
 

@@ -131,8 +131,8 @@ public sealed class SceneNodesModule : IRuntimeModule
                 if (!owned.ContainsKey(cid))
                     access.Add(Touches(cid, isWrite));
 
-            var widths = terms.Length > 0 ? new[] { (uint)terms.Length } : [];
-            var queried = widths.Length > 0;
+            var queries = terms.Length > 0 ? new[] { new QueryDecl { Terms = terms } } : [];
+            var queried = queries.Length > 0;
 
             runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (ctx, dt) =>
             {
@@ -167,7 +167,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                         }
                     }
                 }
-            }, queryTerms: terms, queryWidths: widths, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
+            }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };
 
         var done = new System.Threading.ManualResetEventSlim(false);

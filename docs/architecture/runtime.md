@@ -161,6 +161,5 @@ Each query starts with room for a few segments; when `query_resolve` reports mor
 buffer holds, the runtime grows the buffer to that count and resolves again, before the wave is
 dispatched, so no body ever holds a buffer that moves. The render extraction scratch grows the same
 way. The only failure left is an allocation failure, which fails the tick with `out_of_memory`. A
-query's width is not capped either: `ke_runtime_system_params` carries the terms of every query
-back to back in `query_terms`, and `query_widths` says how many each takes. A query that the ecs
-cannot register fails the tick naming the system.
+query's width is not capped either: each `ke_query_decl` in `ke_runtime_system_params` carries as many
+terms as it declares. A query that the ecs cannot register fails the tick naming the system.
