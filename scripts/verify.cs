@@ -13,11 +13,12 @@ var stages = new Dictionary<string, Func<List<Step>>>
     ["test-native"] = () => [new Step("zig build test", "zig", ["build", "test", .. nativeArgs])],
     ["test-managed"] = () => [new Step("dotnet test", "dotnet", ["test", "KernelEngine.slnx"])],
     ["gates"] = Gates,
+    ["cross-windows"] = () => [new Step("zig build windows", "zig", ["build", "-Dtarget=x86_64-windows-gnu", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win"])],
 };
-string[] order = ["build", "test-native", "test-managed", "gates"];
+string[] order = ["build", "test-native", "test-managed", "gates", "cross-windows"];
 
 var selected = args.Where(a => !a.StartsWith("--")).ToList();
-if (selected.Count == 0 || selected.Contains("all")) selected = [.. order];
+if (selected.Count == 0 || selected.Contains("all")) selected = [.. order.Where(s => s != "cross-windows")];
 var unknown = selected.Where(s => !stages.ContainsKey(s)).ToList();
 if (unknown.Count > 0)
 {

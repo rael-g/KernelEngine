@@ -9,10 +9,12 @@ pub fn build(b: *std.Build) void {
 
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
 
+    const host_windows = b.graph.host.result.os.tag == .windows;
     const triplet = switch (target.result.os.tag) {
         .windows => "x64-windows-zig",
         else => "x64-linux-zig",
     };
+    const host_triplet = if (host_windows) "x64-windows-zig" else "x64-linux-zig";
 
     const tools_dir = b.pathJoin(&.{ root, "build", "tools" });
     const zig_cache_dir = b.pathJoin(&.{ root, "build", "zig-cache" });
@@ -22,11 +24,11 @@ pub fn build(b: *std.Build) void {
     const vcpkg_root = b.option([]const u8, "vcpkg-root", "path to the vcpkg checkout") orelse
         b.graph.environ_map.get("VCPKG_ROOT") orelse
         vcpkg_dir_default;
-    const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg" });
+    const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (host_windows) "vcpkg.exe" else "vcpkg" });
     const vcpkg_bundle_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/vcpkg-standalone-bundle.tar.gz", .{vcpkg_tool_version});
-    const vcpkg_bin_asset = if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg-glibc";
+    const vcpkg_bin_asset = if (host_windows) "vcpkg.exe" else "vcpkg-glibc";
     const vcpkg_bin_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_bin_asset });
-    const vcpkg_name = if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg";
+    const vcpkg_name = if (host_windows) "vcpkg.exe" else "vcpkg";
     const vcpkg_fetch = b.addSystemCommand(&.{
         "sh", "-c",
         b.fmt(
@@ -35,7 +37,10 @@ pub fn build(b: *std.Build) void {
         ),
     });
 
-    const vcpkg_installed = b.pathJoin(&.{ root, "build", "vcpkg-installed" });
+    const vcpkg_installed = if (target.result.os.tag == b.graph.host.result.os.tag)
+        b.pathJoin(&.{ root, "build", "vcpkg-installed" })
+    else
+        b.pathJoin(&.{ root, "build", b.fmt("vcpkg-installed-{s}", .{triplet}) });
     const vcpkg_overlay_triplets = b.pathJoin(&.{ root, "vcpkg-triplets" });
     var vcpkg_install_args: std.ArrayList([]const u8) = .empty;
     vcpkg_install_args.appendSlice(b.allocator, &.{
@@ -45,7 +50,7 @@ pub fn build(b: *std.Build) void {
         b.fmt("--x-manifest-root={s}", .{root}),
         b.fmt("--x-install-root={s}", .{vcpkg_installed}),
         b.fmt("--overlay-triplets={s}", .{vcpkg_overlay_triplets}),
-        b.fmt("--host-triplet={s}", .{triplet}),
+        b.fmt("--host-triplet={s}", .{host_triplet}),
     }) catch @panic("OOM");
     const vcpkg_install = b.addSystemCommand(vcpkg_install_args.items);
     vcpkg_install.step.dependOn(&vcpkg_fetch.step);
@@ -68,14 +73,14 @@ pub fn build(b: *std.Build) void {
         b.pathJoin(&.{ root, b.install_prefix });
 
     const slang_version = "2025.17.2";
-    const slang_url_name = switch (target.result.os.tag) {
+    const slang_url_name = switch (b.graph.host.result.os.tag) {
         .windows => b.fmt("slang-{s}-windows-x86_64", .{slang_version}),
         else => b.fmt("slang-{s}-linux-x86_64", .{slang_version}),
     };
     const slang_dir = b.pathJoin(&.{ tools_dir, slang_url_name });
     const slang_zip = b.pathJoin(&.{ slang_dir, "slang.zip" });
     const slang_url = b.fmt("https://github.com/shader-slang/slang/releases/download/v{s}/{s}.zip", .{ slang_version, slang_url_name });
-    const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (target.result.os.tag == .windows) "slangc.exe" else "slangc" });
+    const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (host_windows) "slangc.exe" else "slangc" });
     const slang_fetch = b.addSystemCommand(&.{
         "sh", "-c",
         b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
@@ -92,6 +97,7 @@ pub fn build(b: *std.Build) void {
         .release_flag = if (debug) "--release=off" else "--release=fast",
         .vcpkg_step = &vcpkg_install.step,
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
+        .exe_suffix = if (target.result.os.tag == .windows) ".exe" else "",
         .slangc_exe = slangc_exe,
         .slang_step = &slang_fetch.step,
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
@@ -894,6 +900,7 @@ const Ctx = struct {
     slang_step: *std.Build.Step,
     plugins_step: *std.Build.Step,
     test_step: *std.Build.Step,
+    exe_suffix: []const u8,
     dotnet_tail: ?*std.Build.Step = null,
 
     fn serializeDotnet(ctx: *Ctx, step: *std.Build.Step) void {
@@ -1064,8 +1071,9 @@ const Ctx = struct {
         run.setName(b.fmt("build {s} (Zig)", .{demo_name}));
 
         const copy = b.addSystemCommand(&.{
-            "install",                                   "-Dm755",
-            b.pathJoin(&.{ own_prefix, "bin", "demo" }), b.pathJoin(&.{ ctx.prefix, "bin", demo_name }),
+            "install", "-Dm755",
+            b.pathJoin(&.{ own_prefix, "bin", b.fmt("demo{s}", .{ctx.exe_suffix}) }),
+            b.pathJoin(&.{ ctx.prefix, "bin", b.fmt("{s}{s}", .{ demo_name, ctx.exe_suffix }) }),
         });
         copy.step.dependOn(&run.step);
         copy.setName(b.fmt("install {s}", .{demo_name}));
