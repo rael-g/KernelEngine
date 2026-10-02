@@ -70,23 +70,30 @@ fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c
     return true;
 }
 
-fn consoleSinkWrite(stream: *c.FILE, event: *const c.ke_log_event) void {
-    const label = levelToString(event.level);
-    const tag: [*c]const u8 = if (event.tag != null) event.tag else "";
-    const message: [*c]const u8 = if (event.message != null) event.message else "";
-    _ = c.fprintf(stream, "[%s] %s: %s\n", label, tag, message);
-    _ = c.fflush(stream);
+fn writeEvent(writer: *std.Io.Writer, event: *const c.ke_log_event) std.Io.Writer.Error!void {
+    const label = std.mem.span(levelToString(event.level));
+    const tag: []const u8 = if (event.tag != null) std.mem.span(event.tag) else "";
+    const message: []const u8 = if (event.message != null) std.mem.span(event.message) else "";
+    try writer.print("[{s}] {s}: {s}\n", .{ label, tag, message });
+}
+
+fn consoleSinkWrite(event: *const c.ke_log_event) void {
+    var buffer: [256]u8 = undefined;
+    const locked = std.debug.lockStderr(&buffer);
+    defer std.debug.unlockStderr();
+    const writer = &locked.file_writer.interface;
+    writeEvent(writer, event) catch return;
+    writer.flush() catch return;
 }
 
 fn consoleSinkLog(self: ?*c.ke_logger_sink, event: [*c]const c.ke_log_event) callconv(.c) void {
     _ = self;
     if (event == null) return;
-    if (c.stderr) |stream| consoleSinkWrite(stream, &event.*);
+    consoleSinkWrite(&event.*);
 }
 
 fn consoleSinkFlush(self: ?*c.ke_logger_sink) callconv(.c) void {
     _ = self;
-    _ = c.fflush(c.stderr);
 }
 
 fn consoleSinkDestroy(self: ?*c.ke_logger_sink) callconv(.c) void {
@@ -273,15 +280,10 @@ test "a sink with a null log fn is skipped" {
 }
 
 fn expectConsoleSinkWrites(expected: []const u8, event: *const c.ke_log_event) !void {
-    const stream = c.tmpfile() orelse return error.TmpFileUnavailable;
-    defer _ = c.fclose(stream);
-
-    consoleSinkWrite(stream, event);
-
-    if (c.fseek(stream, 0, c.SEEK_SET) != 0) return error.SeekFailed;
     var buffer: [256]u8 = undefined;
-    const read = c.fread(&buffer, 1, buffer.len, stream);
-    try testing.expectEqualStrings(expected, buffer[0..read]);
+    var writer = std.Io.Writer.fixed(&buffer);
+    try writeEvent(&writer, event);
+    try testing.expectEqualStrings(expected, writer.buffered());
 }
 
 test "the console sink writes the level, tag and message of an event" {
