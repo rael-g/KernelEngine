@@ -97,6 +97,10 @@ jobs:
       - name: Build native
         run: dotnet run scripts/verify.cs -- build
 
+      - name: Show vcpkg abi inputs
+        if: always()
+        run: cat build/tools/vcpkg-*/buildtrees/zlib/*vcpkg_abi_info.txt || true
+
       - name: Show vcpkg build logs
         if: failure()
         run: |
