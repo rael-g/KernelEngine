@@ -36,9 +36,9 @@ fetches vcpkg into `build/tools` and installs ports into `build/vcpkg-installed`
 compiled, and runs the three projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The eleven gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_bindings_drift`, `check_component_fields`,
+The twelve gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_bindings_drift`, `check_component_fields`,
 `check_generator_contract`, `check_generator_shapes`, `check_managed_handwritten`,
-`check_out_params`, `check_reconstruction` and `check_zig_shapes`, found by `verify.cs` rather than
+`check_out_params`, `check_reconstruction`, `check_rsp_drift` and `check_zig_shapes`, found by `verify.cs` rather than
 listed in the workflow; `check_generator_shapes` and `check_zig_shapes` are run with `--no-cache`
 (`scripts/verify.cs`, `Gates`). What each one fails on is in
 `docs/architecture/kabic.md`. They are Linux-only: they compare generated text against headers and
@@ -46,8 +46,6 @@ read no compiler or linker output.
 
 ## What it leaves out
 
-- **`scripts/generate_rsp.cs --check`.** The check that every `.rsp` equals what the headers imply
-  exists (`generate_rsp.cs:254-270`) and `ci.yml` does not call it.
 - **Running anything.** No step starts a C or C# example: `grep -n 'c_demo\|examples' ci.yml` finds
   nothing. A defect that only shows when a program starts is not caught here.
 - **Coverage.** `scripts/coverage.cs` is not called.

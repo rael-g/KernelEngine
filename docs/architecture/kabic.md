@@ -118,7 +118,7 @@ carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.ym
 ## The gates
 
 Each gate is a file-based `dotnet run scripts/<name>.cs` that exits non-zero on failure. `ci.yml`
-runs all eleven through `scripts/verify.cs` (see `docs/conventions/ci.md`).
+runs all twelve through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
@@ -132,6 +132,7 @@ runs all eleven through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 | `check_generator_contract.cs` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
 | `check_component_fields.cs` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
 | `check_managed_handwritten.cs` | the count of hand-written `.cs` files under `src/csharp` (excluding `Generated`, `*.g.cs`, `kabic/`) goes above the ceiling, or stays below it (`check_managed_handwritten.cs:17`, `:35-47`) |
+| `check_rsp_drift.cs` | a versioned `.rsp` or umbrella header differs from what `generate_rsp.cs` derives from `api_domains.json` and the headers (`generate_rsp.cs --check`); editing one by hand fails it |
 | `check_bindings_drift.cs` | what ClangSharp generates from a `.rsp`'s headers into a temporary directory differs, byte for byte or by file set, from the committed `Generated/` tree (`generate_bindings.cs --check`; the `.rsp` is copied beside itself with `--output` rewritten) |
 
 ## The `.rsp` files, which are derived
@@ -143,7 +144,9 @@ binding under `src/csharp/<domain>/<project>/Native/`. These are generated, not 
 writes each `.rsp`. It computes the include directories by following `#include <kernel_engine/...>`
 transitively from the binding's headers, the `--traverse` list, a `--remap`/`--exclude` pair for every
 type another reachable binding owns, and a `Name.umbrella.h` when a binding has more than one header
-(`generate_rsp.cs:36`, `:164-239`). A header claimed by two bindings fails the run
-(`generate_rsp.cs:100-108`). `generate_rsp.cs --check` reports every `.rsp` that differs from what
-the headers describe without writing (`generate_rsp.cs:254`, `:270-280`). `scripts/generate_bindings.cs` then
-runs ClangSharp over every `.rsp` it finds (`generate_bindings.cs:36`).
+(`Closure` and the `foreach (var b in bindings)` loop in `generate_rsp.cs`). A header claimed by two
+bindings fails the run, and a remap into a project the binding does not reach is never emitted
+(`Reachable`). The `project` of an entry has to be a real project directory, since reachability is read
+from its `.csproj`. `generate_rsp.cs --check` reports every `.rsp` that differs from what the headers
+describe without writing, and `check_rsp_drift.cs` runs it. `scripts/generate_bindings.cs` then runs
+ClangSharp over every `.rsp` it finds. Never edit a `.rsp`: change the manifest entry or the generator.
