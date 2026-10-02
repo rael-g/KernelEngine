@@ -1,14 +1,5 @@
 name: build and test
 
-# The gates existed before this file did, and nothing ran them: the drift checks,
-# the coverage check and the three test suites all had to be remembered by hand.
-# A gate nobody runs is a gate that goes stale, so this runs them on every push
-# and pull request, in the order a person would.
-#
-# On both platforms, because "backend-agnostic" and "no platform favoritism" are
-# claims this repository makes and only a second target keeps honest. The build
-# already carries a triplet for each (vcpkg-triplets/x64-{linux,windows}-zig);
-# what has never been checked is that both still pass.
 on:
   push:
     branches: ['**']
@@ -21,8 +12,6 @@ concurrency:
 jobs:
   build-and-test:
     strategy:
-      # Neither platform's failure hides the other's: a break is almost always on
-      # one of them, and knowing which is most of the diagnosis.
       fail-fast: false
       matrix:
         include:
@@ -34,8 +23,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
 
-    # One shell on both platforms, so a path or a binary name never differs by
-    # runner rather than by intent.
     defaults:
       run:
         shell: bash
@@ -45,9 +32,6 @@ jobs:
         with:
           lfs: true
 
-      # X11 and GL headers only: vcpkg builds glfw3 from source, and it looks for
-      # the windowing system's own development headers, which no port provides.
-      # Windows ships its equivalents with the SDK the runner already has.
       - name: Install windowing system headers
         if: runner.os == 'Linux'
         run: |
@@ -63,10 +47,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # Speed only, never correctness: the build fetches vcpkg into build/tools
-      # and installs the ports into build/vcpkg-installed by itself, so a cache
-      # miss costs minutes rather than failing. Both directories are derived
-      # from the manifest and the triplet, which is what the key follows.
       - name: Restore vcpkg
         id: vcpkg-cache
         uses: actions/cache/restore@v4
@@ -76,11 +56,6 @@ jobs:
             build/vcpkg-installed
           key: vcpkg-${{ matrix.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
 
-      # Speed only again. check_bindings_drift fetches the clang resource-dir
-      # headers into .cache on its first run, and every managed build restores
-      # NuGet packages, the ClangSharp generator among them; a miss costs the
-      # download, never a failure. The clang entry is Linux only because the
-      # gates are.
       - name: Restore clang resource headers
         if: runner.os == 'Linux'
         uses: actions/cache@v4
@@ -107,10 +82,6 @@ jobs:
             build/vcpkg-installed
           key: vcpkg-${{ matrix.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
 
-      - name: Show vcpkg abi inputs
-        if: always()
-        run: cat build/tools/vcpkg-*/buildtrees/zlib/*vcpkg_abi_info.txt || true
-
       - name: Show vcpkg build logs
         if: failure()
         run: |
@@ -119,23 +90,12 @@ jobs:
           done
           true
 
-      # Every native test is a Zig test inside the file it covers, so the whole
-      # native suite is one step and it cannot go stale: a plugin does not compile
-      # until it answers whether it has tests, and the test invocation reuses the
-      # library build's own flags.
       - name: Native tests
         run: dotnet run scripts/verify.cs -- test-native
 
       - name: Managed tests
         run: dotnet run scripts/verify.cs -- test-managed
 
-      # Every gate, on one platform. None of them reads a compiler or a linker:
-      # they compare generated text against the headers it came from, so the
-      # answer cannot differ by runner, and one differing would itself be the
-      # news. verify.cs discovers every scripts/check_*.cs, so a gate added there
-      # runs without this file being edited; the two shapes gates run with
-      # --no-cache because a cached build of the generator answers about the
-      # wrong generator.
       - name: Gates
         if: runner.os == 'Linux'
         run: dotnet run scripts/verify.cs -- gates
