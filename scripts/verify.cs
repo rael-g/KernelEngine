@@ -48,7 +48,6 @@ return results.Any(r => r.Exit != 0) ? 1 : 0;
 
 List<Step> Gates() =>
     Directory.EnumerateFiles(Path.Combine(rootDir, "scripts"), "check_*.cs").Order()
-        .Where(f => Path.GetFileName(f) != "check_bindings_drift.cs")
         .Select(f => new Step(Path.GetFileName(f), "dotnet",
             Path.GetFileName(f) is "check_generator_shapes.cs" or "check_zig_shapes.cs"
                 ? ["run", "--no-cache", f] : ["run", f]))

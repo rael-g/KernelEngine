@@ -24,7 +24,7 @@ describes.
 | managed tests | `dotnet run scripts/verify.cs -- test-managed` (`ci.yml:86`) | both |
 | gates | `dotnet run scripts/verify.cs -- gates` (`ci.yml:97`) | Linux only |
 
-`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native --cache-dir build/zig-cache`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, and `gates` runs every `scripts/check_*.cs` it finds except `check_bindings_drift.cs`. With no stage it runs all four in that order and prints each step's time. `--keep-going` does not stop at the first failing step.
+`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native --cache-dir build/zig-cache`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, and `gates` runs every `scripts/check_*.cs` it finds. With no stage it runs all four in that order and prints each step's time. `--keep-going` does not stop at the first failing step.
 
 The vcpkg cache only speeds the run up: a miss is repopulated by the build itself, because the build
 fetches vcpkg into `build/tools` and installs ports into `build/vcpkg-installed` on its own
@@ -34,7 +34,7 @@ fetches vcpkg into `build/tools` and installs ports into `build/vcpkg-installed`
 compiled, and runs the three projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The ten gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_component_fields`,
+The eleven gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_bindings_drift`, `check_component_fields`,
 `check_generator_contract`, `check_generator_shapes`, `check_managed_handwritten`,
 `check_out_params`, `check_reconstruction` and `check_zig_shapes`, found by `verify.cs` rather than
 listed in the workflow; `check_generator_shapes` and `check_zig_shapes` are run with `--no-cache`
@@ -44,9 +44,6 @@ read no compiler or linker output.
 
 ## What it leaves out
 
-- **`scripts/check_bindings_drift.cs`.** It compares a header's modification time with the oldest
-  generated file's (`check_bindings_drift.cs:56`), and a fresh checkout gives every file the same
-  time. It is in neither the workflow (`ci.yml:99-103`) nor `verify.cs`.
 - **`scripts/generate_rsp.cs --check`.** The check that every `.rsp` equals what the headers imply
   exists (`generate_rsp.cs:254-270`) and `ci.yml` does not call it.
 - **Running anything.** No step starts a C or C# example: `grep -n 'c_demo\|examples' ci.yml` finds

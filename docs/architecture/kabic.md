@@ -118,7 +118,7 @@ carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.ym
 ## The gates
 
 Each gate is a file-based `dotnet run scripts/<name>.cs` that exits non-zero on failure. `ci.yml`
-runs ten of the eleven (see `docs/conventions/ci.md`).
+runs all eleven through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
@@ -132,7 +132,7 @@ runs ten of the eleven (see `docs/conventions/ci.md`).
 | `check_generator_contract.cs` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
 | `check_component_fields.cs` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
 | `check_managed_handwritten.cs` | the count of hand-written `.cs` files under `src/csharp` (excluding `Generated`, `*.g.cs`, `kabic/`) goes above the ceiling, or stays below it (`check_managed_handwritten.cs:17`, `:35-47`) |
-| `check_bindings_drift.cs` | a header is newer than the oldest file it generated, by timestamp (`check_bindings_drift.cs:56`) |
+| `check_bindings_drift.cs` | what ClangSharp generates from a `.rsp`'s headers into a temporary directory differs, byte for byte or by file set, from the committed `Generated/` tree (`generate_bindings.cs --check`; the `.rsp` is copied beside itself with `--output` rewritten) |
 
 ## The `.rsp` files, which are derived
 

@@ -95,9 +95,3 @@ jobs:
       - name: Gates
         if: runner.os == 'Linux'
         run: dotnet run scripts/verify.cs -- gates
-
-      # scripts/check_bindings_drift.cs is deliberately NOT run here. It compares
-      # timestamps, and a fresh checkout writes every file at once in no
-      # meaningful order, so it reports drift that regenerating does not change a
-      # byte of. It becomes a CI step once it compares content, the way the gates
-      # above already do.
