@@ -19,10 +19,12 @@ describes.
 | Zig | `mlugg/setup-zig@v2`, version `0.16.0` (`ci.yml:55-57`) | both |
 | .NET | `actions/setup-dotnet@v4`, `10.0.x` (`ci.yml:59-61`) | both |
 | vcpkg cache | `build/tools` and `build/vcpkg-installed`, keyed on `vcpkg.json`, `vcpkg-configuration.json` and `vcpkg-triplets/**` (`ci.yml:68-73`) | both |
-| native build | `dotnet run scripts/verify.cs -- build` (`ci.yml:76`) | both |
-| native tests | `dotnet run scripts/verify.cs -- test-native` (`ci.yml:83`) | both |
-| managed tests | `dotnet run scripts/verify.cs -- test-managed` (`ci.yml:86`) | both |
-| gates | `dotnet run scripts/verify.cs -- gates` (`ci.yml:97`) | Linux only |
+| clang headers cache | `.cache`, keyed on `scripts/generate_bindings.cs` (`ci.yml:80-85`) | Linux |
+| NuGet cache | `~/.nuget/packages`, keyed on every `.csproj` and `src/csharp/dotnet-tools.json`, with the OS prefix as fallback (`ci.yml:87-92`) | both |
+| native build | `dotnet run scripts/verify.cs -- build` (`ci.yml:95`) | both |
+| native tests | `dotnet run scripts/verify.cs -- test-native` (`ci.yml:102`) | both |
+| managed tests | `dotnet run scripts/verify.cs -- test-managed` (`ci.yml:105`) | both |
+| gates | `dotnet run scripts/verify.cs -- gates` (`ci.yml:116`) | Linux only |
 
 `scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native --cache-dir build/zig-cache`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, and `gates` runs every `scripts/check_*.cs` it finds. With no stage it runs all four in that order and prints each step's time. `--keep-going` does not stop at the first failing step.
 

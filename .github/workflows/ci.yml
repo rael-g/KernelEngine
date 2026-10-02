@@ -72,6 +72,25 @@ jobs:
             build/vcpkg-installed
           key: vcpkg-${{ matrix.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
 
+      # Speed only again. check_bindings_drift fetches the clang resource-dir
+      # headers into .cache on its first run, and every managed build restores
+      # NuGet packages, the ClangSharp generator among them; a miss costs the
+      # download, never a failure. The clang entry is Linux only because the
+      # gates are.
+      - name: Restore clang resource headers
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: clang-resource-dir-${{ hashFiles('scripts/generate_bindings.cs') }}
+
+      - name: Restore NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'src/csharp/dotnet-tools.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Build native
         run: dotnet run scripts/verify.cs -- build
 
