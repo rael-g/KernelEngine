@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const builtin = @import("builtin");
-
-const tracking = builtin.mode == .Debug;
+const tracking = @import("builtin").mode == .Debug;
 
 extern "c" fn atexit(callback: *const fn () callconv(.c) void) c_int;
 
@@ -14,7 +12,6 @@ fn reportLeaksAtExit() callconv(.c) void {
 }
 
 fn registerExitHook() void {
-    if (builtin.os.tag == .windows and builtin.output_mode == .Lib) return;
     if (exit_hook.swap(true, .acq_rel)) return;
     _ = atexit(&reportLeaksAtExit);
 }
