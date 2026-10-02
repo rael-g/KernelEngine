@@ -59,8 +59,15 @@ plugin cannot be declared without answering the question. A `.has_tests` plugin 
 | wgpu-native | `v24.0.3.1` (`build.zig:258`) | `sh -c …` (`build.zig:271-277`) |
 
 vcpkg runs in manifest mode against `vcpkg.json` with the overlay triplets in `vcpkg-triplets/`,
-installing into `build/vcpkg-installed` (`build.zig:37-48`). The triplet is chosen by OS alone:
-`x64-windows-zig` or `x64-linux-zig` (`build.zig:10-13`).
+installing into `build/vcpkg-installed`. The triplet is chosen by the target OS: `x64-windows-zig` or
+`x64-linux-zig`.
+
+The install step is skipped when the installed tree is current. The root build hashes `vcpkg.json`,
+`vcpkg-configuration.json`, every file in `vcpkg-triplets/`, the vcpkg version and the Zig version
+building it, and compares the digest with `build/vcpkg-installed/ke-ports.stamp`. A match with the
+triplet's `lib/` present leaves vcpkg out of the build graph; any difference, or a missing stamp, runs
+vcpkg and writes the stamp afterwards. vcpkg re-evaluates every port on each run otherwise, which on
+a Windows runner costs minutes even when nothing was rebuilt.
 
 ## Shaders
 
@@ -88,6 +95,12 @@ vcpkg ports with `zig cc` through a mingw-style toolchain file, so no Visual Stu
 is involved (`vcpkg-triplets/x64-windows-zig.cmake:11`, `vcpkg-triplets/zig-mingw-toolchain.cmake:10-13`,
 `vcpkg-triplets/zig-cc.cmd:4`). Static archives keep the GNU `lib*.a` naming; assimp's `zlib` and
 `minizip` archives are named `libzs.a` and `libminizips[d].a` there (`build.zig:219-230`).
+
+A plugin DLL's entry point is Zig's, which skips the mingw C runtime start-up, so any C runtime facility a
+plugin reaches, `atexit` included, works on a real Windows runtime only after that start-up has run. Every
+plugin root module that imports `heap` re-exports the mingw entry point as
+`pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;`, and `scripts/check_dll_startup.cs`
+fails when one does not. Wine tolerates the omission, so a Wine run does not prove it.
 
 A plugin library is installed under Zig's own per-target name: `<name>.dll` on Windows, with no `lib`
 prefix, and `lib<name>.so` elsewhere (`build.zig:977-981`). After every plugin and the wgpu-native

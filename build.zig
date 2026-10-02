@@ -55,6 +55,16 @@ pub fn build(b: *std.Build) void {
     const vcpkg_install = b.addSystemCommand(vcpkg_install_args.items);
     vcpkg_install.step.dependOn(&vcpkg_fetch.step);
 
+    const ports_digest = portsDigest(b, root, &.{ vcpkg_tool_version, @import("builtin").zig_version_string, triplet, host_triplet });
+    const ports_stamp = b.pathJoin(&.{ vcpkg_installed, "ke-ports.stamp" });
+    const ports_step: *std.Build.Step = if (portsCurrent(b, ports_stamp, ports_digest, b.pathJoin(&.{ vcpkg_installed, triplet, "lib" })))
+        b.step("vcpkg-current", "the installed ports match the manifest, the triplets and the toolchain")
+    else blk: {
+        const write_stamp = b.addSystemCommand(&.{ "sh", "-c", b.fmt("printf '%s' '{s}' > '{s}'", .{ ports_digest, ports_stamp }) });
+        write_stamp.step.dependOn(&vcpkg_install.step);
+        break :blk &write_stamp.step;
+    };
+
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
     const vcpkg_lib_release = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
     const vcpkg_lib = if (debug) b.pathJoin(&.{ vcpkg_installed, triplet, "debug", "lib" }) else vcpkg_lib_release;
@@ -95,7 +105,7 @@ pub fn build(b: *std.Build) void {
         .prefix = absolute_prefix,
         .cache_dir = zig_cache_dir,
         .release_flag = if (debug) "--release=off" else "--release=fast",
-        .vcpkg_step = &vcpkg_install.step,
+        .vcpkg_step = ports_step,
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
         .exe_suffix = if (target.result.os.tag == .windows) ".exe" else "",
         .run_under_wine = target.result.os.tag == .windows and !host_windows,
@@ -1083,6 +1093,56 @@ const Ctx = struct {
         return copy;
     }
 };
+
+fn portsDigest(b: *std.Build, root: []const u8, parts: []const []const u8) [64]u8 {
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    for (parts) |part| {
+        hasher.update(part);
+        hasher.update("\n");
+    }
+    const cwd = std.Io.Dir.cwd();
+    for ([_][]const u8{ "vcpkg.json", "vcpkg-configuration.json" }) |name| {
+        const contents = cwd.readFileAlloc(io, b.pathJoin(&.{ root, name }), b.allocator, .limited(1 << 20)) catch "";
+        hasher.update(contents);
+    }
+    var names: std.ArrayList([]const u8) = .empty;
+    const triplets_path = b.pathJoin(&.{ root, "vcpkg-triplets" });
+    if (std.Io.Dir.openDirAbsolute(io, triplets_path, .{ .iterate = true })) |opened| {
+        var dir = opened;
+        defer dir.close(io);
+        var it = dir.iterate();
+        while (it.next(io) catch null) |entry| {
+            if (entry.kind == .file) names.append(b.allocator, b.dupe(entry.name)) catch @panic("OOM");
+        }
+    } else |_| {}
+    std.mem.sort([]const u8, names.items, {}, struct {
+        fn lessThan(_: void, a: []const u8, c: []const u8) bool {
+            return std.mem.lessThan(u8, a, c);
+        }
+    }.lessThan);
+    for (names.items) |name| {
+        hasher.update(name);
+        const contents = cwd.readFileAlloc(io, b.pathJoin(&.{ triplets_path, name }), b.allocator, .limited(1 << 20)) catch "";
+        hasher.update(contents);
+    }
+    var digest: [32]u8 = undefined;
+    hasher.final(&digest);
+    return std.fmt.bytesToHex(digest, .lower);
+}
+
+fn portsCurrent(b: *std.Build, stamp_path: []const u8, digest: [64]u8, lib_dir: []const u8) bool {
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const cwd = std.Io.Dir.cwd();
+    const recorded = cwd.readFileAlloc(io, stamp_path, b.allocator, .limited(128)) catch return false;
+    if (!std.mem.eql(u8, recorded, &digest)) return false;
+    cwd.access(io, lib_dir, .{}) catch return false;
+    return true;
+}
 
 fn joinPaths(b: *std.Build, paths: []const []const u8) []const u8 {
     return std.mem.join(b.allocator, "|", paths) catch @panic("OOM");
