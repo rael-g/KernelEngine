@@ -2,6 +2,13 @@ const std = @import("std");
 
 const tracking = @import("builtin").mode == .Debug;
 
+/// Every plugin root module that imports this module re-exports it: `pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;`.
+pub extern fn _DllMainCRTStartup(
+    hinst: std.os.windows.HINSTANCE,
+    reason: std.os.windows.DWORD,
+    reserved: std.os.windows.LPVOID,
+) callconv(.winapi) std.os.windows.BOOL;
+
 extern "c" fn atexit(callback: *const fn () callconv(.c) void) c_int;
 
 var debug_instance: std.heap.DebugAllocator(.{ .thread_safe = true }) = .init;

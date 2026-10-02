@@ -45,7 +45,7 @@ does not enter the hash.
 compiled, and runs the three projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The twelve gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_bindings_drift`, `check_component_fields`,
+The thirteen gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_bindings_drift`, `check_component_fields`, `check_dll_startup`,
 `check_generator_contract`, `check_generator_shapes`, `check_managed_handwritten`,
 `check_out_params`, `check_reconstruction`, `check_rsp_drift` and `check_zig_shapes`, found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.

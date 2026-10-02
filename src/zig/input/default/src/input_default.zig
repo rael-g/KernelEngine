@@ -3,6 +3,7 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const heap = @import("heap");
+pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;
 const gpa = heap.gpa;
 
 const c = @cImport({

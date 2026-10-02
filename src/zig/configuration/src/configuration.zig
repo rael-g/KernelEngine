@@ -8,6 +8,7 @@ const ke = @cImport({
 });
 
 const heap = @import("heap");
+pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;
 const gpa = heap.gpa;
 
 const NONE: u32 = std.math.maxInt(u32);

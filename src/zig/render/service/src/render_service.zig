@@ -14,6 +14,7 @@ pub const c = @cImport({
 });
 
 const heap = @import("heap");
+pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;
 pub const gpa = heap.gpa;
 
 const resource_table = @import("resource_table.zig");

@@ -7,6 +7,7 @@ const c = cimport.c;
 const handles = @import("handle").Handles(c);
 
 const heap = @import("heap");
+pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;
 const gpa = heap.gpa;
 
 const MAX_UI_QUADS = 8192;

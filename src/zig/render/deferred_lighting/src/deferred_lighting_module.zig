@@ -6,6 +6,7 @@ const cimport = @import("cimport.zig");
 const c = cimport.c;
 
 const heap = @import("heap");
+pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;
 const gpa = heap.gpa;
 
 const DeferredFrame = extern struct {
