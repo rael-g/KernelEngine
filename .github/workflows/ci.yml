@@ -68,7 +68,8 @@ jobs:
       # miss costs minutes rather than failing. Both directories are derived
       # from the manifest and the triplet, which is what the key follows.
       - name: Restore vcpkg
-        uses: actions/cache@v4
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             build/tools
@@ -96,6 +97,15 @@ jobs:
 
       - name: Build native
         run: dotnet run scripts/verify.cs -- build
+
+      - name: Save vcpkg
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build/tools
+            build/vcpkg-installed
+          key: vcpkg-${{ matrix.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
 
       - name: Show vcpkg abi inputs
         if: always()
