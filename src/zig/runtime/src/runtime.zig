@@ -16,7 +16,6 @@ const KE_RUNTIME_PHASE_COUNT = 7;
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
 const heap = @import("heap");
-pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;
 
 fn cAlloc(comptime T: type, n: usize) ?[*]T {
     if (n == 0) return null;

@@ -12,7 +12,6 @@ const ke = @cImport({
 });
 
 const heap = @import("heap");
-pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;
 const gpa = heap.gpa;
 
 fn setErr(out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]const u8, src: std.builtin.SourceLocation) void {

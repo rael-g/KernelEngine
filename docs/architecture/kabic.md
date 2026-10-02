@@ -118,7 +118,7 @@ carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.ym
 ## The gates
 
 Each gate is a file-based `dotnet run scripts/<name>.cs` that exits non-zero on failure. `ci.yml`
-runs all thirteen through `scripts/verify.cs` (see `docs/conventions/ci.md`).
+runs all twelve through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
@@ -131,7 +131,6 @@ runs all thirteen through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 | `check_zig_shapes.cs` | the same, against the Zig backend (`check_zig_shapes.cs:26-33`) |
 | `check_generator_contract.cs` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
 | `check_component_fields.cs` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
-| `check_dll_startup.cs` | a plugin root module that imports `heap` does not re-export `_DllMainCRTStartup` |
 | `check_managed_handwritten.cs` | the count of hand-written `.cs` files under `src/csharp` (excluding `Generated`, `*.g.cs`, `kabic/`) goes above the ceiling, or stays below it (`check_managed_handwritten.cs:17`, `:35-47`) |
 | `check_rsp_drift.cs` | a versioned `.rsp` or umbrella header differs from what `generate_rsp.cs` derives from `api_domains.json` and the headers (`generate_rsp.cs --check`); editing one by hand fails it |
 | `check_bindings_drift.cs` | what ClangSharp generates from a `.rsp`'s headers into a temporary directory differs, byte for byte or by file set, from the committed `Generated/` tree (`generate_bindings.cs --check`; the `.rsp` is copied beside itself with `--output` rewritten) |

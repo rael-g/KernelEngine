@@ -100,7 +100,7 @@ Vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `<plugin>/th
 
 Generated P/Invoke, one `Native/` directory per managed project (28 of them), each driven by its own `.rsp`. **Never edit `Generated/` or a `.rsp` by hand** — a `.rsp` is derived from the `bindings` array of `scripts/api_domains.json` by `dotnet run scripts/generate_rsp.cs`, and the bindings from the `.rsp` by `dotnet run scripts/generate_bindings.cs`.
 
-Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Thirteen `scripts/check_*.cs` gates keep both honest against the headers.
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Twelve `scripts/check_*.cs` gates keep both honest against the headers.
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 

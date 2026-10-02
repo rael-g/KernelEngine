@@ -241,7 +241,6 @@ fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
 }
 
 const heap = @import("heap");
-pub const _DllMainCRTStartup = @import("heap")._DllMainCRTStartup;
 const gpa = heap.gpa;
 
 fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) GpuError!wgpu.WGPUSurface {
