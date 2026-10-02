@@ -115,6 +115,31 @@ Expect("a caller-allocated buffer is one writable span, not a written-back value
     absent: ["buf_out"],
     providers: ["ke_probe"]);
 
+// A struct whose counted pointer is memory the call reads, handed over as a sequence. The
+// Zig side already holds the native layout, so a [borrowed] element is the ABI's own struct
+// and the sequence is the slice the plain case already is.
+Expect("a sequence of borrowed structs is a slice of the ABI's own struct",
+    m =>
+    {
+        m.Structs.Add(new ApiStruct("ke_probe_term", null, ["value"],
+            [new ApiField("cid", "uint32_t", [], null)], []));
+        m.Structs.Add(new ApiStruct("ke_probe_decl", null, ["borrowed"],
+        [
+            new ApiField("terms", "const ke_probe_term *", ["array_of:term_count"], null),
+            new ApiField("term_count", "uint32_t", [], null),
+        ], []));
+        m.Structs.Add(Vtable("ke_probe",
+            Slot("declare", "uint64_t",
+                P("decls", "const ke_probe_decl *", "array_of:decl_count"),
+                P("decl_count", "uint32_t"))));
+        m.Structs.Add(Handle("ke_probe"));
+    },
+    contains: ["pub fn declare(self: Probe, decls: []const abi.ke_probe_decl) u64 {",
+               "self.ref.declare(self.ref, decls.ptr, @intCast(decls.len));",
+               "terms: [*]const ke_probe_term,"],
+    absent: ["decl_count: u32) u64 {", "decls: [*]const abi"],
+    providers: ["ke_probe"]);
+
 // Zig refuses a parameter that shadows an outer declaration. A vtable declaring both a
 // `parent` slot and a `parent` parameter is not a mistake in the header -- in C the two
 // live in different scopes, and only the projection puts them in the same one.

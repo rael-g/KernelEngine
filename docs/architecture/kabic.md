@@ -57,7 +57,7 @@ tags that decide a call's *shape* are read once, in `Classifier`:
 
 `[default:...]`, `[name:...]`, `[bool]` and `[output]` on a component field are read by the C
 backend (`CBackend.cs:94`, `:60`, `:148`, `:157`). The C# backend reads further tags that no other
-backend does (`enum`, `node`, `base`, `closure`, `completion`, `view`, `value`, `utf8`, `idiom`, and
+backend does (`enum`, `node`, `base`, `closure`, `completion`, `view`, `value`, `borrowed`, `utf8`, `idiom`, and
 others, all as `.Has("...")` / `.TagValue("...")` in `CSharpBackend.cs`), and the Zig backend reads
 `utf8`, `closure`, `default` and `optional` itself (`ZigBackend.cs:568`, `:723`, `:858`, `:333`).
 

@@ -588,6 +588,61 @@ ExpectStructSpans("a counted pointer field naming a length the struct lacks is r
     contains: [], absent: [],
     throws: "names a length field the struct does not declare");
 
+// The struct a caller builds and the native side only reads while the call lasts. A
+// [value] refuses a pointer because it would make the lifetime of what it reaches someone
+// else's question; here the lifetime is the call, so the pointer is a memory the caller
+// keeps alive and the count that bounded it is the memory's length.
+ExpectBorrowedStruct("a borrowed struct holds its counted pointers as memory and hides their counts",
+    BorrowedStruct("ke_probe_decl",
+        ("terms", "const ke_probe_term *", "array_of:term_count"),
+        ("term_count", "uint32_t", "")),
+    contains: ["public partial struct ProbeDecl", "public ReadOnlyMemory<ProbeTerm> Terms;"],
+    absent: ["TermCount", "term_count", "ProbeTerm*", "StructLayout"],
+    alongside: [ValueStruct("ke_probe_term", ("cid", "uint32_t"))]);
+
+ExpectBorrowedStruct("a borrowed struct refuses a pointer nothing counts",
+    BorrowedStruct("ke_probe_decl", ("terms", "const ke_probe_term *", "")),
+    contains: [], absent: [],
+    throws: "names no count",
+    alongside: [ValueStruct("ke_probe_term", ("cid", "uint32_t"))]);
+
+// A sequence whose elements carry their own sequence. The outer span is pinned like any
+// other; each element's memory is pinned for the call and released when it ends, whether
+// the call returned or threw.
+Expect("a sequence of borrowed structs pins every element's memory for the call",
+    Vtable("ke_probe", Slot("declare", "uint64_t",
+        Param("decls", "const ke_probe_decl *", "array_of:decl_count"),
+        Param("decl_count", "uint32_t"),
+        Param("out_error", "ke_error **"))),
+    contains: ["public ulong Declare(Span<ProbeDecl> decls)",
+               "var declsPins = new System.Buffers.MemoryHandle[decls.Length];",
+               "var declsNative = new ke_probe_decl[decls.Length];",
+               "declsPins[declsAt] = decls[declsAt].Terms.Pin();",
+               "declsNative[declsAt].terms = (ke_probe_term*)declsPins[declsAt].Pointer;",
+               "declsNative[declsAt].term_count = (uint)decls[declsAt].Terms.Length;",
+               "fixed (ke_probe_decl* declsPtr = declsNative)",
+               "finally", "declsPins[declsAt].Dispose();",
+               "declsPtr, (uint)decls.Length"],
+    absent: ["fixed (ProbeDecl*", "Span<ke_probe_decl>"],
+    structs: [new JsonObject
+    {
+        ["name"] = "ke_probe_decl",
+        ["doc"] = null,
+        ["tags"] = new JsonArray((JsonNode)"borrowed"),
+        ["fields"] = new JsonArray(
+            Param("terms", "const ke_probe_term *", "array_of:term_count"),
+            Param("term_count", "uint32_t")),
+        ["slots"] = new JsonArray(),
+    },
+    new JsonObject
+    {
+        ["name"] = "ke_probe_term",
+        ["doc"] = null,
+        ["tags"] = new JsonArray((JsonNode)"value"),
+        ["fields"] = new JsonArray(Param("cid", "uint32_t")),
+        ["slots"] = new JsonArray(),
+    }]);
+
 // A struct nobody in managed code owns, read as a projection rather than mirrored as
 // bytes. Every field is private: a pointer and its count are one sequence, and a fixed
 // char array read as its bytes is text spelled as storage. The element is named after the
@@ -1043,6 +1098,47 @@ void ExpectView(string what, ApiStruct s, string[] contains, string[] absent, st
     {
         emitted = CSharpBackend.RenderView(model, s, "Probe", ["Probe.Common"],
             Convention.KernelEngine);
+    }
+    catch (Exception ex)
+    {
+        if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+        else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+            failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+        return;
+    }
+    if (throws is not null)
+    {
+        failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+        return;
+    }
+    if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+
+    foreach (var needle in contains)
+        if (!emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected to find \"{needle}\"");
+
+    foreach (var needle in absent)
+        if (emitted.Contains(needle, StringComparison.Ordinal))
+            failures.Add($"{what}: expected NOT to find \"{needle}\"");
+}
+
+static ApiStruct BorrowedStruct(string name, params (string Name, string Type, string Tags)[] fields) =>
+    new(name, null, ["borrowed"],
+        fields.Select(f => new ApiField(f.Name, f.Type,
+            f.Tags is "" ? [] : f.Tags.Split(','), null)).ToList(), []);
+
+void ExpectBorrowedStruct(string what, ApiStruct s, string[] contains, string[] absent,
+    string? throws = null, ApiStruct[]? alongside = null)
+{
+    checks++;
+    var model = new ApiModel();
+    model.Structs.Add(s);
+    foreach (var other in alongside ?? []) model.Structs.Add(other);
+
+    string emitted;
+    try
+    {
+        emitted = CSharpBackend.RenderBorrowed(model, s, "Probe", [], Convention.KernelEngine);
     }
     catch (Exception ex)
     {
