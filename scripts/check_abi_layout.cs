@@ -83,12 +83,12 @@ try
 
         var compile = new List<string> { "cc", src, "-o", exe };
         foreach (var inc in includeDirs) { compile.Add("-I"); compile.Add(Path.Combine(rootDir, inc)); }
-        if (!Run(zig, compile, out _, out var compileErr))
+        if (!Run(zig, compile, Path.Combine(tmpRoot, "zig-cache"), out _, out var compileErr))
         {
             Console.WriteLine($"[?] {name}: could not compile the layout probe, so nothing was compared:\n{compileErr}");
             return 2;
         }
-        if (!Run(exe, [], out var layout, out var runErr))
+        if (!Run(exe, [], Path.Combine(tmpRoot, "zig-cache"), out var layout, out var runErr))
         {
             Console.WriteLine($"[?] {name}: the layout probe did not run:\n{runErr}");
             return 2;
@@ -134,12 +134,13 @@ Console.WriteLine("\nIf the change is intended, every plugin and the managed sid
 Console.WriteLine("  dotnet run scripts/check_abi_layout.cs -- --update");
 return 1;
 
-static bool Run(string file, List<string> args, out string stdout, out string stderr)
+static bool Run(string file, List<string> args, string cacheDir, out string stdout, out string stderr)
 {
     using var process = new Process
     {
         StartInfo = new ProcessStartInfo(file) { RedirectStandardOutput = true, RedirectStandardError = true },
     };
+    process.StartInfo.Environment["ZIG_LOCAL_CACHE_DIR"] = cacheDir;
     foreach (var a in args) process.StartInfo.ArgumentList.Add(a);
     process.Start();
     stdout = process.StandardOutput.ReadToEnd();

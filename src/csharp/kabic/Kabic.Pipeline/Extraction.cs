@@ -76,6 +76,7 @@ public static class Extraction
         {
             StartInfo = new ProcessStartInfo(zig) { RedirectStandardOutput = true, RedirectStandardError = true },
         };
+        process.StartInfo.Environment["ZIG_LOCAL_CACHE_DIR"] = Path.Combine(Path.GetDirectoryName(tuPath)!, "zig-cache");
         foreach (var a in new[] { "cc", "-Xclang", "-ast-dump=json", "-fsyntax-only", "-fparse-all-comments", tuPath })
             process.StartInfo.ArgumentList.Add(a);
         foreach (var d in includeDirs) { process.StartInfo.ArgumentList.Add("-I"); process.StartInfo.ArgumentList.Add(d); }

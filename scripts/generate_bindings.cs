@@ -14,7 +14,7 @@ Console.WriteLine($"Restoring .NET tools in {csharpDir}...");
 Run(["dotnet", "tool", "restore"], csharpDir);
 
 const string ClangVersion = "21.1.8";
-var resourceDir = Path.Combine(rootDir, ".cache", $"clang-resource-dir-{ClangVersion}");
+var resourceDir = Path.Combine(rootDir, "build", "cache", $"clang-resource-dir-{ClangVersion}");
 await EnsureClangResourceDir(resourceDir, ClangVersion);
 
 var extraArgs = new[] { "-a", $"-resource-dir={resourceDir}", "-r", "uint64_t=ulong", "-r", "int64_t=long" };
