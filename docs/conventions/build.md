@@ -4,6 +4,18 @@
 native entry point. The root `build.zig` builds no plugin itself: it fetches toolchains, runs vcpkg,
 and invokes every plugin's own `build.zig` as a separate `zig build` (`Ctx.plugin`, `build.zig:911-939`).
 
+## What the build needs from the machine
+
+The project resolves its own dependencies. The machine provides Zig and the .NET SDK, and on Linux the
+system's windowing development headers that glfw is built against (`docs/conventions/ci.md`). Everything
+else is fetched at a pinned version and kept under `build/`: vcpkg and every port it builds from source
+(`vcpkg.json`), `slangc`, `wgpu-native`, the NuGet packages and the `libclang` the binding generator loads
+(`build.zig` fetch steps, `nuget.config`). The fetch steps run through `sh`.
+
+So the first build on a machine, or after `build/` is deleted, downloads those tools and compiles every
+port, and takes far longer than any later one, which reuses `build/` and rebuilds only what changed. A slow
+first build is the project resolving its own dependencies, not a fault.
+
 ## Where output goes
 
 Everything a build fetches or produces is under `build/`, with two exceptions: the small markers `dotnet run` keeps for each script under `~/.local/share/dotnet/runfile`, which the tool does not let a repository relocate, and NuGet's HTTP cache, which only a command run through `scripts/verify.cs` keeps under `build/nuget/http-cache` (`NUGET_HTTP_CACHE_PATH`, set for every child process there; a `dotnet build` typed by hand writes to `~/.local/share/NuGet`):
