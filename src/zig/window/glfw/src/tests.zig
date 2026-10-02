@@ -5,6 +5,7 @@ const testing = std.testing;
 const c = @import("c.zig").c;
 const device = @import("device.zig");
 const core_mod = @import("core.zig");
+const heap = @import("heap");
 
 const FakeDevice = struct {
     initialize_result: bool = true,
@@ -128,6 +129,12 @@ fn makeCore(dev: *FakeDevice, input: ?*c.ke_input) *core_mod.Core {
 
 fn destroyCore(core: *core_mod.Core) void {
     core_mod.Core.destroyApi(core.toApi());
+}
+
+test "creating and destroying the window core leaves no block allocated" {
+    var dev = FakeDevice{};
+    destroyCore(makeCore(&dev, null));
+    try heap.expectNoLeaks();
 }
 
 test "initialize forwards to the device and is idempotent" {

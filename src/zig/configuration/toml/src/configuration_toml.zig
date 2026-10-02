@@ -237,3 +237,20 @@ test "null args rejected" {
     try std.testing.expect(!ke_configuration_toml_load(null, "x", null));
     try std.testing.expect(!ke_configuration_toml_load(&cfg, null, null));
 }
+
+test "loading a file and clearing the recorded values leaves no block allocated" {
+    const path = "test_cfg_leaks.toml";
+    writeTemp(path,
+        \\[shadow]
+        \\resolution = 2048
+        \\[render]
+        \\shader_path = "res/shaders"
+        \\
+    );
+    defer _ = toml.remove(path);
+
+    var cfg = mockConfig();
+    try std.testing.expect(ke_configuration_toml_load(&cfg, path, null));
+    clearRecs();
+    try heap.expectNoLeaks();
+}
