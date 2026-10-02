@@ -1,8 +1,8 @@
 #!/usr/bin/env dotnet run
+#:project ../src/csharp/kabic/Kabic.Pipeline/Kabic.Pipeline.csproj
 
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Text.Json.Nodes;
+using Kabic.Pipeline;
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
@@ -11,9 +11,7 @@ string? zigOverride = null;
 for (var i = 0; i < args.Length; i++)
     if (args[i] == "--zig") zigOverride = args[++i];
 
-var manifestPath = Path.Combine(rootDir, "scripts", "api_domains.json");
-var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
-var domains = manifest["domains"]!.AsArray();
+var specs = DomainSpec.Load(Path.Combine(rootDir, "scripts", "api_domains.json"));
 
 Console.WriteLine("Checking for ke_api.json drift (headers vs. generated C#)...");
 
@@ -24,88 +22,70 @@ Directory.CreateDirectory(tmpRoot);
 
 try
 {
-    foreach (var dRaw in domains)
+    var extracted = new Dictionary<string, string>();
+    var extractionFailures = new Dictionary<string, string>();
+    Parallel.ForEach(specs, spec =>
     {
-        var d = dRaw!.AsObject();
-        var name = d["name"]!.GetValue<string>();
-        var headers = d["headers"]!.AsArray().Select(h => Path.Combine(rootDir, h!.GetValue<string>())).ToList();
-        var includeDirs = d["includeDirs"]!.AsArray().Select(i => Path.Combine(rootDir, i!.GetValue<string>())).ToList();
-        var committedApiJson = Path.Combine(rootDir, d["apiJson"]!.GetValue<string>());
-        var ns = d["namespace"]!.GetValue<string>();
-        var nativeNs = d["nativeNamespace"]!.GetValue<string>();
-        var committedOutDir = Path.Combine(rootDir, d["outDir"]!.GetValue<string>());
-        var committedContractDir = d["abstractionsOutDir"] is not null
-            ? Path.Combine(rootDir, d["abstractionsOutDir"]!.GetValue<string>()) : committedOutDir;
-        var usings = d["usings"]?.AsArray().Select(u => u!.GetValue<string>()).ToList() ?? [];
-        var library = d["library"]?.GetValue<string>();
-        var auxHeaders = d["auxHeaders"]?.AsArray().Select(h => Path.Combine(rootDir, h!.GetValue<string>())).ToList() ?? [];
-        var composeHeaders = d["composeHeaders"]?.AsArray().Select(h => Path.Combine(rootDir, h!.GetValue<string>())).ToList() ?? [];
+        try
+        {
+            var json = Regeneration.ExtractOne(spec, rootDir, zigOverride);
+            lock (extracted) extracted[spec.Name] = json;
+        }
+        catch (InvalidOperationException e)
+        {
+            lock (extractionFailures) extractionFailures[spec.Name] = e.Message;
+        }
+    });
 
-        var tmpApiJson = Path.Combine(tmpRoot, $"{name}.ke_api.json");
-        var tmpOutDir = Path.Combine(tmpRoot, name, "out");
-        var tmpContractDir = d["abstractionsOutDir"] is not null ? Path.Combine(tmpRoot, name, "abstractions") : tmpOutDir;
-
-        var extractArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "extract_api.cs"), "--",
-            "--out", tmpApiJson };
-        if (zigOverride is not null) extractArgs.AddRange(["--zig", zigOverride]);
-        foreach (var inc in includeDirs) extractArgs.AddRange(["-I", inc]);
-        foreach (var aux in auxHeaders) extractArgs.AddRange(["--aux", aux]);
-        foreach (var compose in composeHeaders) extractArgs.AddRange(["--compose", compose]);
-        extractArgs.AddRange(headers);
-
-        if (!RunDotnet(extractArgs, out var extractErr))
+    foreach (var spec in specs)
+    {
+        var name = spec.Name;
+        if (extractionFailures.TryGetValue(name, out var extractErr))
         {
             Console.WriteLine($"[?] {name}: could not extract the headers, so nothing was compared:\n{extractErr}");
             checkFailed = true;
             continue;
         }
 
-        if (!FilesEqual(tmpApiJson, committedApiJson))
+        var apiJson = extracted[name];
+        var committed = Regeneration.Plan(spec, p => Path.Combine(rootDir, p));
+        var tmpApiJson = Path.Combine(tmpRoot, $"{name}.ke_api.json");
+        File.WriteAllText(tmpApiJson, apiJson);
+
+        if (!FilesEqual(tmpApiJson, committed.ApiJson))
         {
             Console.WriteLine($"[!] {name}: ke_api.json is out of date "
-                + $"(committed: {Path.GetRelativePath(rootDir, committedApiJson)})");
+                + $"(committed: {Path.GetRelativePath(rootDir, committed.ApiJson)})");
             driftDetected = true;
         }
 
-        var genArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "generate_csharp.cs"), "--",
-            "--api", tmpApiJson, "--namespace", ns, "--native-namespace", nativeNs,
-            "--out", tmpOutDir, "--contract-out", tmpContractDir, "--domain", name };
-        foreach (var u in usings) genArgs.AddRange(["--using", u]);
-        if (library is not null) genArgs.AddRange(["--library", library]);
+        var tmpOutDir = Path.Combine(tmpRoot, name, "out");
+        var tmpContractDir = spec.AbstractionsOutDir is not null ? Path.Combine(tmpRoot, name, "abstractions") : tmpOutDir;
+        var tmpCFile = spec.CFieldTable is null ? null : Path.Combine(tmpRoot, name, "component_fields.h");
 
-        if (!RunDotnet(genArgs, out var genErr))
+        try
         {
-            Console.WriteLine($"[?] {name}: could not generate the C#, so nothing was compared:\n{genErr}");
+            Regeneration.GenerateOne(spec, apiJson, new DomainOutput(tmpApiJson, tmpOutDir, tmpContractDir, tmpCFile));
+        }
+        catch (InvalidOperationException e)
+        {
+            Console.WriteLine($"[?] {name}: could not generate, so nothing was compared:\n{e.Message}");
             checkFailed = true;
             continue;
         }
 
-        if (!DirsEqual(tmpOutDir, committedOutDir) || !DirsEqual(tmpContractDir, committedContractDir))
+        if (!DirsEqual(tmpOutDir, committed.OutDir) || !DirsEqual(tmpContractDir, committed.ContractDir))
         {
             Console.WriteLine($"[!] {name}: generated C# is out of date "
-                + $"(committed: {Path.GetRelativePath(rootDir, committedOutDir)})");
+                + $"(committed: {Path.GetRelativePath(rootDir, committed.OutDir)})");
             driftDetected = true;
         }
 
-        if (d["cOut"] is JsonObject cOut)
+        if (tmpCFile is not null && committed.CFieldTableFile is { } committedCFile && !FilesEqual(tmpCFile, committedCFile))
         {
-            var committedCFile = Path.Combine(rootDir, cOut["file"]!.GetValue<string>());
-            var tmpCFile = Path.Combine(tmpRoot, name, "component_fields.h");
-            var cArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "generate_c.cs"), "--",
-                "--api", tmpApiJson, "--out", tmpCFile, "--guard", cOut["guard"]!.GetValue<string>() };
-            foreach (var inc in cOut["includes"]!.AsArray()) cArgs.AddRange(["--include", inc!.GetValue<string>()]);
-
-            if (!RunDotnet(cArgs, out var cErr))
-            {
-                Console.WriteLine($"[?] {name}: could not generate the C field table, so nothing was compared:\n{cErr}");
-                checkFailed = true;
-            }
-            else if (!FilesEqual(tmpCFile, committedCFile))
-            {
-                Console.WriteLine($"[!] {name}: generated C field table is out of date "
-                    + $"(committed: {Path.GetRelativePath(rootDir, committedCFile)})");
-                driftDetected = true;
-            }
+            Console.WriteLine($"[!] {name}: generated C field table is out of date "
+                + $"(committed: {Path.GetRelativePath(rootDir, committedCFile)})");
+            driftDetected = true;
         }
     }
 }
@@ -129,20 +109,6 @@ if (checkFailed)
 
 Console.WriteLine("No drift detected.");
 return 0;
-
-static bool RunDotnet(List<string> args, out string stderr)
-{
-    using var process = new Process
-    {
-        StartInfo = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true },
-    };
-    foreach (var a in args) process.StartInfo.ArgumentList.Add(a);
-    process.Start();
-    process.StandardOutput.ReadToEnd();
-    stderr = process.StandardError.ReadToEnd();
-    process.WaitForExit();
-    return process.ExitCode == 0;
-}
 
 static bool FilesEqual(string a, string b) =>
     File.Exists(b) && File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
