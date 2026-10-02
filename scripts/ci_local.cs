@@ -24,12 +24,12 @@ var Image = windows ? WineImage : BaseImage;
 if (rebuildImage || !Succeeds("docker", "image", "inspect", BaseImage))
 {
     Console.WriteLine("--- building the CI image (Ubuntu 24.04, Zig, .NET, the windowing headers ci.yml installs)");
-    if (Run("docker", "build", "--network", "host", "-t", BaseImage, Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
+    if (Run("docker", "build", "--force-rm", "--network", "host", "-t", BaseImage, Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
 }
 if (windows && (rebuildImage || !Succeeds("docker", "image", "inspect", WineImage)))
 {
     Console.WriteLine("--- building the Windows test image (the CI image plus Wine with a prefix created at build time)");
-    if (Run("docker", "build", "--network", "host", "-t", WineImage, "-f", Path.Combine(rootDir, "scripts", "ci", "Dockerfile.wine"), Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
+    if (Run("docker", "build", "--force-rm", "--network", "host", "-t", WineImage, "-f", Path.Combine(rootDir, "scripts", "ci", "Dockerfile.wine"), Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
 }
 
 var checkout = Path.Combine(Path.GetTempPath(), "ke-ci-" + Guid.NewGuid().ToString("N")[..8]);
