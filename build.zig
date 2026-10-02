@@ -98,6 +98,7 @@ pub fn build(b: *std.Build) void {
         .vcpkg_step = &vcpkg_install.step,
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
         .exe_suffix = if (target.result.os.tag == .windows) ".exe" else "",
+        .run_under_wine = target.result.os.tag == .windows and !host_windows,
         .slangc_exe = slangc_exe,
         .slang_step = &slang_fetch.step,
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
@@ -901,6 +902,7 @@ const Ctx = struct {
     plugins_step: *std.Build.Step,
     test_step: *std.Build.Step,
     exe_suffix: []const u8,
+    run_under_wine: bool,
     dotnet_tail: ?*std.Build.Step = null,
 
     fn serializeDotnet(ctx: *Ctx, step: *std.Build.Step) void {
@@ -1039,6 +1041,7 @@ const Ctx = struct {
                 t.addArgs(extra_args);
                 t.addArg(ctx.release_flag);
                 if (ctx.target_arg.len != 0) t.addArg(ctx.target_arg);
+                if (ctx.run_under_wine) t.addArg("-fwine");
                 t.setCwd(.{ .cwd_relative = cwd });
                 t.expectExitCode(0);
                 t.has_side_effects = true;

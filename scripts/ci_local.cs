@@ -6,20 +6,30 @@ using System.Runtime.CompilerServices;
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
 
-const string Image = "ke-ci";
+const string BaseImage = "ke-ci";
+const string WineImage = "ke-ci-wine";
 const string ToolsVolume = "ke-ci-tools";
 const string PortsVolume = "ke-ci-vcpkg-installed";
+const string WindowsPortsVolume = "ke-ci-vcpkg-installed-windows";
 
 var useCache = args.Contains("--cache");
 var keep = args.Contains("--keep");
 var rebuildImage = args.Contains("--rebuild-image");
 var workingTree = args.Contains("--working-tree");
+var windows = args.Contains("--windows");
 var stages = args.Where(a => !a.StartsWith("--")).ToList();
+if (windows && stages.Count == 0) stages = ["cross-windows", "test-windows"];
+var Image = windows ? WineImage : BaseImage;
 
-if (rebuildImage || !Succeeds("docker", "image", "inspect", Image))
+if (rebuildImage || !Succeeds("docker", "image", "inspect", BaseImage))
 {
     Console.WriteLine("--- building the CI image (Ubuntu 24.04, Zig, .NET, the windowing headers ci.yml installs)");
-    if (Run("docker", "build", "--network", "host", "-t", Image, Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
+    if (Run("docker", "build", "--network", "host", "-t", BaseImage, Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
+}
+if (windows && (rebuildImage || !Succeeds("docker", "image", "inspect", WineImage)))
+{
+    Console.WriteLine("--- building the Windows test image (the CI image plus Wine with a prefix created at build time)");
+    if (Run("docker", "build", "--network", "host", "-t", WineImage, "-f", Path.Combine(rootDir, "scripts", "ci", "Dockerfile.wine"), Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
 }
 
 var checkout = Path.Combine(Path.GetTempPath(), "ke-ci-" + Guid.NewGuid().ToString("N")[..8]);
@@ -40,12 +50,14 @@ try
     if (useCache)
     {
         run.AddRange(["-v", $"{ToolsVolume}:/work/build/tools", "-v", $"{PortsVolume}:/work/build/vcpkg-installed"]);
+        if (windows) run.AddRange(["-v", $"{WindowsPortsVolume}:/work/build/vcpkg-installed-x64-windows-zig"]);
     }
     run.AddRange([Image, "dotnet", "run", "scripts/verify.cs", "--", .. stages]);
 
     Console.WriteLine($"--- running scripts/verify.cs {string.Join(' ', stages)} the way ci.yml does, on Linux"
         + (useCache ? " (vcpkg caches kept between runs)" : " (cold, no caches)"));
-    Console.WriteLine("    The Windows leg of the matrix is not simulated here.");
+    if (windows) Console.WriteLine("    Windows target cross-built on Linux; its tests run under Wine inside the container, never against the host's.");
+    else Console.WriteLine("    The Windows leg of the matrix is not simulated here.");
     return Run("docker", [.. run]);
 }
 finally
