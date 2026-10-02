@@ -9,6 +9,10 @@ ke_render_module
 --include-directory
 ../../../../c/ecs
 --include-directory
+../../../../c/framework
+--include-directory
+../../../../c/math
+--include-directory
 ../../../../c/render
 --include-directory
 ../../../../c/runtime
@@ -19,13 +23,7 @@ ke_render_module
 --include-directory
 ../../../../c/view
 --include-directory
-../../../../c/math
---include-directory
 ../../../../zig/common/include
---include-directory
-../../../../c/framework
---include-directory
-../../../../zig/framework/include
 --include-directory
 ../../../../zig/render/module/include
 --include-directory

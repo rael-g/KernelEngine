@@ -13,10 +13,10 @@ header.h --zig cc ast-dump--> Kabic.Frontend --> ke_api.json --> Kabic.Core (Cla
 
 ## What it reads
 
-`scripts/extract_api.cs` writes one throwaway translation unit that `#include`s the domain's headers
+`Kabic.Pipeline.Extraction` writes one throwaway translation unit that `#include`s the domain's headers
 and runs `zig cc -Xclang -ast-dump=json -fsyntax-only -fparse-all-comments` over it
-(`extract_api.cs:51`, `:115`). A header that fails to parse stops the run
-(`extract_api.cs:126-130`). `Kabic.Frontend.Extractor` keeps only nodes from the listed files
+(`Extraction.cs:28`, `:79`). A header that fails to parse stops the run
+(`Extraction.cs:95`). `Kabic.Frontend.Extractor` keeps only nodes from the listed files
 (`Extractor.cs:19-36`):
 
 | input | what is kept |
@@ -38,7 +38,7 @@ Meaning that C types cannot carry is written in the doc comment, as bracketed ta
 `DocParser.Parse` peels leading `[a,b:c]` blocks off the text and splits each on commas
 (`DocParser.cs:9`, `:49-55`); `ApiParam.Has` and `TagValue` match `name` or `name:value`
 (`ApiModel.cs:6-7`). A `@param` naming something that is not a parameter fails extraction
-(`Extractor.cs:147`, `:246`; `extract_api.cs:69-73` prints each and exits 1).
+(`Extractor.cs:147`, `:246`; `Extraction.cs:42-44` raises them all as one failure).
 
 A tag exists in a backend only if that backend names it, and a backend ignores the rest: the Zig
 backend never reads `[rooted]` (`grep -c rooted Kabic.ZigBackend/ZigBackend.cs` prints `0`). The
@@ -72,8 +72,9 @@ of what a backend can know.
 `scripts/api_domains.json` is the hand-written manifest. Each entry of `domains` names the
 `headers`, `includeDirs`, `apiJson`, the C# `namespace` and `nativeNamespace`, the `outDir`, and
 optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHeaders` and `cOut`
-(the C field-table target). `scripts/regenerate_api.cs` walks it: extract, then
-`generate_csharp.cs`, then `generate_c.cs` for entries with `cOut` (`regenerate_api.cs:26-92`).
+(the C field-table target). `scripts/regenerate_api.cs` walks it in one process: it extracts every domain in parallel
+(`Regeneration.ExtractAll`), then generates the C# and, for entries with `cOut`, the C field table
+(`Regeneration.GenerateOne`, `Regeneration.cs:31-38`).
 
 ## The Classifier
 
@@ -100,9 +101,9 @@ fails: a slot that answers, fails and writes a value (`Classifier.cs:293-298`), 
 
 | backend | driver | emits | when it cannot render a form |
 |---|---|---|---|
-| `Kabic.CSharpBackend` | `scripts/generate_csharp.cs` | enums, value structs, views, providers with a contract interface, callback interfaces, node types, free-function groups (`generate_csharp.cs:48-129`) | throws `InvalidOperationException`; no catch, so the domain run fails |
+| `Kabic.CSharpBackend` | `Kabic.Pipeline.Generation.CSharp` | enums, value structs, views, providers with a contract interface, callback interfaces, node types, free-function groups (`Generation.cs:21-115`) | throws `InvalidOperationException`; no catch, so the domain run fails |
 | `Kabic.ZigBackend` | `scripts/generate_zig.cs` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:91-92`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:497`) and listed in the module's header comment (`ZigBackend.cs:110-115`); the other slots are still emitted |
-| `Kabic.CBackend` | `scripts/generate_c.cs` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:40-50`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:105-107`) |
+| `Kabic.CBackend` | `Kabic.Pipeline.Generation.CFieldTable` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:40-50`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:105-107`) |
 
 The C backend leaves a field out of its tables when the field is `[output]` or has no scene-file
 spelling (`CBackend.cs:133`).
@@ -117,7 +118,7 @@ carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.ym
 ## The gates
 
 Each gate is a file-based `dotnet run scripts/<name>.cs` that exits non-zero on failure. `ci.yml`
-runs ten of the eleven (see `docs/conventions/ci.md`).
+runs all twelve through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
@@ -131,7 +132,8 @@ runs ten of the eleven (see `docs/conventions/ci.md`).
 | `check_generator_contract.cs` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
 | `check_component_fields.cs` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
 | `check_managed_handwritten.cs` | the count of hand-written `.cs` files under `src/csharp` (excluding `Generated`, `*.g.cs`, `kabic/`) goes above the ceiling, or stays below it (`check_managed_handwritten.cs:17`, `:35-47`) |
-| `check_bindings_drift.cs` | a header is newer than the oldest file it generated, by timestamp (`check_bindings_drift.cs:56`) |
+| `check_rsp_drift.cs` | a versioned `.rsp` or umbrella header differs from what `generate_rsp.cs` derives from `api_domains.json` and the headers (`generate_rsp.cs --check`); editing one by hand fails it |
+| `check_bindings_drift.cs` | what ClangSharp generates from a `.rsp`'s headers into a temporary directory differs, byte for byte or by file set, from the committed `Generated/` tree (`generate_bindings.cs --check`; the `.rsp` is copied beside itself with `--output` rewritten) |
 
 ## The `.rsp` files, which are derived
 
@@ -142,7 +144,9 @@ binding under `src/csharp/<domain>/<project>/Native/`. These are generated, not 
 writes each `.rsp`. It computes the include directories by following `#include <kernel_engine/...>`
 transitively from the binding's headers, the `--traverse` list, a `--remap`/`--exclude` pair for every
 type another reachable binding owns, and a `Name.umbrella.h` when a binding has more than one header
-(`generate_rsp.cs:36`, `:164-239`). A header claimed by two bindings fails the run
-(`generate_rsp.cs:100-108`). `generate_rsp.cs --check` reports every `.rsp` that differs from what
-the headers describe without writing (`generate_rsp.cs:254`, `:270-280`). `scripts/generate_bindings.cs` then
-runs ClangSharp over every `.rsp` it finds (`generate_bindings.cs:36`).
+(`Closure` and the `foreach (var b in bindings)` loop in `generate_rsp.cs`). A header claimed by two
+bindings fails the run, and a remap into a project the binding does not reach is never emitted
+(`Reachable`). The `project` of an entry has to be a real project directory, since reachability is read
+from its `.csproj`. `generate_rsp.cs --check` reports every `.rsp` that differs from what the headers
+describe without writing, and `check_rsp_drift.cs` runs it. `scripts/generate_bindings.cs` then runs
+ClangSharp over every `.rsp` it finds. Never edit a `.rsp`: change the manifest entry or the generator.

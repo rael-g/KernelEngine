@@ -48,8 +48,7 @@ an answer.
 
 ## The same reasoning, applied elsewhere
 
-Source comments are banned in this project for exactly this reason, and the ban had to be widened
-once — from comments to `<remarks>` — because rationale and history kept finding a new place to
-hide. Doc comments (`///`, `<summary>`) survive because they carry *API contract*: what a caller
-must pass, what it gets back, what fails. The moment one starts explaining why the author chose
-something, or what used to be there, it is the same defect in a smaller font.
+Source comments are banned, and the ban covers every place rationale can be written: `//`,
+`/* */`, `<remarks>`, `<para>`, `@note`, a `TODO`, a line of context. A doc comment (`///`,
+`<summary>`, Doxygen) carries the API contract and nothing else: what a caller must pass, what it
+gets back, what fails. Rationale, history and the name of a consumer do not belong in one.

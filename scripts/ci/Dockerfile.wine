@@ -1,0 +1,12 @@
+FROM ke-ci
+
+ENV WINEPREFIX=/opt/wine \
+    WINEARCH=win64 \
+    WINEDEBUG=-all \
+    WINEDLLOVERRIDES="mscoree,mshtml="
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends wine wine64 libwine xvfb xauth \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN xvfb-run -a wine wineboot --init && wineserver -w

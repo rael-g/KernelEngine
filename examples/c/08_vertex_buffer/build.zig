@@ -4,25 +4,32 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const glslang = b.option([]const u8, "glslang", "path to glslangValidator") orelse "glslangValidator";
-    const shader_name = b.option([]const u8, "shader-name", "base name shared by the .vert.glsl/.frag.glsl pair") orelse @panic("-Dshader-name required");
+    const compile_slang = b.option([]const u8, "compile-slang", "path to the built compile_slang.dll") orelse @panic("-Dcompile-slang required");
+    const slangc = b.option([]const u8, "slangc", "path to the fetched slangc executable") orelse @panic("-Dslangc required");
+    const shader_name = b.option([]const u8, "shader-name", "base name of the .slang file holding vs_main and fs_main") orelse @panic("-Dshader-name required");
     const shader_out_dir = b.option([]const u8, "shader-out-dir", "directory to write generated shader headers into") orelse @panic("-Dshader-out-dir required");
     const include_dirs = b.option([]const u8, "include-dirs", "'|'-separated include directories") orelse "";
     const libs = b.option([]const u8, "libs", "'|'-separated absolute shared-library paths, in link order") orelse @panic("-Dlibs required");
     const link_m = b.option(bool, "link-m", "link libm") orelse false;
 
-    const vert_header = b.pathJoin(&.{ shader_out_dir, b.fmt("{s}_vert.h", .{shader_name}) });
-    const frag_header = b.pathJoin(&.{ shader_out_dir, b.fmt("{s}_frag.h", .{shader_name}) });
+    const vert_header = b.pathJoin(&.{ shader_out_dir, b.fmt("{s}_vs_wgsl.h", .{shader_name}) });
+    const frag_header = b.pathJoin(&.{ shader_out_dir, b.fmt("{s}_fs_wgsl.h", .{shader_name}) });
 
     const gen_vert = b.addSystemCommand(&.{
-        glslang, "-V", "-S", "vert", "--vn", b.fmt("{s}_vert_spv", .{shader_name}),
-        b.pathFromRoot(b.fmt("{s}.vert.glsl", .{shader_name})),
-        "-o", vert_header,
+        "dotnet",   compile_slang,
+        "--slangc", slangc,                                         "--input",
+        b.pathFromRoot(b.fmt("{s}.slang", .{shader_name})),         "--output",
+        vert_header, "--name",                                      b.fmt("{s}_vs_wgsl", .{shader_name}),
+        "--target", "wgsl",                                         "--entry",
+        "vs_main",  "--stage",                                      "vertex",
     });
     const gen_frag = b.addSystemCommand(&.{
-        glslang, "-V", "-S", "frag", "--vn", b.fmt("{s}_frag_spv", .{shader_name}),
-        b.pathFromRoot(b.fmt("{s}.frag.glsl", .{shader_name})),
-        "-o", frag_header,
+        "dotnet",   compile_slang,
+        "--slangc", slangc,                                         "--input",
+        b.pathFromRoot(b.fmt("{s}.slang", .{shader_name})),         "--output",
+        frag_header, "--name",                                      b.fmt("{s}_fs_wgsl", .{shader_name}),
+        "--target", "wgsl",                                         "--entry",
+        "fs_main",  "--stage",                                      "fragment",
     });
 
     const mod = b.createModule(.{

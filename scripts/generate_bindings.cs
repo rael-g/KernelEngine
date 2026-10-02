@@ -5,6 +5,8 @@ using System.Runtime.CompilerServices;
 
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
 var csharpDir = Path.Combine(rootDir, "src", "csharp");
+var check = args.Contains("--check");
+var checkRoot = Path.Combine(Path.GetTempPath(), "ke_bindings_check_" + Guid.NewGuid().ToString("N")[..8]);
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 
@@ -12,7 +14,7 @@ Console.WriteLine($"Restoring .NET tools in {csharpDir}...");
 Run(["dotnet", "tool", "restore"], csharpDir);
 
 const string ClangVersion = "21.1.8";
-var resourceDir = Path.Combine(rootDir, ".cache", $"clang-resource-dir-{ClangVersion}");
+var resourceDir = Path.Combine(rootDir, "build", "cache", $"clang-resource-dir-{ClangVersion}");
 await EnsureClangResourceDir(resourceDir, ClangVersion);
 
 var extraArgs = new[] { "-a", $"-resource-dir={resourceDir}", "-r", "uint64_t=ulong", "-r", "int64_t=long" };
@@ -40,39 +42,117 @@ var rspFiles = Directory.EnumerateFiles(csharpDir, "*.rsp", SearchOption.AllDire
 Console.WriteLine($"Found {rspFiles.Count} response files.");
 var successCount = 0;
 
-foreach (var rsp in rspFiles)
+var drift = new List<string>();
+var failed = 0;
+
+try
 {
-    Console.WriteLine($"\n--- Generating: {Path.GetRelativePath(rootDir, rsp)} ---");
-
-    var outDir = OutputDirFor(rsp);
-    if (outDir is not null && Directory.Exists(outDir))
+    foreach (var rsp in rspFiles)
     {
-        Console.WriteLine($"Cleaning stale bindings in {Path.GetRelativePath(rootDir, outDir)}");
-        Directory.Delete(outDir, recursive: true);
+        var name = Path.GetRelativePath(rootDir, rsp);
+        var committedDir = OutputDirFor(rsp);
+
+        if (check)
+        {
+            var target = Path.Combine(checkRoot, Path.GetFileNameWithoutExtension(rsp));
+            var probe = Path.Combine(Path.GetDirectoryName(rsp)!, Path.GetFileNameWithoutExtension(rsp) + ".check.rsp");
+            try
+            {
+                File.WriteAllText(probe, WithOutput(File.ReadAllLines(rsp), target));
+                string[] checkCommand = ["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", $"@{probe}", .. extraArgs];
+                Run(checkCommand, Path.GetDirectoryName(rsp)!, env, quiet: true);
+            }
+            finally
+            {
+                File.Delete(probe);
+            }
+
+            if (!Directory.Exists(target) || !Directory.EnumerateFiles(target, "*.cs", SearchOption.AllDirectories).Any())
+            {
+                Console.WriteLine($"[?] {name}: the generator wrote nothing, so nothing was compared");
+                failed++;
+            }
+            else if (committedDir is null || !Directory.Exists(committedDir))
+            {
+                Console.WriteLine($"[DRIFT] {name}: the committed output directory is missing");
+                drift.Add(name);
+            }
+            else if (!SameTree(target, committedDir))
+            {
+                Console.WriteLine($"[DRIFT] {name}: the committed bindings differ from what the headers generate");
+                drift.Add(name);
+            }
+            continue;
+        }
+
+        Console.WriteLine($"\n--- Generating: {name} ---");
+
+        if (committedDir is not null && Directory.Exists(committedDir))
+        {
+            Console.WriteLine($"Cleaning stale bindings in {Path.GetRelativePath(rootDir, committedDir)}");
+            Directory.Delete(committedDir, recursive: true);
+        }
+
+        string[] command = ["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", $"@{rsp}", .. extraArgs];
+        var (exitCode, stdout, stderr) = Run(command, Path.GetDirectoryName(rsp)!, env);
+
+        var wrote = committedDir is not null && Directory.Exists(committedDir)
+            && Directory.EnumerateFiles(committedDir, "*.cs", SearchOption.AllDirectories).Any();
+
+        if (wrote)
+        {
+            successCount++;
+            if (exitCode != 0) Console.WriteLine($"WARNINGS: {name} (bindings written)");
+        }
+        else
+        {
+            Console.WriteLine($"FAILED: {name} wrote no bindings");
+            Console.WriteLine($"STDOUT: {stdout}");
+            Console.WriteLine($"STDERR: {stderr}");
+        }
     }
+}
+finally
+{
+    if (Directory.Exists(checkRoot)) Directory.Delete(checkRoot, recursive: true);
+}
 
-    string[] command = ["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", $"@{rsp}", .. extraArgs];
-    var (exitCode, stdout, stderr) = Run(command, Path.GetDirectoryName(rsp)!, env);
-
-    var wrote = outDir is not null && Directory.Exists(outDir)
-        && Directory.EnumerateFiles(outDir, "*.cs", SearchOption.AllDirectories).Any();
-
-    var name = Path.GetRelativePath(rootDir, rsp);
-    if (wrote)
+if (check)
+{
+    if (drift.Count > 0)
     {
-        successCount++;
-        if (exitCode != 0) Console.WriteLine($"WARNINGS: {name} (bindings written)");
+        Console.WriteLine("\n[FAIL] Drift detected! Please run 'dotnet run scripts/generate_bindings.cs' and commit the changes.");
+        return 1;
     }
-    else
+    if (failed > 0)
     {
-        Console.WriteLine($"FAILED: {name} wrote no bindings");
-        Console.WriteLine($"STDOUT: {stdout}");
-        Console.WriteLine($"STDERR: {stderr}");
+        Console.WriteLine("\nThe check could not run to completion; it says nothing about drift.");
+        return 2;
     }
+    Console.WriteLine($"[OK] All {rspFiles.Count} bindings are up to date.");
+    return 0;
 }
 
 Console.WriteLine($"\nDone. {successCount}/{rspFiles.Count} bindings regenerated successfully.");
 return successCount == rspFiles.Count ? 0 : 1;
+
+static string WithOutput(string[] lines, string outputDir)
+{
+    var copy = (string[])lines.Clone();
+    for (var i = 0; i < copy.Length - 1; i++)
+        if (copy[i].Trim() == "--output") copy[i + 1] = outputDir;
+    return string.Join('\n', copy) + "\n";
+}
+
+static bool SameTree(string a, string b)
+{
+    var left = Directory.EnumerateFiles(a, "*", SearchOption.AllDirectories)
+        .Select(f => Path.GetRelativePath(a, f)).Order().ToList();
+    var right = Directory.EnumerateFiles(b, "*", SearchOption.AllDirectories)
+        .Select(f => Path.GetRelativePath(b, f)).Order().ToList();
+    return left.SequenceEqual(right)
+        && left.All(rel => File.ReadAllBytes(Path.Combine(a, rel)).AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(b, rel))));
+}
 
 static string? OutputDirFor(string rsp)
 {
@@ -111,9 +191,9 @@ static async Task EnsureClangResourceDir(string resourceDir, string clangVersion
     }
 }
 
-static (int ExitCode, string Stdout, string Stderr) Run(string[] command, string cwd, Dictionary<string, string>? env = null)
+static (int ExitCode, string Stdout, string Stderr) Run(string[] command, string cwd, Dictionary<string, string>? env = null, bool quiet = false)
 {
-    Console.WriteLine($"Running: {string.Join(' ', command)} in {cwd}");
+    if (!quiet) Console.WriteLine($"Running: {string.Join(' ', command)} in {cwd}");
     using var process = new Process
     {
         StartInfo = new ProcessStartInfo(command[0])

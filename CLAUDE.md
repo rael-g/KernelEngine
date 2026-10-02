@@ -20,7 +20,7 @@ zig build test --prefix build/native --cache-dir build/zig-cache  # every plugin
 build/native/bin/c_demo_01                                        # run a C example (c_demo_01.exe on Windows)
 ```
 
-`--cache-dir` is not optional housekeeping: the root build passes it down to every sub-build, so omitting it scatters one cache per plugin directory. The `zig cc` wrappers in `vcpkg-triplets/` set `ZIG_LOCAL_CACHE_DIR` for the same reason — vcpkg's CMake runs them from the repo root, and `zig cc` caches into `$PWD/.zig-cache` unless told otherwise.
+`--cache-dir` is not optional housekeeping: the root build gives every sub-build its own directory under it, `<cache-dir>/plugins/<name>`, so omitting it scatters one cache per plugin directory. The directories are separate on purpose: sub-builds sharing one cache serialize on its manifest lock, and a repeated build took 62 s against 3.7 s with one cache each. The `zig cc` wrappers in `vcpkg-triplets/` set `ZIG_LOCAL_CACHE_DIR` for the same reason — vcpkg's CMake runs them from the repo root, and `zig cc` caches into `$PWD/.zig-cache` unless told otherwise.
 
 Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native), `build/vcpkg-installed/` for the ports, `build/zig-cache/` for one shared cache across the root build and every sub-build. Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
 
@@ -39,6 +39,7 @@ dotnet test KernelEngine.slnx
 
 ```bash
 dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
+dotnet run scripts/generate_rsp.cs       # derive every ClangSharp .rsp from the manifest "bindings" array and the headers (--check to verify)
 dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings via ClangSharp
 dotnet run scripts/regenerate_api.cs  # regenerate every kabic domain (ke_api.json + C# + C field tables) from scripts/api_domains.json
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
@@ -97,9 +98,9 @@ Vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `<plugin>/th
 
 ### Layer 3 — C# bindings
 
-Generated P/Invoke, one `Native/` directory per managed project (28 of them), each driven by its own `.rsp`. **Never edit `Generated/` by hand** — regenerate with `dotnet run scripts/generate_bindings.cs`.
+Generated P/Invoke, one `Native/` directory per managed project (28 of them), each driven by its own `.rsp`. **Never edit `Generated/` or a `.rsp` by hand** — a `.rsp` is derived from the `bindings` array of `scripts/api_domains.json` by `dotnet run scripts/generate_rsp.cs`, and the bindings from the `.rsp` by `dotnet run scripts/generate_bindings.cs`.
 
-Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Ten `scripts/check_*.cs` gates keep both honest against the headers.
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Twelve `scripts/check_*.cs` gates keep both honest against the headers.
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 
@@ -140,6 +141,11 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ## Coding conventions
 
+### Comments
+- No comments in any file: source, scripts, workflows, shaders, build files. The code and its names carry the meaning.
+- The one exception is API documentation on a public declaration (`///` and `<summary>` in C#, Doxygen in C and Zig headers). It states the contract: what a caller passes, what it gets back, what fails.
+- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. Rationale belongs in the commit message; a mechanism belongs in `docs/`.
+
 ### C (contracts) and Zig (implementations)
 - **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
 - **Naming**: `snake_case` with a `ke_` prefix on everything crossing the ABI.
@@ -150,7 +156,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
 
 ### C#
-- XML doc comments (`///`) on all `public` and `protected` members.
+- XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments).
 - Generated bindings in `Generated/` — never edit manually.
 - `InternalsVisibleTo` is **banned**. A native handle crosses assemblies through the public `Native` pointer of a generated `INative<Domain>` interface, implemented explicitly so the object itself exposes only managed methods — never through `internal` plus a friend list.
 
@@ -191,10 +197,10 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ## Key documents
 
-Every document that mixed a contract with a moment was retired; `git log -- docs/` reaches all of
-them, and they are not a source for anything. What `docs/` holds is listed in
-[`docs/README.md`](docs/README.md), and the rules every one of them is written to are in
-[`docs/conventions/docs.md`](docs/conventions/docs.md).
+`docs/` holds contracts and mechanisms and nothing else; what it holds is listed in
+[`docs/README.md`](docs/README.md), and the rules every one of its documents is written to are in
+[`docs/conventions/docs.md`](docs/conventions/docs.md). Anything that describes a moment lives in the
+unversioned kanban.
 
 Where to look when this file is not enough:
 

@@ -7,8 +7,6 @@ ke_text_stbtruetype
 --include-directory
 ../../../../c/text
 --include-directory
-../../../../c/math
---include-directory
 ../../../../zig/common/include
 --file
 ../../../../c/text/kernel_engine/text/font.h
@@ -27,8 +25,10 @@ ke_
 *=KernelEngine.Common.Native
 --remap
 ke_error=KernelEngine.Common.Native.ke_error
+ke_error_type=KernelEngine.Common.Native.ke_error_type
 --exclude
 ke_error
+ke_error_type
 --config
 multi-file
 latest-codegen

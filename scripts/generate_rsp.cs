@@ -13,7 +13,6 @@ var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(rootDir, "scripts", 
 var bindings = manifest["bindings"]?.AsArray()
     ?? throw new InvalidOperationException("api_domains.json has no 'bindings' array");
 
-/// Every directory an angle-bracket `kernel_engine/...` include resolves against.
 var includeRoots = Directory.EnumerateDirectories(Path.Combine(rootDir, "src"), "kernel_engine", SearchOption.AllDirectories)
     .Select(Path.GetDirectoryName)
     .Where(p => p is not null && !p.Contains(".zig-cache"))
@@ -35,7 +34,6 @@ string? Resolve(string included)
 
 var includeRx = new Regex(@"#\s*include\s*<([^>]+)>", RegexOptions.Compiled);
 
-/// The headers a set of headers reaches, themselves included.
 HashSet<string> Closure(IEnumerable<string> seeds)
 {
     var seen  = new HashSet<string>(StringComparer.Ordinal);
@@ -50,16 +48,12 @@ HashSet<string> Closure(IEnumerable<string> seeds)
     return seen;
 }
 
-/// A type a header declares: a closing `} ke_x;`, a one-line typedef, or a plain alias.
 var declRx = new[]
 {
     new Regex(@"^\s*\}\s*(ke_\w+)\s*;", RegexOptions.Multiline | RegexOptions.Compiled),
     new Regex(@"typedef\s+(?:struct|enum|union)\s+\w*\s*\{[^{}]*\}\s*(ke_\w+)\s*;", RegexOptions.Compiled),
 };
 
-/// `typedef struct x x;` names an opaque type, which the generator still emits as
-/// a type. Every other one-word typedef is an alias onto a primitive, which it
-/// inlines — naming one in a remap points at something no assembly declares.
 var opaqueRx = new Regex(@"^\s*typedef\s+(?:struct|enum|union)\s+(ke_\w+)\s+\1\s*;", RegexOptions.Multiline | RegexOptions.Compiled);
 var aliasRx  = new Regex(@"^\s*typedef\s+[\w \*]+?\s+(ke_\w+)\s*;", RegexOptions.Multiline | RegexOptions.Compiled);
 
@@ -110,8 +104,6 @@ if (contested.Count > 0)
 var typeRx       = new Regex(@"\bke_\w+\b", RegexOptions.Compiled);
 var projRefRx    = new Regex(@"ProjectReference\s+Include=""([^""]+)""", RegexOptions.Compiled);
 
-/// Every project a project reaches, transitively. A remap into an assembly outside
-/// this set names a namespace the compiler cannot see.
 HashSet<string> Reachable(string projectDir)
 {
     var seen  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -135,7 +127,6 @@ foreach (var b in bindings)
     assemblyOf[b!["namespace"]!.GetValue<string>()] = Path.GetFileName(b["project"]!.GetValue<string>());
 var umbrellas    = new Dictionary<string, string>(StringComparer.Ordinal);
 
-/// The `kernel_engine/...` spelling an include uses to reach a header.
 string AngleName(string abs)
 {
     foreach (var root in includeRoots)
@@ -168,9 +159,6 @@ foreach (var b in bindings)
 
     var reach = Reachable(project);
 
-    // The traversed set is closed under the types it names: a type another
-    // reachable binding owns arrives by remap, and anything else has to be
-    // emitted here, which means traversing the header that declares it.
     var traversed = new List<string>(headers);
     var remaps    = new List<string>();
     var excludes  = new List<string>();
@@ -192,8 +180,6 @@ foreach (var b in bindings)
             {
                 if (o == ns) continue;
                 remaps.Add($"{type}={o}.{type}");
-                // The type belongs to another assembly, so nothing here should emit it:
-                // an incomplete `struct x *` otherwise becomes a stub named after the remap.
                 excludes.Add(type);
                 continue;
             }

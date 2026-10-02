@@ -1489,3 +1489,9 @@ fn queryExtension(dev: [*c]ke.ke_gpu_device, name: [*c]const u8) callconv(.c) ?*
     }
     return null;
 }
+
+test "creating the device and destroying it, or failing to create it, leaves no block allocated" {
+    const handle = ke_gpu_device_webgpu_create(null, null);
+    if (handle.ref != null) handle.destroy.?(handle.ref);
+    try heap.expectNoLeaks();
+}

@@ -9,10 +9,12 @@ pub fn build(b: *std.Build) void {
 
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
 
+    const host_windows = b.graph.host.result.os.tag == .windows;
     const triplet = switch (target.result.os.tag) {
         .windows => "x64-windows-zig",
         else => "x64-linux-zig",
     };
+    const host_triplet = if (host_windows) "x64-windows-zig" else "x64-linux-zig";
 
     const tools_dir = b.pathJoin(&.{ root, "build", "tools" });
     const zig_cache_dir = b.pathJoin(&.{ root, "build", "zig-cache" });
@@ -22,20 +24,23 @@ pub fn build(b: *std.Build) void {
     const vcpkg_root = b.option([]const u8, "vcpkg-root", "path to the vcpkg checkout") orelse
         b.graph.environ_map.get("VCPKG_ROOT") orelse
         vcpkg_dir_default;
-    const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg" });
+    const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (host_windows) "vcpkg.exe" else "vcpkg" });
     const vcpkg_bundle_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/vcpkg-standalone-bundle.tar.gz", .{vcpkg_tool_version});
-    const vcpkg_bin_asset = if (target.result.os.tag == .windows) "vcpkg.exe" else "vcpkg-glibc";
+    const vcpkg_bin_asset = if (host_windows) "vcpkg.exe" else "vcpkg-glibc";
     const vcpkg_bin_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_bin_asset });
-    const vcpkg_bundle_tar = b.pathJoin(&.{ vcpkg_root, "bundle.tar.gz" });
+    const vcpkg_name = if (host_windows) "vcpkg.exe" else "vcpkg";
     const vcpkg_fetch = b.addSystemCommand(&.{
         "sh", "-c",
         b.fmt(
-            "mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && tar -xzf '{s}' -C '{s}' && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
-            .{ vcpkg_root, vcpkg_exe, vcpkg_bundle_tar, vcpkg_bundle_url, vcpkg_bundle_tar, vcpkg_root, vcpkg_exe, vcpkg_bin_url, vcpkg_exe },
+            "mkdir -p '{s}' && ([ -f '{s}' ] || (cd '{s}' && curl -fsSL -o bundle.tar.gz '{s}' && tar -xzf bundle.tar.gz && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
+            .{ vcpkg_root, vcpkg_exe, vcpkg_root, vcpkg_bundle_url, vcpkg_name, vcpkg_bin_url, vcpkg_name },
         ),
     });
 
-    const vcpkg_installed = b.pathJoin(&.{ root, "build", "vcpkg-installed" });
+    const vcpkg_installed = if (target.result.os.tag == b.graph.host.result.os.tag)
+        b.pathJoin(&.{ root, "build", "vcpkg-installed" })
+    else
+        b.pathJoin(&.{ root, "build", b.fmt("vcpkg-installed-{s}", .{triplet}) });
     const vcpkg_overlay_triplets = b.pathJoin(&.{ root, "vcpkg-triplets" });
     var vcpkg_install_args: std.ArrayList([]const u8) = .empty;
     vcpkg_install_args.appendSlice(b.allocator, &.{
@@ -45,10 +50,20 @@ pub fn build(b: *std.Build) void {
         b.fmt("--x-manifest-root={s}", .{root}),
         b.fmt("--x-install-root={s}", .{vcpkg_installed}),
         b.fmt("--overlay-triplets={s}", .{vcpkg_overlay_triplets}),
-        b.fmt("--host-triplet={s}", .{triplet}),
+        b.fmt("--host-triplet={s}", .{host_triplet}),
     }) catch @panic("OOM");
     const vcpkg_install = b.addSystemCommand(vcpkg_install_args.items);
     vcpkg_install.step.dependOn(&vcpkg_fetch.step);
+
+    const ports_digest = portsDigest(b, root, &.{ vcpkg_tool_version, @import("builtin").zig_version_string, triplet, host_triplet });
+    const ports_stamp = b.pathJoin(&.{ vcpkg_installed, "ke-ports.stamp" });
+    const ports_step: *std.Build.Step = if (portsCurrent(b, ports_stamp, ports_digest, b.pathJoin(&.{ vcpkg_installed, triplet, "lib" })))
+        b.step("vcpkg-current", "the installed ports match the manifest, the triplets and the toolchain")
+    else blk: {
+        const write_stamp = b.addSystemCommand(&.{ "sh", "-c", b.fmt("printf '%s' '{s}' > '{s}'", .{ ports_digest, ports_stamp }) });
+        write_stamp.step.dependOn(&vcpkg_install.step);
+        break :blk &write_stamp.step;
+    };
 
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
     const vcpkg_lib_release = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
@@ -68,14 +83,14 @@ pub fn build(b: *std.Build) void {
         b.pathJoin(&.{ root, b.install_prefix });
 
     const slang_version = "2025.17.2";
-    const slang_url_name = switch (target.result.os.tag) {
+    const slang_url_name = switch (b.graph.host.result.os.tag) {
         .windows => b.fmt("slang-{s}-windows-x86_64", .{slang_version}),
         else => b.fmt("slang-{s}-linux-x86_64", .{slang_version}),
     };
     const slang_dir = b.pathJoin(&.{ tools_dir, slang_url_name });
     const slang_zip = b.pathJoin(&.{ slang_dir, "slang.zip" });
     const slang_url = b.fmt("https://github.com/shader-slang/slang/releases/download/v{s}/{s}.zip", .{ slang_version, slang_url_name });
-    const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (target.result.os.tag == .windows) "slangc.exe" else "slangc" });
+    const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (host_windows) "slangc.exe" else "slangc" });
     const slang_fetch = b.addSystemCommand(&.{
         "sh", "-c",
         b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
@@ -90,8 +105,10 @@ pub fn build(b: *std.Build) void {
         .prefix = absolute_prefix,
         .cache_dir = zig_cache_dir,
         .release_flag = if (debug) "--release=off" else "--release=fast",
-        .vcpkg_step = &vcpkg_install.step,
+        .vcpkg_step = ports_step,
         .target_arg = if (target.result.os.tag == .windows) "-Dtarget=x86_64-windows-gnu" else "",
+        .exe_suffix = if (target.result.os.tag == .windows) ".exe" else "",
+        .run_under_wine = target.result.os.tag == .windows and !host_windows,
         .slangc_exe = slangc_exe,
         .slang_step = &slang_fetch.step,
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
@@ -334,8 +351,8 @@ pub fn build(b: *std.Build) void {
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
 
-    const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
-    const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{});
+    const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{}, null);
+    const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{}, null);
     const tonemap = ctx.plugin("ke_render_tonemap", "src/zig/render/tonemap", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -376,8 +393,8 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step }, .no_tests);
 
-    const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
-    const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{});
+    const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
+    const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
     const skybox = ctx.plugin("ke_render_skybox", "src/zig/render/skybox", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -392,8 +409,8 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &skybox_vs.step, &skybox_fs.step }, .has_tests);
 
-    const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
-    const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{});
+    const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{}, null);
+    const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{}, null);
     const ui = ctx.plugin("ke_render_ui", "src/zig/render/ui", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -409,8 +426,8 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &ui_vs.step, &ui_fs.step }, .has_tests);
 
-    const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
-    const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{});
+    const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
+    const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
     const shadow = ctx.plugin("ke_render_shadow", "src/zig/render/shadow", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -425,7 +442,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "ke-lib-dir", lib_dir),
     }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step }, .has_tests);
 
-    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{});
+    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{}, null);
     const cluster = ctx.plugin("ke_render_cluster", "src/zig/render/cluster", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -442,8 +459,8 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step, &cluster_cs.step }, .has_tests);
 
     const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
-    const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
-    const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes);
+    const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes, null);
+    const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes, null);
     const deferred_lighting = ctx.plugin("ke_render_deferred_lighting", "src/zig/render/deferred_lighting", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "stubs-src", stubs_src),
@@ -513,8 +530,8 @@ pub fn build(b: *std.Build) void {
 
     const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
     const magenta_slang = b.pathJoin(&.{ src_zig, "render/service/shaders/magenta.slang" });
-    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{});
-    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, service_gen_dir, &.{});
+    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{}, null);
+    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, service_gen_dir, &.{}, null);
     const magenta_vs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.vs.wgsl" });
     const magenta_fs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.fs.wgsl" });
 
@@ -651,8 +668,16 @@ pub fn build(b: *std.Build) void {
         argF(b, "libs", b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") })),
     }, &.{&gpu_device_webgpu.step});
 
+    const compile_slang_dir = b.pathJoin(&.{ root, "build", "tools", "compile_slang" });
+    const compile_slang_dll = b.pathJoin(&.{ compile_slang_dir, "compile_slang.dll" });
+    const compile_slang_build = b.addSystemCommand(&.{ "dotnet", "build", b.pathJoin(&.{ root, "scripts/compile_slang.cs" }), "-o", compile_slang_dir, "--nologo", "-v", "q" });
+    compile_slang_build.expectExitCode(0);
+    compile_slang_build.has_side_effects = true;
+
     const demo06 = ctx.example("c_demo_06", "examples/c/06_triangle", &.{
         argF(b, "shader-name", "triangle"),
+        argF(b, "compile-slang", compile_slang_dll),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "06_triangle" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -668,10 +693,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo07 = ctx.example("c_demo_07", "examples/c/07_uniform", &.{
         argF(b, "shader-name", "rotate"),
+        argF(b, "compile-slang", compile_slang_dll),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "07_uniform" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -688,10 +715,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
         "-Dlink-m=true",
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo08 = ctx.example("c_demo_08", "examples/c/08_vertex_buffer", &.{
         argF(b, "shader-name", "mesh"),
+        argF(b, "compile-slang", compile_slang_dll),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "08_vertex_buffer" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -707,10 +736,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo09 = ctx.example("c_demo_09", "examples/c/09_texture", &.{
         argF(b, "shader-name", "tex"),
+        argF(b, "compile-slang", compile_slang_dll),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "09_texture" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -726,10 +757,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo10 = ctx.example("c_demo_10", "examples/c/10_depth", &.{
         argF(b, "shader-name", "depth"),
+        argF(b, "compile-slang", compile_slang_dll),
+        argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "10_depth" })),
         argF(b, "include-dirs", joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
@@ -745,10 +778,10 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         })),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo12 = ctx.example("c_demo_12", "examples/c/12_render_service", &.{
-        argF(b, "compile-slang", b.pathJoin(&.{ root, "scripts/compile_slang.cs" })),
+        argF(b, "compile-slang", compile_slang_dll),
         argF(b, "slangc", ctx.slangc_exe),
         argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "12_render_service" })),
         argF(b, "include-dirs", joinPaths(b, &.{
@@ -857,6 +890,7 @@ pub fn build(b: *std.Build) void {
     const all_examples = [_]*std.Build.Step.Run{
         demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14,
     };
+    for ([_]*std.Build.Step.Run{ demo06, demo07, demo08, demo09, demo10, demo12 }) |e| e.step.dependOn(&compile_slang_build.step);
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
 }
 
@@ -877,6 +911,29 @@ const Ctx = struct {
     slang_step: *std.Build.Step,
     plugins_step: *std.Build.Step,
     test_step: *std.Build.Step,
+    exe_suffix: []const u8,
+    run_under_wine: bool,
+    dotnet_tail: ?*std.Build.Step = null,
+
+    fn serializeDotnet(ctx: *Ctx, step: *std.Build.Step) void {
+        if (ctx.dotnet_tail) |tail| step.dependOn(tail);
+        ctx.dotnet_tail = step;
+    }
+
+    fn addSlangInputs(ctx: *Ctx, run: *std.Build.Step.Run, dir_path: []const u8) void {
+        const b = ctx.b;
+        var threaded: std.Io.Threaded = .init(b.allocator, .{});
+        defer threaded.deinit();
+        const io = threaded.io();
+        var dir = std.Io.Dir.openDirAbsolute(io, dir_path, .{ .iterate = true }) catch return;
+        defer dir.close(io);
+        var walker = dir.walk(b.allocator) catch @panic("OOM");
+        defer walker.deinit();
+        while (walker.next(io) catch null) |entry| {
+            if (entry.kind != .file or !std.mem.endsWith(u8, entry.basename, ".slang")) continue;
+            run.addFileInput(.{ .cwd_relative = b.pathJoin(&.{ dir_path, entry.path }) });
+        }
+    }
 
     /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs.
     /// Every render pass loads its shaders at runtime by logical name via
@@ -885,7 +942,7 @@ const Ctx = struct {
     /// (render/service's own embedded fallback shader is the one exception —
     /// handled separately, since @embedFile needs the file before that
     /// module's own `zig build` even starts).
-    fn shader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8) *std.Build.Step.Run {
+    fn shader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8, after: ?*std.Build.Step) *std.Build.Step.InstallFile {
         const b = ctx.b;
         const suffix = if (std.mem.eql(u8, stage, "vertex"))
             "vs"
@@ -893,18 +950,21 @@ const Ctx = struct {
             "fs"
         else
             "cs";
-        const out_file = b.pathJoin(&.{ out_dir, b.fmt("{s}.{s}.wgsl", .{ name, suffix }) });
-        const run = b.addSystemCommand(&.{
-            "dotnet",   "run",          b.pathJoin(&.{ ctx.root, "scripts/compile_slang.cs" }),
-            "--slangc", ctx.slangc_exe, "--raw",
-            "--target", "wgsl",         "--entry",
-            entry,      "--stage",      stage,
-        });
+        const file_name = b.fmt("{s}.{s}.wgsl", .{ name, suffix });
+        const run = b.addSystemCommand(&.{ ctx.slangc_exe, "-target", "wgsl", "-entry", entry, "-stage", stage });
         run.step.dependOn(ctx.slang_step);
-        for (includes) |inc| run.addArgs(&.{ "--include", inc });
-        run.addArgs(&.{ "--input", input, "--output", out_file });
+        if (after) |a| run.step.dependOn(a);
+        for (includes) |inc| run.addArgs(&.{ "-I", inc });
+        run.addFileArg(.{ .cwd_relative = input });
+        run.addArg("-o");
+        const compiled = run.addOutputFileArg(file_name);
+        ctx.addSlangInputs(run, std.fs.path.dirname(input) orelse ".");
+        for (includes) |inc| ctx.addSlangInputs(run, inc);
         run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));
-        return run;
+
+        if (!std.mem.startsWith(u8, out_dir, ctx.prefix)) @panic("shader output directory is outside the install prefix");
+        const relative = std.mem.trimStart(u8, out_dir[ctx.prefix.len..], "/\\");
+        return b.addInstallFileWithDir(compiled, .{ .custom = relative }, file_name);
     }
 
     /// Compiles every authored material × `pass`: glob every materials
@@ -920,9 +980,9 @@ const Ctx = struct {
         includes: []const []const u8,
         out_dir: []const u8,
         materials_dirs: []const []const u8,
-    ) []const *std.Build.Step.Run {
+    ) []const *std.Build.Step.InstallFile {
         const b = ctx.b;
-        var steps: std.ArrayList(*std.Build.Step.Run) = .empty;
+        var steps: std.ArrayList(*std.Build.Step.InstallFile) = .empty;
         const gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", pass });
 
         var wrapper_includes: std.ArrayList([]const u8) = .empty;
@@ -950,10 +1010,11 @@ const Ctx = struct {
                     template,     "--output",    wrapper,
                 });
                 gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
+                ctx.serializeDotnet(&gen_wrapper.step);
 
-                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items);
+                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
                 vs.step.dependOn(&gen_wrapper.step);
-                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items);
+                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
                 fs.step.dependOn(&gen_wrapper.step);
 
                 steps.append(b.allocator, vs) catch @panic("OOM");
@@ -970,24 +1031,29 @@ const Ctx = struct {
     fn plugin(ctx: *Ctx, name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step, tests: Tests) *std.Build.Step.Run {
         const b = ctx.b;
         const cwd = b.pathJoin(&.{ b.build_root.path.?, dir });
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix, "--cache-dir", ctx.cache_dir });
+        const child_cache = b.pathJoin(&.{ ctx.cache_dir, "plugins", name });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", ctx.prefix, "--cache-dir", child_cache });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
         run.setCwd(.{ .cwd_relative = cwd });
         run.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| run.step.dependOn(d);
+        run.expectExitCode(0);
+        run.has_side_effects = true;
         run.setName(b.fmt("build {s} (Zig)", .{name}));
         ctx.plugins_step.dependOn(&run.step);
 
         switch (tests) {
             .no_tests => {},
             .has_tests => {
-                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix, "--cache-dir", ctx.cache_dir });
+                const t = b.addSystemCommand(&.{ ctx.zig_exe, "build", "test", "--summary", "new", "--prefix", ctx.prefix, "--cache-dir", child_cache });
                 t.addArgs(extra_args);
                 t.addArg(ctx.release_flag);
                 if (ctx.target_arg.len != 0) t.addArg(ctx.target_arg);
+                if (ctx.run_under_wine) t.addArg("-fwine");
                 t.setCwd(.{ .cwd_relative = cwd });
+                t.expectExitCode(0);
                 t.has_side_effects = true;
                 t.step.dependOn(ctx.plugins_step);
                 t.setName(b.fmt("test {s} (Zig)", .{name}));
@@ -1006,24 +1072,77 @@ const Ctx = struct {
     fn example(ctx: *Ctx, demo_name: []const u8, dir: []const u8, extra_args: []const []const u8, deps: []const *std.Build.Step) *std.Build.Step.Run {
         const b = ctx.b;
         const own_prefix = b.pathJoin(&.{ ctx.prefix, "examples-out", demo_name });
-        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix, "--cache-dir", ctx.cache_dir });
+        const run = b.addSystemCommand(&.{ ctx.zig_exe, "build", "--prefix", own_prefix, "--cache-dir", b.pathJoin(&.{ ctx.cache_dir, "plugins", demo_name }) });
         run.addArgs(extra_args);
         run.addArg(ctx.release_flag);
         if (ctx.target_arg.len != 0) run.addArg(ctx.target_arg);
         run.setCwd(.{ .cwd_relative = b.pathJoin(&.{ b.build_root.path.?, dir }) });
         run.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| run.step.dependOn(d);
+        run.expectExitCode(0);
+        run.has_side_effects = true;
         run.setName(b.fmt("build {s} (Zig)", .{demo_name}));
 
         const copy = b.addSystemCommand(&.{
-            "install",                                   "-Dm755",
-            b.pathJoin(&.{ own_prefix, "bin", "demo" }), b.pathJoin(&.{ ctx.prefix, "bin", demo_name }),
+            "install", "-Dm755",
+            b.pathJoin(&.{ own_prefix, "bin", b.fmt("demo{s}", .{ctx.exe_suffix}) }),
+            b.pathJoin(&.{ ctx.prefix, "bin", b.fmt("{s}{s}", .{ demo_name, ctx.exe_suffix }) }),
         });
         copy.step.dependOn(&run.step);
         copy.setName(b.fmt("install {s}", .{demo_name}));
         return copy;
     }
 };
+
+fn portsDigest(b: *std.Build, root: []const u8, parts: []const []const u8) [64]u8 {
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    for (parts) |part| {
+        hasher.update(part);
+        hasher.update("\n");
+    }
+    const cwd = std.Io.Dir.cwd();
+    for ([_][]const u8{ "vcpkg.json", "vcpkg-configuration.json" }) |name| {
+        const contents = cwd.readFileAlloc(io, b.pathJoin(&.{ root, name }), b.allocator, .limited(1 << 20)) catch "";
+        hasher.update(contents);
+    }
+    var names: std.ArrayList([]const u8) = .empty;
+    const triplets_path = b.pathJoin(&.{ root, "vcpkg-triplets" });
+    if (std.Io.Dir.openDirAbsolute(io, triplets_path, .{ .iterate = true })) |opened| {
+        var dir = opened;
+        defer dir.close(io);
+        var it = dir.iterate();
+        while (it.next(io) catch null) |entry| {
+            if (entry.kind == .file) names.append(b.allocator, b.dupe(entry.name)) catch @panic("OOM");
+        }
+    } else |_| {}
+    std.mem.sort([]const u8, names.items, {}, struct {
+        fn lessThan(_: void, a: []const u8, c: []const u8) bool {
+            return std.mem.lessThan(u8, a, c);
+        }
+    }.lessThan);
+    for (names.items) |name| {
+        hasher.update(name);
+        const contents = cwd.readFileAlloc(io, b.pathJoin(&.{ triplets_path, name }), b.allocator, .limited(1 << 20)) catch "";
+        hasher.update(contents);
+    }
+    var digest: [32]u8 = undefined;
+    hasher.final(&digest);
+    return std.fmt.bytesToHex(digest, .lower);
+}
+
+fn portsCurrent(b: *std.Build, stamp_path: []const u8, digest: [64]u8, lib_dir: []const u8) bool {
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const cwd = std.Io.Dir.cwd();
+    const recorded = cwd.readFileAlloc(io, stamp_path, b.allocator, .limited(128)) catch return false;
+    if (!std.mem.eql(u8, recorded, &digest)) return false;
+    cwd.access(io, lib_dir, .{}) catch return false;
+    return true;
+}
 
 fn joinPaths(b: *std.Build, paths: []const []const u8) []const u8 {
     return std.mem.join(b.allocator, "|", paths) catch @panic("OOM");

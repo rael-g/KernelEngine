@@ -7,9 +7,9 @@ ke_audio_miniaudio
 --include-directory
 ../../../../c/audio
 --include-directory
-../../../../c/spatial
---include-directory
 ../../../../c/math
+--include-directory
+../../../../c/spatial
 --include-directory
 ../../../../zig/common/include
 --file

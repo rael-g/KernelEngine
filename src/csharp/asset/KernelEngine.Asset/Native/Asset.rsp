@@ -9,13 +9,13 @@ ke_asset_assimp
 --include-directory
 ../../../../c/ecs
 --include-directory
+../../../../c/math
+--include-directory
 ../../../../c/render
 --include-directory
 ../../../../c/scheduler
 --include-directory
 ../../../../c/text
---include-directory
-../../../../c/math
 --include-directory
 ../../../../zig/common/include
 --file

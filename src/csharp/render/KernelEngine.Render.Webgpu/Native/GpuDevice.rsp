@@ -7,8 +7,6 @@ ke_gpu_device_webgpu
 --include-directory
 ../../../../c/render
 --include-directory
-../../../../c/math
---include-directory
 ../../../../zig/common/include
 --include-directory
 ../../../../zig/render/webgpu/include

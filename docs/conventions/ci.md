@@ -1,51 +1,61 @@
 # What does CI run on a push, and what does it leave out?
 
 One workflow, `.github/workflows/ci.yml`, with one job, `build-and-test`. It runs on a push to any
-branch and on every pull request (`ci.yml:12-15`). A newer run for the same workflow and ref cancels
-the older one (`ci.yml:17-19`).
+branch and on every pull request. A newer run for the same workflow and ref cancels the older one,
+and a job is stopped after 45 minutes.
 
 ## Where it runs
 
-A matrix of `ubuntu-latest` and `windows-latest` (`ci.yml:26-34`). `fail-fast` is off, so one
-platform's failure does not stop the other. Every step uses `bash` on both (`ci.yml:36-40`), so each command is written once. The Windows leg builds the
-`x64-windows-zig` triplet and `-Dtarget=x86_64-windows-gnu` sub-builds that `docs/conventions/build.md`
-describes.
+A matrix of `ubuntu-latest` and `windows-latest`. Two targets are what keeps "backend-agnostic" and
+"no platform favoritism" honest: the build carries a triplet for each, and only running both shows
+that both still pass. `fail-fast` is off, so one platform's failure does not stop the other, and
+which of them broke is most of the diagnosis. Every step uses `bash` on both, so each command is
+written once and a path or binary name never differs by runner. The Windows leg builds the
+`x64-windows-zig` triplet and `-Dtarget=x86_64-windows-gnu` sub-builds that
+`docs/conventions/build.md` describes.
 
 ## What it runs, in order
 
 | step | command | platforms |
 |---|---|---|
-| windowing headers | `apt-get install xorg-dev libgl1-mesa-dev libglu1-mesa-dev pkg-config` (`ci.yml:49-53`) | Linux |
-| Zig | `mlugg/setup-zig@v2`, version `0.16.0` (`ci.yml:55-57`) | both |
-| .NET | `actions/setup-dotnet@v4`, `10.0.x` (`ci.yml:59-61`) | both |
-| vcpkg cache | `build/tools` and `build/vcpkg-installed`, keyed on `vcpkg.json`, `vcpkg-configuration.json` and `vcpkg-triplets/**` (`ci.yml:68-73`) | both |
-| native build | `zig build --prefix build/native --cache-dir build/zig-cache` (`ci.yml:76`) | both |
-| native tests | `zig build test --prefix build/native --cache-dir build/zig-cache` (`ci.yml:83`) | both |
-| managed tests | `dotnet test KernelEngine.slnx` (`ci.yml:86`) | both |
-| gates | ten `dotnet run scripts/check_*.cs` | Linux only |
+| checkout | `actions/checkout@v4` with `lfs: true`, so LFS-tracked fixtures are files and not pointers | both |
+| windowing headers | `apt-get install xorg-dev libgl1-mesa-dev libglu1-mesa-dev pkg-config`; vcpkg builds glfw3 from source and needs the system's development headers, which Windows takes from the SDK the runner has | Linux |
+| Zig | `mlugg/setup-zig@v2`, version `0.16.0` | both |
+| .NET | `actions/setup-dotnet@v4`, `10.0.x` | both |
+| vcpkg cache | restores `build/tools` and `build/vcpkg-installed`, keyed on `vcpkg.json`, `vcpkg-configuration.json` and `vcpkg-triplets/**` | both |
+| clang headers cache | `build/cache`, keyed on `scripts/generate_bindings.cs` | Linux |
+| NuGet cache | `~/.nuget/packages`, keyed on every `.csproj` and `src/csharp/dotnet-tools.json`, with the OS prefix as fallback | both |
+| native build | `dotnet run scripts/verify.cs -- build` | both |
+| save vcpkg | saves the vcpkg cache after the build, even when the build failed, unless the restore was a hit | both |
+| vcpkg build logs | on failure, the tail of every vcpkg build log | both |
+| native tests | `dotnet run scripts/verify.cs -- test-native` | both |
+| managed tests | `dotnet run scripts/verify.cs -- test-managed` | both |
+| gates | `dotnet run scripts/verify.cs -- gates` | Linux only |
 
-The vcpkg cache only speeds the run up: a miss is repopulated by the build itself, because the build
-fetches vcpkg into `build/tools` and installs ports into `build/vcpkg-installed` on its own
-(`docs/conventions/build.md`).
+All three caches are for speed and never for correctness: a miss costs the vcpkg ports' build time or
+the download, and is repopulated by the build itself. The clang headers are fetched by
+`check_bindings_drift` into `build/cache` on its first run, and that cache is Linux-only because the gates
+are. A vcpkg cache that is restored but whose ports are rebuilt anyway means a package's ABI hash
+changed; the triplets pass `PATH` through as untracked for that reason, so a runner-specific `PATH`
+does not enter the hash.
+
+`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native --cache-dir build/zig-cache`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, and `gates` runs every `scripts/check_*.cs` it finds. With no stage it runs all four in that order and prints each step's time. `--keep-going` does not stop at the first failing step.
 
 `dotnet test KernelEngine.slnx` builds every project the solution lists, so each C# example is
 compiled, and runs the three projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The ten gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_component_fields`,
+The twelve gates are `check_abi_layout`, `check_api_coverage`, `check_api_drift`, `check_bindings_drift`, `check_component_fields`,
 `check_generator_contract`, `check_generator_shapes`, `check_managed_handwritten`,
-`check_out_params`, `check_reconstruction` and `check_zig_shapes`; `check_generator_shapes` and
-`check_zig_shapes` are run with `--no-cache` (`ci.yml:100`, `:104`). What each one fails on is in
+`check_out_params`, `check_reconstruction`, `check_rsp_drift` and `check_zig_shapes`, found by `verify.cs` rather than
+listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
+`check_generator_shapes` and `check_zig_shapes` are run with `--no-cache`, since a cached build of the
+generator would answer about the wrong generator. What each one fails on is in
 `docs/architecture/kabic.md`. They are Linux-only: they compare generated text against headers and
-read no compiler or linker output.
+read no compiler or linker output, so the answer cannot differ by runner.
 
 ## What it leaves out
 
-- **`scripts/check_bindings_drift.cs`.** It compares a header's modification time with the oldest
-  generated file's (`check_bindings_drift.cs:56`), and a fresh checkout gives every file the same
-  time. It is not in the workflow (`ci.yml:106-109`).
-- **`scripts/generate_rsp.cs --check`.** The check that every `.rsp` equals what the headers imply
-  exists (`generate_rsp.cs:254-270`) and `ci.yml` does not call it.
 - **Running anything.** No step starts a C or C# example: `grep -n 'c_demo\|examples' ci.yml` finds
   nothing. A defect that only shows when a program starts is not caught here.
 - **Coverage.** `scripts/coverage.cs` is not called.

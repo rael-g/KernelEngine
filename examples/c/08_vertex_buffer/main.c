@@ -7,8 +7,9 @@
 #include <kernel_engine/render/gpu/gpu_surface_ext.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 
-#include "mesh_vert.h"
-#include "mesh_frag.h"
+#include "mesh_vs_wgsl.h"
+#include "mesh_fs_wgsl.h"
+#include <string.h>
 
 #include <stdio.h>
 
@@ -79,16 +80,16 @@ int main(void)
     if (ibo == KE_GPU_INVALID_HANDLE) die("index buffer creation failed", err);
 
     ke_gpu_shader_module_params vsp = {
-        .code        = mesh_vert_spv,
-        .byte_size   = sizeof(mesh_vert_spv),
-        .entry_point = "main",
+        .code        = mesh_vs_wgsl,
+        .byte_size   = strlen(mesh_vs_wgsl),
+        .entry_point = "vs_main",
     };
     ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &vsp, &err);
 
     ke_gpu_shader_module_params fsp = {
-        .code        = mesh_frag_spv,
-        .byte_size   = sizeof(mesh_frag_spv),
-        .entry_point = "main",
+        .code        = mesh_fs_wgsl,
+        .byte_size   = strlen(mesh_fs_wgsl),
+        .entry_point = "fs_main",
     };
     ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &fsp, &err);
 
@@ -118,6 +119,8 @@ int main(void)
     ke_gpu_render_pipeline_params pp = {
         .vertex_module           = vs,
         .fragment_module         = fs,
+        .vertex_entry = "vs_main",
+        .fragment_entry = "fs_main",
         .primitive_topology      = KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .cull_mode               = KE_GPU_CULL_MODE_NONE,
         .front_face              = KE_GPU_FRONT_FACE_CCW,
