@@ -97,6 +97,14 @@ jobs:
       - name: Build native
         run: dotnet run scripts/verify.cs -- build
 
+      - name: Show vcpkg build logs
+        if: failure()
+        run: |
+          for f in build/tools/vcpkg-*/buildtrees/*/*-out.log build/tools/vcpkg-*/buildtrees/*/*-err.log; do
+            [ -s "$f" ] && { echo "::group::$f"; tail -n 60 "$f"; echo "::endgroup::"; }
+          done
+          true
+
       # Every native test is a Zig test inside the file it covers, so the whole
       # native suite is one step and it cannot go stale: a plugin does not compile
       # until it answers whether it has tests, and the test invocation reuses the
