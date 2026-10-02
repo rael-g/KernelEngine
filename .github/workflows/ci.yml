@@ -42,6 +42,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       # X11 and GL headers only: vcpkg builds glfw3 from source, and it looks for
       # the windowing system's own development headers, which no port provides.
