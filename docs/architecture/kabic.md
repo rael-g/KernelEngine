@@ -101,6 +101,17 @@ A description the classifier cannot classify throws `InvalidOperationException` 
 fails: a slot that answers, fails and writes a value (`Classifier.cs:293-298`), an unmatched
 `array_of` or `bytes_of` name, two written-back parameters that would project under one name.
 
+## Packs
+
+kabic knows only what C itself has. A family of types that some ABIs have and some languages can spell, vectors,
+quaternions and matrices for one, is a *pack*: an `IShapePack` that recognises the types from what a header declares
+(`[vector]`, `[quaternion]` and `[matrix]` on a struct, a bare `float[2..4]`, `[vector2:name]` on a run of parameters),
+projects each into the languages it knows (`Languages.CSharp`, `Languages.FieldTable`), and names what the generated code
+then has to import (a `using` in C#, an `#include` in C++, an `@import` in Zig) and which libraries it has to reference.
+A language the pack does not know keeps the plain struct. The numerics pack is `Kabic.Numerics`; the manifest turns it
+on with `"packs": ["numerics"]`, and `Kabic.Builtin` resolves the names of the packs kabic ships. A pack of another
+project is added with `ConventionBuilder.Use`.
+
 ## The three backends
 
 | backend | driver | emits | when it cannot render a form |

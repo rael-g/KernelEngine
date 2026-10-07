@@ -1,9 +1,6 @@
 
 namespace Kabic;
 
-/// <summary>A struct of two to four floats and the managed type of the same bytes.</summary>
-public sealed record VectorShape(string Managed, string[] Lanes);
-
 public record ApiParam(string? Name, string Type, IReadOnlyList<string> Tags, string? Doc)
 {
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
@@ -124,30 +121,6 @@ public class ApiModel
     /// are absent: those are real types the description already carries.
     /// </summary>
     public Dictionary<string, string> TypeAliases { get; } = [];
-
-    /// <summary>
-    /// The vector a struct is, or null when it is not one: a plain struct whose fields are two to four
-    /// <c>float</c> scalars, in lane order. A struct tagged <c>[quaternion]</c> with four lanes is a
-    /// quaternion rather than a four-lane vector.
-    /// </summary>
-    public VectorShape? VectorOf(string cType)
-    {
-        var name = cType.Replace("const ", "").Replace("struct ", "").Trim();
-        var s = Structs.FirstOrDefault(x => x.Name == name && !x.IsVtable);
-        if (s is null || s.Fields.Count is < 2 or > 4 || s.Fields.Any(f => f.Type.Trim() != "float")) return null;
-        var quaternion = s.Fields.Count == 4 && s.Tags.Contains("quaternion");
-        return new VectorShape(quaternion ? "Quaternion" : $"Vector{s.Fields.Count}",
-            s.Fields.Select(f => f.Name).ToArray());
-    }
-
-    /// <summary>The managed matrix a struct is, or null: a plain struct whose only field is sixteen floats.</summary>
-    public string? MatrixOf(string cType)
-    {
-        var name = cType.Replace("const ", "").Replace("struct ", "").Trim();
-        var s = Structs.FirstOrDefault(x => x.Name == name && !x.IsVtable);
-        return s is { Fields.Count: 1 } && System.Text.RegularExpressions.Regex.IsMatch(s.Fields[0].Type.Trim(), @"^float\s*\[16\]$")
-            ? "Matrix4x4" : null;
-    }
 
     /// <summary>Resolves a type through <see cref="TypeAliases"/> until it is no longer an alias.</summary>
     public string ResolveAlias(string type)

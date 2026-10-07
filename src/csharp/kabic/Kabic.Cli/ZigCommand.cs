@@ -59,7 +59,7 @@ internal static class ZigCommand
         }
 
         var model = ReadModel(domains.First(d => d.Name == domain).Api);
-        var convention = Convention.Load(domainsPath);
+        var convention = BuiltinConventions.Load(domainsPath);
         var classified = Classifier.Classify(model, providers.ToHashSet(), [], convention);
         var text = ZigBackend.Render(model, classified, convention, foreign,
             Regeneration.ExtractErrorAbi(convention, root, null));

@@ -41,12 +41,12 @@ public static class CBackend
 
         foreach (var s in Describable(model, convention))
         {
-            var fields = s.Fields.Where(f => Describes(model, f, table)).ToList();
+            var fields = s.Fields.Where(f => Describes(model, f, table, convention)).ToList();
             sb.AppendLine($"static const {table.EntryType} {s.Name}_fields[] = {{");
             foreach (var f in fields)
-                sb.AppendLine($"    {{ \"{f.TagValue("name") ?? f.Name}\", {table.Variants[VariantOf(model, f, table)!.Value].Constant}, "
+                sb.AppendLine($"    {{ \"{f.TagValue("name") ?? f.Name}\", {table.Variants[VariantOf(model, f, table, convention)!].Constant}, "
                     + $"offsetof({s.Name}, {f.Name}), sizeof((({s.Name} *)0)->{f.Name}), "
-                    + $"{DefaultOf(model, f, table)} }},");
+                    + $"{DefaultOf(model, f, table, convention)} }},");
             sb.AppendLine("};");
             sb.AppendLine();
         }
@@ -80,7 +80,7 @@ public static class CBackend
         model.Structs.Where(s => !s.IsVtable
             && !s.External
             && s.Name.EndsWith(convention.ComponentSuffix, StringComparison.Ordinal)
-            && s.Fields.Any(f => Describes(model, f, convention.FieldTable!)));
+            && s.Fields.Any(f => Describes(model, f, convention.FieldTable!, convention)));
 
     /// <summary>
     /// Whether a scene file can address this field at all. <c>[output]</c> is a
@@ -91,66 +91,58 @@ public static class CBackend
     /// Renders a field's <c>[default:]</c> as an initializer for the table's
     /// ke_variant, or the null variant when the header declares none.
     /// </summary>
-    private static string DefaultOf(ApiModel model, ApiField f, FieldTableConvention table)
+    private static string DefaultOf(ApiModel model, ApiField f, FieldTableConvention table, Convention convention)
     {
         var d = f.TagValue("default");
         if (d is null) return NullVariant(table);
 
-        var kind = VariantOf(model, f, table)!.Value;
+        var kind = VariantOf(model, f, table, convention)!;
         var variant = table.Variants[kind];
         var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var lanes = kind switch
-        {
-            FieldKind.Vec2 => 2, FieldKind.Vec3 => 3,
-            FieldKind.Vec4 or FieldKind.Quat => 4,
-            _ => 1,
-        };
+        var lanes = convention.ShapeOf(model, Base(f.Type))?.Shape.Lanes.Count ?? 1;
         if (parts.Length != lanes)
             throw new InvalidOperationException(
                 $"{f.Name}: [default:{d}] has {parts.Length} components but {variant.Constant} takes {lanes}");
 
         var value = kind switch
         {
-            FieldKind.String => $"\"{d}\"",
-            FieldKind.Bool => d is "1" or "true" ? "true" : "false",
-            FieldKind.Int => d,
-            FieldKind.Float => CDouble(parts[0]),
+            "string" => $"\"{d}\"",
+            "bool" => d is "1" or "true" ? "true" : "false",
+            "int" => d,
+            "float" => CDouble(parts[0]),
             _ => "{ " + string.Join(", ", parts.Select(p => CDouble(p) + "f")) + " }",
         };
         return $"{{ {variant.Constant}, {{ {variant.Member} = {value} }} }}";
     }
 
-    private static string NullVariant(FieldTableConvention table) => $"{{ {table.Variants[FieldKind.Null].Constant}, {{ 0 }} }}";
+    private static string NullVariant(FieldTableConvention table) => $"{{ {table.Variants["null"].Constant}, {{ 0 }} }}";
 
     /// <summary>A C floating literal: "5" is not one, "5.0" is.</summary>
     private static string CDouble(string raw) => raw.Contains('.') ? raw : raw + ".0";
 
-    private static bool Describes(ApiModel model, ApiField f, FieldTableConvention table) =>
-        !f.Has("output") && VariantOf(model, f, table) is not null;
+    private static bool Describes(ApiModel model, ApiField f, FieldTableConvention table, Convention convention) =>
+        !f.Has("output") && VariantOf(model, f, table, convention) is not null;
 
     /// <summary>
-    /// The <c>ke_variant_type</c> a field is addressed as, or null when the field
-    /// has no scene-file spelling — a derived matrix or an opaque handle is
-    /// produced by a system, never written down.
+    /// The kind a field is addressed as, or null when the field has no scene-file spelling: a
+    /// derived matrix or an opaque handle is produced by a system, never written down. C's own
+    /// scalars and strings are kinds here; every other kind is what a pack projects the type to.
     /// </summary>
-    private static FieldKind? VariantOf(ApiModel model, ApiField f, FieldTableConvention table)
+    private static string? VariantOf(ApiModel model, ApiField f, FieldTableConvention table, Convention convention)
     {
-        if (f.Has("bool")) return FieldKind.Bool;
+        if (f.Has("bool")) return "bool";
         var type = Base(f.Type);
-        if (model.Enums.Any(e => e.Name == type)) return FieldKind.Int;
-        if (model.VectorOf(type) is { } vector)
-            return vector.Managed == "Quaternion" ? FieldKind.Quat : vector.Lanes.Length switch { 2 => FieldKind.Vec2, 3 => FieldKind.Vec3, _ => FieldKind.Vec4 };
+        if (model.Enums.Any(e => e.Name == type)) return "int";
+        if (convention.Project(Languages.FieldTable, model, type) is { } projected)
+            return table.Variants.ContainsKey(projected) ? projected : null;
         return type switch
         {
-            "float" or "double"                        => FieldKind.Float,
-            "bool" or "_Bool"                          => FieldKind.Bool,
-            "int8_t" or "int16_t" or "int32_t" or "int64_t" => FieldKind.Int,
-            "uint8_t" or "uint16_t" or "uint32_t" or "uint64_t" => FieldKind.Int,
-            "int" or "unsigned" or "unsigned int"      => FieldKind.Int,
-            var t when t.StartsWith("char[")           => FieldKind.String,
-            "float[2]"                                 => FieldKind.Vec2,
-            "float[3]"                                 => FieldKind.Vec3,
-            "float[4]"                                 => FieldKind.Vec4,
+            "float" or "double"                        => "float",
+            "bool" or "_Bool"                          => "bool",
+            "int8_t" or "int16_t" or "int32_t" or "int64_t" => "int",
+            "uint8_t" or "uint16_t" or "uint32_t" or "uint64_t" => "int",
+            "int" or "unsigned" or "unsigned int"      => "int",
+            var t when t.StartsWith("char[")           => "string",
             _                                          => null,
         };
     }

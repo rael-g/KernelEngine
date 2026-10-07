@@ -10,7 +10,7 @@ internal static class GenerateCommand
             .Where(s => options.Domains.Count == 0 || options.Domains.Contains(s.Name))
             .ToList();
 
-        var convention = Convention.Load(options.Manifest);
+        var convention = BuiltinConventions.Load(options.Manifest);
 
         string Place(string relative) => Path.Combine(options.Into ?? options.Root, relative);
 

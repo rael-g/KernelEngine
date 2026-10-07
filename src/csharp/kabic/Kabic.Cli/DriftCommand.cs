@@ -9,7 +9,7 @@ internal static class DriftCommand
         var rootDir = options.Root;
         var zigOverride = options.Zig;
         var specs = DomainSpec.Load(options.Manifest);
-        var convention = Convention.Load(options.Manifest);
+        var convention = BuiltinConventions.Load(options.Manifest);
 
         Console.WriteLine("Checking for ke_api.json drift (headers vs. generated C#)...");
 

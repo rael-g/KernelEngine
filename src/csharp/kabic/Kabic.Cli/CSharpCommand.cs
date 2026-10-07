@@ -42,7 +42,7 @@ internal static class CSharpCommand
         {
             Generation.CSharp(new Generation.CSharpRequest(File.ReadAllText(apiPath), ns, nativeNs, outDir,
                 contractOutDir ?? outDir, domain, library, explicitProviders, explicitCallbacks, extraUsings,
-                Convention.Load(manifest ?? Path.Combine("scripts", "api_domains.json"))));
+                BuiltinConventions.Load(manifest ?? Path.Combine("scripts", "api_domains.json"))));
         }
         catch (InvalidOperationException e)
         {

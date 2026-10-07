@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kabic.Pipeline/Kabic.Pipeline.csproj" />
+    <ProjectReference Include="../Kabic.Builtin/Kabic.Builtin.csproj" />
     <ProjectReference Include="../Kabic.ZigBackend/Kabic.ZigBackend.csproj" />
     <ProjectReference Include="../Kabic.ClangSharpBackend/Kabic.ClangSharpBackend.csproj" />
   </ItemGroup>

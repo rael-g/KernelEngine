@@ -4,22 +4,20 @@ namespace Kabic;
 /// The naming and shape conventions of the C ABI being compiled — everything
 /// `kabic` "knows" about its consumer that is NOT intrinsic to C itself.
 /// </summary>
-/// <summary>What a scene file can write for a component field.</summary>
-public enum FieldKind { Null, Bool, Int, Float, String, Vec2, Vec3, Vec4, Quat }
-
 /// <summary>How one kind of field is spelled in the generated table.</summary>
 public sealed record FieldVariant(string Constant, string Member);
 
 /// <summary>
 /// How a component struct is described to the runtime that applies a scene file to it:
 /// the entry type of the table, the header declaring it, and the spelling of every kind of
-/// field. A convention without one has no field tables.
+/// field, by the kind's name: <c>null</c>, <c>bool</c>, <c>int</c>, <c>float</c> and <c>string</c> are C's own, and a
+/// pack names the others. A convention without one has no field tables.
 /// </summary>
 public sealed record FieldTableConvention(
     string EntryType,
     string Include,
     string NameMacroPrefix,
-    IReadOnlyDictionary<FieldKind, FieldVariant> Variants);
+    IReadOnlyDictionary<string, FieldVariant> Variants);
 
 /// <summary>
 /// One kind of failure the ABI names: the singleton a failure of that kind is reached by, the dotted name
@@ -183,11 +181,42 @@ public sealed class Convention
     /// <summary>C owner-wrapper handle types and the managed type a caller holds instead.</summary>
     public IReadOnlyDictionary<string, string> HandleTypes { get; init; } = new Dictionary<string, string>();
 
+    /// <summary>The packs of types this ABI has beyond what C itself provides.</summary>
+    public IReadOnlyList<IShapePack> Packs { get; init; } = [];
+
+    /// <summary>The shape a C type is, as the first pack that recognises it says, or null.</summary>
+    public (IShapePack Pack, TypeShape Shape)? ShapeOf(ApiModel model, string cType)
+    {
+        foreach (var pack in Packs)
+            if (pack.Recognize(model, cType) is { } shape)
+                return (pack, shape);
+        return null;
+    }
+
+    /// <summary>How <paramref name="language"/> spells the shape of a C type, or null when it is no shape or the language has no such type.</summary>
+    public string? Project(string language, ApiModel model, string cType) =>
+        ShapeOf(model, cType) is { } found ? found.Pack.Project(language, found.Shape) : null;
+
+    /// <summary>The group a parameter opens, with the pack that groups it.</summary>
+    public (IShapePack Pack, ParamGroup Group)? GroupOf(ApiParam parameter)
+    {
+        foreach (var pack in Packs)
+            if (pack.GroupOf(parameter) is { } group)
+                return (pack, group);
+        return null;
+    }
+
+    /// <summary>Everything the packs say <paramref name="language"/> has to import.</summary>
+    public IEnumerable<string> Imports(string language) => Packs.SelectMany(p => p.Imports(language)).Distinct();
+
+    /// <summary>Every library, beyond the language's own, the packs say <paramref name="language"/> has to reference.</summary>
+    public IEnumerable<string> Libraries(string language) => Packs.SelectMany(p => p.Libraries(language)).Distinct();
+
     /// <summary>Name of the trailing failure lane, which is never a projected parameter.</summary>
     public string ErrorLaneName { get; init; } = "out_error";
 
-    /// <summary>Reads the <c>convention</c> object of a manifest into a <see cref="ConventionBuilder"/> and builds it.</summary>
-    public static Convention FromJson(System.Text.Json.Nodes.JsonObject json)
+    /// <summary>Reads the <c>convention</c> object of a manifest into a <see cref="ConventionBuilder"/> and builds it; <paramref name="pack"/> resolves the name of a pack.</summary>
+    public static Convention FromJson(System.Text.Json.Nodes.JsonObject json, Func<string, IShapePack> pack)
     {
         static string Text(System.Text.Json.Nodes.JsonObject o, string key) =>
             o[key]?.GetValue<string>() ?? throw new InvalidOperationException($"the convention declares no '{key}'");
@@ -213,6 +242,8 @@ public sealed class Convention
             builder.AddHandleType(cType, managed!.GetValue<string>());
         foreach (var (symbol, name) in json["typeNameOverrides"]?.AsObject() ?? [])
             builder.AddTypeName(symbol, name!.GetValue<string>());
+        foreach (var name in json["packs"]?.AsArray() ?? [])
+            builder.Use(pack(name!.GetValue<string>()));
         if (json["fieldTable"] is System.Text.Json.Nodes.JsonObject table)
             builder.FieldTable(ReadFieldTable(table));
         return builder.Build();
@@ -224,19 +255,12 @@ public sealed class Convention
 
     static FieldTableConvention ReadFieldTable(System.Text.Json.Nodes.JsonObject table)
     {
-        static FieldKind Kind(string name) => Enum.Parse<FieldKind>(name, ignoreCase: true);
-
         return new FieldTableConvention(
             table["entryType"]!.GetValue<string>(),
             table["include"]!.GetValue<string>(),
             table["nameMacroPrefix"]!.GetValue<string>(),
             table["variants"]!.AsObject().ToDictionary(
-                kv => Kind(kv.Key),
+                kv => kv.Key,
                 kv => new FieldVariant(kv.Value!["constant"]!.GetValue<string>(), kv.Value["member"]?.GetValue<string>() ?? "")));
     }
-
-    /// <summary>Reads the <c>convention</c> object of the manifest at <paramref name="manifestPath"/>.</summary>
-    public static Convention Load(string manifestPath) =>
-        FromJson(System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject()["convention"]?.AsObject()
-            ?? throw new InvalidOperationException($"{manifestPath} has no 'convention' object"));
 }

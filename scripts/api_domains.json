@@ -1,6 +1,7 @@
 {
   "_comment": "Hand-authored manifest and the only input of the kabic pipeline. Each `domains` entry drives extraction to ke_api.json and the C#, C and Zig backends (kabic generate); each `bindings` entry configures ClangSharp (kabic bindings). Adding a domain here is what migrating it to kabic means mechanically. Never a derived artifact.",
   "convention": {
+    "packs": ["numerics"],
     "symbolPrefix": "ke_",
     "handleSuffix": "_handle",
     "factorySuffix": "_create",

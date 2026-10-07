@@ -521,7 +521,8 @@ public static class CSharpBackend
 
         var baseName = BaseNodeOf(model, component) ?? "Node";
 
-        var o = new List<string> { Header, "using System.Numerics;" };
+        var o = new List<string> { Header };
+        foreach (var u in convention.Imports(Languages.CSharp)) o.Add($"using {u};");
         foreach (var u in extraUsings) o.Add($"using {u};");
         o.Add("");
         o.Add($"namespace {ns};\n");
@@ -622,20 +623,13 @@ public static class CSharpBackend
         }
     }
 
-    static int? VectorArity(string cType)
-    {
-        var m = System.Text.RegularExpressions.Regex.Match(cType.Trim(), @"^float\s*\[(\d+)\]$");
-        return m.Success && int.Parse(m.Groups[1].Value) is >= 2 and <= 4 ? int.Parse(m.Groups[1].Value) : null;
-    }
-
     static bool IsCharArray(string cType) =>
         System.Text.RegularExpressions.Regex.IsMatch(cType.Trim(), @"^(const\s+)?char\s*\[\d+\]$");
 
     static string NodePropertyType(ApiModel model, ApiField f, Convention convention) =>
         IsCharArray(f.Type) ? "string" :
         convention.HandleTypes.TryGetValue(f.Type.Trim(), out var h) ? h :
-        VectorArity(f.Type) is int n ? $"Vector{n}"
-        : model.VectorOf(f.Type) is { } v ? v.Managed
+        convention.Project(Languages.CSharp, model, f.Type) is { } projected ? projected
         : model.Enums.Any(e => e.Name == f.Type.Trim()) ? Idioms.TypeName(f.Type.Trim(), convention)
         : f.Has("bool") ? "bool" : CsType(model, f.Type, convention);
 
@@ -672,19 +666,17 @@ public static class CSharpBackend
     public static string RenderStruct(ApiModel model, ApiStruct s, string ns,
         IEnumerable<string> extraUsings, Convention convention)
     {
-        var needsNumerics = s.Fields.Any(f => ValueFieldType(model, s, f, convention)
-            is var t && (t.StartsWith("Vector", StringComparison.Ordinal)
-                || t is "Quaternion" or "Matrix4x4"));
+        var needsPackImports = s.Fields.Any(f => convention.ShapeOf(model, f.Type) is not null);
         var inlineArrays = s.Fields
             .Select(f => (Field: f, Array: ValueArray(model, s, f, convention)))
             .Where(x => x.Array is not null)
             .Select(x => (x.Field, Array: x.Array!.Value))
             .ToList();
 
-        var borrowsAType = s.Fields.Any(f => NamesForeignDeclaration(model, f));
+        var borrowsAType = s.Fields.Any(f => NamesForeignDeclaration(model, f, convention));
 
         var o = new List<string> { Header };
-        if (needsNumerics) o.Add("using System.Numerics;");
+        if (needsPackImports) foreach (var u in convention.Imports(Languages.CSharp)) o.Add($"using {u};");
         if (inlineArrays.Count > 0) o.Add("using System.Runtime.CompilerServices;");
         o.Add("using System.Runtime.InteropServices;");
         if (borrowsAType) foreach (var u in extraUsings) o.Add($"using {u};");
@@ -823,9 +815,9 @@ public static class CSharpBackend
     /// dereferencing, so asking the field's own spelling would miss exactly the case the
     /// projection exists to compose.
     /// </summary>
-    static bool ViewNamesForeignDeclaration(ApiModel model, ApiField f)
+    static bool ViewNamesForeignDeclaration(ApiModel model, ApiField f, Convention convention)
     {
-        if (NamesForeignDeclaration(model, f)) return true;
+        if (NamesForeignDeclaration(model, f, convention)) return true;
         if (!CTypes.IsPointer(f.Type)) return false;
         var element = StripQualifiers(CTypes.Deref(f.Type)).Trim();
         return model.Structs.Any(v => v.Name == element && v.External);
@@ -846,7 +838,7 @@ public static class CSharpBackend
 
         var o = new List<string> { Header };
         o.Add("using System.Runtime.InteropServices;");
-        if (s.Fields.Any(f => ViewNamesForeignDeclaration(model, f)))
+        if (s.Fields.Any(f => ViewNamesForeignDeclaration(model, f, convention)))
             foreach (var u in extraUsings) o.Add($"using {u};");
         o.Add("");
         o.Add($"namespace {ns};\n");
@@ -954,10 +946,10 @@ public static class CSharpBackend
     /// the projection reaches it by name, and only a struct that actually names one needs
     /// the namespaces the domain composes from.
     /// </summary>
-    static bool NamesForeignDeclaration(ApiModel model, ApiField f)
+    static bool NamesForeignDeclaration(ApiModel model, ApiField f, Convention convention)
     {
         var t = StripQualifiers(CTypes.FixedArray(f.Type)?.Element ?? f.Type).Trim();
-        if (model.VectorOf(t) is not null || model.MatrixOf(t) is not null) return false;
+        if (convention.ShapeOf(model, t) is not null) return false;
         return model.Enums.Any(e => e.Name == t && e.External)
             || model.Structs.Any(v => v.Name == t && v.External);
     }
@@ -1021,7 +1013,7 @@ public static class CSharpBackend
         var borrowsAType = s.Fields.Any(f =>
         {
             var named = StripQualifiers(CTypes.IsPointer(f.Type) ? CTypes.Deref(f.Type) : f.Type).Trim();
-            if (model.VectorOf(named) is not null || model.MatrixOf(named) is not null) return false;
+            if (convention.ShapeOf(model, named) is not null) return false;
             return model.Enums.Any(e => e.Name == named && e.External)
                 || model.Structs.Any(v => v.Name == named && v.External);
         });
@@ -1051,7 +1043,7 @@ public static class CSharpBackend
     static (string Buffer, string Element, int Arity)? ValueArray(ApiModel model, ApiStruct s, ApiField f,
         Convention convention)
     {
-        if (CTypes.FixedArray(f.Type) is not { } arr || VectorArity(f.Type) is not null) return null;
+        if (CTypes.FixedArray(f.Type) is not { } arr || convention.ShapeOf(model, f.Type) is not null) return null;
 
         var element = arr.Element;
         if (CTypes.IsPointer(element))
@@ -1070,7 +1062,7 @@ public static class CSharpBackend
     /// type whose fields are the other.
     /// </summary>
     static string ValueTypeName(ApiModel model, string cType, Convention convention) =>
-        model.MatrixOf(cType) is { } mat ? mat
+        convention.Project(Languages.CSharp, model, cType) is { } mat ? mat
         : convention.HandleTypes.TryGetValue(cType.Trim(), out var handle) ? handle
         : model.Structs.Any(v => v.Name == cType.Trim() && (IsValue(v) || IsBorrowed(v)))
         || model.Enums.Any(e => e.Name == cType.Trim())
@@ -1095,8 +1087,7 @@ public static class CSharpBackend
                 + " it only has to outlive the call that takes the struct, declare the struct"
                 + " [borrowed].");
 
-        if (VectorArity(f.Type) is int n) return $"Vector{n}";
-        if (model.VectorOf(f.Type) is { } v) return v.Managed;
+        if (convention.Project(Languages.CSharp, model, f.Type) is { } projected) return projected;
         if (ValueArray(model, s, f, convention) is { } array) return array.Buffer;
         return ValueTypeName(model, f.Type, convention);
     }
@@ -1113,9 +1104,7 @@ public static class CSharpBackend
         var name = Idioms.Pascal(f.Name);
         var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        var lanes = VectorArity(f.Type) is int n ? n
-            : model.VectorOf(f.Type) is { } v ? v.Lanes.Length
-            : 1;
+        var lanes = convention.ShapeOf(model, f.Type)?.Shape.Lanes.Count ?? 1;
         if (lanes > 1)
         {
             if (parts.Length != lanes)
@@ -1261,7 +1250,7 @@ public static class CSharpBackend
             $"using {convention.CommonBindingsNamespace};",
             $"using {nativeNs};",
         };
-        if (HasVectorParams(vtable)) o.Add("using System.Numerics;");
+        if (HasGroupedParams(vtable, convention)) foreach (var u in convention.Imports(Languages.CSharp)) o.Add($"using {u};");
         foreach (var u in extraUsings) o.Add($"using {u};");
         o.Add("");
         o.Add($"namespace {ns};");
@@ -1284,7 +1273,7 @@ public static class CSharpBackend
         var contract = domainIface is null ? null : new List<string> { Header };
         if (contract is not null)
         {
-            if (HasVectorParams(vtable)) contract.Add("using System.Numerics;");
+            if (HasGroupedParams(vtable, convention)) foreach (var u in convention.Imports(Languages.CSharp)) contract.Add($"using {u};");
             contract.Add($"using {convention.CommonManagedNamespace};");
             if (contractNamesForeignProjections)
                 foreach (var u in extraUsings) contract.Add($"using {u};");
@@ -1562,30 +1551,31 @@ public static class CSharpBackend
     /// every language that does have one re-groups them; doing that by hand is an
     /// overload per slot whose only content is which argument goes where.
     /// </summary>
-    static Dictionary<ApiParam, (string Vector, string Lane, int Arity, bool Leads)> VectorLanes(IReadOnlyList<ApiParam> ps)
+    static Dictionary<ApiParam, (string Group, string Lane, string Type, bool Leads)> GroupedLanes(IReadOnlyList<ApiParam> ps, Convention convention)
     {
-        var map = new Dictionary<ApiParam, (string, string, int, bool)>();
+        var map = new Dictionary<ApiParam, (string, string, string, bool)>();
         for (var i = 0; i < ps.Count; i++)
         {
-            var arity = ps[i].Has("vector2") ? 2 : ps[i].Has("vector3") ? 3 : 0;
-            if (arity == 0) continue;
-            var vector = ps[i].TagValue($"vector{arity}")
+            if (convention.GroupOf(ps[i]) is not { } found) continue;
+            var (pack, group) = found;
+            var arity = group.Shape.Lanes.Count;
+            var type = pack.Project(Languages.CSharp, group.Shape)
                 ?? throw new InvalidOperationException(
-                    $"{ps[i].Name}: [vector{arity}] must name the vector, as [vector{arity}:<name>]");
+                    $"{ps[i].Name}: [{group.Shape.Kind}:{group.Name}] groups {arity} parameters, but C# has no type for that");
             if (i + arity > ps.Count)
                 throw new InvalidOperationException(
-                    $"{ps[i].Name}: [vector{arity}:{vector}] needs {arity} consecutive parameters, "
+                    $"{ps[i].Name}: [{group.Shape.Kind}:{group.Name}] needs {arity} consecutive parameters, "
                     + $"but only {ps.Count - i} follow");
             for (var lane = 0; lane < arity; lane++)
-                map[ps[i + lane]] = (vector, "XYZ"[lane].ToString(), arity, lane == 0);
+                map[ps[i + lane]] = (group.Name, group.Shape.Lanes[lane].ToUpperInvariant(), type, lane == 0);
             i += arity - 1;
         }
         return map;
     }
 
     /// <summary>Whether any slot on the vtable groups parameters into a vector.</summary>
-    static bool HasVectorParams(ApiStruct vtable) =>
-        vtable.Slots.Any(s => s.Params.Any(p => p.Has("vector2") || p.Has("vector3")));
+    static bool HasGroupedParams(ApiStruct vtable, Convention convention) =>
+        vtable.Slots.Any(s => s.Params.Any(p => convention.GroupOf(p) is not null));
 
     /// <summary>
     /// How long the managed handler must stay reachable after the call that registered it.
@@ -2240,7 +2230,7 @@ public static class CSharpBackend
         var name = SlotName(slot);
         var access = owned is not null && owned.Release == slot ? "internal" : "public";
         var ownedReturn = owned is not null && owned.Answers(slot.Returns) ? owned : null;
-        var lanes = VectorLanes(slot.Params);
+        var lanes = GroupedLanes(slot.Params, convention);
         var callbacks = CallbackPairs(model, cs, convention);
         var groups = ClosureGroups(model, slot, callbacks, owner, ownerDrains, convention);
         var completion = CompletionOf(model, cs, convention, owned);
@@ -2283,7 +2273,7 @@ public static class CSharpBackend
                 .Where(p => !lanes.TryGetValue(p, out var l) || l.Leads)
                 .Where(p => callbacks.All(c => c.Ctx != p))
                 .Select(p => (Param: p, Text: lanes.TryGetValue(p, out var l)
-                    ? $"Vector{l.Arity} {Idioms.Ident(l.Vector)}"
+                    ? $"{l.Type} {Idioms.Ident(l.Group)}"
                     : callbacks.FirstOrDefault(c => c.Fn == p) is { } cb
                         ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
                     : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
@@ -2760,7 +2750,7 @@ public static class CSharpBackend
                 ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local")
             : cs.Sequences.FirstOrDefault(s => s.Count == p) is { } asCount
                 ? $"({CsType(model, asCount.Count.Type, convention)}){Idioms.Ident(asCount.Seq.Name!)}.Length"
-            : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
+            : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Group)}.{lane.Lane}"
             : p.Has("provider") ? $"{Idioms.Ident(p.Name!)}.Native"
             : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
             : p.Has("ctx") ? $"({CTypes.Normalize(p.Type)}){Idioms.Ident(p.Name!)}"

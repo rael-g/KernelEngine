@@ -832,11 +832,11 @@ internal static class GeneratorShapeCases
             var m = new ApiModel();
             foreach (var (name, lanes, tags) in new (string, string[], string[])[]
                 {
-                    ("ke_vec2", ["x", "y"], []), ("ke_vec3", ["x", "y", "z"], []),
-                    ("ke_vec4", ["x", "y", "z", "w"], []), ("ke_quat", ["x", "y", "z", "w"], ["quaternion"]),
+                    ("ke_vec2", ["x", "y"], ["vector"]), ("ke_vec3", ["x", "y", "z"], ["vector"]),
+                    ("ke_vec4", ["x", "y", "z", "w"], ["vector"]), ("ke_quat", ["x", "y", "z", "w"], ["quaternion"]),
                 })
                 m.Structs.Add(new ApiStruct(name, null, tags, lanes.Select(l => new ApiField(l, "float", [], null)).ToList(), []));
-            m.Structs.Add(new ApiStruct("ke_mat4", null, [], [new ApiField("m", "float[16]", [], null)], []));
+            m.Structs.Add(new ApiStruct("ke_mat4", null, ["matrix"], [new ApiField("m", "float[16]", [], null)], []));
             return m;
         }
 

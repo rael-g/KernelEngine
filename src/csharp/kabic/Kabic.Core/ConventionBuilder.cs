@@ -17,6 +17,7 @@ public sealed class ConventionBuilder
     FieldTableConvention? fieldTable;
     readonly List<ErrorKindSpec> errors = [];
     readonly Dictionary<string, string> handleTypes = [], typeNames = [];
+    readonly List<IShapePack> packs = [];
 
     /// <summary>The spellings that mark what a symbol is: its prefix and the suffix of a handle, a factory, a component and a parameter bag.</summary>
     public ConventionBuilder Symbols(string prefix, string handle, string factory, string component, string parameters)
@@ -81,6 +82,13 @@ public sealed class ConventionBuilder
         return this;
     }
 
+    /// <summary>Adds a pack of types the ABI has beyond C's own.</summary>
+    public ConventionBuilder Use(IShapePack pack)
+    {
+        packs.Add(pack);
+        return this;
+    }
+
     /// <summary>A C owner-wrapper handle type and the managed type a caller holds instead.</summary>
     public ConventionBuilder AddHandleType(string cType, string managed)
     {
@@ -129,5 +137,6 @@ public sealed class ConventionBuilder
         HandleTypes = new Dictionary<string, string>(handleTypes),
         TypeNameOverrides = new Dictionary<string, string>(typeNames),
         FieldTable = fieldTable,
+        Packs = packs.ToList(),
     };
 }

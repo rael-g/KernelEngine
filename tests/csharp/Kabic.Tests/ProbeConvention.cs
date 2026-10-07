@@ -1,8 +1,11 @@
+using Kabic.Numerics;
+
 namespace Kabic.Tests;
 
 internal static class ProbeConvention
 {
     public static readonly Convention Value = new ConventionBuilder()
+        .UseNumerics()
         .Symbols("ke_", "_handle", "_create", "_component", "_params")
         .Booleans("ke_bool")
         .Bindings("kernel_engine", "KernelEngine.Common.Native")

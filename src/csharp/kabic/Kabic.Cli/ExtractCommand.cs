@@ -39,7 +39,7 @@ internal static class ExtractCommand
         try
         {
             json = Extraction.Run(new Extraction.Request(headers, includeDirs, auxHeaders, composeHeaders, zigOverride,
-                Convention.Load(manifest ?? Path.Combine("scripts", "api_domains.json"))));
+                BuiltinConventions.Load(manifest ?? Path.Combine("scripts", "api_domains.json"))));
         }
         catch (InvalidOperationException e)
         {
