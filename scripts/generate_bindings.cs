@@ -20,12 +20,15 @@ await EnsureClangResourceDir(resourceDir, ClangVersion);
 var extraArgs = new[] { "-a", $"-resource-dir={resourceDir}", "-r", "uint64_t=ulong", "-r", "int64_t=long" };
 
 Dictionary<string, string>? env = null;
+string[] generator = ["dotnet", "tool", "run", "ClangSharpPInvokeGenerator"];
 if (!OperatingSystem.IsWindows())
 {
     var nugetPackages = Environment.GetEnvironmentVariable("NUGET_PACKAGES") ?? GlobalPackagesFolder(csharpDir);
     var libclangDir = Path.Combine(nugetPackages, "clangsharppinvokegenerator.linux-x64", "21.1.8.2", "tools", "any", "linux-x64");
     if (Directory.Exists(libclangDir))
     {
+        var executable = Path.Combine(libclangDir, "ClangSharpPInvokeGenerator");
+        if (File.Exists(executable)) generator = [executable];
         var existing = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
         env = new Dictionary<string, string>
         {
@@ -58,7 +61,7 @@ try
             try
             {
                 File.WriteAllText(probe, WithOutput(File.ReadAllLines(rsp), target));
-                string[] checkCommand = ["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", $"@{probe}", .. extraArgs];
+                string[] checkCommand = [.. generator, $"@{probe}", .. extraArgs];
                 Run(checkCommand, Path.GetDirectoryName(rsp)!, env, quiet: true);
             }
             finally
@@ -92,7 +95,7 @@ try
             Directory.Delete(committedDir, recursive: true);
         }
 
-        string[] command = ["dotnet", "tool", "run", "ClangSharpPInvokeGenerator", $"@{rsp}", .. extraArgs];
+        string[] command = [.. generator, $"@{rsp}", .. extraArgs];
         var (exitCode, stdout, stderr) = Run(command, Path.GetDirectoryName(rsp)!, env);
 
         var wrote = committedDir is not null && Directory.Exists(committedDir)
