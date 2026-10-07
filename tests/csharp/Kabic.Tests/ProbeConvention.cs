@@ -16,17 +16,7 @@ internal static class ProbeConvention
         ErrorKindType = "ke_error_type",
         ErrorIsFunction = "ke_error_is",
         ErrorGeneralSingleton = "KE_ERROR_GENERAL",
-        ErrorKinds =
-        [
-            new("NotFound", "KE_ERROR_NOT_FOUND"),
-            new("Io", "KE_ERROR_IO"),
-            new("OutOfMemory", "KE_ERROR_OUT_OF_MEMORY"),
-            new("InvalidArgument", "KE_ERROR_INVALID_ARGUMENT"),
-            new("NotInitialized", "KE_ERROR_NOT_INITIALIZED"),
-            new("NotSupported", "KE_ERROR_NOT_SUPPORTED"),
-            new("AlreadyExists", "KE_ERROR_ALREADY_EXISTS"),
-        ],
-        ZigErrorAbi = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "zig_error_abi.zig")),
+        ErrorSingletonPrefix = "KE_ERROR_",
         ErrorHelperClass = "NativeErrors",
         CommonManagedNamespace = "KernelEngine.Common",
         CommonBindingsNamespace = "KernelEngine.Common.Native",

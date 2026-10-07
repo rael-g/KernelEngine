@@ -42,7 +42,7 @@ internal static class ZigShapeCases
                 var model = new ApiModel();
             build(model);
             var classified = Classifier.Classify(model, (providers ?? []).ToHashSet(), [], ProbeConvention.Value);
-            var emitted = ZigBackend.Render(model, classified, ProbeConvention.Value, foreign);
+            var emitted = ZigBackend.Render(model, classified, ProbeConvention.Value, foreign, ProbeErrorAbi.Model());
             if (Environment.GetEnvironmentVariable("KE_ZIG_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
             foreach (var needle in contains)

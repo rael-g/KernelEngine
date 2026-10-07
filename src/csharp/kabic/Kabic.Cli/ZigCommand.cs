@@ -1,3 +1,4 @@
+using Kabic.Pipeline;
 using System.Text.Json.Nodes;
 using Kabic;
 using Kabic.Zig;
@@ -60,7 +61,8 @@ internal static class ZigCommand
         var model = ReadModel(domains.First(d => d.Name == domain).Api);
         var convention = Convention.Load(domainsPath);
         var classified = Classifier.Classify(model, providers.ToHashSet(), [], convention);
-        var text = ZigBackend.Render(model, classified, convention, foreign);
+        var text = ZigBackend.Render(model, classified, convention, foreign,
+            Regeneration.ExtractErrorAbi(convention, root, null));
 
         Directory.CreateDirectory(outDir);
         var outPath = Path.Combine(outDir, $"{domain}.zig");

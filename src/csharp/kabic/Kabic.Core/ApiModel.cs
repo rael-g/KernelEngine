@@ -79,6 +79,9 @@ public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IR
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
+/// <summary>An exported global the header declares (<c>extern const T NAME;</c>).</summary>
+public record ApiVariable(string Name, string Type, string? Doc);
+
 public record ApiFunction(string Name, string Returns, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params)
 {
     /// <summary>The tags the function's <c>@return</c> block declared.</summary>
@@ -99,6 +102,7 @@ public class ApiModel
     public List<ApiEnum> Enums { get; } = [];
     public List<ApiStruct> Structs { get; } = [];
     public List<ApiFunction> Functions { get; } = [];
+    public List<ApiVariable> Variables { get; } = [];
 
     /// <summary>
     /// Function-pointer typedefs, keyed by the name a parameter is declared with.
@@ -192,6 +196,11 @@ public static class ApiReader
             {
                 ReturnTags = ReadTags(o, "return_tags"),
             });
+        }
+        foreach (var v in root["variables"]?.AsArray() ?? [])
+        {
+            var o = v!.AsObject();
+            m.Variables.Add(new ApiVariable(Str(o, "name")!, Str(o, "type")!, Str(o, "doc")));
         }
         return m;
     }

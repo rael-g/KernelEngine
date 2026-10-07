@@ -18,10 +18,19 @@ public sealed class ZigBackend
     readonly SortedSet<string> opaque = [];
     readonly Dictionary<string, BagForm> bags = [];
     readonly SortedSet<string> unprojected = [];
+    readonly ApiModel errorAbi;
+    readonly IReadOnlyList<(string Kind, string Singleton)> errorKinds;
 
     ZigBackend(ApiModel model, ClassifiedModel classified, Convention convention,
-        IReadOnlyDictionary<string, ForeignType> foreign)
+        IReadOnlyDictionary<string, ForeignType> foreign, ApiModel errorAbi)
     {
+        this.errorAbi = errorAbi;
+        errorKinds = errorAbi.Variables
+            .Where(v => v.Name != convention.ErrorGeneralSingleton
+                && v.Name.StartsWith(convention.ErrorSingletonPrefix, StringComparison.Ordinal)
+                && Idioms.Base(v.Type) == convention.ErrorKindType)
+            .Select(v => (Idioms.Pascal(v.Name[convention.ErrorSingletonPrefix.Length..]), v.Name))
+            .ToList();
         this.model = model;
         this.classified = classified;
         this.convention = convention;
@@ -36,8 +45,8 @@ public sealed class ZigBackend
     /// never declares.
     /// </summary>
     public static string Render(ApiModel model, ClassifiedModel classified, Convention convention,
-        IReadOnlyDictionary<string, ForeignType>? foreign = null) =>
-        new ZigBackend(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>())
+        IReadOnlyDictionary<string, ForeignType>? foreign, ApiModel errorAbi) =>
+        new ZigBackend(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>(), errorAbi)
             .Render();
 
     string Render()
@@ -54,30 +63,13 @@ public sealed class ZigBackend
 
         foreach (var e in model.Enums.Where(e => !e.External)) RenderEnum(sb, e);
 
-        sb.AppendLine(Preamble(convention));
+        sb.AppendLine(Preamble(convention, errorKinds));
 
         sb.AppendLine("/// The ABI as the header declares it. Nothing above this line is a C name and");
         sb.AppendLine("/// nothing below it is meant to be called by hand.");
-        foreach (var c in model.Callbacks)
-            abi.AppendLine($"    pub const {c.Name} = ?*const fn ({string.Join(", ", c.Lanes.Select(l =>
-                $"{Idioms.Ident(l.Name ?? "_")}: {AbiType(l.Type, l, "")}"))}) "
-                + $"callconv(.c) {AbiType(c.Returns, null, "")};");
-        if (model.Callbacks.Count > 0) abi.AppendLine();
-        foreach (var s in model.Structs.Where(s => !s.External))
-        {
-            abi.AppendLine($"    pub const {s.Name} = extern struct {{");
-            foreach (var f in s.Fields)
-                abi.AppendLine($"        {Idioms.Ident(f.Name)}: {AbiType(f.Type, AsParam(f), "")},");
-            foreach (var slot in s.Slots)
-                abi.AppendLine($"        {Idioms.Ident(slot.Name)}: *const fn ({SlotAbiParams(s, slot)})"
-                    + $" callconv(.c) {AbiReturn(slot, "")},");
-            abi.AppendLine("    };");
-            abi.AppendLine();
-        }
-        foreach (var f in model.Functions)
-            abi.AppendLine($"    pub extern fn {f.Name}({string.Join(", ", f.Params.Select(p =>
-                $"{Idioms.Ident(p.Name ?? "_")}: {AbiType(p.Type, p, "")}"))}) "
-                + $"callconv(.c) {AbiType(f.Returns, null, "")};");
+        var errorDecls = new StringBuilder();
+        Declare(errorAbi, errorDecls);
+        Declare(model, abi);
 
         var projections = new StringBuilder();
         foreach (var v in classified.Providers)
@@ -89,8 +81,7 @@ public sealed class ZigBackend
         foreach (var b in bags.Values) RenderBag(bagTypes, b);
 
         sb.AppendLine("pub const abi = struct {");
-        sb.AppendLine(convention.ZigErrorAbi);
-        sb.Append(AbiErrorTypes(convention));
+        sb.Append(errorDecls);
         foreach (var name in opaque)
         {
             sb.AppendLine("    /// No domain describes this type, so the only thing known about it here is");
@@ -148,6 +139,34 @@ public sealed class ZigBackend
         sb.AppendLine();
     }
 
+    void Declare(ApiModel m, StringBuilder abi)
+    {
+        foreach (var c in m.Callbacks)
+            abi.AppendLine($"    pub const {c.Name} = ?*const fn ({string.Join(", ", c.Lanes.Select(l =>
+                $"{Idioms.Ident(l.Name ?? "_")}: {AbiType(l.Type, l, "")}"))}) "
+                + $"callconv(.c) {AbiType(c.Returns, null, "")};");
+        if (m.Callbacks.Count > 0) abi.AppendLine();
+        foreach (var s in m.Structs.Where(s => !s.External))
+        {
+            abi.AppendLine($"    pub const {s.Name} = extern struct {{");
+            foreach (var f in s.Fields)
+                abi.AppendLine($"        {Idioms.Ident(f.Name)}: {AbiType(f.Type, AsParam(f), "")},");
+            foreach (var slot in s.Slots)
+                abi.AppendLine($"        {Idioms.Ident(slot.Name)}: *const fn ({SlotAbiParams(s, slot)})"
+                    + $" callconv(.c) {AbiReturn(slot, "")},");
+            abi.AppendLine("    };");
+            abi.AppendLine();
+        }
+        foreach (var f in m.Functions)
+            abi.AppendLine($"    pub extern fn {f.Name}({string.Join(", ", f.Params.Select(p =>
+                $"{Idioms.Ident(p.Name ?? "_")}: {AbiType(p.Type, p, "")}"))}) "
+                + $"callconv(.c) {AbiType(f.Returns, null, "")};");
+
+        foreach (var v in m.Variables)
+            abi.AppendLine($"    pub extern const {v.Name}: {AbiType(v.Type, null, "")};");
+        if (m.Variables.Count > 0) abi.AppendLine();
+    }
+
     /// <summary>
     /// The kinds the error hierarchy names, paired with the singleton each is reached by.
     /// One list because three functions have to agree about it: the set a caller catches,
@@ -160,18 +179,18 @@ public sealed class ZigBackend
     /// The error vocabulary every module opens with: the set, the thread-local carrying
     /// what a Zig error set cannot, and the three crossings between the two spellings.
     /// </summary>
-    static string Preamble(Convention convention)
+    static string Preamble(Convention convention, IReadOnlyList<(string Kind, string Singleton)> errorKinds)
     {
         var sb = new StringBuilder(PreambleHead(convention));
         sb.AppendLine("pub const Error = error{");
         sb.AppendLine("    General,");
-        foreach (var (kind, _) in convention.ErrorKinds) sb.AppendLine($"    {kind},");
+        foreach (var (kind, _) in errorKinds) sb.AppendLine($"    {kind},");
         sb.AppendLine("};");
         sb.AppendLine();
 
         sb.AppendLine($"fn raise(err: ?*const abi.{convention.ErrorType}) Error {{");
         sb.AppendLine("    last_error = err;");
-        foreach (var (kind, singleton) in convention.ErrorKinds)
+        foreach (var (kind, singleton) in errorKinds)
             sb.AppendLine($"    if (abi.{convention.ErrorIsFunction}(err, &abi.{singleton})) return Error.{kind};");
         sb.AppendLine("    return Error.General;");
         sb.AppendLine("}");
@@ -180,7 +199,7 @@ public sealed class ZigBackend
         sb.AppendLine(ErrorTypeDoc);
         sb.AppendLine($"fn errorType(e: Error) *const abi.{convention.ErrorKindType} {{");
         sb.AppendLine("    return switch (e) {");
-        foreach (var (kind, singleton) in convention.ErrorKinds)
+        foreach (var (kind, singleton) in errorKinds)
             sb.AppendLine($"        Error.{kind} => &abi.{singleton},");
         sb.AppendLine($"        else => &abi.{convention.ErrorGeneralSingleton},");
         sb.AppendLine("    };");
@@ -190,7 +209,7 @@ public sealed class ZigBackend
         sb.AppendLine(ErrorFromDoc);
         sb.AppendLine($"fn errorFrom(t: ?*const abi.{convention.ErrorKindType}) ?Error {{");
         sb.AppendLine("    const named = t orelse return null;");
-        foreach (var (kind, singleton) in convention.ErrorKinds)
+        foreach (var (kind, singleton) in errorKinds)
             sb.AppendLine($"    if (named == &abi.{singleton}) return Error.{kind};");
         sb.AppendLine("    return Error.General;");
         sb.AppendLine("}");
@@ -220,10 +239,6 @@ public sealed class ZigBackend
         pub threadlocal var last_error: ?*const abi.{{convention.ErrorType}} = null;
 
         """;
-
-    static string AbiErrorTypes(Convention convention) =>
-        string.Concat(convention.ErrorKinds.Select(k => k.Singleton).Prepend(convention.ErrorGeneralSingleton)
-            .Select(s => $"    pub extern const {s}: {convention.ErrorKindType};\n")) + "\n";
 
     /// <summary>
     /// The slot's parameters with its receiver put back. The receiver is not always
@@ -266,7 +281,8 @@ public sealed class ZigBackend
 
         if (depth == 0) return Named(bare, q);
         if (bare is "void") return depth == 1 ? "?*anyopaque" : "*?*anyopaque";
-        if (bare is "char" && depth == 1) return "[*:0]const u8";
+        if (bare is "char" && depth == 1)
+            return p is not null && p.Has("optional") ? "?[*:0]const u8" : "[*:0]const u8";
 
         var inner = Pointee(bare, q);
         var cv = isConst ? "const " : "";
@@ -288,7 +304,7 @@ public sealed class ZigBackend
     string Pointee(string bare, string q)
     {
         var named = Named(bare, q);
-        if (named == q + bare && bare != convention.ErrorType && bare != convention.ErrorKindType
+        if (named == q + bare && !errorAbi.Structs.Any(s => s.Name == bare)
             && !DeclaredHere(bare) && !model.Structs.Any(s => s.Name == bare))
             opaque.Add(bare);
         return named;

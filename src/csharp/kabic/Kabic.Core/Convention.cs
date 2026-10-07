@@ -26,9 +26,6 @@ public sealed record FieldTableConvention(
     IReadOnlyDictionary<string, FieldKind> ValueTypes,
     IReadOnlyDictionary<FieldKind, FieldVariant> Variants);
 
-/// <summary>A kind of failure the ABI names, and the singleton a failure of that kind is reached by.</summary>
-public sealed record ErrorKind(string Name, string Singleton);
-
 public sealed class Convention
 {
     /// <summary>Prefix every public symbol in this ABI carries (<c>ke_input</c>, <c>ke_logger_create</c>).</summary>
@@ -154,11 +151,14 @@ public sealed class Convention
     /// <summary>The singleton a failure reads as when no kind matched.</summary>
     public string ErrorGeneralSingleton { get; init; } = "";
 
-    /// <summary>The kinds the error hierarchy names, in the order a projection declares them.</summary>
-    public IReadOnlyList<ErrorKind> ErrorKinds { get; init; } = [];
+    /// <summary>Prefix of the singleton a failure kind is reached by (<c>KE_ERROR_</c>); what follows it names the kind.</summary>
+    public string ErrorSingletonPrefix { get; init; } = "";
 
-    /// <summary>Zig declarations of the error ABI, written by hand because no description owns them.</summary>
-    public string ZigErrorAbi { get; init; } = "";
+    /// <summary>Header, relative to the repository root, that declares the failure types, the singletons and the functions that read them.</summary>
+    public string ErrorAbiHeader { get; init; } = "";
+
+    /// <summary>Include directories the error header is read with, relative to the repository root.</summary>
+    public IReadOnlyList<string> ErrorAbiIncludeDirs { get; init; } = [];
 
     /// <summary>The managed class that raises a failure from the native struct and back (<c>ThrowIfFailed</c>, <c>FromNative</c>, <c>ToNative</c>).</summary>
     public string ErrorHelperClass { get; init; } = "";
@@ -179,7 +179,7 @@ public sealed class Convention
     public string ErrorLaneName { get; init; } = "out_error";
 
     /// <summary>Reads the <c>convention</c> object of a manifest.</summary>
-    public static Convention FromJson(System.Text.Json.Nodes.JsonObject json, string zigErrorAbi = "")
+    public static Convention FromJson(System.Text.Json.Nodes.JsonObject json)
     {
         static string Text(System.Text.Json.Nodes.JsonObject o, string key) =>
             o[key]?.GetValue<string>() ?? throw new InvalidOperationException($"the convention declares no '{key}'");
@@ -206,8 +206,9 @@ public sealed class Convention
             ErrorKindType = Text(json, "errorKindType"),
             ErrorIsFunction = Text(json, "errorIsFunction"),
             ErrorGeneralSingleton = Text(json, "errorGeneralSingleton"),
-            ErrorKinds = (json["errorKinds"]?.AsArray() ?? []).Select(k => new ErrorKind(k!["name"]!.GetValue<string>(), k["singleton"]!.GetValue<string>())).ToList(),
-            ZigErrorAbi = zigErrorAbi,
+            ErrorSingletonPrefix = Text(json, "errorSingletonPrefix"),
+            ErrorAbiHeader = Text(json, "errorAbiHeader"),
+            ErrorAbiIncludeDirs = (json["errorAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()).ToList(),
             ErrorHelperClass = Text(json, "errorHelperClass"),
             CommonManagedNamespace = Text(json, "commonManagedNamespace"),
             VectorTypes = (json["vectorTypes"]?.AsObject() ?? []).ToDictionary(
@@ -239,12 +240,7 @@ public sealed class Convention
     }
 
     /// <summary>Reads the <c>convention</c> object of the manifest at <paramref name="manifestPath"/>.</summary>
-    public static Convention Load(string manifestPath)
-    {
-        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject()["convention"]?.AsObject()
-            ?? throw new InvalidOperationException($"{manifestPath} has no 'convention' object");
-        var abiFile = json["zigErrorAbiFile"]?.GetValue<string>();
-        var abi = abiFile is null ? "" : File.ReadAllText(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!, abiFile));
-        return FromJson(json, abi);
-    }
+    public static Convention Load(string manifestPath) =>
+        FromJson(System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject()["convention"]?.AsObject()
+            ?? throw new InvalidOperationException($"{manifestPath} has no 'convention' object"));
 }

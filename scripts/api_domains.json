@@ -15,16 +15,9 @@
     "errorKindType": "ke_error_type",
     "errorIsFunction": "ke_error_is",
     "errorGeneralSingleton": "KE_ERROR_GENERAL",
-    "errorKinds": [
-      { "name": "NotFound", "singleton": "KE_ERROR_NOT_FOUND" },
-      { "name": "Io", "singleton": "KE_ERROR_IO" },
-      { "name": "OutOfMemory", "singleton": "KE_ERROR_OUT_OF_MEMORY" },
-      { "name": "InvalidArgument", "singleton": "KE_ERROR_INVALID_ARGUMENT" },
-      { "name": "NotInitialized", "singleton": "KE_ERROR_NOT_INITIALIZED" },
-      { "name": "NotSupported", "singleton": "KE_ERROR_NOT_SUPPORTED" },
-      { "name": "AlreadyExists", "singleton": "KE_ERROR_ALREADY_EXISTS" }
-    ],
-    "zigErrorAbiFile": "zig_error_abi.zig",
+    "errorSingletonPrefix": "KE_ERROR_",
+    "errorAbiHeader": "src/zig/common/include/kernel_engine/common/error.h",
+    "errorAbiIncludeDirs": ["src/zig/common/include"],
     "errorHelperClass": "NativeErrors",
     "commonManagedNamespace": "KernelEngine.Common",
     "vectorTypes": {

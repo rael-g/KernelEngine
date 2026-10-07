@@ -25,6 +25,14 @@ public static class Regeneration
             Rooted(spec.AuxHeaders), Rooted(spec.ComposeHeaders), zig, convention);
     }
 
+    public static ApiModel ExtractErrorAbi(Convention convention, string rootDir, string? zig)
+    {
+        string Rooted(string path) => Path.Combine(rootDir, path);
+        var json = Extraction.Run(new Extraction.Request([Rooted(convention.ErrorAbiHeader)],
+            convention.ErrorAbiIncludeDirs.Select(Rooted).ToList(), [], [], zig, convention));
+        return ApiReader.Read(System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject());
+    }
+
     public static string ExtractOne(DomainSpec spec, string rootDir, string? zig, Convention convention) =>
         Extraction.Run(RequestFor(spec, rootDir, zig, convention));
 

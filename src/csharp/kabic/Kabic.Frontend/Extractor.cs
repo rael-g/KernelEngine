@@ -57,6 +57,11 @@ public static class Extractor
                     api.Functions.Add(ExtractFunction(node, name, errors));
                     break;
 
+                case "VarDecl" when name is not null && node["storageClass"]?.GetValue<string>() == "extern" && HasSymbol(node):
+                    api.Variables.Add(new ApiVariable(name, node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "",
+                        DocParser.Parse(node).Summary is { Length: > 0 } doc ? doc : null));
+                    break;
+
                 case "TypedefDecl" when name is not null:
                 {
                     var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
