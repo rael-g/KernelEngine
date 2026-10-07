@@ -42,15 +42,13 @@ does not enter the hash.
 `scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native --cache-dir build/zig-cache`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, and `gates` runs every `scripts/check_*.cs` it finds. With no stage it runs all four in that order and prints each step's time. `--keep-going` does not stop at the first failing step.
 
 `dotnet test KernelEngine.slnx` builds every project the solution lists, so each C# example is
-compiled, and runs the three projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`).
+compiled, and runs the four projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`, and `Kabic`, whose cases pin the shape each backend emits for a synthetic header).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The eleven gates are the `kabic check` commands `drift`, `bindings`, `abi-layout`, `api-coverage`, `component-fields`,
-`generator-contract` and `reconstruction`, and the scripts `check_generator_shapes`,
-`check_managed_handwritten`, `check_out_params` and `check_zig_shapes`. The scripts are found by `verify.cs` rather than
+The nine gates are the `kabic check` commands `drift`, `bindings`, `abi-layout`, `api-coverage`, `component-fields`,
+`generator-contract` and `reconstruction`, and the scripts `check_managed_handwritten` and `check_out_params`. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
-`check_generator_shapes` and `check_zig_shapes` are run with `--no-cache`, since a cached build of the
-generator would answer about the wrong generator. What each one fails on is in
+What each one fails on is in
 `docs/architecture/kabic.md`. They are Linux-only: they compare generated text against headers and
 read no compiler or linker output, so the answer cannot differ by runner.
 
@@ -67,5 +65,5 @@ body. It runs after the push, so it reports a violation and does not prevent one
   nothing. A defect that only shows when a program starts is not caught here.
 - **Coverage.** `scripts/coverage.cs` is not called.
 - **Artifacts.** The workflow uploads nothing: the libraries it builds are discarded with the runner.
-- **Zig generation.** Nothing calls `kabic zig`; `check_zig_shapes` exercises the Zig
+- **Zig generation.** Nothing calls `kabic zig`; the Zig shape tests of `Kabic.Tests` exercise the Zig
   backend on synthetic shapes only.

@@ -118,7 +118,7 @@ carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.ym
 ## The gates
 
 Each gate is a `kabic check <name>` command or a file-based `dotnet run scripts/<name>.cs`, and exits non-zero on failure. `ci.yml`
-runs all eleven through `scripts/verify.cs` (see `docs/conventions/ci.md`).
+runs all nine through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
@@ -127,8 +127,6 @@ runs all eleven through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 | `kabic check reconstruction` | any file `kabic generate --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
 | `kabic check api-coverage` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `bindings` entry, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
 | `check_out_params.cs` | a parameter named `out` or `out_*`, other than `out_error`, carries no `[out]` tag (`check_out_params.cs:57-68`); one exclusion is recorded |
-| `check_generator_shapes.cs` | for a given synthetic header shape, the C# backend's text lacks a required fragment or holds a forbidden one; run with `--no-cache` so the current backend is the one checked |
-| `check_zig_shapes.cs` | the same, against the Zig backend (`check_zig_shapes.cs:26-33`) |
 | `kabic check generator-contract` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
 | `kabic check component-fields` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
 | `check_managed_handwritten.cs` | the count of hand-written `.cs` files under `src/csharp` (excluding `Generated`, `*.g.cs`, `kabic/`) goes above the ceiling, or stays below it (`check_managed_handwritten.cs:17`, `:35-47`) |

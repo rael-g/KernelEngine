@@ -65,5 +65,6 @@
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Runtime.Tests/KernelEngine.Runtime.Tests.csproj" />
+    <Project Path="tests/csharp/Kabic.Tests/Kabic.Tests.csproj" />
   </Folder>
 </Solution>

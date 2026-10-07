@@ -53,9 +53,7 @@ List<Step> Gates() =>
     .. new[] { "drift", "bindings", "abi-layout", "api-coverage", "component-fields", "generator-contract", "reconstruction" }
         .Select(name => new Step($"kabic check {name}", "dotnet", ["run", "--project", "src/csharp/kabic/Kabic.Cli", "--", "check", name])),
     .. Directory.EnumerateFiles(Path.Combine(rootDir, "scripts"), "check_*.cs").Order()
-        .Select(f => new Step(Path.GetFileName(f), "dotnet",
-            Path.GetFileName(f) is "check_generator_shapes.cs" or "check_zig_shapes.cs"
-                ? ["run", "--no-cache", f] : ["run", f])),
+        .Select(f => new Step(Path.GetFileName(f), "dotnet", ["run", f])),
 ];
 
 int Run(Step step)
