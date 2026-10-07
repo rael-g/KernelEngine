@@ -76,8 +76,10 @@ The eight generic roots are exported by `ke_common` (`error.zig:23-30`). A Zig p
 link `ke_common` fills the error through `Errors(c).fail` in `src/zig/common/kerror.zig:62`, which
 uses a set of type nodes of its own (`kerror.zig:46-49`).
 
-The managed side matches by name, walking `Parent`
-(`src/csharp/common/KernelEngine.Common/KernelErrorType.cs:26-32`).
+The managed side matches the generic root by name, walking `parent` (`NativeErrors.Root`), and throws the
+standard exception for that category: `KeyNotFoundException`, `IOException`, `OutOfMemoryException`,
+`ArgumentException`, `NotSupportedException`, or `InvalidOperationException` for the rest. The cause chain is
+`InnerException`, and the full type name is `Data["ke.error_type"]`.
 
 ### The one sanctioned way to end the process
 

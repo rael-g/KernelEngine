@@ -28,13 +28,13 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
     ke_window* INativeWindow.Native => Handle;
 
     /// <summary>Wraps an owner <c>ke_window_handle</c> and runs window's startup lifecycle hook.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public Window(ke_window_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
         _destroy = handle.destroy;
-        { ke_error* err2 = null; KernelError.ThrowIfFailed(_native->on_initialize(_native, &err2), err2, "on_initialize"); }
+        { ke_error* err2 = null; NativeErrors.ThrowIfFailed(_native->on_initialize(_native, &err2), err2, "on_initialize"); }
     }
 
     /// <summary>Wraps a <c>ke_window*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -54,21 +54,21 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
     }
 
     /// <summary>Processes pending OS events. Call once per frame.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void PollEvents()
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->poll_events(Handle, &err), err, "poll_events");
+        NativeErrors.ThrowIfFailed(Handle->poll_events(Handle, &err), err, "poll_events");
     }
 
     /// <summary>Retrieves the current client-area size in pixels.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public (int Width, int Height) GetSize()
     {
         int width;
         int height;
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->get_size(Handle, &width, &height, &err), err, "get_size");
+        NativeErrors.ThrowIfFailed(Handle->get_size(Handle, &width, &height, &err), err, "get_size");
         return (width, height);
     }
 

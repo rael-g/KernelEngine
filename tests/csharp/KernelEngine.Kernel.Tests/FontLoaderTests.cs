@@ -98,7 +98,7 @@ public class FontLoaderTests
 
         LastResult = false;
 
-        await Assert.ThrowsAsync<KernelError>(() => loader.LoadFontAsync("test.ttf", 16));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => loader.LoadFontAsync("test.ttf", 16));
 
         LastResult = true;
         unsafe { NativeMemory.Free(h.@ref); }

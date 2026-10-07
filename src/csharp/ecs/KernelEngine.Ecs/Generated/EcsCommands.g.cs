@@ -39,40 +39,40 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
 
     /// <summary>Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.</summary>
     /// <returns>KE_ENTITY_INVALID when the operation could not be recorded.</returns>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ulong Spawn()
     {
         ke_error* err = null;
         var result = Handle->spawn(Handle, &err);
-        if (err != null) throw KernelError.FromNative(err, "spawn");
+        if (err != null) throw NativeErrors.FromNative(err, "spawn");
         return result;
     }
 
     /// <summary>Records giving `entity` the component `cid`, initialised from `size` bytes of `data`. The bytes are copied, so the caller's buffer need not outlive the call. `size` must equal the registered size of `cid`, or be 0 to attach the component without copying bytes into it.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Attach<TData>(ulong entity, uint cid, in TData data) where TData : unmanaged
     {
         fixed (TData* dataPtr = &data)
         {
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->attach(Handle, entity, cid, (void*)dataPtr, (nuint)sizeof(TData), &err), err, "attach");
+            NativeErrors.ThrowIfFailed(Handle->attach(Handle, entity, cid, (void*)dataPtr, (nuint)sizeof(TData), &err), err, "attach");
         }
     }
 
     /// <summary>Records removing component `cid` from `entity`.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Detach(ulong entity, uint cid)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->detach(Handle, entity, cid, &err), err, "detach");
+        NativeErrors.ThrowIfFailed(Handle->detach(Handle, entity, cid, &err), err, "detach");
     }
 
     /// <summary>Records destroying `entity`.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Despawn(ulong entity)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->despawn(Handle, entity, &err), err, "despawn");
+        NativeErrors.ThrowIfFailed(Handle->despawn(Handle, entity, &err), err, "despawn");
     }
 
     /// <summary>Releases the native ecscommands.</summary>

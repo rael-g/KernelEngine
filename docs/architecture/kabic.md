@@ -72,21 +72,25 @@ of what a backend can know.
 `scripts/api_domains.json` is the hand-written manifest. Each entry of `domains` names the
 `headers`, `includeDirs`, `apiJson`, the C# `namespace` and `nativeNamespace`, the `outDir`, and
 optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHeaders` and `cOut`
-(the C field-table target). `scripts/regenerate_api.cs` walks it in one process: it extracts every domain in parallel
+(the C field-table target). `kabic generate` walks it in one process: it extracts every domain in parallel
 (`Regeneration.ExtractAll`), then generates the C# and, for entries with `cOut`, the C field table
 (`Regeneration.GenerateOne`, `Regeneration.cs:31-38`).
 
 ## The Classifier
 
 `Classifier.Classify(model, explicitProviders, explicitCallbacks, convention)` (`Classifier.cs:88`)
-decides what each struct is and what shape each slot has. `Convention.KernelEngine`
-(`Convention.cs:106-125`) holds the project's spellings, so the classifier states nothing about
-`ke_`:
+decides what each struct is and what shape each slot has. A `Convention`, built by `ConventionBuilder` (its
+source is the `convention` object of `api_domains.json`, `Convention.Load`), holds the project's spellings, so the
+classifier states nothing about `ke_`. A failure kind is declared with `AddError(singleton, nativeName, managed, zig, extends)`:
+the Zig error set and the generated `NativeErrors.Kinds.g.cs` both come from that list, and the error header only
+has to export each singleton. `managed` is any exception type with a `(string, Exception?)` constructor; with
+`extends`, kabic declares it itself, deriving from that type. A convention that declares no kind reads every failure
+as a plain `Exception`:
 
 - a vtable is a struct with slots that is not a handle (`_handle`) and not a parameter bag
   (`_params`); it is a *provider* when a `<name>_handle` struct or a `<name>_create` function exists
   (`Classifier.cs:93`, `:105-110`);
-- a slot is *fallible* when its last parameter is `ke_error**` (`Convention.cs:83`); the parameter
+- a slot is *fallible* when its last parameter is `ke_error**` (`Convention.IsErrorOutParam`); the parameter
   is removed from the projected signature (`Classifier.cs:196-197`);
 - the resulting `SlotShape` is one of `Fallible`, `Try`, `ReturnsOutParam`, `TupleOutParams`,
   `Plain` (`Classifier.cs:4`, `:286-290`);
@@ -97,12 +101,23 @@ A description the classifier cannot classify throws `InvalidOperationException` 
 fails: a slot that answers, fails and writes a value (`Classifier.cs:293-298`), an unmatched
 `array_of` or `bytes_of` name, two written-back parameters that would project under one name.
 
+## Packs
+
+kabic knows only what C itself has. A family of types that some ABIs have and some languages can spell, vectors,
+quaternions and matrices for one, is a *pack*: an `IShapePack` that recognises the types from what a header declares
+(`[vector]`, `[quaternion]` and `[matrix]` on a struct, a bare `float[2..4]`, `[vector2:name]` on a run of parameters),
+projects each into the languages it knows (`Languages.CSharp`, `Languages.FieldTable`), and names what the generated code
+then has to import (a `using` in C#, an `#include` in C++, an `@import` in Zig) and which libraries it has to reference.
+A language the pack does not know keeps the plain struct. The numerics pack is `Kabic.Numerics`; the manifest turns it
+on with `"packs": ["numerics"]`, and `Kabic.Packs` resolves the names of the packs kabic ships. A pack of another
+project is added with `ConventionBuilder.Use`.
+
 ## The three backends
 
 | backend | driver | emits | when it cannot render a form |
 |---|---|---|---|
 | `Kabic.CSharpBackend` | `Kabic.Pipeline.Generation.CSharp` | enums, value structs, views, providers with a contract interface, callback interfaces, node types, free-function groups (`Generation.cs:21-115`) | throws `InvalidOperationException`; no catch, so the domain run fails |
-| `Kabic.ZigBackend` | `scripts/generate_zig.cs` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:91-92`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:497`) and listed in the module's header comment (`ZigBackend.cs:110-115`); the other slots are still emitted |
+| `Kabic.ZigBackend` | `kabic zig` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:91-92`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:497`) and listed in the module's header comment (`ZigBackend.cs:110-115`); the other slots are still emitted |
 | `Kabic.CBackend` | `Kabic.Pipeline.Generation.CFieldTable` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:40-50`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:105-107`) |
 
 The C backend leaves a field out of its tables when the field is `[output]` or has no scene-file
@@ -111,42 +126,38 @@ spelling (`CBackend.cs:133`).
 The Zig backend refuses a raw callback, an opaque payload, a `[closure]` that names no state
 parameter, a consumer vtable with other than one untyped field, and a consumer slot that reports
 failure (`ZigBackend.cs:521-524`, `:723-738`, `:804-813`). It learns where a type from another
-domain lives by reading the other domains' `ke_api.json` (`generate_zig.cs:44-55`); the manifest
+domain lives by reading the other domains' `ke_api.json` (`ZigCommand.cs`); the manifest
 carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.yml` calls
-`generate_zig.cs`, so no generated Zig is in the tree.
+`kabic zig`, so no generated Zig is in the tree.
 
 ## The gates
 
-Each gate is a file-based `dotnet run scripts/<name>.cs` that exits non-zero on failure. `ci.yml`
-runs all twelve through `scripts/verify.cs` (see `docs/conventions/ci.md`).
+Each gate is a `kabic check <name>` command or a file-based `dotnet run scripts/<name>.cs`, and exits non-zero on failure. `ci.yml`
+runs all nine through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
-| `check_api_drift.cs` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory; exits 1 for that. When the extraction or generation itself cannot run it exits 2 and says it compared nothing, because that is a broken tool, not drift |
+| `kabic check drift` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory; exits 1 for that. When the extraction or generation itself cannot run it exits 2 and says it compared nothing, because that is a broken tool, not drift |
 | `check_abi_layout.cs` | the size, alignment or a member offset of any struct or vtable the contract headers declare differs from `scripts/abi_layout.snapshot`, which a C compiler probe regenerates; an intended change is recorded with `-- --update` |
-| `check_reconstruction.cs` | any file `regenerate_api.cs --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
-| `check_api_coverage.cs` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `.rsp`, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
-| `check_out_params.cs` | a parameter named `out` or `out_*`, other than `out_error`, carries no `[out]` tag (`check_out_params.cs:57-68`); one exclusion is recorded |
-| `check_generator_shapes.cs` | for a given synthetic header shape, the C# backend's text lacks a required fragment or holds a forbidden one; run with `--no-cache` so the current backend is the one checked |
-| `check_zig_shapes.cs` | the same, against the Zig backend (`check_zig_shapes.cs:26-33`) |
+| `kabic check reconstruction` | any file `kabic generate --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
+| `kabic check api-coverage` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `bindings` entry, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
+| `kabic check out-params` | a parameter named `out` or carrying the convention's out prefix, other than its failure lane, carries no `[out]` tag |
 | `check_generator_contract.cs` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
 | `check_component_fields.cs` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
 | `check_managed_handwritten.cs` | the count of hand-written `.cs` files under `src/csharp` (excluding `Generated`, `*.g.cs`, `kabic/`) goes above the ceiling, or stays below it (`check_managed_handwritten.cs:17`, `:35-47`) |
-| `check_rsp_drift.cs` | a versioned `.rsp` or umbrella header differs from what `generate_rsp.cs` derives from `api_domains.json` and the headers (`generate_rsp.cs --check`); editing one by hand fails it |
-| `check_bindings_drift.cs` | what ClangSharp generates from a `.rsp`'s headers into a temporary directory differs, byte for byte or by file set, from the committed `Generated/` tree (`generate_bindings.cs --check`; the `.rsp` is copied beside itself with `--output` rewritten) |
+| `kabic check bindings` | what ClangSharp generates from a binding's headers into a temporary directory differs, byte for byte or by file set, from the committed `Generated/` tree |
 
-## The `.rsp` files, which are derived
+## The ClangSharp bindings, which are configured from the manifest
 
-The raw P/Invoke layer is a different generator: ClangSharp, driven by one `.rsp` response file per
-binding under `src/csharp/<domain>/<project>/Native/`. These are generated, not hand-written:
-`scripts/generate_rsp.cs` reads the `bindings` array of `api_domains.json` (`name`, `project`,
-`namespace`, `headers`, `library`, `output`, and optionally `additional` and `macroBindings`) and
-writes each `.rsp`. It computes the include directories by following `#include <kernel_engine/...>`
-transitively from the binding's headers, the `--traverse` list, a `--remap`/`--exclude` pair for every
-type another reachable binding owns, and a `Name.umbrella.h` when a binding has more than one header
-(`Closure` and the `foreach (var b in bindings)` loop in `generate_rsp.cs`). A header claimed by two
-bindings fails the run, and a remap into a project the binding does not reach is never emitted
-(`Reachable`). The `project` of an entry has to be a real project directory, since reachability is read
-from its `.csproj`. `generate_rsp.cs --check` reports every `.rsp` that differs from what the headers
-describe without writing, and `check_rsp_drift.cs` runs it. `scripts/generate_bindings.cs` then runs
-ClangSharp over every `.rsp` it finds. Never edit a `.rsp`: change the manifest entry or the generator.
+The raw P/Invoke layer is a different generator: ClangSharp, used as a library by `Kabic.ClangSharpBackend`
+and nothing else. `kabic bindings` reads the `bindings` array of `api_domains.json` (`name`, `project`,
+`namespace`, `headers`, `library`, `output`, and optionally `additional` and `macroBindings`) and builds
+one configuration per entry in memory (`BindingsPlanner`). It computes the include directories by following
+`#include <kernel_engine/...>` transitively from the binding's headers, the traversal list, a remap and an
+exclude for every type another reachable binding owns, and an umbrella header under `build/kabic/` when a
+binding has more than one header. A header claimed by two bindings fails the run, and a remap into a
+project the binding does not reach is never emitted (`Reachable`). The `project` of an entry has to be a
+real project directory, since reachability is read from its `.csproj`. `kabic bindings --print-config`
+prints what each binding is given without running ClangSharp, and `kabic check bindings` reports every
+binding whose committed output differs from what the headers generate. A failing run keeps the previous
+output of that binding.

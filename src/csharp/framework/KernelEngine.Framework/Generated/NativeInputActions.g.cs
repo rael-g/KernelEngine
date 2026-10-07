@@ -60,14 +60,14 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
         _borrowed = borrowed;
     }
 
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Load(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->load(Handle, (sbyte*)pathPtr, &err), err, "load");
+            NativeErrors.ThrowIfFailed(Handle->load(Handle, (sbyte*)pathPtr, &err), err, "load");
         }
     }
 
@@ -91,36 +91,36 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
         }
     }
 
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void BindKey(int actionId, ke_key key)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->bind_key(Handle, actionId, key, &err), err, "bind_key");
+        NativeErrors.ThrowIfFailed(Handle->bind_key(Handle, actionId, key, &err), err, "bind_key");
     }
 
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void BindMouseButton(int actionId, ke_mouse_button button)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->bind_mouse_button(Handle, actionId, button, &err), err, "bind_mouse_button");
+        NativeErrors.ThrowIfFailed(Handle->bind_mouse_button(Handle, actionId, button, &err), err, "bind_mouse_button");
     }
 
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void BindKeyPair(int actionId, ke_key negative, ke_key positive)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->bind_key_pair(Handle, actionId, negative, positive, &err), err, "bind_key_pair");
+        NativeErrors.ThrowIfFailed(Handle->bind_key_pair(Handle, actionId, negative, positive, &err), err, "bind_key_pair");
     }
 
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void BindKeyQuad(int actionId, ke_key up, ke_key down, ke_key left, ke_key right)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, up, down, left, right, &err), err, "bind_key_quad");
+        NativeErrors.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, up, down, left, right, &err), err, "bind_key_quad");
     }
 
     /// <summary>Runs one frame of binding evaluation against snapshot, updating polling state and firing on_event for each phase transition. A null on_event updates polling only.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Evaluate(ke_input_snapshot* snapshot, InputActionEvent? onEvent)
     {
         var onEventHandle = onEvent is null ? default : GCHandle.Alloc(onEvent);
@@ -140,7 +140,7 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
             s_parkedCallbackException = null;
             throw parked;
         }
-        KernelError.ThrowIfFailed(ok, err, "evaluate");
+        NativeErrors.ThrowIfFailed(ok, err, "evaluate");
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

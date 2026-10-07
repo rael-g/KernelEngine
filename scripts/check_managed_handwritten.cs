@@ -1,20 +1,8 @@
 #!/usr/bin/env dotnet run
 
-// Counts the managed source still written by hand, and fails when the count goes up.
-//
-// The other checks ask whether generated output matches its headers. All of them pass
-// in a tree where most of the managed surface never went through a generator at all —
-// they only ever look at the generator's own back yard. The goal is no hand-written
-// managed code, so the number that measures the goal is this one: how many .cs files
-// a person still maintains.
-//
-// There is no exclusion list, on purpose. Every category of "but this one is different"
-// argued for so far turned out to be a shape nobody had bothered to declare in a
-// header yet. The ceiling only moves down.
-
 using System.Runtime.CompilerServices;
 
-const int Ceiling = 129;
+const int Ceiling = 128;
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
@@ -53,10 +41,6 @@ return 0;
 
 static IEnumerable<string> Segments(string path) => path.Split('/');
 
-/// <summary>
-/// Names what a file is, so the count reads as a list of things left to do rather than
-/// one opaque number. The order matters: the first match wins.
-/// </summary>
 static string Bucket(string path)
 {
     var name = Path.GetFileName(path);

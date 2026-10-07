@@ -44,6 +44,10 @@
     <Project Path="src/csharp/kabic/Kabic.Frontend/Kabic.Frontend.csproj" />
     <Project Path="src/csharp/kabic/Kabic.CSharpBackend/Kabic.CSharpBackend.csproj" />
     <Project Path="src/csharp/kabic/Kabic.Pipeline/Kabic.Pipeline.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.ClangSharpBackend/Kabic.ClangSharpBackend.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.Numerics/Kabic.Numerics.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.Packs/Kabic.Packs.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.Cli/Kabic.Cli.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input/KernelEngine.Input.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs/KernelEngine.Ecs.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
@@ -63,5 +67,6 @@
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Runtime.Tests/KernelEngine.Runtime.Tests.csproj" />
+    <Project Path="tests/csharp/Kabic.Tests/Kabic.Tests.csproj" />
   </Folder>
 </Solution>

@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/cache
-          key: clang-resource-dir-${{ hashFiles('scripts/generate_bindings.cs') }}
+          key: clang-resource-dir-${{ hashFiles('src/csharp/kabic/Kabic.ClangSharpBackend/ClangResourceDir.cs') }}
 
       - name: Restore Zig global cache
         id: zig-global-cache
@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'src/csharp/dotnet-tools.json') }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
       - name: Build native

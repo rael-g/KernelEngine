@@ -62,7 +62,7 @@ public static class ServiceCollectionExtensions
 
             ke_error* err = null;
             var handle = KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &err);
-            if (handle.@ref == null) throw KernelError.FromNative(err, "window_glfw_create");
+            if (handle.@ref == null) throw NativeErrors.FromNative(err, "window_glfw_create");
             return new KernelEngine.Window.Window(handle);
         }
         finally

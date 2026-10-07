@@ -49,11 +49,12 @@ Console.WriteLine($"{"",5}{"total",-40} {results.Sum(r => r.Seconds),7:F1}s");
 return results.Any(r => r.Exit != 0) ? 1 : 0;
 
 List<Step> Gates() =>
-    Directory.EnumerateFiles(Path.Combine(rootDir, "scripts"), "check_*.cs").Order()
-        .Select(f => new Step(Path.GetFileName(f), "dotnet",
-            Path.GetFileName(f) is "check_generator_shapes.cs" or "check_zig_shapes.cs"
-                ? ["run", "--no-cache", f] : ["run", f]))
-        .ToList();
+[
+    .. new[] { "drift", "bindings", "api-coverage", "reconstruction", "out-params" }
+        .Select(name => new Step($"kabic check {name}", "dotnet", ["run", "--project", "src/csharp/kabic/Kabic.Cli", "--", "check", name])),
+    .. Directory.EnumerateFiles(Path.Combine(rootDir, "scripts"), "check_*.cs").Order()
+        .Select(f => new Step(Path.GetFileName(f), "dotnet", ["run", f])),
+];
 
 int Run(Step step)
 {

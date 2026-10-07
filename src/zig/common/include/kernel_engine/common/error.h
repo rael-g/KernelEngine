@@ -32,18 +32,18 @@ extern "C" {
 /// Names are dotted and domain-scoped: "ke.<domain>.<...>.<reason>".
 typedef struct ke_error_type {
     const char*                  name;    ///< e.g. "ke.window.not_initialized"
-    const struct ke_error_type*  parent;  ///< more generic category, or NULL
+    const struct ke_error_type*  parent;  ///< [optional] more generic category, or NULL
 } ke_error_type;
 
 /// Rich error context filled by the failing callee via KE_ERROR_SET() / KE_ERROR_WRAP().
 /// Points into a thread-local ring buffer — valid until the next two failing calls on the
 /// same thread (depth-2 chain is always safe; deeper chains may alias).
 typedef struct ke_error {
-    const ke_error_type*   type;
-    const char*            message;  ///< human-readable detail
-    const char*            file;     ///< source file (__FILE__ from KE_ERROR_SET)
+    const ke_error_type*   type;     ///< [optional] kind of failure
+    const char*            message;  ///< [optional] human-readable detail
+    const char*            file;     ///< [optional] source file (__FILE__ from KE_ERROR_SET)
     uint32_t               line;     ///< source line (__LINE__ from KE_ERROR_SET)
-    const struct ke_error* cause;    ///< wrapped inner error, or NULL
+    const struct ke_error* cause;    ///< [optional] wrapped inner error, or NULL
 } ke_error;
 
 /// Generic error type singletons (defined in error.c, exported from ke_common.dll).

@@ -25,7 +25,7 @@ public interface IRuntime : IDisposable
     /// <param name="name">Identifies the module in diagnostics.</param>
     /// <param name="onLoad">Registers the module's components and systems.</param>
     /// <param name="onUnload">Releases what the load acquired. A module that acquired nothing leaves it out.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     ulong RegisterModule(string name, ModuleLoad? onLoad, ModuleUnload? onUnload = null);
     /// <summary>Registers a system body against the phase and the component access it declares. Registered from a body, the system takes effect with the next tick and a refusal is not reported.</summary>
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
@@ -36,17 +36,17 @@ public interface IRuntime : IDisposable
     /// <param name="pinnedThread">The worker the body must run on, or 0 to let any wave thread take it.</param>
     /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
     /// <returns>0 when the system was refused.</returns>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false);
     /// <summary>Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     void UnregisterSystem(ulong id);
     /// <summary>The id of the system registered last and still registered, or 0 when there is none.</summary>
     ulong LastSystem();
     /// <summary>Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body's error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     void Tick(float dt);
     /// <summary>Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     void Flush();
 }

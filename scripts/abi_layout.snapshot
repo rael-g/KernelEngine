@@ -216,27 +216,6 @@ ke_physics_2d_handle size=16 align=8
   destroy 8
 
 [physics_components]
-ke_collision_filter_2d size=8 align=4
-  layer 0
-  mask 4
-ke_body_state_2d size=24 align=4
-  x 0
-  y 4
-  angle 8
-  velocity_x 12
-  velocity_y 16
-  angular_velocity 20
-ke_transform_component size=40 align=4
-  position 0
-  rotation 12
-  scale 28
-ke_transform2d_component size=24 align=4
-  position 0
-  rotation 8
-  scale 12
-  depth 20
-ke_world_transform_component size=64 align=4
-  matrix 0
 ke_body2d_component size=40 align=4
   type 0
   position 4
@@ -256,36 +235,8 @@ ke_collider2d_component size=40 align=4
   layer 28
   mask 32
   attached 36
-ke_physics_2d size=104 align=8
-  handle 0
-  set_gravity 8
-  step 16
-  create_body 24
-  destroy_body 32
-  add_box_fixture 40
-  add_circle_fixture 48
-  get_body_state 56
-  set_body_position 64
-  set_body_velocity 72
-  apply_impulse 80
-  set_body_fixed_rotation 88
-  set_body_gravity_scale 96
-ke_physics_2d_handle size=16 align=8
-  ref 0
-  destroy 8
 
 [audio_components]
-ke_transform_component size=40 align=4
-  position 0
-  rotation 12
-  scale 28
-ke_transform2d_component size=24 align=4
-  position 0
-  rotation 8
-  scale 12
-  depth 20
-ke_world_transform_component size=64 align=4
-  matrix 0
 ke_audio_player_component size=260 align=4
   path 0
   volume 256
@@ -386,36 +337,6 @@ ke_render_service_handle size=16 align=8
   destroy 8
 
 [asset_loader]
-ke_mesh_data size=96 align=8
-  vertices 0
-  vertex_count 8
-  indices 16
-  index_count 24
-  material_index 28
-  name 32
-ke_material_data size=96 align=4
-  base_color_r 0
-  base_color_g 4
-  base_color_b 8
-  base_color_a 12
-  metallic 16
-  roughness 20
-  albedo_texture_index 24
-  normal_map_texture_index 28
-  name 32
-ke_texture_data size=280 align=8
-  pixels 0
-  byte_count 8
-  width 12
-  height 16
-  path 20
-ke_model_data size=48 align=8
-  meshes 0
-  mesh_count 8
-  materials 16
-  material_count 24
-  textures 32
-  texture_count 40
 ke_asset_loader size=32 align=8
   handle 0
   load_model 8
@@ -426,19 +347,6 @@ ke_asset_loader_handle size=16 align=8
   destroy 8
 
 [mesh_data]
-ke_vertex size=48 align=4
-  x 0
-  y 4
-  z 8
-  nx 12
-  ny 16
-  nz 20
-  u 24
-  v 28
-  tx 32
-  ty 36
-  tz 40
-  tw 44
 ke_mesh_data size=96 align=8
   vertices 0
   vertex_count 8
@@ -600,17 +508,6 @@ ke_script_host_handle size=16 align=8
   destroy 8
 
 [render_components]
-ke_transform_component size=40 align=4
-  position 0
-  rotation 12
-  scale 28
-ke_transform2d_component size=24 align=4
-  position 0
-  rotation 8
-  scale 12
-  depth 20
-ke_world_transform_component size=64 align=4
-  matrix 0
 ke_camera_component size=24 align=4
   fov 0
   near_plane 4
@@ -663,17 +560,6 @@ ke_sprite2d_component size=196 align=4
   attached 192
 
 [ui_components]
-ke_transform_component size=40 align=4
-  position 0
-  rotation 12
-  scale 28
-ke_transform2d_component size=24 align=4
-  position 0
-  rotation 8
-  scale 12
-  depth 20
-ke_world_transform_component size=64 align=4
-  matrix 0
 ke_ui_font_handle size=4 align=4
   bits 0
 ke_label_glyph_quad size=32 align=4

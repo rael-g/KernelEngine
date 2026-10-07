@@ -11,10 +11,10 @@ public interface IWindow : IDisposable
     /// <summary>Returns true once the user has requested the window to close.</summary>
     bool ShouldClose();
     /// <summary>Processes pending OS events. Call once per frame.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     void PollEvents();
     /// <summary>Retrieves the current client-area size in pixels.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     (int Width, int Height) GetSize();
     /// <summary>Returns the platform-specific native handle (HWND, X11 Window, ...).</summary>
     nint GetNativeHandle();

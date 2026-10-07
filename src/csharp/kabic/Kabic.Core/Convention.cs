@@ -4,6 +4,27 @@ namespace Kabic;
 /// The naming and shape conventions of the C ABI being compiled — everything
 /// `kabic` "knows" about its consumer that is NOT intrinsic to C itself.
 /// </summary>
+/// <summary>How one kind of field is spelled in the generated table.</summary>
+public sealed record FieldVariant(string Constant, string Member);
+
+/// <summary>
+/// How a component struct is described to the runtime that applies a scene file to it:
+/// the entry type of the table, the header declaring it, and the spelling of every kind of
+/// field, by the kind's name: <c>null</c>, <c>bool</c>, <c>int</c>, <c>float</c> and <c>string</c> are C's own, and a
+/// pack names the others. A convention without one has no field tables.
+/// </summary>
+public sealed record FieldTableConvention(
+    string EntryType,
+    string Include,
+    string NameMacroPrefix,
+    IReadOnlyDictionary<string, FieldVariant> Variants);
+
+/// <summary>
+/// One kind of failure the ABI names: the singleton a failure of that kind is reached by, the dotted name
+/// the native type carries, the exception a managed caller catches, and the error a Zig caller switches on.
+/// </summary>
+public sealed record ErrorKindSpec(string Singleton, string NativeName, string Managed, string Zig, string? Extends = null);
+
 public sealed class Convention
 {
     /// <summary>Prefix every public symbol in this ABI carries (<c>ke_input</c>, <c>ke_logger_create</c>).</summary>
@@ -53,10 +74,10 @@ public sealed class Convention
     /// The out-parameter type spelling that makes a slot fallible. A slot returning boolean-true-on-success
     /// whose last parameter is this type reports failure through it rather than through its return value.
     /// </summary>
-    public required string ErrorOutParamType { get; init; }
+    public string ErrorOutParamType => ErrorType + "**";
 
     /// <summary>Boolean return-type spellings that mean "succeeded", paired with <see cref="ErrorOutParamType"/>.</summary>
-    public required IReadOnlyList<string> BooleanReturnTypes { get; init; }
+    public IReadOnlyList<string> BooleanReturnTypes => ["_Bool", "bool", ByteBoolType];
 
     /// <summary>True if <paramref name="structName"/> names an owner-wrapper rather than a real vtable.</summary>
     public bool IsHandleType(string structName) => structName.EndsWith(HandleSuffix);
@@ -99,28 +120,147 @@ public sealed class Convention
     public string StripPrefix(string name) =>
         name.StartsWith(SymbolPrefix) ? name[SymbolPrefix.Length..] : name;
 
-    /// <summary>
-    /// KernelEngine's ABI vocabulary. The one hardcoded instance today; see the
-    /// class remarks for why it is not yet a parameter.
-    /// </summary>
-    public static readonly Convention KernelEngine = new()
+    /// <summary>Prefix of a parameter the callee writes back (<c>out_size</c>), which must carry the <c>[out]</c> tag.</summary>
+    public string OutParamPrefix { get; init; } = "out_";
+
+    /// <summary>Name of the directory under which a public header lives (<c>kernel_engine/audio/audio.h</c>), so a header is addressed without its install prefix.</summary>
+    public string IncludeDirectoryName { get; init; } = "kernel_engine";
+
+    /// <summary>Namespace of the raw bindings every other binding assembly takes its shared types from.</summary>
+    public string CommonBindingsNamespace { get; init; } = "";
+
+    /// <summary>Class that holds the raw P/Invoke methods of a binding assembly.</summary>
+    public string BindingsMethodsClass { get; init; } = "NativeMethods";
+
+    /// <summary>The C typedef for a boolean that crosses the ABI as one byte (<c>ke_bool</c>), which the managed side widens to <c>bool</c>.</summary>
+    public string ByteBoolType { get; init; } = "";
+
+    /// <summary>The C struct a failed call reports through (<c>ke_error</c>).</summary>
+    public string ErrorType { get; init; } = "";
+
+    /// <summary>How component structs are described as field tables, or null when this ABI has none.</summary>
+    public FieldTableConvention? FieldTable { get; init; }
+
+    /// <summary>The C struct that names the kind of a failure (<c>ke_error_type</c>).</summary>
+    public string ErrorKindType { get; init; } = "";
+
+    /// <summary>The exported function that asks whether a failure is of a kind (<c>ke_error_is</c>).</summary>
+    public string ErrorIsFunction { get; init; } = "";
+
+    /// <summary>The singleton a failure reads as when no kind matched.</summary>
+    public string ErrorGeneralSingleton { get; init; } = "";
+
+    /// <summary>The kinds of failure the ABI names, the general one included; <see cref="ErrorGeneralSingleton"/> picks it out.</summary>
+    public IReadOnlyList<ErrorKindSpec> ErrorKinds { get; init; } = [];
+
+    /// <summary>Namespace of <see cref="ErrorHelperClass"/>, which receives the generated mapping from native names to exceptions.</summary>
+    public string ErrorHelperNamespace { get; init; } = "";
+
+    /// <summary>Path, relative to the repository root, of the generated file that maps native error names to exceptions.</summary>
+    public string ErrorKindsOut { get; init; } = "";
+
+    /// <summary>The kind a failure reads as when no other matched.</summary>
+    public ErrorKindSpec GeneralError => ErrorKinds.FirstOrDefault(k => k.Singleton == ErrorGeneralSingleton)
+        ?? new ErrorKindSpec(ErrorGeneralSingleton, "", "Exception", "General");
+
+    /// <summary>The kinds a caller can tell apart: every kind but the general one, in declaration order.</summary>
+    public IEnumerable<ErrorKindSpec> NamedErrors => ErrorKinds.Where(k => k.Singleton != ErrorGeneralSingleton);
+
+    /// <summary>Header, relative to the repository root, that declares the failure types, the singletons and the functions that read them.</summary>
+    public string ErrorAbiHeader { get; init; } = "";
+
+    /// <summary>Include directories the error header is read with, relative to the repository root.</summary>
+    public IReadOnlyList<string> ErrorAbiIncludeDirs { get; init; } = [];
+
+    /// <summary>The managed class that raises a failure from the native struct and back (<c>ThrowIfFailed</c>, <c>FromNative</c>, <c>ToNative</c>).</summary>
+    public string ErrorHelperClass { get; init; } = "";
+
+    /// <summary>Managed namespace the generated projections import for the shared types, beside the bindings namespace.</summary>
+    public string CommonManagedNamespace { get; init; } = "";
+
+    /// <summary>C owner-wrapper handle types and the managed type a caller holds instead.</summary>
+    public IReadOnlyDictionary<string, string> HandleTypes { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>The packs of types this ABI has beyond what C itself provides.</summary>
+    public IReadOnlyList<IShapePack> Packs { get; init; } = [];
+
+    /// <summary>The shape a C type is, as the first pack that recognises it says, or null.</summary>
+    public (IShapePack Pack, TypeShape Shape)? ShapeOf(ApiModel model, string cType)
     {
-        SymbolPrefix = "ke_",
-        HandleSuffix = "_handle",
-        FactorySuffix = "_create",
-        ComponentSuffix = "_component",
-        ParamsSuffix = "_params",
-        ErrorOutParamType = "ke_error**",
-        BooleanReturnTypes = ["_Bool", "bool", "ke_bool"],
-        TypeNameOverrides = new Dictionary<string, string>
-        {
-            ["ke_ecs"] = "EcsRegistry",
-            ["ke_asset_resolver"] = "NativeAssetResolver",
-            ["ke_input_actions"] = "NativeInputActions",
-            ["ke_physics_2d"] = "Physics2D",
-            ["ke_body_type_2d"] = "BodyType2D",
-            ["ke_phase"] = "RuntimePhase",
-            ["ke_access"] = "RuntimeAccess",
-        },
-    };
+        foreach (var pack in Packs)
+            if (pack.Recognize(model, cType) is { } shape)
+                return (pack, shape);
+        return null;
+    }
+
+    /// <summary>How <paramref name="language"/> spells the shape of a C type, or null when it is no shape or the language has no such type.</summary>
+    public string? Project(string language, ApiModel model, string cType) =>
+        ShapeOf(model, cType) is { } found ? found.Pack.Project(language, found.Shape) : null;
+
+    /// <summary>The group a parameter opens, with the pack that groups it.</summary>
+    public (IShapePack Pack, ParamGroup Group)? GroupOf(ApiParam parameter)
+    {
+        foreach (var pack in Packs)
+            if (pack.GroupOf(parameter) is { } group)
+                return (pack, group);
+        return null;
+    }
+
+    /// <summary>Everything the packs say <paramref name="language"/> has to import.</summary>
+    public IEnumerable<string> Imports(string language) => Packs.SelectMany(p => p.Imports(language)).Distinct();
+
+    /// <summary>Every library, beyond the language's own, the packs say <paramref name="language"/> has to reference.</summary>
+    public IEnumerable<string> Libraries(string language) => Packs.SelectMany(p => p.Libraries(language)).Distinct();
+
+    /// <summary>Name of the trailing failure lane, which is never a projected parameter.</summary>
+    public string ErrorLaneName { get; init; } = "out_error";
+
+    /// <summary>Reads the <c>convention</c> object of a manifest into a <see cref="ConventionBuilder"/> and builds it; <paramref name="pack"/> resolves the name of a pack.</summary>
+    public static Convention FromJson(System.Text.Json.Nodes.JsonObject json, Func<string, IShapePack> pack)
+    {
+        static string Text(System.Text.Json.Nodes.JsonObject o, string key) =>
+            o[key]?.GetValue<string>() ?? throw new InvalidOperationException($"the convention declares no '{key}'");
+        static string Or(System.Text.Json.Nodes.JsonObject o, string key, string fallback) => o[key]?.GetValue<string>() ?? fallback;
+
+        var builder = new ConventionBuilder()
+            .Symbols(Text(json, "symbolPrefix"), Text(json, "handleSuffix"), Text(json, "factorySuffix"),
+                Text(json, "componentSuffix"), Text(json, "paramsSuffix"))
+            .Booleans(Text(json, "byteBoolType"))
+            .OutParams(Or(json, "outParamPrefix", "out_"), Or(json, "errorLaneName", "out_error"))
+            .Bindings(Or(json, "includeDirectoryName", "kernel_engine"), Or(json, "commonBindingsNamespace", ""),
+                Or(json, "bindingsMethodsClass", "NativeMethods"))
+            .Managed(Text(json, "commonManagedNamespace"))
+            .Failure(Text(json, "errorType"), Text(json, "errorKindType"), Text(json, "errorIsFunction"),
+                Text(json, "errorGeneralSingleton"), Text(json, "errorAbiHeader"),
+                (json["errorAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()),
+                Text(json, "errorHelperClass"), Text(json, "errorHelperNamespace"), Text(json, "errorKindsOut"));
+
+        foreach (var e in json["errors"]?.AsArray() ?? [])
+            builder.AddError(e!["singleton"]!.GetValue<string>(), e["nativeName"]!.GetValue<string>(),
+                e["managed"]!.GetValue<string>(), e["zig"]?.GetValue<string>(), e["extends"]?.GetValue<string>());
+        foreach (var (cType, managed) in json["handleTypes"]?.AsObject() ?? [])
+            builder.AddHandleType(cType, managed!.GetValue<string>());
+        foreach (var (symbol, name) in json["typeNameOverrides"]?.AsObject() ?? [])
+            builder.AddTypeName(symbol, name!.GetValue<string>());
+        foreach (var name in json["packs"]?.AsArray() ?? [])
+            builder.Use(pack(name!.GetValue<string>()));
+        if (json["fieldTable"] is System.Text.Json.Nodes.JsonObject table)
+            builder.FieldTable(ReadFieldTable(table));
+        return builder.Build();
+    }
+
+    internal static string ZigErrorName(string nativeName) =>
+        string.Concat(nativeName[(nativeName.LastIndexOf('.') + 1)..].Split('_')
+            .Where(p => p.Length > 0).Select(p => char.ToUpperInvariant(p[0]) + p[1..].ToLowerInvariant()));
+
+    static FieldTableConvention ReadFieldTable(System.Text.Json.Nodes.JsonObject table)
+    {
+        return new FieldTableConvention(
+            table["entryType"]!.GetValue<string>(),
+            table["include"]!.GetValue<string>(),
+            table["nameMacroPrefix"]!.GetValue<string>(),
+            table["variants"]!.AsObject().ToDictionary(
+                kv => kv.Key,
+                kv => new FieldVariant(kv.Value!["constant"]!.GetValue<string>(), kv.Value["member"]?.GetValue<string>() ?? "")));
+    }
 }

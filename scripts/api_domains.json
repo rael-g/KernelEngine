@@ -1,5 +1,70 @@
 {
-  "_comment": "Hand-authored manifest and the only input of the kabic pipeline. Each `domains` entry drives extraction to ke_api.json and the C#, C and Zig backends (scripts/regenerate_api.cs); each `bindings` entry drives the ClangSharp .rsp files (scripts/generate_rsp.cs, scripts/generate_bindings.cs). Adding a domain here is what migrating it to kabic means mechanically. Never a derived artifact.",
+  "_comment": "Hand-authored manifest and the only input of the kabic pipeline. Each `domains` entry drives extraction to ke_api.json and the C#, C and Zig backends (kabic generate); each `bindings` entry configures ClangSharp (kabic bindings). Adding a domain here is what migrating it to kabic means mechanically. Never a derived artifact.",
+  "convention": {
+    "packs": ["numerics"],
+    "symbolPrefix": "ke_",
+    "handleSuffix": "_handle",
+    "factorySuffix": "_create",
+    "componentSuffix": "_component",
+    "paramsSuffix": "_params",
+    "outParamPrefix": "out_",
+    "errorLaneName": "out_error",
+    "byteBoolType": "ke_bool",
+    "errorType": "ke_error",
+    "errorKindType": "ke_error_type",
+    "errorIsFunction": "ke_error_is",
+    "errorGeneralSingleton": "KE_ERROR_GENERAL",
+    "errorHelperNamespace": "KernelEngine",
+    "errorKindsOut": "src/csharp/common/KernelEngine.Common/Generated/NativeErrors.Kinds.g.cs",
+    "errors": [
+      { "singleton": "KE_ERROR_GENERAL", "nativeName": "ke.error", "managed": "InvalidOperationException", "zig": "General" },
+      { "singleton": "KE_ERROR_NOT_FOUND", "nativeName": "ke.error.not_found", "managed": "KeyNotFoundException" },
+      { "singleton": "KE_ERROR_IO", "nativeName": "ke.error.io", "managed": "IOException" },
+      { "singleton": "KE_ERROR_OUT_OF_MEMORY", "nativeName": "ke.error.out_of_memory", "managed": "OutOfMemoryException" },
+      { "singleton": "KE_ERROR_INVALID_ARGUMENT", "nativeName": "ke.error.invalid_argument", "managed": "ArgumentException" },
+      { "singleton": "KE_ERROR_NOT_INITIALIZED", "nativeName": "ke.error.not_initialized", "managed": "InvalidOperationException" },
+      { "singleton": "KE_ERROR_NOT_SUPPORTED", "nativeName": "ke.error.not_supported", "managed": "NotSupportedException" },
+      { "singleton": "KE_ERROR_ALREADY_EXISTS", "nativeName": "ke.error.already_exists", "managed": "InvalidOperationException" }
+    ],
+    "errorAbiHeader": "src/zig/common/include/kernel_engine/common/error.h",
+    "errorAbiIncludeDirs": ["src/zig/common/include"],
+    "errorHelperClass": "NativeErrors",
+    "commonManagedNamespace": "KernelEngine.Common",
+    "handleTypes": {
+      "ke_mesh_handle": "KernelEngine.Render.MeshHandle",
+      "ke_material_handle": "KernelEngine.Render.MaterialHandle",
+      "ke_texture_handle": "KernelEngine.Render.TextureHandle",
+      "ke_ui_font_handle": "KernelEngine.Render.FontHandle"
+    },
+    "fieldTable": {
+      "entryType": "ke_component_field",
+      "include": "kernel_engine/ecs/component_field.h",
+      "nameMacroPrefix": "KE_COMPONENT_NAME_",
+      "variants": {
+        "null": { "constant": "KE_VARIANT_NULL" },
+        "bool": { "constant": "KE_VARIANT_BOOL", "member": ".b" },
+        "int": { "constant": "KE_VARIANT_INT", "member": ".i" },
+        "float": { "constant": "KE_VARIANT_FLOAT", "member": ".f" },
+        "string": { "constant": "KE_VARIANT_STRING", "member": ".s" },
+        "vec2": { "constant": "KE_VARIANT_VEC2", "member": ".v2" },
+        "vec3": { "constant": "KE_VARIANT_VEC3", "member": ".v3" },
+        "vec4": { "constant": "KE_VARIANT_VEC4", "member": ".v4" },
+        "quat": { "constant": "KE_VARIANT_QUAT", "member": ".q" }
+      }
+    },
+    "includeDirectoryName": "kernel_engine",
+    "commonBindingsNamespace": "KernelEngine.Common.Native",
+    "bindingsMethodsClass": "NativeMethods",
+    "typeNameOverrides": {
+      "ke_ecs": "EcsRegistry",
+      "ke_asset_resolver": "NativeAssetResolver",
+      "ke_input_actions": "NativeInputActions",
+      "ke_physics_2d": "Physics2D",
+      "ke_body_type_2d": "BodyType2D",
+      "ke_phase": "RuntimePhase",
+      "ke_access": "RuntimeAccess"
+    }
+  },
   "domains": [
     {
       "name": "input",
@@ -182,6 +247,7 @@
         "src/zig/common/include"
       ],
       "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/spatial/kernel_engine/spatial/transform.h",
         "src/c/physics/kernel_engine/physics/physics_2d.h"
       ],
@@ -213,6 +279,7 @@
         "src/zig/common/include"
       ],
       "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ],
       "apiJson": "src/csharp/audio/components.ke_api.json",
@@ -362,6 +429,9 @@
       "name": "spatial",
       "headers": [
         "src/c/spatial/kernel_engine/spatial/transform.h"
+      ],
+      "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h"
       ],
       "includeDirs": [
         "src/c/spatial",
@@ -525,6 +595,7 @@
       "outDir": "src/csharp/render/KernelEngine.Render/Scene",
       "usings": [],
       "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ]
     },
@@ -553,6 +624,7 @@
       "outDir": "src/csharp/render/KernelEngine.Render/Scene",
       "usings": [],
       "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ]
     },

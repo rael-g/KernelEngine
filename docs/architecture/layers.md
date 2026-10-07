@@ -74,16 +74,16 @@ tracking allocator of its own and does not take part.
 
 ## Layer 3 — bindings are generated, never written
 
-Each managed project has a `Native/` directory with an `.rsp` naming the headers to read, the
-library to load and the output namespace
-(`src/csharp/window/KernelEngine.Window.Glfw/Native/Glfw.rsp`). The generated
+Each managed project has a `Native/` directory, and the `bindings` entry of `scripts/api_domains.json`
+for it names the headers to read, the library to load and the output namespace (`Glfw`, for
+`src/csharp/window/KernelEngine.Window.Glfw/Native/`). The generated
 `[DllImport("ke_window_glfw", ... EntryPoint = "ke_window_glfw_create")]` is in
 `.../Native/Generated/NativeMethods.cs:8`.
 
 Two generators feed the layer and they are not interchangeable. ClangSharp produces the raw
 struct-and-function surface from the headers. kabic (`src/csharp/kabic/`) produces the idiomatic
 projection from the same headers' doc tags, and is driven by `scripts/api_domains.json`
-(`scripts/regenerate_api.cs:23`). Both are run by `scripts/`; nothing under `Generated/` is ever
+(`kabic generate`). Both are run by `scripts/`; nothing under `Generated/` is ever
 edited.
 
 ## Layer 4 — managed code reaches native code only through layer 3

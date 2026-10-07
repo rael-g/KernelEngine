@@ -22,7 +22,7 @@ kabic generates one class per vtable from the contract header, into `Generated/<
 ## How a pointer crosses assemblies
 
 No assembly grants another access to its internals. `grep -rn InternalsVisibleTo src tests examples scripts`
-finds one hit, a doc comment (`src/csharp/common/KernelEngine.Common/KernelError.cs:44`). What a
+finds no use of it. What a
 wrapper offers instead is a public interface per domain, declared in the same generated file:
 
 ```csharp
@@ -40,7 +40,7 @@ that borrows the object does exactly that — `Runtime` takes `INativeEcs` and r
 The interface is public, and `Native` is a plain pointer, so any holder of the object can cast to it:
 the mechanism keeps the pointer off the class's own surface, not out of reach.
 `grep -rn 'interface INative' src/csharp` lists them. The same constraint is why
-`KernelError.FromNative` and `KernelError.ToNative` are `public` (`KernelError.cs:46`, `:80`).
+`NativeErrors.FromNative` and `NativeErrors.ToNative` are `public` (`NativeErrors.cs`).
 
 A node type's members follow the same rule from the other side: `Node`'s hooks are
 `protected internal`, so a node declared in another assembly cannot override an `internal` member.
@@ -84,8 +84,8 @@ next depends on the handler's shape:
 | has an error lane and runs inside the registering call (module `on_load`) | written to the native error lane only; the call that registered it throws (`Runtime.g.cs:148-160`, `:119-132`) |
 | has no error lane (`on_unload`, a per-call event callback) | parked in a `[ThreadStatic]` slot, first one wins; rethrown by the call once the native stack has unwound (`Runtime.g.cs:167-178`, `:298-307`) |
 
-`KernelError.ToNative` copies the **message**, prefixed with the context name, into the native record and sets no type
-(`KernelError.cs:80-88`), so only the message survives that lane. A native caller that needs a type
+`NativeErrors.ToNative` copies the **message**, prefixed with the context name, into the native record and sets no type
+(`NativeErrors.cs`), so only the message survives that lane. A native caller that needs a type
 substitutes one: the runtime turns an untyped failure of a system body into the generic type and
 raises it on the tick thread with the system's name as its message
 ([runtime.md](runtime.md#how-a-failure-in-a-body-reaches-the-caller)).
@@ -95,7 +95,7 @@ The managed call that observes the failure is where the original exception comes
 `InvalidOperationException("A handler registered with this provider threw")` carrying the exception
 (or an `AggregateException` of all of them) in place of the native error
 (`Runtime.g.cs:66-73`, `:266-282`; `SceneLoader.g.cs:87-98`). A failure of the native call itself, with
-an empty queue, throws `KernelError`. The queue is read and emptied on every such call, so a failure
+an empty queue, throws the standard exception for the native error's category (`NativeErrors.FromNative`). The queue is read and emptied on every such call, so a failure
 survives until some call asks.
 
 The two scheduler entry points that are not generated have their own channel
@@ -141,6 +141,6 @@ order**, visiting each one's `Dependencies` first. Consequences:
   else.
 
 Unload is the native runtime's reverse order of that same list ([runtime.md](runtime.md#modules)).
-A module whose `OnLoad` throws is refused natively: the exception's message becomes a `KernelError`
-thrown from `RegisterModule` (`Runtime.g.cs:128-131`), the modules before it stay loaded, and the
+A module whose `OnLoad` throws is refused natively: the exception's message becomes a native error, which
+`RegisterModule` throws as the exception for its category (`Runtime.g.cs:128-131`), the modules before it stay loaded, and the
 refused module's `OnUnload` is never called.

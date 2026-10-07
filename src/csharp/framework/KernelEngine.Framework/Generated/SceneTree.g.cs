@@ -53,7 +53,7 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
     }
 
     /// <summary>Creates a node attached under `parent`, or under the root when `parent` is KE_ENTITY_INVALID. The node exists when the call returns.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ulong CreateNode(string name, ulong parent)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
@@ -61,13 +61,13 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         {
             ke_error* err = null;
             var result = Handle->create_node(Handle, (sbyte*)namePtr, parent, &err);
-            if (err != null) throw KernelError.FromNative(err, "create_node");
+            if (err != null) throw NativeErrors.FromNative(err, "create_node");
             return result;
         }
     }
 
     /// <summary>Records the creation of a node into `commands`, with the same placement as create_node. The id is usable as a reference at once; the node exists when `commands` is applied. For a caller that may not touch the world, such as a system body.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ulong CreateNodeDeferred(string name, ulong parent, nint commands)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
@@ -75,25 +75,25 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         {
             ke_error* err = null;
             var result = Handle->create_node_deferred(Handle, (sbyte*)namePtr, parent, (ke_ecs_commands*)commands, &err);
-            if (err != null) throw KernelError.FromNative(err, "create_node_deferred");
+            if (err != null) throw NativeErrors.FromNative(err, "create_node_deferred");
             return result;
         }
     }
 
     /// <summary>Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent. The node is gone when the call returns.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void DestroyNode(ulong entity)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->destroy_node(Handle, entity, &err), err, "destroy_node");
+        NativeErrors.ThrowIfFailed(Handle->destroy_node(Handle, entity, &err), err, "destroy_node");
     }
 
     /// <summary>Records the destruction of a node and its descendants into `commands`, as destroy_node would do it when `commands` is applied.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void DestroyNodeDeferred(ulong entity, nint commands)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, (ke_ecs_commands*)commands, &err), err, "destroy_node_deferred");
+        NativeErrors.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, (ke_ecs_commands*)commands, &err), err, "destroy_node_deferred");
     }
 
 
@@ -102,7 +102,7 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         Handle->destroy_all(Handle);
     }
 
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ulong FindNode(string nameOrPath)
     {
         var nameOrPathBytes = System.Text.Encoding.UTF8.GetBytes(nameOrPath + '\0');
@@ -110,7 +110,7 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         {
             ke_error* err = null;
             var result = Handle->find_node(Handle, (sbyte*)nameOrPathPtr, &err);
-            if (err != null) throw KernelError.FromNative(err, "find_node");
+            if (err != null) throw NativeErrors.FromNative(err, "find_node");
             return result;
         }
     }

@@ -46,7 +46,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     }
 
     /// <summary>Resolves a signal by name, registering it on first use. The payload size is part of the identity, not metadata: two languages naming the same signal with different payload layouts would otherwise alias one id and read each other's bytes at the wrong stride. A second registration under a different size fails instead.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public uint SignalId(string name, uint payloadSize)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
@@ -54,7 +54,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
         {
             uint result;
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->signal_id(Handle, (sbyte*)namePtr, payloadSize, &result, &err), err, "signal_id");
+            NativeErrors.ThrowIfFailed(Handle->signal_id(Handle, (sbyte*)namePtr, payloadSize, &result, &err), err, "signal_id");
             return result;
         }
     }
@@ -73,11 +73,11 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     }
 
     /// <summary>Wires one source entity's signal to one target entity, tagged with a handler selector the receiving language interprets. Connecting the same quadruple twice is a no-op rather than a duplicate delivery.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Connect(ulong source, uint signalId, ulong target, uint handlerId)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->connect(Handle, source, signalId, target, handlerId, &err), err, "connect");
+        NativeErrors.ThrowIfFailed(Handle->connect(Handle, source, signalId, target, handlerId, &err), err, "connect");
     }
 
     /// <summary>Removes a connection previously made by connect(). Returns false when no such connection exists.</summary>
@@ -93,11 +93,11 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     }
 
     /// <summary>Queues one emission for this frame. The payload is copied into frame storage, so the caller's buffer need not outlive the call.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Emit(ulong source, uint signalId, void* payload, uint payloadSize)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->emit(Handle, source, signalId, payload, payloadSize, &err), err, "emit");
+        NativeErrors.ThrowIfFailed(Handle->emit(Handle, source, signalId, payload, payloadSize, &err), err, "emit");
     }
 
     /// <summary>Joins this frame's emissions against the connection table and returns the resulting deliveries. Idempotent within a frame: calling it twice returns the same list rather than duplicating it.</summary>

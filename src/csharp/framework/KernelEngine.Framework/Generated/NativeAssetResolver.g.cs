@@ -49,7 +49,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     }
 
     /// <summary>Resolves an image path into freshly-decoded RGBA8 pixel data. Caller owns the result; release with free_texture. Returns KE_ERROR_NOT_FOUND when the file is missing or the extension is unsupported; KE_ERROR_INVALID_ARGUMENT when no image loader was injected at construction time.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_texture_data* ResolveTexture(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -57,7 +57,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         {
             ke_texture_data* result;
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->resolve_texture(Handle, (sbyte*)pathPtr, &result, &err), err, "resolve_texture");
+            NativeErrors.ThrowIfFailed(Handle->resolve_texture(Handle, (sbyte*)pathPtr, &result, &err), err, "resolve_texture");
             return result;
         }
     }
@@ -69,7 +69,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     }
 
     /// <summary>Resolves a mesh path. "res://primitives/{quad|plane|cube|sphere}" names a baked primitive, built via ke_mesh_shape_bake; a path that names none fails. Caller owns the result; release with free_mesh.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_mesh_shape_data ResolveMesh(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -77,7 +77,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         {
             ke_mesh_shape_data result;
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->resolve_mesh(Handle, (sbyte*)pathPtr, &result, &err), err, "resolve_mesh");
+            NativeErrors.ThrowIfFailed(Handle->resolve_mesh(Handle, (sbyte*)pathPtr, &result, &err), err, "resolve_mesh");
             return result;
         }
     }
@@ -89,7 +89,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     }
 
     /// <summary>Parses a `.material` TOML file into ke_material_spec. Texture fields stay as path strings — feed them back through resolve_texture to materialise.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_material_spec ResolveMaterial(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -97,13 +97,13 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         {
             ke_material_spec result;
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->resolve_material(Handle, (sbyte*)pathPtr, &result, &err), err, "resolve_material");
+            NativeErrors.ThrowIfFailed(Handle->resolve_material(Handle, (sbyte*)pathPtr, &result, &err), err, "resolve_material");
             return result;
         }
     }
 
     /// <summary>Resolves a font file path into a freshly-baked ke_font_data (atlas RGBA8 + glyph metrics). Caller owns the result; release with free_font. Returns KE_ERROR_INVALID_ARGUMENT when no font loader was injected at construction time.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_font_data* ResolveFont(string path, float pixelSize, uint firstCodepoint, uint codepointCount, uint atlasSize)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -111,7 +111,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         {
             ke_font_data* result;
             ke_error* err = null;
-            KernelError.ThrowIfFailed(Handle->resolve_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &result, &err), err, "resolve_font");
+            NativeErrors.ThrowIfFailed(Handle->resolve_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &result, &err), err, "resolve_font");
             return result;
         }
     }
@@ -124,7 +124,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
 
     /// <summary>Resolves and uploads a texture, deduped by `path`. On a cache hit, nothing is decoded. KE_TEXTURE_NONE on failure (see resolve_texture's error cases; upload failure also reports via out_error).</summary>
     /// <param name="core">The render service to upload into.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_texture_handle ResolveTextureInto(ke_render_service* core, string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -132,14 +132,14 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         {
             ke_error* err = null;
             var result = Handle->resolve_texture_into(Handle, core, (sbyte*)pathPtr, &err);
-            if (err != null) throw KernelError.FromNative(err, "resolve_texture_into");
+            if (err != null) throw NativeErrors.FromNative(err, "resolve_texture_into");
             return result;
         }
     }
 
     /// <summary>Resolves and uploads a mesh, deduped by `path`. Resolution is that of resolve_mesh. KE_MESH_NONE on failure.</summary>
     /// <param name="core">The render service to upload into.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_mesh_handle ResolveMeshInto(ke_render_service* core, string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -147,14 +147,14 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         {
             ke_error* err = null;
             var result = Handle->resolve_mesh_into(Handle, core, (sbyte*)pathPtr, &err);
-            if (err != null) throw KernelError.FromNative(err, "resolve_mesh_into");
+            if (err != null) throw NativeErrors.FromNative(err, "resolve_mesh_into");
             return result;
         }
     }
 
     /// <summary>Resolves a `.material` file, resolving/uploading its albedo and normal textures (each deduped by their own path) and creating the material, deduped by `path`. KE_MATERIAL_NONE on failure.</summary>
     /// <param name="core">The render service to upload into.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_material_handle ResolveMaterialInto(ke_render_service* core, string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -162,7 +162,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         {
             ke_error* err = null;
             var result = Handle->resolve_material_into(Handle, core, (sbyte*)pathPtr, &err);
-            if (err != null) throw KernelError.FromNative(err, "resolve_material_into");
+            if (err != null) throw NativeErrors.FromNative(err, "resolve_material_into");
             return result;
         }
     }

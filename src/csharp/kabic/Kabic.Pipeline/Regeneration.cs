@@ -18,34 +18,42 @@ public static class Regeneration
             spec.CFieldTable is null ? null : place(spec.CFieldTable.File));
     }
 
-    public static Extraction.Request RequestFor(DomainSpec spec, string rootDir, string? zig)
+    public static Extraction.Request RequestFor(DomainSpec spec, string rootDir, string? zig, Convention convention)
     {
         List<string> Rooted(IEnumerable<string> paths) => paths.Select(p => Path.Combine(rootDir, p)).ToList();
         return new Extraction.Request(Rooted(spec.Headers), Rooted(spec.IncludeDirs),
-            Rooted(spec.AuxHeaders), Rooted(spec.ComposeHeaders), zig);
+            Rooted(spec.AuxHeaders), Rooted(spec.ComposeHeaders), zig, convention);
     }
 
-    public static string ExtractOne(DomainSpec spec, string rootDir, string? zig) =>
-        Extraction.Run(RequestFor(spec, rootDir, zig));
+    public static ApiModel ExtractErrorAbi(Convention convention, string rootDir, string? zig)
+    {
+        string Rooted(string path) => Path.Combine(rootDir, path);
+        var json = Extraction.Run(new Extraction.Request([Rooted(convention.ErrorAbiHeader)],
+            convention.ErrorAbiIncludeDirs.Select(Rooted).ToList(), [], [], zig, convention));
+        return ApiReader.Read(System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject());
+    }
 
-    public static void GenerateOne(DomainSpec spec, string apiJson, DomainOutput output)
+    public static string ExtractOne(DomainSpec spec, string rootDir, string? zig, Convention convention) =>
+        Extraction.Run(RequestFor(spec, rootDir, zig, convention));
+
+    public static void GenerateOne(DomainSpec spec, string apiJson, DomainOutput output, Convention convention)
     {
         Generation.CSharp(new Generation.CSharpRequest(
             apiJson, spec.Namespace, spec.NativeNamespace, output.OutDir, output.ContractDir,
-            spec.Name, spec.Library, spec.Providers, [], spec.Usings));
+            spec.Name, spec.Library, spec.Providers, [], spec.Usings, convention));
 
         if (spec.CFieldTable is { } c && output.CFieldTableFile is { } file)
-            Generation.CFieldTable(apiJson, file, c.Guard, c.Includes);
+            Generation.CFieldTable(apiJson, file, c.Guard, c.Includes, convention);
     }
 
     public static IReadOnlyDictionary<string, string> ExtractAll(
-        IReadOnlyList<DomainSpec> specs, string rootDir, string? zig)
+        IReadOnlyList<DomainSpec> specs, string rootDir, string? zig, Convention convention)
     {
         var results = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
         var failures = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
         Parallel.ForEach(specs, spec =>
         {
-            try { results[spec.Name] = ExtractOne(spec, rootDir, zig); }
+            try { results[spec.Name] = ExtractOne(spec, rootDir, zig, convention); }
             catch (Exception e) { failures[spec.Name] = e.Message; }
         });
         if (!failures.IsEmpty)

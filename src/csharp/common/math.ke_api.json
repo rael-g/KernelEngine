@@ -3,8 +3,10 @@
   "structs": [
     {
       "name": "ke_vec2",
-      "doc": null,
-      "tags": [],
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
       "fields": [
         {
           "name": "x",
@@ -22,8 +24,10 @@
     },
     {
       "name": "ke_vec3",
-      "doc": null,
-      "tags": [],
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
       "fields": [
         {
           "name": "x",
@@ -47,8 +51,10 @@
     },
     {
       "name": "ke_vec4",
-      "doc": null,
-      "tags": [],
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
       "fields": [
         {
           "name": "x",
@@ -78,8 +84,10 @@
     },
     {
       "name": "ke_quat",
-      "doc": null,
-      "tags": [],
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
       "fields": [
         {
           "name": "x",
@@ -109,8 +117,10 @@
     },
     {
       "name": "ke_mat4",
-      "doc": null,
-      "tags": [],
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
       "fields": [
         {
           "name": "m",

@@ -27,8 +27,6 @@ foreach (var header in Directory.EnumerateFiles(Path.Combine(rootDir, "src"), "*
         nameMacros[m.Groups[1].Value] = m.Groups[2].Value;
 }
 
-/// The table a component name owns, matched through the struct the table was
-/// generated from: KE_COMPONENT_NAME_UI_QUAD -> "ui_quad" -> ke_ui_quad_component_fields.
 string? TableFor(string spelledName)
 {
     var literal = spelledName.StartsWith("KE_COMPONENT_NAME_", StringComparison.Ordinal)

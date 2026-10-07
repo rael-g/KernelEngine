@@ -48,7 +48,7 @@ public unsafe partial class Audio : IDisposable, INativeAudio
     /// <summary>Loads a sound for repeated playback; the backend autodetects the format.</summary>
     /// <param name="path">Filesystem path to the audio file.</param>
     /// <returns>KE_AUDIO_SOUND_INVALID on error.</returns>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public uint LoadSound(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -56,7 +56,7 @@ public unsafe partial class Audio : IDisposable, INativeAudio
         {
             ke_error* err = null;
             var result = Handle->load_sound(Handle, (sbyte*)pathPtr, &err);
-            if (err != null) throw KernelError.FromNative(err, "load_sound");
+            if (err != null) throw NativeErrors.FromNative(err, "load_sound");
             return result;
         }
     }
@@ -70,11 +70,11 @@ public unsafe partial class Audio : IDisposable, INativeAudio
     /// <summary>Plays a sound, restarting it from the beginning if already playing.</summary>
     /// <param name="volume">Playback volume in 0..1.</param>
     /// <param name="loop">Non-zero to restart the sound when it ends.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Play(uint sound, float volume, bool loop)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->play(Handle, sound, volume, loop ? (byte)1 : (byte)0, &err), err, "play");
+        NativeErrors.ThrowIfFailed(Handle->play(Handle, sound, volume, loop ? (byte)1 : (byte)0, &err), err, "play");
     }
 
     /// <summary>Stops a playing sound; no-op when it is not playing.</summary>

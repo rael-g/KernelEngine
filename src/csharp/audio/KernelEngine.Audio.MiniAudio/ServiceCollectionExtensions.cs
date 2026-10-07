@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
 
                 ke_error* err = null;
                 var handle = KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_create(&@params, &err);
-                if (handle.@ref == null) throw KernelError.FromNative(err, "audio_miniaudio_create");
+                if (handle.@ref == null) throw NativeErrors.FromNative(err, "audio_miniaudio_create");
                 return new KernelEngine.Audio.Audio(handle);
             }
         });
