@@ -17,7 +17,7 @@ internal static class GenerateCommand
         IReadOnlyDictionary<string, string> apis;
         try
         {
-            apis = Regeneration.ExtractAll(specs, options.Root, options.Zig);
+            apis = Regeneration.ExtractAll(specs, options.Root, options.Zig, convention);
         }
         catch (InvalidOperationException e)
         {

@@ -8,7 +8,7 @@ public static class Extractor
 {
     public static (ApiModel Model, List<string> Errors) Extract(JsonObject ast, HashSet<string> headerNames,
         Dictionary<string, byte[]> sourceBytes, HashSet<string>? auxHeaderNames = null,
-        HashSet<string>? composeHeaderNames = null)
+        HashSet<string>? composeHeaderNames = null, string symbolPrefix = "")
     {
         var api = new ApiModel();
         var errors = new List<string>();
@@ -53,7 +53,7 @@ public static class Extractor
                     api.Structs.Add(ExtractStruct(node, name, bytes, errors) with { External = compose });
                     break;
 
-                case "FunctionDecl" when name is not null && name.StartsWith("ke_") && HasSymbol(node):
+                case "FunctionDecl" when name is not null && name.StartsWith(symbolPrefix, StringComparison.Ordinal) && HasSymbol(node):
                     api.Functions.Add(ExtractFunction(node, name, errors));
                     break;
 

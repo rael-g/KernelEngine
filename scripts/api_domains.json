@@ -10,6 +10,9 @@
     "booleanReturnTypes": ["_Bool", "bool", "ke_bool"],
     "outParamPrefix": "out_",
     "errorLaneName": "out_error",
+    "includeDirectoryName": "kernel_engine",
+    "commonBindingsNamespace": "KernelEngine.Common.Native",
+    "bindingsMethodsClass": "NativeMethods",
     "typeNameOverrides": {
       "ke_ecs": "EcsRegistry",
       "ke_asset_resolver": "NativeAssetResolver",

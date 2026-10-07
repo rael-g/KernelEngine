@@ -38,15 +38,15 @@ public static class ClangSharpRunner
 
         var config = new PInvokeGeneratorConfiguration("c++", "", job.Namespace, outputDirectory, "", PInvokeGeneratorOutputMode.CSharp, options)
         {
-            DefaultClass = "NativeMethods",
+            DefaultClass = job.MethodsClass,
             ExcludedNames = job.Excludes.ToArray(),
             LibraryPath = job.Library ?? "",
-            MethodPrefixToStrip = "ke_",
+            MethodPrefixToStrip = job.MethodPrefix,
             RemappedNames = remaps,
             TraversalNames = job.Traverse.ToArray(),
-            WithUsings = job.Namespace == "KernelEngine.Common.Native"
+            WithUsings = job.CommonNamespace.Length == 0 || job.Namespace == job.CommonNamespace
                 ? new Dictionary<string, IReadOnlyList<string>>()
-                : new Dictionary<string, IReadOnlyList<string>> { ["*"] = new List<string> { "KernelEngine.Common.Native" } },
+                : new Dictionary<string, IReadOnlyList<string>> { ["*"] = new List<string> { job.CommonNamespace } },
         };
 
         var clangArgs = new List<string> { "--language=c++", "-Wno-pragma-once-outside-header" };

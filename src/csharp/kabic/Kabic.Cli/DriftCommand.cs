@@ -26,7 +26,7 @@ internal static class DriftCommand
             {
                 try
                 {
-                    var json = Regeneration.ExtractOne(spec, rootDir, zigOverride);
+                    var json = Regeneration.ExtractOne(spec, rootDir, zigOverride, convention);
                     lock (extracted) extracted[spec.Name] = json;
                 }
                 catch (InvalidOperationException e)

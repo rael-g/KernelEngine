@@ -18,7 +18,10 @@ public sealed record BindingJob(
     IReadOnlyList<string> Additional,
     IReadOnlyList<string> Remaps,
     IReadOnlyList<string> Excludes,
-    IReadOnlyList<string> Config)
+    IReadOnlyList<string> Config,
+    string MethodPrefix,
+    string CommonNamespace,
+    string MethodsClass)
 {
     public string Print()
     {
@@ -36,9 +39,9 @@ public sealed record BindingJob(
         Opt("file", File);
         Opt("traverse", Traverse);
         if (Additional.Count > 0) Opt("additional", Additional);
-        Opt("methodClassName", "NativeMethods");
-        Opt("prefixStrip", "ke_");
-        if (Namespace != "KernelEngine.Common.Native") Opt("with-using", "*=KernelEngine.Common.Native");
+        Opt("methodClassName", MethodsClass);
+        Opt("prefixStrip", MethodPrefix);
+        if (CommonNamespace.Length > 0 && Namespace != CommonNamespace) Opt("with-using", $"*={CommonNamespace}");
         if (Remaps.Count > 0) Opt("remap", Remaps);
         if (Excludes.Count > 0) Opt("exclude", Excludes);
         Opt("config", Config);

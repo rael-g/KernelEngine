@@ -8,6 +8,7 @@ internal static class ExtractCommand
     {
         string? outPath = null;
         string? zigOverride = null;
+        string? manifest = null;
         var includeDirs = new List<string>();
         var headers = new List<string>();
         var auxHeaders = new List<string>();
@@ -19,6 +20,7 @@ internal static class ExtractCommand
             {
                 case "--out": outPath = args[++i]; break;
                 case "--zig": zigOverride = args[++i]; break;
+                case "--manifest": manifest = args[++i]; break;
                 case "-I": includeDirs.Add(args[++i]); break;
                 case "--aux": auxHeaders.Add(args[++i]); break;
                 case "--compose": composeHeaders.Add(args[++i]); break;
@@ -36,7 +38,8 @@ internal static class ExtractCommand
         string json;
         try
         {
-            json = Extraction.Run(new Extraction.Request(headers, includeDirs, auxHeaders, composeHeaders, zigOverride));
+            json = Extraction.Run(new Extraction.Request(headers, includeDirs, auxHeaders, composeHeaders, zigOverride,
+                Convention.Load(manifest ?? Path.Combine("scripts", "api_domains.json"))));
         }
         catch (InvalidOperationException e)
         {

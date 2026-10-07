@@ -31,6 +31,7 @@ internal static class ApiCoverageCheck
             ["render/camera/camera_create.h"] = "created natively by render_module, no managed caller",
         };
 
+        var convention = Convention.Load(options.Manifest);
         var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(rootDir, "scripts", "api_domains.json")))!.AsObject();
 
         var describedByKabic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -48,7 +49,7 @@ internal static class ApiCoverageCheck
         foreach (var dir in (string[])["src/c", "src/zig"])
             foreach (var header in Directory.EnumerateFiles(Path.Combine(rootDir, dir), "*.h", SearchOption.AllDirectories))
             {
-                if (!header.Replace('\\', '/').Contains("/kernel_engine/")) continue;
+                if (!header.Replace('\\', '/').Contains($"/{convention.IncludeDirectoryName}/")) continue;
                 if (header.Contains(".zig-cache")) continue;
                 var key = Norm(header);
                 if (describedByKabic.Contains(key) || describedByClangSharp.Contains(key)) continue;
@@ -97,11 +98,12 @@ internal static class ApiCoverageCheck
             return !declaresSomething;
         }
 
-        static string Norm(string path)
+        string Norm(string path)
         {
             var p = path.Replace('\\', '/');
-            var i = p.IndexOf("kernel_engine/", StringComparison.Ordinal);
-            return i >= 0 ? p[(i + "kernel_engine/".Length)..] : p;
+            var marker = convention.IncludeDirectoryName + "/";
+            var i = p.IndexOf(marker, StringComparison.Ordinal);
+            return i >= 0 ? p[(i + marker.Length)..] : p;
         }
     }
 }

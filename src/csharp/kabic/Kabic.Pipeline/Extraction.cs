@@ -12,7 +12,8 @@ public static class Extraction
         IReadOnlyList<string> IncludeDirs,
         IReadOnlyList<string> AuxHeaders,
         IReadOnlyList<string> ComposeHeaders,
-        string? Zig);
+        string? Zig,
+        Convention Convention);
 
     public static string Run(Request request)
     {
@@ -39,7 +40,7 @@ public static class Extraction
 
         var ast = JsonNode.Parse(astJson)!.AsObject();
         var sourceBytes = all.Distinct().ToDictionary(Path.GetFullPath, File.ReadAllBytes);
-        var (api, errors) = Extractor.Extract(ast, Names(headerPaths), sourceBytes, Names(auxPaths), Names(composePaths));
+        var (api, errors) = Extractor.Extract(ast, Names(headerPaths), sourceBytes, Names(auxPaths), Names(composePaths), request.Convention.SymbolPrefix);
         if (errors.Count > 0)
             throw new InvalidOperationException(string.Join('\n', errors.Select(e => $"ERROR: {e}")));
 

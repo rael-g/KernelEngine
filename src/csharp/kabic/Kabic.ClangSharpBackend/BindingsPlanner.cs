@@ -10,24 +10,25 @@ namespace Kabic.ClangSharpBackend;
 public static class BindingsPlanner
 {
     static readonly Regex Include = new(@"#\s*include\s*<([^>]+)>", RegexOptions.Compiled);
-    static readonly Regex TypeName = new(@"\bke_\w+\b", RegexOptions.Compiled);
     static readonly Regex ProjectReference = new(@"ProjectReference\s+Include=""([^""]+)""", RegexOptions.Compiled);
-
-    static readonly Regex[] Declarations =
-    [
-        new(@"^\s*\}\s*(ke_\w+)\s*;", RegexOptions.Multiline | RegexOptions.Compiled),
-        new(@"typedef\s+(?:struct|enum|union)\s+\w*\s*\{[^{}]*\}\s*(ke_\w+)\s*;", RegexOptions.Compiled),
-    ];
-    static readonly Regex Opaque = new(@"^\s*typedef\s+(?:struct|enum|union)\s+(ke_\w+)\s+\1\s*;", RegexOptions.Multiline | RegexOptions.Compiled);
-    static readonly Regex Alias = new(@"^\s*typedef\s+[\w \*]+?\s+(ke_\w+)\s*;", RegexOptions.Multiline | RegexOptions.Compiled);
 
     public static IReadOnlyList<BindingJob> Plan(string rootDir, string manifestPath)
     {
+        var convention = Convention.Load(manifestPath);
+        var symbol = Regex.Escape(convention.SymbolPrefix) + @"\w+";
+        var typeName = new Regex($@"\b{symbol}\b", RegexOptions.Compiled);
+        Regex[] declarations =
+        [
+            new($@"^\s*\}}\s*({symbol})\s*;", RegexOptions.Multiline | RegexOptions.Compiled),
+            new($@"typedef\s+(?:struct|enum|union)\s+\w*\s*\{{[^{{}}]*\}}\s*({symbol})\s*;", RegexOptions.Compiled),
+        ];
+        var opaque = new Regex($@"^\s*typedef\s+(?:struct|enum|union)\s+({symbol})\s+\1\s*;", RegexOptions.Multiline | RegexOptions.Compiled);
+        var alias = new Regex($@"^\s*typedef\s+[\w \*]+?\s+({symbol})\s*;", RegexOptions.Multiline | RegexOptions.Compiled);
         var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
         var bindings = manifest["bindings"]?.AsArray()
             ?? throw new InvalidOperationException("the manifest has no 'bindings' array");
 
-        var includeRoots = Directory.EnumerateDirectories(Path.Combine(rootDir, "src"), "kernel_engine", SearchOption.AllDirectories)
+        var includeRoots = Directory.EnumerateDirectories(Path.Combine(rootDir, "src"), convention.IncludeDirectoryName, SearchOption.AllDirectories)
             .Select(Path.GetDirectoryName)
             .Where(p => p is not null && !p.Contains(".zig-cache"))
             .Select(p => p!)
@@ -64,19 +65,19 @@ public static class BindingsPlanner
         var declaredIn = new Dictionary<string, string>(StringComparer.Ordinal);
         var aliases = new HashSet<string>(StringComparer.Ordinal);
         var sourceHeaders = Directory.EnumerateFiles(Path.Combine(rootDir, "src"), "*.h", SearchOption.AllDirectories)
-            .Where(h => !h.Contains(".zig-cache") && h.Replace('\\', '/').Contains("/kernel_engine/"))
+            .Where(h => !h.Contains(".zig-cache") && h.Replace('\\', '/').Contains($"/{convention.IncludeDirectoryName}/"))
             .Order(StringComparer.Ordinal)
             .ToList();
         var sourceTexts = sourceHeaders.ToDictionary(h => h, File.ReadAllText);
         foreach (var header in sourceHeaders)
-            foreach (var rx in Declarations)
+            foreach (var rx in declarations)
                 foreach (Match m in rx.Matches(sourceTexts[header]))
                     declaredIn.TryAdd(m.Groups[1].Value, header);
         foreach (var header in sourceHeaders)
-            foreach (Match m in Opaque.Matches(sourceTexts[header]))
+            foreach (Match m in opaque.Matches(sourceTexts[header]))
                 declaredIn.TryAdd(m.Groups[1].Value, header);
         foreach (var header in sourceHeaders)
-            foreach (Match m in Alias.Matches(sourceTexts[header]))
+            foreach (Match m in alias.Matches(sourceTexts[header]))
                 if (!declaredIn.ContainsKey(m.Groups[1].Value)) aliases.Add(m.Groups[1].Value);
 
         var ownHeaders = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -165,7 +166,7 @@ public static class BindingsPlanner
                 grew = false;
                 var declaredHere = declaredIn.Where(kv => traversed.Contains(kv.Value)).Select(kv => kv.Key)
                                              .ToHashSet(StringComparer.Ordinal);
-                var referenced = traversed.SelectMany(h => TypeName.Matches(File.ReadAllText(h)).Select(m => m.Value))
+                var referenced = traversed.SelectMany(h => typeName.Matches(File.ReadAllText(h)).Select(m => m.Value))
                                           .ToHashSet(StringComparer.Ordinal);
                 remaps.Clear();
                 excludes.Clear();
@@ -216,7 +217,8 @@ public static class BindingsPlanner
                 name, nativeDir, b["output"]!.GetValue<string>(), ns, library,
                 dirs.Select(Rel).ToList(), file, umbrellaBody,
                 traversed.OrderBy(Repo, StringComparer.Ordinal).Select(Rel).ToList(),
-                extra, remaps, excludes.OrderBy(x => x, StringComparer.Ordinal).ToList(), config));
+                extra, remaps, excludes.OrderBy(x => x, StringComparer.Ordinal).ToList(), config,
+                convention.SymbolPrefix, convention.CommonBindingsNamespace, convention.BindingsMethodsClass));
         }
 
         return jobs;

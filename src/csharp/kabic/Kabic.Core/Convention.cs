@@ -102,6 +102,15 @@ public sealed class Convention
     /// <summary>Prefix of a parameter the callee writes back (<c>out_size</c>), which must carry the <c>[out]</c> tag.</summary>
     public string OutParamPrefix { get; init; } = "out_";
 
+    /// <summary>Name of the directory under which a public header lives (<c>kernel_engine/audio/audio.h</c>), so a header is addressed without its install prefix.</summary>
+    public string IncludeDirectoryName { get; init; } = "kernel_engine";
+
+    /// <summary>Namespace of the raw bindings every other binding assembly takes its shared types from.</summary>
+    public string CommonBindingsNamespace { get; init; } = "";
+
+    /// <summary>Class that holds the raw P/Invoke methods of a binding assembly.</summary>
+    public string BindingsMethodsClass { get; init; } = "NativeMethods";
+
     /// <summary>Name of the trailing failure lane, which is never a projected parameter.</summary>
     public string ErrorLaneName { get; init; } = "out_error";
 
@@ -127,6 +136,9 @@ public sealed class Convention
                 .Select(n => n!.GetValue<string>()).ToList(),
             OutParamPrefix = json["outParamPrefix"]?.GetValue<string>() ?? "out_",
             ErrorLaneName = json["errorLaneName"]?.GetValue<string>() ?? "out_error",
+            IncludeDirectoryName = json["includeDirectoryName"]?.GetValue<string>() ?? "kernel_engine",
+            CommonBindingsNamespace = json["commonBindingsNamespace"]?.GetValue<string>() ?? "",
+            BindingsMethodsClass = json["bindingsMethodsClass"]?.GetValue<string>() ?? "NativeMethods",
             TypeNameOverrides = overrides,
         };
     }
