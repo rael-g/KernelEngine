@@ -67,5 +67,5 @@ body. It runs after the push, so it reports a violation and does not prevent one
   nothing. A defect that only shows when a program starts is not caught here.
 - **Coverage.** `scripts/coverage.cs` is not called.
 - **Artifacts.** The workflow uploads nothing: the libraries it builds are discarded with the runner.
-- **Zig generation.** Nothing calls `scripts/generate_zig.cs`; `check_zig_shapes` exercises the Zig
+- **Zig generation.** Nothing calls `kabic zig`; `check_zig_shapes` exercises the Zig
   backend on synthetic shapes only.

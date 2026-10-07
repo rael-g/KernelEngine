@@ -102,7 +102,7 @@ fails: a slot that answers, fails and writes a value (`Classifier.cs:293-298`), 
 | backend | driver | emits | when it cannot render a form |
 |---|---|---|---|
 | `Kabic.CSharpBackend` | `Kabic.Pipeline.Generation.CSharp` | enums, value structs, views, providers with a contract interface, callback interfaces, node types, free-function groups (`Generation.cs:21-115`) | throws `InvalidOperationException`; no catch, so the domain run fails |
-| `Kabic.ZigBackend` | `scripts/generate_zig.cs` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:91-92`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:497`) and listed in the module's header comment (`ZigBackend.cs:110-115`); the other slots are still emitted |
+| `Kabic.ZigBackend` | `kabic zig` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:91-92`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:497`) and listed in the module's header comment (`ZigBackend.cs:110-115`); the other slots are still emitted |
 | `Kabic.CBackend` | `Kabic.Pipeline.Generation.CFieldTable` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:40-50`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:105-107`) |
 
 The C backend leaves a field out of its tables when the field is `[output]` or has no scene-file
@@ -111,9 +111,9 @@ spelling (`CBackend.cs:133`).
 The Zig backend refuses a raw callback, an opaque payload, a `[closure]` that names no state
 parameter, a consumer vtable with other than one untyped field, and a consumer slot that reports
 failure (`ZigBackend.cs:521-524`, `:723-738`, `:804-813`). It learns where a type from another
-domain lives by reading the other domains' `ke_api.json` (`generate_zig.cs:44-55`); the manifest
+domain lives by reading the other domains' `ke_api.json` (`ZigCommand.cs`); the manifest
 carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.yml` calls
-`generate_zig.cs`, so no generated Zig is in the tree.
+`kabic zig`, so no generated Zig is in the tree.
 
 ## The gates
 

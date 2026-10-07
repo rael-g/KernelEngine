@@ -30,7 +30,7 @@ time a domain is migrated or a header changes.
 - [ ] `[try]` is on any slot where a boolean return means found/not-found,
       not succeeded/failed.
 
-## 2. Extraction (`scripts/extract_api.cs`, or `kabic generate --domain <name>`)
+## 2. Extraction (`kabic extract`, or `kabic generate --domain <name>`)
 
 - [ ] Run twice with the exact same arguments; diff the two `ke_api.json`
       outputs. They must be byte-identical. A diff here means a path-identity
