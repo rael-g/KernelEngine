@@ -72,11 +72,14 @@ public sealed class ConventionBuilder
     /// <summary>
     /// Declares a kind of failure: the singleton it is reached by, the name its native type carries, the exception a
     /// managed caller catches (built from a message and a cause), and the error a Zig caller switches on. The Zig name
-    /// defaults to the last segment of the native name in PascalCase.
+    /// defaults to the last segment of the native name in PascalCase. With <paramref name="extends"/>, kabic declares
+    /// <paramref name="managed"/> as a new exception type deriving from it; without, <paramref name="managed"/> names an
+    /// existing type. A kind never declared reads as the general one, which is a plain <see cref="Exception"/> until
+    /// it is declared too.
     /// </summary>
-    public ConventionBuilder AddError(string singleton, string nativeName, string managed, string? zig = null)
+    public ConventionBuilder AddError(string singleton, string nativeName, string managed, string? zig = null, string? extends = null)
     {
-        errors.Add(new ErrorKindSpec(singleton, nativeName, managed, zig ?? Convention.ZigErrorName(nativeName)));
+        errors.Add(new ErrorKindSpec(singleton, nativeName, managed, zig ?? Convention.ZigErrorName(nativeName), extends));
         return this;
     }
 

@@ -81,9 +81,11 @@ optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHead
 `Classifier.Classify(model, explicitProviders, explicitCallbacks, convention)` (`Classifier.cs:88`)
 decides what each struct is and what shape each slot has. A `Convention`, built by `ConventionBuilder` (its
 source is the `convention` object of `api_domains.json`, `Convention.Load`), holds the project's spellings, so the
-classifier states nothing about `ke_`. A failure kind is declared with `AddError(singleton, nativeName, managed, zig)`:
+classifier states nothing about `ke_`. A failure kind is declared with `AddError(singleton, nativeName, managed, zig, extends)`:
 the Zig error set and the generated `NativeErrors.Kinds.g.cs` both come from that list, and the error header only
-has to export each singleton:
+has to export each singleton. `managed` is any exception type with a `(string, Exception?)` constructor; with
+`extends`, kabic declares it itself, deriving from that type. A convention that declares no kind reads every failure
+as a plain `Exception`:
 
 - a vtable is a struct with slots that is not a handle (`_handle`) and not a parameter bag
   (`_params`); it is a *provider* when a `<name>_handle` struct or a `<name>_create` function exists

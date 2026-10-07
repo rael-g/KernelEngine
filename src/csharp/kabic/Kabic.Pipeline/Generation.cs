@@ -154,6 +154,18 @@ public static class Generation
         o.Add("    static Exception CreateGeneral(string message, Exception? cause) =>");
         o.Add($"        new {convention.GeneralError.Managed}(message, cause);");
         o.Add("}");
+        foreach (var kind in convention.ErrorKinds.Where(k => k.Extends is not null))
+        {
+            o.Add("");
+            o.Add($"/// <summary>The exception for the native error <c>{kind.NativeName}</c>.</summary>");
+            o.Add($"public class {kind.Managed} : {kind.Extends}");
+            o.Add("{");
+            o.Add($"    /// <summary>Creates the exception for a native error.</summary>");
+            o.Add($"    public {kind.Managed}(string message, Exception? innerException) : base(message, innerException)");
+            o.Add("    {");
+            o.Add("    }");
+            o.Add("}");
+        }
         return string.Join('\n', o) + "\n";
     }
 }

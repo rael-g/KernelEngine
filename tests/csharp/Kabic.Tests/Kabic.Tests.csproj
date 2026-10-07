@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\csharp\kabic\Kabic.CSharpBackend\Kabic.CSharpBackend.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\kabic\Kabic.ZigBackend\Kabic.ZigBackend.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\kabic\Kabic.Pipeline\Kabic.Pipeline.csproj" />
   </ItemGroup>
 
 </Project>

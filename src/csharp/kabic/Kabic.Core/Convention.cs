@@ -30,7 +30,7 @@ public sealed record FieldTableConvention(
 /// One kind of failure the ABI names: the singleton a failure of that kind is reached by, the dotted name
 /// the native type carries, the exception a managed caller catches, and the error a Zig caller switches on.
 /// </summary>
-public sealed record ErrorKindSpec(string Singleton, string NativeName, string Managed, string Zig);
+public sealed record ErrorKindSpec(string Singleton, string NativeName, string Managed, string Zig, string? Extends = null);
 
 public sealed class Convention
 {
@@ -168,7 +168,7 @@ public sealed class Convention
 
     /// <summary>The kind a failure reads as when no other matched.</summary>
     public ErrorKindSpec GeneralError => ErrorKinds.FirstOrDefault(k => k.Singleton == ErrorGeneralSingleton)
-        ?? throw new InvalidOperationException($"the convention declares no error for '{ErrorGeneralSingleton}'");
+        ?? new ErrorKindSpec(ErrorGeneralSingleton, "", "Exception", "General");
 
     /// <summary>The kinds a caller can tell apart: every kind but the general one, in declaration order.</summary>
     public IEnumerable<ErrorKindSpec> NamedErrors => ErrorKinds.Where(k => k.Singleton != ErrorGeneralSingleton);
@@ -219,9 +219,9 @@ public sealed class Convention
                 (json["errorAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()),
                 Text(json, "errorHelperClass"), Text(json, "errorHelperNamespace"), Text(json, "errorKindsOut"));
 
-        foreach (var e in json["errors"]?.AsArray() ?? throw new InvalidOperationException("the convention declares no 'errors'"))
+        foreach (var e in json["errors"]?.AsArray() ?? [])
             builder.AddError(e!["singleton"]!.GetValue<string>(), e["nativeName"]!.GetValue<string>(),
-                e["managed"]!.GetValue<string>(), e["zig"]?.GetValue<string>());
+                e["managed"]!.GetValue<string>(), e["zig"]?.GetValue<string>(), e["extends"]?.GetValue<string>());
         foreach (var (cType, v) in json["vectorTypes"]?.AsObject() ?? [])
             builder.AddVectorType(cType, v!["managed"]!.GetValue<string>(), v["lanes"]!.AsArray().Select(l => l!.GetValue<string>()).ToArray());
         foreach (var (cType, managed) in json["matrixTypes"]?.AsObject() ?? [])
