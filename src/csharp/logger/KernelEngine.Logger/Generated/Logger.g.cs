@@ -28,12 +28,12 @@ public unsafe partial class Logger : IDisposable, INativeLogger
     ke_logger* INativeLogger.Native => Handle;
 
     /// <summary>Creates a logger instance.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public Logger()
     {
         ke_error* err = null;
         var handle = KernelEngine.Logger.Native.NativeMethods.logger_create(&err);
-        if (handle.@ref == null) throw KernelError.FromNative(err, "ke_logger_create");
+        if (handle.@ref == null) throw NativeErrors.FromNative(err, "ke_logger_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -65,7 +65,7 @@ public unsafe partial class Logger : IDisposable, INativeLogger
 
     /// <summary>Takes ownership of a sink and starts routing entries to it.</summary>
     /// <param name="sink">Caller-implemented output target.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void AddSink(ILoggerSinkNative sink, int minLevel = 0)
     {
         var gch = GCHandle.Alloc(sink);
@@ -79,15 +79,15 @@ public unsafe partial class Logger : IDisposable, INativeLogger
             destroy = &DestroyTrampoline,
         };
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->add_sink(Handle, native, &err), err, "add_sink");
+        NativeErrors.ThrowIfFailed(Handle->add_sink(Handle, native, &err), err, "add_sink");
     }
 
     /// <summary>Takes ownership of a sink and starts routing entries to it. Takes an already-built <c>ke_logger_sink</c> value directly — for one produced by a native factory, not a managed <see cref="ILoggerSinkNative"/>.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void AddSinkRaw(ke_logger_sink sink)
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->add_sink(Handle, sink, &err), err, "add_sink");
+        NativeErrors.ThrowIfFailed(Handle->add_sink(Handle, sink, &err), err, "add_sink");
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

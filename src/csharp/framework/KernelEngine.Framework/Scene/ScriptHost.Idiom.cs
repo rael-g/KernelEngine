@@ -304,7 +304,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
                 (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands), &err))
         {
             handle.Free();
-            throw KernelError.FromNative(err, "bind_deferred");
+            throw NativeErrors.FromNative(err, "bind_deferred");
         }
         _rooted[entity] = handle;
     }
@@ -318,7 +318,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         }
         KernelEngine.Common.Native.ke_error* err = null;
         if (!Handle->unbind_deferred(Handle, entity, (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands), &err))
-            throw KernelError.FromNative(err, "unbind_deferred");
+            throw NativeErrors.FromNative(err, "unbind_deferred");
         if (_rooted.TryRemove(entity, out var handle)) _retired.Enqueue((Interlocked.Read(ref _epoch), handle));
     }
 

@@ -23,7 +23,7 @@ public static class ServiceCollectionExtensions
                 };
                 ke_error* err = null;
                 var handle = Native.NativeMethods.image_loader_stb_create(&@params, &err);
-                if (handle.@ref == null) throw KernelError.FromNative(err, "image_loader_stb_create");
+                if (handle.@ref == null) throw NativeErrors.FromNative(err, "image_loader_stb_create");
                 return new ImageLoader(handle);
             }
         });

@@ -63,7 +63,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <param name="fields">The type's field layout, normally its generated field table. Must outlive the ecs. NULL registers the size alone.</param>
     /// <param name="fieldCount">Entries in `fields`; 0 when `fields` is NULL.</param>
     /// <returns>The component's id, or 0 on error.</returns>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public uint ComponentRegister(string name, nuint elementSize, ke_component_field* fields, uint fieldCount)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
@@ -71,7 +71,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         {
             ke_error* err = null;
             var result = Handle->component_register(Handle, (sbyte*)namePtr, elementSize, fields, fieldCount, &err);
-            if (err != null) throw KernelError.FromNative(err, "component_register");
+            if (err != null) throw NativeErrors.FromNative(err, "component_register");
             return result;
         }
     }

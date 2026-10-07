@@ -33,7 +33,7 @@ public unsafe partial class SceneLoader
             ke_error* err = null;
             var handle = KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
                 ((INativeWorld)world).Native, (sbyte*)rootPtr, &err);
-            if (handle.@ref == null) throw KernelError.FromNative(err, "scene_loader_create");
+            if (handle.@ref == null) throw NativeErrors.FromNative(err, "scene_loader_create");
             return handle;
         }
     }

@@ -16,7 +16,7 @@ public static class CSharpBackend
         foreach (var (n, d) in pars ?? [])
             if (!string.IsNullOrEmpty(d)) lines.Add($"{indent}/// <param name=\"{n}\">{Escape(d)}</param>");
         if (!string.IsNullOrEmpty(ret)) lines.Add($"{indent}/// <returns>{Escape(ret)}</returns>");
-        if (throwsOnFail) lines.Add($"{indent}/// <exception cref=\"{convention.ErrorHelperClass}\">The native call failed.</exception>");
+        if (throwsOnFail) lines.Add($"{indent}/// <exception cref=\"Exception\">The native call failed.</exception>");
         return lines.Count > 0 ? string.Join('\n', lines) + '\n' : "";
     }
 
@@ -1424,7 +1424,7 @@ public static class CSharpBackend
         {
             var handleType = plan.HandleTypeName!;
             o.Add($"    /// <summary>Wraps an owner <c>{handleType}</c> and runs {typeName.ToLowerInvariant()}'s startup lifecycle hook.</summary>");
-            if (initCall is not null) o.Add($"    /// <exception cref=\"{convention.ErrorHelperClass}\">The native call failed.</exception>");
+            if (initCall is not null) o.Add($"    /// <exception cref=\"Exception\">The native call failed.</exception>");
             o.Add($"    public {typeName}({handleType} handle)");
             o.Add("    {");
             o.Add("        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));");

@@ -83,7 +83,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
 
     /// <summary>Loads the scene at path, instantiating every entity it declares. This is where a script factory that refused an entity is answered for.</summary>
     /// <param name="path">Path to the scene file.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Load(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -91,14 +91,14 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         {
             ke_error* err = null;
             if (!Handle->load(Handle, (sbyte*)pathPtr, &err) && _callbackFailures.IsEmpty)
-                throw KernelError.FromNative(err, "load");
+                throw NativeErrors.FromNative(err, "load");
             DrainCallbackFailures();
         }
     }
 
     /// <summary>Registers the factory consulted for every entity that declares a type. Replaces any factory registered before it.</summary>
     /// <param name="factory">Consulted once per typed entity.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void RegisterScriptFactory(ScriptFactory? factory)
     {
         var factoryHandle = factory is null
@@ -118,7 +118,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         if (!ok)
         {
             if (factoryHandle.IsAllocated) factoryHandle.Free();
-            throw KernelError.FromNative(err, "register_script_factory");
+            throw NativeErrors.FromNative(err, "register_script_factory");
         }
         if (_retainedFactory.IsAllocated) _retainedFactory.Free();
         _retainedFactory = factoryHandle;
@@ -147,7 +147,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterScriptFactoryClosures failed)
                 failed.Owner._callbackFailures.Enqueue(ex);
-            KernelError.ToNative(arg3, ex, "ke_script_factory_func");
+            NativeErrors.ToNative(arg3, ex, "ke_script_factory_func");
             return false;
         }
     }

@@ -30,12 +30,12 @@ public unsafe partial class Input : IDisposable, INativeInput
 
     /// <summary>Creates an input system.</summary>
     /// <param name="logger">Optional logger; pass NULL to disable logging.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     internal Input(ke_logger* logger)
     {
         ke_error* err = null;
         var handle = KernelEngine.Input.Native.NativeMethods.input_create(logger, &err);
-        if (handle.@ref == null) throw KernelError.FromNative(err, "ke_input_create");
+        if (handle.@ref == null) throw NativeErrors.FromNative(err, "ke_input_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -51,11 +51,11 @@ public unsafe partial class Input : IDisposable, INativeInput
     }
 
     /// <summary>Updates internal state, clearing this frame's pressed/released edges. Call once per tick, before any query.</summary>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Update()
     {
         ke_error* err = null;
-        KernelError.ThrowIfFailed(Handle->update(Handle, &err), err, "update");
+        NativeErrors.ThrowIfFailed(Handle->update(Handle, &err), err, "update");
     }
 
     /// <summary>Returns true if the key transitioned to down during this tick.</summary>

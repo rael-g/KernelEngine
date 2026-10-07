@@ -22,7 +22,7 @@ public static class ServiceCollectionExtensions
                 };
                 ke_error* err = null;
                 var handle = Native.NativeMethods.asset_loader_assimp_create(&@params, &err);
-                if (handle.@ref == null) throw KernelError.FromNative(err, "asset_loader_assimp_create");
+                if (handle.@ref == null) throw NativeErrors.FromNative(err, "asset_loader_assimp_create");
                 return new AssetLoader(handle);
             }
         });

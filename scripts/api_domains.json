@@ -25,7 +25,7 @@
       { "name": "AlreadyExists", "singleton": "KE_ERROR_ALREADY_EXISTS" }
     ],
     "zigErrorAbiFile": "zig_error_abi.zig",
-    "errorHelperClass": "KernelError",
+    "errorHelperClass": "NativeErrors",
     "commonManagedNamespace": "KernelEngine.Common",
     "vectorTypes": {
       "ke_vec2": { "managed": "Vector2", "lanes": ["x", "y"] },

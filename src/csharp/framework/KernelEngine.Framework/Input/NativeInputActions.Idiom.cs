@@ -19,7 +19,7 @@ public unsafe partial class NativeInputActions
     {
         ke_error* err = null;
         var handle = KernelEngine.Framework.Native.NativeMethods.input_actions_create(&err);
-        if (handle.@ref == null) throw KernelError.FromNative(err, "input_actions_create");
+        if (handle.@ref == null) throw NativeErrors.FromNative(err, "input_actions_create");
         return handle;
     }
 }

@@ -145,7 +145,7 @@ internal static class GeneratorShapeCases
             contains: ["public void Attach<TData>(ulong entity, in TData data) where TData : unmanaged",
                        "fixed (TData* dataPtr = &data)",
                        "(void*)dataPtr, (nuint)sizeof(TData), &err",
-                       "KernelError.ThrowIfFailed("],
+                       "NativeErrors.ThrowIfFailed("],
             absent: ["public void Attach(ulong"]);
 
         Expect("a typed pointer tagged as an opaque payload is refused",
@@ -201,7 +201,7 @@ internal static class GeneratorShapeCases
                        "private readonly Dictionary<uint, GCHandle> _retainedApply = new();",
                        "public void RegisterApply(uint cid, ProbeApply? apply)",
                        "private static bool RegisterApplyTrampoline(void* ctx, uint arg1, ke_error** arg2)",
-                       "KernelError.ToNative(arg2, ex, \"ke_probe_apply_fn\");",
+                       "NativeErrors.ToNative(arg2, ex, \"ke_probe_apply_fn\");",
                        "if (_retainedApply.Remove(cid, out var replacedApply)) replacedApply.Free();",
                        "_retainedApply[cid] = applyHandle;",
                        "foreach (var retained in _retainedApply.Values) retained.Free();"],
@@ -571,7 +571,7 @@ internal static class GeneratorShapeCases
                        "private sealed class OpenAsyncCompletion",
                        "private static void OpenAsyncOnDoneTrampoline(ke_error* arg0, ke_probe_bundle* arg1, void* ctx)",
                        "if (arg0 != null || arg1 == null)",
-                       "state.Source.TrySetException(KernelError.FromNative(arg0, \"open_async\"));",
+                       "state.Source.TrySetException(NativeErrors.FromNative(arg0, \"open_async\"));",
                        "state.Source.TrySetResult(new Bundle(state.Owner, (ProbeBundle*)arg1));"],
             absent: ["ke_probe_done_func on_done", "void* user_data", "ke_task* OpenAsync"],
             structs: [ViewJson("ke_probe_bundle")],

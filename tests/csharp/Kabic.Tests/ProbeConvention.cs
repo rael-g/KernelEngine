@@ -27,7 +27,7 @@ internal static class ProbeConvention
             new("AlreadyExists", "KE_ERROR_ALREADY_EXISTS"),
         ],
         ZigErrorAbi = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "zig_error_abi.zig")),
-        ErrorHelperClass = "KernelError",
+        ErrorHelperClass = "NativeErrors",
         CommonManagedNamespace = "KernelEngine.Common",
         CommonBindingsNamespace = "KernelEngine.Common.Native",
         VectorTypes = new Dictionary<string, ValueTypeMapping>

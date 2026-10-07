@@ -47,7 +47,7 @@ public unsafe partial class ImageLoader : IDisposable, INativeImageLoader
 
     /// <summary>Loads an image from path into a newly allocated ke_texture_data (RGBA8). The caller owns the result and must release it with free_image.</summary>
     /// <param name="path">Image file path to decode.</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_texture_data* LoadImage(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -55,7 +55,7 @@ public unsafe partial class ImageLoader : IDisposable, INativeImageLoader
         {
             ke_error* err = null;
             var result = Handle->load_image(Handle, (sbyte*)pathPtr, &err);
-            if (result == null) throw KernelError.FromNative(err, "load_image");
+            if (result == null) throw NativeErrors.FromNative(err, "load_image");
             return result;
         }
     }

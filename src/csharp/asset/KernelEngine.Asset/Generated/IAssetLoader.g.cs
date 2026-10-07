@@ -11,7 +11,7 @@ public interface IAssetLoader : IDisposable
 {
     /// <summary>Loads a 3D model from path into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.</summary>
     /// <param name="path">Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     Model LoadModel(string path);
     /// <summary>Asynchronously loads a 3D model, calling on_complete on a scheduler thread once the load has finished or failed.</summary>
     /// <param name="scheduler">Non-null task scheduler.</param>

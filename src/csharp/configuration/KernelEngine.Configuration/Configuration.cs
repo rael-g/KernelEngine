@@ -18,7 +18,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
     {
         ke_error* err = null;
         var handle = ConfigNative.configuration_create(&err);
-        if (handle.@ref == null) throw KernelError.FromNative(err, "configuration_create");
+        if (handle.@ref == null) throw NativeErrors.FromNative(err, "configuration_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -31,7 +31,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         {
             ke_error* err = null;
             if (!ConfigNative.configuration_toml_load(_native, (sbyte*)p, &err))
-                throw KernelError.FromNative(err, "configuration_toml_load");
+                throw NativeErrors.FromNative(err, "configuration_toml_load");
         }
     }
 
@@ -79,7 +79,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         {
             ke_error* err = null;
             if (!_native->set_int(_native, (sbyte*)sp, (sbyte*)kp, value, &err))
-                throw KernelError.FromNative(err, "configuration set_int");
+                throw NativeErrors.FromNative(err, "configuration set_int");
         }
     }
 
@@ -91,7 +91,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         {
             ke_error* err = null;
             if (!_native->set_double(_native, (sbyte*)sp, (sbyte*)kp, value, &err))
-                throw KernelError.FromNative(err, "configuration set_double");
+                throw NativeErrors.FromNative(err, "configuration set_double");
         }
     }
 
@@ -103,7 +103,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         {
             ke_error* err = null;
             if (!_native->set_bool(_native, (sbyte*)sp, (sbyte*)kp, value, &err))
-                throw KernelError.FromNative(err, "configuration set_bool");
+                throw NativeErrors.FromNative(err, "configuration set_bool");
         }
     }
 
@@ -116,7 +116,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         {
             ke_error* err = null;
             if (!_native->set_string(_native, (sbyte*)sp, (sbyte*)kp, (sbyte*)vp, &err))
-                throw KernelError.FromNative(err, "configuration set_string");
+                throw NativeErrors.FromNative(err, "configuration set_string");
         }
     }
 

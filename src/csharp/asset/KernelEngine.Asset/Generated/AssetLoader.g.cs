@@ -79,7 +79,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
 
     /// <summary>Loads a 3D model from path into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.</summary>
     /// <param name="path">Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).</param>
-    /// <exception cref="KernelError">The native call failed.</exception>
+    /// <exception cref="Exception">The native call failed.</exception>
     public Model LoadModel(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
@@ -87,7 +87,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         {
             ke_error* err = null;
             var result = (ModelData*)Handle->load_model(Handle, (sbyte*)pathPtr, &err);
-            if (result == null) throw KernelError.FromNative(err, "load_model");
+            if (result == null) throw NativeErrors.FromNative(err, "load_model");
             return new Model(this, result);
         }
     }
@@ -138,7 +138,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         try
         {
             if (arg0 != null || arg1 == null)
-                state.Source.TrySetException(KernelError.FromNative(arg0, "load_model_async"));
+                state.Source.TrySetException(NativeErrors.FromNative(arg0, "load_model_async"));
             else
                 state.Source.TrySetResult(new Model(state.Owner, (ModelData*)arg1));
         }

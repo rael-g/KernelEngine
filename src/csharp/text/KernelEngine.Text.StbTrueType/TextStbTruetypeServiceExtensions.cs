@@ -28,7 +28,7 @@ public static class TextStbTrueTypeServiceExtensions
                 };
                 ke_error* err = null;
                 var handle = KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&@params, &err);
-                if (handle.@ref == null) throw KernelError.FromNative(err, "font_loader_stb_create");
+                if (handle.@ref == null) throw NativeErrors.FromNative(err, "font_loader_stb_create");
                 return new FontLoader(handle);
             }
         });
