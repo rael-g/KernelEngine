@@ -109,7 +109,7 @@ quaternions and matrices for one, is a *pack*: an `IShapePack` that recognises t
 projects each into the languages it knows (`Languages.CSharp`, `Languages.FieldTable`), and names what the generated code
 then has to import (a `using` in C#, an `#include` in C++, an `@import` in Zig) and which libraries it has to reference.
 A language the pack does not know keeps the plain struct. The numerics pack is `Kabic.Numerics`; the manifest turns it
-on with `"packs": ["numerics"]`, and `Kabic.Builtin` resolves the names of the packs kabic ships. A pack of another
+on with `"packs": ["numerics"]`, and `Kabic.Packs` resolves the names of the packs kabic ships. A pack of another
 project is added with `ConventionBuilder.Use`.
 
 ## The three backends

@@ -8,7 +8,7 @@ namespace Kabic;
 /// convention with those packs available. A pack of another project is added with
 /// <see cref="ConventionBuilder.Use"/> instead.
 /// </summary>
-public static class BuiltinConventions
+public static class ConventionLoader
 {
     /// <summary>The shipped pack called <paramref name="name"/>.</summary>
     public static IShapePack Pack(string name) => name switch

@@ -6,7 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kabic.Core/Kabic.Core.csproj" />
-    <ProjectReference Include="../Kabic.Builtin/Kabic.Builtin.csproj" />
+    <ProjectReference Include="../Kabic.Packs/Kabic.Packs.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="ClangSharp.PInvokeGenerator" Version="21.1.8.2" />

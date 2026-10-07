@@ -14,7 +14,7 @@ public static class BindingsPlanner
 
     public static IReadOnlyList<BindingJob> Plan(string rootDir, string manifestPath)
     {
-        var convention = BuiltinConventions.Load(manifestPath);
+        var convention = ConventionLoader.Load(manifestPath);
         var symbol = Regex.Escape(convention.SymbolPrefix) + @"\w+";
         var typeName = new Regex($@"\b{symbol}\b", RegexOptions.Compiled);
         Regex[] declarations =

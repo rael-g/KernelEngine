@@ -6,7 +6,7 @@ internal static class OutParamsCheck
 {
     public static int Execute(Options options)
     {
-        var convention = BuiltinConventions.Load(options.Manifest);
+        var convention = ConventionLoader.Load(options.Manifest);
         var manifest = JsonNode.Parse(File.ReadAllText(options.Manifest))!.AsObject();
         var offenders = new List<string>();
 

@@ -31,7 +31,7 @@ internal static class ApiCoverageCheck
             ["render/camera/camera_create.h"] = "created natively by render_module, no managed caller",
         };
 
-        var convention = BuiltinConventions.Load(options.Manifest);
+        var convention = ConventionLoader.Load(options.Manifest);
         var manifest = JsonNode.Parse(File.ReadAllText(Path.Combine(rootDir, "scripts", "api_domains.json")))!.AsObject();
 
         var describedByKabic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
