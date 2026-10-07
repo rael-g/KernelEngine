@@ -234,6 +234,9 @@ typedef struct ke_gpu_capabilities
     ke_bool  supports_bindless;
     ke_bool  supports_mesh_shaders;
     ke_bool  supports_ray_tracing;
+    /// Byte multiple a texture/buffer copy's bytes_per_row must be a multiple of; 1 when
+    /// the backend imposes none.
+    uint32_t copy_bytes_per_row_alignment;
 } ke_gpu_capabilities;
 
 #define KE_GPU_INVALID_HANDLE UINT64_MAX

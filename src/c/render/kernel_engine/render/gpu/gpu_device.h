@@ -353,6 +353,16 @@ typedef struct ke_gpu_device
     /// into (e.g. before destroying a ke_render_service PSO cache that owns the
     /// entries those callbacks update). A no-op if nothing is pending.
     void (*flush_pipeline_compiles)(struct ke_gpu_device *self);
+
+    /// Starts mapping [offset, offset + size) of a buffer created with
+    /// KE_GPU_BUFFER_USAGE_MAP_READ for reading. `on_ready` fires later, during this device's
+    /// normal event pump (queue_present, queue_wait_idle), with `ok` true when the range is
+    /// readable through map_buffer until unmap_buffer, and false when the mapping failed.
+    /// Submit the work that writes the buffer before calling.
+    void (*map_buffer_read)(struct ke_gpu_device *self, ke_gpu_buffer h,
+                            size_t offset, size_t size,
+                            void (*on_ready)(ke_gpu_buffer buffer, bool ok, void *user),
+                            void *user);
 } ke_gpu_device;
 
 typedef struct ke_gpu_device_handle

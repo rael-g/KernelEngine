@@ -42,4 +42,7 @@ public partial struct ke_gpu_capabilities
 
     [NativeTypeName("ke_bool")]
     public byte supports_ray_tracing;
+
+    [NativeTypeName("uint32_t")]
+    public uint copy_bytes_per_row_alignment;
 }

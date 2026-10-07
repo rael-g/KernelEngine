@@ -116,4 +116,7 @@ public unsafe partial struct ke_gpu_device
 
     [NativeTypeName("void (*)(struct ke_gpu_device *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, void> flush_pipeline_compiles;
+
+    [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_buffer, size_t, size_t, void (*)(ke_gpu_buffer, bool, void *), void *)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, nuint, nuint, delegate* unmanaged[Cdecl]<ulong, bool, void*, void>, void*, void> map_buffer_read;
 }

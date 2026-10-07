@@ -46,6 +46,7 @@ const DeviceState = struct {
 };
 
 const MAX_PENDING_COMPILES = 64;
+const copy_row_alignment: u32 = 256;
 
 fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
     return @ptrCast(dev);
@@ -412,6 +413,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .query_extension                = queryExtension,
         .create_render_pipeline_async   = createRenderPipelineAsync,
         .flush_pipeline_compiles        = flushPipelineCompiles,
+        .map_buffer_read                = mapBufferRead,
     };
     return dev;
 }
@@ -525,6 +527,7 @@ fn queuePresent(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void
             s.current_surface_texture = null;
         }
     }
+    _ = wgpu.wgpuDevicePoll(s.device, 0, null);
 }
 
 fn queueWaitIdle(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
@@ -630,7 +633,7 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     if (pp.initial_data != null) {
         const bytes_per_pixel: u32 = 4;
         const unaligned_bpr: u32 = pp.width * bytes_per_pixel;
-        const bytes_per_row: u32 = (unaligned_bpr + 255) & ~@as(u32, 255);
+        const bytes_per_row: u32 = std.mem.alignForward(u32, unaligned_bpr, copy_row_alignment);
         const face_bytes: usize = @as(usize, unaligned_bpr) * pp.height;
         const layers: u32 = if (pp.depth_or_array_layers == 0) 1 else pp.depth_or_array_layers;
         const src_bytes: [*]const u8 = @ptrCast(pp.initial_data);
@@ -1355,7 +1358,45 @@ fn encCopyBufferToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buff
     wgpu.wgpuCommandEncoderCopyBufferToBuffer(@ptrCast(enc.*.handle), @ptrFromInt(src), src_off, @ptrFromInt(dst), dst_off, size);
 }
 
-fn encCopyBufferToTexture(_: [*c]ke.ke_gpu_command_encoder, _: ke.ke_gpu_buffer, _: usize, _: ke.ke_gpu_texture, _: u32, _: u32, _: u32, _: u32, _: u32) callconv(.c) void {}
+fn rowPitchValid(bytes_per_row: u32, out_error: ?*?*ke.ke_error, src: std.builtin.SourceLocation) bool {
+    if (bytes_per_row % copy_row_alignment == 0) return true;
+    ke.ke_error_set(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "bytes_per_row is not a multiple of the copy row alignment", src.file, @intCast(src.line), null);
+    return false;
+}
+
+fn encCopyBufferToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buffer, src_off: usize, bytes_per_row: u32, dst: ke.ke_gpu_texture, x: u32, y: u32, z: u32, width: u32, height: u32, out_error: ?*?*ke.ke_error) callconv(.c) bool {
+    if (!rowPitchValid(bytes_per_row, out_error, @src())) return false;
+    const src_info = wgpu.WGPUTexelCopyBufferInfo{
+        .layout = .{ .offset = src_off, .bytesPerRow = bytes_per_row, .rowsPerImage = height },
+        .buffer = @ptrFromInt(src),
+    };
+    const dst_info = wgpu.WGPUTexelCopyTextureInfo{
+        .texture = @ptrFromInt(dst),
+        .mipLevel = 0,
+        .origin = .{ .x = x, .y = y, .z = z },
+        .aspect = wgpu.WGPUTextureAspect_All,
+    };
+    const extent = wgpu.WGPUExtent3D{ .width = width, .height = height, .depthOrArrayLayers = 1 };
+    wgpu.wgpuCommandEncoderCopyBufferToTexture(@ptrCast(enc.*.handle), &src_info, &dst_info, &extent);
+    return true;
+}
+
+fn encCopyTextureToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_texture, x: u32, y: u32, z: u32, dst: ke.ke_gpu_buffer, dst_off: usize, bytes_per_row: u32, width: u32, height: u32, out_error: ?*?*ke.ke_error) callconv(.c) bool {
+    if (!rowPitchValid(bytes_per_row, out_error, @src())) return false;
+    const src_info = wgpu.WGPUTexelCopyTextureInfo{
+        .texture = @ptrFromInt(src),
+        .mipLevel = 0,
+        .origin = .{ .x = x, .y = y, .z = z },
+        .aspect = wgpu.WGPUTextureAspect_All,
+    };
+    const dst_info = wgpu.WGPUTexelCopyBufferInfo{
+        .layout = .{ .offset = dst_off, .bytesPerRow = bytes_per_row, .rowsPerImage = height },
+        .buffer = @ptrFromInt(dst),
+    };
+    const extent = wgpu.WGPUExtent3D{ .width = width, .height = height, .depthOrArrayLayers = 1 };
+    wgpu.wgpuCommandEncoderCopyTextureToBuffer(@ptrCast(enc.*.handle), &src_info, &dst_info, &extent);
+    return true;
+}
 
 fn encCopyTextureToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_texture, dst: ke.ke_gpu_texture, width: u32, height: u32) callconv(.c) void {
     const src_info = wgpu.WGPUTexelCopyTextureInfo{
@@ -1400,6 +1441,7 @@ fn createCommandEncoder(dev: [*c]ke.ke_gpu_device) callconv(.c) [*c]ke.ke_gpu_co
         .copy_buffer_to_buffer  = encCopyBufferToBuffer,
         .copy_buffer_to_texture = encCopyBufferToTexture,
         .copy_texture_to_texture = encCopyTextureToTexture,
+        .copy_texture_to_buffer = encCopyTextureToBuffer,
         .finish                 = encFinish,
         .destroy                = encDestroy,
     };
@@ -1411,7 +1453,38 @@ fn writeBuffer(dev: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: u64, data
 }
 
 fn mapBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
-    return wgpu.wgpuBufferGetMappedRange(@ptrFromInt(h), offset, size);
+    const buffer: wgpu.WGPUBuffer = @ptrFromInt(h);
+    if (wgpu.wgpuBufferGetMappedRange(buffer, offset, size)) |range| return range;
+    return @constCast(wgpu.wgpuBufferGetConstMappedRange(buffer, offset, size));
+}
+
+const MapReadRequest = struct {
+    buffer: ke.ke_gpu_buffer,
+    on_ready: *const fn (ke.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void,
+    user: ?*anyopaque,
+};
+
+fn mapReadDone(status: wgpu.WGPUMapAsyncStatus, _: wgpu.WGPUStringView, userdata1: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
+    const req: *MapReadRequest = @ptrCast(@alignCast(userdata1.?));
+    req.on_ready(req.buffer, status == wgpu.WGPUMapAsyncStatus_Success, req.user);
+    gpa.destroy(req);
+}
+
+fn mapBufferRead(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize,
+                 on_ready: ?*const fn (ke.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
+    const cb = on_ready orelse return;
+    const req = gpa.create(MapReadRequest) catch {
+        cb(h, false, user);
+        return;
+    };
+    req.* = .{ .buffer = h, .on_ready = cb, .user = user };
+    _ = wgpu.wgpuBufferMapAsync(@ptrFromInt(h), wgpu.WGPUMapMode_Read, offset, size, .{
+        .nextInChain = null,
+        .mode = wgpu.WGPUCallbackMode_AllowProcessEvents,
+        .callback = mapReadDone,
+        .userdata1 = req,
+        .userdata2 = null,
+    });
 }
 fn mapBufferWrite(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
     return wgpu.wgpuBufferGetMappedRange(@ptrFromInt(h), offset, size);
@@ -1438,6 +1511,7 @@ fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) c
     p.max_compute_workgroup_size_x = limits.maxComputeWorkgroupSizeX;
     p.max_compute_workgroup_size_y = limits.maxComputeWorkgroupSizeY;
     p.max_compute_workgroup_size_z = limits.maxComputeWorkgroupSizeZ;
+    p.copy_bytes_per_row_alignment = copy_row_alignment;
 }
 
 const SurfaceExt = extern struct {
@@ -1494,4 +1568,76 @@ test "creating the device and destroying it, or failing to create it, leaves no 
     const handle = ke_gpu_device_webgpu_create(null, null);
     if (handle.ref != null) handle.destroy.?(handle.ref);
     try heap.expectNoLeaks();
+}
+
+const ReadbackProbe = struct {
+    fired: bool = false,
+    ok: bool = false,
+};
+
+fn readbackProbeDone(_: ke.ke_gpu_buffer, ok: bool, user: ?*anyopaque) callconv(.c) void {
+    const probe: *ReadbackProbe = @ptrCast(@alignCast(user.?));
+    probe.fired = true;
+    probe.ok = ok;
+}
+
+test "a texture's pixels are read back through a copy to a buffer and an asynchronous map" {
+    const handle = ke_gpu_device_webgpu_create(null, null);
+    if (handle.ref == null) return error.SkipZigTest;
+    defer handle.destroy.?(handle.ref);
+    const dev = handle.ref;
+
+    const width: u32 = 64;
+    const height: u32 = 4;
+    const row_bytes: u32 = width * 4;
+    var pixels: [row_bytes * height]u8 = undefined;
+    for (&pixels, 0..) |*b, i| b.* = @truncate(i *% 7);
+
+    const tex = dev.*.create_texture.?(dev, &ke.ke_gpu_texture_params{
+        .width = width,
+        .height = height,
+        .depth_or_array_layers = 1,
+        .format = ke.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
+        .dimension = ke.KE_GPU_TEXTURE_DIM_2D,
+        .usage = ke.KE_GPU_TEXTURE_USAGE_COPY_SRC,
+        .mip_level_count = 1,
+        .sample_count = 1,
+        .initial_data = &pixels,
+        .initial_data_size = pixels.len,
+    });
+    try std.testing.expect(tex != ke.KE_GPU_INVALID_HANDLE);
+    defer dev.*.destroy_texture.?(dev, tex);
+
+    const buf = dev.*.create_buffer.?(dev, &ke.ke_gpu_buffer_params{
+        .initial_data = null,
+        .size = row_bytes * height,
+        .usage = ke.KE_GPU_BUFFER_USAGE_MAP_READ | ke.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    }, null);
+    try std.testing.expect(buf != ke.KE_GPU_INVALID_HANDLE);
+    defer dev.*.destroy_buffer.?(dev, buf);
+
+    const enc = dev.*.create_command_encoder.?(dev);
+    defer enc.*.destroy.?(enc);
+
+    var misaligned: ?*ke.ke_error = null;
+    try std.testing.expect(!enc.*.copy_texture_to_buffer.?(enc, tex, 0, 0, 0, buf, 0, row_bytes - 1, width, height, &misaligned));
+    try std.testing.expect(misaligned != null);
+    try std.testing.expect(ke.ke_error_is(misaligned, &ke.KE_ERROR_INVALID_ARGUMENT));
+
+    try std.testing.expect(enc.*.copy_texture_to_buffer.?(enc, tex, 0, 0, 0, buf, 0, row_bytes, width, height, null));
+    const cmd = enc.*.finish.?(enc);
+    var cmds = [_][*c]ke.ke_gpu_command_buffer{cmd};
+    const queue = dev.*.get_default_queue.?(dev);
+    dev.*.queue_submit.?(dev, queue, &cmds, 1);
+
+    var probe = ReadbackProbe{};
+    dev.*.map_buffer_read.?(dev, buf, 0, row_bytes * height, readbackProbeDone, &probe);
+    dev.*.queue_wait_idle.?(dev, queue);
+    try std.testing.expect(probe.fired);
+    try std.testing.expect(probe.ok);
+
+    const mapped: [*]const u8 = @ptrCast(dev.*.map_buffer.?(dev, buf, 0, row_bytes * height).?);
+    try std.testing.expectEqualSlices(u8, &pixels, mapped[0..pixels.len]);
+    dev.*.unmap_buffer.?(dev, buf);
 }
