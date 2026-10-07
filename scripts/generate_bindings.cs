@@ -89,26 +89,41 @@ try
 
         Console.WriteLine($"\n--- Generating: {name} ---");
 
+        string? previousDir = null;
         if (committedDir is not null && Directory.Exists(committedDir))
         {
-            Console.WriteLine($"Cleaning stale bindings in {Path.GetRelativePath(rootDir, committedDir)}");
-            Directory.Delete(committedDir, recursive: true);
+            Console.WriteLine($"Replacing the bindings in {Path.GetRelativePath(rootDir, committedDir)}");
+            previousDir = committedDir.TrimEnd(Path.DirectorySeparatorChar) + ".previous";
+            if (Directory.Exists(previousDir)) Directory.Delete(previousDir, recursive: true);
+            Directory.Move(committedDir, previousDir);
         }
 
         string[] command = [.. generator, $"@{rsp}", .. extraArgs];
-        var (exitCode, stdout, stderr) = Run(command, Path.GetDirectoryName(rsp)!, env);
+        int exitCode;
+        string stdout, stderr;
+        try
+        {
+            (exitCode, stdout, stderr) = Run(command, Path.GetDirectoryName(rsp)!, env);
+        }
+        catch
+        {
+            RestorePrevious(committedDir, previousDir);
+            throw;
+        }
 
         var wrote = committedDir is not null && Directory.Exists(committedDir)
             && Directory.EnumerateFiles(committedDir, "*.cs", SearchOption.AllDirectories).Any();
 
         if (wrote)
         {
+            if (previousDir is not null) Directory.Delete(previousDir, recursive: true);
             successCount++;
             if (exitCode != 0) Console.WriteLine($"WARNINGS: {name} (bindings written)");
         }
         else
         {
-            Console.WriteLine($"FAILED: {name} wrote no bindings");
+            RestorePrevious(committedDir, previousDir);
+            Console.WriteLine($"FAILED: {name} wrote no bindings; the previous bindings were kept");
             Console.WriteLine($"STDOUT: {stdout}");
             Console.WriteLine($"STDERR: {stderr}");
         }
@@ -137,6 +152,13 @@ if (check)
 
 Console.WriteLine($"\nDone. {successCount}/{rspFiles.Count} bindings regenerated successfully.");
 return successCount == rspFiles.Count ? 0 : 1;
+
+static void RestorePrevious(string? committedDir, string? previousDir)
+{
+    if (committedDir is null || previousDir is null) return;
+    if (Directory.Exists(committedDir)) Directory.Delete(committedDir, recursive: true);
+    Directory.Move(previousDir, committedDir);
+}
 
 static string WithOutput(string[] lines, string outputDir)
 {
