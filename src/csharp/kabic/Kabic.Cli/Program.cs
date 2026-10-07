@@ -5,10 +5,7 @@ var checks = new Dictionary<string, Func<Options, int>>
 {
     ["drift"] = DriftCommand.Run,
     ["bindings"] = BindingsCommand.CheckDrift,
-    ["abi-layout"] = AbiLayoutCheck.Execute,
     ["api-coverage"] = ApiCoverageCheck.Execute,
-    ["component-fields"] = ComponentFieldsCheck.Execute,
-    ["generator-contract"] = GeneratorContractCheck.Execute,
     ["reconstruction"] = ReconstructionCheck.Execute,
     ["out-params"] = OutParamsCheck.Execute,
 };

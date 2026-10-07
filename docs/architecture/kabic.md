@@ -123,12 +123,12 @@ runs all nine through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 | gate | what fails it |
 |---|---|
 | `kabic check drift` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory; exits 1 for that. When the extraction or generation itself cannot run it exits 2 and says it compared nothing, because that is a broken tool, not drift |
-| `kabic check abi-layout` | the size, alignment or a member offset of any struct or vtable the contract headers declare differs from `scripts/abi_layout.snapshot`, which a C compiler probe regenerates; an intended change is recorded with `-- --update` |
+| `check_abi_layout.cs` | the size, alignment or a member offset of any struct or vtable the contract headers declare differs from `scripts/abi_layout.snapshot`, which a C compiler probe regenerates; an intended change is recorded with `-- --update` |
 | `kabic check reconstruction` | any file `kabic generate --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
 | `kabic check api-coverage` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `bindings` entry, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
 | `kabic check out-params` | a parameter named `out` or carrying the convention's out prefix, other than its failure lane, carries no `[out]` tag |
-| `kabic check generator-contract` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
-| `kabic check component-fields` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
+| `check_generator_contract.cs` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
+| `check_component_fields.cs` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
 | `check_managed_handwritten.cs` | the count of hand-written `.cs` files under `src/csharp` (excluding `Generated`, `*.g.cs`, `kabic/`) goes above the ceiling, or stays below it (`check_managed_handwritten.cs:17`, `:35-47`) |
 | `kabic check bindings` | what ClangSharp generates from a binding's headers into a temporary directory differs, byte for byte or by file set, from the committed `Generated/` tree |
 
