@@ -9,16 +9,14 @@ public sealed class ConventionBuilder
     string symbolPrefix = "", handleSuffix = "", factorySuffix = "", componentSuffix = "", paramsSuffix = "";
     string outParamPrefix = "out_", errorLaneName = "out_error";
     string byteBoolType = "";
-    IReadOnlyList<string> booleanReturnTypes = [];
     string includeDirectoryName = "", commonBindingsNamespace = "", bindingsMethodsClass = "NativeMethods";
     string commonManagedNamespace = "";
-    string errorType = "", errorKindType = "", errorIsFunction = "", errorGeneral = "", errorLaneType = "";
+    string errorType = "", errorKindType = "", errorIsFunction = "", errorGeneral = "";
     string errorHelperClass = "", errorHelperNamespace = "", errorKindsOut = "", errorAbiHeader = "";
     IReadOnlyList<string> errorAbiIncludeDirs = [];
     FieldTableConvention? fieldTable;
     readonly List<ErrorKindSpec> errors = [];
-    readonly Dictionary<string, ValueTypeMapping> vectorTypes = [];
-    readonly Dictionary<string, string> matrixTypes = [], handleTypes = [], typeNames = [];
+    readonly Dictionary<string, string> handleTypes = [], typeNames = [];
 
     /// <summary>The spellings that mark what a symbol is: its prefix and the suffix of a handle, a factory, a component and a parameter bag.</summary>
     public ConventionBuilder Symbols(string prefix, string handle, string factory, string component, string parameters)
@@ -27,10 +25,10 @@ public sealed class ConventionBuilder
         return this;
     }
 
-    /// <summary>The one-byte boolean typedef and the spellings a boolean return takes.</summary>
-    public ConventionBuilder Booleans(string byteBool, params string[] returnTypes)
+    /// <summary>The one-byte boolean typedef the ABI declares; <c>_Bool</c> and <c>bool</c> are C's own.</summary>
+    public ConventionBuilder Booleans(string byteBool)
     {
-        (byteBoolType, booleanReturnTypes) = (byteBool, returnTypes);
+        byteBoolType = byteBool;
         return this;
     }
 
@@ -57,13 +55,13 @@ public sealed class ConventionBuilder
 
     /// <summary>
     /// How a failure is reported: the struct and the kind type, the function that tests a kind, the general kind,
-    /// the lane type a fallible slot ends in, the header that declares all of it, and the class and file that
+    /// the header that declares all of it, and the class and file that
     /// receive the generated mapping to exceptions.
     /// </summary>
-    public ConventionBuilder Failure(string type, string kindType, string isFunction, string generalSingleton, string laneType,
+    public ConventionBuilder Failure(string type, string kindType, string isFunction, string generalSingleton,
         string header, IEnumerable<string> includeDirs, string helperClass, string helperNamespace, string kindsOut)
     {
-        (errorType, errorKindType, errorIsFunction, errorGeneral, errorLaneType) = (type, kindType, isFunction, generalSingleton, laneType);
+        (errorType, errorKindType, errorIsFunction, errorGeneral) = (type, kindType, isFunction, generalSingleton);
         (errorAbiHeader, errorAbiIncludeDirs) = (header, includeDirs.ToList());
         (errorHelperClass, errorHelperNamespace, errorKindsOut) = (helperClass, helperNamespace, kindsOut);
         return this;
@@ -80,20 +78,6 @@ public sealed class ConventionBuilder
     public ConventionBuilder AddError(string singleton, string nativeName, string managed, string? zig = null, string? extends = null)
     {
         errors.Add(new ErrorKindSpec(singleton, nativeName, managed, zig ?? Convention.ZigErrorName(nativeName), extends));
-        return this;
-    }
-
-    /// <summary>A C vector type, the managed type of the same bytes, and the lanes of the C struct in order.</summary>
-    public ConventionBuilder AddVectorType(string cType, string managed, params string[] lanes)
-    {
-        vectorTypes[cType] = new ValueTypeMapping(managed, lanes);
-        return this;
-    }
-
-    /// <summary>A C matrix type and the managed type of the same bytes.</summary>
-    public ConventionBuilder AddMatrixType(string cType, string managed)
-    {
-        matrixTypes[cType] = managed;
         return this;
     }
 
@@ -125,8 +109,6 @@ public sealed class ConventionBuilder
         FactorySuffix = factorySuffix,
         ComponentSuffix = componentSuffix,
         ParamsSuffix = paramsSuffix,
-        ErrorOutParamType = errorLaneType,
-        BooleanReturnTypes = booleanReturnTypes,
         OutParamPrefix = outParamPrefix,
         ErrorLaneName = errorLaneName,
         ByteBoolType = byteBoolType,
@@ -144,8 +126,6 @@ public sealed class ConventionBuilder
         ErrorHelperNamespace = errorHelperNamespace,
         ErrorKindsOut = errorKindsOut,
         ErrorKinds = errors.ToList(),
-        VectorTypes = new Dictionary<string, ValueTypeMapping>(vectorTypes),
-        MatrixTypes = new Dictionary<string, string>(matrixTypes),
         HandleTypes = new Dictionary<string, string>(handleTypes),
         TypeNameOverrides = new Dictionary<string, string>(typeNames),
         FieldTable = fieldTable,

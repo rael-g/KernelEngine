@@ -6,8 +6,6 @@
     "factorySuffix": "_create",
     "componentSuffix": "_component",
     "paramsSuffix": "_params",
-    "errorOutParamType": "ke_error**",
-    "booleanReturnTypes": ["_Bool", "bool", "ke_bool"],
     "outParamPrefix": "out_",
     "errorLaneName": "out_error",
     "byteBoolType": "ke_bool",
@@ -31,13 +29,6 @@
     "errorAbiIncludeDirs": ["src/zig/common/include"],
     "errorHelperClass": "NativeErrors",
     "commonManagedNamespace": "KernelEngine.Common",
-    "vectorTypes": {
-      "ke_vec2": { "managed": "Vector2", "lanes": ["x", "y"] },
-      "ke_vec3": { "managed": "Vector3", "lanes": ["x", "y", "z"] },
-      "ke_vec4": { "managed": "Vector4", "lanes": ["x", "y", "z", "w"] },
-      "ke_quat": { "managed": "Quaternion", "lanes": ["x", "y", "z", "w"] }
-    },
-    "matrixTypes": { "ke_mat4": "Matrix4x4" },
     "handleTypes": {
       "ke_mesh_handle": "KernelEngine.Render.MeshHandle",
       "ke_material_handle": "KernelEngine.Render.MaterialHandle",
@@ -48,9 +39,8 @@
       "entryType": "ke_component_field",
       "include": "kernel_engine/ecs/component_field.h",
       "nameMacroPrefix": "KE_COMPONENT_NAME_",
-      "nullVariant": "{ KE_VARIANT_NULL, { 0 } }",
-      "valueTypes": { "ke_vec2": "vec2", "ke_vec3": "vec3", "ke_vec4": "vec4", "ke_quat": "quat" },
       "variants": {
+        "null": { "constant": "KE_VARIANT_NULL" },
         "bool": { "constant": "KE_VARIANT_BOOL", "member": ".b" },
         "int": { "constant": "KE_VARIANT_INT", "member": ".i" },
         "float": { "constant": "KE_VARIANT_FLOAT", "member": ".f" },
@@ -256,6 +246,7 @@
         "src/zig/common/include"
       ],
       "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/spatial/kernel_engine/spatial/transform.h",
         "src/c/physics/kernel_engine/physics/physics_2d.h"
       ],
@@ -287,6 +278,7 @@
         "src/zig/common/include"
       ],
       "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ],
       "apiJson": "src/csharp/audio/components.ke_api.json",
@@ -436,6 +428,9 @@
       "name": "spatial",
       "headers": [
         "src/c/spatial/kernel_engine/spatial/transform.h"
+      ],
+      "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h"
       ],
       "includeDirs": [
         "src/c/spatial",
@@ -599,6 +594,7 @@
       "outDir": "src/csharp/render/KernelEngine.Render/Scene",
       "usings": [],
       "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ]
     },
@@ -627,6 +623,7 @@
       "outDir": "src/csharp/render/KernelEngine.Render/Scene",
       "usings": [],
       "composeHeaders": [
+        "src/c/math/kernel_engine/math/math.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ]
     },

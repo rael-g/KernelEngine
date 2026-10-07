@@ -9,6 +9,7 @@ extern "C"
     typedef struct ke_vec2 { float x, y;       } ke_vec2;
     typedef struct ke_vec3 { float x, y, z;    } ke_vec3;
     typedef struct ke_vec4 { float x, y, z, w; } ke_vec4;
+    /** [quaternion] A rotation; the four lanes are x, y, z, w. */
     typedef struct ke_quat { float x, y, z, w; } ke_quat;
 
     typedef struct ke_mat4 { float m[16]; } ke_mat4;

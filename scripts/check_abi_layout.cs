@@ -61,6 +61,7 @@ try
             foreach (var sRaw in api[kind]?.AsArray() ?? [])
             {
                 var s = sRaw!.AsObject();
+                if (s["external"]?.GetValue<bool>() == true) continue;
                 var type = s["name"]!.GetValue<string>();
                 tu.AppendLine($"  printf(\"{type} size=%zu align=%zu\\n\", sizeof({type}), _Alignof({type}));");
                 foreach (var fRaw in s["fields"]?.AsArray() ?? [])

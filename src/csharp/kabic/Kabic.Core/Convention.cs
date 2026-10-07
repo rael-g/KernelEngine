@@ -4,11 +4,8 @@ namespace Kabic;
 /// The naming and shape conventions of the C ABI being compiled — everything
 /// `kabic` "knows" about its consumer that is NOT intrinsic to C itself.
 /// </summary>
-/// <summary>A C type and the managed type that occupies the same bytes.</summary>
-public sealed record ValueTypeMapping(string Managed, string[] Lanes);
-
 /// <summary>What a scene file can write for a component field.</summary>
-public enum FieldKind { Bool, Int, Float, String, Vec2, Vec3, Vec4, Quat }
+public enum FieldKind { Null, Bool, Int, Float, String, Vec2, Vec3, Vec4, Quat }
 
 /// <summary>How one kind of field is spelled in the generated table.</summary>
 public sealed record FieldVariant(string Constant, string Member);
@@ -22,8 +19,6 @@ public sealed record FieldTableConvention(
     string EntryType,
     string Include,
     string NameMacroPrefix,
-    string NullVariant,
-    IReadOnlyDictionary<string, FieldKind> ValueTypes,
     IReadOnlyDictionary<FieldKind, FieldVariant> Variants);
 
 /// <summary>
@@ -81,10 +76,10 @@ public sealed class Convention
     /// The out-parameter type spelling that makes a slot fallible. A slot returning boolean-true-on-success
     /// whose last parameter is this type reports failure through it rather than through its return value.
     /// </summary>
-    public required string ErrorOutParamType { get; init; }
+    public string ErrorOutParamType => ErrorType + "**";
 
     /// <summary>Boolean return-type spellings that mean "succeeded", paired with <see cref="ErrorOutParamType"/>.</summary>
-    public required IReadOnlyList<string> BooleanReturnTypes { get; init; }
+    public IReadOnlyList<string> BooleanReturnTypes => ["_Bool", "bool", ByteBoolType];
 
     /// <summary>True if <paramref name="structName"/> names an owner-wrapper rather than a real vtable.</summary>
     public bool IsHandleType(string structName) => structName.EndsWith(HandleSuffix);
@@ -185,12 +180,6 @@ public sealed class Convention
     /// <summary>Managed namespace the generated projections import for the shared types, beside the bindings namespace.</summary>
     public string CommonManagedNamespace { get; init; } = "";
 
-    /// <summary>C vector types and the managed type that occupies the same bytes, with the lanes of the C struct in order.</summary>
-    public IReadOnlyDictionary<string, ValueTypeMapping> VectorTypes { get; init; } = new Dictionary<string, ValueTypeMapping>();
-
-    /// <summary>C matrix types and the managed type that occupies the same bytes.</summary>
-    public IReadOnlyDictionary<string, string> MatrixTypes { get; init; } = new Dictionary<string, string>();
-
     /// <summary>C owner-wrapper handle types and the managed type a caller holds instead.</summary>
     public IReadOnlyDictionary<string, string> HandleTypes { get; init; } = new Dictionary<string, string>();
 
@@ -207,25 +196,19 @@ public sealed class Convention
         var builder = new ConventionBuilder()
             .Symbols(Text(json, "symbolPrefix"), Text(json, "handleSuffix"), Text(json, "factorySuffix"),
                 Text(json, "componentSuffix"), Text(json, "paramsSuffix"))
-            .Booleans(Text(json, "byteBoolType"),
-                (json["booleanReturnTypes"]?.AsArray() ?? throw new InvalidOperationException("the convention declares no 'booleanReturnTypes'"))
-                    .Select(n => n!.GetValue<string>()).ToArray())
+            .Booleans(Text(json, "byteBoolType"))
             .OutParams(Or(json, "outParamPrefix", "out_"), Or(json, "errorLaneName", "out_error"))
             .Bindings(Or(json, "includeDirectoryName", "kernel_engine"), Or(json, "commonBindingsNamespace", ""),
                 Or(json, "bindingsMethodsClass", "NativeMethods"))
             .Managed(Text(json, "commonManagedNamespace"))
             .Failure(Text(json, "errorType"), Text(json, "errorKindType"), Text(json, "errorIsFunction"),
-                Text(json, "errorGeneralSingleton"), Text(json, "errorOutParamType"), Text(json, "errorAbiHeader"),
+                Text(json, "errorGeneralSingleton"), Text(json, "errorAbiHeader"),
                 (json["errorAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()),
                 Text(json, "errorHelperClass"), Text(json, "errorHelperNamespace"), Text(json, "errorKindsOut"));
 
         foreach (var e in json["errors"]?.AsArray() ?? [])
             builder.AddError(e!["singleton"]!.GetValue<string>(), e["nativeName"]!.GetValue<string>(),
                 e["managed"]!.GetValue<string>(), e["zig"]?.GetValue<string>(), e["extends"]?.GetValue<string>());
-        foreach (var (cType, v) in json["vectorTypes"]?.AsObject() ?? [])
-            builder.AddVectorType(cType, v!["managed"]!.GetValue<string>(), v["lanes"]!.AsArray().Select(l => l!.GetValue<string>()).ToArray());
-        foreach (var (cType, managed) in json["matrixTypes"]?.AsObject() ?? [])
-            builder.AddMatrixType(cType, managed!.GetValue<string>());
         foreach (var (cType, managed) in json["handleTypes"]?.AsObject() ?? [])
             builder.AddHandleType(cType, managed!.GetValue<string>());
         foreach (var (symbol, name) in json["typeNameOverrides"]?.AsObject() ?? [])
@@ -247,11 +230,9 @@ public sealed class Convention
             table["entryType"]!.GetValue<string>(),
             table["include"]!.GetValue<string>(),
             table["nameMacroPrefix"]!.GetValue<string>(),
-            table["nullVariant"]!.GetValue<string>(),
-            (table["valueTypes"]?.AsObject() ?? []).ToDictionary(kv => kv.Key, kv => Kind(kv.Value!.GetValue<string>())),
             table["variants"]!.AsObject().ToDictionary(
                 kv => Kind(kv.Key),
-                kv => new FieldVariant(kv.Value!["constant"]!.GetValue<string>(), kv.Value["member"]!.GetValue<string>())));
+                kv => new FieldVariant(kv.Value!["constant"]!.GetValue<string>(), kv.Value["member"]?.GetValue<string>() ?? "")));
     }
 
     /// <summary>Reads the <c>convention</c> object of the manifest at <paramref name="manifestPath"/>.</summary>

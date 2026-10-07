@@ -78,8 +78,10 @@
     },
     {
       "name": "ke_quat",
-      "doc": null,
-      "tags": [],
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
       "fields": [
         {
           "name": "x",

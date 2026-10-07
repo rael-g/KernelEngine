@@ -8,8 +8,8 @@ public sealed class ErrorKindsTests
     {
         var builder = new ConventionBuilder()
             .Symbols("my_", "_handle", "_create", "_component", "_params")
-            .Booleans("my_bool", "bool")
-            .Failure("my_error", "my_error_type", "my_error_is", "MY_ERROR_GENERAL", "my_error**",
+            .Booleans("my_bool")
+            .Failure("my_error", "my_error_type", "my_error_is", "MY_ERROR_GENERAL",
                 "", [], "NativeErrors", "MyGame", "");
         declare(builder);
         return builder.Build();

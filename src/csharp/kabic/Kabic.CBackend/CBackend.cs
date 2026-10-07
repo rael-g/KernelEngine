@@ -94,7 +94,7 @@ public static class CBackend
     private static string DefaultOf(ApiModel model, ApiField f, FieldTableConvention table)
     {
         var d = f.TagValue("default");
-        if (d is null) return table.NullVariant;
+        if (d is null) return NullVariant(table);
 
         var kind = VariantOf(model, f, table)!.Value;
         var variant = table.Variants[kind];
@@ -120,6 +120,8 @@ public static class CBackend
         return $"{{ {variant.Constant}, {{ {variant.Member} = {value} }} }}";
     }
 
+    private static string NullVariant(FieldTableConvention table) => $"{{ {table.Variants[FieldKind.Null].Constant}, {{ 0 }} }}";
+
     /// <summary>A C floating literal: "5" is not one, "5.0" is.</summary>
     private static string CDouble(string raw) => raw.Contains('.') ? raw : raw + ".0";
 
@@ -136,7 +138,8 @@ public static class CBackend
         if (f.Has("bool")) return FieldKind.Bool;
         var type = Base(f.Type);
         if (model.Enums.Any(e => e.Name == type)) return FieldKind.Int;
-        if (table.ValueTypes.TryGetValue(type, out var named)) return named;
+        if (model.VectorOf(type) is { } vector)
+            return vector.Managed == "Quaternion" ? FieldKind.Quat : vector.Lanes.Length switch { 2 => FieldKind.Vec2, 3 => FieldKind.Vec3, _ => FieldKind.Vec4 };
         return type switch
         {
             "float" or "double"                        => FieldKind.Float,

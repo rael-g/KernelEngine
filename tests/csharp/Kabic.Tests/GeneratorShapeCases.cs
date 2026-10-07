@@ -701,7 +701,7 @@ internal static class GeneratorShapeCases
         {
             Register(what, failures =>
             {
-                var model = new ApiModel();
+                var model = NewModel();
             model.Structs.Add(component);
             foreach (var other in alongside ?? []) model.Structs.Add(other);
 
@@ -724,7 +724,7 @@ internal static class GeneratorShapeCases
         {
             Register(what, failures =>
             {
-                var model = new ApiModel();
+                var model = NewModel();
             model.Structs.Add(s);
             foreach (var other in alongside ?? []) model.Structs.Add(other);
 
@@ -827,6 +827,19 @@ internal static class GeneratorShapeCases
             };
         }
 
+        static ApiModel NewModel()
+        {
+            var m = new ApiModel();
+            foreach (var (name, lanes, tags) in new (string, string[], string[])[]
+                {
+                    ("ke_vec2", ["x", "y"], []), ("ke_vec3", ["x", "y", "z"], []),
+                    ("ke_vec4", ["x", "y", "z", "w"], []), ("ke_quat", ["x", "y", "z", "w"], ["quaternion"]),
+                })
+                m.Structs.Add(new ApiStruct(name, null, tags, lanes.Select(l => new ApiField(l, "float", [], null)).ToList(), []));
+            m.Structs.Add(new ApiStruct("ke_mat4", null, [], [new ApiField("m", "float[16]", [], null)], []));
+            return m;
+        }
+
         static ApiStruct ValueStruct(string name, params (string Name, string Type)[] fields) =>
             new(name, null, ["value"],
                 fields.Select(f => new ApiField(f.Name, f.Type, [], null)).ToList(), []);
@@ -845,7 +858,7 @@ internal static class GeneratorShapeCases
         {
             Register(what, failures =>
             {
-                var model = new ApiModel();
+                var model = NewModel();
             model.Structs.Add(s);
 
             string emitted;
@@ -882,7 +895,7 @@ internal static class GeneratorShapeCases
         {
             Register(what, failures =>
             {
-                var model = new ApiModel();
+                var model = NewModel();
             model.Structs.Add(s);
             model.Structs.Add(new ApiStruct("ke_vertex", null, ["value"],
                 [new ApiField("x", "float", [], null)], []) { External = true });
@@ -928,7 +941,7 @@ internal static class GeneratorShapeCases
         {
             Register(what, failures =>
             {
-                var model = new ApiModel();
+                var model = NewModel();
             model.Structs.Add(s);
             foreach (var other in alongside ?? []) model.Structs.Add(other);
 

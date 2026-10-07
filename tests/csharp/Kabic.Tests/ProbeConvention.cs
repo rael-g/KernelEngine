@@ -4,10 +4,10 @@ internal static class ProbeConvention
 {
     public static readonly Convention Value = new ConventionBuilder()
         .Symbols("ke_", "_handle", "_create", "_component", "_params")
-        .Booleans("ke_bool", "_Bool", "bool", "ke_bool")
+        .Booleans("ke_bool")
         .Bindings("kernel_engine", "KernelEngine.Common.Native")
         .Managed("KernelEngine.Common")
-        .Failure("ke_error", "ke_error_type", "ke_error_is", "KE_ERROR_GENERAL", "ke_error**",
+        .Failure("ke_error", "ke_error_type", "ke_error_is", "KE_ERROR_GENERAL",
             "", [], "NativeErrors", "KernelEngine", "")
         .AddError("KE_ERROR_GENERAL", "ke.error", "InvalidOperationException", "General")
         .AddError("KE_ERROR_NOT_FOUND", "ke.error.not_found", "KeyNotFoundException")
@@ -17,11 +17,6 @@ internal static class ProbeConvention
         .AddError("KE_ERROR_NOT_INITIALIZED", "ke.error.not_initialized", "InvalidOperationException")
         .AddError("KE_ERROR_NOT_SUPPORTED", "ke.error.not_supported", "NotSupportedException")
         .AddError("KE_ERROR_ALREADY_EXISTS", "ke.error.already_exists", "InvalidOperationException")
-        .AddVectorType("ke_vec2", "Vector2", "x", "y")
-        .AddVectorType("ke_vec3", "Vector3", "x", "y", "z")
-        .AddVectorType("ke_vec4", "Vector4", "x", "y", "z", "w")
-        .AddVectorType("ke_quat", "Quaternion", "x", "y", "z", "w")
-        .AddMatrixType("ke_mat4", "Matrix4x4")
         .AddHandleType("ke_mesh_handle", "KernelEngine.Render.MeshHandle")
         .AddHandleType("ke_material_handle", "KernelEngine.Render.MaterialHandle")
         .AddHandleType("ke_texture_handle", "KernelEngine.Render.TextureHandle")

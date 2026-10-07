@@ -635,7 +635,7 @@ public static class CSharpBackend
         IsCharArray(f.Type) ? "string" :
         convention.HandleTypes.TryGetValue(f.Type.Trim(), out var h) ? h :
         VectorArity(f.Type) is int n ? $"Vector{n}"
-        : convention.VectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.Managed
+        : model.VectorOf(f.Type) is { } v ? v.Managed
         : model.Enums.Any(e => e.Name == f.Type.Trim()) ? Idioms.TypeName(f.Type.Trim(), convention)
         : f.Has("bool") ? "bool" : CsType(model, f.Type, convention);
 
@@ -957,6 +957,7 @@ public static class CSharpBackend
     static bool NamesForeignDeclaration(ApiModel model, ApiField f)
     {
         var t = StripQualifiers(CTypes.FixedArray(f.Type)?.Element ?? f.Type).Trim();
+        if (model.VectorOf(t) is not null || model.MatrixOf(t) is not null) return false;
         return model.Enums.Any(e => e.Name == t && e.External)
             || model.Structs.Any(v => v.Name == t && v.External);
     }
@@ -1020,6 +1021,7 @@ public static class CSharpBackend
         var borrowsAType = s.Fields.Any(f =>
         {
             var named = StripQualifiers(CTypes.IsPointer(f.Type) ? CTypes.Deref(f.Type) : f.Type).Trim();
+            if (model.VectorOf(named) is not null || model.MatrixOf(named) is not null) return false;
             return model.Enums.Any(e => e.Name == named && e.External)
                 || model.Structs.Any(v => v.Name == named && v.External);
         });
@@ -1068,7 +1070,7 @@ public static class CSharpBackend
     /// type whose fields are the other.
     /// </summary>
     static string ValueTypeName(ApiModel model, string cType, Convention convention) =>
-        convention.MatrixTypes.TryGetValue(cType.Trim(), out var mat) ? mat
+        model.MatrixOf(cType) is { } mat ? mat
         : convention.HandleTypes.TryGetValue(cType.Trim(), out var handle) ? handle
         : model.Structs.Any(v => v.Name == cType.Trim() && (IsValue(v) || IsBorrowed(v)))
         || model.Enums.Any(e => e.Name == cType.Trim())
@@ -1094,7 +1096,7 @@ public static class CSharpBackend
                 + " [borrowed].");
 
         if (VectorArity(f.Type) is int n) return $"Vector{n}";
-        if (convention.VectorTypes.TryGetValue(f.Type.Trim(), out var v)) return v.Managed;
+        if (model.VectorOf(f.Type) is { } v) return v.Managed;
         if (ValueArray(model, s, f, convention) is { } array) return array.Buffer;
         return ValueTypeName(model, f.Type, convention);
     }
@@ -1112,7 +1114,7 @@ public static class CSharpBackend
         var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         var lanes = VectorArity(f.Type) is int n ? n
-            : convention.VectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.Lanes.Length
+            : model.VectorOf(f.Type) is { } v ? v.Lanes.Length
             : 1;
         if (lanes > 1)
         {
