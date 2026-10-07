@@ -39,8 +39,7 @@ dotnet test KernelEngine.slnx
 
 ```bash
 dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
-dotnet run scripts/generate_rsp.cs       # derive every ClangSharp .rsp from the manifest "bindings" array and the headers (--check to verify)
-dotnet run scripts/generate_bindings.cs  # regenerate all C# P/Invoke bindings via ClangSharp
+dotnet run --project src/csharp/kabic/Kabic.Cli -- bindings  # regenerate all C# P/Invoke bindings via ClangSharp, configured from the manifest "bindings" array and the headers
 dotnet run --project src/csharp/kabic/Kabic.Cli -- generate  # regenerate every kabic domain (ke_api.json + C# + C field tables) from scripts/api_domains.json
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
 ```
@@ -98,9 +97,9 @@ Vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `<plugin>/th
 
 ### Layer 3 — C# bindings
 
-Generated P/Invoke, one `Native/` directory per managed project (28 of them), each driven by its own `.rsp`. **Never edit `Generated/` or a `.rsp` by hand** — a `.rsp` is derived from the `bindings` array of `scripts/api_domains.json` by `dotnet run scripts/generate_rsp.cs`, and the bindings from the `.rsp` by `dotnet run scripts/generate_bindings.cs`.
+Generated P/Invoke, one `Native/` directory per managed project (28 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
-Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Twelve gates, six `kabic check` commands and six `scripts/check_*.cs`, keep both honest against the headers.
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Eleven gates, seven `kabic check` commands and four `scripts/check_*.cs`, keep both honest against the headers.
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 

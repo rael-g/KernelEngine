@@ -23,8 +23,8 @@ written once and a path or binary name never differs by runner. The Windows leg 
 | Zig | `mlugg/setup-zig@v2`, version `0.16.0` | both |
 | .NET | `actions/setup-dotnet@v4`, `10.0.x` | both |
 | vcpkg cache | restores `build/tools` and `build/vcpkg-installed`, keyed on `vcpkg.json`, `vcpkg-configuration.json` and `vcpkg-triplets/**` | both |
-| clang headers cache | `build/cache`, keyed on `scripts/generate_bindings.cs` | Linux |
-| NuGet cache | `~/.nuget/packages`, keyed on every `.csproj` and `src/csharp/dotnet-tools.json`, with the OS prefix as fallback | both |
+| clang headers cache | `build/cache`, keyed on `Kabic.ClangSharpBackend/ClangResourceDir.cs` | Linux |
+| NuGet cache | `~/.nuget/packages`, keyed on every `.csproj`, with the OS prefix as fallback | both |
 | native build | `dotnet run scripts/verify.cs -- build` | both |
 | save vcpkg | saves the vcpkg cache after the build, even when the build failed, unless the restore was a hit | both |
 | vcpkg build logs | on failure, the tail of every vcpkg build log | both |
@@ -34,7 +34,7 @@ written once and a path or binary name never differs by runner. The Windows leg 
 
 All three caches are for speed and never for correctness: a miss costs the vcpkg ports' build time or
 the download, and is repopulated by the build itself. The clang headers are fetched by
-`check_bindings_drift` into `build/cache` on its first run, and that cache is Linux-only because the gates
+`kabic check bindings` into `build/cache` on its first run, and that cache is Linux-only because the gates
 are. A vcpkg cache that is restored but whose ports are rebuilt anyway means a package's ABI hash
 changed; the triplets pass `PATH` through as untracked for that reason, so a runner-specific `PATH`
 does not enter the hash.
@@ -45,9 +45,9 @@ does not enter the hash.
 compiled, and runs the three projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The twelve gates are the `kabic check` commands `drift`, `abi-layout`, `api-coverage`, `component-fields`,
-`generator-contract` and `reconstruction`, and the scripts `check_bindings_drift`, `check_generator_shapes`,
-`check_managed_handwritten`, `check_out_params`, `check_rsp_drift` and `check_zig_shapes`. The scripts are found by `verify.cs` rather than
+The eleven gates are the `kabic check` commands `drift`, `bindings`, `abi-layout`, `api-coverage`, `component-fields`,
+`generator-contract` and `reconstruction`, and the scripts `check_generator_shapes`,
+`check_managed_handwritten`, `check_out_params` and `check_zig_shapes`. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
 `check_generator_shapes` and `check_zig_shapes` are run with `--no-cache`, since a cached build of the
 generator would answer about the wrong generator. What each one fails on is in

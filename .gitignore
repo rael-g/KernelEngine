@@ -81,5 +81,5 @@ Thumbs.db
 *.orig
 *.pid
 
-# Clang resource-dir headers that scripts/generate_bindings.cs fetches
+# Clang resource-dir headers that kabic fetches
 /.cache/

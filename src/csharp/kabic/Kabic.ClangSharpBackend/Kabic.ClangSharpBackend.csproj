@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ClangSharp.PInvokeGenerator" Version="21.1.8.2" />
+    <PackageReference Include="libClangSharp.runtime.linux-x64" Version="21.1.8.2" />
+    <PackageReference Include="libClangSharp.runtime.win-x64" Version="21.1.8.2" />
+    <PackageReference Include="libclang.runtime.linux-x64" Version="21.1.8" />
+    <PackageReference Include="libclang.runtime.win-x64" Version="21.1.8" />
+  </ItemGroup>
+</Project>

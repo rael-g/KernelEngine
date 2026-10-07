@@ -74,9 +74,9 @@ tracking allocator of its own and does not take part.
 
 ## Layer 3 — bindings are generated, never written
 
-Each managed project has a `Native/` directory with an `.rsp` naming the headers to read, the
-library to load and the output namespace
-(`src/csharp/window/KernelEngine.Window.Glfw/Native/Glfw.rsp`). The generated
+Each managed project has a `Native/` directory, and the `bindings` entry of `scripts/api_domains.json`
+for it names the headers to read, the library to load and the output namespace (`Glfw`, for
+`src/csharp/window/KernelEngine.Window.Glfw/Native/`). The generated
 `[DllImport("ke_window_glfw", ... EntryPoint = "ke_window_glfw_create")]` is in
 `.../Native/Generated/NativeMethods.cs:8`.
 

@@ -9,7 +9,7 @@ and invokes every plugin's own `build.zig` as a separate `zig build` (`Ctx.plugi
 The project resolves its own dependencies. The machine provides Zig and the .NET SDK, and on Linux the
 system's windowing development headers that glfw is built against (`docs/conventions/ci.md`). Everything
 else is fetched at a pinned version and kept under `build/`: vcpkg and every port it builds from source
-(`vcpkg.json`), `slangc`, `wgpu-native`, the NuGet packages and the `libclang` the binding generator loads
+(`vcpkg.json`), `slangc`, `wgpu-native`, the NuGet packages, which include the `libclang` the binding generator loads
 (`build.zig` fetch steps, `nuget.config`). The fetch steps run through `sh`.
 
 So the first build on a machine, or after `build/` is deleted, downloads those tools and compiles every

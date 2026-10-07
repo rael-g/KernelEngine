@@ -40,20 +40,9 @@ internal static class ApiCoverageCheck
                     describedByKabic.Add(Norm(h!.GetValue<string>()));
 
         var describedByClangSharp = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var rsp in Directory.EnumerateFiles(Path.Combine(rootDir, "src", "csharp"), "*.rsp", SearchOption.AllDirectories))
-        {
-            var dir = Path.GetDirectoryName(rsp)!;
-            foreach (var line in File.ReadAllLines(rsp))
-            {
-                var t = line.Trim();
-                if (!t.EndsWith(".h", StringComparison.OrdinalIgnoreCase)) continue;
-                describedByClangSharp.Add(Norm(Path.GetFullPath(Path.Combine(dir, t))));
-            }
-            foreach (var umbrella in Directory.EnumerateFiles(dir, "*.umbrella.h"))
-                foreach (var line in File.ReadAllLines(umbrella))
-                    if (line.TrimStart().StartsWith("#include <", StringComparison.Ordinal))
-                        describedByClangSharp.Add(Norm(line.Trim()[10..].TrimEnd('>')));
-        }
+        foreach (var job in Kabic.ClangSharpBackend.BindingsPlanner.Plan(rootDir, options.Manifest))
+            foreach (var header in job.Traverse)
+                describedByClangSharp.Add(Norm(Path.GetFullPath(Path.Combine(job.NativeDir, header))));
 
         var holes = new List<string>();
         foreach (var dir in (string[])["src/c", "src/zig"])
@@ -78,7 +67,7 @@ internal static class ApiCoverageCheck
         Console.Error.WriteLine($"{holes.Count} header(s) reach no language:");
         foreach (var h in holes.Order()) Console.Error.WriteLine($"  {h}");
         Console.Error.WriteLine();
-        Console.Error.WriteLine("Add each to scripts/api_domains.json, to a .rsp, or to this script's");
+        Console.Error.WriteLine("Add each to scripts/api_domains.json, to a binding in it, or to this script's");
         Console.Error.WriteLine("exclusion list with the reason it stays unbound.");
         return 1;
 
