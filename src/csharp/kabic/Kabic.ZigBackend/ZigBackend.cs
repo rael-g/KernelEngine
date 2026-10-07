@@ -47,7 +47,7 @@ public sealed class ZigBackend
 
         foreach (var (alias, target) in model.TypeAliases)
         {
-            var prim = Idioms.Primitive(target);
+            var prim = Idioms.Primitive(target, convention);
             if (prim is not null) sb.AppendLine($"pub const {Idioms.TypeName(alias, convention)} = {prim};");
         }
         sb.AppendLine();
@@ -296,7 +296,7 @@ public sealed class ZigBackend
 
     string Named(string bare, string q)
     {
-        if (Idioms.Primitive(bare) is { } prim && !model.TypeAliases.ContainsKey(bare)) return prim;
+        if (Idioms.Primitive(bare, convention) is { } prim && !model.TypeAliases.ContainsKey(bare)) return prim;
         if (!DeclaredHere(bare) && foreign.TryGetValue(bare, out var owner))
         {
             var binding = Bind(owner.Module);
@@ -305,11 +305,11 @@ public sealed class ZigBackend
                 ? $"{binding}.abi.{bare}"
                 : $"{binding}.{Idioms.TypeName(bare, convention)}";
         }
-        if (model.TypeAliases.TryGetValue(bare, out var target) && Idioms.Primitive(target) is not null)
+        if (model.TypeAliases.TryGetValue(bare, out var target) && Idioms.Primitive(target, convention) is not null)
             return Idioms.TypeName(bare, convention);
         if (model.Enums.Any(e => e.Name == bare)) return Idioms.TypeName(bare, convention);
         if (model.Structs.Any(s => s.Name == bare)) return q + bare;
-        return Idioms.Primitive(bare) ?? q + bare;
+        return Idioms.Primitive(bare, convention) ?? q + bare;
     }
 
     /// <summary>

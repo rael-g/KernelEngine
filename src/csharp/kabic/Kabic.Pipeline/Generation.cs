@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using Kabic.C;
 using Kabic.CSharp;
 
 namespace Kabic.Pipeline;
@@ -113,13 +112,5 @@ public static class Generation
             File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(owner, convention)}Functions.g.cs"),
                 CSharpBackend.RenderFreeFunctions(model, owner, fns, ns, nativeNs, usings, r.Library, convention));
         }
-    }
-
-    public static void CFieldTable(string apiJson, string outPath, string guard, IReadOnlyList<string> includes, Convention convention)
-    {
-        var model = ApiReader.Read(JsonNode.Parse(apiJson)!.AsObject());
-        var text = CBackend.RenderFieldTables(model, guard, includes.ToList(), convention);
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
-        File.WriteAllText(outPath, text);
     }
 }

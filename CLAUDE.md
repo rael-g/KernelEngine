@@ -40,7 +40,8 @@ dotnet test KernelEngine.slnx
 ```bash
 dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGSL (see root build.zig's Ctx.shader/materialShaders helpers for the driven build)
 dotnet run --project src/csharp/kabic/Kabic.Cli -- bindings  # regenerate all C# P/Invoke bindings via ClangSharp, configured from the manifest "bindings" array and the headers
-dotnet run --project src/csharp/kabic/Kabic.Cli -- generate  # regenerate every kabic domain (ke_api.json + C# + C field tables) from scripts/api_domains.json
+dotnet run --project src/csharp/kabic/Kabic.Cli -- generate  # regenerate every kabic domain (ke_api.json + C#) from scripts/api_domains.json
+dotnet run --project scripts/FieldTables  # write the C component field tables from each ke_api.json (--check to verify)
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
 ```
 
@@ -99,7 +100,7 @@ Vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `<plugin>/th
 
 Generated P/Invoke, one `Native/` directory per managed project (28 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
-Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Nine gates, five `kabic check` commands and four `scripts/check_*.cs`, keep both honest against the headers.
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Ten gates, `scripts/FieldTables --check`, five `kabic check` commands and four `scripts/check_*.cs`, keep both honest against the headers.
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 

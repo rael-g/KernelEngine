@@ -23,7 +23,7 @@ public static class Extraction
         var composePaths = request.ComposeHeaders.Select(Path.GetFullPath).ToList();
         var all = headerPaths.Concat(auxPaths).Concat(composePaths).ToList();
 
-        var tuDir = Path.Combine(Path.GetTempPath(), "ke_extract_api_" + Guid.NewGuid().ToString("N"));
+        var tuDir = Path.Combine(Path.GetTempPath(), "kabic_extract_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tuDir);
         var tuPath = Path.Combine(tuDir, "tu.c");
         File.WriteAllLines(tuPath, all.Select(h => $"#include \"{h.Replace('\\', '/')}\""));

@@ -7,9 +7,11 @@ per target language. Nothing it emits is edited by hand; the headers are the onl
 ```
 header.h --zig cc ast-dump--> Kabic.Frontend --> ke_api.json --> Kabic.Core (Classifier)
                                                                     |--> Kabic.CSharpBackend --> *.g.cs
-                                                                    |--> Kabic.ZigBackend    --> <domain>.zig
-                                                                    '--> Kabic.CBackend      --> component_fields.h
+                                                                    '--> Kabic.ZigBackend    --> <domain>.zig
 ```
+
+The engine's own tool, `scripts/FieldTables`, reads the same `ke_api.json` and writes `component_fields.h`;
+kabic knows nothing of it.
 
 ## What it reads
 
@@ -55,8 +57,8 @@ tags that decide a call's *shape* are read once, in `Classifier`:
 | `[lifecycle:init]`, `[lifecycle:shutdown]` | slot summary | the slot a wrapper calls after create or before destroy (`Classifier.cs:115-118`) |
 | `[callback]` | param | the parameter's type is a vtable the caller implements (`Classifier.cs:96-101`) |
 
-`[default:...]`, `[name:...]`, `[bool]` and `[output]` on a component field are read by the C
-backend (`CBackend.cs:94`, `:60`, `:148`, `:157`). The C# backend reads further tags that no other
+`[default:...]`, `[name:...]`, `[bool]` and `[output]` on a component field are read by the
+engine's field-table tool. The C# backend reads further tags that no other
 backend does (`enum`, `node`, `base`, `closure`, `completion`, `view`, `value`, `borrowed`, `utf8`, `idiom`, and
 others, all as `.Has("...")` / `.TagValue("...")` in `CSharpBackend.cs`), and the Zig backend reads
 `utf8`, `closure`, `default` and `optional` itself (`ZigBackend.cs:568`, `:723`, `:858`, `:333`).
@@ -71,10 +73,9 @@ of what a backend can know.
 
 `scripts/api_domains.json` is the hand-written manifest. Each entry of `domains` names the
 `headers`, `includeDirs`, `apiJson`, the C# `namespace` and `nativeNamespace`, the `outDir`, and
-optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHeaders` and `cOut`
-(the C field-table target). `kabic generate` walks it in one process: it extracts every domain in parallel
-(`Regeneration.ExtractAll`), then generates the C# and, for entries with `cOut`, the C field table
-(`Regeneration.GenerateOne`, `Regeneration.cs:31-38`).
+optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders` and `composeHeaders`; `cOut` is read only by
+the engine's field-table tool. `kabic generate` walks it in one process: it extracts every domain in parallel
+(`Regeneration.ExtractAll`), then generates the C# (`Regeneration.GenerateOne`).
 
 ## The Classifier
 
@@ -97,16 +98,12 @@ A description the classifier cannot classify throws `InvalidOperationException` 
 fails: a slot that answers, fails and writes a value (`Classifier.cs:293-298`), an unmatched
 `array_of` or `bytes_of` name, two written-back parameters that would project under one name.
 
-## The three backends
+## The two backends
 
 | backend | driver | emits | when it cannot render a form |
 |---|---|---|---|
 | `Kabic.CSharpBackend` | `Kabic.Pipeline.Generation.CSharp` | enums, value structs, views, providers with a contract interface, callback interfaces, node types, free-function groups (`Generation.cs:21-115`) | throws `InvalidOperationException`; no catch, so the domain run fails |
 | `Kabic.ZigBackend` | `kabic zig` | one module per domain that declares the ABI itself in a `pub const abi = struct`, with no `@cImport` line (`ZigBackend.cs:91-92`) | a slot it cannot render raises `NotSupportedException`, is caught per slot (`ZigBackend.cs:497`) and listed in the module's header comment (`ZigBackend.cs:110-115`); the other slots are still emitted |
-| `Kabic.CBackend` | `Kabic.Pipeline.Generation.CFieldTable` | a `ke_component_field` table per component struct (`_component` suffix), as `offsetof`/`sizeof` expressions the C compiler evaluates (`CBackend.cs:40-50`) | a `[default]` whose component count does not match its field type throws (`CBackend.cs:105-107`) |
-
-The C backend leaves a field out of its tables when the field is `[output]` or has no scene-file
-spelling (`CBackend.cs:133`).
 
 The Zig backend refuses a raw callback, an opaque payload, a `[closure]` that names no state
 parameter, a consumer vtable with other than one untyped field, and a consumer slot that reports
@@ -118,11 +115,11 @@ carries no Zig output directory and nothing in `scripts/`, `build.zig` or `ci.ym
 ## The gates
 
 Each gate is a `kabic check <name>` command or a file-based `dotnet run scripts/<name>.cs`, and exits non-zero on failure. `ci.yml`
-runs all nine through `scripts/verify.cs` (see `docs/conventions/ci.md`).
+runs all ten through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
-| `kabic check drift` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory; exits 1 for that. When the extraction or generation itself cannot run it exits 2 and says it compared nothing, because that is a broken tool, not drift |
+| `kabic check drift` | a domain's committed `ke_api.json`, generated C# differs byte for byte from a fresh extraction and generation into a temp directory; exits 1 for that. When the extraction or generation itself cannot run it exits 2 and says it compared nothing, because that is a broken tool, not drift |
 | `check_abi_layout.cs` | the size, alignment or a member offset of any struct or vtable the contract headers declare differs from `scripts/abi_layout.snapshot`, which a C compiler probe regenerates; an intended change is recorded with `-- --update` |
 | `kabic check reconstruction` | any file `kabic generate --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
 | `kabic check api-coverage` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `bindings` entry, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |

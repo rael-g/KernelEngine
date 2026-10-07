@@ -45,7 +45,7 @@ does not enter the hash.
 compiled, and runs the four projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`, and `Kabic`, whose cases pin the shape each backend emits for a synthetic header).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The nine gates are the `kabic check` commands `drift`, `bindings`, `api-coverage`, `reconstruction` and `out-params`,
+The ten gates are `scripts/FieldTables --check`, the `kabic check` commands `drift`, `bindings`, `api-coverage`, `reconstruction` and `out-params`,
 and the engine's scripts `check_abi_layout`, `check_component_fields`, `check_generator_contract` and `check_managed_handwritten`. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
 What each one fails on is in

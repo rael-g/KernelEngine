@@ -1,4 +1,6 @@
-namespace Kabic.C;
+using Kabic;
+
+namespace KernelEngine.FieldTables;
 
 /// <summary>
 /// kabic's C backend: renders a domain's component structs as
@@ -6,7 +8,7 @@ namespace Kabic.C;
 /// to component memory by reading a description instead of running a callback
 /// somebody wrote by hand for that one component.
 /// </summary>
-public static class CBackend
+public static class FieldTableBackend
 {
     /// <summary>
     /// Renders the field tables for every non-vtable, non-composed struct in

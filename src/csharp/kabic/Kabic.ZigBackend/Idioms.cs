@@ -12,7 +12,7 @@ public static class Idioms
 {
     static readonly Dictionary<string, string> Prim = new()
     {
-        ["_Bool"] = "bool", ["bool"] = "bool", ["ke_bool"] = "bool",
+        ["_Bool"] = "bool", ["bool"] = "bool",
         ["uint8_t"] = "u8", ["int8_t"] = "i8",
         ["uint16_t"] = "u16", ["int16_t"] = "i16",
         ["uint32_t"] = "u32", ["int32_t"] = "i32",
@@ -75,7 +75,8 @@ public static class Idioms
         return Ident(raw.ToLowerInvariant());
     }
 
-    public static string? Primitive(string cType) => Prim.GetValueOrDefault(Base(cType));
+    public static string? Primitive(string cType, Convention convention) =>
+        Base(cType) == convention.ByteBoolType ? "bool" : Prim.GetValueOrDefault(Base(cType));
 
     public static string Base(string cType) =>
         cType.Replace("const ", "").Replace("struct ", "").Replace("enum ", "").Trim();

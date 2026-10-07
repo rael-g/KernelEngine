@@ -8,7 +8,7 @@ public static class Idioms
 {
     static readonly Dictionary<string, string> Prim = new()
     {
-        ["_Bool"] = "bool", ["ke_bool"] = "bool", ["uint32_t"] = "uint", ["int32_t"] = "int",
+        ["_Bool"] = "bool", ["uint32_t"] = "uint", ["int32_t"] = "int",
         ["uint64_t"] = "ulong", ["int64_t"] = "long", ["float"] = "float", ["double"] = "double",
         ["void"] = "void", ["size_t"] = "nuint",
         ["uint16_t"] = "ushort", ["int16_t"] = "short", ["uint8_t"] = "byte", ["int8_t"] = "sbyte",
@@ -70,9 +70,10 @@ public static class Idioms
             ? overridden
             : Pascal(convention.StripPrefix(name));
 
-    public static string CsPrimitive(string cType)
+    public static string CsPrimitive(string cType, Convention convention)
     {
         var t = cType.Trim();
+        if (t == convention.ByteBoolType) return "bool";
         if (t is "void *" or "void*") return "nint";
         return Prim.GetValueOrDefault(t, t);
     }
@@ -82,9 +83,10 @@ public static class Idioms
     /// `const ` and normalizes spacing so it reads as a C# pointer type
     /// (`ke_logger*`). The caller is responsible for bringing the target
     /// type's namespace into scope (see --using).
-    public static string CsForeignType(string cType)
+    public static string CsForeignType(string cType, Convention convention)
     {
         var t = cType.Trim().Replace("const ", "").Replace("struct ", "");
+        if (t == convention.ByteBoolType) return "bool";
         return Prim.TryGetValue(t.TrimEnd('*', ' '), out var prim) && !t.Contains('*')
             ? prim
             : t.TrimEnd('*', ' ') + (t.Contains('*') ? "*" : "");

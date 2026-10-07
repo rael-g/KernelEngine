@@ -3,8 +3,7 @@ namespace Kabic.Pipeline;
 public sealed record DomainOutput(
     string ApiJson,
     string OutDir,
-    string ContractDir,
-    string? CFieldTableFile);
+    string ContractDir);
 
 public static class Regeneration
 {
@@ -14,8 +13,7 @@ public static class Regeneration
         return new DomainOutput(
             place(spec.ApiJson),
             outDir,
-            spec.AbstractionsOutDir is null ? outDir : place(spec.AbstractionsOutDir),
-            spec.CFieldTable is null ? null : place(spec.CFieldTable.File));
+            spec.AbstractionsOutDir is null ? outDir : place(spec.AbstractionsOutDir));
     }
 
     public static Extraction.Request RequestFor(DomainSpec spec, string rootDir, string? zig, Convention convention)
@@ -33,9 +31,6 @@ public static class Regeneration
         Generation.CSharp(new Generation.CSharpRequest(
             apiJson, spec.Namespace, spec.NativeNamespace, output.OutDir, output.ContractDir,
             spec.Name, spec.Library, spec.Providers, [], spec.Usings, convention));
-
-        if (spec.CFieldTable is { } c && output.CFieldTableFile is { } file)
-            Generation.CFieldTable(apiJson, file, c.Guard, c.Includes, convention);
     }
 
     public static IReadOnlyDictionary<string, string> ExtractAll(

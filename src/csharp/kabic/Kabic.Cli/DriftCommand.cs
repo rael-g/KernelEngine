@@ -15,7 +15,7 @@ internal static class DriftCommand
 
         var driftDetected = false;
         var checkFailed = false;
-        var tmpRoot = Path.Combine(Path.GetTempPath(), "ke_api_drift_" + Guid.NewGuid().ToString("N"));
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "kabic_drift_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tmpRoot);
 
         try
@@ -59,11 +59,10 @@ internal static class DriftCommand
 
                 var tmpOutDir = Path.Combine(tmpRoot, name, "out");
                 var tmpContractDir = spec.AbstractionsOutDir is not null ? Path.Combine(tmpRoot, name, "abstractions") : tmpOutDir;
-                var tmpCFile = spec.CFieldTable is null ? null : Path.Combine(tmpRoot, name, "component_fields.h");
 
                 try
                 {
-                    Regeneration.GenerateOne(spec, apiJson, new DomainOutput(tmpApiJson, tmpOutDir, tmpContractDir, tmpCFile), convention);
+                    Regeneration.GenerateOne(spec, apiJson, new DomainOutput(tmpApiJson, tmpOutDir, tmpContractDir), convention);
                 }
                 catch (InvalidOperationException e)
                 {
@@ -76,13 +75,6 @@ internal static class DriftCommand
                 {
                     Console.WriteLine($"[!] {name}: generated C# is out of date "
                         + $"(committed: {Path.GetRelativePath(rootDir, committed.OutDir)})");
-                    driftDetected = true;
-                }
-
-                if (tmpCFile is not null && committed.CFieldTableFile is { } committedCFile && !FilesEqual(tmpCFile, committedCFile))
-                {
-                    Console.WriteLine($"[!] {name}: generated C field table is out of date "
-                        + $"(committed: {Path.GetRelativePath(rootDir, committedCFile)})");
                     driftDetected = true;
                 }
             }

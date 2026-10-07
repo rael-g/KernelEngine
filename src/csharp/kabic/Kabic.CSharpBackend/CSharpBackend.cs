@@ -57,7 +57,7 @@ public static class CSharpBackend
             var at = indent + new string(' ', depth * 4);
             if (BorrowedOf(model, s.Seq) is { } borrowed)
             {
-                var native = CsType(model, CTypes.Deref(s.Seq.Type));
+                var native = CsType(model, CTypes.Deref(s.Seq.Type), convention);
                 lines.Add($"{at}var {n}Pins = new System.Buffers.MemoryHandle[{n}.Length];");
                 lines.Add($"{at}var {n}Native = new {native}[{n}.Length];");
                 lines.Add($"{at}try");
@@ -132,8 +132,8 @@ public static class CSharpBackend
             {
                 var count = b.Fields.First(x => x.Name == f.TagValue("array_of"));
                 yield return $"    {n}Pins[{at}] = {mirror}.Pin();";
-                yield return $"    {native} = ({CsType(model, f.Type)}){n}Pins[{at}].Pointer;";
-                yield return $"    {n}Native[{at}].{count.Name} = ({CsType(model, count.Type)}){mirror}.Length;";
+                yield return $"    {native} = ({CsType(model, f.Type, convention)}){n}Pins[{at}].Pointer;";
+                yield return $"    {n}Native[{at}].{count.Name} = ({CsType(model, count.Type, convention)}){mirror}.Length;";
             }
             else if (!b.Fields.Any(x => x.TagValue("array_of") == f.Name))
                 yield return $"    {native} = {mirror};";
@@ -155,7 +155,7 @@ public static class CSharpBackend
     {
         var n = Idioms.Ident(s.Seq.Name!);
         if (BorrowedOf(model, s.Seq) is not null) return $"{n}Ptr";
-        var native = CsType(model, CTypes.Deref(s.Seq.Type));
+        var native = CsType(model, CTypes.Deref(s.Seq.Type), convention);
         return SequenceElement(model, s, convention) == native ? $"{n}Ptr" : $"({native}*){n}Ptr";
     }
 
@@ -212,7 +212,7 @@ public static class CSharpBackend
     /// A C type mapped to C#. Typedef aliases resolve first; pointers recurse so
     /// `const`/`struct` qualifiers are dropped and the pointee receives the same
     /// mapping as any other type. An opaque `void *` maps to `nint`.
-    static string CsType(ApiModel model, string cType)
+    static string CsType(ApiModel model, string cType, Convention convention)
     {
         var t = cType.Trim();
         if (t is "void *" or "void*") return "nint";
@@ -221,25 +221,25 @@ public static class CSharpBackend
             var inner = CTypes.Deref(t).Trim();
             if (inner.StartsWith("const ")) inner = inner["const ".Length..];
             if (inner.StartsWith("struct ")) inner = inner["struct ".Length..];
-            return CsType(model, inner) + "*";
+            return CsType(model, inner, convention) + "*";
         }
         var resolved = model.ResolveAlias(t);
-        return FunctionPointerType(model, resolved) ?? Idioms.CsPrimitive(resolved);
+        return FunctionPointerType(model, resolved, convention) ?? Idioms.CsPrimitive(resolved, convention);
     }
 
     /// A C function-pointer type (`void (*)(ke_ecs *, void *)`) as a C# function
     /// pointer. The C name is only ever an alias, so leaving it verbatim emits an
     /// identifier that resolves to nothing; the callable type has to be spelled out.
-    static string? FunctionPointerType(ApiModel model, string cType)
+    static string? FunctionPointerType(ApiModel model, string cType, Convention convention)
     {
         var m = Regex.Match(cType.Trim(), @"^(.+?)\s*\(\s*\*\s*\)\s*\((.*)\)$");
         if (!m.Success) return null;
 
-        var returns = CsType(model, m.Groups[1].Value);
+        var returns = CsType(model, m.Groups[1].Value, convention);
         var paramList = m.Groups[2].Value.Trim();
         var parameters = paramList is "" or "void"
             ? []
-            : paramList.Split(',').Select(p => CsType(model, p)).ToList();
+            : paramList.Split(',').Select(p => CsType(model, p, convention)).ToList();
 
         return $"delegate* unmanaged[Cdecl]<{string.Join(", ", parameters.Append(returns))}>";
     }
@@ -264,7 +264,7 @@ public static class CSharpBackend
     static string ReturnType(ApiModel model, string cType, Convention convention) =>
         model.Enums.Any(e => e.Name == cType.Trim())
             ? Idioms.TypeName(cType.Trim(), convention)
-            : PointerToView(model, cType, convention) ?? CsType(model, cType);
+            : PointerToView(model, cType, convention) ?? CsType(model, cType, convention);
 
     /// <summary>
     /// The cast carrying the ABI's answer into what <see cref="ReturnType"/> spells, or
@@ -431,7 +431,7 @@ public static class CSharpBackend
     static string OutLocal(ApiModel model, ApiParam p, Convention convention) =>
         p.TagValue("enum") is { } named
             ? Idioms.TypeName(named, convention)
-            : CsType(model, CTypes.Deref(p.Type));
+            : CsType(model, CTypes.Deref(p.Type), convention);
 
     /// <summary>
     /// The local read back as the caller's type. Everything but a rooted handle reads as
@@ -449,14 +449,14 @@ public static class CSharpBackend
     /// field declares -- so the address of one is the address of the wrong type as far as
     /// the compiler is concerned.
     /// </summary>
-    static string NativePointerType(ApiModel model, string cType)
+    static string NativePointerType(ApiModel model, string cType, Convention convention)
     {
         var t = cType.Trim();
-        if (!CTypes.IsPointer(t)) return CsType(model, t);
+        if (!CTypes.IsPointer(t)) return CsType(model, t, convention);
         var inner = CTypes.Deref(t).Trim();
         if (inner.StartsWith("const ", StringComparison.Ordinal)) inner = inner["const ".Length..];
         if (inner.StartsWith("struct ", StringComparison.Ordinal)) inner = inner["struct ".Length..];
-        return (inner is "void" ? "void" : NativePointerType(model, inner)) + "*";
+        return (inner is "void" ? "void" : NativePointerType(model, inner, convention)) + "*";
     }
 
     /// <summary>
@@ -465,7 +465,7 @@ public static class CSharpBackend
     /// </summary>
     static string OutAddress(ApiModel model, ApiParam p, Convention convention, string local)
     {
-        var native = NativePointerType(model, p.Type);
+        var native = NativePointerType(model, p.Type, convention);
         return native == OutLocal(model, p, convention) + "*" ? $"&{local}" : $"({native})&{local}";
     }
 
@@ -500,7 +500,7 @@ public static class CSharpBackend
         if (p.Has("ctx")) return "nint";
         if (model.Enums.Any(e => e.Name == p.Type.Trim()))
             return Idioms.TypeName(p.Type.Trim(), convention);
-        return PointerToView(model, p.Type, convention) ?? CsType(model, p.Type);
+        return PointerToView(model, p.Type, convention) ?? CsType(model, p.Type, convention);
     }
 
     /// <summary>
@@ -637,7 +637,7 @@ public static class CSharpBackend
         VectorArity(f.Type) is int n ? $"Vector{n}"
         : convention.VectorTypes.TryGetValue(f.Type.Trim(), out var v) ? v.Managed
         : model.Enums.Any(e => e.Name == f.Type.Trim()) ? Idioms.TypeName(f.Type.Trim(), convention)
-        : f.Has("bool") ? "bool" : CsType(model, f.Type);
+        : f.Has("bool") ? "bool" : CsType(model, f.Type, convention);
 
     public static string RenderEnums(ApiModel model, string ns, Convention convention)
     {
@@ -881,7 +881,7 @@ public static class CSharpBackend
     {
         if (CTypes.FixedArray(f.Type) is { } arr)
         {
-            var element = Idioms.CsPrimitive(StripQualifiers(arr.Element));
+            var element = Idioms.CsPrimitive(StripQualifiers(arr.Element), convention);
             if (element is "sbyte" or "byte" or "short" or "ushort" or "int" or "uint"
                 or "long" or "ulong" or "float" or "double")
                 return $"private fixed {element} {f.Name}[{arr.Extent}];";
@@ -927,7 +927,7 @@ public static class CSharpBackend
 
         if (CTypes.FixedArray(f.Type) is { } arr)
         {
-            var element = Idioms.CsPrimitive(StripQualifiers(arr.Element));
+            var element = Idioms.CsPrimitive(StripQualifiers(arr.Element), convention);
             if (element is "sbyte")
                 return
                 [
@@ -1009,10 +1009,10 @@ public static class CSharpBackend
         foreach (var f in s.Fields.Where(x => !CTypes.IsPointer(x.Type) && !counts.Contains(x.Name)))
         {
             var type = ValueFieldType(model, s, f, convention);
-            if (type != CsType(model, f.Type))
+            if (type != CsType(model, f.Type, convention))
                 throw new InvalidOperationException(
                     $"{s.Name}.{f.Name}: a [borrowed] struct is rebuilt field by field into the native one,"
-                    + $" so a scalar has to be spelled the same on both sides and {type} is not {CsType(model, f.Type)}.");
+                    + $" so a scalar has to be spelled the same on both sides and {type} is not {CsType(model, f.Type, convention)}.");
             if (!string.IsNullOrEmpty(f.Doc)) fields.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
             fields.Add($"    public {type} {Idioms.Pascal(f.Name)};");
         }
@@ -1073,7 +1073,7 @@ public static class CSharpBackend
         : model.Structs.Any(v => v.Name == cType.Trim() && (IsValue(v) || IsBorrowed(v)))
         || model.Enums.Any(e => e.Name == cType.Trim())
             ? Idioms.TypeName(cType.Trim(), convention)
-            : CsType(model, cType);
+            : CsType(model, cType, convention);
 
     /// <summary>
     /// The type one field of a <c>[value]</c> struct takes. Every answer here has to occupy
@@ -1322,7 +1322,7 @@ public static class CSharpBackend
             o.Add("    /// over there stops the collector from moving or reclaiming the object; the");
             o.Add("    /// handle is what makes the pointer mean anything by the time it comes back.");
             o.Add("    /// </summary>");
-            o.Add($"    private readonly System.Collections.Concurrent.ConcurrentDictionary<{CsType(model, rootedKey.Type)}, GCHandle> _rooted = new();");
+            o.Add($"    private readonly System.Collections.Concurrent.ConcurrentDictionary<{CsType(model, rootedKey.Type, convention)}, GCHandle> _rooted = new();");
         }
 
         foreach (var cg in closureGroups.Where(c => c.Lifetime == ClosureLifetime.Retained))
@@ -1340,7 +1340,7 @@ public static class CSharpBackend
             o.Add("    /// side from collecting or moving the object before the engine calls back into it.");
             o.Add("    /// </summary>");
             o.Add(cg.Keyed
-                ? $"    private readonly Dictionary<{cg.KeyType ?? CsType(model, cg.RetainKey!.Type)}, GCHandle>"
+                ? $"    private readonly Dictionary<{cg.KeyType ?? CsType(model, cg.RetainKey!.Type, convention)}, GCHandle>"
                     + $" {cg.Retained} = new();"
                 : $"    private GCHandle {cg.Retained};");
         }
@@ -1405,7 +1405,7 @@ public static class CSharpBackend
         {
             var factory = plan.Factory!;
             var fparams = factory.Params.Where(p => !convention.IsErrorOutParam(p)).ToList();
-            var sig = string.Join(", ", fparams.Select(p => $"{Idioms.CsForeignType(p.Type)} {Idioms.Ident(p.Name!)}"));
+            var sig = string.Join(", ", fparams.Select(p => $"{Idioms.CsForeignType(p.Type, convention)} {Idioms.Ident(p.Name!)}"));
             var call = string.Join(", ", fparams.Select(p => Idioms.Ident(p.Name!)));
             o.Add(XmlDoc("    ", factory.Doc, convention, fparams.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
                 throwsOnFail: true).TrimEnd());
@@ -1645,7 +1645,7 @@ public static class CSharpBackend
         var stars = t.Count(c => c == '*');
         var basis = model.ResolveAlias(t.TrimEnd('*', ' '));
         if (stars == 0 && IsBoolType(basis, convention)) return "bool";
-        return Idioms.CsForeignType(basis) + new string('*', stars);
+        return Idioms.CsForeignType(basis, convention) + new string('*', stars);
     }
 
     /// <summary>How a lane is spelled in the delegate the caller implements.</summary>
@@ -1654,7 +1654,7 @@ public static class CSharpBackend
         : lane.Has("ctx") ? "nint"
         : lane.Has("utf8") ? "string"
         : IsBoolType(lane.Type, convention) ? "bool"
-        : CsType(model, lane.Type);
+        : CsType(model, lane.Type, convention);
 
     /// <summary>
     /// What a handler returns on the managed side. A callback reporting failure through
@@ -1727,11 +1727,11 @@ public static class CSharpBackend
             if (lifetime == ClosureLifetime.Retained && errorLane is null && !teardown)
                 throw new InvalidOperationException(
                     $"{slot.Name}.{fn.Name}: a retained closure outlives the call that registered it, so a "
-                    + $"handler that throws has nowhere to report; {callback.Name} needs a ke_error** lane, "
+                    + $"handler that throws has nowhere to report; {callback.Name} needs a {convention.ErrorType}** lane, "
                     + "or [teardown] if the engine only calls it from the destroy this object drives");
             if (errorLane is not null && !IsBoolType(callback.Returns, convention))
                 throw new InvalidOperationException(
-                    $"{slot.Name}.{fn.Name}: {callback.Name} has a ke_error** lane but returns "
+                    $"{slot.Name}.{fn.Name}: {callback.Name} has a {convention.ErrorType}** lane but returns "
                     + $"{callback.Returns}, so the caller cannot tell that it failed");
 
             pairs.Add(new CallbackPair(fn, ctx, lifetime, DelegateName(callback, convention),
@@ -1818,7 +1818,7 @@ public static class CSharpBackend
             ?? throw new InvalidOperationException(
                 $"{slot.Name}.{fn.Name}: a completion is how the operation says it ended, and it can"
                 + $" only say it failed through a lane handed the error itself; {callback.Name}"
-                + " declares no const ke_error* lane");
+                + $" declares no const {convention.ErrorType}* lane");
 
         if (callback.Returns.Trim() != "void")
             throw new InvalidOperationException(
@@ -1949,12 +1949,12 @@ public static class CSharpBackend
     }
 
     static IReadOnlyList<ClosureGroup> ClosureGroups(ApiModel model, ApiSlot slot, IReadOnlyList<CallbackPair> pairs,
-        string owner, bool ownerDrains)
+        string owner, bool ownerDrains, Convention convention)
     {
         var groups = pairs
             .GroupBy(p => p.Ctx)
             .Select(g => new ClosureGroup(g.Key, g.ToList(), $"{Idioms.Pascal(slot.Name)}Closures",
-                CsType(model, slot.Returns), owner, ownerDrains))
+                CsType(model, slot.Returns, convention), owner, ownerDrains))
             .ToList();
 
         foreach (var g in groups.Where(x => x.Shared))
@@ -1972,7 +1972,7 @@ public static class CSharpBackend
     {
         var drains = Drains(model, slots, convention);
         return slots.Where(Projected)
-            .SelectMany(s => ClosureGroups(model, s.Slot, CallbackPairs(model, s, convention), owner, drains))
+            .SelectMany(s => ClosureGroups(model, s.Slot, CallbackPairs(model, s, convention), owner, drains, convention))
             .ToList();
     }
 
@@ -2240,7 +2240,7 @@ public static class CSharpBackend
         var ownedReturn = owned is not null && owned.Answers(slot.Returns) ? owned : null;
         var lanes = VectorLanes(slot.Params);
         var callbacks = CallbackPairs(model, cs, convention);
-        var groups = ClosureGroups(model, slot, callbacks, owner, ownerDrains);
+        var groups = ClosureGroups(model, slot, callbacks, owner, ownerDrains, convention);
         var completion = CompletionOf(model, cs, convention, owned);
 
         if (callbacks.Count > 0 && cs.Shape is not SlotShape.Fallible)
@@ -2671,7 +2671,7 @@ public static class CSharpBackend
                     throw new InvalidOperationException(
                         $"{slot.Name}: answers with the memory [releases:{ownedReturn.TypeName}] owns, and"
                         + " has no failure channel -- so a caller handed nothing back is never told why."
-                        + " The slot needs a ke_error** parameter.");
+                        + $" The slot needs a {convention.ErrorType}** parameter.");
                 var retType = spanElement is not null ? $"ReadOnlySpan<{spanElement}>"
                     : slot.Returns == convention.ByteBoolType ? "bool"
                     : ReturnType(model, slot.Returns, convention);
@@ -2708,9 +2708,9 @@ public static class CSharpBackend
                 if (spanElement is not null)
                 {
                     var countLocal = $"{Idioms.Ident(WrittenName(cs.ReturnCount!))}Local";
-                    var native = CsType(model, CTypes.Deref(slot.Returns));
+                    var native = CsType(model, CTypes.Deref(slot.Returns), convention);
                     var front = spanElement == native ? "front" : $"({spanElement}*)front";
-                    o.Add($"{pInd}{CsType(model, CTypes.Deref(cs.ReturnCount!.Type))} {countLocal} = 0;");
+                    o.Add($"{pInd}{CsType(model, CTypes.Deref(cs.ReturnCount!.Type), convention)} {countLocal} = 0;");
                     o.Add($"{pInd}var front = {pCall};");
                     o.Add($"{pInd}{(pHolds ? "var result =" : "return")} front == null ? default"
                         + $" : new ReadOnlySpan<{spanElement}>({front}, (int){countLocal});");
@@ -2750,14 +2750,14 @@ public static class CSharpBackend
             : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSeq
                 ? SequenceArg(model, asSeq, convention)
             : cs.Blobs.FirstOrDefault(b => b.Blob == p) is { } asBlob
-                ? $"({NativePointerType(model, p.Type)}){Idioms.Ident(p.Name!)}Ptr"
+                ? $"({NativePointerType(model, p.Type, convention)}){Idioms.Ident(p.Name!)}Ptr"
             : cs.Blobs.FirstOrDefault(b => b.Size == p) is { } asSize
-                ? $"({CsType(model, asSize.Size.Type)})sizeof({BlobTypeParam(asSize.Blob)})"
+                ? $"({CsType(model, asSize.Size.Type, convention)})sizeof({BlobTypeParam(asSize.Blob)})"
             : p == cs.ReturnCount ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local")
             : cs.TrailingOuts.Contains(p)
                 ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local")
             : cs.Sequences.FirstOrDefault(s => s.Count == p) is { } asCount
-                ? $"({CsType(model, asCount.Count.Type)}){Idioms.Ident(asCount.Seq.Name!)}.Length"
+                ? $"({CsType(model, asCount.Count.Type, convention)}){Idioms.Ident(asCount.Seq.Name!)}.Length"
             : lanes.TryGetValue(p, out var lane) ? $"{Idioms.Ident(lane.Vector)}.{lane.Lane}"
             : p.Has("provider") ? $"{Idioms.Ident(p.Name!)}.Native"
             : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
@@ -2766,9 +2766,9 @@ public static class CSharpBackend
             : p.Type.Trim() == convention.ByteBoolType ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") && CTypes.IsPointer(p.Type) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
-            : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type)}){Idioms.Ident(p.Name!)}"
+            : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type, convention)}){Idioms.Ident(p.Name!)}"
             : PointerToView(model, p.Type, convention) is not null
-                ? $"({NativePointerType(model, p.Type)}){Idioms.Ident(p.Name!)}"
+                ? $"({NativePointerType(model, p.Type, convention)}){Idioms.Ident(p.Name!)}"
             : UntypedPointer(p.Type) is string cast ? $"({cast}){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!);
     }
@@ -2839,10 +2839,10 @@ public static class CSharpBackend
         foreach (var s in cbType.Slots)
         {
             var trampParams = s.Params.Select(p =>
-                (CTypes.IsPointer(p.Type) ? $"{CTypes.Deref(p.Type)}*" : Idioms.CsPrimitive(p.Type)) + " " + Idioms.Ident(p.Name!));
+                (CTypes.IsPointer(p.Type) ? $"{CTypes.Deref(p.Type)}*" : Idioms.CsPrimitive(p.Type, convention)) + " " + Idioms.Ident(p.Name!));
             var sig = string.Join(", ", new[] { $"{cbType.Name}* self" }.Concat(trampParams));
             o.Add("    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]");
-            o.Add($"    private static {Idioms.CsPrimitive(s.Returns)} {Idioms.Pascal(s.Name)}Trampoline({sig})");
+            o.Add($"    private static {Idioms.CsPrimitive(s.Returns, convention)} {Idioms.Pascal(s.Name)}Trampoline({sig})");
             o.Add("    {");
             if (s.Name == "destroy")
             {
@@ -2859,7 +2859,7 @@ public static class CSharpBackend
             o.Add("");
         }
 
-        string CsParamType2(ApiParam p) => p.Has("enum") ? Idioms.TypeName(p.TagValue("enum")!, convention) : Idioms.CsPrimitive(p.Type);
+        string CsParamType2(ApiParam p) => p.Has("enum") ? Idioms.TypeName(p.TagValue("enum")!, convention) : Idioms.CsPrimitive(p.Type, convention);
     }
 
     public static string RenderCallbackInterface(ApiStruct cbType, string ns, string nativeNs, Convention convention)
@@ -2882,8 +2882,8 @@ public static class CSharpBackend
         {
             o.Add(XmlDoc("    ", s.Doc, convention).TrimEnd());
             var ps = string.Join(", ", s.Params.Select(p =>
-                (CTypes.IsPointer(p.Type) ? $"in {CTypes.Deref(p.Type)}" : Idioms.CsPrimitive(p.Type)) + " " + Idioms.Ident(p.Name!)));
-            o.Add($"    {Idioms.CsPrimitive(s.Returns)} {Idioms.Pascal(s.Name)}({ps});");
+                (CTypes.IsPointer(p.Type) ? $"in {CTypes.Deref(p.Type)}" : Idioms.CsPrimitive(p.Type, convention)) + " " + Idioms.Ident(p.Name!)));
+            o.Add($"    {Idioms.CsPrimitive(s.Returns, convention)} {Idioms.Pascal(s.Name)}({ps});");
         }
         o.Add("}");
         o.Add("");
@@ -2910,9 +2910,9 @@ public static class CSharpBackend
         var selfIsCtx = self is not null && self.Has("ctx");
         var selfSig = self is null ? null
             : selfIsCtx ? $"nint {Idioms.Ident(self.Name!)}"
-            : $"in {CsType(model, CTypes.Deref(self.Type))} {Idioms.Ident(self.Name!)}";
+            : $"in {CsType(model, CTypes.Deref(self.Type), convention)} {Idioms.Ident(self.Name!)}";
         var selfArg = self is null ? null
-            : selfIsCtx ? $"({NativePointerType(model, self.Type)}){Idioms.Ident(self.Name!)}" : "p";
+            : selfIsCtx ? $"({NativePointerType(model, self.Type, convention)}){Idioms.Ident(self.Name!)}" : "p";
 
         var tupleOuts = cs.Shape is SlotShape.TupleOutParams ? cs.OutParams : [];
         var writes = cs.TrailingOuts.Concat(tupleOuts)
@@ -2950,9 +2950,9 @@ public static class CSharpBackend
         var args = (self is null ? [] : new[] { selfArg! }).Concat(rest.Select(p =>
             p == cs.ReturnCount || writes.Contains(p) ? OutAddress(model, p, convention, Local(p))
             : cs.Blobs.FirstOrDefault(b => b.Blob == p) is { } asBlob
-                ? $"({NativePointerType(model, p.Type)}){Idioms.Ident(p.Name!)}Ptr"
+                ? $"({NativePointerType(model, p.Type, convention)}){Idioms.Ident(p.Name!)}Ptr"
             : cs.Blobs.FirstOrDefault(b => b.Size == p) is { } asSize
-                ? $"({CsType(model, asSize.Size.Type)})sizeof({BlobTypeParam(asSize.Blob)})"
+                ? $"({CsType(model, asSize.Size.Type, convention)})sizeof({BlobTypeParam(asSize.Blob)})"
             : p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!)));
         var call = $"{(cs.ReturnCount is null ? ReturnCast(model, f.Returns, convention) : "")}"
@@ -2982,9 +2982,9 @@ public static class CSharpBackend
             body.Add($"{OutLocal(model, p, convention)} {Local(p)};");
         if (cs.ReturnCount is not null)
         {
-            var native = CsType(model, CTypes.Deref(f.Returns));
+            var native = CsType(model, CTypes.Deref(f.Returns), convention);
             var front = spanElement == native ? "front" : $"({spanElement}*)front";
-            body.Add($"{CsType(model, CTypes.Deref(cs.ReturnCount.Type))} {Local(cs.ReturnCount)} = 0;");
+            body.Add($"{CsType(model, CTypes.Deref(cs.ReturnCount.Type), convention)} {Local(cs.ReturnCount)} = 0;");
             body.Add($"var front = {call};");
             body.Add($"return front == null ? default"
                 + $" : new ReadOnlySpan<{spanElement}>({front}, (int){Local(cs.ReturnCount)});");
@@ -3003,7 +3003,7 @@ public static class CSharpBackend
 
         var pins = new List<string>();
         if (needsFixed)
-            pins.Add($"fixed ({CsType(model, CTypes.Deref(self!.Type))}* p = &{Idioms.Ident(self.Name!)})");
+            pins.Add($"fixed ({CsType(model, CTypes.Deref(self!.Type), convention)}* p = &{Idioms.Ident(self.Name!)})");
         foreach (var b in cs.Blobs)
             pins.Add($"fixed ({BlobTypeParam(b.Blob)}* {Idioms.Ident(b.Blob.Name!)}Ptr"
                 + $" = &{Idioms.Ident(b.Blob.Name!)})");
@@ -3053,12 +3053,12 @@ public static class CSharpBackend
         {
             var f = g.Fn;
             var rest = (g.SelfParam is not null ? f.Params.Skip(1) : f.Params)
-                .Select(p => $"{(p.Has("enum") ? "int" : CsType(model, p.Type))} {Idioms.Ident(p.Name!)}").ToList();
-            var selfParamSig = g.SelfParam is not null ? $"{CsType(model, CTypes.Deref(f.Params[0].Type))}* {Idioms.Ident(f.Params[0].Name!)}" : null;
+                .Select(p => $"{(p.Has("enum") ? "int" : CsType(model, p.Type, convention))} {Idioms.Ident(p.Name!)}").ToList();
+            var selfParamSig = g.SelfParam is not null ? $"{CsType(model, CTypes.Deref(f.Params[0].Type), convention)}* {Idioms.Ident(f.Params[0].Name!)}" : null;
             var nativeSig = string.Join(", ", (selfParamSig is not null ? [selfParamSig] : Array.Empty<string>()).Concat(rest));
             o.Add($"        [DllImport(\"{libraryName}\", CallingConvention = CallingConvention.Cdecl,");
             o.Add($"                   EntryPoint = \"{f.Name}\", ExactSpelling = true)]");
-            o.Add($"        public static extern {(f.Returns == convention.ByteBoolType ? "byte" : CsType(model, f.Returns))} {f.Name}({nativeSig});");
+            o.Add($"        public static extern {(f.Returns == convention.ByteBoolType ? "byte" : CsType(model, f.Returns, convention))} {f.Name}({nativeSig});");
             o.Add("");
         }
         o.Add("    }");
