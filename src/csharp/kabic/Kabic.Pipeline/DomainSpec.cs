@@ -2,6 +2,8 @@ using System.Text.Json.Nodes;
 
 namespace Kabic.Pipeline;
 
+public sealed record CFieldTableSpec(string File, string Guard, IReadOnlyList<string> Includes);
+
 public sealed record DomainSpec(
     string Name,
     IReadOnlyList<string> Headers,
@@ -15,7 +17,8 @@ public sealed record DomainSpec(
     string? AbstractionsOutDir,
     IReadOnlyList<string> Providers,
     IReadOnlyList<string> Usings,
-    string? Library)
+    string? Library,
+    CFieldTableSpec? CFieldTable)
 {
     public static IReadOnlyList<DomainSpec> Load(string manifestPath)
     {
@@ -28,6 +31,7 @@ public sealed record DomainSpec(
         static List<string> Strings(JsonNode? node) =>
             node?.AsArray().Select(n => n!.GetValue<string>()).ToList() ?? [];
 
+        var cOut = d["cOut"] as JsonObject;
         return new DomainSpec(
             d["name"]!.GetValue<string>(),
             Strings(d["headers"]),
@@ -41,6 +45,8 @@ public sealed record DomainSpec(
             d["abstractionsOutDir"]?.GetValue<string>(),
             Strings(d["providers"]),
             Strings(d["usings"]),
-            d["library"]?.GetValue<string>());
+            d["library"]?.GetValue<string>(),
+            cOut is null ? null : new CFieldTableSpec(
+                cOut["file"]!.GetValue<string>(), cOut["guard"]!.GetValue<string>(), Strings(cOut["includes"])));
     }
 }

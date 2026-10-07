@@ -3,11 +3,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <OutputType>Exe</OutputType>
-    <AssemblyName>field-tables</AssemblyName>
-    <RootNamespace>KernelEngine.FieldTables</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/csharp/kabic/Kabic.Core/Kabic.Core.csproj" />
+    <ProjectReference Include="../Kabic.Core/Kabic.Core.csproj" />
   </ItemGroup>
 </Project>

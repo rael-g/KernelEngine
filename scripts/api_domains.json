@@ -40,6 +40,23 @@
       "ke_texture_handle": "KernelEngine.Render.TextureHandle",
       "ke_ui_font_handle": "KernelEngine.Render.FontHandle"
     },
+    "fieldTable": {
+      "entryType": "ke_component_field",
+      "include": "kernel_engine/ecs/component_field.h",
+      "nameMacroPrefix": "KE_COMPONENT_NAME_",
+      "nullVariant": "{ KE_VARIANT_NULL, { 0 } }",
+      "valueTypes": { "ke_vec2": "vec2", "ke_vec3": "vec3", "ke_vec4": "vec4", "ke_quat": "quat" },
+      "variants": {
+        "bool": { "constant": "KE_VARIANT_BOOL", "member": ".b" },
+        "int": { "constant": "KE_VARIANT_INT", "member": ".i" },
+        "float": { "constant": "KE_VARIANT_FLOAT", "member": ".f" },
+        "string": { "constant": "KE_VARIANT_STRING", "member": ".s" },
+        "vec2": { "constant": "KE_VARIANT_VEC2", "member": ".v2" },
+        "vec3": { "constant": "KE_VARIANT_VEC3", "member": ".v3" },
+        "vec4": { "constant": "KE_VARIANT_VEC4", "member": ".v4" },
+        "quat": { "constant": "KE_VARIANT_QUAT", "member": ".q" }
+      }
+    },
     "includeDirectoryName": "kernel_engine",
     "commonBindingsNamespace": "KernelEngine.Common.Native",
     "bindingsMethodsClass": "NativeMethods",

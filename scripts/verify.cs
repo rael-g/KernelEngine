@@ -50,7 +50,6 @@ return results.Any(r => r.Exit != 0) ? 1 : 0;
 
 List<Step> Gates() =>
 [
-    new Step("field tables check", "dotnet", ["run", "--project", "scripts/FieldTables", "--", "--check"]),
     .. new[] { "drift", "bindings", "api-coverage", "reconstruction", "out-params" }
         .Select(name => new Step($"kabic check {name}", "dotnet", ["run", "--project", "src/csharp/kabic/Kabic.Cli", "--", "check", name])),
     .. Directory.EnumerateFiles(Path.Combine(rootDir, "scripts"), "check_*.cs").Order()

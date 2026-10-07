@@ -46,7 +46,6 @@
     <Project Path="src/csharp/kabic/Kabic.Pipeline/Kabic.Pipeline.csproj" />
     <Project Path="src/csharp/kabic/Kabic.ClangSharpBackend/Kabic.ClangSharpBackend.csproj" />
     <Project Path="src/csharp/kabic/Kabic.Cli/Kabic.Cli.csproj" />
-    <Project Path="scripts/FieldTables/FieldTables.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input/KernelEngine.Input.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs/KernelEngine.Ecs.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />

@@ -7,6 +7,25 @@ namespace Kabic;
 /// <summary>A C type and the managed type that occupies the same bytes.</summary>
 public sealed record ValueTypeMapping(string Managed, string[] Lanes);
 
+/// <summary>What a scene file can write for a component field.</summary>
+public enum FieldKind { Bool, Int, Float, String, Vec2, Vec3, Vec4, Quat }
+
+/// <summary>How one kind of field is spelled in the generated table.</summary>
+public sealed record FieldVariant(string Constant, string Member);
+
+/// <summary>
+/// How a component struct is described to the runtime that applies a scene file to it:
+/// the entry type of the table, the header declaring it, and the spelling of every kind of
+/// field. A convention without one has no field tables.
+/// </summary>
+public sealed record FieldTableConvention(
+    string EntryType,
+    string Include,
+    string NameMacroPrefix,
+    string NullVariant,
+    IReadOnlyDictionary<string, FieldKind> ValueTypes,
+    IReadOnlyDictionary<FieldKind, FieldVariant> Variants);
+
 /// <summary>A kind of failure the ABI names, and the singleton a failure of that kind is reached by.</summary>
 public sealed record ErrorKind(string Name, string Singleton);
 
@@ -123,6 +142,9 @@ public sealed class Convention
     /// <summary>The C struct a failed call reports through (<c>ke_error</c>).</summary>
     public string ErrorType { get; init; } = "";
 
+    /// <summary>How component structs are described as field tables, or null when this ABI has none.</summary>
+    public FieldTableConvention? FieldTable { get; init; }
+
     /// <summary>The C struct that names the kind of a failure (<c>ke_error_type</c>).</summary>
     public string ErrorKindType { get; init; } = "";
 
@@ -180,6 +202,7 @@ public sealed class Convention
             ErrorLaneName = json["errorLaneName"]?.GetValue<string>() ?? "out_error",
             ByteBoolType = Text(json, "byteBoolType"),
             ErrorType = Text(json, "errorType"),
+            FieldTable = json["fieldTable"] is System.Text.Json.Nodes.JsonObject table ? ReadFieldTable(table) : null,
             ErrorKindType = Text(json, "errorKindType"),
             ErrorIsFunction = Text(json, "errorIsFunction"),
             ErrorGeneralSingleton = Text(json, "errorGeneralSingleton"),
@@ -198,6 +221,21 @@ public sealed class Convention
             BindingsMethodsClass = json["bindingsMethodsClass"]?.GetValue<string>() ?? "NativeMethods",
             TypeNameOverrides = overrides,
         };
+    }
+
+    static FieldTableConvention ReadFieldTable(System.Text.Json.Nodes.JsonObject table)
+    {
+        static FieldKind Kind(string name) => Enum.Parse<FieldKind>(name, ignoreCase: true);
+
+        return new FieldTableConvention(
+            table["entryType"]!.GetValue<string>(),
+            table["include"]!.GetValue<string>(),
+            table["nameMacroPrefix"]!.GetValue<string>(),
+            table["nullVariant"]!.GetValue<string>(),
+            (table["valueTypes"]?.AsObject() ?? []).ToDictionary(kv => kv.Key, kv => Kind(kv.Value!.GetValue<string>())),
+            table["variants"]!.AsObject().ToDictionary(
+                kv => Kind(kv.Key),
+                kv => new FieldVariant(kv.Value!["constant"]!.GetValue<string>(), kv.Value["member"]!.GetValue<string>())));
     }
 
     /// <summary>Reads the <c>convention</c> object of the manifest at <paramref name="manifestPath"/>.</summary>
