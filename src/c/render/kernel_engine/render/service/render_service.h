@@ -188,7 +188,6 @@ struct ke_render_service
     void (*upload)(struct ke_render_service *self, ke_gpu_buffer buffer,
                    uint64_t offset, const void *data, size_t size);
 
-    /// ── PSO authority (§6 Mechanism 1) ─────────────────────────────────────
     /// Returns the pipeline for this exact params state, compiling it on first
     /// request.
     ke_gpu_pipeline (*get_or_create_pipeline)(struct ke_render_service *self,

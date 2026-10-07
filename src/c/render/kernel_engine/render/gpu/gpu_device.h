@@ -339,8 +339,8 @@ typedef struct ke_gpu_device
     /// caller's thread; `on_ready` fires later (during this device's normal
     /// event pump, e.g. at queue_present) with the finished pipeline, or
     /// KE_GPU_INVALID_HANDLE on failure. The raw async primitive: no caching,
-    /// no fallback — see ke_render_service::get_or_create_pipeline (§6 Mechanism
-    /// 1 of RenderArchitectureV2.md) for the policy layer built on top.
+    /// no fallback — see ke_render_service::get_or_create_pipeline for the policy layer
+    /// built on top.
     /// Appended at the tail so adding it never shifts existing slot offsets.
     void (*create_render_pipeline_async)(struct ke_gpu_device *self,
                                          const ke_gpu_render_pipeline_params *p,

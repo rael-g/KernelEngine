@@ -300,7 +300,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         Handle->upload(Handle, buffer, offset, data, size);
     }
 
-    /// <summary>── PSO authority (§6 Mechanism 1) ───────────────────────────────────── Returns the pipeline for this exact params state, compiling it on first request.</summary>
+    /// <summary>Returns the pipeline for this exact params state, compiling it on first request.</summary>
     public ulong GetOrCreatePipeline(ke_gpu_render_pipeline_params* @params)
     {
         return Handle->get_or_create_pipeline(Handle, @params);

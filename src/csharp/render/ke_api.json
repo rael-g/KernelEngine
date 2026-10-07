@@ -904,7 +904,7 @@
           "name": "get_or_create_pipeline",
           "returns": "ke_gpu_pipeline",
           "tags": [],
-          "doc": "\u2500\u2500 PSO authority (\u00A76 Mechanism 1) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Returns the pipeline for this exact params state, compiling it on first request.",
+          "doc": "Returns the pipeline for this exact params state, compiling it on first request.",
           "return_doc": null,
           "params": [
             {
