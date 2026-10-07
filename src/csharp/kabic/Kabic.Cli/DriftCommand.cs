@@ -86,6 +86,13 @@ internal static class DriftCommand
                     driftDetected = true;
                 }
             }
+
+            var committedKinds = Path.Combine(rootDir, convention.ErrorKindsOut);
+            if (!File.Exists(committedKinds) || File.ReadAllText(committedKinds) != Generation.ErrorKinds(convention))
+            {
+                Console.WriteLine($"[!] error kinds: the mapping from native errors to exceptions is out of date (committed: {convention.ErrorKindsOut})");
+                driftDetected = true;
+            }
         }
         finally
         {

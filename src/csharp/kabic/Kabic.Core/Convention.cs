@@ -26,6 +26,12 @@ public sealed record FieldTableConvention(
     IReadOnlyDictionary<string, FieldKind> ValueTypes,
     IReadOnlyDictionary<FieldKind, FieldVariant> Variants);
 
+/// <summary>
+/// One kind of failure the ABI names: the singleton a failure of that kind is reached by, the dotted name
+/// the native type carries, the exception a managed caller catches, and the error a Zig caller switches on.
+/// </summary>
+public sealed record ErrorKindSpec(string Singleton, string NativeName, string Managed, string Zig);
+
 public sealed class Convention
 {
     /// <summary>Prefix every public symbol in this ABI carries (<c>ke_input</c>, <c>ke_logger_create</c>).</summary>
@@ -151,8 +157,21 @@ public sealed class Convention
     /// <summary>The singleton a failure reads as when no kind matched.</summary>
     public string ErrorGeneralSingleton { get; init; } = "";
 
-    /// <summary>Prefix of the singleton a failure kind is reached by (<c>KE_ERROR_</c>); what follows it names the kind.</summary>
-    public string ErrorSingletonPrefix { get; init; } = "";
+    /// <summary>The kinds of failure the ABI names, the general one included; <see cref="ErrorGeneralSingleton"/> picks it out.</summary>
+    public IReadOnlyList<ErrorKindSpec> ErrorKinds { get; init; } = [];
+
+    /// <summary>Namespace of <see cref="ErrorHelperClass"/>, which receives the generated mapping from native names to exceptions.</summary>
+    public string ErrorHelperNamespace { get; init; } = "";
+
+    /// <summary>Path, relative to the repository root, of the generated file that maps native error names to exceptions.</summary>
+    public string ErrorKindsOut { get; init; } = "";
+
+    /// <summary>The kind a failure reads as when no other matched.</summary>
+    public ErrorKindSpec GeneralError => ErrorKinds.FirstOrDefault(k => k.Singleton == ErrorGeneralSingleton)
+        ?? throw new InvalidOperationException($"the convention declares no error for '{ErrorGeneralSingleton}'");
+
+    /// <summary>The kinds a caller can tell apart: every kind but the general one, in declaration order.</summary>
+    public IEnumerable<ErrorKindSpec> NamedErrors => ErrorKinds.Where(k => k.Singleton != ErrorGeneralSingleton);
 
     /// <summary>Header, relative to the repository root, that declares the failure types, the singletons and the functions that read them.</summary>
     public string ErrorAbiHeader { get; init; } = "";
@@ -178,51 +197,47 @@ public sealed class Convention
     /// <summary>Name of the trailing failure lane, which is never a projected parameter.</summary>
     public string ErrorLaneName { get; init; } = "out_error";
 
-    /// <summary>Reads the <c>convention</c> object of a manifest.</summary>
+    /// <summary>Reads the <c>convention</c> object of a manifest into a <see cref="ConventionBuilder"/> and builds it.</summary>
     public static Convention FromJson(System.Text.Json.Nodes.JsonObject json)
     {
         static string Text(System.Text.Json.Nodes.JsonObject o, string key) =>
             o[key]?.GetValue<string>() ?? throw new InvalidOperationException($"the convention declares no '{key}'");
+        static string Or(System.Text.Json.Nodes.JsonObject o, string key, string fallback) => o[key]?.GetValue<string>() ?? fallback;
 
-        var overrides = new Dictionary<string, string>();
+        var builder = new ConventionBuilder()
+            .Symbols(Text(json, "symbolPrefix"), Text(json, "handleSuffix"), Text(json, "factorySuffix"),
+                Text(json, "componentSuffix"), Text(json, "paramsSuffix"))
+            .Booleans(Text(json, "byteBoolType"),
+                (json["booleanReturnTypes"]?.AsArray() ?? throw new InvalidOperationException("the convention declares no 'booleanReturnTypes'"))
+                    .Select(n => n!.GetValue<string>()).ToArray())
+            .OutParams(Or(json, "outParamPrefix", "out_"), Or(json, "errorLaneName", "out_error"))
+            .Bindings(Or(json, "includeDirectoryName", "kernel_engine"), Or(json, "commonBindingsNamespace", ""),
+                Or(json, "bindingsMethodsClass", "NativeMethods"))
+            .Managed(Text(json, "commonManagedNamespace"))
+            .Failure(Text(json, "errorType"), Text(json, "errorKindType"), Text(json, "errorIsFunction"),
+                Text(json, "errorGeneralSingleton"), Text(json, "errorOutParamType"), Text(json, "errorAbiHeader"),
+                (json["errorAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()),
+                Text(json, "errorHelperClass"), Text(json, "errorHelperNamespace"), Text(json, "errorKindsOut"));
+
+        foreach (var e in json["errors"]?.AsArray() ?? throw new InvalidOperationException("the convention declares no 'errors'"))
+            builder.AddError(e!["singleton"]!.GetValue<string>(), e["nativeName"]!.GetValue<string>(),
+                e["managed"]!.GetValue<string>(), e["zig"]?.GetValue<string>());
+        foreach (var (cType, v) in json["vectorTypes"]?.AsObject() ?? [])
+            builder.AddVectorType(cType, v!["managed"]!.GetValue<string>(), v["lanes"]!.AsArray().Select(l => l!.GetValue<string>()).ToArray());
+        foreach (var (cType, managed) in json["matrixTypes"]?.AsObject() ?? [])
+            builder.AddMatrixType(cType, managed!.GetValue<string>());
+        foreach (var (cType, managed) in json["handleTypes"]?.AsObject() ?? [])
+            builder.AddHandleType(cType, managed!.GetValue<string>());
         foreach (var (symbol, name) in json["typeNameOverrides"]?.AsObject() ?? [])
-            overrides[symbol] = name!.GetValue<string>();
-
-        return new Convention
-        {
-            SymbolPrefix = Text(json, "symbolPrefix"),
-            HandleSuffix = Text(json, "handleSuffix"),
-            FactorySuffix = Text(json, "factorySuffix"),
-            ComponentSuffix = Text(json, "componentSuffix"),
-            ParamsSuffix = Text(json, "paramsSuffix"),
-            ErrorOutParamType = Text(json, "errorOutParamType"),
-            BooleanReturnTypes = (json["booleanReturnTypes"]?.AsArray() ?? throw new InvalidOperationException("the convention declares no 'booleanReturnTypes'"))
-                .Select(n => n!.GetValue<string>()).ToList(),
-            OutParamPrefix = json["outParamPrefix"]?.GetValue<string>() ?? "out_",
-            ErrorLaneName = json["errorLaneName"]?.GetValue<string>() ?? "out_error",
-            ByteBoolType = Text(json, "byteBoolType"),
-            ErrorType = Text(json, "errorType"),
-            FieldTable = json["fieldTable"] is System.Text.Json.Nodes.JsonObject table ? ReadFieldTable(table) : null,
-            ErrorKindType = Text(json, "errorKindType"),
-            ErrorIsFunction = Text(json, "errorIsFunction"),
-            ErrorGeneralSingleton = Text(json, "errorGeneralSingleton"),
-            ErrorSingletonPrefix = Text(json, "errorSingletonPrefix"),
-            ErrorAbiHeader = Text(json, "errorAbiHeader"),
-            ErrorAbiIncludeDirs = (json["errorAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()).ToList(),
-            ErrorHelperClass = Text(json, "errorHelperClass"),
-            CommonManagedNamespace = Text(json, "commonManagedNamespace"),
-            VectorTypes = (json["vectorTypes"]?.AsObject() ?? []).ToDictionary(
-                kv => kv.Key,
-                kv => new ValueTypeMapping(kv.Value!["managed"]!.GetValue<string>(),
-                    kv.Value!["lanes"]!.AsArray().Select(l => l!.GetValue<string>()).ToArray())),
-            MatrixTypes = (json["matrixTypes"]?.AsObject() ?? []).ToDictionary(kv => kv.Key, kv => kv.Value!.GetValue<string>()),
-            HandleTypes = (json["handleTypes"]?.AsObject() ?? []).ToDictionary(kv => kv.Key, kv => kv.Value!.GetValue<string>()),
-            IncludeDirectoryName = json["includeDirectoryName"]?.GetValue<string>() ?? "kernel_engine",
-            CommonBindingsNamespace = json["commonBindingsNamespace"]?.GetValue<string>() ?? "",
-            BindingsMethodsClass = json["bindingsMethodsClass"]?.GetValue<string>() ?? "NativeMethods",
-            TypeNameOverrides = overrides,
-        };
+            builder.AddTypeName(symbol, name!.GetValue<string>());
+        if (json["fieldTable"] is System.Text.Json.Nodes.JsonObject table)
+            builder.FieldTable(ReadFieldTable(table));
+        return builder.Build();
     }
+
+    internal static string ZigErrorName(string nativeName) =>
+        string.Concat(nativeName[(nativeName.LastIndexOf('.') + 1)..].Split('_')
+            .Where(p => p.Length > 0).Select(p => char.ToUpperInvariant(p[0]) + p[1..].ToLowerInvariant()));
 
     static FieldTableConvention ReadFieldTable(System.Text.Json.Nodes.JsonObject table)
     {

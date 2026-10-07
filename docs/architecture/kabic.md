@@ -79,9 +79,11 @@ optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHead
 ## The Classifier
 
 `Classifier.Classify(model, explicitProviders, explicitCallbacks, convention)` (`Classifier.cs:88`)
-decides what each struct is and what shape each slot has. A `Convention`, read from the `convention`
-object of `api_domains.json` (`Convention.Load`), holds the project's spellings, so the classifier states
-nothing about `ke_`:
+decides what each struct is and what shape each slot has. A `Convention`, built by `ConventionBuilder` (its
+source is the `convention` object of `api_domains.json`, `Convention.Load`), holds the project's spellings, so the
+classifier states nothing about `ke_`. A failure kind is declared with `AddError(singleton, nativeName, managed, zig)`:
+the Zig error set and the generated `NativeErrors.Kinds.g.cs` both come from that list, and the error header only
+has to export each singleton:
 
 - a vtable is a struct with slots that is not a handle (`_handle`) and not a parameter bag
   (`_params`); it is a *provider* when a `<name>_handle` struct or a `<name>_create` function exists

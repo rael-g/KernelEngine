@@ -4,17 +4,14 @@ using KernelEngine.Common.Native;
 namespace KernelEngine;
 
 /// <summary>
-/// Crosses a native failure into the standard exception that stands for its category, and a managed
-/// exception back into a native error record. A failure whose type descends from one of the generic
-/// roots becomes the matching .NET exception: not found is <see cref="KeyNotFoundException"/>, I/O is
-/// <see cref="IOException"/>, out of memory is <see cref="OutOfMemoryException"/>, an invalid argument is
-/// <see cref="ArgumentException"/>, an unsupported operation is <see cref="NotSupportedException"/>, and
-/// anything else, including a failure that carries no type, is <see cref="InvalidOperationException"/>.
-/// The native cause chain becomes <see cref="Exception.InnerException"/>, the source location is part of the
+/// Crosses a native failure into the exception that stands for its category, and a managed exception
+/// back into a native error record. Which exception a native error name becomes is declared in the
+/// manifest and generated into <c>NativeErrors.Kinds.g.cs</c>; a failure whose type chain names none of
+/// them becomes the general one. The native cause chain becomes <see cref="Exception.InnerException"/>, the source location is part of the
 /// message, and the full native type name is kept in <see cref="Exception.Data"/> under
 /// <see cref="TypeKey"/>.
 /// </summary>
-public static unsafe class NativeErrors
+public static unsafe partial class NativeErrors
 {
     /// <summary>The <see cref="Exception.Data"/> key that holds the dotted name of the native error type.</summary>
     public const string TypeKey = "ke.error_type";
@@ -36,7 +33,7 @@ public static unsafe class NativeErrors
         message = Prefix(context, message);
         var cause = error->cause is not null ? FromNative(error->cause) : null;
 
-        var exception = Create(Root(error->type), message, cause);
+        var exception = Create(error->type, message, cause);
         if (typeName is not null) exception.Data[TypeKey] = typeName;
         return exception;
     }
@@ -59,22 +56,12 @@ public static unsafe class NativeErrors
             NativeMethods.error_set(outError, null, (sbyte*)p, null, 0, null);
     }
 
-    static Exception Create(string? root, string message, Exception? cause) => root switch
-    {
-        "ke.error.not_found" => new KeyNotFoundException(message, cause),
-        "ke.error.io" => new IOException(message, cause),
-        "ke.error.out_of_memory" => new OutOfMemoryException(message, cause),
-        "ke.error.invalid_argument" => new ArgumentException(message, cause),
-        "ke.error.not_supported" => new NotSupportedException(message, cause),
-        _ => new InvalidOperationException(message, cause),
-    };
-
-    static string? Root(ke_error_type* type)
+    static Exception Create(ke_error_type* type, string message, Exception? cause)
     {
         for (var t = type; t is not null; t = t->parent)
-            if (Name(t) is { } name && name.StartsWith("ke.error.", StringComparison.Ordinal) && name.IndexOf('.', 9) < 0)
-                return name;
-        return null;
+            if (Name(t) is { } name && TryCreate(name, message, cause, out var exception))
+                return exception;
+        return CreateGeneral(message, cause);
     }
 
     static string? Name(ke_error_type* type) =>

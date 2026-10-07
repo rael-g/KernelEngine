@@ -25,12 +25,11 @@ public sealed class ZigBackend
         IReadOnlyDictionary<string, ForeignType> foreign, ApiModel errorAbi)
     {
         this.errorAbi = errorAbi;
-        errorKinds = errorAbi.Variables
-            .Where(v => v.Name != convention.ErrorGeneralSingleton
-                && v.Name.StartsWith(convention.ErrorSingletonPrefix, StringComparison.Ordinal)
-                && Idioms.Base(v.Type) == convention.ErrorKindType)
-            .Select(v => (Idioms.Pascal(v.Name[convention.ErrorSingletonPrefix.Length..]), v.Name))
-            .ToList();
+        var declared = errorAbi.Variables.Select(v => v.Name).ToHashSet();
+        foreach (var kind in convention.ErrorKinds.Where(k => !declared.Contains(k.Singleton)))
+            throw new InvalidOperationException(
+                $"the convention declares the error '{kind.NativeName}' reached by {kind.Singleton}, which the error header does not export");
+        errorKinds = convention.NamedErrors.Select(k => (k.Zig, k.Singleton)).ToList();
         this.model = model;
         this.classified = classified;
         this.convention = convention;

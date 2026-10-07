@@ -42,6 +42,14 @@ internal static class GenerateCommand
             Console.WriteLine($"{spec.Name}: regenerated");
         }
 
+        if (options.Domains.Count == 0)
+        {
+            var kindsFile = Place(convention.ErrorKindsOut);
+            Directory.CreateDirectory(Path.GetDirectoryName(kindsFile)!);
+            File.WriteAllText(kindsFile, Generation.ErrorKinds(convention));
+            Console.WriteLine("error kinds: regenerated");
+        }
+
         return 0;
     }
 }
