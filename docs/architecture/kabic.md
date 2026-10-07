@@ -72,7 +72,7 @@ of what a backend can know.
 `scripts/api_domains.json` is the hand-written manifest. Each entry of `domains` names the
 `headers`, `includeDirs`, `apiJson`, the C# `namespace` and `nativeNamespace`, the `outDir`, and
 optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHeaders` and `cOut`
-(the C field-table target). `scripts/regenerate_api.cs` walks it in one process: it extracts every domain in parallel
+(the C field-table target). `kabic generate` walks it in one process: it extracts every domain in parallel
 (`Regeneration.ExtractAll`), then generates the C# and, for entries with `cOut`, the C field table
 (`Regeneration.GenerateOne`, `Regeneration.cs:31-38`).
 
@@ -122,9 +122,9 @@ runs all twelve through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 
 | gate | what fails it |
 |---|---|
-| `check_api_drift.cs` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory; exits 1 for that. When the extraction or generation itself cannot run it exits 2 and says it compared nothing, because that is a broken tool, not drift |
+| `kabic check drift` | a domain's committed `ke_api.json`, generated C#, or C field table differs byte for byte from a fresh extraction and generation into a temp directory; exits 1 for that. When the extraction or generation itself cannot run it exits 2 and says it compared nothing, because that is a broken tool, not drift |
 | `check_abi_layout.cs` | the size, alignment or a member offset of any struct or vtable the contract headers declare differs from `scripts/abi_layout.snapshot`, which a C compiler probe regenerates; an intended change is recorded with `-- --update` |
-| `check_reconstruction.cs` | any file `regenerate_api.cs --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
+| `check_reconstruction.cs` | any file `kabic generate --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
 | `check_api_coverage.cs` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `.rsp`, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
 | `check_out_params.cs` | a parameter named `out` or `out_*`, other than `out_error`, carries no `[out]` tag (`check_out_params.cs:57-68`); one exclusion is recorded |
 | `check_generator_shapes.cs` | for a given synthetic header shape, the C# backend's text lacks a required fragment or holds a forbidden one; run with `--no-cache` so the current backend is the one checked |

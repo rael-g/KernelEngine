@@ -83,7 +83,7 @@ library to load and the output namespace
 Two generators feed the layer and they are not interchangeable. ClangSharp produces the raw
 struct-and-function surface from the headers. kabic (`src/csharp/kabic/`) produces the idiomatic
 projection from the same headers' doc tags, and is driven by `scripts/api_domains.json`
-(`scripts/regenerate_api.cs:23`). Both are run by `scripts/`; nothing under `Generated/` is ever
+(`kabic generate`). Both are run by `scripts/`; nothing under `Generated/` is ever
 edited.
 
 ## Layer 4 — managed code reaches native code only through layer 3

@@ -30,7 +30,7 @@ time a domain is migrated or a header changes.
 - [ ] `[try]` is on any slot where a boolean return means found/not-found,
       not succeeded/failed.
 
-## 2. Extraction (`scripts/extract_api.cs`, or `regenerate_api.cs --domain <name>`)
+## 2. Extraction (`scripts/extract_api.cs`, or `kabic generate --domain <name>`)
 
 - [ ] Run twice with the exact same arguments; diff the two `ke_api.json`
       outputs. They must be byte-identical. A diff here means a path-identity
@@ -126,13 +126,13 @@ Any change to `Kabic.Core` or `Kabic.CSharpBackend` can affect every
 previously migrated domain, not just the one being worked on.
 
 ```bash
-dotnet run scripts/regenerate_api.cs
+dotnet run --project src/csharp/kabic/Kabic.Cli -- generate
 ```
 
 - [ ] `git status` shows no unexpected diffs in domains other than the one
       being changed. Any diff there means the change had a broader effect —
       read it before deciding it's safe.
-- [ ] Clear `~/.local/share/dotnet/runfile/{regenerate_api,check_api_drift}-*`
+- [ ] Clear `~/.local/share/dotnet/runfile/{check_api_drift,regenerate_api}-*`
       before any of the above if a kabic source file changed. The file-based
       `dotnet run` cache does not reliably invalidate on `#:project`-referenced
       file changes.
@@ -144,7 +144,7 @@ Run in this order; do not skip any step because an earlier one passed:
 1. `dotnet build KernelEngine.slnx` — zero errors.
 2. `dotnet test KernelEngine.slnx` — all pass, count matches or exceeds the
    prior run (a silently-dropped test file is not a passing run).
-3. `dotnet run scripts/verify.cs -- gates` — every `check_*.cs`, `check_api_drift` included, green.
+3. `dotnet run scripts/verify.cs -- gates` — every `check_*.cs`, `kabic check drift` included, green.
 4. `zig build --prefix build/native --cache-dir build/zig-cache` — zero errors.
 5. If the domain has any live usage in an example or test that exercises the
    changed slot at runtime (not just at compile time), run it. A shape can

@@ -21,8 +21,8 @@ Console.WriteLine("Rebuilding every generated artifact from the headers alone...
 
 try
 {
-    var regenArgs = new List<string> { "run", "--no-cache", Path.Combine(rootDir, "scripts", "regenerate_api.cs"),
-        "--", "--into", shadow };
+    var regenArgs = new List<string> { "run", "--project", Path.Combine(rootDir, "src", "csharp", "kabic", "Kabic.Cli"),
+        "--", "generate", "--into", shadow };
     if (zigOverride is not null) regenArgs.AddRange(["--zig", zigOverride]);
 
     if (!Run(regenArgs, out var err))
@@ -52,7 +52,7 @@ try
     {
         Console.Error.WriteLine(
             $"\n{missing.Count + differing.Count} of {produced} artifact(s) do not match a clean rebuild.\n"
-            + "Run 'dotnet run scripts/regenerate_api.cs' and commit the result.");
+            + "Run 'dotnet run --project src/csharp/kabic/Kabic.Cli -- generate' and commit the result.");
         return 1;
     }
 
