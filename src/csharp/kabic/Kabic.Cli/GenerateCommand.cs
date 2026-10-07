@@ -10,6 +10,8 @@ internal static class GenerateCommand
             .Where(s => options.Domains.Count == 0 || options.Domains.Contains(s.Name))
             .ToList();
 
+        var convention = Convention.Load(options.Manifest);
+
         string Place(string relative) => Path.Combine(options.Into ?? options.Root, relative);
 
         IReadOnlyDictionary<string, string> apis;
@@ -30,7 +32,7 @@ internal static class GenerateCommand
                 var output = Regeneration.Plan(spec, Place);
                 Directory.CreateDirectory(Path.GetDirectoryName(output.ApiJson)!);
                 File.WriteAllText(output.ApiJson, apis[spec.Name]);
-                Regeneration.GenerateOne(spec, apis[spec.Name], output);
+                Regeneration.GenerateOne(spec, apis[spec.Name], output, convention);
             }
             catch (InvalidOperationException e)
             {

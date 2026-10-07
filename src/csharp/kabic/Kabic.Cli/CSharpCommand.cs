@@ -6,7 +6,7 @@ internal static class CSharpCommand
 {
     public static int Run(IReadOnlyList<string> args)
     {
-        string? apiPath = null, ns = null, nativeNs = null, outDir = null, contractOutDir = null, library = null, domain = null;
+        string? manifest = null, apiPath = null, ns = null, nativeNs = null, outDir = null, contractOutDir = null, library = null, domain = null;
         var explicitProviders = new HashSet<string>();
         var explicitCallbacks = new HashSet<string>();
         var extraUsings = new List<string>();
@@ -16,6 +16,7 @@ internal static class CSharpCommand
             switch (args[i])
             {
                 case "--api": apiPath = args[++i]; break;
+                case "--manifest": manifest = args[++i]; break;
                 case "--namespace": ns = args[++i]; break;
                 case "--native-namespace": nativeNs = args[++i]; break;
                 case "--out": outDir = args[++i]; break;
@@ -33,14 +34,15 @@ internal static class CSharpCommand
             Console.Error.WriteLine("usage: kabic csharp --api <ke_api.json> "
                 + "--namespace <NS> --native-namespace <NS.Native> --out <dir> "
                 + "[--contract-out <dir>] [--provider <vtable>]... [--callback <vtable>]... [--using <NS>]..."
-                + " [--library <so-name>] [--domain <name>]");
+                + " [--library <so-name>] [--domain <name>] [--manifest <api_domains.json>]");
             return 1;
         }
 
         try
         {
             Generation.CSharp(new Generation.CSharpRequest(File.ReadAllText(apiPath), ns, nativeNs, outDir,
-                contractOutDir ?? outDir, domain, library, explicitProviders, explicitCallbacks, extraUsings));
+                contractOutDir ?? outDir, domain, library, explicitProviders, explicitCallbacks, extraUsings,
+                Convention.Load(manifest ?? Path.Combine("scripts", "api_domains.json"))));
         }
         catch (InvalidOperationException e)
         {

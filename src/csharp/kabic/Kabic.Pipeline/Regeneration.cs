@@ -28,14 +28,14 @@ public static class Regeneration
     public static string ExtractOne(DomainSpec spec, string rootDir, string? zig) =>
         Extraction.Run(RequestFor(spec, rootDir, zig));
 
-    public static void GenerateOne(DomainSpec spec, string apiJson, DomainOutput output)
+    public static void GenerateOne(DomainSpec spec, string apiJson, DomainOutput output, Convention convention)
     {
         Generation.CSharp(new Generation.CSharpRequest(
             apiJson, spec.Namespace, spec.NativeNamespace, output.OutDir, output.ContractDir,
-            spec.Name, spec.Library, spec.Providers, [], spec.Usings));
+            spec.Name, spec.Library, spec.Providers, [], spec.Usings, convention));
 
         if (spec.CFieldTable is { } c && output.CFieldTableFile is { } file)
-            Generation.CFieldTable(apiJson, file, c.Guard, c.Includes);
+            Generation.CFieldTable(apiJson, file, c.Guard, c.Includes, convention);
     }
 
     public static IReadOnlyDictionary<string, string> ExtractAll(

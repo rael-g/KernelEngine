@@ -10,6 +10,7 @@ var checks = new Dictionary<string, Func<Options, int>>
     ["component-fields"] = ComponentFieldsCheck.Execute,
     ["generator-contract"] = GeneratorContractCheck.Execute,
     ["reconstruction"] = ReconstructionCheck.Execute,
+    ["out-params"] = OutParamsCheck.Execute,
 };
 
 if (args is ["generate", .. var generateArgs])

@@ -46,7 +46,7 @@ compiled, and runs the four projects under `tests/csharp/` (`Configuration`, `Ke
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
 The nine gates are the `kabic check` commands `drift`, `bindings`, `abi-layout`, `api-coverage`, `component-fields`,
-`generator-contract` and `reconstruction`, and the scripts `check_managed_handwritten` and `check_out_params`. The scripts are found by `verify.cs` rather than
+`generator-contract`, `reconstruction` and `out-params`, and the script `check_managed_handwritten`. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
 What each one fails on is in
 `docs/architecture/kabic.md`. They are Linux-only: they compare generated text against headers and

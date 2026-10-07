@@ -58,8 +58,9 @@ internal static class ZigCommand
         }
 
         var model = ReadModel(domains.First(d => d.Name == domain).Api);
-        var classified = Classifier.Classify(model, providers.ToHashSet(), [], Convention.KernelEngine);
-        var text = ZigBackend.Render(model, classified, Convention.KernelEngine, foreign);
+        var convention = Convention.Load(domainsPath);
+        var classified = Classifier.Classify(model, providers.ToHashSet(), [], convention);
+        var text = ZigBackend.Render(model, classified, convention, foreign);
 
         Directory.CreateDirectory(outDir);
         var outPath = Path.Combine(outDir, $"{domain}.zig");

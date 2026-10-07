@@ -16,12 +16,13 @@ public static class Generation
         string? Library,
         IReadOnlyCollection<string> Providers,
         IReadOnlyCollection<string> Callbacks,
-        IReadOnlyList<string> Usings);
+        IReadOnlyList<string> Usings,
+        Convention Convention);
 
     public static void CSharp(CSharpRequest r)
     {
         var model = ApiReader.Read(JsonNode.Parse(r.ApiJson)!.AsObject());
-        var convention = Convention.KernelEngine;
+        var convention = r.Convention;
         var classified = Classifier.Classify(model, new HashSet<string>(r.Providers), new HashSet<string>(r.Callbacks), convention);
         var ns = r.Namespace;
         var nativeNs = r.NativeNamespace;
@@ -114,10 +115,10 @@ public static class Generation
         }
     }
 
-    public static void CFieldTable(string apiJson, string outPath, string guard, IReadOnlyList<string> includes)
+    public static void CFieldTable(string apiJson, string outPath, string guard, IReadOnlyList<string> includes, Convention convention)
     {
         var model = ApiReader.Read(JsonNode.Parse(apiJson)!.AsObject());
-        var text = CBackend.RenderFieldTables(model, guard, includes.ToList(), Convention.KernelEngine);
+        var text = CBackend.RenderFieldTables(model, guard, includes.ToList(), convention);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
         File.WriteAllText(outPath, text);
     }

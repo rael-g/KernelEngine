@@ -9,6 +9,7 @@ internal static class DriftCommand
         var rootDir = options.Root;
         var zigOverride = options.Zig;
         var specs = DomainSpec.Load(options.Manifest);
+        var convention = Convention.Load(options.Manifest);
 
         Console.WriteLine("Checking for ke_api.json drift (headers vs. generated C#)...");
 
@@ -62,7 +63,7 @@ internal static class DriftCommand
 
                 try
                 {
-                    Regeneration.GenerateOne(spec, apiJson, new DomainOutput(tmpApiJson, tmpOutDir, tmpContractDir, tmpCFile));
+                    Regeneration.GenerateOne(spec, apiJson, new DomainOutput(tmpApiJson, tmpOutDir, tmpContractDir, tmpCFile), convention);
                 }
                 catch (InvalidOperationException e)
                 {

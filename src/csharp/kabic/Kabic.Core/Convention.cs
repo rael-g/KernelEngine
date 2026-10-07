@@ -99,28 +99,40 @@ public sealed class Convention
     public string StripPrefix(string name) =>
         name.StartsWith(SymbolPrefix) ? name[SymbolPrefix.Length..] : name;
 
-    /// <summary>
-    /// KernelEngine's ABI vocabulary. The one hardcoded instance today; see the
-    /// class remarks for why it is not yet a parameter.
-    /// </summary>
-    public static readonly Convention KernelEngine = new()
+    /// <summary>Prefix of a parameter the callee writes back (<c>out_size</c>), which must carry the <c>[out]</c> tag.</summary>
+    public string OutParamPrefix { get; init; } = "out_";
+
+    /// <summary>Name of the trailing failure lane, which is never a projected parameter.</summary>
+    public string ErrorLaneName { get; init; } = "out_error";
+
+    /// <summary>Reads the <c>convention</c> object of a manifest.</summary>
+    public static Convention FromJson(System.Text.Json.Nodes.JsonObject json)
     {
-        SymbolPrefix = "ke_",
-        HandleSuffix = "_handle",
-        FactorySuffix = "_create",
-        ComponentSuffix = "_component",
-        ParamsSuffix = "_params",
-        ErrorOutParamType = "ke_error**",
-        BooleanReturnTypes = ["_Bool", "bool", "ke_bool"],
-        TypeNameOverrides = new Dictionary<string, string>
+        static string Text(System.Text.Json.Nodes.JsonObject o, string key) =>
+            o[key]?.GetValue<string>() ?? throw new InvalidOperationException($"the convention declares no '{key}'");
+
+        var overrides = new Dictionary<string, string>();
+        foreach (var (symbol, name) in json["typeNameOverrides"]?.AsObject() ?? [])
+            overrides[symbol] = name!.GetValue<string>();
+
+        return new Convention
         {
-            ["ke_ecs"] = "EcsRegistry",
-            ["ke_asset_resolver"] = "NativeAssetResolver",
-            ["ke_input_actions"] = "NativeInputActions",
-            ["ke_physics_2d"] = "Physics2D",
-            ["ke_body_type_2d"] = "BodyType2D",
-            ["ke_phase"] = "RuntimePhase",
-            ["ke_access"] = "RuntimeAccess",
-        },
-    };
+            SymbolPrefix = Text(json, "symbolPrefix"),
+            HandleSuffix = Text(json, "handleSuffix"),
+            FactorySuffix = Text(json, "factorySuffix"),
+            ComponentSuffix = Text(json, "componentSuffix"),
+            ParamsSuffix = Text(json, "paramsSuffix"),
+            ErrorOutParamType = Text(json, "errorOutParamType"),
+            BooleanReturnTypes = (json["booleanReturnTypes"]?.AsArray() ?? throw new InvalidOperationException("the convention declares no 'booleanReturnTypes'"))
+                .Select(n => n!.GetValue<string>()).ToList(),
+            OutParamPrefix = json["outParamPrefix"]?.GetValue<string>() ?? "out_",
+            ErrorLaneName = json["errorLaneName"]?.GetValue<string>() ?? "out_error",
+            TypeNameOverrides = overrides,
+        };
+    }
+
+    /// <summary>Reads the <c>convention</c> object of the manifest at <paramref name="manifestPath"/>.</summary>
+    public static Convention Load(string manifestPath) =>
+        FromJson(System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject()["convention"]?.AsObject()
+            ?? throw new InvalidOperationException($"{manifestPath} has no 'convention' object"));
 }

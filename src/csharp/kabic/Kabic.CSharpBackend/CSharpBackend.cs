@@ -165,7 +165,7 @@ public static class CSharpBackend
     /// any wave thread take it" is describing an optional parameter, and spelling that 0 a
     /// second time in a hand-written overload is how the two come to disagree.
     /// </summary>
-    static string DefaultLiteral(ApiModel model, ClassifiedSlot cs, ApiParam p, ApiSlot slot)
+    static string DefaultLiteral(ApiModel model, ClassifiedSlot cs, ApiParam p, ApiSlot slot, Convention convention)
     {
         var v = p.TagValue("default")!.Trim();
         if (p.Has("closure"))
@@ -190,7 +190,7 @@ public static class CSharpBackend
 
         if (model.Enums.FirstOrDefault(e => e.Name == p.Type.Trim()) is { } e)
             return e.Values.Any(ev => ev.Name == v)
-                ? $"{Idioms.TypeName(e.Name, Convention.KernelEngine)}.{Idioms.EnumMember(v, e.Name)}"
+                ? $"{Idioms.TypeName(e.Name, convention)}.{Idioms.EnumMember(v, e.Name)}"
                 : throw new InvalidOperationException(
                     $"{slot.Name}.{p.Name}: [default:{v}] is not a value of {e.Name}.");
 
@@ -2329,7 +2329,7 @@ public static class CSharpBackend
                         .Where(x => !x.Param.Has("default")).Select(x => x.Param.Name))} has none.");
 
             return parts.Select(x => x.Param.Has("default")
-                ? $"{x.Text} = {DefaultLiteral(model, cs, x.Param, slot)}"
+                ? $"{x.Text} = {DefaultLiteral(model, cs, x.Param, slot, convention)}"
                 : x.Text);
         }
 

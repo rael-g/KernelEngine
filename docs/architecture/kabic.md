@@ -79,14 +79,14 @@ optionally `abstractionsOutDir`, `usings`, `library`, `auxHeaders`, `composeHead
 ## The Classifier
 
 `Classifier.Classify(model, explicitProviders, explicitCallbacks, convention)` (`Classifier.cs:88`)
-decides what each struct is and what shape each slot has. `Convention.KernelEngine`
-(`Convention.cs:106-125`) holds the project's spellings, so the classifier states nothing about
-`ke_`:
+decides what each struct is and what shape each slot has. A `Convention`, read from the `convention`
+object of `api_domains.json` (`Convention.Load`), holds the project's spellings, so the classifier states
+nothing about `ke_`:
 
 - a vtable is a struct with slots that is not a handle (`_handle`) and not a parameter bag
   (`_params`); it is a *provider* when a `<name>_handle` struct or a `<name>_create` function exists
   (`Classifier.cs:93`, `:105-110`);
-- a slot is *fallible* when its last parameter is `ke_error**` (`Convention.cs:83`); the parameter
+- a slot is *fallible* when its last parameter is `ke_error**` (`Convention.IsErrorOutParam`); the parameter
   is removed from the projected signature (`Classifier.cs:196-197`);
 - the resulting `SlotShape` is one of `Fallible`, `Try`, `ReturnsOutParam`, `TupleOutParams`,
   `Plain` (`Classifier.cs:4`, `:286-290`);
@@ -126,7 +126,7 @@ runs all nine through `scripts/verify.cs` (see `docs/conventions/ci.md`).
 | `kabic check abi-layout` | the size, alignment or a member offset of any struct or vtable the contract headers declare differs from `scripts/abi_layout.snapshot`, which a C compiler probe regenerates; an intended change is recorded with `-- --update` |
 | `kabic check reconstruction` | any file `kabic generate --into <temp>` produces is missing from the tree or differs from it (`check_reconstruction.cs:38-51`) |
 | `kabic check api-coverage` | a public header under `src/c` or `src/zig` is described by no `api_domains.json` entry, no `bindings` entry, and no recorded exclusion (`check_api_coverage.cs:56-67`); a header with only `static inline` functions needs none |
-| `check_out_params.cs` | a parameter named `out` or `out_*`, other than `out_error`, carries no `[out]` tag (`check_out_params.cs:57-68`); one exclusion is recorded |
+| `kabic check out-params` | a parameter named `out` or carrying the convention's out prefix, other than its failure lane, carries no `[out]` tag |
 | `kabic check generator-contract` | an attribute name kabic emits, the one the source generator matches by string, and the class under `src/csharp/framework` stop agreeing (`check_generator_contract.cs:39-62`) |
 | `kabic check component-fields` | a Zig `component_register` call omits the generated field table for a component that has one, or a table is named by no registration (`check_component_fields.cs:46`, `:75`) |
 | `check_managed_handwritten.cs` | the count of hand-written `.cs` files under `src/csharp` (excluding `Generated`, `*.g.cs`, `kabic/`) goes above the ceiling, or stays below it (`check_managed_handwritten.cs:17`, `:35-47`) |

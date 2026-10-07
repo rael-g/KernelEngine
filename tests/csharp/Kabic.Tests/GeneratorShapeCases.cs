@@ -665,7 +665,7 @@ internal static class GeneratorShapeCases
             try
             {
                 var model = ApiReader.Read(api);
-                var convention = Convention.KernelEngine;
+                var convention = ProbeConvention.Value;
                 var classified = Classifier.Classify(model, [], [], convention);
                 var provider = classified.Providers.Single();
                 var source = CSharpBackend.RenderProvider(model, provider, classified, "Probe", "Probe.Native", [], convention);
@@ -705,7 +705,7 @@ internal static class GeneratorShapeCases
             model.Structs.Add(component);
             foreach (var other in alongside ?? []) model.Structs.Add(other);
 
-            var emitted = CSharpBackend.RenderNodeType(model, component, "Probe", [], Convention.KernelEngine);
+            var emitted = CSharpBackend.RenderNodeType(model, component, "Probe", [], ProbeConvention.Value);
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
             foreach (var needle in contains)
@@ -731,7 +731,7 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderStruct(model, s, "Probe", [], Convention.KernelEngine);
+                emitted = CSharpBackend.RenderStruct(model, s, "Probe", [], ProbeConvention.Value);
             }
             catch (Exception ex)
             {
@@ -784,7 +784,7 @@ internal static class GeneratorShapeCases
             try
             {
                 var model = ApiReader.Read(api);
-                var convention = Convention.KernelEngine;
+                var convention = ProbeConvention.Value;
                 var classified = Classifier.Classify(model, [], [], convention);
                 var (owner, group) = classified.FreeFunctionGroups.Single();
                 emitted = CSharpBackend.RenderFreeFunctions(model, owner, group, "Probe", "Probe.Native",
@@ -851,7 +851,7 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderStructSpans(model, s, "Probe.Native", Convention.KernelEngine);
+                emitted = CSharpBackend.RenderStructSpans(model, s, "Probe.Native", ProbeConvention.Value);
             }
             catch (Exception ex)
             {
@@ -891,7 +891,7 @@ internal static class GeneratorShapeCases
             try
             {
                 emitted = CSharpBackend.RenderView(model, s, "Probe", ["Probe.Common"],
-                    Convention.KernelEngine);
+                    ProbeConvention.Value);
             }
             catch (Exception ex)
             {
@@ -935,7 +935,7 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderBorrowed(model, s, "Probe", [], Convention.KernelEngine);
+                emitted = CSharpBackend.RenderBorrowed(model, s, "Probe", [], ProbeConvention.Value);
             }
             catch (Exception ex)
             {
@@ -986,7 +986,7 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderBorrowWrappers(kinds, "Probe", Convention.KernelEngine);
+                emitted = CSharpBackend.RenderBorrowWrappers(kinds, "Probe", ProbeConvention.Value);
             }
             catch (Exception ex)
             {
