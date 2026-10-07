@@ -54,7 +54,7 @@ public sealed class ZigBackend
 
         foreach (var e in model.Enums.Where(e => !e.External)) RenderEnum(sb, e);
 
-        sb.AppendLine(Preamble);
+        sb.AppendLine(Preamble(convention));
 
         sb.AppendLine("/// The ABI as the header declares it. Nothing above this line is a C name and");
         sb.AppendLine("/// nothing below it is meant to be called by hand.");
@@ -89,8 +89,8 @@ public sealed class ZigBackend
         foreach (var b in bags.Values) RenderBag(bagTypes, b);
 
         sb.AppendLine("pub const abi = struct {");
-        sb.AppendLine(AbiPreamble);
-        sb.Append(AbiErrorTypes);
+        sb.AppendLine(convention.ZigErrorAbi);
+        sb.Append(AbiErrorTypes(convention));
         foreach (var name in opaque)
         {
             sb.AppendLine("    /// No domain describes this type, so the only thing known about it here is");
@@ -155,59 +155,47 @@ public sealed class ZigBackend
     /// own handler raised. Kept apart, a kind added to one of them is a kind the other two
     /// silently flatten to <c>General</c>.
     /// </summary>
-    static readonly (string Kind, string Singleton)[] ErrorKinds = [
-        ("NotFound", "KE_ERROR_NOT_FOUND"),
-        ("Io", "KE_ERROR_IO"),
-        ("OutOfMemory", "KE_ERROR_OUT_OF_MEMORY"),
-        ("InvalidArgument", "KE_ERROR_INVALID_ARGUMENT"),
-        ("NotInitialized", "KE_ERROR_NOT_INITIALIZED"),
-        ("NotSupported", "KE_ERROR_NOT_SUPPORTED"),
-        ("AlreadyExists", "KE_ERROR_ALREADY_EXISTS"),
-    ];
 
     /// <summary>
     /// The error vocabulary every module opens with: the set, the thread-local carrying
     /// what a Zig error set cannot, and the three crossings between the two spellings.
     /// </summary>
-    static string Preamble
+    static string Preamble(Convention convention)
     {
-        get
-        {
-            var sb = new StringBuilder(PreambleHead);
-            sb.AppendLine("pub const Error = error{");
-            sb.AppendLine("    General,");
-            foreach (var (kind, _) in ErrorKinds) sb.AppendLine($"    {kind},");
-            sb.AppendLine("};");
-            sb.AppendLine();
+        var sb = new StringBuilder(PreambleHead(convention));
+        sb.AppendLine("pub const Error = error{");
+        sb.AppendLine("    General,");
+        foreach (var (kind, _) in convention.ErrorKinds) sb.AppendLine($"    {kind},");
+        sb.AppendLine("};");
+        sb.AppendLine();
 
-            sb.AppendLine("fn raise(err: ?*const abi.ke_error) Error {");
-            sb.AppendLine("    last_error = err;");
-            foreach (var (kind, singleton) in ErrorKinds)
-                sb.AppendLine($"    if (abi.ke_error_is(err, &abi.{singleton})) return Error.{kind};");
-            sb.AppendLine("    return Error.General;");
-            sb.AppendLine("}");
-            sb.AppendLine();
+        sb.AppendLine($"fn raise(err: ?*const abi.{convention.ErrorType}) Error {{");
+        sb.AppendLine("    last_error = err;");
+        foreach (var (kind, singleton) in convention.ErrorKinds)
+            sb.AppendLine($"    if (abi.{convention.ErrorIsFunction}(err, &abi.{singleton})) return Error.{kind};");
+        sb.AppendLine("    return Error.General;");
+        sb.AppendLine("}");
+        sb.AppendLine();
 
-            sb.AppendLine(ErrorTypeDoc);
-            sb.AppendLine("fn errorType(e: Error) *const abi.ke_error_type {");
-            sb.AppendLine("    return switch (e) {");
-            foreach (var (kind, singleton) in ErrorKinds)
-                sb.AppendLine($"        Error.{kind} => &abi.{singleton},");
-            sb.AppendLine("        else => &abi.KE_ERROR_GENERAL,");
-            sb.AppendLine("    };");
-            sb.AppendLine("}");
-            sb.AppendLine();
+        sb.AppendLine(ErrorTypeDoc);
+        sb.AppendLine($"fn errorType(e: Error) *const abi.{convention.ErrorKindType} {{");
+        sb.AppendLine("    return switch (e) {");
+        foreach (var (kind, singleton) in convention.ErrorKinds)
+            sb.AppendLine($"        Error.{kind} => &abi.{singleton},");
+        sb.AppendLine($"        else => &abi.{convention.ErrorGeneralSingleton},");
+        sb.AppendLine("    };");
+        sb.AppendLine("}");
+        sb.AppendLine();
 
-            sb.AppendLine(ErrorFromDoc);
-            sb.AppendLine("fn errorFrom(t: ?*const abi.ke_error_type) ?Error {");
-            sb.AppendLine("    const named = t orelse return null;");
-            foreach (var (kind, singleton) in ErrorKinds)
-                sb.AppendLine($"    if (named == &abi.{singleton}) return Error.{kind};");
-            sb.AppendLine("    return Error.General;");
-            sb.AppendLine("}");
-            sb.AppendLine();
-            return sb.ToString();
-        }
+        sb.AppendLine(ErrorFromDoc);
+        sb.AppendLine($"fn errorFrom(t: ?*const abi.{convention.ErrorKindType}) ?Error {{");
+        sb.AppendLine("    const named = t orelse return null;");
+        foreach (var (kind, singleton) in convention.ErrorKinds)
+            sb.AppendLine($"    if (named == &abi.{singleton}) return Error.{kind};");
+        sb.AppendLine("    return Error.General;");
+        sb.AppendLine("}");
+        sb.AppendLine();
+        return sb.ToString();
     }
 
     const string ErrorTypeDoc = """
@@ -223,49 +211,19 @@ public sealed class ZigBackend
         /// narrowing it would mean walking a parent chain the caller cannot act on.
         """;
 
-    const string PreambleHead = """
+    static string PreambleHead(Convention convention) => $$"""
         /// The failure a fallible call reported. A Zig error set carries a kind and
         /// nothing else, so the message, the source location and the cause chain the
         /// native side filled in have to be readable somewhere; thread-local for the
         /// same reason the native slot is, which is that two threads failing at once
         /// are two failures.
-        pub threadlocal var last_error: ?*const abi.ke_error = null;
+        pub threadlocal var last_error: ?*const abi.{{convention.ErrorType}} = null;
 
         """;
 
-    /// <summary>
-    /// The types <see cref="AbiPreamble"/> declares by hand. They reach a description as
-    /// names no domain owns, so without this the error channel itself would be taken for
-    /// a type nobody describes.
-    /// </summary>
-    static readonly HashSet<string> AbiPreambleTypes = ["ke_error", "ke_error_type"];
-
-    const string AbiPreamble = """
-            pub const ke_error_type = extern struct {
-                name: ?[*:0]const u8,
-                parent: ?*const ke_error_type,
-            };
-
-            pub const ke_error = extern struct {
-                @"type": ?*const ke_error_type,
-                message: ?[*:0]const u8,
-                file: ?[*:0]const u8,
-                line: u32,
-                cause: ?*const ke_error,
-            };
-
-            pub extern fn ke_error_is(err: ?*const ke_error, @"type": *const ke_error_type) callconv(.c) bool;
-
-        """;
-
-    /// <summary>
-    /// The singletons the projection reaches, declared from the one list that also builds
-    /// the error set. <c>KE_ERROR_GENERAL</c> is not among the kinds, because it is what a
-    /// failure reads as when no kind matched rather than a kind a caller catches by name.
-    /// </summary>
-    static string AbiErrorTypes =>
-        string.Concat(ErrorKinds.Select(k => k.Singleton).Prepend("KE_ERROR_GENERAL")
-            .Select(s => $"    pub extern const {s}: ke_error_type;\n")) + "\n";
+    static string AbiErrorTypes(Convention convention) =>
+        string.Concat(convention.ErrorKinds.Select(k => k.Singleton).Prepend(convention.ErrorGeneralSingleton)
+            .Select(s => $"    pub extern const {s}: {convention.ErrorKindType};\n")) + "\n";
 
     /// <summary>
     /// The slot's parameters with its receiver put back. The receiver is not always
@@ -314,7 +272,7 @@ public sealed class ZigBackend
         var cv = isConst ? "const " : "";
         if (depth == 2) return $"?*?*{cv}{inner}";
         if (p is not null && p.Has("array_of")) return $"[*]{cv}{inner}";
-        return p is not null && (p.Has("optional") || IsOutcome(p))
+        return p is not null && (p.Has("optional") || IsOutcome(p, convention))
             ? $"?*{cv}{inner}" : $"*{cv}{inner}";
     }
 
@@ -330,7 +288,7 @@ public sealed class ZigBackend
     string Pointee(string bare, string q)
     {
         var named = Named(bare, q);
-        if (named == q + bare && !AbiPreambleTypes.Contains(bare)
+        if (named == q + bare && bare != convention.ErrorType && bare != convention.ErrorKindType
             && !DeclaredHere(bare) && !model.Structs.Any(s => s.Name == bare))
             opaque.Add(bare);
         return named;
@@ -580,7 +538,7 @@ public sealed class ZigBackend
             body.Add($"var {Local(p)}: "
                 + $"{PubType(CTypes.Deref(p.Type), null)} = undefined;");
         if (cs.ReturnCount is not null) body.Add("var count: u32 = 0;");
-        if (cs.Fallible) body.Add("var err: ?*abi.ke_error = null;");
+        if (cs.Fallible) body.Add($"var err: ?*abi.{convention.ErrorType} = null;");
 
         var call = $"self.ref.{Idioms.Ident(slot.Name)}({string.Join(", ", args)})";
 
@@ -680,20 +638,21 @@ public sealed class ZigBackend
 
     static string Norm(string t) => t.Replace(" ", "");
 
-    static ReportKind ReportOf(ApiParam lane) => Norm(lane.Type) switch
+    static ReportKind ReportOf(ApiParam lane, Convention convention)
     {
-        "ke_error**" => ReportKind.Fact,
-        "constke_error_type**" => ReportKind.Kind,
-        _ => ReportKind.None,
-    };
+        var type = Norm(lane.Type);
+        if (type == convention.ErrorType + "**") return ReportKind.Fact;
+        if (type == "const" + convention.ErrorKindType + "**") return ReportKind.Kind;
+        return ReportKind.None;
+    }
 
     /// <summary>
     /// Whether the lane tells the handler that something already failed. That is the
     /// opposite direction from a report channel, and it reads as an optional error rather
     /// than one, because the engine calls the handler on success too.
     /// </summary>
-    static bool IsOutcome(ApiParam lane) =>
-        Norm(lane.Type) is "constke_error*" or "constke_error_type*";
+    static bool IsOutcome(ApiParam lane, Convention convention) =>
+        Norm(lane.Type) == "const" + convention.ErrorType + "*" || Norm(lane.Type) == "const" + convention.ErrorKindType + "*";
 
     /// <summary>
     /// The closure a <c>[closure:&lt;state&gt;]</c> parameter declares. Which lane carries
@@ -720,10 +679,10 @@ public sealed class ZigBackend
             throw new NotSupportedException(
                 $"{where}: {callback.Name} hands the handler {lane.Type.Trim()}, and no domain"
                 + " describes that as a vtable this one can reach a projection of");
-        var report = callback.Lanes.FirstOrDefault(l => ReportOf(l) is not ReportKind.None);
+        var report = callback.Lanes.FirstOrDefault(l => ReportOf(l, convention) is not ReportKind.None);
         return new ClosureForm(fn, state, callback, context, report,
-            report is null ? ReportKind.None : ReportOf(report),
-            callback.Lanes.Where(IsOutcome).ToList());
+            report is null ? ReportKind.None : ReportOf(report, convention),
+            callback.Lanes.Where(l => IsOutcome(l, convention)).ToList());
     }
 
     /// <summary>
@@ -747,7 +706,7 @@ public sealed class ZigBackend
     }
 
     string HandlerLaneType(ApiParam lane) =>
-        LentType(lane) ?? (IsOutcome(lane) ? "?Error"
+        LentType(lane) ?? (IsOutcome(lane, convention) ? "?Error"
         : lane.Has("utf8") ? "[:0]const u8"
         : PubType(lane.Type, lane));
 
@@ -760,7 +719,7 @@ public sealed class ZigBackend
     /// </summary>
     string HandedExpr(ApiParam lane, string name) =>
         LentType(lane) is { } lent ? $"{lent}.borrow({name})"
-        : IsOutcome(lane) ? OutcomeExpr(lane, name)
+        : IsOutcome(lane, convention) ? OutcomeExpr(lane, name, convention)
         : lane.Has("utf8") ? Within("std", $"std.mem.span({name})")
         : name;
 
@@ -791,7 +750,7 @@ public sealed class ZigBackend
                 $"{where}: {vtable.Name} declares {state.Count} untyped fields, and an implementer"
                 + " reaches its own state through exactly one of them");
         if (vtable.Slots.Any(s => convention.IsFallible(s.Returns, s.Params)
-                || s.Params.Any(l => ReportOf(l) is not ReportKind.None)))
+                || s.Params.Any(l => ReportOf(l, convention) is not ReportKind.None)))
             throw new NotSupportedException(
                 $"{where}: a slot of {vtable.Name} reports failure, which this backend does not"
                 + " project yet");
@@ -950,8 +909,8 @@ public sealed class ZigBackend
     /// reachable; a <c>ke_error_type</c> has no such storage to record, which is the whole
     /// reason the ABI chose it for a failure that outlives its thread.
     /// </summary>
-    static string OutcomeExpr(ApiParam lane, string name) =>
-        Norm(lane.Type) is "constke_error*"
+    static string OutcomeExpr(ApiParam lane, string name, Convention convention) =>
+        Norm(lane.Type) == "const" + convention.ErrorType + "*"
             ? $"if ({name}) |failed| raise(failed) else null"
             : $"errorFrom({name})";
 

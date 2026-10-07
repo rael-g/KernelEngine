@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\..\..\scripts\zig_error_abi.zig" Link="zig_error_abi.zig" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\csharp\kabic\Kabic.CSharpBackend\Kabic.CSharpBackend.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\kabic\Kabic.ZigBackend\Kabic.ZigBackend.csproj" />
   </ItemGroup>

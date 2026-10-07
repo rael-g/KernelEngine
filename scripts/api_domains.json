@@ -10,6 +10,36 @@
     "booleanReturnTypes": ["_Bool", "bool", "ke_bool"],
     "outParamPrefix": "out_",
     "errorLaneName": "out_error",
+    "byteBoolType": "ke_bool",
+    "errorType": "ke_error",
+    "errorKindType": "ke_error_type",
+    "errorIsFunction": "ke_error_is",
+    "errorGeneralSingleton": "KE_ERROR_GENERAL",
+    "errorKinds": [
+      { "name": "NotFound", "singleton": "KE_ERROR_NOT_FOUND" },
+      { "name": "Io", "singleton": "KE_ERROR_IO" },
+      { "name": "OutOfMemory", "singleton": "KE_ERROR_OUT_OF_MEMORY" },
+      { "name": "InvalidArgument", "singleton": "KE_ERROR_INVALID_ARGUMENT" },
+      { "name": "NotInitialized", "singleton": "KE_ERROR_NOT_INITIALIZED" },
+      { "name": "NotSupported", "singleton": "KE_ERROR_NOT_SUPPORTED" },
+      { "name": "AlreadyExists", "singleton": "KE_ERROR_ALREADY_EXISTS" }
+    ],
+    "zigErrorAbiFile": "zig_error_abi.zig",
+    "errorHelperClass": "KernelError",
+    "commonManagedNamespace": "KernelEngine.Common",
+    "vectorTypes": {
+      "ke_vec2": { "managed": "Vector2", "lanes": ["x", "y"] },
+      "ke_vec3": { "managed": "Vector3", "lanes": ["x", "y", "z"] },
+      "ke_vec4": { "managed": "Vector4", "lanes": ["x", "y", "z", "w"] },
+      "ke_quat": { "managed": "Quaternion", "lanes": ["x", "y", "z", "w"] }
+    },
+    "matrixTypes": { "ke_mat4": "Matrix4x4" },
+    "handleTypes": {
+      "ke_mesh_handle": "KernelEngine.Render.MeshHandle",
+      "ke_material_handle": "KernelEngine.Render.MaterialHandle",
+      "ke_texture_handle": "KernelEngine.Render.TextureHandle",
+      "ke_ui_font_handle": "KernelEngine.Render.FontHandle"
+    },
     "includeDirectoryName": "kernel_engine",
     "commonBindingsNamespace": "KernelEngine.Common.Native",
     "bindingsMethodsClass": "NativeMethods",

@@ -4,6 +4,12 @@ namespace Kabic;
 /// The naming and shape conventions of the C ABI being compiled — everything
 /// `kabic` "knows" about its consumer that is NOT intrinsic to C itself.
 /// </summary>
+/// <summary>A C type and the managed type that occupies the same bytes.</summary>
+public sealed record ValueTypeMapping(string Managed, string[] Lanes);
+
+/// <summary>A kind of failure the ABI names, and the singleton a failure of that kind is reached by.</summary>
+public sealed record ErrorKind(string Name, string Singleton);
+
 public sealed class Convention
 {
     /// <summary>Prefix every public symbol in this ABI carries (<c>ke_input</c>, <c>ke_logger_create</c>).</summary>
@@ -111,11 +117,47 @@ public sealed class Convention
     /// <summary>Class that holds the raw P/Invoke methods of a binding assembly.</summary>
     public string BindingsMethodsClass { get; init; } = "NativeMethods";
 
+    /// <summary>The C typedef for a boolean that crosses the ABI as one byte (<c>ke_bool</c>), which the managed side widens to <c>bool</c>.</summary>
+    public string ByteBoolType { get; init; } = "";
+
+    /// <summary>The C struct a failed call reports through (<c>ke_error</c>).</summary>
+    public string ErrorType { get; init; } = "";
+
+    /// <summary>The C struct that names the kind of a failure (<c>ke_error_type</c>).</summary>
+    public string ErrorKindType { get; init; } = "";
+
+    /// <summary>The exported function that asks whether a failure is of a kind (<c>ke_error_is</c>).</summary>
+    public string ErrorIsFunction { get; init; } = "";
+
+    /// <summary>The singleton a failure reads as when no kind matched.</summary>
+    public string ErrorGeneralSingleton { get; init; } = "";
+
+    /// <summary>The kinds the error hierarchy names, in the order a projection declares them.</summary>
+    public IReadOnlyList<ErrorKind> ErrorKinds { get; init; } = [];
+
+    /// <summary>Zig declarations of the error ABI, written by hand because no description owns them.</summary>
+    public string ZigErrorAbi { get; init; } = "";
+
+    /// <summary>The managed class that raises a failure from the native struct and back (<c>ThrowIfFailed</c>, <c>FromNative</c>, <c>ToNative</c>).</summary>
+    public string ErrorHelperClass { get; init; } = "";
+
+    /// <summary>Managed namespace the generated projections import for the shared types, beside the bindings namespace.</summary>
+    public string CommonManagedNamespace { get; init; } = "";
+
+    /// <summary>C vector types and the managed type that occupies the same bytes, with the lanes of the C struct in order.</summary>
+    public IReadOnlyDictionary<string, ValueTypeMapping> VectorTypes { get; init; } = new Dictionary<string, ValueTypeMapping>();
+
+    /// <summary>C matrix types and the managed type that occupies the same bytes.</summary>
+    public IReadOnlyDictionary<string, string> MatrixTypes { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>C owner-wrapper handle types and the managed type a caller holds instead.</summary>
+    public IReadOnlyDictionary<string, string> HandleTypes { get; init; } = new Dictionary<string, string>();
+
     /// <summary>Name of the trailing failure lane, which is never a projected parameter.</summary>
     public string ErrorLaneName { get; init; } = "out_error";
 
     /// <summary>Reads the <c>convention</c> object of a manifest.</summary>
-    public static Convention FromJson(System.Text.Json.Nodes.JsonObject json)
+    public static Convention FromJson(System.Text.Json.Nodes.JsonObject json, string zigErrorAbi = "")
     {
         static string Text(System.Text.Json.Nodes.JsonObject o, string key) =>
             o[key]?.GetValue<string>() ?? throw new InvalidOperationException($"the convention declares no '{key}'");
@@ -136,6 +178,21 @@ public sealed class Convention
                 .Select(n => n!.GetValue<string>()).ToList(),
             OutParamPrefix = json["outParamPrefix"]?.GetValue<string>() ?? "out_",
             ErrorLaneName = json["errorLaneName"]?.GetValue<string>() ?? "out_error",
+            ByteBoolType = Text(json, "byteBoolType"),
+            ErrorType = Text(json, "errorType"),
+            ErrorKindType = Text(json, "errorKindType"),
+            ErrorIsFunction = Text(json, "errorIsFunction"),
+            ErrorGeneralSingleton = Text(json, "errorGeneralSingleton"),
+            ErrorKinds = (json["errorKinds"]?.AsArray() ?? []).Select(k => new ErrorKind(k!["name"]!.GetValue<string>(), k["singleton"]!.GetValue<string>())).ToList(),
+            ZigErrorAbi = zigErrorAbi,
+            ErrorHelperClass = Text(json, "errorHelperClass"),
+            CommonManagedNamespace = Text(json, "commonManagedNamespace"),
+            VectorTypes = (json["vectorTypes"]?.AsObject() ?? []).ToDictionary(
+                kv => kv.Key,
+                kv => new ValueTypeMapping(kv.Value!["managed"]!.GetValue<string>(),
+                    kv.Value!["lanes"]!.AsArray().Select(l => l!.GetValue<string>()).ToArray())),
+            MatrixTypes = (json["matrixTypes"]?.AsObject() ?? []).ToDictionary(kv => kv.Key, kv => kv.Value!.GetValue<string>()),
+            HandleTypes = (json["handleTypes"]?.AsObject() ?? []).ToDictionary(kv => kv.Key, kv => kv.Value!.GetValue<string>()),
             IncludeDirectoryName = json["includeDirectoryName"]?.GetValue<string>() ?? "kernel_engine",
             CommonBindingsNamespace = json["commonBindingsNamespace"]?.GetValue<string>() ?? "",
             BindingsMethodsClass = json["bindingsMethodsClass"]?.GetValue<string>() ?? "NativeMethods",
@@ -144,7 +201,12 @@ public sealed class Convention
     }
 
     /// <summary>Reads the <c>convention</c> object of the manifest at <paramref name="manifestPath"/>.</summary>
-    public static Convention Load(string manifestPath) =>
-        FromJson(System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject()["convention"]?.AsObject()
-            ?? throw new InvalidOperationException($"{manifestPath} has no 'convention' object"));
+    public static Convention Load(string manifestPath)
+    {
+        var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject()["convention"]?.AsObject()
+            ?? throw new InvalidOperationException($"{manifestPath} has no 'convention' object");
+        var abiFile = json["zigErrorAbiFile"]?.GetValue<string>();
+        var abi = abiFile is null ? "" : File.ReadAllText(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(manifestPath))!, abiFile));
+        return FromJson(json, abi);
+    }
 }
