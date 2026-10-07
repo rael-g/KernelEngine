@@ -42,9 +42,6 @@ void Expect(string what, Action<ApiModel> build, string[] contains, string[] abs
             failures.Add($"{what}: expected NOT to find \"{needle}\"");
 }
 
-// A fixed extent belongs in front of the element type in Zig, and the element goes on
-// through the primitive table. Left as a C declarator suffix the whole spelling misses
-// that table, and the module names a type nothing declares.
 Expect("a fixed-size array field declares its extent and its element type",
     m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [
         new ApiField("path", "char[256]", [], null),
@@ -54,10 +51,6 @@ Expect("a fixed-size array field declares its extent and its element type",
     contains: ["path: [256]u8,", "m: [16]f32,", "columns: [8]?*anyopaque,"],
     absent: ["char[256]", "float[16]"]);
 
-// An enum member whose C initialiser names a sibling is a second name for a case that
-// already exists, not a case of its own. Zig refuses two fields sharing a tag value, so
-// the alias is a declaration -- and emitting the C initialiser verbatim would name a
-// symbol the module never declares.
 Expect("an enum member aliasing a sibling is a declaration, not a second case",
     m => m.Enums.Add(new ApiEnum("ke_probe_button", null, [
         new ApiEnumValue("KE_PROBE_BUTTON_1", "0", true, null),
@@ -66,10 +59,6 @@ Expect("an enum member aliasing a sibling is a declaration, not a second case",
     contains: ["button_1 = 0,", "pub const left: @This() = .button_1;"],
     absent: ["left = KE_PROBE_BUTTON_1"]);
 
-// A type this domain composes is emitted by the domain that owns it, so this module
-// reaches it through an import. Zig has no ambient namespace for the bare name to
-// resolve in; a struct is part of the layout and sits under the owner's abi block,
-// an enum is a projection and sits at its top level.
 Expect("a composed foreign type is reached through an import, not named bare",
     m =>
     {
@@ -88,18 +77,12 @@ Expect("a composed foreign type is reached through an import, not named bare",
         ["ke_far_kind"] = new("far", "far.zig", false),
     });
 
-// A domain naming nothing foreign imports nothing: an unused import is a compile error
-// in Zig, so emitting the map wholesale would refuse every module that composes less
-// than it is handed.
 Expect("a domain naming nothing foreign imports nothing",
     m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [new ApiField("n", "uint32_t", [], null)], [])),
     contains: [],
     absent: ["@import("],
     foreign: new Dictionary<string, ForeignType> { ["ke_far_ctx"] = new("far", "far.zig", true) });
 
-// A buffer the caller allocates and the callee fills is written back and counted at
-// once. It is the memory, so there is no local to declare and take the address of, and
-// the capacity the ABI asks for separately comes off the span.
 Expect("a caller-allocated buffer is one writable span, not a written-back value",
     m =>
     {
@@ -115,9 +98,6 @@ Expect("a caller-allocated buffer is one writable span, not a written-back value
     absent: ["buf_out"],
     providers: ["ke_probe"]);
 
-// A struct whose counted pointer is memory the call reads, handed over as a sequence. The
-// Zig side already holds the native layout, so a [borrowed] element is the ABI's own struct
-// and the sequence is the slice the plain case already is.
 Expect("a sequence of borrowed structs is a slice of the ABI's own struct",
     m =>
     {
@@ -140,9 +120,6 @@ Expect("a sequence of borrowed structs is a slice of the ABI's own struct",
     absent: ["decl_count: u32) u64 {", "decls: [*]const abi"],
     providers: ["ke_probe"]);
 
-// Zig refuses a parameter that shadows an outer declaration. A vtable declaring both a
-// `parent` slot and a `parent` parameter is not a mistake in the header -- in C the two
-// live in different scopes, and only the projection puts them in the same one.
 Expect("a parameter shadowing a method of the same projection is renamed",
     m =>
     {
@@ -156,12 +133,6 @@ Expect("a parameter shadowing a method of the same projection is renamed",
     absent: ["pub fn attach(self: Probe, parent: u64)"],
     providers: ["ke_probe"]);
 
-// A handler the caller supplies travels as the C pair it already is: a function pointer
-// and the state it reaches its own data through. Zig closes over nothing at runtime, so
-// the state stays the caller's memory and the projection retains nothing -- and the
-// context lane, being how the state comes back, is not something the handler is asked
-// for. Where the typedef declares a ke_error** lane the handler reports through Zig's
-// own error union, which is what that lane is the C spelling of.
 Expect("a supplied handler is a trampoline over the caller's own state",
     m =>
     {
@@ -190,11 +161,6 @@ Expect("a supplied handler is a trampoline over the caller's own state",
     absent: ["@TypeOf(ctx), ?*anyopaque", "out_error: ?*?*abi.ke_error"],
     providers: ["ke_probe"]);
 
-// A name no domain describes, reached only through a pointer, is a C type forward
-// declared and never defined -- the header hands out its address and nothing else. Zig
-// says that with opaque, and saying it is what makes the pointer legal: the bare name
-// alone leaves the module naming a symbol nothing declares. The types the ABI preamble
-// writes by hand are not among them, or the error channel itself would be invented.
 Expect("a type nothing describes is declared opaque so its pointer is legal",
     m =>
     {
@@ -209,10 +175,6 @@ Expect("a type nothing describes is declared opaque so its pointer is legal",
     absent: ["pub const ke_error = opaque", "pub const ke_error_type = opaque"],
     providers: ["ke_probe"]);
 
-// The same undescribed name by value is not a handle. A layout this domain cannot see
-// is a defect in the description, so the module goes on naming the symbol nothing
-// declares and stops compiling -- which is the signal. Inventing an opaque here would
-// trade a refusal to build for a field the caller can never reach.
 Expect("an undescribed type reached by value is not made opaque",
     m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [
         new ApiField("held", "ke_probe_kind", [], null),
@@ -223,11 +185,6 @@ Expect("an undescribed type reached by value is not made opaque",
                "addressed: *ke_probe_body,"],
     absent: ["pub const ke_probe_kind = opaque {};"]);
 
-// A failure crosses the ABI in two spellings and neither reaches the caller's signature.
-// A ke_error_type ** is the channel a handler reports through, so it becomes Zig's error
-// union and the trampoline writes the singleton the error names; a ke_error_type * is a
-// failure that already happened, so it becomes an optional error read the other way. The
-// lane is optional either way, because succeeding is what a null in it means.
 Expect("a failure crosses as an error union one way and an optional error the other",
     m =>
     {
@@ -261,10 +218,6 @@ Expect("a failure crosses as an error union one way and an optional error the ot
     absent: ["?Error) Error!void", "failure: *const abi.ke_error_type"],
     providers: ["ke_probe"]);
 
-// A vtable the caller implements needs no interface declared for it: each slot becomes a
-// method looked up on the caller's own type, so a missing or mistyped one is named by the
-// Zig compiler. The state field is found by its type, and the plain fields the vtable also
-// carries become parameters, so nothing about the value is left for the caller to fill.
 Expect("a vtable the caller implements is filled from a type the compiler looks methods up on",
     m =>
     {
@@ -297,10 +250,6 @@ Expect("a vtable the caller implements is filled from a type the compiler looks 
     absent: ["sink: abi.ke_probe_sink", "ProbeSink = struct"],
     providers: ["ke_probe"]);
 
-// A [ctx] or [self] parameter is the engine handing the caller one of its own objects, so
-// it crosses as that vtable's projection rather than as the pointer under it. The vtable
-// has no owner wrapper, which is exactly why nothing else would project it -- and why the
-// projection offers only borrow: a caller cannot come to hold what a call is lending.
 Expect("an engine object crosses as a projection with no lifetime of its own",
     m =>
     {
@@ -323,10 +272,6 @@ Expect("an engine object crosses as a projection with no lifetime of its own",
     ],
     providers: ["ke_probe"]);
 
-// A parameter bag becomes the one thing Zig already says better than C: a struct whose
-// fields carry the defaults the header states, so a caller states only what it means. The
-// handler and the state it reaches its own data through cannot be fields -- one is
-// comptime, the other typed by what was passed -- and a count comes off the span beside it.
 Expect("a parameter bag becomes a struct of defaults, with the handler and its state outside",
     m =>
     {

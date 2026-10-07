@@ -12,9 +12,6 @@ int ticks = ArgValue("--ticks", 300);
 int churn = ArgValue("--churn", 0);
 string kind = ArgText("--type", "both");
 
-// Names the borrowed child something the borrow does not ask for, so a run can show
-// the coupling check failing. A check nobody has ever seen fail is a check nobody
-// knows the range of.
 bool breakBorrow = Environment.GetCommandLineArgs().Contains("--break-borrow");
 
 ScriptHost? churnWorld = null;
@@ -24,8 +21,6 @@ var services = new ServiceCollection()
     .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
-    // One connection, one event and one delivery per coupled pair, so the bus is sized
-    // from the scene rather than the scene being sized to fit the bus.
     .Add<IRuntimeModule>(new FrameworkModule(new SignalBusCapacities(
         MaxConnections: (uint)instances + 64,
         MaxEvents:      (uint)instances + 64,
