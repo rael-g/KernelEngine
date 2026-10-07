@@ -45,9 +45,9 @@ does not enter the hash.
 compiled, and runs the three projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The twelve gates are `check_abi_layout`, `check_api_coverage`, `check_bindings_drift`, `check_component_fields`,
-`check_generator_contract`, `check_generator_shapes`, `check_managed_handwritten`,
-`check_out_params`, `check_reconstruction`, `check_rsp_drift` and `check_zig_shapes`, found by `verify.cs` rather than
+The twelve gates are the `kabic check` commands `drift`, `abi-layout`, `api-coverage`, `component-fields`,
+`generator-contract` and `reconstruction`, and the scripts `check_bindings_drift`, `check_generator_shapes`,
+`check_managed_handwritten`, `check_out_params`, `check_rsp_drift` and `check_zig_shapes`. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
 `check_generator_shapes` and `check_zig_shapes` are run with `--no-cache`, since a cached build of the
 generator would answer about the wrong generator. What each one fails on is in

@@ -50,7 +50,8 @@ return results.Any(r => r.Exit != 0) ? 1 : 0;
 
 List<Step> Gates() =>
 [
-    new Step("kabic check drift", "dotnet", ["run", "--project", "src/csharp/kabic/Kabic.Cli", "--", "check", "drift"]),
+    .. new[] { "drift", "abi-layout", "api-coverage", "component-fields", "generator-contract", "reconstruction" }
+        .Select(name => new Step($"kabic check {name}", "dotnet", ["run", "--project", "src/csharp/kabic/Kabic.Cli", "--", "check", name])),
     .. Directory.EnumerateFiles(Path.Combine(rootDir, "scripts"), "check_*.cs").Order()
         .Select(f => new Step(Path.GetFileName(f), "dotnet",
             Path.GetFileName(f) is "check_generator_shapes.cs" or "check_zig_shapes.cs"

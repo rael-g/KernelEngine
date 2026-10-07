@@ -1,6 +1,6 @@
 namespace Kabic.Cli;
 
-internal sealed record Options(string Root, string Manifest, string? Zig, IReadOnlyList<string> Domains, string? Into)
+internal sealed record Options(string Root, string Manifest, string? Zig, IReadOnlyList<string> Domains, string? Into, string[] Raw)
 {
     public static Options Parse(IReadOnlyList<string> args)
     {
@@ -20,6 +20,6 @@ internal sealed record Options(string Root, string Manifest, string? Zig, IReadO
                 case "--into": into = Path.GetFullPath(args[++i]); break;
             }
         }
-        return new Options(root, manifest ?? Path.Combine(root, "scripts", "api_domains.json"), zig, domains, into);
+        return new Options(root, manifest ?? Path.Combine(root, "scripts", "api_domains.json"), zig, domains, into, [.. args]);
     }
 }

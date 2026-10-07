@@ -1,5 +1,5 @@
 # size, alignment and member offsets of every struct the contract headers declare.
-# Regenerate with: dotnet run scripts/check_abi_layout.cs -- --update
+# Regenerate with: dotnet run --project src/csharp/kabic/Kabic.Cli -- check abi-layout --update
 
 [input]
 ke_input_snapshot size=232 align=8
