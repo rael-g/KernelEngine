@@ -20,7 +20,7 @@ var windows = args.Contains("--windows");
 var updateGolden = args.Contains("--update-golden");
 var stages = args.Where(a => !a.StartsWith("--")).ToList();
 if (updateGolden && stages.Count == 0) stages = ["build", "visual"];
-if (windows && stages.Count == 0) stages = ["cross-windows", "test-windows"];
+if (windows && stages.Count == 0) stages = ["cross-windows", "test-windows", "test-managed-windows"];
 var Image = windows ? WineImage : BaseImage;
 
 if (rebuildImage || !Succeeds("docker", "image", "inspect", BaseImage))
@@ -30,7 +30,7 @@ if (rebuildImage || !Succeeds("docker", "image", "inspect", BaseImage))
 }
 if (windows && (rebuildImage || !Succeeds("docker", "image", "inspect", WineImage)))
 {
-    Console.WriteLine("--- building the Windows test image (the CI image plus Wine with a prefix created at build time)");
+    Console.WriteLine("--- building the Windows test image (the CI image plus Wine and the Windows .NET SDK)");
     if (Run("docker", "build", "--force-rm", "--network", "host", "-t", WineImage, "-f", Path.Combine(rootDir, "scripts", "ci", "Dockerfile.wine"), Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
 }
 

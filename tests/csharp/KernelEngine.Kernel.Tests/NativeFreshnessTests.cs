@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using Xunit;
 
@@ -16,7 +17,11 @@ public class NativeFreshnessTests
     public void NativeLibraries_WereBuiltFromTheHeadersOnDisk()
     {
         var root = FindRepoRoot();
-        var stamp = Path.Combine(root, "build", "native", "abi.stamp");
+        var prefix = typeof(NativeFreshnessTests).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(a => a.Key == "NativePrefix").Value!
+            .Replace('\\', '/').TrimEnd('/');
+        var stamp = Path.Combine([root, .. prefix.Split('/'), "abi.stamp"]);
         Assert.True(File.Exists(stamp),
             $"{stamp} does not exist: build the native side first with `zig build --prefix build/native --cache-dir build/zig-cache`");
 

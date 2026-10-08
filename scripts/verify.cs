@@ -13,14 +13,15 @@ var stages = new Dictionary<string, Func<List<Step>>>
     ["test-native"] = () => [new Step("zig build test", "zig", ["build", "test", .. nativeArgs])],
     ["test-managed"] = () => [new Step("dotnet test", "dotnet", ["test", "KernelEngine.slnx"])],
     ["test-windows"] = () => [new Step("zig build test windows", "zig", ["build", "test", "-Dtarget=x86_64-windows-gnu", "-fwine", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win", "--global-cache-dir", "build/zig-global"])],
+    ["test-managed-windows"] = ManagedWindowsTests,
     ["gates"] = Gates,
     ["visual"] = () => [new Step("visual", "dotnet", ["run", "scripts/visual.cs", .. args.Where(a => a == "--update")])],
     ["cross-windows"] = () => [new Step("zig build windows", "zig", ["build", "-Dtarget=x86_64-windows-gnu", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win", "--global-cache-dir", "build/zig-global"])],
 };
-string[] order = ["build", "test-native", "test-managed", "gates", "visual", "cross-windows", "test-windows"];
+string[] order = ["build", "test-native", "test-managed", "gates", "visual", "cross-windows", "test-windows", "test-managed-windows"];
 
 var selected = args.Where(a => !a.StartsWith("--")).ToList();
-if (selected.Count == 0 || selected.Contains("all")) selected = [.. order.Where(s => s is not ("cross-windows" or "test-windows"))];
+if (selected.Count == 0 || selected.Contains("all")) selected = [.. order.Where(s => s is not ("cross-windows" or "test-windows" or "test-managed-windows"))];
 var unknown = selected.Where(s => !stages.ContainsKey(s)).ToList();
 if (unknown.Count > 0)
 {
@@ -48,6 +49,26 @@ foreach (var (name, seconds, exit) in results)
     Console.WriteLine($"{(exit == 0 ? "ok  " : "FAIL")} {name,-40} {seconds,7:F1}s");
 Console.WriteLine($"{"",5}{"total",-40} {results.Sum(r => r.Seconds),7:F1}s");
 return results.Any(r => r.Exit != 0) ? 1 : 0;
+
+List<Step> ManagedWindowsTests()
+{
+    var windowsDotnet = Environment.GetEnvironmentVariable("DOTNET_WINDOWS_ROOT");
+    if (string.IsNullOrEmpty(windowsDotnet))
+        return [new Step("test-managed-windows needs DOTNET_WINDOWS_ROOT, the Windows .NET SDK the wine ci image carries", "false", [])];
+    var prefix = Path.Combine(rootDir, "build", "cross-windows");
+    var artifacts = Path.Combine(rootDir, "build", "artifacts-windows");
+    var steps = new List<Step>();
+    foreach (var project in Directory.EnumerateFiles(Path.Combine(rootDir, "tests", "csharp"), "*.csproj", SearchOption.AllDirectories).Order())
+    {
+        var name = Path.GetFileNameWithoutExtension(project);
+        var assembly = Path.Combine(artifacts, "bin", name, "debug", name + ".dll");
+        steps.Add(new Step($"dotnet build {name} for windows", "dotnet",
+            ["build", project, "-p:NativeOS=win", $"-p:NativePrefix={prefix}", $"-p:ArtifactsPath={artifacts}"]));
+        steps.Add(new Step($"dotnet test {name} under wine", "wine",
+            [Path.Combine(windowsDotnet, "dotnet.exe"), "test", "Z:" + assembly.Replace('/', '\\')]));
+    }
+    return steps;
+}
 
 List<Step> Gates() =>
 [

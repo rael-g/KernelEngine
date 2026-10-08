@@ -1,15 +1,15 @@
 <Project>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+  <PropertyGroup Condition="'$(NativeOS)' == '' And $([MSBuild]::IsOSPlatform('Linux'))">
     <NativeOS>linux</NativeOS>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+  <PropertyGroup Condition="'$(NativeOS)' == '' And $([MSBuild]::IsOSPlatform('OSX'))">
     <NativeOS>osx</NativeOS>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-      <NativeOS>win</NativeOS>
+  <PropertyGroup Condition="'$(NativeOS)' == '' And $([MSBuild]::IsOSPlatform('Windows'))">
+    <NativeOS>win</NativeOS>
   </PropertyGroup>
 
   <PropertyGroup Condition="$(Configuration) == 'Debug'">
@@ -32,17 +32,17 @@
     <NativePreset>$(NativeRID)-$(NativeConfig)</NativePreset>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+  <PropertyGroup Condition="'$(NativeOS)' == 'linux'">
     <NativeExt>so</NativeExt>
     <NativePre>lib</NativePre>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+  <PropertyGroup Condition="'$(NativeOS)' == 'osx'">
     <NativeExt>dylib</NativeExt>
     <NativePre>lib</NativePre>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+  <PropertyGroup Condition="'$(NativeOS)' == 'win'">
     <NativeExt>dll</NativeExt>
     <NativePre></NativePre>
   </PropertyGroup>
@@ -53,7 +53,8 @@
 
   <PropertyGroup>
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))</RepoRoot>
-    <NativeFinalDir>$(RepoRoot)/build/native/$(NativeTypeDir)</NativeFinalDir>
+    <NativePrefix Condition="'$(NativePrefix)' == ''">$(RepoRoot)/build/native</NativePrefix>
+    <NativeFinalDir>$(NativePrefix)/$(NativeTypeDir)</NativeFinalDir>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(NativeTarget)' != ''">
