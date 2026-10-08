@@ -17,7 +17,9 @@ var keep = args.Contains("--keep");
 var rebuildImage = args.Contains("--rebuild-image");
 var workingTree = args.Contains("--working-tree");
 var windows = args.Contains("--windows");
+var updateGolden = args.Contains("--update-golden");
 var stages = args.Where(a => !a.StartsWith("--")).ToList();
+if (updateGolden && stages.Count == 0) stages = ["build", "visual"];
 if (windows && stages.Count == 0) stages = ["cross-windows", "test-windows"];
 var Image = windows ? WineImage : BaseImage;
 
@@ -59,13 +61,24 @@ try
         run.AddRange(["-v", $"{ToolsVolume}:/work/build/tools", "-v", $"{PortsVolume}:/work/build/vcpkg-installed"]);
         if (windows) run.AddRange(["-v", $"{WindowsPortsVolume}:/work/build/vcpkg-installed-x64-windows-zig"]);
     }
-    run.AddRange([Image, "dotnet", "run", "scripts/verify.cs", "--", .. stages]);
+    run.AddRange([Image, "dotnet", "run", "scripts/verify.cs", "--", .. stages, .. updateGolden ? ["--update"] : Array.Empty<string>()]);
 
     Console.WriteLine($"--- running scripts/verify.cs {string.Join(' ', stages)} the way ci.yml does, on Linux"
         + (useCache ? " (vcpkg caches kept between runs)" : " (cold, no caches)"));
     if (windows) Console.WriteLine("    Windows target cross-built on Linux; its tests run under Wine inside the container, never against the host's.");
     else Console.WriteLine("    The Windows leg of the matrix is not simulated here.");
-    return Run("docker", [.. run]);
+    var exit = Run("docker", [.. run]);
+    if (exit == 0 && updateGolden)
+    {
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(checkout, "golden"), "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(rootDir, Path.GetRelativePath(checkout, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file, destination, overwrite: true);
+            Console.WriteLine($"--- {Path.GetRelativePath(rootDir, destination)} recorded");
+        }
+    }
+    return exit;
 }
 finally
 {

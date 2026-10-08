@@ -9,6 +9,8 @@
 #include "triangle_vs_wgsl.h"
 #include "triangle_fs_wgsl.h"
 
+#include <stb_image_write.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -80,7 +82,7 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
     gpu->unmap_buffer(gpu, staging);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     printf("--- c_demo_15: offscreen capture ---\n");
 
@@ -157,6 +159,13 @@ int main(void)
     printf("%zu of %d texels differ from the corner (the triangle), %zu differ between the two frames\n",
            lit, WIDTH * HEIGHT, differing);
 
+    bool written = true;
+    if (argc > 1)
+    {
+        written = stbi_write_png(argv[1], WIDTH, HEIGHT, BYTES_PER_TEXEL, first, WIDTH * BYTES_PER_TEXEL) != 0;
+        printf("%s %s\n", written ? "wrote" : "failed to write", argv[1]);
+    }
+
     free(first);
     free(second);
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
@@ -166,5 +175,5 @@ int main(void)
     gpu.destroy(gpu.ref);
 
     printf("--- Done ---\n");
-    return differing == 0 && lit > 0 ? 0 : 1;
+    return differing == 0 && lit > 0 && written ? 0 : 1;
 }
