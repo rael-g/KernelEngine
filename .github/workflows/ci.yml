@@ -116,6 +116,50 @@ jobs:
         if: runner.os == 'Linux'
         run: dotnet run scripts/verify.cs -- gates
 
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Build the pinned ci image
+        run: docker build -t ke-ci scripts/ci
+
+      - name: Restore vcpkg
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/tools
+            build/vcpkg-installed
+          key: vcpkg-ke-ci-${{ hashFiles('scripts/ci/Dockerfile', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
+
+      - name: Build native and compare against the goldens
+        run: |
+          mkdir -p build/home
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -e HOME=/work/build/home -e DOTNET_CLI_HOME=/work/build/home \
+            -v "$PWD:/work" -w /work ke-ci \
+            dotnet run scripts/verify.cs -- build visual
+
+      - name: Save vcpkg
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build/tools
+            build/vcpkg-installed
+          key: vcpkg-ke-ci-${{ hashFiles('scripts/ci/Dockerfile', 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-triplets/**') }}
+
+      - name: Upload the captured images
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-captures
+          path: build/visual
+
   main-history:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
