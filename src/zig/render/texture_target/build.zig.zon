@@ -1,0 +1,8 @@
+.{
+    .name = .ke_gpu_render_target_texture,
+    .version = "0.1.0",
+    .fingerprint = 0x207b6f695fa92322,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

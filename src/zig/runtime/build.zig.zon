@@ -1,0 +1,8 @@
+.{
+    .name = .ke_runtime,
+    .version = "0.1.0",
+    .fingerprint = 0x18b5617562dbe406,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

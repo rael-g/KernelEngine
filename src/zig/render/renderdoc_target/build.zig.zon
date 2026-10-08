@@ -1,0 +1,8 @@
+.{
+    .name = .ke_gpu_render_target_renderdoc,
+    .version = "0.1.0",
+    .fingerprint = 0xbd5f6798fadce6b,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

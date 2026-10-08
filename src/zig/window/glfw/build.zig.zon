@@ -1,0 +1,8 @@
+.{
+    .name = .ke_window_glfw,
+    .version = "0.1.0",
+    .fingerprint = 0xbee671a1c4ae70c4,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

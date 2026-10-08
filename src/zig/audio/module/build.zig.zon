@@ -1,0 +1,8 @@
+.{
+    .name = .ke_audio_module,
+    .version = "0.1.0",
+    .fingerprint = 0x1863021bdcc2fca3,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

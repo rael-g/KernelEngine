@@ -1,0 +1,8 @@
+.{
+    .name = .c_demo_16,
+    .version = "0.1.0",
+    .fingerprint = 0x44c111b5234adab5,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

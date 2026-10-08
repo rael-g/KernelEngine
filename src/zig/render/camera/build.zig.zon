@@ -1,0 +1,8 @@
+.{
+    .name = .ke_render_camera,
+    .version = "0.1.0",
+    .fingerprint = 0x983226710a1589a5,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

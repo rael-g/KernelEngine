@@ -1,0 +1,8 @@
+.{
+    .name = .ke_physics_2d_box2d,
+    .version = "0.1.0",
+    .fingerprint = 0x716a534e32ab2e24,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}
