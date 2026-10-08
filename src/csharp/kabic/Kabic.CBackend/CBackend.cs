@@ -52,7 +52,7 @@ public static class CBackend
         }
 
         sb.AppendLine($"#endif /* {guard} */");
-        return sb.ToString();
+        return sb.ToString().ReplaceLineEndings("\n");
     }
 
     /// <summary>

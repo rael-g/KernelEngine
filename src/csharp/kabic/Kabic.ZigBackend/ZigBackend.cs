@@ -108,7 +108,7 @@ public sealed class ZigBackend
         foreach (var (module, path) in imported)
             head.AppendLine($"const {module} = @import(\"{path}\");");
         if (imported.Count > 0) head.AppendLine();
-        return head.Append(sb).ToString();
+        return head.Append(sb).ToString().ReplaceLineEndings("\n");
     }
 
     /// <summary>
@@ -213,7 +213,7 @@ public sealed class ZigBackend
         sb.AppendLine("    return Error.General;");
         sb.AppendLine("}");
         sb.AppendLine();
-        return sb.ToString();
+        return sb.ToString().ReplaceLineEndings("\n");
     }
 
     const string ErrorTypeDoc = """
