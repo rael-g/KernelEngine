@@ -24,6 +24,7 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
             c.KE_GPU_TEXTURE_USAGE_COPY_SRC | c.KE_GPU_TEXTURE_USAGE_COPY_DST;
 
     const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
+        .label = desc.*.name,
         .width = w,
         .height = h,
         .depth_or_array_layers = 1,
@@ -37,6 +38,7 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
     });
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
+        .label = desc.*.name,
         .format = desc.*.format,
         .dimension = c.KE_GPU_TEXTURE_DIM_2D,
         .aspect = if (depth) c.KE_GPU_TEXTURE_ASPECT_DEPTH else c.KE_GPU_TEXTURE_ASPECT_COLOR,

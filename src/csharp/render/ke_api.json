@@ -101,6 +101,12 @@
       "tags": [],
       "fields": [
         {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name the pass\u0027s render or compute pass is labeled with; copied when the pass begins."
+        },
+        {
           "name": "reads",
           "type": "const char *const *",
           "tags": [],

@@ -4,6 +4,9 @@ namespace KernelEngine.Render.Native;
 
 public unsafe partial struct ke_render_pass_io
 {
+    [NativeTypeName("const char *")]
+    public sbyte* name;
+
     [NativeTypeName("const char *const *")]
     public sbyte** reads;
 

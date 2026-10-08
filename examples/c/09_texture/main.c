@@ -147,10 +147,10 @@ int main(void)
     if (ibo == KE_GPU_INVALID_HANDLE) die("index buffer creation failed", err);
 
     ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = tex_vs_wgsl, .byte_size = strlen(tex_vs_wgsl), .entry_point = "vs_main",
+        .code = tex_vs_wgsl, .byte_size = strlen(tex_vs_wgsl), .label = "vs_main",
     }, &err);
     ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = tex_fs_wgsl, .byte_size = strlen(tex_fs_wgsl), .entry_point = "fs_main",
+        .code = tex_fs_wgsl, .byte_size = strlen(tex_fs_wgsl), .label = "fs_main",
     }, &err);
 
     ke_gpu_vertex_attribute attrs[] = {
@@ -209,7 +209,7 @@ int main(void)
             .color_attachments = &ca, .color_attachment_count = 1,
         };
 
-        ke_gpu_command_encoder *enc = gpu.ref->create_command_encoder(gpu.ref);
+        ke_gpu_command_encoder *enc = gpu.ref->create_command_encoder(gpu.ref, NULL);
         ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
         rp->set_pipeline(rp, pipeline);
         rp->set_bind_group(rp, 0, bg, NULL, 0);

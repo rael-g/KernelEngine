@@ -52,14 +52,14 @@ int main(void)
     ke_gpu_shader_module_params vsp = {
         .code        = triangle_vs_wgsl,
         .byte_size   = strlen(triangle_vs_wgsl),
-        .entry_point = "vs_main",
+        .label = "vs_main",
     };
     ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &vsp, &err);
 
     ke_gpu_shader_module_params fsp = {
         .code        = triangle_fs_wgsl,
         .byte_size   = strlen(triangle_fs_wgsl),
-        .entry_point = "fs_main",
+        .label = "fs_main",
     };
     ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &fsp, &err);
 
@@ -127,7 +127,7 @@ int main(void)
             .depth_stencil_attachment = NULL,
         };
 
-        ke_gpu_command_encoder *enc = gpu.ref->create_command_encoder(gpu.ref);
+        ke_gpu_command_encoder *enc = gpu.ref->create_command_encoder(gpu.ref, NULL);
         ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
         rp->set_pipeline(rp, pipeline);
         rp->draw(rp, 3, 1, 0, 0);

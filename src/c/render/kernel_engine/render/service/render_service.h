@@ -47,6 +47,9 @@ typedef struct ke_render_resource_desc
 /// A pass's declared resource I/O by name.
 typedef struct ke_render_pass_io
 {
+    /// Optional name the pass's render or compute pass is labeled with; copied when the pass
+    /// begins.
+    const char        *name;
     const char *const *reads;
     uint32_t           reads_count;
     const char *const *writes;

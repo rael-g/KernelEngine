@@ -2,8 +2,11 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Native;
 
-public partial struct ke_gpu_texture_view_params
+public unsafe partial struct ke_gpu_texture_view_params
 {
+    [NativeTypeName("const char *")]
+    public sbyte* label;
+
     public ke_gpu_texture_format format;
 
     public ke_gpu_texture_dimension dimension;

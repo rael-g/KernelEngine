@@ -28,6 +28,7 @@ pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*
     if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
 
     const vbo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+        .label = "mesh.vertices",
         .initial_data = vertices,
         .size = vertices_size,
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -36,6 +37,7 @@ pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*
     if (vbo == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
     const ibo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+        .label = "mesh.indices",
         .initial_data = @ptrCast(indices),
         .size = index_count * @sizeOf(u16),
         .usage = c.KE_GPU_BUFFER_USAGE_INDEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -80,6 +82,7 @@ pub fn uploadTexture(self: [*c]c.ke_render_service, key: [*c]const u8, width: u3
     if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
 
     const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
+        .label = key,
         .width = width,
         .height = height,
         .depth_or_array_layers = 1,
@@ -94,6 +97,7 @@ pub fn uploadTexture(self: [*c]c.ke_render_service, key: [*c]const u8, width: u3
     if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
+        .label = key,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
         .dimension = c.KE_GPU_TEXTURE_DIM_2D,
         .aspect = c.KE_GPU_TEXTURE_ASPECT_COLOR,
@@ -124,6 +128,7 @@ pub fn uploadCubemap(self: [*c]c.ke_render_service, key: [*c]const u8, face_size
     if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
 
     const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
+        .label = key,
         .width = face_size,
         .height = face_size,
         .depth_or_array_layers = 6,
@@ -138,6 +143,7 @@ pub fn uploadCubemap(self: [*c]c.ke_render_service, key: [*c]const u8, face_size
     if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
+        .label = key,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
         .dimension = c.KE_GPU_TEXTURE_DIM_CUBE,
         .aspect = c.KE_GPU_TEXTURE_ASPECT_COLOR,
@@ -201,6 +207,7 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
         distortion_strength,         0.0,                         0.0,                         0.0,
     };
     const ubo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+        .label = "material.uniform",
         .initial_data = &mat_data,
         .size = 48,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -220,6 +227,7 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
         .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = nrm_view, .sampler = 0 },
     };
     const bg = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
+        .label = "material.bind_group",
         .layout = st.material_bgl,
         .entry_count = 4,
         .entries = &entries,

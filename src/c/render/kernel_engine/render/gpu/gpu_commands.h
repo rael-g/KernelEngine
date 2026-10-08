@@ -33,6 +33,14 @@ struct ke_gpu_render_pass
     void (*draw_indirect)(struct ke_gpu_render_pass *self,
                           ke_gpu_buffer indirect_buf, size_t offset);
     void (*end)(struct ke_gpu_render_pass *self);
+
+    /// Opens a named group that capture tools nest the following commands under, until the
+    /// matching pop_debug_group. The label is copied by the call.
+    void (*push_debug_group)(struct ke_gpu_render_pass *self, const char *label);
+    /// Closes the group the last unmatched push_debug_group opened.
+    void (*pop_debug_group)(struct ke_gpu_render_pass *self);
+    /// Marks a single named point in the command stream. The label is copied by the call.
+    void (*insert_debug_marker)(struct ke_gpu_render_pass *self, const char *label);
 };
 
 struct ke_gpu_compute_pass
@@ -49,6 +57,14 @@ struct ke_gpu_compute_pass
     void (*dispatch_indirect)(struct ke_gpu_compute_pass *self,
                               ke_gpu_buffer indirect_buf, size_t offset);
     void (*end)(struct ke_gpu_compute_pass *self);
+
+    /// Opens a named group that capture tools nest the following commands under, until the
+    /// matching pop_debug_group. The label is copied by the call.
+    void (*push_debug_group)(struct ke_gpu_compute_pass *self, const char *label);
+    /// Closes the group the last unmatched push_debug_group opened.
+    void (*pop_debug_group)(struct ke_gpu_compute_pass *self);
+    /// Marks a single named point in the command stream. The label is copied by the call.
+    void (*insert_debug_marker)(struct ke_gpu_compute_pass *self, const char *label);
 };
 
 struct ke_gpu_command_encoder
@@ -58,7 +74,9 @@ struct ke_gpu_command_encoder
 
     struct ke_gpu_render_pass  *(*begin_render_pass)(struct ke_gpu_command_encoder *self,
                                                      const ke_gpu_render_pass_params *p);
-    struct ke_gpu_compute_pass *(*begin_compute_pass)(struct ke_gpu_command_encoder *self);
+    /// Begins a compute pass. p may be NULL, which begins it unlabeled.
+    struct ke_gpu_compute_pass *(*begin_compute_pass)(struct ke_gpu_command_encoder *self,
+                                                      const ke_gpu_compute_pass_params *p);
     void (*pipeline_barrier)(struct ke_gpu_command_encoder *self, const ke_gpu_barrier *b);
     void (*copy_buffer_to_buffer)(struct ke_gpu_command_encoder *self,
                                   ke_gpu_buffer src, size_t src_offset,
@@ -87,6 +105,14 @@ struct ke_gpu_command_encoder
                                    ke_gpu_buffer dst, size_t dst_offset, uint32_t bytes_per_row,
                                    uint32_t width, uint32_t height,
                                    ke_error **out_error);
+
+    /// Opens a named group that capture tools nest the following commands under, until the
+    /// matching pop_debug_group. The label is copied by the call.
+    void (*push_debug_group)(struct ke_gpu_command_encoder *self, const char *label);
+    /// Closes the group the last unmatched push_debug_group opened.
+    void (*pop_debug_group)(struct ke_gpu_command_encoder *self);
+    /// Marks a single named point in the command stream. The label is copied by the call.
+    void (*insert_debug_marker)(struct ke_gpu_command_encoder *self, const char *label);
 };
 
 struct ke_gpu_command_buffer

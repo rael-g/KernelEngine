@@ -82,12 +82,33 @@ pub const ComputeCmd = union(enum) {
     set_bind_group: struct { index: u32, bg: c.ke_gpu_bind_group, offsets: [4]u32, count: u32 },
     dispatch: struct { x: u32, y: u32, z: u32 },
     dispatch_indirect: struct { buf: c.ke_gpu_buffer, offset: usize },
+    push_debug_group: ?u32,
+    pop_debug_group,
+    insert_debug_marker: ?u32,
 };
 pub const ComputeRecord = struct {
     pass: c.ke_gpu_compute_pass,
     cmds: [MAX_COMPUTE_CMDS]ComputeCmd,
     count: u32,
     valid: bool,
+    pass_label: ?u32,
+    labels: std.ArrayList(u8),
+
+    pub fn storeLabel(self: *ComputeRecord, text: [*c]const u8) ?u32 {
+        if (text == null) return null;
+        const offset: u32 = @intCast(self.labels.items.len);
+        self.labels.appendSlice(gpa, std.mem.sliceTo(text, 0)) catch return null;
+        self.labels.append(gpa, 0) catch {
+            self.labels.shrinkRetainingCapacity(offset);
+            return null;
+        };
+        return offset;
+    }
+
+    pub fn label(self: *const ComputeRecord, offset: ?u32) [*c]const u8 {
+        const at = offset orelse return null;
+        return self.labels.items[at..].ptr;
+    }
 };
 
 pub const CoreState = struct {
@@ -206,6 +227,7 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
     if (st.material_bgl != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_bgl);
     st.pipeline_cache.destroyAll(st.device);
+    for (&st.compute_records) |*r| r.labels.deinit(gpa);
     gpa.free(st.upload_arena);
     gpa.free(@constCast(st.shader_dir));
     gpa.destroy(st);
@@ -277,6 +299,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .ndc = dev.get_ndc_convention.?(dev),
         .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
+    for (&st.compute_records) |*r| r.labels = .empty;
 
     const mesh_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
         .destroy_fn = asset_upload.destroyMeshResource,
@@ -375,6 +398,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
     };
 
     st.sampler = dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
+        .label = "service.sampler",
         .min_filter = c.KE_GPU_FILTER_LINEAR,
         .mag_filter = c.KE_GPU_FILTER_LINEAR,
         .mipmap_filter = c.KE_GPU_SAMPLER_MIPMAP_NEAREST,
@@ -393,6 +417,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     st.material_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "service.material_bgl",
         .entry_count = 4,
         .entries = &mat_bgl_entries,
     });
@@ -482,6 +507,88 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     try testing.expectEqual(@as(u32, 1), target.presented);
     try testing.expectEqual(@as(c.ke_bool, 0), svc.*.end_frame.?(svc, null));
     try testing.expectEqual(@as(u32, 1), target.presented);
+}
+
+test "a declared resource's texture and view carry the name it was declared under" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
+    const svc = h.ref orelse return error.TestUnexpectedResult;
+    defer h.destroy.?(svc);
+
+    var desc = std.mem.zeroes(c.ke_render_resource_desc);
+    desc.name = "hdr_color";
+    desc.format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    desc.size_mode = c.KE_RENDER_SIZE_ABSOLUTE;
+    desc.width = 4;
+    desc.height = 4;
+    _ = svc.*.declare.?(svc, &desc, null);
+
+    try testing.expectEqualStrings("hdr_color", std.mem.span(dev.texture_label));
+    try testing.expectEqualStrings("hdr_color", std.mem.span(dev.texture_view_label));
+}
+
+test "a render pass is opened under the name its pass declared" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
+    const svc = h.ref orelse return error.TestUnexpectedResult;
+    defer h.destroy.?(svc);
+
+    const writes = [_][*c]const u8{"backbuffer"};
+    var io = std.mem.zeroes(c.ke_render_pass_io);
+    io.name = "render.clear";
+    io.writes = &writes;
+    io.writes_count = 1;
+
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
+    const rp = pass.*.begin_render.?(pass);
+    rp.*.end.?(rp);
+    svc.*.end_pass.?(svc, pass);
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.end_frame.?(svc, null));
+
+    try testing.expectEqualStrings("render.clear", std.mem.span(dev.render_pass_label));
+}
+
+test "a compute pass replays at the end of the frame under its name and with the debug groups recorded into it" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
+    const svc = h.ref orelse return error.TestUnexpectedResult;
+    defer h.destroy.?(svc);
+
+    var io = std.mem.zeroes(c.ke_render_pass_io);
+    io.name = "render.cull";
+    io.cmd_slot = 2;
+
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
+    const cp = pass.*.begin_compute.?(pass);
+    var transient = [_:0]u8{ 'b', 'i', 'n' };
+    cp.*.push_debug_group.?(cp, &transient);
+    transient[0] = 'x';
+    cp.*.pop_debug_group.?(cp);
+    cp.*.end.?(cp);
+    svc.*.end_pass.?(svc, pass);
+    try testing.expect(dev.compute_pass_label == null);
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.end_frame.?(svc, null));
+
+    try testing.expectEqualStrings("render.cull", std.mem.span(dev.compute_pass_label));
+    try testing.expectEqualStrings("bin", std.mem.span(dev.debug_group_label));
+    try testing.expectEqual(@as(i32, 0), dev.debug_groups_open);
 }
 
 test "a render service created without a shader directory is refused and leaves nothing behind" {

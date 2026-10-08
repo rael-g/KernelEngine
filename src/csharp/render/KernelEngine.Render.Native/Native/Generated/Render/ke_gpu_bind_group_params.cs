@@ -4,6 +4,9 @@ namespace KernelEngine.Render.Native;
 
 public unsafe partial struct ke_gpu_bind_group_params
 {
+    [NativeTypeName("const char *")]
+    public sbyte* label;
+
     [NativeTypeName("ke_gpu_bind_group_layout")]
     public ulong layout;
 

@@ -223,7 +223,7 @@ fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) c.ke_gpu_shader_m
     const made = st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
         .code = src.ptr,
         .byte_size = src.len,
-        .entry_point = "fs_main",
+        .label = "service.fallback_fragment",
     }, null);
     if (made == c.KE_GPU_INVALID_HANDLE) return made;
     if (slot.cmpxchgStrong(c.KE_GPU_INVALID_HANDLE, made, .acq_rel, .acquire)) |won| {

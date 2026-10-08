@@ -4,6 +4,9 @@ namespace KernelEngine.Render.Native;
 
 public unsafe partial struct ke_gpu_render_pass_params
 {
+    [NativeTypeName("const char *")]
+    public sbyte* label;
+
     [NativeTypeName("const ke_gpu_color_attachment *")]
     public ke_gpu_color_attachment* color_attachments;
 

@@ -4,6 +4,9 @@ namespace KernelEngine.Render.Native;
 
 public unsafe partial struct ke_gpu_buffer_params
 {
+    [NativeTypeName("const char *")]
+    public sbyte* label;
+
     [NativeTypeName("const void *")]
     public void* initial_data;
 

@@ -44,6 +44,8 @@ extern const ke_error_type KE_ERROR_GPU_RESOURCE_CREATION;
 
 typedef struct ke_gpu_buffer_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     const void        *initial_data;
     size_t             size;
     ke_gpu_buffer_usage usage;
@@ -52,6 +54,8 @@ typedef struct ke_gpu_buffer_params
 
 typedef struct ke_gpu_texture_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     uint32_t                 width;
     uint32_t                 height;
     uint32_t                 depth_or_array_layers;
@@ -66,6 +70,8 @@ typedef struct ke_gpu_texture_params
 
 typedef struct ke_gpu_texture_view_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     ke_gpu_texture_format    format;
     ke_gpu_texture_dimension dimension;
     ke_gpu_texture_aspect    aspect;
@@ -77,6 +83,8 @@ typedef struct ke_gpu_texture_view_params
 
 typedef struct ke_gpu_sampler_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     ke_gpu_filter               min_filter;
     ke_gpu_filter               mag_filter;
     ke_gpu_sampler_mipmap_filter mipmap_filter;
@@ -91,11 +99,12 @@ typedef struct ke_gpu_sampler_params
 
 typedef struct ke_gpu_shader_module_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     const void *code;        ///< shader bytes in the device's accepted language
                              ///< (query ke_gpu_device::shader_language); WGSL text
                              ///< or SPIR-V binary etc.
     size_t      byte_size;   ///< size in bytes (excluding any text terminator)
-    const char *entry_point; ///< debug label; per-stage entry is in pipeline params
 } ke_gpu_shader_module_params;
 
 typedef struct ke_gpu_vertex_attribute
@@ -156,6 +165,8 @@ typedef struct ke_gpu_bind_group_layout_entry
 
 typedef struct ke_gpu_bind_group_layout_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     uint32_t                              entry_count;
     const ke_gpu_bind_group_layout_entry *entries;
 } ke_gpu_bind_group_layout_params;
@@ -173,6 +184,8 @@ typedef struct ke_gpu_bind_group_entry
 
 typedef struct ke_gpu_bind_group_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     ke_gpu_bind_group_layout      layout;
     uint32_t                      entry_count;
     const ke_gpu_bind_group_entry *entries;
@@ -180,6 +193,8 @@ typedef struct ke_gpu_bind_group_params
 
 typedef struct ke_gpu_render_pipeline_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     ke_gpu_shader_module             vertex_module;
     ke_gpu_shader_module             fragment_module;
     const char                      *vertex_entry;         ///< NULL → "main"
@@ -200,6 +215,8 @@ typedef struct ke_gpu_render_pipeline_params
 
 typedef struct ke_gpu_compute_pipeline_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     ke_gpu_shader_module     compute_module;
     const char              *compute_entry;
     ke_gpu_bind_group_layout bind_group_layouts[4];
@@ -228,10 +245,24 @@ typedef struct ke_gpu_depth_stencil_attachment
 
 typedef struct ke_gpu_render_pass_params
 {
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
     const ke_gpu_color_attachment         *color_attachments;
     uint32_t                               color_attachment_count;
     const ke_gpu_depth_stencil_attachment *depth_stencil_attachment;
 } ke_gpu_render_pass_params;
+
+typedef struct ke_gpu_command_encoder_params
+{
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
+} ke_gpu_command_encoder_params;
+
+typedef struct ke_gpu_compute_pass_params
+{
+    /// Optional name shown for this object by capture and validation tools; copied by the call.
+    const char *label;
+} ke_gpu_compute_pass_params;
 
 typedef enum ke_gpu_barrier_type
 {
@@ -315,7 +346,9 @@ typedef struct ke_gpu_device
     void (*destroy_bind_group_layout)(struct ke_gpu_device *self, ke_gpu_bind_group_layout h);
     void (*destroy_bind_group)(struct ke_gpu_device *self, ke_gpu_bind_group h);
 
-    ke_gpu_command_encoder *(*create_command_encoder)(struct ke_gpu_device *self);
+    /// Creates a command encoder. p may be NULL, which creates it unlabeled.
+    ke_gpu_command_encoder *(*create_command_encoder)(struct ke_gpu_device *self,
+                                                      const ke_gpu_command_encoder_params *p);
 
     void (*write_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,
                          uint64_t offset, const void *data, size_t size);
