@@ -175,6 +175,7 @@ fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
         .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.*.sampler.?(ui.core) },
     };
     const bg = ui.device.create_bind_group.?(ui.device, &c.ke_gpu_bind_group_params{
+        .label = "ui.bg",
         .layout = ui.bgl_tex,
         .entry_count = 2,
         .entries = &entries,
@@ -338,6 +339,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0,
     };
     ui.bgl_frame = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "ui.bgl_frame",
         .entry_count = 1,
         .entries = &frame_bgl_entry,
     });
@@ -347,6 +349,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     ui.bgl_tex = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "ui.bgl_tex",
         .entry_count = 2,
         .entries = &tex_bgl_entries,
     });
@@ -364,6 +367,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
 
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    pp.label = "ui.pipeline";
     pp.vertex_module = vs;
     pp.fragment_module = fs;
     pp.vertex_entry = "vs_main";
@@ -397,6 +401,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }
 
     ui.frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "ui.frame_uniform",
         .initial_data = null,
         .size = 64,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -410,6 +415,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .texture_view = 0, .sampler = 0,
     };
     ui.frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "ui.frame_bind_group",
         .layout = ui.bgl_frame,
         .entry_count = 1,
         .entries = &frame_entry,
@@ -417,6 +423,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     if (ui.frame_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
     ui.vbo = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "ui.vbo",
         .initial_data = null,
         .size = ui.vertices.len * @sizeOf(UiVertex),
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -427,6 +434,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     ui.writes = .{"backbuffer"};
     ui.io = std.mem.zeroes(c.ke_render_pass_io);
+    ui.io.name = "render.ui";
     ui.io.writes = @ptrCast(&ui.writes);
     ui.io.writes_count = 1;
     ui.io.cmd_slot = cmd_slot;

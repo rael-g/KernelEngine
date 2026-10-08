@@ -75,7 +75,7 @@ static void read_texture(ke_gpu_device *gpu, ke_gpu_texture texture, uint8_t *ou
     if (staging == KE_GPU_INVALID_HANDLE) die("staging buffer create failed", err);
 
     ke_gpu_queue q = gpu->get_default_queue(gpu);
-    ke_gpu_command_encoder *enc = gpu->create_command_encoder(gpu);
+    ke_gpu_command_encoder *enc = gpu->create_command_encoder(gpu, NULL);
     if (!enc->copy_texture_to_buffer(enc, texture, 0, 0, 0, staging, 0, padded_row, WIDTH, HEIGHT, &err))
         die("copy to buffer failed", err);
     ke_gpu_command_buffer *cmd = enc->finish(enc);

@@ -175,10 +175,12 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     gb.camera_cid = camera_cid;
 
     gb.empty_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "gbuffer.empty_bgl",
         .entry_count = 0,
         .entries = null,
     });
     gb.empty_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "gbuffer.empty_bg",
         .layout = gb.empty_bgl,
         .entry_count = 0,
         .entries = null,
@@ -193,6 +195,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .view_dimension = 0,
     };
     const obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "gbuffer.obj_bgl",
         .entry_count = 1,
         .entries = &obj_bgl_entry,
     });
@@ -212,6 +215,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
 
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    pp.label = "gbuffer.pipeline";
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
     pp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -243,6 +247,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }
 
     gb.obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "gbuffer.obj_uniform",
         .initial_data = null,
         .size = UNIFORM_STRIDE * MAX_DRAWS,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -259,6 +264,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .sampler = 0,
     };
     gb.obj_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "gbuffer.obj_bind_group",
         .layout = obj_bgl,
         .entry_count = 1,
         .entries = &obj_bg_entry,
@@ -296,6 +302,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     gb.writes = .{ "gbuffer_albedo", "gbuffer_normal", "gbuffer_emissive", "depth" };
     gb.io = std.mem.zeroes(c.ke_render_pass_io);
+    gb.io.name = "render.gbuffer";
     gb.io.writes = @ptrCast(&gb.writes);
     gb.io.writes_count = 4;
     gb.io.cmd_slot = 3;

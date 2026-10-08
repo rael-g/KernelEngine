@@ -5,6 +5,9 @@ namespace KernelEngine.Render.Native;
 
 public unsafe partial struct ke_gpu_compute_pipeline_params
 {
+    [NativeTypeName("const char *")]
+    public sbyte* label;
+
     [NativeTypeName("ke_gpu_shader_module")]
     public ulong compute_module;
 

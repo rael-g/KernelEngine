@@ -56,7 +56,7 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
     };
     ke_gpu_render_pass_params rpp = { .color_attachments = &ca, .color_attachment_count = 1 };
 
-    ke_gpu_command_encoder *enc = gpu->create_command_encoder(gpu);
+    ke_gpu_command_encoder *enc = gpu->create_command_encoder(gpu, NULL);
     ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
     rp->set_pipeline(rp, pipeline);
     rp->draw(rp, 3, 1, 0, 0);
@@ -114,10 +114,10 @@ int main(int argc, char **argv)
     if (staging == KE_GPU_INVALID_HANDLE) die("staging buffer create failed", err);
 
     ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_vs_wgsl, .byte_size = strlen(triangle_vs_wgsl), .entry_point = "vs_main" }, &err);
+        .code = triangle_vs_wgsl, .byte_size = strlen(triangle_vs_wgsl), .label = "vs_main" }, &err);
     if (vs == KE_GPU_INVALID_HANDLE) die("vertex shader creation failed", err);
     ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_fs_wgsl, .byte_size = strlen(triangle_fs_wgsl), .entry_point = "fs_main" }, &err);
+        .code = triangle_fs_wgsl, .byte_size = strlen(triangle_fs_wgsl), .label = "fs_main" }, &err);
     if (fs == KE_GPU_INVALID_HANDLE) die("fragment shader creation failed", err);
 
     ke_gpu_render_pipeline_params pp = {

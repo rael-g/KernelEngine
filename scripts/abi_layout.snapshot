@@ -280,13 +280,14 @@ ke_render_resource_desc size=56 align=8
   scale_x 28
   scale_y 32
   clear_value 36
-ke_render_pass_io size=40 align=8
-  reads 0
-  reads_count 8
-  writes 16
-  writes_count 24
-  cmd_slot 28
-  load 32
+ke_render_pass_io size=48 align=8
+  name 0
+  reads 8
+  reads_count 16
+  writes 24
+  writes_count 32
+  cmd_slot 36
+  load 40
 ke_render_service size=360 align=8
   handle 0
   declare 8

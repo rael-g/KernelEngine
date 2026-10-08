@@ -2,8 +2,11 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Native;
 
-public partial struct ke_gpu_sampler_params
+public unsafe partial struct ke_gpu_sampler_params
 {
+    [NativeTypeName("const char *")]
+    public sbyte* label;
+
     public ke_gpu_filter min_filter;
 
     public ke_gpu_filter mag_filter;

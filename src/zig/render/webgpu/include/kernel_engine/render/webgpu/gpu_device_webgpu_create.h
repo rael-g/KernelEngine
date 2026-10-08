@@ -37,6 +37,8 @@ KE_GPU_WEBGPU_API extern const ke_error_type KE_ERROR_WGPU_RESOURCE_CREATION;
 typedef struct ke_gpu_device_webgpu_params
 {
     struct ke_logger    *logger;
+    /// When non-zero, asks the underlying graphics API to validate every call, which takes
+    /// effect only where that API's validation layers are installed.
     ke_bool              enable_validation;
     /// Optional, borrowed. wgpu-native's async pipeline-compile entry points
     /// (wgpuDeviceCreateRenderPipelineAsync et al) are unimplemented upstream
@@ -46,6 +48,9 @@ typedef struct ke_gpu_device_webgpu_params
     /// compile onto this scheduler's worker pool. When NULL, it degrades to a
     /// synchronous compile-then-callback (never hangs, just isn't async).
     struct ke_scheduler *scheduler;
+    /// When non-zero, the labels and debug groups given through ke_gpu_device reach the
+    /// underlying graphics API, where capture tools read them.
+    ke_bool              debug_labels;
 } ke_gpu_device_webgpu_params;
 
 /**

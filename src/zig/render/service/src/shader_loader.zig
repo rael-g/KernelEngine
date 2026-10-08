@@ -72,7 +72,7 @@ pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke
     const module = st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
         .code = bytes.ptr,
         .byte_size = bytes.len,
-        .entry_point = name,
+        .label = name,
     }, out_error);
     if (module == c.KE_GPU_INVALID_HANDLE) return module;
 

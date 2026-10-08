@@ -8,6 +8,7 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     for (&st.compute_records) |*r| {
         r.valid = false;
         r.count = 0;
+        r.labels.clearRetainingCapacity();
     }
     st.upload_count.store(0, .monotonic);
     st.upload_arena_offset.store(0, .monotonic);
@@ -15,7 +16,7 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     if (view == c.KE_GPU_INVALID_HANDLE) return 0;
     var pe: u32 = 0;
     while (pe < rc.NUM_PRECREATED_ENCODERS) : (pe += 1) {
-        st.cmd_encoders[pe] = st.device.create_command_encoder.?(st.device);
+        st.cmd_encoders[pe] = st.device.create_command_encoder.?(st.device, null);
     }
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
     if (st.find("backbuffer")) |bb| bb.view = view;
@@ -45,7 +46,7 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
         } else if (st.compute_records[s].valid) {
             const enc = st.cmd_encoders[s];
             const rec = &st.compute_records[s];
-            const cp = enc.*.begin_compute_pass.?(enc);
+            const cp = enc.*.begin_compute_pass.?(enc, &c.ke_gpu_compute_pass_params{ .label = rec.label(rec.pass_label) });
             var ci: u32 = 0;
             while (ci < rec.count) : (ci += 1) {
                 switch (rec.cmds[ci]) {
@@ -58,6 +59,9 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
                     },
                     .dispatch => |d| cp.*.dispatch.?(cp, d.x, d.y, d.z),
                     .dispatch_indirect => |d| cp.*.dispatch_indirect.?(cp, d.buf, d.offset),
+                    .push_debug_group => |l| cp.*.push_debug_group.?(cp, rec.label(l)),
+                    .pop_debug_group => cp.*.pop_debug_group.?(cp),
+                    .insert_debug_marker => |l| cp.*.insert_debug_marker.?(cp, rec.label(l)),
                 }
             }
             cp.*.end.?(cp);

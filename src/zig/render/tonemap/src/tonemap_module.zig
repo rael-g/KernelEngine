@@ -53,6 +53,7 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
         dev.destroy_bind_group.?(dev, tm.bind_group);
     var err: ?*c.ke_error = null;
     tm.bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "tonemap.bind_group",
         .layout = tm.bgl,
         .entry_count = 2,
         .entries = &entries,
@@ -89,12 +90,14 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     const bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "tonemap.bgl",
         .entry_count = 2,
         .entries = &bgl_entries,
     });
 
     tm.bgl = bgl;
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    pp.label = "tonemap.pipeline";
     pp.vertex_module   = vs;
     pp.vertex_entry    = "vs_main";
     pp.fragment_module = fs;
@@ -118,6 +121,7 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     tm.writes = .{"backbuffer"};
     tm.reads  = .{"hdr"};
     tm.io = std.mem.zeroes(c.ke_render_pass_io);
+    tm.io.name = "render.tonemap";
     tm.io.writes = @ptrCast(&tm.writes);
     tm.io.writes_count = 1;
     tm.io.reads = @ptrCast(&tm.reads);

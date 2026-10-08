@@ -4,6 +4,9 @@ namespace KernelEngine.Render.Native;
 
 public unsafe partial struct ke_gpu_texture_params
 {
+    [NativeTypeName("const char *")]
+    public sbyte* label;
+
     [NativeTypeName("uint32_t")]
     public uint width;
 

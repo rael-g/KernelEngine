@@ -85,6 +85,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         dev.destroy_bind_group.?(dev, sm.bind_group);
     var err: ?*c.ke_error = null;
     sm.bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "skybox.bind_group",
         .layout = sm.bgl,
         .entry_count = 4,
         .entries = &entries,
@@ -122,6 +123,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .binding = 3, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     sm.bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "skybox.bgl",
         .entry_count = 4,
         .entries = &bgl_entries,
     });
@@ -132,6 +134,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     if (sky_fs == c.KE_GPU_INVALID_HANDLE) return false;
 
     var skp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    skp.label = "skybox.pipeline";
     skp.vertex_module = sky_vs;
     skp.fragment_module = sky_fs;
     skp.vertex_entry = "vs_main";
@@ -154,6 +157,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }
 
     sm.frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "skybox.frame_uniform",
         .initial_data = null,
         .size = @sizeOf(SkyFrame),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -164,6 +168,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sm.writes = .{"hdr"};
     sm.reads = .{"depth"};
     sm.io = std.mem.zeroes(c.ke_render_pass_io);
+    sm.io.name = "render.skybox";
     sm.io.writes = @ptrCast(&sm.writes);
     sm.io.writes_count = 1;
     sm.io.reads = @ptrCast(&sm.reads);

@@ -222,8 +222,9 @@ fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) v
     core.*.upload.?(core, cm.cluster_grid_uniform, 0, &grid_data, @sizeOf(ClusterGridUniform));
 }
 
-fn makeStorageBuffer(dev: *c.ke_gpu_device, size: usize, out_error: [*c][*c]c.ke_error) c.ke_gpu_buffer {
+fn makeStorageBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, out_error: [*c][*c]c.ke_error) c.ke_gpu_buffer {
     return dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = label,
         .initial_data = null,
         .size = size,
         .usage = c.KE_GPU_BUFFER_USAGE_STORAGE | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -258,17 +259,17 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const indices_bytes: usize = @as(usize, cm.num_clusters) * cm.max_lights_per_cluster * @sizeOf(u32);
     const counts_bytes: usize = @as(usize, cm.num_clusters) * @sizeOf(u32);
 
-    cm.point_lights_sb = makeStorageBuffer(dev, point_lights_bytes, out_error);
+    cm.point_lights_sb = makeStorageBuffer(dev, "cluster.point_lights_sb", point_lights_bytes, out_error);
     if (cm.point_lights_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    cm.spot_lights_sb = makeStorageBuffer(dev, spot_lights_bytes, out_error);
+    cm.spot_lights_sb = makeStorageBuffer(dev, "cluster.spot_lights_sb", spot_lights_bytes, out_error);
     if (cm.spot_lights_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    cm.point_indices_sb = makeStorageBuffer(dev, indices_bytes, out_error);
+    cm.point_indices_sb = makeStorageBuffer(dev, "cluster.point_indices_sb", indices_bytes, out_error);
     if (cm.point_indices_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    cm.point_counts_sb = makeStorageBuffer(dev, counts_bytes, out_error);
+    cm.point_counts_sb = makeStorageBuffer(dev, "cluster.point_counts_sb", counts_bytes, out_error);
     if (cm.point_counts_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    cm.spot_indices_sb = makeStorageBuffer(dev, indices_bytes, out_error);
+    cm.spot_indices_sb = makeStorageBuffer(dev, "cluster.spot_indices_sb", indices_bytes, out_error);
     if (cm.spot_indices_sb == c.KE_GPU_INVALID_HANDLE) return false;
-    cm.spot_counts_sb = makeStorageBuffer(dev, counts_bytes, out_error);
+    cm.spot_counts_sb = makeStorageBuffer(dev, "cluster.spot_counts_sb", counts_bytes, out_error);
     if (cm.spot_counts_sb == c.KE_GPU_INVALID_HANDLE) return false;
 
     const ro = c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
@@ -283,10 +284,12 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .binding = 6, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     cm.light_set_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "cluster.light_set_bgl",
         .entry_count = 7,
         .entries = &light_bgl_entries,
     });
     cm.cluster_grid_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "cluster.cluster_grid_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterGridUniform),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -303,6 +306,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = cm.cluster_grid_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterGridUniform), .texture_view = 0, .sampler = 0 },
     };
     cm.fwd_light_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "cluster.fwd_light_bind_group",
         .layout = cm.light_set_bgl,
         .entry_count = 7,
         .entries = &light_bg_entries,
@@ -322,12 +326,14 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .binding = 6, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     const cull_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "cluster.cull_bgl",
         .entry_count = 7,
         .entries = &cull_bgl_entries,
     });
     cm.cull_bgl = cull_bgl;
 
     cm.cull_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "cluster.cull_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterParams),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -344,6 +350,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .binding = 6, .type = rw, .buffer = cm.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
     };
     cm.cull_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "cluster.cull_bind_group",
         .layout = cull_bgl,
         .entry_count = 7,
         .entries = &cull_bg_entries,
@@ -355,6 +362,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     const cull_layouts = [_]c.ke_gpu_bind_group_layout{ cull_bgl, 0, 0, 0 };
     cm.cull_pipeline = dev.create_compute_pipeline.?(dev, &c.ke_gpu_compute_pipeline_params{
+        .label = "cluster.cull_pipeline",
         .compute_module = cs,
         .compute_entry = "cs_main",
         .bind_group_layouts = cull_layouts,
@@ -367,6 +375,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     cm.clusters_cid = core.*.import_tag.?(core, "light_clusters", null);
     cm.cull_io = std.mem.zeroes(c.ke_render_pass_io);
+    cm.cull_io.name = "render.cull";
     cm.cull_io.cmd_slot = 2;
     cm.cull_access = .{
         .{ .cid = cm.clusters_cid, .access = c.KE_ACCESS_WRITE },

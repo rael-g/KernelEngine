@@ -23,6 +23,7 @@ const Params = extern struct {
     logger:            ?*anyopaque,
     enable_validation: ke.ke_bool,
     scheduler:         ?*ke.ke_scheduler,
+    debug_labels:      ke.ke_bool,
 };
 
 const GpuError = error{
@@ -240,14 +241,17 @@ fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
 const heap = @import("heap");
 pub const gpa = heap.gpa;
 
-fn createDeviceState() GpuError!*DeviceState {
+fn createDeviceState(instance_flags: wgpu.WGPUInstanceFlag) GpuError!*DeviceState {
     const s = gpa.create(DeviceState) catch return GpuError.OutOfMemory;
     errdefer gpa.destroy(s);
     s.scheduler = null;
     s.pending_compiles = [_]?*ke.ke_task{null} ** MAX_PENDING_COMPILES;
     s.pending_compiles_count = 0;
 
-    const instance_desc = wgpu.WGPUInstanceDescriptor{ .nextInChain = null };
+    var extras = std.mem.zeroes(wgpu.WGPUInstanceExtras);
+    extras.chain.sType = wgpu.WGPUSType_InstanceExtras;
+    extras.flags = instance_flags;
+    const instance_desc = wgpu.WGPUInstanceDescriptor{ .nextInChain = if (instance_flags != wgpu.WGPUInstanceFlag_Default) &extras.chain else null };
     s.instance = wgpu.wgpuCreateInstance(&instance_desc) orelse
         return GpuError.DeviceCreationFailed;
     errdefer wgpu.wgpuInstanceRelease(s.instance);
@@ -335,7 +339,12 @@ pub export fn ke_gpu_device_webgpu_create(
     params: ?*const Params,
     out_error: ?*?*ke.ke_error,
 ) ke.ke_gpu_device_handle {
-    const s = createDeviceState() catch |err| {
+    var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;
+    if (params) |p| {
+        if (p.enable_validation != 0) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
+        if (p.debug_labels != 0) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
+    }
+    const s = createDeviceState(instance_flags) catch |err| {
         setError(out_error, err, "webgpu: device initialisation failed", @src());
         return .{ .ref = null, .destroy = null };
     };
@@ -470,6 +479,38 @@ fn mapShaderStage(ke_stage: ke.ke_gpu_shader_stage) wgpu.WGPUShaderStage {
     return s;
 }
 
+fn labelView(label: [*c]const u8) wgpu.WGPUStringView {
+    return .{ .data = label, .length = if (label == null) 0 else wgpu.WGPU_STRLEN };
+}
+
+fn rpPushDebugGroup(rp: [*c]ke.ke_gpu_render_pass, label: [*c]const u8) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderPushDebugGroup(@ptrCast(rp.*.handle), labelView(label));
+}
+fn rpPopDebugGroup(rp: [*c]ke.ke_gpu_render_pass) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderPopDebugGroup(@ptrCast(rp.*.handle));
+}
+fn rpInsertDebugMarker(rp: [*c]ke.ke_gpu_render_pass, label: [*c]const u8) callconv(.c) void {
+    wgpu.wgpuRenderPassEncoderInsertDebugMarker(@ptrCast(rp.*.handle), labelView(label));
+}
+fn cpPushDebugGroup(cp: [*c]ke.ke_gpu_compute_pass, label: [*c]const u8) callconv(.c) void {
+    wgpu.wgpuComputePassEncoderPushDebugGroup(@ptrCast(cp.*.handle), labelView(label));
+}
+fn cpPopDebugGroup(cp: [*c]ke.ke_gpu_compute_pass) callconv(.c) void {
+    wgpu.wgpuComputePassEncoderPopDebugGroup(@ptrCast(cp.*.handle));
+}
+fn cpInsertDebugMarker(cp: [*c]ke.ke_gpu_compute_pass, label: [*c]const u8) callconv(.c) void {
+    wgpu.wgpuComputePassEncoderInsertDebugMarker(@ptrCast(cp.*.handle), labelView(label));
+}
+fn encPushDebugGroup(enc: [*c]ke.ke_gpu_command_encoder, label: [*c]const u8) callconv(.c) void {
+    wgpu.wgpuCommandEncoderPushDebugGroup(@ptrCast(enc.*.handle), labelView(label));
+}
+fn encPopDebugGroup(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) void {
+    wgpu.wgpuCommandEncoderPopDebugGroup(@ptrCast(enc.*.handle));
+}
+fn encInsertDebugMarker(enc: [*c]ke.ke_gpu_command_encoder, label: [*c]const u8) callconv(.c) void {
+    wgpu.wgpuCommandEncoderInsertDebugMarker(@ptrCast(enc.*.handle), labelView(label));
+}
+
 fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_buffer {
     const pp = @as(*const ke.ke_gpu_buffer_params, @ptrCast(p));
     const s = state(dev);
@@ -477,7 +518,7 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params,
     if (pp.initial_data != null) usage |= wgpu.WGPUBufferUsage_CopyDst;
     const desc = wgpu.WGPUBufferDescriptor{
         .nextInChain      = null,
-        .label            = .{ .data = null, .length = 0 },
+        .label            = labelView(pp.label),
         .usage            = usage,
         .size             = pp.size,
         .mappedAtCreation = if (pp.mapped_at_creation != 0) 1 else 0,
@@ -513,7 +554,7 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     const fmt = toWgpuTextureFormat(pp.format);
     const desc = wgpu.WGPUTextureDescriptor{
         .nextInChain     = null,
-        .label           = .{ .data = null, .length = 0 },
+        .label           = labelView(pp.label),
         .usage           = usage,
         .dimension       = toWgpuTextureDimension(pp.dimension),
         .size            = .{ .width = pp.width, .height = pp.height, .depthOrArrayLayers = if (pp.depth_or_array_layers == 0) 1 else pp.depth_or_array_layers },
@@ -568,7 +609,7 @@ fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]con
     const pp = @as(*const ke.ke_gpu_texture_view_params, @ptrCast(p));
     const desc = wgpu.WGPUTextureViewDescriptor{
         .nextInChain     = null,
-        .label           = .{ .data = null, .length = 0 },
+        .label           = labelView(pp.label),
         .format          = toWgpuTextureFormat(pp.format),
         .dimension       = toWgpuTextureViewDimension(pp.dimension),
         .aspect          = toWgpuTextureAspect(pp.aspect),
@@ -585,7 +626,7 @@ fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_param
     const pp = @as(*const ke.ke_gpu_sampler_params, @ptrCast(p));
     const desc = wgpu.WGPUSamplerDescriptor{
         .nextInChain   = null,
-        .label         = .{ .data = null, .length = 0 },
+        .label         = labelView(pp.label),
         .addressModeU  = @intCast(pp.address_mode_u),
         .addressModeV  = @intCast(pp.address_mode_v),
         .addressModeW  = @intCast(pp.address_mode_w),
@@ -660,7 +701,7 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
 
     var desc = wgpu.WGPUShaderModuleDescriptor{
         .nextInChain = null,
-        .label       = .{ .data = pp.entry_point, .length = wgpu.WGPU_STRLEN },
+        .label       = labelView(pp.label),
     };
     var spirv: wgpu.WGPUShaderSourceSPIRV = undefined;
     const wgsl = wgpu.WGPUShaderSourceWGSL{
@@ -800,7 +841,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         for (0..bgl_count) |i| build.bgl_handles[i] = @ptrFromInt(pp.bind_group_layouts[i]);
         const layout_desc = wgpu.WGPUPipelineLayoutDescriptor{
             .nextInChain          = null,
-            .label                = .{ .data = null, .length = 0 },
+            .label                = labelView(pp.label),
             .bindGroupLayoutCount = bgl_count,
             .bindGroupLayouts     = &build.bgl_handles,
         };
@@ -809,7 +850,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
 
     build.desc = .{
         .nextInChain = null,
-        .label       = .{ .data = null, .length = 0 },
+        .label       = labelView(pp.label),
         .layout      = build.pipeline_layout,
         .vertex      = .{
             .nextInChain   = null,
@@ -855,7 +896,15 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
     return @intFromPtr(wgpu.wgpuDeviceCreateRenderPipeline(state(dev).device, &build.desc));
 }
 
+fn ownedText(text: [*c]const u8) ?[:0]u8 {
+    if (text == null) return null;
+    return gpa.dupeZ(u8, std.mem.span(text)) catch null;
+}
+
 const AsyncCompileJob = struct {
+    label: ?[:0]u8,
+    vertex_entry: ?[:0]u8,
+    fragment_entry: ?[:0]u8,
     device: wgpu.WGPUDevice,
     build: RenderPipelineDescBuild,
     on_ready: *const fn (ke.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void,
@@ -894,6 +943,9 @@ fn runAsyncCompileJob(data: ?*anyopaque, out_failure: [*c][*c]const ke.ke_error_
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleRelease(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleRelease(m);
     job.on_ready(if (pipeline != null) @intFromPtr(pipeline) else ke.KE_GPU_INVALID_HANDLE, job.user);
+    if (job.label) |l| gpa.free(l);
+    if (job.vertex_entry) |e| gpa.free(e);
+    if (job.fragment_entry) |e| gpa.free(e);
     gpa.destroy(job);
 }
 
@@ -933,6 +985,12 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
     job.on_ready = cb;
     job.user = user;
     buildRenderPipelineDescriptor(dev, p, &job.build);
+    job.label = ownedText(p.*.label);
+    job.vertex_entry = ownedText(p.*.vertex_entry);
+    job.fragment_entry = ownedText(p.*.fragment_entry);
+    job.build.desc.label = labelView(if (job.label) |l| l.ptr else null);
+    if (job.vertex_entry) |e| job.build.desc.vertex.entryPoint.data = e.ptr;
+    if (job.fragment_entry) |e| job.build.frag_state.entryPoint.data = e.ptr;
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     const task = sched.dispatch.?(sched, runAsyncCompileJob, job);
@@ -960,7 +1018,7 @@ fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compu
         for (0..bgl_count) |i| bgl_handles[i] = @ptrFromInt(pp.bind_group_layouts[i]);
         const layout_desc = wgpu.WGPUPipelineLayoutDescriptor{
             .nextInChain          = null,
-            .label                = .{ .data = null, .length = 0 },
+            .label                = labelView(pp.label),
             .bindGroupLayoutCount = bgl_count,
             .bindGroupLayouts     = &bgl_handles,
         };
@@ -970,7 +1028,7 @@ fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compu
 
     const desc = wgpu.WGPUComputePipelineDescriptor{
         .nextInChain = null,
-        .label       = .{ .data = null, .length = 0 },
+        .label       = labelView(pp.label),
         .layout      = pipeline_layout,
         .compute     = .{
             .nextInChain   = null,
@@ -1034,7 +1092,7 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
     }
     const desc = wgpu.WGPUBindGroupLayoutDescriptor{
         .nextInChain = null,
-        .label       = .{ .data = null, .length = 0 },
+        .label       = labelView(pp.label),
         .entryCount  = n,
         .entries     = if (n > 0) &entries else null,
     };
@@ -1070,7 +1128,7 @@ fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_
     }
     const desc = wgpu.WGPUBindGroupDescriptor{
         .nextInChain = null,
-        .label       = .{ .data = null, .length = 0 },
+        .label       = labelView(pp.label),
         .layout      = @ptrFromInt(pp.layout),
         .entryCount  = n,
         .entries     = if (n > 0) &entries else null,
@@ -1212,7 +1270,7 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
 
     const rp_desc = wgpu.WGPURenderPassDescriptor{
         .nextInChain            = null,
-        .label                  = .{ .data = null, .length = 0 },
+        .label                  = labelView(pp.label),
         .colorAttachmentCount   = color_count,
         .colorAttachments       = if (color_count > 0) &color_attachments else null,
         .depthStencilAttachment = if (has_ds) &ds_attach else null,
@@ -1235,12 +1293,15 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
         .draw_indexed      = rpDrawIndexed,
         .draw_indirect     = rpDrawIndirect,
         .end               = rpEnd,
+        .push_debug_group    = rpPushDebugGroup,
+        .pop_debug_group     = rpPopDebugGroup,
+        .insert_debug_marker = rpInsertDebugMarker,
     };
     return rp;
 }
 
-fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) [*c]ke.ke_gpu_compute_pass {
-    const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 }, .timestampWrites = null };
+fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu_compute_pass_params) callconv(.c) [*c]ke.ke_gpu_compute_pass {
+    const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = labelView(if (p != null) p.*.label else null), .timestampWrites = null };
     const raw = wgpu.wgpuCommandEncoderBeginComputePass(@ptrCast(enc.*.handle), &desc) orelse return null;
     const cp = gpa.create(ke.ke_gpu_compute_pass) catch return null;
     cp.* = .{
@@ -1251,6 +1312,9 @@ fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) [*c]ke.k
         .dispatch          = cpDispatch,
         .dispatch_indirect = cpDispatchIndirect,
         .end               = cpEnd,
+        .push_debug_group    = cpPushDebugGroup,
+        .pop_debug_group     = cpPopDebugGroup,
+        .insert_debug_marker = cpInsertDebugMarker,
     };
     return cp;
 }
@@ -1331,8 +1395,8 @@ fn encDestroy(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) void {
     gpa.destroy(@as(*ke.ke_gpu_command_encoder, @ptrCast(enc)));
 }
 
-fn createCommandEncoder(dev: [*c]ke.ke_gpu_device) callconv(.c) [*c]ke.ke_gpu_command_encoder {
-    const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
+fn createCommandEncoder(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_command_encoder_params) callconv(.c) [*c]ke.ke_gpu_command_encoder {
+    const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = labelView(if (p != null) p.*.label else null) };
     const raw = wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc) orelse return null;
     const enc = gpa.create(ke.ke_gpu_command_encoder) catch return null;
     enc.* = .{
@@ -1347,6 +1411,9 @@ fn createCommandEncoder(dev: [*c]ke.ke_gpu_device) callconv(.c) [*c]ke.ke_gpu_co
         .copy_texture_to_buffer = encCopyTextureToBuffer,
         .finish                 = encFinish,
         .destroy                = encDestroy,
+        .push_debug_group       = encPushDebugGroup,
+        .pop_debug_group        = encPopDebugGroup,
+        .insert_debug_marker    = encInsertDebugMarker,
     };
     return enc;
 }
@@ -1474,7 +1541,7 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     try std.testing.expect(buf != ke.KE_GPU_INVALID_HANDLE);
     defer dev.*.destroy_buffer.?(dev, buf);
 
-    const enc = dev.*.create_command_encoder.?(dev);
+    const enc = dev.*.create_command_encoder.?(dev, null);
     defer enc.*.destroy.?(enc);
 
     var misaligned: ?*ke.ke_error = null;

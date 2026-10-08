@@ -10,9 +10,18 @@ pub fn Stubs(comptime c: type) type {
             fallible_created: u32,
             fallible_budget: u32,
             encoder: c.ke_gpu_command_encoder,
+            render_pass: c.ke_gpu_render_pass,
+            compute_pass: c.ke_gpu_compute_pass,
+            command_buffer: c.ke_gpu_command_buffer,
+            texture_label: [*c]const u8,
+            texture_view_label: [*c]const u8,
+            render_pass_label: [*c]const u8,
+            compute_pass_label: [*c]const u8,
+            debug_group_label: [*c]const u8,
+            debug_groups_open: i32,
 
             pub fn init(self: *Device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0 };
                 self.vtable.handle = self;
                 self.vtable.create_buffer = &createBuffer;
                 self.vtable.create_bind_group_layout = &createBindGroupLayout;
@@ -42,10 +51,63 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.queue_submit = &queueSubmit;
                 self.vtable.queue_poll = &queuePoll;
                 self.encoder = std.mem.zeroes(c.ke_gpu_command_encoder);
+                self.encoder.handle = self;
                 self.encoder.destroy = &destroyEncoder;
+                self.encoder.begin_render_pass = &beginRenderPass;
+                self.encoder.begin_compute_pass = &beginComputePass;
+                self.encoder.finish = &finishEncoder;
+                self.render_pass = std.mem.zeroes(c.ke_gpu_render_pass);
+                self.render_pass.end = &endRenderPass;
+                self.compute_pass = std.mem.zeroes(c.ke_gpu_compute_pass);
+                self.compute_pass.handle = self;
+                self.compute_pass.end = &endComputePass;
+                self.compute_pass.push_debug_group = &pushDebugGroup;
+                self.compute_pass.pop_debug_group = &popDebugGroup;
+                self.command_buffer = std.mem.zeroes(c.ke_gpu_command_buffer);
+                self.command_buffer.destroy = &destroyCommandBuffer;
             }
 
-            fn createCommandEncoder(self: ?*c.ke_gpu_device) callconv(.c) [*c]c.ke_gpu_command_encoder {
+            fn encoderOwner(enc: ?*c.ke_gpu_command_encoder) *Device {
+                return @ptrCast(@alignCast(enc.?.handle.?));
+            }
+
+            fn passOwner(pass: ?*c.ke_gpu_compute_pass) *Device {
+                return @ptrCast(@alignCast(pass.?.handle.?));
+            }
+
+            fn beginRenderPass(enc: ?*c.ke_gpu_command_encoder, p: [*c]const c.ke_gpu_render_pass_params) callconv(.c) [*c]c.ke_gpu_render_pass {
+                const self = encoderOwner(enc);
+                self.render_pass_label = p.*.label;
+                return &self.render_pass;
+            }
+
+            fn beginComputePass(enc: ?*c.ke_gpu_command_encoder, p: [*c]const c.ke_gpu_compute_pass_params) callconv(.c) [*c]c.ke_gpu_compute_pass {
+                const self = encoderOwner(enc);
+                self.compute_pass_label = if (p != null) p.*.label else null;
+                return &self.compute_pass;
+            }
+
+            fn endRenderPass(_: ?*c.ke_gpu_render_pass) callconv(.c) void {}
+
+            fn endComputePass(_: ?*c.ke_gpu_compute_pass) callconv(.c) void {}
+
+            fn pushDebugGroup(pass: ?*c.ke_gpu_compute_pass, label: [*c]const u8) callconv(.c) void {
+                const self = passOwner(pass);
+                self.debug_group_label = label;
+                self.debug_groups_open += 1;
+            }
+
+            fn popDebugGroup(pass: ?*c.ke_gpu_compute_pass) callconv(.c) void {
+                passOwner(pass).debug_groups_open -= 1;
+            }
+
+            fn finishEncoder(enc: ?*c.ke_gpu_command_encoder) callconv(.c) [*c]c.ke_gpu_command_buffer {
+                return &encoderOwner(enc).command_buffer;
+            }
+
+            fn destroyCommandBuffer(_: ?*c.ke_gpu_command_buffer) callconv(.c) void {}
+
+            fn createCommandEncoder(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_command_encoder_params) callconv(.c) [*c]c.ke_gpu_command_encoder {
                 return &of(self).encoder;
             }
 
@@ -121,11 +183,13 @@ pub fn Stubs(comptime c: type) type {
                 if (on_ready) |ready| ready(mint(self), user);
             }
 
-            fn createTexture(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_texture_params) callconv(.c) c.ke_gpu_texture {
+            fn createTexture(self: ?*c.ke_gpu_device, p: [*c]const c.ke_gpu_texture_params) callconv(.c) c.ke_gpu_texture {
+                of(self).texture_label = p.*.label;
                 return mint(self);
             }
 
-            fn createTextureView(self: ?*c.ke_gpu_device, _: c.ke_gpu_texture, _: [*c]const c.ke_gpu_texture_view_params) callconv(.c) c.ke_gpu_texture_view {
+            fn createTextureView(self: ?*c.ke_gpu_device, _: c.ke_gpu_texture, p: [*c]const c.ke_gpu_texture_view_params) callconv(.c) c.ke_gpu_texture_view {
+                of(self).texture_view_label = p.*.label;
                 return mint(self);
             }
 

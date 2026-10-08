@@ -7,7 +7,7 @@ pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_i
     if (!st.frame_live) return null;
     const ps = gpa.create(rc.PassState) catch return null;
     const slot = io.*.cmd_slot;
-    const enc = if (slot < rc.NUM_PRECREATED_ENCODERS) st.cmd_encoders[slot] else st.device.create_command_encoder.?(st.device);
+    const enc = if (slot < rc.NUM_PRECREATED_ENCODERS) st.cmd_encoders[slot] else st.device.create_command_encoder.?(st.device, null);
     ps.* = .{
         .core = st,
         .io = io.*,
@@ -98,6 +98,7 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     }
 
     const params = c.ke_gpu_render_pass_params{
+        .label = ps.io.name,
         .color_attachments = &colors,
         .color_attachment_count = color_count,
         .depth_stencil_attachment = if (has_depth) &depth else null,
@@ -113,6 +114,7 @@ fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_com
     const rec = &ps.core.compute_records[slot];
     rec.count = 0;
     rec.valid = true;
+    rec.pass_label = rec.storeLabel(ps.io.name);
     rec.pass = .{
         .handle = rec,
         .device = ps.core.device,
@@ -121,6 +123,9 @@ fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_com
         .dispatch = cpDispatch,
         .dispatch_indirect = cpDispatchIndirect,
         .end = cpEnd,
+        .push_debug_group = cpPushDebugGroup,
+        .pop_debug_group = cpPopDebugGroup,
+        .insert_debug_marker = cpInsertDebugMarker,
     };
     return &rec.pass;
 }
@@ -152,6 +157,17 @@ fn cpDispatchIndirect(self: [*c]c.ke_gpu_compute_pass, indirect_buf: c.ke_gpu_bu
 }
 fn cpEnd(self: [*c]c.ke_gpu_compute_pass) callconv(.c) void {
     _ = self;
+}
+fn cpPushDebugGroup(self: [*c]c.ke_gpu_compute_pass, label: [*c]const u8) callconv(.c) void {
+    const rec = recOf(self);
+    cpAppend(rec, .{ .push_debug_group = rec.storeLabel(label) });
+}
+fn cpPopDebugGroup(self: [*c]c.ke_gpu_compute_pass) callconv(.c) void {
+    cpAppend(recOf(self), .pop_debug_group);
+}
+fn cpInsertDebugMarker(self: [*c]c.ke_gpu_compute_pass, label: [*c]const u8) callconv(.c) void {
+    const rec = recOf(self);
+    cpAppend(rec, .{ .insert_debug_marker = rec.storeLabel(label) });
 }
 
 fn ctxEncoder(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_command_encoder {

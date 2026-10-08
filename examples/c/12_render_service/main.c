@@ -54,7 +54,7 @@ int main(void)
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
 
     ke_gpu_shader_module shader = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_wgsl, .byte_size = strlen(triangle_wgsl), .entry_point = "triangle" }, &err);
+        .code = triangle_wgsl, .byte_size = strlen(triangle_wgsl), .label = "triangle" }, &err);
     if (shader == KE_GPU_INVALID_HANDLE) die("shader", err);
 
     ke_gpu_render_pipeline_params pp = {
@@ -75,7 +75,7 @@ int main(void)
     gpu.ref->destroy_shader_module(gpu.ref, shader);
 
     const char *writes[] = { "backbuffer" };
-    ke_render_pass_io io = { .reads = NULL, .reads_count = 0, .writes = writes, .writes_count = 1 };
+    ke_render_pass_io io = { .name = "triangle", .reads = NULL, .reads_count = 0, .writes = writes, .writes_count = 1 };
 
     printf("Triangle drawn through ke_render_service. Close the window to exit.\n");
     while (!win.ref->should_close(win.ref))

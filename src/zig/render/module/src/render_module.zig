@@ -230,6 +230,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.logger = logger;
     st.bb_writes = .{"backbuffer"};
     st.io = std.mem.zeroes(c.ke_render_pass_io);
+    st.io.name = "render.clear";
     st.io.writes = @ptrCast(&st.bb_writes);
     st.io.writes_count = 1;
     st.io.cmd_slot = 0;
