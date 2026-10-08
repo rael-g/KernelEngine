@@ -5,6 +5,7 @@
 #include <kernel_engine/render/gpu/gpu_commands.h>
 #include <kernel_engine/render/gpu/gpu_enums.h>
 #include <kernel_engine/render/texture_target/gpu_render_target_texture_create.h>
+#include <kernel_engine/render/renderdoc_target/gpu_render_target_renderdoc_create.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/module/render_module_create.h>
 #include <kernel_engine/render/components.h>
@@ -102,7 +103,9 @@ int main(int argc, char **argv)
     printf("--- c_demo_16: forward lit cube captured offscreen ---\n");
     ke_error *err = NULL;
 
-    ke_gpu_device_webgpu_params dp = { .logger = NULL, .enable_validation = 1 };
+    const bool renderdoc = argc > 2 && strcmp(argv[2], "--renderdoc") == 0;
+
+    ke_gpu_device_webgpu_params dp = { .logger = NULL, .enable_validation = 1, .debug_labels = renderdoc };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
 
@@ -118,6 +121,15 @@ int main(int argc, char **argv)
                                                  .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM }, &err);
     if (!target.ref) die("render target", err);
 
+    ke_gpu_render_target_handle captured = { 0 };
+    if (renderdoc)
+    {
+        captured = ke_gpu_render_target_renderdoc_create(target.ref,
+            &(ke_gpu_render_target_renderdoc_params){ .first_frame = FRAMES - 1, .frame_count = 1 }, &err);
+        if (!captured.ref) die("renderdoc render target", err);
+    }
+    ke_gpu_render_target *frame_target = renderdoc ? captured.ref : target.ref;
+
     ke_ecs_flecs_params ep = { .world_id_base = 0 };
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
@@ -129,7 +141,7 @@ int main(int argc, char **argv)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);
     if (!rt.ref) die("runtime", err);
 
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, target.ref, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
+    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, frame_target, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
     if (!render.ref) die("render module", err);
     ke_render_service *core = ke_render_module_core(render.ref);
 
@@ -205,6 +217,7 @@ int main(int argc, char **argv)
     rt.destroy(rt.ref);
     sched.destroy(sched.ref);
     ecs.destroy(ecs.ref);
+    if (captured.ref) captured.destroy(captured.ref);
     target.destroy(target.ref);
     gpu.ref->destroy_texture(gpu.ref, texture);
     gpu.destroy(gpu.ref);
