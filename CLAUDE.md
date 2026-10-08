@@ -87,7 +87,9 @@ Implemented in Zig, behind the C ABI. Each plugin is a shared library that expor
 
 No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile (stb, miniaudio) come from vcpkg; tomlc99 is the one vendored library.
 
-Vendoring rule: when vcpkg lacks a pure-C library, vendor it inside `<plugin>/third_party/<lib>/` with a `VENDOR.md` recording upstream, license and sync date. Contained — never leaks to a sibling plugin.
+Dependencies enter through dependency management: vcpkg for native libraries, NuGet for .NET, `build.zig.zon` for Zig packages and C sources built by the graph. A pinned fetch step in the root `build.zig` is the exception for what none of them carries, a vendored copy the exception after that, and the machine's environment or the operating system's package manager is never a source — see [`docs/conventions/build.md`](docs/conventions/build.md).
+
+Vendoring rule: when no package manager carries a pure-C library and it cannot be fetched, vendor it inside `<plugin>/third_party/<lib>/` with a `VENDOR.md` recording upstream, license and sync date. Contained — never leaks to a sibling plugin.
 
 #### Layer boundary rule (non-negotiable)
 

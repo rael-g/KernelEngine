@@ -9,13 +9,41 @@ every C example into its own build graph as a path dependency (`build.zig.zon`; 
 
 The project resolves its own dependencies. The machine provides Zig and the .NET SDK, and on Linux the
 system's windowing development headers that glfw is built against (`docs/conventions/ci.md`). Everything
-else is fetched at a pinned version and kept under `build/`: vcpkg and every port it builds from source
-(`vcpkg.json`), `slangc`, `wgpu-native`, RenderDoc, the NuGet packages, which include the `libclang` the binding generator loads
-(`build.zig` fetch steps, `nuget.config`). The fetch steps run through `sh`.
+else comes through a package manager and is kept under `build/`: the native libraries are vcpkg ports
+built from source (`vcpkg.json`), the .NET packages come from NuGet (`nuget.config`), among them the
+`libclang` the binding generator loads, and the Zig packages are declared in a `build.zig.zon`. The four
+tools no package manager carries, vcpkg itself, `slangc`, `wgpu-native` and RenderDoc, are fetched by
+`build.zig` at a pinned version, through `sh`.
 
-So the first build on a machine, or after `build/` is deleted, downloads those tools and compiles every
-port, and takes far longer than any later one, which reuses `build/` and rebuilds only what changed. A slow
-first build is the project resolving its own dependencies, not a fault.
+So the first build on a machine, or after `build/` is deleted, downloads those packages and tools and
+compiles every port, and takes far longer than any later one, which reuses `build/` and rebuilds only what
+changed. A slow first build is the project resolving its own dependencies, not a fault.
+
+## Where a dependency comes from
+
+Dependency management is the way a dependency enters the project. It is declared to the package manager
+of its language or of the project, which resolves it:
+
+- **vcpkg** for native libraries (`vcpkg.json`).
+- **NuGet** for .NET packages (`nuget.config`).
+- **`build.zig.zon`** for Zig packages, and for C sources that a `build.zig` compiles. A package there is
+  source, built by the build graph for whatever the target is, never a binary chosen per operating
+  system.
+
+Two fallbacks exist, in this order, and each is an exception that has to be justified by the package
+managers not carrying the thing:
+
+1. **A fetch step in the root `build.zig`**, pinned to a version, into `build/tools/`. It exists so that
+   third-party code does not have to be copied into the repository. The tools taken this way are the
+   ones in the table under [Fetched tools](#fetched-tools), and the root `build.zig` is the only place
+   that fetches: a dependency does not download tools on behalf of the build that uses it.
+2. **A vendored copy**, under the rule for vendoring in `CLAUDE.md`.
+
+The machine is never a source. Beyond the prerequisites named above, nothing is looked for in the
+environment or installed through the operating system's package manager.
+
+When a tool is wanted and no package manager carries it, the first question is whether a library that
+one of them does carry solves the same problem. A fetch step is what is left when the answer is no.
 
 ## Where output goes
 
