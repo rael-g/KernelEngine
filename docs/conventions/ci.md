@@ -64,6 +64,18 @@ is what makes an exact comparison hold: another driver rounds differently, so th
 refuses to run where lavapipe is not installed. A failure uploads `build/visual` as an artifact, with the images that were drawn.
 `scripts/ci_local.cs -- --update-golden` records the goldens from the same image.
 
+## What `capture` checks
+
+`capture` is a stage of `verify.cs` that runs only when named, and no job runs it. `scripts/capture.cs`
+starts `c_demo_16 --renderdoc` through the `renderdoccmd` the native build fetched into `build/tools/`,
+on the same lavapipe driver, with the Vulkan layer manifest the build wrote beside it. The example then
+draws into a render target that has RenderDoc capture its last frame. The script converts the capture
+to XML with `renderdoccmd convert`, collects the debug labels the frame's passes were recorded under,
+sorts them, and compares the list against `golden/linux-lavapipe/c_demo_16.passes`. The list is sorted
+because passes record on several workers at once, so their order in the capture file varies between
+runs. The capture stays in `build/capture/linux-lavapipe/`, where RenderDoc opens it; `--update` records
+the list.
+
 ## What `main-history` checks
 
 Every commit on `main` is a one-line Conventional Commit (`docs/conventions/git.md`), so the changelog is

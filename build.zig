@@ -364,6 +364,33 @@ pub fn build(b: *std.Build) void {
         argF(b, "stubs-src", stubs_src),
     }, &.{&common.step}, .has_tests);
 
+    const renderdoc_version = "1.46";
+    const renderdoc_dir = b.pathJoin(&.{ tools_dir, b.fmt("renderdoc-{s}", .{renderdoc_version}) });
+    const renderdoc_include = b.pathJoin(&.{ renderdoc_dir, if (host_windows) b.fmt("RenderDoc_{s}_64", .{renderdoc_version}) else "include" });
+    const renderdoc_marker = if (host_windows)
+        b.pathJoin(&.{ renderdoc_include, "renderdoc_app.h" })
+    else
+        b.pathJoin(&.{ renderdoc_dir, "share/vulkan/implicit_layer.d/renderdoc_capture.json" });
+    const renderdoc_fetch = b.addSystemCommand(&.{
+        "sh", "-c",
+        if (host_windows)
+            b.fmt("mkdir -p '{0s}' && ([ -f '{1s}' ] || (curl -fsSL -o '{0s}/renderdoc.zip' 'https://renderdoc.org/stable/{2s}/RenderDoc_{2s}_64.zip' && echo '9ca4d09ecaba2cc791168660d6fc2a7e3d70fe67146e87ec05c5f8dea70772f7  {0s}/renderdoc.zip' | sha256sum -c - && unzip -oq '{0s}/renderdoc.zip' -d '{0s}'))", .{
+                renderdoc_dir, renderdoc_marker, renderdoc_version,
+            })
+        else
+            b.fmt("mkdir -p '{0s}/share/vulkan/implicit_layer.d' && ([ -f '{1s}' ] || (curl -fsSL -o '{0s}/renderdoc.tar.gz' 'https://renderdoc.org/stable/{2s}/renderdoc_{2s}.tar.gz' && echo '6fedf15eab1288d9a81889ba8a4452dca53f5c10de8162be32a0f8972f62dc09  {0s}/renderdoc.tar.gz' | sha256sum -c - && tar -xzf '{0s}/renderdoc.tar.gz' -C '{0s}' --strip-components=1 && sed 's|\"library_path\": *\"[^\"]*\"|\"library_path\": \"../../../lib/librenderdoc.so\"|' '{0s}/etc/vulkan/implicit_layer.d/renderdoc_capture.json' > '{1s}'))", .{
+                renderdoc_dir, renderdoc_marker, renderdoc_version,
+            }),
+    });
+
+    const gpu_render_target_renderdoc = ctx.plugin("ke_gpu_render_target_renderdoc", "src/zig/render/renderdoc_target", &.{
+        argF(b, "heap-src", heap_src),
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "kerror-src", kerror_src),
+        argF(b, "renderdoc-include", renderdoc_include),
+    }, &.{ &common.step, &renderdoc_fetch.step }, .has_tests);
+
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
 
@@ -924,6 +951,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_zig, "render/texture_target/include" }),
+            b.pathJoin(&.{ src_zig, "render/renderdoc_target/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
             b.pathJoin(&.{ src_zig, "render/module/include" }),
@@ -942,6 +970,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_renderdoc") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
@@ -951,7 +980,7 @@ pub fn build(b: *std.Build) void {
         })),
         "-Dlink-m=true",
     }, &.{
-        &common.step,    &gpu_render_target_texture.step, &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &common.step,    &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &render_module.step,
         &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 

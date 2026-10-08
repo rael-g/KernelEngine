@@ -1,0 +1,8 @@
+render.clear
+render.cull
+render.deferred_lighting
+render.forward_transparent
+render.gbuffer
+render.shadow
+render.skybox
+render.tonemap
