@@ -1,13 +1,16 @@
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     DOTNET_NOLOGO=1
 
+ARG APT_SNAPSHOT=20261001T000000Z
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get update --snapshot "${APT_SNAPSHOT}" \
+    && apt-get install -y --no-install-recommends --snapshot "${APT_SNAPSHOT}" \
         ca-certificates curl git unzip zip tar xz-utils build-essential cmake ninja-build \
-        pkg-config xorg-dev libgl1-mesa-dev libglu1-mesa-dev libicu74 \
+        pkg-config xorg-dev libgl1-mesa-dev libglu1-mesa-dev libicu74 mesa-vulkan-drivers \
     && rm -rf /var/lib/apt/lists/*
 
 ARG ZIG_VERSION=0.16.0
