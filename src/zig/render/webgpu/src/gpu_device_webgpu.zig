@@ -1,22 +1,26 @@
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
+
+comptime {
+    _ = @import("window_target.zig");
+}
 const builtin = @import("builtin");
-const wgpu = @cImport({
+pub const wgpu = @cImport({
     @cInclude("webgpu/webgpu.h");
     @cInclude("webgpu/wgpu.h");
 });
-const ke = @cImport({
+pub const ke = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/render/gpu/gpu_device.h");
     @cInclude("kernel_engine/render/gpu/gpu_commands.h");
+    @cInclude("kernel_engine/render/gpu/gpu_render_target.h");
     @cInclude("kernel_engine/window/window.h");
     @cInclude("kernel_engine/scheduler/scheduler.h");
 });
 
 const Params = extern struct {
     logger:            ?*anyopaque,
-    window:            ?*ke.ke_window,
     enable_validation: ke.ke_bool,
     scheduler:         ?*ke.ke_scheduler,
 };
@@ -25,33 +29,27 @@ const GpuError = error{
     OutOfMemory,
     NoAdapter,
     DeviceCreationFailed,
-    SurfaceCreationFailed,
     NotImplemented,
 };
 
-const DeviceState = struct {
+pub const DeviceState = struct {
     instance:                wgpu.WGPUInstance,
     adapter:                 wgpu.WGPUAdapter,
     device:                  wgpu.WGPUDevice,
     queue:                   wgpu.WGPUQueue,
-    surface:                 wgpu.WGPUSurface,
-    surface_format:          wgpu.WGPUTextureFormat,
-    current_surface_texture: wgpu.WGPUTexture,
-    surface_ext:             ?*SurfaceExt,
-    surface_w:               u32,
-    surface_h:               u32,
     scheduler:               ?*ke.ke_scheduler,
     pending_compiles:        [MAX_PENDING_COMPILES]?*ke.ke_task,
     pending_compiles_count:  u32,
 };
 
 const MAX_PENDING_COMPILES = 64;
+const copy_row_alignment: u32 = 256;
 
 fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
     return @ptrCast(dev);
 }
 
-fn state(dev: [*c]ke.ke_gpu_device) *DeviceState {
+pub fn state(dev: [*c]ke.ke_gpu_device) *DeviceState {
     return @ptrCast(@alignCast(ptr(dev).handle));
 }
 
@@ -64,8 +62,7 @@ fn setError(
     const etype: *const ke.ke_error_type = switch (err) {
         GpuError.OutOfMemory           => &ke.KE_ERROR_OUT_OF_MEMORY,
         GpuError.NoAdapter,
-        GpuError.DeviceCreationFailed,
-        GpuError.SurfaceCreationFailed => &ke.KE_ERROR_NOT_INITIALIZED,
+        GpuError.DeviceCreationFailed  => &ke.KE_ERROR_NOT_INITIALIZED,
         GpuError.NotImplemented        => &ke.KE_ERROR_NOT_SUPPORTED,
     };
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
@@ -241,54 +238,11 @@ fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
 }
 
 const heap = @import("heap");
-const gpa = heap.gpa;
+pub const gpa = heap.gpa;
 
-fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) GpuError!wgpu.WGPUSurface {
-    const native = window.get_native_handle.?(window) orelse return GpuError.SurfaceCreationFailed;
-
-    const desc: wgpu.WGPUSurfaceDescriptor = switch (builtin.os.tag) {
-        .windows => blk: {
-            const src = wgpu.WGPUSurfaceSourceWindowsHWND{
-                .chain     = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceWindowsHWND },
-                .hinstance = blk2: {
-                    const GetModuleHandleW = @extern(*const fn (?[*:0]const u16) callconv(.winapi) ?std.os.windows.HMODULE, .{ .name = "GetModuleHandleW" });
-                    break :blk2 GetModuleHandleW(null);
-                },
-                .hwnd = native,
-            };
-            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
-        },
-        .linux => blk: {
-            const x11 = @cImport(@cInclude("X11/Xlib.h"));
-            const src = wgpu.WGPUSurfaceSourceXlibWindow{
-                .chain   = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceXlibWindow },
-                .display = x11.XOpenDisplay(null),
-                .window  = @intFromPtr(native),
-            };
-            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
-        },
-        .macos => blk: {
-            const src = wgpu.WGPUSurfaceSourceMetalLayer{
-                .chain = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceMetalLayer },
-                .layer = native,
-            };
-            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
-        },
-        else => return GpuError.SurfaceCreationFailed,
-    };
-
-    return wgpu.wgpuInstanceCreateSurface(instance, &desc) orelse GpuError.SurfaceCreationFailed;
-}
-
-fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
+fn createDeviceState() GpuError!*DeviceState {
     const s = gpa.create(DeviceState) catch return GpuError.OutOfMemory;
     errdefer gpa.destroy(s);
-    s.surface = null;
-    s.surface_format = wgpu.WGPUTextureFormat_Undefined;
-    s.current_surface_texture = null;
-    s.surface_ext = null;
-    s.surface_w = 0;
-    s.surface_h = 0;
     s.scheduler = null;
     s.pending_compiles = [_]?*ke.ke_task{null} ** MAX_PENDING_COMPILES;
     s.pending_compiles_count = 0;
@@ -298,14 +252,9 @@ fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
         return GpuError.DeviceCreationFailed;
     errdefer wgpu.wgpuInstanceRelease(s.instance);
 
-    if (window) |w| {
-        s.surface = try createSurface(s.instance, w);
-    }
-    errdefer if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
-
     const adapter_opts = wgpu.WGPURequestAdapterOptions{
         .nextInChain          = null,
-        .compatibleSurface    = s.surface,
+        .compatibleSurface    = null,
         .powerPreference      = wgpu.WGPUPowerPreference_HighPerformance,
         .backendType          = wgpu.WGPUBackendType_Undefined,
         .forceFallbackAdapter = 0,
@@ -332,43 +281,7 @@ fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
 
     s.queue = wgpu.wgpuDeviceGetQueue(s.device);
 
-    if (s.surface) |surf| {
-        var caps: wgpu.WGPUSurfaceCapabilities = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
-        _ = wgpu.wgpuSurfaceGetCapabilities(surf, s.adapter, &caps);
-        s.surface_format = wgpu.WGPUTextureFormat_BGRA8Unorm;
-        var i: usize = 0;
-        while (i < caps.formatCount) : (i += 1) {
-            const f = caps.formats[i];
-            if (f == wgpu.WGPUTextureFormat_BGRA8Unorm or f == wgpu.WGPUTextureFormat_RGBA8Unorm) {
-                s.surface_format = f;
-                break;
-            }
-        } else if (caps.formatCount > 0) {
-            s.surface_format = caps.formats[0];
-        }
-        wgpu.wgpuSurfaceCapabilitiesFreeMembers(caps);
-    }
-
     return s;
-}
-
-fn configureSurface(s: *DeviceState, width: u32, height: u32) void {
-    const surf = s.surface orelse return;
-    const config = wgpu.WGPUSurfaceConfiguration{
-        .nextInChain     = null,
-        .device          = s.device,
-        .format          = s.surface_format,
-        .usage           = wgpu.WGPUTextureUsage_RenderAttachment,
-        .viewFormatCount = 0,
-        .viewFormats     = null,
-        .alphaMode       = wgpu.WGPUCompositeAlphaMode_Auto,
-        .width           = width,
-        .height          = height,
-        .presentMode     = wgpu.WGPUPresentMode_Fifo,
-    };
-    wgpu.wgpuSurfaceConfigure(surf, &config);
-    s.surface_w = width;
-    s.surface_h = height;
 }
 
 fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
@@ -377,7 +290,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .handle                         = s,
         .get_default_queue              = getDefaultQueue,
         .queue_submit                   = queueSubmit,
-        .queue_present                  = queuePresent,
+        .queue_poll                     = queuePoll,
         .queue_wait_idle                = queueWaitIdle,
         .create_fence                   = createFence,
         .queue_signal_fence             = queueSignalFence,
@@ -412,32 +325,23 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .query_extension                = queryExtension,
         .create_render_pipeline_async   = createRenderPipelineAsync,
         .flush_pipeline_compiles        = flushPipelineCompiles,
+        .map_buffer_read                = mapBufferRead,
     };
     return dev;
 }
 
-export fn ke_gpu_device_webgpu_create(
+pub export fn ke_gpu_device_webgpu_create(
     params: ?*const Params,
     out_error: ?*?*ke.ke_error,
 ) ke.ke_gpu_device_handle {
-    const window = if (params) |p| p.window else null;
-
-    const s = createDeviceState(window) catch |err| {
+    const s = createDeviceState() catch |err| {
         setError(out_error, err, "webgpu: device initialisation failed", @src());
         return .{ .ref = null, .destroy = null };
     };
     s.scheduler = if (params) |p| p.scheduler else null;
 
-    if (window) |w| {
-        var width: i32 = 0;
-        var height: i32 = 0;
-        _ = w.get_size.?(w, &width, &height, null);
-        configureSurface(s, @intCast(@max(width, 1)), @intCast(@max(height, 1)));
-    }
-
     const dev = createDeviceVtable(s) catch |err| {
         setError(out_error, err, "webgpu: vtable allocation failed", @src());
-        if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
         wgpu.wgpuQueueRelease(s.queue);
         wgpu.wgpuDeviceRelease(s.device);
         wgpu.wgpuAdapterRelease(s.adapter);
@@ -454,9 +358,7 @@ fn deviceDestroy(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     wgpu.wgpuQueueRelease(s.queue);
     wgpu.wgpuDeviceRelease(s.device);
     wgpu.wgpuAdapterRelease(s.adapter);
-    if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
     wgpu.wgpuInstanceRelease(s.instance);
-    if (s.surface_ext) |ext| gpa.destroy(ext);
     gpa.destroy(s);
     gpa.destroy(ptr(dev));
 }
@@ -483,7 +385,7 @@ fn deviceCallback(
     out.* = device;
 }
 
-fn getDefaultQueue(dev: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_queue {
+pub fn getDefaultQueue(dev: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_queue {
     return @intFromPtr(state(dev).queue);
 }
 
@@ -515,16 +417,10 @@ fn reapCompletedCompiles(s: *DeviceState) void {
     }
 }
 
-fn queuePresent(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
+fn queuePoll(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
     const s = state(dev);
     reapCompletedCompiles(s);
-    if (s.surface) |surf| {
-        _ = wgpu.wgpuSurfacePresent(surf);
-        if (s.current_surface_texture) |tex| {
-            wgpu.wgpuTextureRelease(tex);
-            s.current_surface_texture = null;
-        }
-    }
+    _ = wgpu.wgpuDevicePoll(s.device, 0, null);
 }
 
 fn queueWaitIdle(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
@@ -630,7 +526,7 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     if (pp.initial_data != null) {
         const bytes_per_pixel: u32 = 4;
         const unaligned_bpr: u32 = pp.width * bytes_per_pixel;
-        const bytes_per_row: u32 = (unaligned_bpr + 255) & ~@as(u32, 255);
+        const bytes_per_row: u32 = std.mem.alignForward(u32, unaligned_bpr, copy_row_alignment);
         const face_bytes: usize = @as(usize, unaligned_bpr) * pp.height;
         const layers: u32 = if (pp.depth_or_array_layers == 0) 1 else pp.depth_or_array_layers;
         const src_bytes: [*]const u8 = @ptrCast(pp.initial_data);
@@ -839,7 +735,6 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         attr_offset += ac;
     }
 
-    const s = state(dev);
     const target_count = @min(@max(pp.color_target_count, 1), 8);
     const bs = pp.blend_state;
     build.wgpu_blend = .{
@@ -858,12 +753,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         const fmt = pp.color_target_formats[ti];
         build.color_targets[ti] = .{
             .nextInChain = null,
-            .format      = if (fmt != ke.KE_GPU_TEXTURE_FORMAT_INVALID)
-                toWgpuTextureFormat(fmt)
-            else if (s.surface_format != wgpu.WGPUTextureFormat_Undefined)
-                s.surface_format
-            else
-                wgpu.WGPUTextureFormat_BGRA8Unorm,
+            .format      = toWgpuTextureFormat(fmt),
             .blend       = if (bs.blend_enabled != 0) &build.wgpu_blend else null,
             .writeMask   = pp.blend_state.write_mask,
         };
@@ -947,7 +837,17 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
     };
 }
 
+fn colorTargetsDeclared(p: [*c]const ke.ke_gpu_render_pipeline_params) bool {
+    if (p.*.fragment_module == ke.KE_GPU_INVALID_HANDLE) return true;
+    const count = @min(@max(p.*.color_target_count, 1), 8);
+    for (p.*.color_target_formats[0..count]) |f| {
+        if (toWgpuTextureFormat(f) == wgpu.WGPUTextureFormat_Undefined) return false;
+    }
+    return true;
+}
+
 fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
+    if (!colorTargetsDeclared(p)) return ke.KE_GPU_INVALID_HANDLE;
     var build: RenderPipelineDescBuild = undefined;
     buildRenderPipelineDescriptor(dev, p, &build);
     defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
@@ -1000,6 +900,10 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
                              on_ready: ?*const fn (ke.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
     const cb = on_ready orelse return;
     const s = state(dev);
+    if (!colorTargetsDeclared(p)) {
+        cb(ke.KE_GPU_INVALID_HANDLE, user);
+        return;
+    }
 
     const sched = s.scheduler orelse {
         var build: RenderPipelineDescBuild = undefined;
@@ -1355,7 +1259,45 @@ fn encCopyBufferToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buff
     wgpu.wgpuCommandEncoderCopyBufferToBuffer(@ptrCast(enc.*.handle), @ptrFromInt(src), src_off, @ptrFromInt(dst), dst_off, size);
 }
 
-fn encCopyBufferToTexture(_: [*c]ke.ke_gpu_command_encoder, _: ke.ke_gpu_buffer, _: usize, _: ke.ke_gpu_texture, _: u32, _: u32, _: u32, _: u32, _: u32) callconv(.c) void {}
+fn rowPitchValid(bytes_per_row: u32, out_error: ?*?*ke.ke_error, src: std.builtin.SourceLocation) bool {
+    if (bytes_per_row % copy_row_alignment == 0) return true;
+    ke.ke_error_set(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "bytes_per_row is not a multiple of the copy row alignment", src.file, @intCast(src.line), null);
+    return false;
+}
+
+fn encCopyBufferToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buffer, src_off: usize, bytes_per_row: u32, dst: ke.ke_gpu_texture, x: u32, y: u32, z: u32, width: u32, height: u32, out_error: ?*?*ke.ke_error) callconv(.c) bool {
+    if (!rowPitchValid(bytes_per_row, out_error, @src())) return false;
+    const src_info = wgpu.WGPUTexelCopyBufferInfo{
+        .layout = .{ .offset = src_off, .bytesPerRow = bytes_per_row, .rowsPerImage = height },
+        .buffer = @ptrFromInt(src),
+    };
+    const dst_info = wgpu.WGPUTexelCopyTextureInfo{
+        .texture = @ptrFromInt(dst),
+        .mipLevel = 0,
+        .origin = .{ .x = x, .y = y, .z = z },
+        .aspect = wgpu.WGPUTextureAspect_All,
+    };
+    const extent = wgpu.WGPUExtent3D{ .width = width, .height = height, .depthOrArrayLayers = 1 };
+    wgpu.wgpuCommandEncoderCopyBufferToTexture(@ptrCast(enc.*.handle), &src_info, &dst_info, &extent);
+    return true;
+}
+
+fn encCopyTextureToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_texture, x: u32, y: u32, z: u32, dst: ke.ke_gpu_buffer, dst_off: usize, bytes_per_row: u32, width: u32, height: u32, out_error: ?*?*ke.ke_error) callconv(.c) bool {
+    if (!rowPitchValid(bytes_per_row, out_error, @src())) return false;
+    const src_info = wgpu.WGPUTexelCopyTextureInfo{
+        .texture = @ptrFromInt(src),
+        .mipLevel = 0,
+        .origin = .{ .x = x, .y = y, .z = z },
+        .aspect = wgpu.WGPUTextureAspect_All,
+    };
+    const dst_info = wgpu.WGPUTexelCopyBufferInfo{
+        .layout = .{ .offset = dst_off, .bytesPerRow = bytes_per_row, .rowsPerImage = height },
+        .buffer = @ptrFromInt(dst),
+    };
+    const extent = wgpu.WGPUExtent3D{ .width = width, .height = height, .depthOrArrayLayers = 1 };
+    wgpu.wgpuCommandEncoderCopyTextureToBuffer(@ptrCast(enc.*.handle), &src_info, &dst_info, &extent);
+    return true;
+}
 
 fn encCopyTextureToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_texture, dst: ke.ke_gpu_texture, width: u32, height: u32) callconv(.c) void {
     const src_info = wgpu.WGPUTexelCopyTextureInfo{
@@ -1400,6 +1342,7 @@ fn createCommandEncoder(dev: [*c]ke.ke_gpu_device) callconv(.c) [*c]ke.ke_gpu_co
         .copy_buffer_to_buffer  = encCopyBufferToBuffer,
         .copy_buffer_to_texture = encCopyBufferToTexture,
         .copy_texture_to_texture = encCopyTextureToTexture,
+        .copy_texture_to_buffer = encCopyTextureToBuffer,
         .finish                 = encFinish,
         .destroy                = encDestroy,
     };
@@ -1411,7 +1354,38 @@ fn writeBuffer(dev: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: u64, data
 }
 
 fn mapBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
-    return wgpu.wgpuBufferGetMappedRange(@ptrFromInt(h), offset, size);
+    const buffer: wgpu.WGPUBuffer = @ptrFromInt(h);
+    if (wgpu.wgpuBufferGetMappedRange(buffer, offset, size)) |range| return range;
+    return @constCast(wgpu.wgpuBufferGetConstMappedRange(buffer, offset, size));
+}
+
+const MapReadRequest = struct {
+    buffer: ke.ke_gpu_buffer,
+    on_ready: *const fn (ke.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void,
+    user: ?*anyopaque,
+};
+
+fn mapReadDone(status: wgpu.WGPUMapAsyncStatus, _: wgpu.WGPUStringView, userdata1: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
+    const req: *MapReadRequest = @ptrCast(@alignCast(userdata1.?));
+    req.on_ready(req.buffer, status == wgpu.WGPUMapAsyncStatus_Success, req.user);
+    gpa.destroy(req);
+}
+
+fn mapBufferRead(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize,
+                 on_ready: ?*const fn (ke.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
+    const cb = on_ready orelse return;
+    const req = gpa.create(MapReadRequest) catch {
+        cb(h, false, user);
+        return;
+    };
+    req.* = .{ .buffer = h, .on_ready = cb, .user = user };
+    _ = wgpu.wgpuBufferMapAsync(@ptrFromInt(h), wgpu.WGPUMapMode_Read, offset, size, .{
+        .nextInChain = null,
+        .mode = wgpu.WGPUCallbackMode_AllowProcessEvents,
+        .callback = mapReadDone,
+        .userdata1 = req,
+        .userdata2 = null,
+    });
 }
 fn mapBufferWrite(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize) callconv(.c) ?*anyopaque {
     return wgpu.wgpuBufferGetMappedRange(@ptrFromInt(h), offset, size);
@@ -1438,55 +1412,10 @@ fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) c
     p.max_compute_workgroup_size_x = limits.maxComputeWorkgroupSizeX;
     p.max_compute_workgroup_size_y = limits.maxComputeWorkgroupSizeY;
     p.max_compute_workgroup_size_z = limits.maxComputeWorkgroupSizeZ;
+    p.copy_bytes_per_row_alignment = copy_row_alignment;
 }
 
-const SurfaceExt = extern struct {
-    acquire_current_texture_view: *const fn (*const SurfaceExt) callconv(.c) ke.ke_gpu_texture_view,
-    reconfigure:                  *const fn (*const SurfaceExt, u32, u32) callconv(.c) void,
-    current_size:                 *const fn (*const SurfaceExt, [*c]u32, [*c]u32) callconv(.c) void,
-    device_state:                 *DeviceState,
-};
-
-fn surfaceExtAcquire(self: *const SurfaceExt) callconv(.c) ke.ke_gpu_texture_view {
-    const s = self.device_state;
-    const surf = s.surface orelse return ke.KE_GPU_INVALID_HANDLE;
-    var st: wgpu.WGPUSurfaceTexture = std.mem.zeroes(wgpu.WGPUSurfaceTexture);
-    wgpu.wgpuSurfaceGetCurrentTexture(surf, &st);
-    if (st.status != wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal and
-        st.status != wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal)
-    {
-        return ke.KE_GPU_INVALID_HANDLE;
-    }
-    s.current_surface_texture = st.texture;
-    return @intFromPtr(wgpu.wgpuTextureCreateView(st.texture, null));
-}
-
-fn surfaceExtReconfigure(self: *const SurfaceExt, width: u32, height: u32) callconv(.c) void {
-    configureSurface(self.device_state, width, height);
-}
-
-fn surfaceExtCurrentSize(self: *const SurfaceExt, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
-    const s = self.device_state;
-    if (out_w != null) out_w.* = s.surface_w;
-    if (out_h != null) out_h.* = s.surface_h;
-}
-
-fn queryExtension(dev: [*c]ke.ke_gpu_device, name: [*c]const u8) callconv(.c) ?*const anyopaque {
-    const s = state(dev);
-    if (s.surface == null) return null;
-    if (std.mem.eql(u8, std.mem.span(name), "ke_gpu_surface_ext")) {
-        if (s.surface_ext == null) {
-            const ext = gpa.create(SurfaceExt) catch return null;
-            ext.* = .{
-                .acquire_current_texture_view = surfaceExtAcquire,
-                .reconfigure                  = surfaceExtReconfigure,
-                .current_size                 = surfaceExtCurrentSize,
-                .device_state                 = s,
-            };
-            s.surface_ext = ext;
-        }
-        return s.surface_ext;
-    }
+fn queryExtension(_: [*c]ke.ke_gpu_device, _: [*c]const u8) callconv(.c) ?*const anyopaque {
     return null;
 }
 
@@ -1494,4 +1423,76 @@ test "creating the device and destroying it, or failing to create it, leaves no 
     const handle = ke_gpu_device_webgpu_create(null, null);
     if (handle.ref != null) handle.destroy.?(handle.ref);
     try heap.expectNoLeaks();
+}
+
+const ReadbackProbe = struct {
+    fired: bool = false,
+    ok: bool = false,
+};
+
+fn readbackProbeDone(_: ke.ke_gpu_buffer, ok: bool, user: ?*anyopaque) callconv(.c) void {
+    const probe: *ReadbackProbe = @ptrCast(@alignCast(user.?));
+    probe.fired = true;
+    probe.ok = ok;
+}
+
+test "a texture's pixels are read back through a copy to a buffer and an asynchronous map" {
+    const handle = ke_gpu_device_webgpu_create(null, null);
+    if (handle.ref == null) return error.SkipZigTest;
+    defer handle.destroy.?(handle.ref);
+    const dev = handle.ref;
+
+    const width: u32 = 64;
+    const height: u32 = 4;
+    const row_bytes: u32 = width * 4;
+    var pixels: [row_bytes * height]u8 = undefined;
+    for (&pixels, 0..) |*b, i| b.* = @truncate(i *% 7);
+
+    const tex = dev.*.create_texture.?(dev, &ke.ke_gpu_texture_params{
+        .width = width,
+        .height = height,
+        .depth_or_array_layers = 1,
+        .format = ke.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
+        .dimension = ke.KE_GPU_TEXTURE_DIM_2D,
+        .usage = ke.KE_GPU_TEXTURE_USAGE_COPY_SRC,
+        .mip_level_count = 1,
+        .sample_count = 1,
+        .initial_data = &pixels,
+        .initial_data_size = pixels.len,
+    });
+    try std.testing.expect(tex != ke.KE_GPU_INVALID_HANDLE);
+    defer dev.*.destroy_texture.?(dev, tex);
+
+    const buf = dev.*.create_buffer.?(dev, &ke.ke_gpu_buffer_params{
+        .initial_data = null,
+        .size = row_bytes * height,
+        .usage = ke.KE_GPU_BUFFER_USAGE_MAP_READ | ke.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    }, null);
+    try std.testing.expect(buf != ke.KE_GPU_INVALID_HANDLE);
+    defer dev.*.destroy_buffer.?(dev, buf);
+
+    const enc = dev.*.create_command_encoder.?(dev);
+    defer enc.*.destroy.?(enc);
+
+    var misaligned: ?*ke.ke_error = null;
+    try std.testing.expect(!enc.*.copy_texture_to_buffer.?(enc, tex, 0, 0, 0, buf, 0, row_bytes - 1, width, height, &misaligned));
+    try std.testing.expect(misaligned != null);
+    try std.testing.expect(ke.ke_error_is(misaligned, &ke.KE_ERROR_INVALID_ARGUMENT));
+
+    try std.testing.expect(enc.*.copy_texture_to_buffer.?(enc, tex, 0, 0, 0, buf, 0, row_bytes, width, height, null));
+    const cmd = enc.*.finish.?(enc);
+    var cmds = [_][*c]ke.ke_gpu_command_buffer{cmd};
+    const queue = dev.*.get_default_queue.?(dev);
+    dev.*.queue_submit.?(dev, queue, &cmds, 1);
+
+    var probe = ReadbackProbe{};
+    dev.*.map_buffer_read.?(dev, buf, 0, row_bytes * height, readbackProbeDone, &probe);
+    dev.*.queue_wait_idle.?(dev, queue);
+    try std.testing.expect(probe.fired);
+    try std.testing.expect(probe.ok);
+
+    const mapped: [*]const u8 = @ptrCast(dev.*.map_buffer.?(dev, buf, 0, row_bytes * height).?);
+    try std.testing.expectEqualSlices(u8, &pixels, mapped[0..pixels.len]);
+    dev.*.unmap_buffer.?(dev, buf);
 }

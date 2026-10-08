@@ -899,7 +899,8 @@
       "project": "src/csharp/render/KernelEngine.Render.Webgpu",
       "namespace": "KernelEngine.Render.Webgpu.Native",
       "headers": [
-        "src/zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_create.h"
+        "src/zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_create.h",
+        "src/zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h"
       ],
       "library": "ke_gpu_device_webgpu",
       "output": "Generated/GpuDevice/"
@@ -928,7 +929,8 @@
         "src/c/render/kernel_engine/render/ui/components.h",
         "src/c/render/kernel_engine/render/service/render_service.h",
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
-        "src/c/render/kernel_engine/render/gpu/gpu_device.h"
+        "src/c/render/kernel_engine/render/gpu/gpu_device.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_render_target.h"
       ],
       "library": "ke_render_service",
       "output": "Generated/Render/"

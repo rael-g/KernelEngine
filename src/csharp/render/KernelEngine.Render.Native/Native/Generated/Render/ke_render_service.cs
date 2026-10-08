@@ -134,4 +134,7 @@ public unsafe partial struct ke_render_service
 
     [NativeTypeName("ke_gpu_shader_module (*)(struct ke_render_service *, const char *, ke_gpu_shader_stage, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, KernelEngine.Common.Native.ke_error**, ulong> load_shader;
+
+    [NativeTypeName("ke_gpu_texture_format (*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_gpu_texture_format> backbuffer_format;
 }

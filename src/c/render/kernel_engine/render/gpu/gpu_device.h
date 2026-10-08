@@ -269,7 +269,9 @@ typedef struct ke_gpu_device
     ke_gpu_queue (*get_default_queue)(struct ke_gpu_device *self);
     void (*queue_submit)(struct ke_gpu_device *self, ke_gpu_queue q,
                          ke_gpu_command_buffer *const *cmds, uint32_t cmd_count);
-    void (*queue_present)(struct ke_gpu_device *self, ke_gpu_queue q);
+    /// Runs this device's event pump without blocking: delivers the callbacks of work that has
+    /// completed since the last pump (create_render_pipeline_async, map_buffer_read).
+    void (*queue_poll)(struct ke_gpu_device *self, ke_gpu_queue q);
     void (*queue_wait_idle)(struct ke_gpu_device *self, ke_gpu_queue q);
 
     ke_gpu_fence (*create_fence)(struct ke_gpu_device *self, uint64_t initial_value);
@@ -337,7 +339,7 @@ typedef struct ke_gpu_device
 
     /// Kicks a background pipeline compile — the driver compiles off the
     /// caller's thread; `on_ready` fires later (during this device's normal
-    /// event pump, e.g. at queue_present) with the finished pipeline, or
+    /// event pump, e.g. at queue_poll) with the finished pipeline, or
     /// KE_GPU_INVALID_HANDLE on failure. The raw async primitive: no caching,
     /// no fallback — see ke_render_service::get_or_create_pipeline for the policy layer
     /// built on top.
@@ -353,6 +355,16 @@ typedef struct ke_gpu_device
     /// into (e.g. before destroying a ke_render_service PSO cache that owns the
     /// entries those callbacks update). A no-op if nothing is pending.
     void (*flush_pipeline_compiles)(struct ke_gpu_device *self);
+
+    /// Starts mapping [offset, offset + size) of a buffer created with
+    /// KE_GPU_BUFFER_USAGE_MAP_READ for reading. `on_ready` fires later, during this device's
+    /// normal event pump (queue_poll, queue_wait_idle), with `ok` true when the range is
+    /// readable through map_buffer until unmap_buffer, and false when the mapping failed.
+    /// Submit the work that writes the buffer before calling.
+    void (*map_buffer_read)(struct ke_gpu_device *self, ke_gpu_buffer h,
+                            size_t offset, size_t size,
+                            void (*on_ready)(ke_gpu_buffer buffer, bool ok, void *user),
+                            void *user);
 } ke_gpu_device;
 
 typedef struct ke_gpu_device_handle

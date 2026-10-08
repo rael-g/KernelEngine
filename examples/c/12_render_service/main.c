@@ -4,6 +4,7 @@
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_enums.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
+#include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/service/pass_context.h>
 #include <kernel_engine/render/service/render_service_create.h>
@@ -36,15 +37,18 @@ int main(void)
     if (!win.ref) die("window", err);
     if (!win.ref->on_initialize(win.ref, &err)) die("window init", err);
 
-    ke_gpu_device_webgpu_params dp = { .logger = NULL, .window = win.ref, .enable_validation = 1 };
+    ke_gpu_device_webgpu_params dp = { .logger = NULL, .enable_validation = 1 };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
+
+    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, &err);
+    if (!target.ref) die("render target", err);
 
     ke_ecs_flecs_params ep = { .world_id_base = 0 };
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
 
-    ke_render_service_handle core = ke_render_service_create(gpu.ref, ecs.ref, "shaders", &err);
+    ke_render_service_handle core = ke_render_service_create(gpu.ref, target.ref, ecs.ref, "shaders", &err);
     if (!core.ref) die("render core", err);
 
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
@@ -63,7 +67,7 @@ int main(void)
                          .src_alpha = KE_GPU_BLEND_FACTOR_ONE, .dst_alpha = KE_GPU_BLEND_FACTOR_ZERO,
                          .alpha_op = KE_GPU_BLEND_OP_ADD, .write_mask = 0x0F },
         .depth_stencil = { .depth_test_enabled = 0 },
-        .color_target_formats = { 0 },
+        .color_target_formats = { core.ref->backbuffer_format(core.ref) },
         .color_target_count = 1,
     };
     ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
@@ -93,6 +97,7 @@ int main(void)
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
     core.destroy(core.ref);
     ecs.destroy(ecs.ref);
+    target.destroy(target.ref);
     gpu.destroy(gpu.ref);
     win.ref->on_shutdown(win.ref, NULL);
     win.destroy(win.ref);

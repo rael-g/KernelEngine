@@ -4,8 +4,8 @@
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_commands.h>
 #include <kernel_engine/render/gpu/gpu_enums.h>
-#include <kernel_engine/render/gpu/gpu_surface_ext.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
+#include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 
 #include "rotate_vs_wgsl.h"
 #include "rotate_fs_wgsl.h"
@@ -53,15 +53,13 @@ int main(void)
 
     ke_gpu_device_webgpu_params dp = {
         .logger            = NULL,
-        .window            = win.ref,
         .enable_validation = 1,
     };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device create failed", err);
 
-    const ke_gpu_surface_ext *surf_ext =
-        (const ke_gpu_surface_ext *)gpu.ref->query_extension(gpu.ref, KE_GPU_SURFACE_EXT_NAME);
-    if (!surf_ext) die("surface extension not available", NULL);
+    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, &err);
+    if (!target.ref) die("render target create failed", err);
 
     float uniform_data[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     ke_gpu_buffer_params ubp = {
@@ -129,6 +127,8 @@ int main(void)
         .write_mask = 0x0F,
     };
     ke_gpu_render_pipeline_params pp = {
+        .color_target_formats = { target.ref->format(target.ref) },
+        .color_target_count = 1,
         .vertex_module           = vs,
         .fragment_module         = fs,
         .vertex_entry = "vs_main",
@@ -162,8 +162,12 @@ int main(void)
         uniform_data[0] = angle;
         gpu.ref->write_buffer(gpu.ref, ubo, 0, uniform_data, sizeof(uniform_data));
 
-        ke_gpu_texture_view view = surf_ext->acquire_current_texture_view(surf_ext);
-        if (view == KE_GPU_INVALID_HANDLE) continue;
+        ke_gpu_texture_view view = target.ref->acquire(target.ref, &err);
+        if (view == KE_GPU_INVALID_HANDLE)
+        {
+            if (err) die("acquire failed", err);
+            continue;
+        }
 
         ke_gpu_clear_value clear = { .color = { 0.1f, 0.1f, 0.1f, 1.0f } };
         ke_gpu_color_attachment ca = {
@@ -191,14 +195,15 @@ int main(void)
         ke_gpu_command_buffer *cmds[] = { cmd };
         gpu.ref->queue_submit(gpu.ref, q, cmds, 1);
         cmd->destroy(cmd);
-        gpu.ref->queue_present(gpu.ref, q);
-        gpu.ref->destroy_texture_view(gpu.ref, view);
+        if (!target.ref->present(target.ref, &err)) die("present failed", err);
+        gpu.ref->queue_poll(gpu.ref, q);
     }
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
     gpu.ref->destroy_bind_group(gpu.ref, bg);
     gpu.ref->destroy_bind_group_layout(gpu.ref, bgl);
     gpu.ref->destroy_buffer(gpu.ref, ubo);
+    target.destroy(target.ref);
     gpu.destroy(gpu.ref);
     win.ref->on_shutdown(win.ref, NULL);
     win.destroy(win.ref);

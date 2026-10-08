@@ -93,10 +93,12 @@ struct ke_render_service
     /// Closes a recording context opened by begin_pass.
     void (*end_pass)(struct ke_render_service *self, struct ke_render_pass_ctx *ctx);
 
-    /// Acquires the backbuffer (a built-in resource named "backbuffer") and
-    /// clears the per-pass command slot table.
+    /// Acquires the service's render target as the backbuffer (a built-in resource named
+    /// "backbuffer") and clears the per-pass command slot table. Returns false when the target
+    /// has nothing to draw into this frame, with out_error set when acquiring it failed.
     ke_bool (*begin_frame)(struct ke_render_service *self, ke_error **out_error);
-    /// Submits the populated command slots in ascending slot order, then presents.
+    /// Submits the populated command slots in ascending slot order, then presents the render
+    /// target. Returns false when no frame began, or with out_error set when presenting failed.
     ke_bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
@@ -240,6 +242,9 @@ struct ke_render_service
     /// Resolves a shader by logical NAME + STAGE to a device-ready module.
     ke_gpu_shader_module (*load_shader)(struct ke_render_service *self, const char *name,
                                         ke_gpu_shader_stage stage, ke_error **out_error);
+
+    /// Texel format of the backbuffer, the format a pipeline drawing into it declares.
+    ke_gpu_texture_format (*backbuffer_format)(struct ke_render_service *self);
 };
 
 typedef struct ke_render_service_handle

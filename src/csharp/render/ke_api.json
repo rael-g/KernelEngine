@@ -345,7 +345,7 @@
           "name": "begin_frame",
           "returns": "ke_bool",
           "tags": [],
-          "doc": "Acquires the backbuffer (a built-in resource named \u0022backbuffer\u0022) and clears the per-pass command slot table.",
+          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022) and clears the per-pass command slot table. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.",
           "return_doc": null,
           "params": [
             {
@@ -361,7 +361,7 @@
           "name": "end_frame",
           "returns": "ke_bool",
           "tags": [],
-          "doc": "Submits the populated command slots in ascending slot order, then presents.",
+          "doc": "Submits the populated command slots in ascending slot order, then presents the render target. Returns false when no frame began, or with out_error set when presenting failed.",
           "return_doc": null,
           "params": [
             {
@@ -1147,6 +1147,15 @@
               "doc": null
             }
           ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "backbuffer_format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of the backbuffer, the format a pipeline drawing into it declares.",
+          "return_doc": null,
+          "params": [],
           "receiver": "struct ke_render_service *"
         }
       ]

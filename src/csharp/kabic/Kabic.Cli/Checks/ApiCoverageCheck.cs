@@ -14,7 +14,6 @@ internal static class ApiCoverageCheck
             ["common/common_export.h"]          = "visibility macros, no declarations",
             ["resource_cache/default/resource_cache_default_create.h"] = "created natively by plugins, no managed caller",
             ["render/gpu/gpu_commands.h"]       = "L4 command surface, rebuilt per backend rather than bound once (named debt)",
-            ["render/gpu/gpu_surface_ext.h"]    = "platform surface handoff, consumed only by a backend's own Zig",
             ["render/service/pass_context.h"]   = "pass-internal; a pass is native, no managed caller",
             ["framework/scene_hierarchy.h"]     = "systems registered by the framework itself, nothing to call",
 
@@ -29,6 +28,7 @@ internal static class ApiCoverageCheck
             ["render/tonemap/tonemap_create.h"] = "render pass factory, called only by render_module",
             ["render/camera.h"] = "consumed only by render passes, no managed caller",
             ["render/camera/camera_create.h"] = "created natively by render_module, no managed caller",
+            ["render/texture_target/gpu_render_target_texture_create.h"] = "render target over a caller-owned texture, no managed caller",
         };
 
         var convention = ConventionLoader.Load(options.Manifest);

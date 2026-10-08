@@ -2,7 +2,6 @@ const rc = @import("render_service.zig");
 const c = rc.c;
 
 pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
-    _ = out_error;
     const st = rc.coreOf(self);
     st.frame_live = false;
     @memset(st.cmd_valid[0..], false);
@@ -12,22 +11,19 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     }
     st.upload_count.store(0, .monotonic);
     st.upload_arena_offset.store(0, .monotonic);
+    const view = st.target.acquire.?(st.target, out_error);
+    if (view == c.KE_GPU_INVALID_HANDLE) return 0;
     var pe: u32 = 0;
     while (pe < rc.NUM_PRECREATED_ENCODERS) : (pe += 1) {
         st.cmd_encoders[pe] = st.device.create_command_encoder.?(st.device);
     }
-    if (st.surface) |surf| {
-        surf.current_size.?(surf, &st.backbuffer_w, &st.backbuffer_h);
-        const view = surf.acquire_current_texture_view.?(surf);
-        if (view == c.KE_GPU_INVALID_HANDLE) return 0;
-        if (st.find("backbuffer")) |bb| bb.view = view;
-    }
+    st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
+    if (st.find("backbuffer")) |bb| bb.view = view;
     st.frame_live = true;
     return 1;
 }
 
 pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
-    _ = out_error;
     const st = rc.coreOf(self);
     if (!st.frame_live) return 0;
 
@@ -80,14 +76,11 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
         const enc = st.cmd_encoders[pe];
         enc.*.destroy.?(enc);
     }
-    st.device.queue_present.?(st.device, st.queue);
-    if (st.find("backbuffer")) |bb| {
-        if (bb.view != c.KE_GPU_INVALID_HANDLE) {
-            st.device.destroy_texture_view.?(st.device, bb.view);
-            bb.view = c.KE_GPU_INVALID_HANDLE;
-        }
-    }
-    return 1;
+    st.frame_live = false;
+    if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
+    const presented = st.target.present.?(st.target, out_error);
+    st.device.queue_poll.?(st.device, st.queue);
+    return @intFromBool(presented);
 }
 
 pub fn uploadBuffer(self: [*c]c.ke_render_service, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
