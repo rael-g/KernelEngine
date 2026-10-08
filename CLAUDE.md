@@ -10,23 +10,24 @@ A microkernel game engine: ABI-stable C contracts, Zig plugin backends behind th
 
 ### Native (Zig + vcpkg manifest mode)
 
-The root `build.zig` is the only native build orchestrator: it resolves vcpkg directly (manifest mode — `vcpkg.json` + `vcpkg-configuration.json`, no toolchain file), then invokes every plugin's own `build.zig` with one shared `--prefix` so every `.so`/`.dll` converges into one output directory. Each plugin still owns its own `build.zig`, callable standalone the same way (see any `src/zig/<plugin>/build.zig` header comment for its options).
+The root `build.zig` is the only native build orchestrator: it resolves vcpkg directly (manifest mode — `vcpkg.json` + `vcpkg-configuration.json`, no toolchain file), then builds every plugin in its own graph: each one is a path dependency in the root `build.zig.zon`, and the root installs every `.so`/`.dll` into one output directory. Each plugin still owns its own `build.zig`, callable standalone with the same options (see any `src/zig/<plugin>/build.zig` header comment for its options).
 
 vcpkg itself is fetched automatically (`build/tools/vcpkg-<version>/`) — no manual install, no `VCPKG_ROOT` needed. Pass `-Dvcpkg-root=<path>` (or export `VCPKG_ROOT`) only to point at an existing vcpkg checkout instead.
 
 ```bash
-zig build --prefix build/native --cache-dir build/zig-cache       # configure + build + install, one step
-zig build test --prefix build/native --cache-dir build/zig-cache  # every plugin's own Zig tests
+zig build --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global       # configure + build + install, one step
+zig build test --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global  # every plugin's own Zig tests
+zig build docs --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global  # build/native/docs/<plugin>.md, generated from the sources
 build/native/bin/c_demo_01                                        # run a C example (c_demo_01.exe on Windows)
 ```
 
-`--cache-dir` is not optional housekeeping: the root build gives every sub-build its own directory under it, `<cache-dir>/plugins/<name>`, so omitting it scatters one cache per plugin directory. The directories are separate on purpose: sub-builds sharing one cache serialize on its manifest lock, and a repeated build took 62 s against 3.7 s with one cache each. The root build gives `vcpkg install` the same cache through `ZIG_LOCAL_CACHE_DIR` for the same reason — vcpkg's CMake runs `zig cc` from the repo root, and `zig cc` caches into `$PWD/.zig-cache` unless told otherwise.
+`--cache-dir` and `--global-cache-dir` are not optional housekeeping: one process compiles every plugin, and without them it caches into `.zig-cache` at the root and into the user's home. The root build gives `vcpkg install` the same cache through `ZIG_LOCAL_CACHE_DIR` for the same reason — vcpkg's CMake runs `zig cc` from the repo root, and `zig cc` caches into `$PWD/.zig-cache` unless told otherwise.
 
-Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native, RenderDoc), `build/vcpkg-installed/` for the ports, `build/vcpkg-archives/` and `build/vcpkg-registries/` for vcpkg's compiled-port archives and registry checkouts, `build/zig-cache/` for the Zig cache of the root build and of each sub-build, `build/zig-global/` for Zig's global cache, and `build/nuget/` for the NuGet packages (`nuget.config` at the root points there). Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
+Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native, RenderDoc), `build/vcpkg-installed/` for the ports, `build/vcpkg-archives/` and `build/vcpkg-registries/` for vcpkg's compiled-port archives and registry checkouts, `build/zig-cache/` for the Zig cache of the build, `build/zig-global/` for Zig's global cache, and `build/nuget/` for the NuGet packages (`nuget.config` at the root points there). The one exception is `zig-pkg/` at the repository root, where Zig unpacks the packages declared by URL in a `build.zig.zon` (zmath, zigdoc); Zig offers no option to move it, and git ignores it. Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
 
 **Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
 
-The root `test` step runs all of them. It cannot go stale: `Ctx.plugin` takes a required `.has_tests` / `.no_tests` argument, so a new plugin does not compile until that question is answered, and the test invocation reuses the same `-D` flag slice as the library build, so the two can never drift. Give a plugin a single test root that transitively imports its other files — a hand-written list of test roots lets a new test file go silently unrun, and lets two roots that import each other run the same test twice.
+The root `test` step runs all of them. It cannot go stale: `Ctx.member` takes a required `.has_tests` / `.no_tests` argument, so a new plugin does not compile until that question is answered, and the plugin's tests are configured by the same `b.dependency` call as its library, so the two can never drift. Give a plugin a single test root that transitively imports its other files — a hand-written list of test roots lets a new test file go silently unrun, and lets two roots that import each other run the same test twice.
 
 ### Managed (.NET 10)
 
@@ -82,7 +83,7 @@ Contracts worth knowing by name:
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
-Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty-three plugins are declared in the root `build.zig`; `grep 'ctx.plugin("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
+Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty-three plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
 No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile (stb, miniaudio) come from vcpkg; tomlc99 is the one vendored library.
 
@@ -208,6 +209,6 @@ Where to look when this file is not enough:
 |---|---|
 | what does a contract require? | the header in `src/c/<domain>/` — it is the API, not a description of one |
 | how does sim hand off to render? | `src/zig/runtime/src/runtime.zig` |
-| which plugins exist? | `grep 'ctx.plugin("' build.zig` |
+| which plugins exist? | `grep 'ctx.member("' build.zig` |
 | what does a generated projection look like, and why? | `src/csharp/kabic/`, plus the `scripts/check_*.cs` gate that pins it |
 | what is being worked on? | `docs/kanban/` — unversioned, and the only place status is allowed |

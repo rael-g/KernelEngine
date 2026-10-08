@@ -1,15 +1,16 @@
 # How does the build turn the tree into libraries, and where does everything land?
 
-`zig build`, run at the repository root (`build.zig:8` refuses any other directory), is the only
-native entry point. The root `build.zig` builds no plugin itself: it fetches toolchains, runs vcpkg,
-and invokes every plugin's own `build.zig` as a separate `zig build` (`Ctx.plugin`, `build.zig:911-939`).
+`zig build`, run at the repository root (`build.zig:12` refuses any other directory), is the only
+native entry point. The root `build.zig` fetches toolchains, runs vcpkg, and takes every plugin and
+every C example into its own build graph as a path dependency (`build.zig.zon`; `Ctx.member` and
+`Ctx.example`, `build.zig:1206-1244`). One `zig build` process compiles all of them, with one cache.
 
 ## What the build needs from the machine
 
 The project resolves its own dependencies. The machine provides Zig and the .NET SDK, and on Linux the
 system's windowing development headers that glfw is built against (`docs/conventions/ci.md`). Everything
 else is fetched at a pinned version and kept under `build/`: vcpkg and every port it builds from source
-(`vcpkg.json`), `slangc`, `wgpu-native`, the NuGet packages, which include the `libclang` the binding generator loads
+(`vcpkg.json`), `slangc`, `wgpu-native`, RenderDoc, the NuGet packages, which include the `libclang` the binding generator loads
 (`build.zig` fetch steps, `nuget.config`). The fetch steps run through `sh`.
 
 So the first build on a machine, or after `build/` is deleted, downloads those tools and compiles every
@@ -18,25 +19,28 @@ first build is the project resolving its own dependencies, not a fault.
 
 ## Where output goes
 
-Everything a build fetches or produces is under `build/`, with two exceptions: the small markers `dotnet run` keeps for each script under `~/.local/share/dotnet/runfile`, which the tool does not let a repository relocate, and NuGet's HTTP cache, which only a command run through `scripts/verify.cs` keeps under `build/nuget/http-cache` (`NUGET_HTTP_CACHE_PATH`, set for every child process there; a `dotnet build` typed by hand writes to `~/.local/share/NuGet`):
+Everything a build fetches or produces is under `build/`, apart from the `zig-pkg/` described below and two exceptions: the small markers `dotnet run` keeps for each script under `~/.local/share/dotnet/runfile`, which the tool does not let a repository relocate, and NuGet's HTTP cache, which only a command run through `scripts/verify.cs` keeps under `build/nuget/http-cache` (`NUGET_HTTP_CACHE_PATH`, set for every child process there; a `dotnet build` typed by hand writes to `~/.local/share/NuGet`):
 
 | directory | holds |
 |---|---|
-| `build/tools/` | fetched toolchains: vcpkg, `slangc`, wgpu-native |
+| `build/tools/` | fetched toolchains: vcpkg, `slangc`, wgpu-native, RenderDoc |
 | `build/vcpkg-installed/<triplet>/` | the ports vcpkg installed |
 | `build/vcpkg-archives/`, `build/vcpkg-registries/` | vcpkg's binary archives of compiled ports and its registry checkouts; the root build gives `vcpkg install` these paths through `VCPKG_DEFAULT_BINARY_CACHE` and `X_VCPKG_REGISTRIES_CACHE` |
-| `build/zig-global/` | Zig's global cache; every `zig build` the root build launches, and the vcpkg ports' `zig cc`, are given it, and `scripts/verify.cs` passes it to the root build |
+| `build/zig-global/` | Zig's global cache, when the root build is given `--global-cache-dir build/zig-global`, as `scripts/verify.cs` gives it; the vcpkg ports' `zig cc` is always given it |
 | `build/nuget/packages/` | NuGet's global packages folder, set by `nuget.config` at the repository root |
 | `build/nuget/http-cache/` | NuGet's HTTP cache, set by `scripts/verify.cs` for the commands it runs |
-| `build/zig-cache/` | the root build's Zig cache; `plugins/<name>/` inside it is one cache per plugin, test and example build |
+| `build/zig-cache/` | the Zig cache of the one build process, when the root build is given `--cache-dir build/zig-cache`; the vcpkg ports' `zig cc` is always given it |
 | `<--prefix>/lib`, `/bin`, `/gen` | plugin libraries, executables, generated shader output |
 
-`--prefix` is the install root the caller picks; every plugin build is invoked with that same prefix
-(`build.zig:914`) and installs its library under `lib` (`src/zig/window/glfw/build.zig:54-56`), so all
-plugin libraries converge in one `lib/`. `Ctx.cache_dir` is the fixed
-`build/zig-cache` path (`build.zig:18`, `91`), whatever `--cache-dir` the caller gave the root; each
-sub-build gets `<cache_dir>/plugins/<name>` as its `--cache-dir` (`build.zig:976`, `992`, `1016`).
-Sub-builds that shared one cache serialized on its manifest lock, so the caches are separate.
+`--prefix` is the install root the caller picks. The root installs every plugin's library under
+`lib` (`build.zig:1212`) and every example's executable under `bin`, named after the example
+(`build.zig:1239-1242`), so all of them converge in one tree.
+
+A Zig package is declared by URL and hash in a `build.zig.zon`: `zigdoc` in the root's, `zmath` in
+that of each plugin that imports it. Zig 0.16 unpacks every package of a build into `zig-pkg/` beside
+the `build.zig` that was invoked and offers no option to move it, so the root build keeps one
+`zig-pkg/` at the repository root, ignored by git. It is the one thing a build writes outside
+`build/` and outside the user's home.
 
 ## Which headers the libraries were built from
 
@@ -49,22 +53,25 @@ and nothing else tells it apart from a current one.
 
 ## What a plugin receives
 
-A plugin's `build.zig` runs standalone and takes its dependencies as `-D` options, never by reading
-its neighbours: one include directory per domain it consumes, plus library paths
-(`argF(b, "ke-asset-include", …)`, `build.zig:510-523`; `src/zig/window/glfw/build.zig:7-14`). Each
-option is required: the plugin's build panics without it (`glfw/build.zig:7-14`), and its include
-paths are exactly the ones it was handed (`glfw/build.zig:23-25`).
+A plugin's `build.zig` takes its dependencies as options, never by reading its neighbours: one
+include directory per domain it consumes, plus library and source paths
+(`src/zig/window/glfw/build.zig:7-14`). Each option is required: the plugin's build panics without
+it, and its include paths are exactly the ones it was handed (`glfw/build.zig:23-25`). The root
+passes them as the arguments of `b.dependency`, together with its own `target` and `optimize`
+(`build.zig:1208`, and any `ctx.member` call). The same `build.zig` still runs alone from its
+directory, given the same options as `-D` flags.
 
-`Ctx.plugin` also passes `--release=off` or `--release=fast` from the root's optimize mode
-(`build.zig:87`) and `-Dtarget=x86_64-windows-gnu` when the root target is Windows
-(`build.zig:89`); on every other OS no target is passed and the plugin builds for the host.
+A plugin that links another plugin's library takes it from `<--prefix>/lib`, so the root makes its
+compile step wait for the steps listed in the `deps` argument of `Ctx.member` (`build.zig:1211`):
+the install steps of the plugins it links, and the fetch or shader steps it reads the output of.
 
 ## Tests
 
-`Ctx.plugin` takes a required `Tests` argument, `.has_tests` or `.no_tests` (`build.zig:804`), so a
-plugin cannot be declared without answering the question. A `.has_tests` plugin gets a second
-`zig build test` invocation, given the same `-D` options as its library build, hung off the root's
-`test` step (`build.zig:924-936`).
+`Ctx.member` takes a required `Tests` argument, `.has_tests` or `.no_tests` (`build.zig:1078`), so a
+plugin cannot be declared without answering the question. For a `.has_tests` plugin the root hangs
+the plugin's own `test` step off its `test` step, and makes every test run wait for the installed
+libraries, since a test may load one (`build.zig:1217-1221`). The plugin's test module is built
+with the options its library was given, because both come from the one `b.dependency` call.
 
 ## Fetched tools
 
@@ -72,7 +79,8 @@ plugin cannot be declared without answering the question. A `.has_tests` plugin 
 |---|---|---|
 | vcpkg | `2026-07-13` (`build.zig:18`) | `sh -c 'curl … && tar …'` (`build.zig:28-35`) |
 | slangc | `2025.17.2` (`build.zig:65`) | `sh -c 'curl … && unzip …'` (`build.zig:74-79`) |
-| wgpu-native | `v24.0.3.1` (`build.zig:258`) | `sh -c …` (`build.zig:271-277`) |
+| wgpu-native | `v24.0.3.1` (`build.zig:324`) | `sh -c …` |
+| RenderDoc | `1.46` (`build.zig:402`), with a SHA-256 | `sh -c …` |
 
 vcpkg runs in manifest mode against `vcpkg.json` with the overlay triplets in `vcpkg-triplets/`,
 installing into `build/vcpkg-installed`. The triplet is chosen by the target OS: `x64-windows-zig` or
@@ -84,6 +92,13 @@ building it, and compares the digest with `build/vcpkg-installed/ke-ports.stamp`
 triplet's `lib/` present leaves vcpkg out of the build graph; any difference, or a missing stamp, runs
 vcpkg and writes the stamp afterwards. vcpkg re-evaluates every port on each run otherwise, which on
 a Windows runner costs minutes even when nothing was rebuilt.
+
+## Documentation
+
+`zig build docs` writes `<--prefix>/docs/<plugin>.json` and `<plugin>.md` for every plugin, from its
+module in the build graph: the plugin's sources, the contract directory named in its `ctx.member`
+call and the headers both include. The step comes from `zigdoc`, a dependency of the root
+`build.zig.zon` whose `build.zig` the root imports (`build.zig:3`).
 
 ## Shaders
 
@@ -106,7 +121,7 @@ The root `build.zig` separates what runs on the machine doing the build (the **h
 
 That split is what lets a Linux host build the Windows target: `dotnet run scripts/verify.cs -- cross-windows` runs `zig build -Dtarget=x86_64-windows-gnu` into `build/cross-windows`, with the ports installed under their own root, `build/vcpkg-installed-x64-windows-zig`, because a vcpkg manifest root keeps one triplet's packages and installing another would remove the first. It compiles and links every plugin, example and DLL; it does not run any of them, and it cannot reproduce what the Windows runner image brings (its `tar`, its `ccache`).
 
-Every plugin is told `-Dtarget=x86_64-windows-gnu`, and the Windows triplet builds vcpkg ports with
+Every plugin is given the root's target, and the Windows triplet builds vcpkg ports with
 `zig cc` through a mingw-style toolchain file, so no Visual Studio or Windows SDK is involved. Both
 toolchain files include `vcpkg-triplets/zig-common.cmake`, which names `zig` as the C and C++ compiler
 with `cc` and `c++` as its leading argument and archives with `zig ar`, so there is no wrapper script
