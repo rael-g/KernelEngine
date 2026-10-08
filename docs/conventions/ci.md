@@ -1,6 +1,6 @@
 # What does CI run on a push, and what does it leave out?
 
-One workflow, `.github/workflows/ci.yml`, with two jobs: `build-and-test`, which runs on a push to any
+One workflow, `.github/workflows/ci.yml`, with three jobs: `build-and-test` and `visual`, which run on a push to any
 branch and on every pull request, and `main-history`, which runs on a push to `main` only. A newer run for the same workflow and ref cancels the older one,
 and a job is stopped after 45 minutes.
 
@@ -39,7 +39,9 @@ are. A vcpkg cache that is restored but whose ports are rebuilt anyway means a p
 changed; the triplets pass `PATH` through as untracked for that reason, so a runner-specific `PATH`
 does not enter the hash.
 
-`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native --cache-dir build/zig-cache`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, and `gates` runs every `scripts/check_*.cs` it finds. With no stage it runs all four in that order and prints each step's time. `--keep-going` does not stop at the first failing step.
+`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native --cache-dir build/zig-cache`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, `gates` runs every `scripts/check_*.cs` it finds, and `visual` is described below. With no stage it runs those five in that order and prints each step's time. `--keep-going` does not stop at the first failing step. Each stage runs alone when it is the only one named.
+
+Three more stages exist for the Windows target and are run only when named: `cross-windows` builds it, `test-windows` runs its Zig tests under Wine, and `test-managed-windows` builds each project under `tests/csharp/` against the Windows libraries and runs its assembly under Wine with the Windows .NET SDK. `scripts/ci_local.cs -- --windows` runs the three inside the image `scripts/ci/Dockerfile.wine` describes, which is where Wine and that SDK come from.
 
 `dotnet test KernelEngine.slnx` builds every project the solution lists, so each C# example is
 compiled, and runs the four projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`, and `Kabic`, whose cases pin the shape each backend emits for a synthetic header).
@@ -52,6 +54,16 @@ What each one fails on is in
 `docs/architecture/kabic.md`. They are Linux-only: they compare generated text against headers and
 read no compiler or linker output, so the answer cannot differ by runner.
 
+## What `visual` checks
+
+The job builds the image `scripts/ci/Dockerfile` describes, a base pinned by digest with packages from
+one apt snapshot, and runs `verify.cs -- build visual` inside it. `scripts/visual.cs` runs each capture
+example with the image's lavapipe software Vulkan driver, and compares the PNG it writes, texel by texel
+and with no tolerance, against the one of the same name under `golden/linux-lavapipe/`. The pinned driver
+is what makes an exact comparison hold: another driver rounds differently, so the script
+refuses to run where lavapipe is not installed. A failure uploads `build/visual` as an artifact, with the images that were drawn.
+`scripts/ci_local.cs -- --update-golden` records the goldens from the same image.
+
 ## What `main-history` checks
 
 Every commit on `main` is a one-line Conventional Commit (`docs/conventions/git.md`), so the changelog is
@@ -61,9 +73,10 @@ body. It runs after the push, so it reports a violation and does not prevent one
 
 ## What it leaves out
 
-- **Running anything.** No step starts a C or C# example: `grep -n 'c_demo\|examples' ci.yml` finds
-  nothing. A defect that only shows when a program starts is not caught here.
+- **Running the examples.** The capture examples `visual` draws are the only ones started. No other C or
+  C# example runs, so a defect that only shows when one of them starts is not caught here.
 - **Coverage.** `scripts/coverage.cs` is not called.
-- **Artifacts.** The workflow uploads nothing: the libraries it builds are discarded with the runner.
+- **Artifacts.** The libraries it builds are discarded with the runner; the only upload is the images of
+  a failed `visual`.
 - **Zig generation.** Nothing calls `kabic zig`; the Zig shape tests of `Kabic.Tests` exercise the Zig
   backend on synthetic shapes only.
