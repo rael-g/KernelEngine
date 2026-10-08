@@ -88,6 +88,7 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     };
     var err: ?*c.ke_error = null;
     dl.frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "deferred_lighting.frame_bind_group",
         .layout = dl.frame_bgl,
         .entry_count = 6,
         .entries = &entries,
@@ -182,6 +183,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         dev.destroy_bind_group.?(dev, dl.gbuf_bind_group);
     var err: ?*c.ke_error = null;
     dl.gbuf_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "deferred_lighting.gbuf_bind_group",
         .layout = dl.gbuf_bgl,
         .entry_count = 4,
         .entries = &gbuf_entries,
@@ -232,6 +234,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
         .{ .binding = 8, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     dl.frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "deferred_lighting.frame_bgl",
         .entry_count = 6,
         .entries = &frame_bgl_entries,
     });
@@ -243,15 +246,18 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
         .{ .binding = 3, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     dl.gbuf_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "deferred_lighting.gbuf_bgl",
         .entry_count = 4,
         .entries = &gbuf_bgl_entries,
     });
 
     dl.empty_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "deferred_lighting.empty_bgl",
         .entry_count = 0,
         .entries = null,
     });
     dl.empty_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "deferred_lighting.empty_bg",
         .layout = dl.empty_bgl,
         .entry_count = 0,
         .entries = null,
@@ -264,6 +270,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
 
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    pp.label = "deferred_lighting.pipeline";
     pp.vertex_module = vs;
     pp.fragment_module = fs;
     pp.vertex_entry = "vs_main";
@@ -289,6 +296,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     }
 
     dl.frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "deferred_lighting.frame_uniform",
         .initial_data = null,
         .size = @sizeOf(DeferredFrame),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -312,6 +320,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.writes = .{"hdr"};
     dl.reads = .{ "gbuffer_albedo", "gbuffer_normal", "gbuffer_emissive", "depth", "shadow_map", "light_clusters" };
     dl.io = std.mem.zeroes(c.ke_render_pass_io);
+    dl.io.name = "render.deferred_lighting";
     dl.io.writes = @ptrCast(&dl.writes);
     dl.io.writes_count = 1;
     dl.io.reads = @ptrCast(&dl.reads);

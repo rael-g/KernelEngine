@@ -82,6 +82,7 @@ export fn ke_gpu_render_target_texture_create(
         return empty;
     }
     const view = dev.create_texture_view.?(dev, p.texture, &c.ke_gpu_texture_view_params{
+        .label = "texture_target.view",
         .format = p.format,
         .dimension = c.KE_GPU_TEXTURE_DIM_2D,
         .aspect = c.KE_GPU_TEXTURE_ASPECT_COLOR,

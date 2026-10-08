@@ -31,6 +31,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private readonly string _shaderDir;
     private readonly System.Numerics.Vector4? _clearColorOverride;
     private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;
+    private readonly bool _debugLabelsOverride;
     private readonly ke_render_feature_params _featureParams;
 
     /// <param name="shaderDir">
@@ -58,10 +59,16 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// </param>
     /// <param name="enableShadows">When false, no shadow pass and no shadow map render target exist — a game without shadows carries zero shadow-pass footprint. Default true (matches prior behavior).</param>
     /// <param name="enableIbl">When false, materials sample a forced-black environment regardless of any skybox (no ambient/reflection contribution). Skybox rendering itself is unaffected. Default true (matches prior behavior).</param>
+    /// <param name="debugLabels">
+    /// When true, the names of GPU objects, passes and debug groups reach the graphics API, where a
+    /// frame capture tool reads them. Default false reads <c>[render] debug_labels</c> from
+    /// <see cref="IConfiguration"/> at <see cref="OnLoad"/> instead.
+    /// </param>
     public WebgpuRenderModule(string shaderDir, System.Numerics.Vector4 clearColor = default,
         uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
-        bool enableShadows = true, bool enableIbl = true)
+        bool enableShadows = true, bool enableIbl = true, bool debugLabels = false)
     {
+        _debugLabelsOverride = debugLabels;
         ArgumentException.ThrowIfNullOrEmpty(shaderDir);
         _shaderDir = shaderDir;
         _clearColorOverride = clearColor == default ? null : clearColor;
@@ -108,7 +115,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         ke_error* err = null;
 
-        var dp = new ke_gpu_device_webgpu_params { enable_validation = 1, scheduler = sc };
+        var config = services.GetService<IConfiguration>();
+        var debugLabels = _debugLabelsOverride || (config?.GetBool("render", "debug_labels", false) ?? false);
+        var dp = new ke_gpu_device_webgpu_params { enable_validation = 1, scheduler = sc, debug_labels = (byte)(debugLabels ? 1 : 0) };
         _device = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, &err);
         if (_device.@ref == null)
             throw Fail("webgpu device create failed", err);
@@ -117,7 +126,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (_target.@ref == null)
             throw Fail("webgpu window render target create failed", err);
 
-        var config = services.GetService<IConfiguration>();
         var cp = new ke_render_cluster_params
         {
             grid_x = _clusterGridXOverride != 0 ? _clusterGridXOverride : (uint)(config?.GetInt("render", "cluster_grid_x", 0) ?? 0),

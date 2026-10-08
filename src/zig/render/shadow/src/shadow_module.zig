@@ -155,7 +155,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sh.light_cid = light_cid;
     sh.frame_cid = frame_cid;
 
-    sh.lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
+    sh.lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
     if (sh.lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     _ = core.*.import_buffer.?(core, "shadow_lvp", sh.lvp_uniform, 64, null);
 
@@ -190,15 +190,16 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     if (sh_fs == c.KE_GPU_INVALID_HANDLE) return false;
 
     const sh_lvp_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
-    const sh_lvp_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_lvp_entry });
+    const sh_lvp_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .label = "shadow.sh_lvp_bgl", .entry_count = 1, .entries = &sh_lvp_entry });
     sh.lvp_bgl = sh_lvp_bgl;
     const sh_obj_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 1, .view_dimension = 0 };
-    const sh_obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .entry_count = 1, .entries = &sh_obj_entry });
+    const sh_obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .label = "shadow.sh_obj_bgl", .entry_count = 1, .entries = &sh_obj_entry });
     sh.obj_bgl = sh_obj_bgl;
 
     const sh_attr = c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
     const sh_vbl = c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = &sh_attr };
     var shp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    shp.label = "shadow.pipeline";
     shp.vertex_module = sh_vs;
     shp.fragment_module = sh_fs;
     shp.vertex_entry = "vs_main";
@@ -224,17 +225,18 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }
 
     const sh_lvp_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = sh.lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
-    sh.lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry }, out_error);
+    sh.lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .label = "shadow.lvp_bg", .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry }, out_error);
     if (sh.lvp_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
-    sh.obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .initial_data = null, .size = UNIFORM_STRIDE * MAX_DRAWS, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
+    sh.obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .label = "shadow.obj_uniform", .initial_data = null, .size = UNIFORM_STRIDE * MAX_DRAWS, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
     if (sh.obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     const sh_obj_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = sh.obj_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ShadowObj), .texture_view = 0, .sampler = 0 };
-    sh.obj_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .layout = sh_obj_bgl, .entry_count = 1, .entries = &sh_obj_bg_entry }, out_error);
+    sh.obj_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .label = "shadow.obj_bg", .layout = sh_obj_bgl, .entry_count = 1, .entries = &sh_obj_bg_entry }, out_error);
     if (sh.obj_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
     sh.writes = .{ "shadow_map", "shadow_depth" };
     sh.io = std.mem.zeroes(c.ke_render_pass_io);
+    sh.io.name = "render.shadow";
     sh.io.writes = @ptrCast(&sh.writes);
     sh.io.writes_count = 2;
     sh.io.cmd_slot = 1;

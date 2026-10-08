@@ -35,6 +35,12 @@ takes. A render pass has pipeline, bind group, vertex and index buffer, viewport
 `dispatch` and `dispatch_indirect` (`gpu_commands.h:38-52`). None of the recording slots returns an
 error.
 
+**Every object can be named.** Each creation params struct, `ke_gpu_render_pass_params`,
+`ke_gpu_compute_pass_params` and `ke_gpu_command_encoder_params` start with an optional `label`, and the
+encoder and both passes have `push_debug_group`, `pop_debug_group` and `insert_debug_marker`. A label
+is copied by the call that receives it, so the caller's string need not outlive the call. The names exist
+for capture and validation tools and change nothing that is drawn.
+
 **What can report a failure.** `create_buffer`, `create_shader_module`, `create_bind_group` and
 `wait_fence` take `ke_error **out_error` (`gpu_device.h:278-279`, `:283-304`). The rest return
 `KE_GPU_INVALID_HANDLE` or nothing. Two error types belong to the contract:
@@ -76,6 +82,13 @@ adapter (high-performance preference) and device is where it can fail, with the 
 `BGRA8Unorm` or `RGBA8Unorm` from the surface's formats and falls back to the first one offered, and
 configures it with `Fifo` presentation (`:334-372`). `shader_language` answers WGSL, and
 `get_ndc_convention` answers `z_zero_to_one`, no y flip, left-handed (`:705-711`).
+
+### Labels
+
+Labels and debug groups are forwarded to wgpu on every call, but wgpu-native hands them to the graphics
+API only when its instance was created with the debug flag. `ke_gpu_device_webgpu_params::debug_labels`
+sets that flag; with it off a capture shows every object unnamed. `create_render_pipeline_async` keeps
+its own copy of the label until its job has compiled the pipeline.
 
 ### Resources
 

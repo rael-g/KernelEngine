@@ -158,6 +158,7 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
 
     var err: ?*c.ke_error = null;
     fwd.frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "forward.frame_bind_group",
         .layout = fwd.frame_bgl,
         .entry_count = 8,
         .entries = &entries,
@@ -305,6 +306,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .binding = 8, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
     };
     fwd.frame_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "forward.frame_bgl",
         .entry_count = 8,
         .entries = &frame_bgl_entries,
     });
@@ -317,6 +319,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .view_dimension = 0,
     };
     fwd.obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = "forward.obj_bgl",
         .entry_count = 1,
         .entries = &obj_bgl_entry,
     });
@@ -335,6 +338,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     };
 
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    pp.label = "forward.pipeline";
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
     pp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -372,6 +376,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }
 
     fwd.frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "forward.frame_uniform",
         .initial_data = null,
         .size = @sizeOf(PerFrame),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -380,6 +385,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     if (fwd.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
 
     fwd.obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "forward.obj_uniform",
         .initial_data = null,
         .size = UNIFORM_STRIDE * MAX_DRAWS,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
@@ -396,6 +402,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .sampler = 0,
     };
     fwd.obj_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
+        .label = "forward.obj_bind_group",
         .layout = fwd.obj_bgl,
         .entry_count = 1,
         .entries = &obj_bg_entry,
@@ -419,6 +426,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.writes = .{ "hdr", "depth" };
     fwd.reads = .{"shadow_map"};
     fwd.io = std.mem.zeroes(c.ke_render_pass_io);
+    fwd.io.name = "render.forward_transparent";
     fwd.io.writes = @ptrCast(&fwd.writes);
     fwd.io.writes_count = 2;
     fwd.io.reads = @ptrCast(&fwd.reads);

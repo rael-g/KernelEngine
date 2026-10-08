@@ -32,10 +32,12 @@ reads and writes. The tonemap pass is the smallest example: it reads `hdr`, writ
 render phase (`tonemap_module.zig:149-172`).
 
 Inside its body a pass opens a recording context with `begin_pass(io)` and closes it with
-`end_pass` (`render_service.h:91-94`). `ke_render_pass_io` names the pass's reads and writes and the
+`end_pass` (`render_service.h:91-94`). `ke_render_pass_io` names the pass itself, its reads and writes and the
 command slot it records into (`render_service.h:47-59`). The context resolves those names to views,
 and offers a render pass, a compute pass and the raw encoder
-(`src/c/render/kernel_engine/render/service/pass_context.h:15-28`).
+(`src/c/render/kernel_engine/render/service/pass_context.h:15-28`). The render or compute pass it
+opens is labeled with the io's `name`, and the texture and view of a declared resource are labeled with
+the name it was declared under, so a frame capture reads in the service's own vocabulary.
 
 ## The frame has two edges, and they are also systems
 
