@@ -356,7 +356,7 @@ pub fn build(b: *std.Build) void {
         argF(b, "kerror-src", kerror_src),
     }, &.{&common.step}, .has_tests);
 
-    _ = ctx.plugin("ke_gpu_render_target_texture", "src/zig/render/texture_target", &.{
+    const gpu_render_target_texture = ctx.plugin("ke_gpu_render_target_texture", "src/zig/render/texture_target", &.{
         argF(b, "heap-src", heap_src),
         argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
         argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
@@ -699,6 +699,27 @@ pub fn build(b: *std.Build) void {
         })),
     }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
+    const demo15 = ctx.example("c_demo_15", "examples/c/15_offscreen_capture", &.{
+        argF(b, "shader-name", "triangle"),
+        argF(b, "compile-slang", compile_slang_dll),
+        argF(b, "slangc", ctx.slangc_exe),
+        argF(b, "shader-out-dir", b.pathJoin(&.{ examples_gen, "15_offscreen_capture" })),
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ src_c, "math" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_zig, "render/texture_target/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
+        })),
+    }, &.{ &common.step, &gpu_render_target_texture.step, &gpu_device_webgpu.step, ctx.slang_step });
+
     const demo07 = ctx.example("c_demo_07", "examples/c/07_uniform", &.{
         argF(b, "shader-name", "rotate"),
         argF(b, "compile-slang", compile_slang_dll),
@@ -892,9 +913,9 @@ pub fn build(b: *std.Build) void {
     });
 
     const all_examples = [_]*std.Build.Step.Run{
-        demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14,
+        demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14, demo15,
     };
-    for ([_]*std.Build.Step.Run{ demo06, demo07, demo08, demo09, demo10, demo12 }) |e| e.step.dependOn(&compile_slang_build.step);
+    for ([_]*std.Build.Step.Run{ demo06, demo07, demo08, demo09, demo10, demo12, demo15 }) |e| e.step.dependOn(&compile_slang_build.step);
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
 }
 
