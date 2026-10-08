@@ -4,8 +4,8 @@
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_commands.h>
 #include <kernel_engine/render/gpu/gpu_enums.h>
-#include <kernel_engine/render/gpu/gpu_surface_ext.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
+#include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 
 #include "depth_vs_wgsl.h"
 #include "depth_fs_wgsl.h"
@@ -55,13 +55,12 @@ int main(void)
     if (!win.ref) die("window", err);
     if (!win.ref->on_initialize(win.ref, &err)) die("window init", err);
 
-    ke_gpu_device_webgpu_params dp = { .logger = NULL, .window = win.ref, .enable_validation = 1 };
+    ke_gpu_device_webgpu_params dp = { .logger = NULL, .enable_validation = 1 };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
 
-    const ke_gpu_surface_ext *surf_ext =
-        (const ke_gpu_surface_ext *)gpu.ref->query_extension(gpu.ref, KE_GPU_SURFACE_EXT_NAME);
-    if (!surf_ext) die("surface ext", NULL);
+    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, &err);
+    if (!target.ref) die("render target create failed", err);
 
     ke_gpu_texture depth_tex = gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
         .width = WIDTH, .height = HEIGHT, .depth_or_array_layers = 1,
@@ -105,6 +104,8 @@ int main(void)
         .attribute_count = 2, .attributes = attrs,
     };
     ke_gpu_render_pipeline_params pp = {
+        .color_target_formats = { target.ref->format(target.ref) },
+        .color_target_count = 1,
         .vertex_module = vs, .fragment_module = fs,
         .vertex_entry = "vs_main", .fragment_entry = "fs_main",
         .primitive_topology = KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
@@ -135,8 +136,12 @@ int main(void)
     {
         win.ref->poll_events(win.ref, NULL);
 
-        ke_gpu_texture_view color_view = surf_ext->acquire_current_texture_view(surf_ext);
-        if (color_view == KE_GPU_INVALID_HANDLE) continue;
+        ke_gpu_texture_view color_view = target.ref->acquire(target.ref, &err);
+        if (color_view == KE_GPU_INVALID_HANDLE)
+        {
+            if (err) die("acquire failed", err);
+            continue;
+        }
 
         ke_gpu_color_attachment ca = {
             .view = color_view, .load_op = KE_GPU_LOAD_OP_CLEAR, .store_op = KE_GPU_STORE_OP_STORE,
@@ -171,8 +176,8 @@ int main(void)
         ke_gpu_command_buffer *cmds[] = { cmd };
         gpu.ref->queue_submit(gpu.ref, q, cmds, 1);
         cmd->destroy(cmd);
-        gpu.ref->queue_present(gpu.ref, q);
-        gpu.ref->destroy_texture_view(gpu.ref, color_view);
+        if (!target.ref->present(target.ref, &err)) die("present failed", err);
+        gpu.ref->queue_poll(gpu.ref, q);
     }
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
@@ -181,6 +186,7 @@ int main(void)
     gpu.ref->destroy_buffer(gpu.ref, vbo_back);
     gpu.ref->destroy_texture_view(gpu.ref, depth_view);
     gpu.ref->destroy_texture(gpu.ref, depth_tex);
+    target.destroy(target.ref);
     gpu.destroy(gpu.ref);
     win.ref->on_shutdown(win.ref, NULL);
     win.destroy(win.ref);

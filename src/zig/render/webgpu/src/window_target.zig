@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const dev_impl = @import("gpu_device_webgpu.zig");
 const wgpu = dev_impl.wgpu;
 const ke = dev_impl.ke;
@@ -9,6 +10,7 @@ const WindowTarget = struct {
     device: *dev_impl.DeviceState,
     window: *ke.ke_window,
     surface: wgpu.WGPUSurface,
+    display: ?*anyopaque,
     format: ke.ke_gpu_texture_format,
     wgpu_format: wgpu.WGPUTextureFormat,
     width: u32,
@@ -16,6 +18,56 @@ const WindowTarget = struct {
     texture: wgpu.WGPUTexture,
     view: wgpu.WGPUTextureView,
 };
+
+const x11 = if (builtin.os.tag == .linux) @cImport(@cInclude("X11/Xlib.h")) else struct {};
+
+const Surface = struct { surface: wgpu.WGPUSurface, display: ?*anyopaque };
+
+fn closeDisplay(display: ?*anyopaque) void {
+    if (builtin.os.tag != .linux) return;
+    if (display) |d| _ = x11.XCloseDisplay(@ptrCast(d));
+}
+
+fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) ?Surface {
+    const native = window.get_native_handle.?(window) orelse return null;
+    switch (builtin.os.tag) {
+        .windows => {
+            const GetModuleHandleW = @extern(*const fn (?[*:0]const u16) callconv(.winapi) ?std.os.windows.HMODULE, .{ .name = "GetModuleHandleW" });
+            const src = wgpu.WGPUSurfaceSourceWindowsHWND{
+                .chain = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceWindowsHWND },
+                .hinstance = GetModuleHandleW(null),
+                .hwnd = native,
+            };
+            const desc = wgpu.WGPUSurfaceDescriptor{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
+            const surface = wgpu.wgpuInstanceCreateSurface(instance, &desc) orelse return null;
+            return .{ .surface = surface, .display = null };
+        },
+        .linux => {
+            const display = x11.XOpenDisplay(null) orelse return null;
+            const src = wgpu.WGPUSurfaceSourceXlibWindow{
+                .chain = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceXlibWindow },
+                .display = display,
+                .window = @intFromPtr(native),
+            };
+            const desc = wgpu.WGPUSurfaceDescriptor{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
+            const surface = wgpu.wgpuInstanceCreateSurface(instance, &desc) orelse {
+                _ = x11.XCloseDisplay(display);
+                return null;
+            };
+            return .{ .surface = surface, .display = display };
+        },
+        .macos => {
+            const src = wgpu.WGPUSurfaceSourceMetalLayer{
+                .chain = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceMetalLayer },
+                .layer = native,
+            };
+            const desc = wgpu.WGPUSurfaceDescriptor{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
+            const surface = wgpu.wgpuInstanceCreateSurface(instance, &desc) orelse return null;
+            return .{ .surface = surface, .display = null };
+        },
+        else => return null,
+    }
+}
 
 fn of(self: [*c]ke.ke_gpu_render_target) *WindowTarget {
     return @ptrCast(@alignCast(self.*.handle));
@@ -123,6 +175,7 @@ fn destroy(self: [*c]ke.ke_gpu_render_target) callconv(.c) void {
     releaseFrame(t);
     wgpu.wgpuSurfaceUnconfigure(t.surface);
     wgpu.wgpuSurfaceRelease(t.surface);
+    closeDisplay(t.display);
     gpa.destroy(t);
 }
 
@@ -158,17 +211,20 @@ export fn ke_gpu_render_target_webgpu_window_create(
         return empty;
     };
     const ds = dev_impl.state(device);
-    const surface = dev_impl.createSurface(ds.instance, win) catch {
+    const created = createSurface(ds.instance, win) orelse {
         fail(out_error, &ke.KE_ERROR_NOT_INITIALIZED, "window target: the window has no surface", @src());
         return empty;
     };
+    const surface = created.surface;
     const choice = chooseFormat(surface, ds.adapter) orelse {
         wgpu.wgpuSurfaceRelease(surface);
+        closeDisplay(created.display);
         fail(out_error, &ke.KE_ERROR_NOT_SUPPORTED, "window target: the surface offers no RGBA8 or BGRA8 format on this adapter", @src());
         return empty;
     };
     const t = gpa.create(WindowTarget) catch {
         wgpu.wgpuSurfaceRelease(surface);
+        closeDisplay(created.display);
         fail(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "window target: out of memory", @src());
         return empty;
     };
@@ -177,6 +233,7 @@ export fn ke_gpu_render_target_webgpu_window_create(
         .device = ds,
         .window = win,
         .surface = surface,
+        .display = created.display,
         .format = choice.ke_format,
         .wgpu_format = choice.wgpu_format,
         .width = 0,
@@ -194,6 +251,7 @@ export fn ke_gpu_render_target_webgpu_window_create(
 
 fn destroyUnconfigured(t: *WindowTarget) void {
     wgpu.wgpuSurfaceRelease(t.surface);
+    closeDisplay(t.display);
     gpa.destroy(t);
 }
 

@@ -79,7 +79,7 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
     st.frame_live = false;
     if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
     const presented = st.target.present.?(st.target, out_error);
-    st.device.queue_present.?(st.device, st.queue);
+    st.device.queue_poll.?(st.device, st.queue);
     return @intFromBool(presented);
 }
 

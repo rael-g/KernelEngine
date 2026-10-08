@@ -3,7 +3,6 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
-struct ke_window;
 struct ke_scheduler;
 
 #ifndef KE_GPU_WEBGPU_API
@@ -38,7 +37,6 @@ KE_GPU_WEBGPU_API extern const ke_error_type KE_ERROR_WGPU_RESOURCE_CREATION;
 typedef struct ke_gpu_device_webgpu_params
 {
     struct ke_logger    *logger;
-    struct ke_window    *window;          ///< Optional. When non-NULL, a presentable surface is created.
     ke_bool              enable_validation;
     /// Optional, borrowed. wgpu-native's async pipeline-compile entry points
     /// (wgpuDeviceCreateRenderPipelineAsync et al) are unimplemented upstream

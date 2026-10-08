@@ -21,7 +21,6 @@ pub const ke = @cImport({
 
 const Params = extern struct {
     logger:            ?*anyopaque,
-    window:            ?*ke.ke_window,
     enable_validation: ke.ke_bool,
     scheduler:         ?*ke.ke_scheduler,
 };
@@ -30,7 +29,6 @@ const GpuError = error{
     OutOfMemory,
     NoAdapter,
     DeviceCreationFailed,
-    SurfaceCreationFailed,
     NotImplemented,
 };
 
@@ -39,12 +37,6 @@ pub const DeviceState = struct {
     adapter:                 wgpu.WGPUAdapter,
     device:                  wgpu.WGPUDevice,
     queue:                   wgpu.WGPUQueue,
-    surface:                 wgpu.WGPUSurface,
-    surface_format:          wgpu.WGPUTextureFormat,
-    current_surface_texture: wgpu.WGPUTexture,
-    surface_ext:             ?*SurfaceExt,
-    surface_w:               u32,
-    surface_h:               u32,
     scheduler:               ?*ke.ke_scheduler,
     pending_compiles:        [MAX_PENDING_COMPILES]?*ke.ke_task,
     pending_compiles_count:  u32,
@@ -70,8 +62,7 @@ fn setError(
     const etype: *const ke.ke_error_type = switch (err) {
         GpuError.OutOfMemory           => &ke.KE_ERROR_OUT_OF_MEMORY,
         GpuError.NoAdapter,
-        GpuError.DeviceCreationFailed,
-        GpuError.SurfaceCreationFailed => &ke.KE_ERROR_NOT_INITIALIZED,
+        GpuError.DeviceCreationFailed  => &ke.KE_ERROR_NOT_INITIALIZED,
         GpuError.NotImplemented        => &ke.KE_ERROR_NOT_SUPPORTED,
     };
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
@@ -249,52 +240,9 @@ fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
 const heap = @import("heap");
 pub const gpa = heap.gpa;
 
-pub fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) GpuError!wgpu.WGPUSurface {
-    const native = window.get_native_handle.?(window) orelse return GpuError.SurfaceCreationFailed;
-
-    const desc: wgpu.WGPUSurfaceDescriptor = switch (builtin.os.tag) {
-        .windows => blk: {
-            const src = wgpu.WGPUSurfaceSourceWindowsHWND{
-                .chain     = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceWindowsHWND },
-                .hinstance = blk2: {
-                    const GetModuleHandleW = @extern(*const fn (?[*:0]const u16) callconv(.winapi) ?std.os.windows.HMODULE, .{ .name = "GetModuleHandleW" });
-                    break :blk2 GetModuleHandleW(null);
-                },
-                .hwnd = native,
-            };
-            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
-        },
-        .linux => blk: {
-            const x11 = @cImport(@cInclude("X11/Xlib.h"));
-            const src = wgpu.WGPUSurfaceSourceXlibWindow{
-                .chain   = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceXlibWindow },
-                .display = x11.XOpenDisplay(null),
-                .window  = @intFromPtr(native),
-            };
-            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
-        },
-        .macos => blk: {
-            const src = wgpu.WGPUSurfaceSourceMetalLayer{
-                .chain = .{ .next = null, .sType = wgpu.WGPUSType_SurfaceSourceMetalLayer },
-                .layer = native,
-            };
-            break :blk .{ .nextInChain = @ptrCast(&src), .label = .{ .data = null, .length = 0 } };
-        },
-        else => return GpuError.SurfaceCreationFailed,
-    };
-
-    return wgpu.wgpuInstanceCreateSurface(instance, &desc) orelse GpuError.SurfaceCreationFailed;
-}
-
-fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
+fn createDeviceState() GpuError!*DeviceState {
     const s = gpa.create(DeviceState) catch return GpuError.OutOfMemory;
     errdefer gpa.destroy(s);
-    s.surface = null;
-    s.surface_format = wgpu.WGPUTextureFormat_Undefined;
-    s.current_surface_texture = null;
-    s.surface_ext = null;
-    s.surface_w = 0;
-    s.surface_h = 0;
     s.scheduler = null;
     s.pending_compiles = [_]?*ke.ke_task{null} ** MAX_PENDING_COMPILES;
     s.pending_compiles_count = 0;
@@ -304,14 +252,9 @@ fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
         return GpuError.DeviceCreationFailed;
     errdefer wgpu.wgpuInstanceRelease(s.instance);
 
-    if (window) |w| {
-        s.surface = try createSurface(s.instance, w);
-    }
-    errdefer if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
-
     const adapter_opts = wgpu.WGPURequestAdapterOptions{
         .nextInChain          = null,
-        .compatibleSurface    = s.surface,
+        .compatibleSurface    = null,
         .powerPreference      = wgpu.WGPUPowerPreference_HighPerformance,
         .backendType          = wgpu.WGPUBackendType_Undefined,
         .forceFallbackAdapter = 0,
@@ -338,43 +281,7 @@ fn createDeviceState(window: ?*ke.ke_window) GpuError!*DeviceState {
 
     s.queue = wgpu.wgpuDeviceGetQueue(s.device);
 
-    if (s.surface) |surf| {
-        var caps: wgpu.WGPUSurfaceCapabilities = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
-        _ = wgpu.wgpuSurfaceGetCapabilities(surf, s.adapter, &caps);
-        s.surface_format = wgpu.WGPUTextureFormat_BGRA8Unorm;
-        var i: usize = 0;
-        while (i < caps.formatCount) : (i += 1) {
-            const f = caps.formats[i];
-            if (f == wgpu.WGPUTextureFormat_BGRA8Unorm or f == wgpu.WGPUTextureFormat_RGBA8Unorm) {
-                s.surface_format = f;
-                break;
-            }
-        } else if (caps.formatCount > 0) {
-            s.surface_format = caps.formats[0];
-        }
-        wgpu.wgpuSurfaceCapabilitiesFreeMembers(caps);
-    }
-
     return s;
-}
-
-fn configureSurface(s: *DeviceState, width: u32, height: u32) void {
-    const surf = s.surface orelse return;
-    const config = wgpu.WGPUSurfaceConfiguration{
-        .nextInChain     = null,
-        .device          = s.device,
-        .format          = s.surface_format,
-        .usage           = wgpu.WGPUTextureUsage_RenderAttachment,
-        .viewFormatCount = 0,
-        .viewFormats     = null,
-        .alphaMode       = wgpu.WGPUCompositeAlphaMode_Auto,
-        .width           = width,
-        .height          = height,
-        .presentMode     = wgpu.WGPUPresentMode_Fifo,
-    };
-    wgpu.wgpuSurfaceConfigure(surf, &config);
-    s.surface_w = width;
-    s.surface_h = height;
 }
 
 fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
@@ -383,7 +290,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .handle                         = s,
         .get_default_queue              = getDefaultQueue,
         .queue_submit                   = queueSubmit,
-        .queue_present                  = queuePresent,
+        .queue_poll                     = queuePoll,
         .queue_wait_idle                = queueWaitIdle,
         .create_fence                   = createFence,
         .queue_signal_fence             = queueSignalFence,
@@ -427,24 +334,14 @@ pub export fn ke_gpu_device_webgpu_create(
     params: ?*const Params,
     out_error: ?*?*ke.ke_error,
 ) ke.ke_gpu_device_handle {
-    const window = if (params) |p| p.window else null;
-
-    const s = createDeviceState(window) catch |err| {
+    const s = createDeviceState() catch |err| {
         setError(out_error, err, "webgpu: device initialisation failed", @src());
         return .{ .ref = null, .destroy = null };
     };
     s.scheduler = if (params) |p| p.scheduler else null;
 
-    if (window) |w| {
-        var width: i32 = 0;
-        var height: i32 = 0;
-        _ = w.get_size.?(w, &width, &height, null);
-        configureSurface(s, @intCast(@max(width, 1)), @intCast(@max(height, 1)));
-    }
-
     const dev = createDeviceVtable(s) catch |err| {
         setError(out_error, err, "webgpu: vtable allocation failed", @src());
-        if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
         wgpu.wgpuQueueRelease(s.queue);
         wgpu.wgpuDeviceRelease(s.device);
         wgpu.wgpuAdapterRelease(s.adapter);
@@ -461,9 +358,7 @@ fn deviceDestroy(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     wgpu.wgpuQueueRelease(s.queue);
     wgpu.wgpuDeviceRelease(s.device);
     wgpu.wgpuAdapterRelease(s.adapter);
-    if (s.surface) |surf| wgpu.wgpuSurfaceRelease(surf);
     wgpu.wgpuInstanceRelease(s.instance);
-    if (s.surface_ext) |ext| gpa.destroy(ext);
     gpa.destroy(s);
     gpa.destroy(ptr(dev));
 }
@@ -522,16 +417,9 @@ fn reapCompletedCompiles(s: *DeviceState) void {
     }
 }
 
-fn queuePresent(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
+fn queuePoll(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
     const s = state(dev);
     reapCompletedCompiles(s);
-    if (s.surface) |surf| {
-        _ = wgpu.wgpuSurfacePresent(surf);
-        if (s.current_surface_texture) |tex| {
-            wgpu.wgpuTextureRelease(tex);
-            s.current_surface_texture = null;
-        }
-    }
     _ = wgpu.wgpuDevicePoll(s.device, 0, null);
 }
 
@@ -847,7 +735,6 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         attr_offset += ac;
     }
 
-    const s = state(dev);
     const target_count = @min(@max(pp.color_target_count, 1), 8);
     const bs = pp.blend_state;
     build.wgpu_blend = .{
@@ -866,12 +753,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         const fmt = pp.color_target_formats[ti];
         build.color_targets[ti] = .{
             .nextInChain = null,
-            .format      = if (fmt != ke.KE_GPU_TEXTURE_FORMAT_INVALID)
-                toWgpuTextureFormat(fmt)
-            else if (s.surface_format != wgpu.WGPUTextureFormat_Undefined)
-                s.surface_format
-            else
-                wgpu.WGPUTextureFormat_BGRA8Unorm,
+            .format      = toWgpuTextureFormat(fmt),
             .blend       = if (bs.blend_enabled != 0) &build.wgpu_blend else null,
             .writeMask   = pp.blend_state.write_mask,
         };
@@ -955,7 +837,17 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
     };
 }
 
+fn colorTargetsDeclared(p: [*c]const ke.ke_gpu_render_pipeline_params) bool {
+    if (p.*.fragment_module == ke.KE_GPU_INVALID_HANDLE) return true;
+    const count = @min(@max(p.*.color_target_count, 1), 8);
+    for (p.*.color_target_formats[0..count]) |f| {
+        if (toWgpuTextureFormat(f) == wgpu.WGPUTextureFormat_Undefined) return false;
+    }
+    return true;
+}
+
 fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
+    if (!colorTargetsDeclared(p)) return ke.KE_GPU_INVALID_HANDLE;
     var build: RenderPipelineDescBuild = undefined;
     buildRenderPipelineDescriptor(dev, p, &build);
     defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
@@ -1008,6 +900,10 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
                              on_ready: ?*const fn (ke.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
     const cb = on_ready orelse return;
     const s = state(dev);
+    if (!colorTargetsDeclared(p)) {
+        cb(ke.KE_GPU_INVALID_HANDLE, user);
+        return;
+    }
 
     const sched = s.scheduler orelse {
         var build: RenderPipelineDescBuild = undefined;
@@ -1519,53 +1415,7 @@ fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) c
     p.copy_bytes_per_row_alignment = copy_row_alignment;
 }
 
-const SurfaceExt = extern struct {
-    acquire_current_texture_view: *const fn (*const SurfaceExt) callconv(.c) ke.ke_gpu_texture_view,
-    reconfigure:                  *const fn (*const SurfaceExt, u32, u32) callconv(.c) void,
-    current_size:                 *const fn (*const SurfaceExt, [*c]u32, [*c]u32) callconv(.c) void,
-    device_state:                 *DeviceState,
-};
-
-fn surfaceExtAcquire(self: *const SurfaceExt) callconv(.c) ke.ke_gpu_texture_view {
-    const s = self.device_state;
-    const surf = s.surface orelse return ke.KE_GPU_INVALID_HANDLE;
-    var st: wgpu.WGPUSurfaceTexture = std.mem.zeroes(wgpu.WGPUSurfaceTexture);
-    wgpu.wgpuSurfaceGetCurrentTexture(surf, &st);
-    if (st.status != wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal and
-        st.status != wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal)
-    {
-        return ke.KE_GPU_INVALID_HANDLE;
-    }
-    s.current_surface_texture = st.texture;
-    return @intFromPtr(wgpu.wgpuTextureCreateView(st.texture, null));
-}
-
-fn surfaceExtReconfigure(self: *const SurfaceExt, width: u32, height: u32) callconv(.c) void {
-    configureSurface(self.device_state, width, height);
-}
-
-fn surfaceExtCurrentSize(self: *const SurfaceExt, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
-    const s = self.device_state;
-    if (out_w != null) out_w.* = s.surface_w;
-    if (out_h != null) out_h.* = s.surface_h;
-}
-
-fn queryExtension(dev: [*c]ke.ke_gpu_device, name: [*c]const u8) callconv(.c) ?*const anyopaque {
-    const s = state(dev);
-    if (s.surface == null) return null;
-    if (std.mem.eql(u8, std.mem.span(name), "ke_gpu_surface_ext")) {
-        if (s.surface_ext == null) {
-            const ext = gpa.create(SurfaceExt) catch return null;
-            ext.* = .{
-                .acquire_current_texture_view = surfaceExtAcquire,
-                .reconfigure                  = surfaceExtReconfigure,
-                .current_size                 = surfaceExtCurrentSize,
-                .device_state                 = s,
-            };
-            s.surface_ext = ext;
-        }
-        return s.surface_ext;
-    }
+fn queryExtension(_: [*c]ke.ke_gpu_device, _: [*c]const u8) callconv(.c) ?*const anyopaque {
     return null;
 }
 

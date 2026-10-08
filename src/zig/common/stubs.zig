@@ -38,7 +38,7 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.create_render_pipeline_async = &createRenderPipelineAsync;
                 self.vtable.create_command_encoder = &createCommandEncoder;
                 self.vtable.queue_submit = &queueSubmit;
-                self.vtable.queue_present = &queuePresent;
+                self.vtable.queue_poll = &queuePoll;
                 self.encoder = std.mem.zeroes(c.ke_gpu_command_encoder);
                 self.encoder.destroy = &destroyEncoder;
             }
@@ -51,7 +51,7 @@ pub fn Stubs(comptime c: type) type {
 
             fn queueSubmit(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue, _: [*c]const [*c]c.ke_gpu_command_buffer, _: u32) callconv(.c) void {}
 
-            fn queuePresent(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue) callconv(.c) void {}
+            fn queuePoll(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue) callconv(.c) void {}
 
             pub fn api(self: *Device) *c.ke_gpu_device {
                 return &self.vtable;
