@@ -49,6 +49,10 @@
         .c_demo_13 = .{ .path = "examples/c/13_runtime_clear" },
         .c_demo_14 = .{ .path = "examples/c/14_forward_mesh" },
         .c_demo_16 = .{ .path = "examples/c/16_forward_capture" },
+        .zigdoc = .{
+            .url = "https://github.com/rael-g/zigdoc/archive/0db8afef95fa719755d10fdfc23b27bfea5c5938.tar.gz",
+            .hash = "zigdoc-0.1.0-x25BOaFHAgAQnNi2AoFgxJ_0ATaNAJTEZS1Sc5_D-fWg",
+        },
     },
     .paths = .{"."},
 }

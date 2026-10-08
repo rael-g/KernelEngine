@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const zigdoc = @import("zigdoc");
+
 const abi_stamp = @import("scripts/abi_stamp.zig");
 
 pub fn build(b: *std.Build) void {
@@ -115,9 +117,10 @@ pub fn build(b: *std.Build) void {
         .slang_step = &slang_fetch.step,
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
         .test_step = b.step("test", "Run every plugin's own Zig tests"),
+        .docs_step = b.step("docs", "Write the documentation of every plugin of the build graph"),
     };
 
-    const common = ctx.member("ke_common", .{ .target = target, .optimize = optimize }, &.{}, .has_tests);
+    const common = ctx.member("ke_common", .{ .target = target, .optimize = optimize }, &.{}, null, .has_tests);
 
     const logger_simple = ctx.member("ke_logger_simple", .{
         .target = target,
@@ -126,7 +129,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/logger", .has_tests);
 
     const ecs_flecs = ctx.member("ke_ecs_flecs", .{
         .target = target,
@@ -139,7 +142,7 @@ pub fn build(b: *std.Build) void {
         .@"flecs-include" = vcpkg_include,
         .@"flecs-lib" = b.pathJoin(&.{ vcpkg_lib, "libflecs_static.a" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/ecs", .has_tests);
 
     const input_default = ctx.member("ke_input_default", .{
         .target = target,
@@ -148,7 +151,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-input-include" = b.pathJoin(&.{ src_c, "input" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/input", .has_tests);
 
     const resource_cache_default = ctx.member("ke_resource_cache_default", .{
         .target = target,
@@ -157,7 +160,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-resource-cache-include" = b.pathJoin(&.{ src_c, "resource_cache" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/resource_cache", .has_tests);
 
     const scheduler_enki = ctx.member("ke_scheduler_enki", .{
         .target = target,
@@ -168,7 +171,7 @@ pub fn build(b: *std.Build) void {
         .@"enki-include" = b.pathJoin(&.{ vcpkg_include, "enkiTS" }),
         .@"enki-lib" = vcpkg_lib,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/scheduler", .has_tests);
 
     const runtime = ctx.member("ke_runtime", .{
         .target = target,
@@ -181,7 +184,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-runtime-include" = b.pathJoin(&.{ src_c, "runtime" }),
         .@"kerror-src" = kerror_src,
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
-    }, &.{&common.step}, .has_tests);
+    }, &.{&common.step}, "src/c/runtime", .has_tests);
 
     const framework = ctx.member("ke_framework", .{
         .target = target,
@@ -206,7 +209,7 @@ pub fn build(b: *std.Build) void {
         .@"kerror-src" = kerror_src,
         .@"tomlc99-dir" = tomlc99_dir,
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
-    }, &.{&common.step}, .has_tests);
+    }, &.{&common.step}, "src/c/framework", .has_tests);
 
     const window_glfw = ctx.member("ke_window_glfw", .{
         .target = target,
@@ -219,7 +222,7 @@ pub fn build(b: *std.Build) void {
         .@"glfw-include" = vcpkg_include,
         .@"glfw-lib" = vcpkg_lib,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/window", .has_tests);
 
     const asset_stb_image = ctx.member("ke_asset_stb_image", .{
         .target = target,
@@ -232,7 +235,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "asset/stb_image/include" }),
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/asset", .has_tests);
 
     const audio_miniaudio = ctx.member("ke_audio_miniaudio", .{
         .target = target,
@@ -247,7 +250,7 @@ pub fn build(b: *std.Build) void {
         .@"miniaudio-include" = vcpkg_include,
         .@"ke-resource-cache-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
         .@"kerror-src" = kerror_src,
-    }, &.{&resource_cache_default.step}, .has_tests);
+    }, &.{&resource_cache_default.step}, "src/c/audio", .has_tests);
 
     const text_stb_truetype = ctx.member("ke_text_stb_truetype", .{
         .target = target,
@@ -259,7 +262,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "text/stb_truetype/include" }),
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/text", .has_tests);
 
     const physics_box2d = ctx.member("ke_physics_2d_box2d", .{
         .target = target,
@@ -271,7 +274,7 @@ pub fn build(b: *std.Build) void {
         .@"box2d-include" = vcpkg_include,
         .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, if (debug) "libbox2dd.a" else "libbox2d.a" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/physics", .has_tests);
 
     const is_windows = target.result.os.tag == .windows;
     const assimp_libs = b.fmt("{s}|{s}|{s}|{s}|{s}|{s}", .{
@@ -297,7 +300,7 @@ pub fn build(b: *std.Build) void {
         .@"assimp-libs" = assimp_libs,
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+    }, &.{}, "src/c/asset", .has_tests);
 
     const configuration = ctx.member("ke_configuration", .{
         .target = target,
@@ -306,7 +309,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-config-include" = b.pathJoin(&.{ src_c, "configuration" }),
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
-    }, &.{&common.step}, .has_tests);
+    }, &.{&common.step}, "src/c/configuration", .has_tests);
 
     const configuration_toml = ctx.member("ke_configuration_toml", .{
         .target = target,
@@ -316,7 +319,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-config-include" = b.pathJoin(&.{ src_c, "configuration" }),
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
         .@"tomlc99-dir" = tomlc99_dir,
-    }, &.{&common.step}, .has_tests);
+    }, &.{&common.step}, "src/c/configuration", .has_tests);
 
     const wgpu_version = "v24.0.3.1";
     const wgpu_url_name = switch (target.result.os.tag) {
@@ -351,7 +354,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-scheduler-include" = b.pathJoin(&.{ src_c, "scheduler" }),
         .@"wgpu-include" = wgpu_include,
         .@"wgpu-lib" = wgpu_lib_dir,
-    }, &.{ &common.step, &wgpu_fetch.step }, .has_tests);
+    }, &.{ &common.step, &wgpu_fetch.step }, "src/c/render", .has_tests);
 
     const wgpu_copy = b.addSystemCommand(&.{
         "cp",                                                 "-f",
@@ -372,7 +375,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "view/space/include" }),
         .@"ke-lib-dir" = lib_dir,
         .@"kerror-src" = kerror_src,
-    }, &.{ &common.step }, .has_tests);
+    }, &.{ &common.step }, "src/c/view", .has_tests);
 
     const render_camera = ctx.member("ke_render_camera", .{
         .target = target,
@@ -384,7 +387,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-spatial-include" = b.pathJoin(&.{ src_c, "spatial" }),
         .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
         .@"kerror-src" = kerror_src,
-    }, &.{&common.step}, .has_tests);
+    }, &.{&common.step}, "src/c/render", .has_tests);
 
     const gpu_render_target_texture = ctx.member("ke_gpu_render_target_texture", .{
         .target = target,
@@ -394,7 +397,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
         .@"kerror-src" = kerror_src,
         .@"stubs-src" = stubs_src,
-    }, &.{&common.step}, .has_tests);
+    }, &.{&common.step}, "src/c/render", .has_tests);
 
     const renderdoc_version = "1.46";
     const renderdoc_dir = b.pathJoin(&.{ tools_dir, b.fmt("renderdoc-{s}", .{renderdoc_version}) });
@@ -423,7 +426,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
         .@"kerror-src" = kerror_src,
         .@"renderdoc-include" = renderdoc_include,
-    }, &.{ &common.step, &renderdoc_fetch.step }, .has_tests);
+    }, &.{ &common.step, &renderdoc_fetch.step }, "src/c/render", .has_tests);
 
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
@@ -443,7 +446,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step }, .has_tests);
+    }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step }, "src/c/render", .has_tests);
 
     const physics_body2d = ctx.member("ke_physics_body2d", .{
         .target = target,
@@ -460,7 +463,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-framework-include" = b.pathJoin(&.{ src_c, "framework" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "physics/body2d/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step }, .has_tests);
+    }, &.{ &common.step }, "src/c/physics", .has_tests);
 
     const audio_module = ctx.member("ke_audio_module", .{
         .target = target,
@@ -474,7 +477,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-framework-include" = b.pathJoin(&.{ src_c, "framework" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "audio/module/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step }, .no_tests);
+    }, &.{ &common.step }, "src/c/audio", .no_tests);
 
     const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
@@ -492,7 +495,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/skybox/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step, &skybox_vs.step, &skybox_fs.step }, .has_tests);
+    }, &.{ &common.step, &skybox_vs.step, &skybox_fs.step }, "src/c/render", .has_tests);
 
     const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{}, null);
     const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{}, null);
@@ -511,7 +514,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-text-include" = b.pathJoin(&.{ src_c, "text" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/ui/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step, &ui_vs.step, &ui_fs.step }, .has_tests);
+    }, &.{ &common.step, &ui_vs.step, &ui_fs.step }, "src/c/render", .has_tests);
 
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
@@ -529,7 +532,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/shadow/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step }, .has_tests);
+    }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step }, "src/c/render", .has_tests);
 
     const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{}, null);
     const cluster = ctx.member("ke_render_cluster", .{
@@ -547,7 +550,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/cluster/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step, &cluster_cs.step }, .has_tests);
+    }, &.{ &common.step, &cluster_cs.step }, "src/c/render", .has_tests);
 
     const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
     const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes, null);
@@ -567,7 +570,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .has_tests);
+    }, &.{ &common.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, "src/c/render", .has_tests);
 
     const materials_dirs = [_][]const u8{
         b.pathJoin(&.{ shader_lib_dir, "materials" }),
@@ -596,7 +599,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step }, .has_tests);
+    }, &.{ &common.step }, "src/c/render", .has_tests);
     for (gbuffer_material_shaders) |s| gbuffer.step.dependOn(&s.step);
 
     const forward_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };
@@ -622,7 +625,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/forward/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step }, .has_tests);
+    }, &.{ &common.step }, "src/c/render", .has_tests);
     for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
 
     const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
@@ -656,7 +659,7 @@ pub fn build(b: *std.Build) void {
     }, &.{
         &common.step,     &resource_cache_default.step,
         &magenta_vs.step, &magenta_fs.step,
-    }, .has_tests);
+    }, "src/c/render", .has_tests);
 
     const render_module = ctx.member("ke_render_module", .{
         .target = target,
@@ -693,7 +696,7 @@ pub fn build(b: *std.Build) void {
         &tonemap.step,           &skybox.step,  &ui.step,
         &gbuffer.step,           &shadow.step,  &cluster.step,
         &deferred_lighting.step, &forward.step, &render_camera.step,
-    }, .has_tests);
+    }, "src/c/render", .has_tests);
 
     const all_plugins = [_]*std.Build.Step.InstallArtifact{
         render_module,     common,                 logger_simple,      ecs_flecs,
@@ -1083,6 +1086,7 @@ const Ctx = struct {
     slang_step: *std.Build.Step,
     plugins_step: *std.Build.Step,
     test_step: *std.Build.Step,
+    docs_step: *std.Build.Step,
     exe_suffix: []const u8,
     dotnet_tail: ?*std.Build.Step = null,
 
@@ -1199,7 +1203,7 @@ const Ctx = struct {
     /// Every plugin's own build.zig installs its .so to "lib" under whatever
     /// --prefix it is given, so pointing every invocation at the same prefix
     /// makes them all land in one directory.
-    fn member(ctx: *Ctx, name: []const u8, args: anytype, deps: []const *std.Build.Step, tests: Tests) *std.Build.Step.InstallArtifact {
+    fn member(ctx: *Ctx, name: []const u8, args: anytype, deps: []const *std.Build.Step, contract: ?[]const u8, tests: Tests) *std.Build.Step.InstallArtifact {
         const b = ctx.b;
         const dependency = b.dependency(name, args);
         const artifact = dependency.artifact(name);
@@ -1217,6 +1221,10 @@ const Ctx = struct {
             },
         }
 
+        ctx.docs_step.dependOn(zigdoc.addDocs(b, artifact.root_module, .{
+            .name = name,
+            .documented_dirs = if (contract) |dir| b.allocator.dupe(std.Build.LazyPath, &.{b.path(dir)}) catch @panic("OOM") else &.{},
+        }));
         return install;
     }
 
