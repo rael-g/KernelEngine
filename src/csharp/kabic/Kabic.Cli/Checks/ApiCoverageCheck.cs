@@ -29,6 +29,7 @@ internal static class ApiCoverageCheck
             ["render/camera.h"] = "consumed only by render passes, no managed caller",
             ["render/camera/camera_create.h"] = "created natively by render_module, no managed caller",
             ["render/texture_target/gpu_render_target_texture_create.h"] = "render target over a caller-owned texture, no managed caller",
+            ["render/renderdoc_target/gpu_render_target_renderdoc_create.h"] = "render target that has RenderDoc capture chosen frames, no managed caller",
         };
 
         var convention = ConventionLoader.Load(options.Manifest);
