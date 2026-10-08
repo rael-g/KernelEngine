@@ -712,6 +712,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
+            vcpkg_include,
         })),
         argF(b, "libs", joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),

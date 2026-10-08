@@ -14,9 +14,10 @@ var stages = new Dictionary<string, Func<List<Step>>>
     ["test-managed"] = () => [new Step("dotnet test", "dotnet", ["test", "KernelEngine.slnx"])],
     ["test-windows"] = () => [new Step("zig build test windows", "zig", ["build", "test", "-Dtarget=x86_64-windows-gnu", "-fwine", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win", "--global-cache-dir", "build/zig-global"])],
     ["gates"] = Gates,
+    ["visual"] = () => [new Step("visual", "dotnet", ["run", "scripts/visual.cs", .. args.Where(a => a == "--update")])],
     ["cross-windows"] = () => [new Step("zig build windows", "zig", ["build", "-Dtarget=x86_64-windows-gnu", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win", "--global-cache-dir", "build/zig-global"])],
 };
-string[] order = ["build", "test-native", "test-managed", "gates", "cross-windows", "test-windows"];
+string[] order = ["build", "test-native", "test-managed", "gates", "visual", "cross-windows", "test-windows"];
 
 var selected = args.Where(a => !a.StartsWith("--")).ToList();
 if (selected.Count == 0 || selected.Contains("all")) selected = [.. order.Where(s => s is not ("cross-windows" or "test-windows"))];
