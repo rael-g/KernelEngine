@@ -142,6 +142,7 @@ int main(void)
         prev = t;
     }
 
+    if (!rt.ref->flush_render(rt.ref, &err)) die("flush render", err);
     render.destroy(render.ref);
     rt.destroy(rt.ref);
     sched.destroy(sched.ref);
