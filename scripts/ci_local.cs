@@ -34,7 +34,16 @@ if (windows && (rebuildImage || !Succeeds("docker", "image", "inspect", WineImag
     if (Run("docker", "build", "--force-rm", "--network", "host", "-t", WineImage, "-f", Path.Combine(rootDir, "scripts", "ci", "Dockerfile.wine"), Path.Combine(rootDir, "scripts", "ci")) != 0) return 1;
 }
 
-var checkout = Path.Combine(Path.GetTempPath(), "ke-ci-" + Guid.NewGuid().ToString("N")[..8]);
+const string CheckoutPrefix = "ke-ci-";
+foreach (var orphan in Directory.EnumerateDirectories(Path.GetTempPath(), CheckoutPrefix + "*"))
+{
+    var owner = Path.GetFileName(orphan)[CheckoutPrefix.Length..].Split('-')[0];
+    if (int.TryParse(owner, out var pid) && IsRunning(pid)) continue;
+    Console.WriteLine($"--- removing {orphan}, left behind by a run that did not finish");
+    Remove(orphan);
+}
+
+var checkout = Path.Combine(Path.GetTempPath(), $"{CheckoutPrefix}{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}");
 try
 {
     Console.WriteLine($"--- fresh checkout of {(workingTree ? "the working tree" : "HEAD")} in {checkout}");
@@ -82,9 +91,20 @@ try
 }
 finally
 {
-    if (!keep && Directory.Exists(checkout)) Run("docker", "run", "--rm", "--network", "host", "-v", $"{checkout}:/work", Image, "sh", "-c", "rm -rf /work/* /work/.[!.]*");
-    if (!keep && Directory.Exists(checkout)) Directory.Delete(checkout, recursive: true);
-    else if (keep) Console.WriteLine($"--- kept {checkout}");
+    if (keep) Console.WriteLine($"--- kept {checkout}");
+    else if (Directory.Exists(checkout)) Remove(checkout);
+}
+
+void Remove(string directory)
+{
+    Run("docker", "run", "--rm", "--network", "host", "-v", $"{directory}:/work", BaseImage, "sh", "-c", "rm -rf /work/* /work/.[!.]*");
+    Directory.Delete(directory, recursive: true);
+}
+
+static bool IsRunning(int pid)
+{
+    try { using var process = Process.GetProcessById(pid); return !process.HasExited; }
+    catch (ArgumentException) { return false; }
 }
 
 static int Run(string command, params string[] arguments)
