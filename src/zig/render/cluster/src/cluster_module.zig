@@ -386,7 +386,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 fn destroyModule(cm: *const ClusterModule) void {
     const dev = cm.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
-    if (cm.cull_pipeline != invalid) dev.destroy_pipeline.?(dev, cm.cull_pipeline);
+    if (cm.cull_pipeline != invalid) dev.destroy_compute_pipeline.?(dev, cm.cull_pipeline);
     if (cm.cull_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.cull_bind_group);
     if (cm.cull_bgl != invalid) dev.destroy_bind_group_layout.?(dev, cm.cull_bgl);
     if (cm.cull_uniform != invalid) dev.destroy_buffer.?(dev, cm.cull_uniform);
@@ -469,6 +469,7 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
+    try testing.expectEqual(@as(i64, 0), dev.compute_live);
     try heap.expectNoLeaks();
 }
 
@@ -485,6 +486,7 @@ test "a cluster pass whose shader fails to load releases what it had created" {
     const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
+    try testing.expectEqual(@as(i64, 0), dev.compute_live);
     try heap.expectNoLeaks();
 }
 
@@ -501,5 +503,6 @@ test "a cluster pass the runtime refuses to register releases what it had create
     const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
+    try testing.expectEqual(@as(i64, 0), dev.compute_live);
     try heap.expectNoLeaks();
 }

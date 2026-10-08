@@ -326,6 +326,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .create_render_pipeline_async   = createRenderPipelineAsync,
         .flush_pipeline_compiles        = flushPipelineCompiles,
         .map_buffer_read                = mapBufferRead,
+        .destroy_compute_pipeline       = destroyComputePipeline,
     };
     return dev;
 }
@@ -1108,6 +1109,7 @@ fn destroyTextureView(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_texture_view) callco
 fn destroySampler(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_sampler) callconv(.c) void { wgpu.wgpuSamplerRelease(@ptrFromInt(h)); }
 fn destroyShaderModule(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_shader_module) callconv(.c) void { wgpu.wgpuShaderModuleRelease(@ptrFromInt(h)); }
 fn destroyPipeline(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_pipeline) callconv(.c) void { wgpu.wgpuRenderPipelineRelease(@ptrFromInt(h)); }
+fn destroyComputePipeline(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_pipeline) callconv(.c) void { wgpu.wgpuComputePipelineRelease(@ptrFromInt(h)); }
 fn destroyBindGroupLayout(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_bind_group_layout) callconv(.c) void { wgpu.wgpuBindGroupLayoutRelease(@ptrFromInt(h)); }
 fn destroyBindGroup(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_bind_group) callconv(.c) void { wgpu.wgpuBindGroupRelease(@ptrFromInt(h)); }
 

@@ -6,12 +6,13 @@ pub fn Stubs(comptime c: type) type {
             vtable: c.ke_gpu_device,
             next: u64,
             live: i64,
+            compute_live: i64,
             fallible_created: u32,
             fallible_budget: u32,
             encoder: c.ke_gpu_command_encoder,
 
             pub fn init(self: *Device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined };
                 self.vtable.handle = self;
                 self.vtable.create_buffer = &createBuffer;
                 self.vtable.create_bind_group_layout = &createBindGroupLayout;
@@ -23,6 +24,7 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.destroy_bind_group_layout = &destroyHandle;
                 self.vtable.destroy_bind_group = &destroyHandle;
                 self.vtable.destroy_pipeline = &destroyHandle;
+                self.vtable.destroy_compute_pipeline = &destroyComputePipeline;
                 self.vtable.destroy_sampler = &destroyHandle;
                 self.vtable.create_texture = &createTexture;
                 self.vtable.create_texture_view = &createTextureView;
@@ -89,7 +91,13 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn createComputePipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_compute_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
+                _ = @atomicRmw(i64, &of(self).compute_live, .Add, 1, .monotonic);
                 return mint(self);
+            }
+
+            fn destroyComputePipeline(self: ?*c.ke_gpu_device, h: c.ke_gpu_pipeline) callconv(.c) void {
+                _ = @atomicRmw(i64, &of(self).compute_live, .Sub, 1, .monotonic);
+                destroyHandle(self, h);
             }
 
             fn createRenderPipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {

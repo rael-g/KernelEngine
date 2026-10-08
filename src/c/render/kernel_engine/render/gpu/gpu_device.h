@@ -310,6 +310,7 @@ typedef struct ke_gpu_device
     void (*destroy_texture_view)(struct ke_gpu_device *self, ke_gpu_texture_view h);
     void (*destroy_sampler)(struct ke_gpu_device *self, ke_gpu_sampler h);
     void (*destroy_shader_module)(struct ke_gpu_device *self, ke_gpu_shader_module h);
+    /// Releases a pipeline made by create_render_pipeline or create_render_pipeline_async.
     void (*destroy_pipeline)(struct ke_gpu_device *self, ke_gpu_pipeline h);
     void (*destroy_bind_group_layout)(struct ke_gpu_device *self, ke_gpu_bind_group_layout h);
     void (*destroy_bind_group)(struct ke_gpu_device *self, ke_gpu_bind_group h);
@@ -365,6 +366,9 @@ typedef struct ke_gpu_device
                             size_t offset, size_t size,
                             void (*on_ready)(ke_gpu_buffer buffer, bool ok, void *user),
                             void *user);
+
+    /// Releases a pipeline made by create_compute_pipeline.
+    void (*destroy_compute_pipeline)(struct ke_gpu_device *self, ke_gpu_pipeline h);
 } ke_gpu_device;
 
 typedef struct ke_gpu_device_handle
