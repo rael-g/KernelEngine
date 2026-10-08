@@ -10,7 +10,7 @@ var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
 
 const string Platform = "linux-lavapipe";
 const string SoftwareIcd = "/usr/share/vulkan/icd.d/lvp_icd.json";
-string[] scenes = ["c_demo_15"];
+string[] scenes = ["c_demo_15", "c_demo_16"];
 
 var update = args.Contains("--update");
 var goldenDir = Path.Combine(rootDir, "golden", Platform);
@@ -82,8 +82,9 @@ return failures == 0 ? 0 : 1;
 
 int Capture(string scene, string outputPath)
 {
-    var exe = Path.Combine(rootDir, "build", "native", "bin", OperatingSystem.IsWindows() ? scene + ".exe" : scene);
-    var info = new ProcessStartInfo(exe) { WorkingDirectory = rootDir };
+    var binDir = Path.Combine(rootDir, "build", "native", "bin");
+    var exe = Path.Combine(binDir, OperatingSystem.IsWindows() ? scene + ".exe" : scene);
+    var info = new ProcessStartInfo(exe) { WorkingDirectory = binDir };
     info.ArgumentList.Add(outputPath);
     info.Environment["VK_ICD_FILENAMES"] = SoftwareIcd;
     using var process = Process.Start(info)!;

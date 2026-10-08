@@ -913,8 +913,50 @@ pub fn build(b: *std.Build) void {
         &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 
+    const demo16 = ctx.example("c_demo_16", "examples/c/16_forward_capture", &.{
+        argF(b, "include-dirs", joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "spatial" }),
+            b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ src_c, "ecs" }),
+            b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "math" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "view" }),
+            b.pathJoin(&.{ src_zig, "render/texture_target/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_zig, "render/service/include" }),
+            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/shadow/include" }),
+            b.pathJoin(&.{ src_zig, "render/ui/include" }),
+            b.pathJoin(&.{ src_c, "text" }),
+            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
+            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_zig, "runtime/include" }),
+            b.pathJoin(&.{ src_c, "asset" }),
+            b.pathJoin(&.{ src_c, "framework" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
+            vcpkg_include,
+        })),
+        argF(b, "libs", joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_common") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
+        })),
+        "-Dlink-m=true",
+    }, &.{
+        &common.step,    &gpu_render_target_texture.step, &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
+    });
+
     const all_examples = [_]*std.Build.Step.Run{
-        demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14, demo15,
+        demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14, demo15, demo16,
     };
     for ([_]*std.Build.Step.Run{ demo06, demo07, demo08, demo09, demo10, demo12, demo15 }) |e| e.step.dependOn(&compile_slang_build.step);
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
