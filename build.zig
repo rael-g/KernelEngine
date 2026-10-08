@@ -356,6 +356,14 @@ pub fn build(b: *std.Build) void {
         argF(b, "kerror-src", kerror_src),
     }, &.{&common.step}, .has_tests);
 
+    _ = ctx.plugin("ke_gpu_render_target_texture", "src/zig/render/texture_target", &.{
+        argF(b, "heap-src", heap_src),
+        argF(b, "ke-common-include", b.pathJoin(&.{ src_zig, "common/include" })),
+        argF(b, "ke-render-include", b.pathJoin(&.{ src_c, "render" })),
+        argF(b, "kerror-src", kerror_src),
+        argF(b, "stubs-src", stubs_src),
+    }, &.{&common.step}, .has_tests);
+
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
 
