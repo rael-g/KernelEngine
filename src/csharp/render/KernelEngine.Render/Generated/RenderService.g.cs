@@ -115,7 +115,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         Handle->end_pass(Handle, ctx);
     }
 
-    /// <summary>Acquires the backbuffer (a built-in resource named "backbuffer") and clears the per-pass command slot table.</summary>
+    /// <summary>Acquires the service's render target as the backbuffer (a built-in resource named "backbuffer") and clears the per-pass command slot table. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BeginFrame()
     {
@@ -123,7 +123,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         NativeErrors.ThrowIfFailed(Handle->begin_frame(Handle, &err) != 0, err, "begin_frame");
     }
 
-    /// <summary>Submits the populated command slots in ascending slot order, then presents.</summary>
+    /// <summary>Submits the populated command slots in ascending slot order, then presents the render target. Returns false when no frame began, or with out_error set when presenting failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void EndFrame()
     {
@@ -407,6 +407,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         var result = Handle->load_shader(Handle, name, stage, &err);
         if (err != null) throw NativeErrors.FromNative(err, "load_shader");
         return result;
+    }
+
+    /// <summary>Texel format of the backbuffer, the format a pipeline drawing into it declares.</summary>
+    public ke_gpu_texture_format BackbufferFormat()
+    {
+        return Handle->backbuffer_format(Handle);
     }
 
     /// <summary>Releases the native renderservice.</summary>

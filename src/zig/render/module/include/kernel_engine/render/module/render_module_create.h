@@ -45,6 +45,7 @@ typedef struct ke_render_feature_params
 /// file draws untextured instead of failing the load.
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
+                        ke_gpu_render_target *target,
                         ke_world *world, ke_bool default_passes, struct ke_logger *logger,
                         ke_asset_resolver *asset_resolver,
                         const ke_render_cluster_params *cluster_params,

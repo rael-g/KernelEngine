@@ -6,7 +6,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/ecs/ke_ecs.h");
     @cInclude("kernel_engine/render/gpu/gpu_device.h");
     @cInclude("kernel_engine/render/gpu/gpu_commands.h");
-    @cInclude("kernel_engine/render/gpu/gpu_surface_ext.h");
+    @cInclude("kernel_engine/render/gpu/gpu_render_target.h");
     @cInclude("kernel_engine/render/service/render_service.h");
     @cInclude("kernel_engine/render/service/pass_context.h");
     @cInclude("kernel_engine/resource_cache/resource_cache.h");
@@ -93,7 +93,7 @@ pub const ComputeRecord = struct {
 pub const CoreState = struct {
     device: *c.ke_gpu_device,
     ecs: *c.ke_ecs,
-    surface: ?*const c.ke_gpu_surface_ext,
+    target: *c.ke_gpu_render_target,
     queue: c.ke_gpu_queue,
 
     resources: [MAX_RESOURCES]Resource,
@@ -212,8 +212,12 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     gpa.destroy(@as(*c.ke_render_service, @ptrCast(self)));
 }
 
-export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
+export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu_render_target, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
     const dev = device orelse return .{ .ref = null, .destroy = null };
+    const tgt = target orelse {
+        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_service_create: target is required", @src().file, @intCast(@src().line), null);
+        return .{ .ref = null, .destroy = null };
+    };
     const e = ecs orelse return .{ .ref = null, .destroy = null };
     const shader_dir_span = if (shader_dir != null) std.mem.span(shader_dir) else {
         c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_service_create: shader_dir is required", @src().file, @intCast(@src().line), null);
@@ -230,15 +234,13 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
     };
-    const surf_raw = dev.query_extension.?(dev, c.KE_GPU_SURFACE_EXT_NAME);
-    const surf: ?*const c.ke_gpu_surface_ext = if (surf_raw) |p| @ptrCast(@alignCast(p)) else null;
     var bb_w: u32 = 0;
     var bb_h: u32 = 0;
-    if (surf) |s| s.current_size.?(s, &bb_w, &bb_h);
+    tgt.size.?(tgt, &bb_w, &bb_h);
     st.* = .{
         .device = dev,
         .ecs = e,
-        .surface = surf,
+        .target = tgt,
         .queue = dev.get_default_queue.?(dev),
         .resources = undefined,
         .resource_count = 0,
@@ -311,7 +313,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
     st.resources[0] = .{
         .name = "backbuffer",
         .cid = bb_cid,
-        .format = c.KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM,
+        .format = tgt.format.?(tgt),
         .texture = c.KE_GPU_INVALID_HANDLE,
         .view = c.KE_GPU_INVALID_HANDLE,
         .is_backbuffer = true,
@@ -369,6 +371,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, ecs: ?*c.ke_ecs, s
         .try_get_material = asset_upload.tryGetMaterial,
         .white_texture = asset_upload.whiteTexture,
         .load_shader = shader_loader.loadShader,
+        .backbuffer_format = resource_table.backbufferFormat,
     };
 
     st.sampler = dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
@@ -418,7 +421,7 @@ test {
     _ = slot_map;
 }
 
-test "a pass cannot be opened once the frame has no surface to draw into" {
+test "a pass cannot be opened once the frame has no target view to draw into" {
     var state: CoreState = undefined;
     var core = deadFrame(&state);
 
@@ -426,7 +429,7 @@ test "a pass cannot be opened once the frame has no surface to draw into" {
     try testing.expect(pass_recording.beginPass(&core, &io) == null);
 }
 
-test "a frame with no surface ends without submitting or presenting anything" {
+test "a frame that never began ends without submitting or presenting anything" {
     var state: CoreState = undefined;
     var core = deadFrame(&state);
 
@@ -440,11 +443,45 @@ test "creating and destroying the render service leaves no block allocated and n
     dev.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_service_create(dev.api(), ecs.api(), "shaders", null);
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
+}
+
+test "a render service created without a render target is refused and leaves nothing behind" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var err: [*c]c.ke_error = null;
+    const h = ke_render_service_create(dev.api(), null, ecs.api(), "shaders", &err);
+    try testing.expect(h.ref == null);
+    try testing.expect(err != null);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a frame acquires the render target as the backbuffer and presents it once at its end" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
+    const svc = h.ref orelse return error.TestUnexpectedResult;
+    defer h.destroy.?(svc);
+    try testing.expectEqual(@as(c.ke_gpu_texture_format, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    try testing.expect(target.acquired);
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.end_frame.?(svc, null));
+    try testing.expectEqual(@as(u32, 1), target.presented);
+    try testing.expectEqual(@as(c.ke_bool, 0), svc.*.end_frame.?(svc, null));
+    try testing.expectEqual(@as(u32, 1), target.presented);
 }
 
 test "a render service created without a shader directory is refused and leaves nothing behind" {
@@ -452,7 +489,9 @@ test "a render service created without a shader directory is refused and leaves 
     dev.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_service_create(dev.api(), ecs.api(), null, null);
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), null, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -479,7 +518,9 @@ test "pipelines requested from several threads at once settle on one answer per 
     dev.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_service_create(dev.api(), ecs.api(), "shaders", null);
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
     try testing.expect(h.ref != null);
 
     var params: [stress_keys]c.ke_gpu_render_pipeline_params = undefined;
@@ -511,7 +552,9 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     dev.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_service_create(dev.api(), ecs.api(), "shaders", null);
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
     try testing.expect(h.ref != null);
 
     var p = std.mem.zeroes(c.ke_gpu_render_pipeline_params);

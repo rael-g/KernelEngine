@@ -3,6 +3,7 @@
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
+#include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 #include <kernel_engine/render/module/render_module_create.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
@@ -44,9 +45,12 @@ int main(void)
     if (!win.ref) die("window", err);
     if (!win.ref->on_initialize(win.ref, &err)) die("window init", err);
 
-    ke_gpu_device_webgpu_params dp = { .logger = NULL, .window = win.ref, .enable_validation = 1 };
+    ke_gpu_device_webgpu_params dp = { .logger = NULL, .enable_validation = 1 };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
+
+    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, &err);
+    if (!target.ref) die("render target", err);
 
     ke_ecs_flecs_params ep = { .world_id_base = 0 };
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
@@ -59,7 +63,7 @@ int main(void)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rp, &err);
     if (!rt.ref) die("runtime", err);
 
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
+    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, target.ref, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
     if (!render.ref) die("render module", err);
 
     printf("Clearing the screen through the runtime each tick. Close to exit.\n");
@@ -76,6 +80,7 @@ int main(void)
     rt.destroy(rt.ref);
     sched.destroy(sched.ref);
     ecs.destroy(ecs.ref);
+    target.destroy(target.ref);
     gpu.destroy(gpu.ref);
     win.ref->on_shutdown(win.ref, NULL);
     win.destroy(win.ref);

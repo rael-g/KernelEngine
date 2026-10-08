@@ -287,7 +287,7 @@ ke_render_pass_io size=40 align=8
   writes_count 24
   cmd_slot 28
   load 32
-ke_render_service size=352 align=8
+ke_render_service size=360 align=8
   handle 0
   declare 8
   import_texture 16
@@ -332,6 +332,7 @@ ke_render_service size=352 align=8
   try_get_material 328
   white_texture 336
   load_shader 344
+  backbuffer_format 352
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8

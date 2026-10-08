@@ -8,9 +8,10 @@ pub fn Stubs(comptime c: type) type {
             live: i64,
             fallible_created: u32,
             fallible_budget: u32,
+            encoder: c.ke_gpu_command_encoder,
 
             pub fn init(self: *Device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32) };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined };
                 self.vtable.handle = self;
                 self.vtable.create_buffer = &createBuffer;
                 self.vtable.create_bind_group_layout = &createBindGroupLayout;
@@ -35,7 +36,22 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.create_shader_module = &createShaderModule;
                 self.vtable.destroy_shader_module = &destroyHandle;
                 self.vtable.create_render_pipeline_async = &createRenderPipelineAsync;
+                self.vtable.create_command_encoder = &createCommandEncoder;
+                self.vtable.queue_submit = &queueSubmit;
+                self.vtable.queue_present = &queuePresent;
+                self.encoder = std.mem.zeroes(c.ke_gpu_command_encoder);
+                self.encoder.destroy = &destroyEncoder;
             }
+
+            fn createCommandEncoder(self: ?*c.ke_gpu_device) callconv(.c) [*c]c.ke_gpu_command_encoder {
+                return &of(self).encoder;
+            }
+
+            fn destroyEncoder(_: ?*c.ke_gpu_command_encoder) callconv(.c) void {}
+
+            fn queueSubmit(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue, _: [*c]const [*c]c.ke_gpu_command_buffer, _: u32) callconv(.c) void {}
+
+            fn queuePresent(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue) callconv(.c) void {}
 
             pub fn api(self: *Device) *c.ke_gpu_device {
                 return &self.vtable;
@@ -124,6 +140,51 @@ pub fn Stubs(comptime c: type) type {
             }
         };
 
+        pub const Target = struct {
+            vtable: c.ke_gpu_render_target,
+            acquired: bool,
+            presented: u32,
+
+            pub fn init(self: *Target) void {
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_render_target), .acquired = false, .presented = 0 };
+                self.vtable.handle = self;
+                self.vtable.acquire = &acquire;
+                self.vtable.present = &present;
+                self.vtable.size = &size;
+                self.vtable.format = &format;
+            }
+
+            pub fn api(self: *Target) *c.ke_gpu_render_target {
+                return &self.vtable;
+            }
+
+            fn of(self: ?*c.ke_gpu_render_target) *Target {
+                return @ptrCast(@alignCast(self.?.handle));
+            }
+
+            fn acquire(self: ?*c.ke_gpu_render_target, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
+                of(self).acquired = true;
+                return 1;
+            }
+
+            fn present(self: ?*c.ke_gpu_render_target, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                const t = of(self);
+                if (!t.acquired) return false;
+                t.acquired = false;
+                t.presented += 1;
+                return true;
+            }
+
+            fn size(_: ?*c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+                if (out_w != null) out_w.* = 1;
+                if (out_h != null) out_h.* = 1;
+            }
+
+            fn format(_: ?*c.ke_gpu_render_target) callconv(.c) c.ke_gpu_texture_format {
+                return c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+            }
+        };
+
         pub const Core = struct {
             vtable: c.ke_render_service,
             next: u64,
@@ -133,6 +194,7 @@ pub fn Stubs(comptime c: type) type {
                 self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false };
                 self.vtable.handle = self;
                 self.vtable.load_shader = &loadShader;
+                self.vtable.backbuffer_format = &backbufferFormat;
                 self.vtable.get_or_create_pipeline = &getOrCreatePipeline;
                 self.vtable.cid = &cid;
                 self.vtable.declare = &declare;
@@ -148,6 +210,10 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.white_texture = &whiteTexture;
                 self.vtable.resource_buffer = &resourceBuffer;
                 self.vtable.resource_buffer_size = &resourceBufferSize;
+            }
+
+            fn backbufferFormat(_: ?*c.ke_render_service) callconv(.c) c.ke_gpu_texture_format {
+                return c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
             }
 
             pub fn api(self: *Core) *c.ke_render_service {

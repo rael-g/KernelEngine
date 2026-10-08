@@ -182,3 +182,8 @@ pub fn resourceBindGroupLayout(self: [*c]c.ke_render_service, name: [*c]const u8
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.bind_group_layout;
 }
+
+pub fn backbufferFormat(self: [*c]c.ke_render_service) callconv(.c) c.ke_gpu_texture_format {
+    const st = rc.coreOf(self);
+    return st.target.format.?(st.target);
+}

@@ -16,14 +16,15 @@ using Microsoft.Extensions.DependencyInjection;
 namespace KernelEngine.Render.Webgpu;
 
 /// <summary>
-/// Render v2 (webgpu) as an <see cref="IRuntimeModule"/>. Creates the GPU device
-/// from the window and installs the render path (ke_render_module) which
+/// Render v2 (webgpu) as an <see cref="IRuntimeModule"/>. Creates the GPU device and a
+/// render target presenting into the window, and installs the render path (ke_render_module) which
 /// registers begin/clear/end as KE_PHASE_RENDER systems on the runtime. The host
 /// just ticks the runtime — no render calls in the loop.
 /// </summary>
 public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources, INativeRenderResources
 {
     private ke_gpu_device_handle _device;
+    private ke_gpu_render_target_handle _target;
     private ke_render_module_handle _module;
     private ke_render_service* _core;
     private RenderService? _renderService;
@@ -107,10 +108,14 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         ke_error* err = null;
 
-        var dp = new ke_gpu_device_webgpu_params { window = win, enable_validation = 1, scheduler = sc };
+        var dp = new ke_gpu_device_webgpu_params { enable_validation = 1, scheduler = sc };
         _device = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, &err);
         if (_device.@ref == null)
             throw Fail("webgpu device create failed", err);
+
+        _target = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(_device.@ref, win, &err);
+        if (_target.@ref == null)
+            throw Fail("webgpu window render target create failed", err);
 
         var config = services.GetService<IConfiguration>();
         var cp = new ke_render_cluster_params
@@ -128,7 +133,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             : null;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
         fixed (byte* sd = shaderDirBytes)
-            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, wd, 1, lg, ar, &cp, &fp, null, null, (sbyte*)sd, &err);
+            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, _target.@ref, wd, 1, lg, ar, &cp, &fp, null, null, (sbyte*)sd, &err);
         if (_module.@ref == null)
             throw Fail("render module create failed", err);
 
@@ -325,6 +330,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         if (_module.@ref != null && _module.destroy != null)
             _module.destroy(_module.@ref);
+        if (_target.@ref != null && _target.destroy != null)
+            _target.destroy(_target.@ref);
         if (_device.@ref != null && _device.destroy != null)
             _device.destroy(_device.@ref);
     }

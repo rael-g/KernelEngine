@@ -3,6 +3,7 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
+#include <kernel_engine/render/gpu/gpu_render_target.h>
 #include <kernel_engine/render/service/render_service.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -22,9 +23,16 @@ extern "C"
 {
 #endif
 
+/**
+ * @brief Creates a render service whose frames draw into @p target.
+ * @param device Borrowed, must outlive the service.
+ * @param target Borrowed, must outlive the service; every frame acquires and presents it.
+ * @return Handle whose @c ref is NULL on failure; KE_ERROR_INVALID_ARGUMENT when @p target or
+ *         @p shader_dir is NULL.
+ */
 KE_RENDER_CORE_API ke_render_service_handle
-ke_render_service_create(ke_gpu_device *device, ke_ecs *ecs, const char *shader_dir,
-                      ke_error **out_error);
+ke_render_service_create(ke_gpu_device *device, ke_gpu_render_target *target, ke_ecs *ecs,
+                         const char *shader_dir, ke_error **out_error);
 
 #ifdef __cplusplus
 }

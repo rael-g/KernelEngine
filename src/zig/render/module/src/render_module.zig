@@ -177,6 +177,7 @@ fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_re
 }
 
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
+                                  target: ?*c.ke_gpu_render_target,
                                   world: ?*c.ke_world, default_passes: c.ke_bool, logger: ?*c.ke_logger,
                                   asset_resolver: ?*c.ke_asset_resolver,
                                   cluster_params: ?*const c.ke_render_cluster_params,
@@ -189,7 +190,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     const dev = device orelse return empty;
     const mark = rt.last_system.?(rt);
 
-    const core_h = c.ke_render_service_create(dev, e, shader_dir, out_error);
+    const core_h = c.ke_render_service_create(dev, target, e, shader_dir, out_error);
     if (core_h.ref == null) return empty;
 
     const st = gpa.create(ModuleState) catch {
@@ -408,6 +409,7 @@ const Rig = struct {
     ecs: Stubs.Ecs,
     rt: Stubs.Runtime,
     world: Stubs.World,
+    target: Stubs.Target,
     shaders: std.testing.TmpDir,
     shader_dir: [std.fs.max_path_bytes]u8,
 
@@ -416,6 +418,7 @@ const Rig = struct {
         self.ecs.init();
         self.rt.init();
         self.world.init();
+        self.target.init();
         self.shaders = std.testing.tmpDir(.{});
         errdefer self.shaders.cleanup();
         for (authored_shaders) |name| {
@@ -431,7 +434,7 @@ const Rig = struct {
 
     fn create(self: *Rig) c.ke_render_module_handle {
         const dir: [*:0]const u8 = @ptrCast(&self.shader_dir);
-        return ke_render_module_create(self.rt.api(), self.ecs.api(), self.dev.api(), self.world.api(), 1, null, null, null, null, null, null, dir, null);
+        return ke_render_module_create(self.rt.api(), self.ecs.api(), self.dev.api(), self.target.api(), self.world.api(), 1, null, null, null, null, null, null, dir, null);
     }
 };
 
@@ -520,8 +523,8 @@ test "a render module without a runtime, an ecs or a device is refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    try testing.expect(ke_render_module_create(null, rig.ecs.api(), rig.dev.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
-    try testing.expect(ke_render_module_create(rig.rt.api(), null, rig.dev.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
-    try testing.expect(ke_render_module_create(rig.rt.api(), rig.ecs.api(), null, null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(null, rig.ecs.api(), rig.dev.api(), rig.target.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(rig.rt.api(), null, rig.dev.api(), rig.target.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(rig.rt.api(), rig.ecs.api(), null, rig.target.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
     try heap.expectNoLeaks();
 }

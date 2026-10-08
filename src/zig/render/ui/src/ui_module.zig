@@ -387,7 +387,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.depth_stencil.depth_test_enabled = 0;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    pp.color_target_formats[0] = 0;
+    pp.color_target_formats[0] = core.*.backbuffer_format.?(core);
     pp.color_target_count = 1;
 
     ui.pipeline_params = pp;
