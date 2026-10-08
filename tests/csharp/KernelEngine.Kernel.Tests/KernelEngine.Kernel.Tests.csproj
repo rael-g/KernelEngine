@@ -41,5 +41,11 @@
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <Import Project="../../../src/csharp/NativeDependencies.targets" />
+
+  <ItemGroup>
+    <AssemblyMetadata Include="NativePrefix" Value="$([MSBuild]::MakeRelative('$(RepoRoot)', '$(NativePrefix)'))" />
+  </ItemGroup>
+
 </Project>
 
