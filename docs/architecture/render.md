@@ -56,6 +56,16 @@ the name it was declared under, so a frame capture reads in the service's own vo
 flushes the queued buffer uploads, finishes every recorded slot, submits them in one call and
 presents (`render_service.h:99-100`; `frame_lifecycle.zig:29-90`).
 
+Because a frame is exactly one `acquire` and one `present` of the render target, a target can wrap
+another one and act on those two edges. `ke_gpu_render_target_renderdoc`
+(`src/zig/render/renderdoc_target/`) does that to capture frames: on the frames its params choose it
+tells RenderDoc to start capturing before the inner `acquire` and to stop after the inner `present`, and
+it discards the capture when the inner target had nothing to draw into. It attaches to a RenderDoc that
+is already loaded into the process and is refused with `KE_ERROR_NOT_FOUND` otherwise, because RenderDoc
+has to be present before the device creates its graphics API instance; launching the program through
+`renderdoccmd capture` is what loads it. Names appear in the capture only when the device was created
+with `debug_labels` ([gpu-device.md](gpu-device.md#labels)).
+
 ## Two orders, which are not the same order
 
 **Execution order** is the runtime's: systems are placed into waves greedily **in registration
