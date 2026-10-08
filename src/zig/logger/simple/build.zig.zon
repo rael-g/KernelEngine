@@ -1,0 +1,8 @@
+.{
+    .name = .ke_logger_simple,
+    .version = "0.1.0",
+    .fingerprint = 0x56f932fba438da56,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

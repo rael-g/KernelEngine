@@ -1,0 +1,8 @@
+.{
+    .name = .ke_ecs_flecs,
+    .version = "0.1.0",
+    .fingerprint = 0x8d03218e6a52fdca,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

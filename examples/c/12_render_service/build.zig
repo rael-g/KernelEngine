@@ -41,6 +41,8 @@ pub fn build(b: *std.Build) void {
     }
 
     const exe = b.addExecutable(.{ .name = "demo", .root_module = mod });
+    gen.expectExitCode(0);
+    gen.has_side_effects = true;
     exe.step.dependOn(&gen.step);
 
     const install = b.addInstallArtifact(exe, .{

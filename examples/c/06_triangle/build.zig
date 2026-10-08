@@ -55,7 +55,11 @@ pub fn build(b: *std.Build) void {
     if (link_m) mod.linkSystemLibrary("m", .{});
 
     const exe = b.addExecutable(.{ .name = "demo", .root_module = mod });
+    gen_vert.expectExitCode(0);
+    gen_vert.has_side_effects = true;
     exe.step.dependOn(&gen_vert.step);
+    gen_frag.expectExitCode(0);
+    gen_frag.has_side_effects = true;
     exe.step.dependOn(&gen_frag.step);
 
     const install = b.addInstallArtifact(exe, .{

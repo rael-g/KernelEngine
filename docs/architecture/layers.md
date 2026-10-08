@@ -10,7 +10,7 @@ what it says about itself.
 | 3 — bindings | `src/csharp/<domain>/*/Native/Generated/` | P/Invoke surface generated from layers 1 and 2 |
 | 4 — managed | `src/csharp/<domain>/KernelEngine.*/` | wrappers, framework, game code |
 
-The list of domains is `ls src/c`. The list of plugins is `grep 'ctx.plugin("' build.zig`; a
+The list of domains is `ls src/c`. The list of plugins is `grep 'ctx.member("' build.zig`; a
 plugin not declared there is not built.
 
 ## Layer 1 — a contract is a struct of function pointers

@@ -11,7 +11,7 @@ A matrix of `ubuntu-latest` and `windows-latest`. Two targets are what keeps "ba
 that both still pass. `fail-fast` is off, so one platform's failure does not stop the other, and
 which of them broke is most of the diagnosis. Every step uses `bash` on both, so each command is
 written once and a path or binary name never differs by runner. The Windows leg builds the
-`x64-windows-zig` triplet and `-Dtarget=x86_64-windows-gnu` sub-builds that
+`x64-windows-zig` triplet for the `x86_64-windows-gnu` target that
 `docs/conventions/build.md` describes.
 
 ## What it runs, in order

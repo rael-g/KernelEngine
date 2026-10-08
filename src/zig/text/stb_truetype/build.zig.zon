@@ -1,0 +1,8 @@
+.{
+    .name = .ke_text_stb_truetype,
+    .version = "0.1.0",
+    .fingerprint = 0xf42084ef3f811492,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

@@ -1,0 +1,8 @@
+.{
+    .name = .ke_asset_stb_image,
+    .version = "0.1.0",
+    .fingerprint = 0x63c5eb0a430a9658,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}
