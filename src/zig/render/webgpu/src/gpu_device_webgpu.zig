@@ -1,15 +1,20 @@
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
+
+comptime {
+    _ = @import("window_target.zig");
+}
 const builtin = @import("builtin");
-const wgpu = @cImport({
+pub const wgpu = @cImport({
     @cInclude("webgpu/webgpu.h");
     @cInclude("webgpu/wgpu.h");
 });
-const ke = @cImport({
+pub const ke = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/render/gpu/gpu_device.h");
     @cInclude("kernel_engine/render/gpu/gpu_commands.h");
+    @cInclude("kernel_engine/render/gpu/gpu_render_target.h");
     @cInclude("kernel_engine/window/window.h");
     @cInclude("kernel_engine/scheduler/scheduler.h");
 });
@@ -29,7 +34,7 @@ const GpuError = error{
     NotImplemented,
 };
 
-const DeviceState = struct {
+pub const DeviceState = struct {
     instance:                wgpu.WGPUInstance,
     adapter:                 wgpu.WGPUAdapter,
     device:                  wgpu.WGPUDevice,
@@ -52,7 +57,7 @@ fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
     return @ptrCast(dev);
 }
 
-fn state(dev: [*c]ke.ke_gpu_device) *DeviceState {
+pub fn state(dev: [*c]ke.ke_gpu_device) *DeviceState {
     return @ptrCast(@alignCast(ptr(dev).handle));
 }
 
@@ -242,9 +247,9 @@ fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
 }
 
 const heap = @import("heap");
-const gpa = heap.gpa;
+pub const gpa = heap.gpa;
 
-fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) GpuError!wgpu.WGPUSurface {
+pub fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) GpuError!wgpu.WGPUSurface {
     const native = window.get_native_handle.?(window) orelse return GpuError.SurfaceCreationFailed;
 
     const desc: wgpu.WGPUSurfaceDescriptor = switch (builtin.os.tag) {
@@ -418,7 +423,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
     return dev;
 }
 
-export fn ke_gpu_device_webgpu_create(
+pub export fn ke_gpu_device_webgpu_create(
     params: ?*const Params,
     out_error: ?*?*ke.ke_error,
 ) ke.ke_gpu_device_handle {
@@ -485,7 +490,7 @@ fn deviceCallback(
     out.* = device;
 }
 
-fn getDefaultQueue(dev: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_queue {
+pub fn getDefaultQueue(dev: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_queue {
     return @intFromPtr(state(dev).queue);
 }
 

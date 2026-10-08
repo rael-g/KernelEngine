@@ -6,6 +6,7 @@
 struct ke_window;
 struct ke_scheduler;
 
+#ifndef KE_GPU_WEBGPU_API
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_GPU_WEBGPU_EXPORT
         #define KE_GPU_WEBGPU_API __declspec(dllexport)
@@ -16,6 +17,7 @@ struct ke_scheduler;
     #endif
 #else
     #define KE_GPU_WEBGPU_API __attribute__((visibility("default")))
+#endif
 #endif
 
 #ifdef __cplusplus
