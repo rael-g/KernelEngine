@@ -64,8 +64,9 @@ tags
 TAGS
 cscope.*
 
-# Agent tooling: session scratch, never part of the project
-.claude/
+# Agent tooling: session scratch is not part of the project, the skills are
+.claude/*
+!.claude/skills/
 .aider*
 
 # Planning, logs, tasks and TODOs are not versioned — see docs/conventions/docs.md

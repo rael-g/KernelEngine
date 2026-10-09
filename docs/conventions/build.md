@@ -132,6 +132,11 @@ and per type. Every `build.zig` and every `third_party` directory is left out, a
 `src/csharp` and `src/shaders` from the first. The steps come from `docir`, a dependency of the
 root `build.zig.zon` whose `build.zig` the root imports (`build.zig:3`).
 
+The same program is installed as `<--prefix>/bin/docir` by the default build and by `zig build
+docs`. `docir query <name> src` answers from the sources directly, with no document made first.
+`.claude/skills/docir/SKILL.md` is the skill that teaches a coding agent to use it, as the pinned
+release of docir publishes it.
+
 ## Shaders
 
 Each shader is compiled to WGSL by running `dotnet run scripts/compile_slang.cs` with the fetched

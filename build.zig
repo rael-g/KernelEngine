@@ -121,6 +121,9 @@ pub fn build(b: *std.Build) void {
     };
 
     const docir_exe = b.dependency("docir", .{ .target = b.graph.host, .optimize = .ReleaseSafe }).artifact("docir");
+    const docir_install = b.addInstallArtifact(docir_exe, .{});
+    b.getInstallStep().dependOn(&docir_install.step);
+    ctx.docs_step.dependOn(&docir_install.step);
     ctx.docs_step.dependOn(docir.addSourceDocs(b, docir_exe, b.path("src"), .{
         .name = "engine",
         .title = "KernelEngine",

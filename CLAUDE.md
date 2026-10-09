@@ -19,7 +19,10 @@ zig build --prefix build/native --cache-dir build/zig-cache --global-cache-dir b
 zig build test --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global  # every plugin's own Zig tests
 zig build docs --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global  # build/native/docs/{engine,kabic}/, pages generated from the sources
 build/native/bin/c_demo_01                                        # run a C example (c_demo_01.exe on Windows)
+build/native/bin/docir query <name> src                           # what the sources document about a symbol, a file or an idea
 ```
+
+`docir` is installed by the build beside the examples, at the version pinned in `build.zig.zon`. It answers from the doc comments of the sources each time it is asked, so nothing has to be generated first; `.claude/skills/docir/SKILL.md` says how to ask.
 
 `--cache-dir` and `--global-cache-dir` are not optional housekeeping: one process compiles every plugin, and without them it caches into `.zig-cache` at the root and into the user's home. The root build gives `vcpkg install` the same cache through `ZIG_LOCAL_CACHE_DIR` for the same reason — vcpkg's CMake runs `zig cc` from the repo root, and `zig cc` caches into `$PWD/.zig-cache` unless told otherwise.
 
@@ -210,6 +213,7 @@ Where to look when this file is not enough:
 | question | where the answer actually is |
 |---|---|
 | what does a contract require? | the header in `src/c/<domain>/` — it is the API, not a description of one |
+| what is this symbol or file for, and where is an idea explained? | `build/native/bin/docir query <name> src`, then the code at the location it gives |
 | how does sim hand off to render? | `src/zig/runtime/src/runtime.zig` |
 | which plugins exist? | `grep 'ctx.member("' build.zig` |
 | what does a generated projection look like, and why? | `src/csharp/kabic/`, plus the `scripts/check_*.cs` gate that pins it |
