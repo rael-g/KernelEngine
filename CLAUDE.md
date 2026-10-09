@@ -145,8 +145,8 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ### Comments
 - No comments in any file: source, scripts, workflows, shaders, build files. The code and its names carry the meaning.
-- The one exception is API documentation on a public declaration (`///` and `<summary>` in C#, Doxygen in C and Zig headers). It states the contract: what a caller passes, what it gets back, what fails.
-- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. Rationale belongs in the commit message; a mechanism belongs in `docs/`.
+- The exception is documentation the build generates pages from, and it has two forms. A doc comment on a declaration (`///` in Zig, `///` and `<summary>` in C#, Doxygen in C headers) states what a caller relies on: what it passes, what it gets back, what fails. In a contract it is required on every public declaration. In an implementation file it goes on a function or a type, private ones included, and states the part that declaration plays in the mechanism, never a retelling of its body; a declaration with nothing to say beyond what its body shows carries none, and neither does a field, an enum value or a test helper. A file doc comment at the top of an implementation file (`//!` in Zig, `@file` in C) is the synthesis of the file: a new text, written from an understanding of the whole file and after the doc comments of its declarations, from which a reader learns how the file works; it is a fraction of what it covers, and never longer than the doc comments below it. C# has no file doc comment, so there the synthesis is the `<remarks>` of a type declaration in implementation code, and nowhere else.
+- Rationale, history, a consumer's or example's name, `<remarks>` on a member, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. Rationale belongs in the commit message. The rules a file doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
 
 ### C (contracts) and Zig (implementations)
 - **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
@@ -158,7 +158,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
 
 ### C#
-- XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments).
+- XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments). A type that does work may add a `<remarks>` stating how it works.
 - Generated bindings in `Generated/` — never edit manually.
 - `InternalsVisibleTo` is **banned**. A native handle crosses assemblies through the public `Native` pointer of a generated `INative<Domain>` interface, implemented explicitly so the object itself exposes only managed methods — never through `internal` plus a friend list.
 
