@@ -83,8 +83,8 @@ public abstract class Node
     /// a hand-written subclass overrides this the same way it overrides
     /// <see cref="OnUpdate"/> itself; a generated subclass gets the override
     /// emitted by <c>NodePropertyGenerator</c> when it detects the user's own
-    /// partial declares <c>OnUpdate</c>. Base is false so a node with no
-    /// override never enters <see cref="Framework.ScriptHost.Behaviors"/>.
+    /// partial declares <c>OnUpdate</c>. Base is false so a node type with no
+    /// override is never announced as a behavior and gets no per-frame system.
     /// </summary>
     protected internal virtual bool HasBehavior => false;
 
@@ -118,7 +118,7 @@ public abstract class Node
 
     /// <summary>
     /// Creates <paramref name="child"/> as this node's child, under
-    /// <paramref name="name"/>. The name is what a <see cref="Child{T}"/> borrow
+    /// <paramref name="name"/>. The name is what a <see cref="Borrow{T}"/> call
     /// resolves against, so two children of the same type are told apart by it.
     /// </summary>
     /// <returns>

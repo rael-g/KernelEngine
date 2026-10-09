@@ -4,9 +4,7 @@ using System.Runtime.CompilerServices;
 namespace KernelEngine.Input;
 
 /// <summary>
-/// One discrete action event, emitted by the action-layer dispatcher and propagated through the
-/// node tree (<see cref="OnInputAction"/>-style handlers) in the same frame the underlying input
-/// occurred.
+/// One discrete action event, handed by reference to an <see cref="InputActionHandler"/>.
 /// </summary>
 public struct InputActionEvent
 {
