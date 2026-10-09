@@ -1,7 +1,7 @@
 
 using System.Text.RegularExpressions;
 
-namespace Kabic.Frontend;
+namespace Kabic.Reader;
 
 /// <summary>
 /// Reads the parameter names of a function-pointer field from the bytes of its header.

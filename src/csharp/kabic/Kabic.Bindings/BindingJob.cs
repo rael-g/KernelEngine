@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Kabic.ClangSharpBackend;
+namespace Kabic.Bindings;
 
 /// <summary>
 /// Everything ClangSharp is told to generate one binding assembly's raw surface. Paths are relative

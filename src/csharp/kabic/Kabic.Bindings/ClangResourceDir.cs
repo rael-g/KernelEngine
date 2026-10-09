@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Kabic.ClangSharpBackend;
+namespace Kabic.Bindings;
 
 /// <summary>
 /// Provides the clang resource-directory headers that ClangSharp is run with, fetching them once

@@ -425,7 +425,7 @@
       ]
     },
     {
-      "_comment": "node3d.h: transform.h is [node:]-tagged (whole-struct mode — see CSharpBackend's [whole:] tag) to generate Node3D itself into Framework, not a domain-specific project, since every other assembly's node types (Render.Webgpu, Physics, Audio) inherit it.",
+      "_comment": "node3d.h: transform.h is [node:]-tagged (whole-struct mode — see CSharpWriter's [whole:] tag) to generate Node3D itself into Framework, not a domain-specific project, since every other assembly's node types (Render.Webgpu, Physics, Audio) inherit it.",
       "name": "spatial",
       "headers": [
         "src/c/spatial/kernel_engine/spatial/transform.h"

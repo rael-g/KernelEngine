@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Kabic.Conventions;
 
 namespace Kabic.Cli.Checks;
 
@@ -59,7 +60,7 @@ internal static class ApiCoverageCheck
                     describedByKabic.Add(Norm(h!.GetValue<string>()));
 
         var describedByClangSharp = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var job in Kabic.ClangSharpBackend.BindingsPlanner.Plan(rootDir, options.Manifest))
+        foreach (var job in Kabic.Bindings.BindingsPlanner.Plan(rootDir, options.Manifest))
             foreach (var header in job.Traverse)
                 describedByClangSharp.Add(Norm(Path.GetFullPath(Path.Combine(job.NativeDir, header))));
 

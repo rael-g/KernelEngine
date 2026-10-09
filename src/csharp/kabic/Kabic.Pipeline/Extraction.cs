@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Kabic.Frontend;
+using Kabic.Reader;
 
 namespace Kabic.Pipeline;
 

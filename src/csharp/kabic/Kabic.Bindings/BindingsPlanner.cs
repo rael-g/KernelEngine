@@ -1,8 +1,9 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Kabic.Conventions;
 
-namespace Kabic.ClangSharpBackend;
+namespace Kabic.Bindings;
 
 /// <summary>
 /// Derives, from the <c>bindings</c> array of the manifest and the headers it names, the ClangSharp

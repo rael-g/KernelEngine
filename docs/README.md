@@ -12,7 +12,6 @@ is in the code, and `CLAUDE.md`'s closing table says where to start looking.
 - [What is the framework made of, and what does each piece depend on?](architecture/framework.md)
 - [What does the GPU device contract promise, and what does the WebGPU backend do with it?](architecture/gpu-device.md)
 - [How does a key press reach a system body, and when is its edge visible?](architecture/input.md)
-- [How does kabic turn a C header into C#, Zig and C, and what stops it going wrong?](architecture/kabic.md)
 - [How is the engine divided into layers, and where does each kind of file live?](architecture/layers.md)
 - [How do lights, shadows and image-based light reach a shading pass?](architecture/lighting.md)
 - [How does a log event reach a sink?](architecture/logging.md)

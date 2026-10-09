@@ -71,7 +71,7 @@ later. The generated wrapper turns it into a C function pointer and a context po
 Which slots become trampolines, and how, is declared by tags in the header, not chosen by the
 generator: `[closure:user_data]` names the context lane, `[retained:return]` says the handler outlives
 the call, `[teardown]` marks a hook with no error lane (`src/c/runtime/kernel_engine/runtime/runtime.h:75-80`;
-`CSharpBackend.cs:1476-1612`).
+`CSharpWriter.cs`).
 
 ### What a handler's exception does
 

@@ -1,7 +1,7 @@
 
 using System.Text.Json.Nodes;
 
-namespace Kabic.Frontend;
+namespace Kabic.Reader;
 
 /// <summary>
 /// Writes the declarations of an <c>ApiModel</c> and of its parts as JSON objects under fixed key

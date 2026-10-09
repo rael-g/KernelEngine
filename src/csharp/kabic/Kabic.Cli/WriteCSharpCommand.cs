@@ -1,4 +1,5 @@
 using Kabic.Pipeline;
+using Kabic.Conventions;
 
 namespace Kabic.Cli;
 
@@ -14,7 +15,7 @@ namespace Kabic.Cli;
 /// writes the projection, and an <c>InvalidOperationException</c> it throws is written to the
 /// error stream with the command returning one.
 /// </remarks>
-internal static class CSharpCommand
+internal static class WriteCSharpCommand
 {
     /// <summary>
     /// Runs the command over the arguments and returns zero when the projection was written, or
@@ -47,7 +48,7 @@ internal static class CSharpCommand
 
         if (apiPath is null || ns is null || nativeNs is null || outDir is null)
         {
-            Console.Error.WriteLine("usage: kabic csharp --api <ke_api.json> "
+            Console.Error.WriteLine("usage: kabic write csharp --api <ke_api.json> "
                 + "--namespace <NS> --native-namespace <NS.Native> --out <dir> "
                 + "[--contract-out <dir>] [--provider <vtable>]... [--callback <vtable>]... [--using <NS>]..."
                 + " [--library <so-name>] [--domain <name>] [--manifest <api_domains.json>]");

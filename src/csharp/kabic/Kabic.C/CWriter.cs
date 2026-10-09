@@ -1,7 +1,7 @@
 namespace Kabic.C;
 
 /// <summary>
-/// kabic's C backend: renders a domain's component structs as field tables, so the runtime can
+/// kabic's C writer: renders a domain's component structs as field tables, so the runtime can
 /// apply a scene file to component memory by reading a description instead of running a callback
 /// somebody wrote by hand for that one component. The table's entry type and the spelling of each
 /// kind of field come from the convention.
@@ -17,7 +17,7 @@ namespace Kabic.C;
 /// <c>DefaultOf</c> renders. It then closes the guard and normalizes the line endings to LF.
 /// It throws an <c>InvalidOperationException</c> when the convention declares no field table.
 /// </remarks>
-public static class CBackend
+public static class CWriter
 {
     /// <summary>
     /// Renders the field tables for every non-vtable, non-composed struct in

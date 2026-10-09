@@ -2,6 +2,7 @@ using Kabic.Pipeline;
 using System.Text.Json.Nodes;
 using Kabic;
 using Kabic.Zig;
+using Kabic.Conventions;
 
 namespace Kabic.Cli;
 
@@ -18,7 +19,7 @@ namespace Kabic.Cli;
 /// classified against the providers and rendered with that table and the error ABI. The text is
 /// written to a file named after the domain in the output directory.
 /// </remarks>
-internal static class ZigCommand
+internal static class WriteZigCommand
 {
     /// <summary>
     /// Writes the Zig projection of the named domain and returns zero. Returns one when a
@@ -42,7 +43,7 @@ internal static class ZigCommand
 
         if (domainsPath is null || domain is null || outDir is null)
         {
-            Console.Error.WriteLine("usage: kabic zig --domains <api_domains.json> "
+            Console.Error.WriteLine("usage: kabic write zig --domains <api_domains.json> "
                 + "--domain <name> --out-dir <dir> [--provider <ke_vtable>]...");
             return 1;
         }
@@ -78,7 +79,7 @@ internal static class ZigCommand
         var model = ReadModel(domains.First(d => d.Name == domain).Api);
         var convention = ConventionLoader.Load(domainsPath);
         var classified = Classifier.Classify(model, providers.ToHashSet(), [], convention);
-        var text = ZigBackend.Render(model, classified, convention, foreign,
+        var text = ZigWriter.Render(model, classified, convention, foreign,
             Regeneration.ExtractErrorAbi(convention, root, null));
 
         Directory.CreateDirectory(outDir);

@@ -6,8 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Kabic.Core/Kabic.Core.csproj" />
-    <ProjectReference Include="../Kabic.Frontend/Kabic.Frontend.csproj" />
-    <ProjectReference Include="../Kabic.CSharpBackend/Kabic.CSharpBackend.csproj" />
-    <ProjectReference Include="../Kabic.CBackend/Kabic.CBackend.csproj" />
+    <ProjectReference Include="../Kabic.Reader/Kabic.Reader.csproj" />
+    <ProjectReference Include="../Kabic.CSharp/Kabic.CSharp.csproj" />
+    <ProjectReference Include="../Kabic.C/Kabic.C.csproj" />
   </ItemGroup>
 </Project>

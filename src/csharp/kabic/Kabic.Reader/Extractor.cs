@@ -2,7 +2,7 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace Kabic.Frontend;
+namespace Kabic.Reader;
 
 /// <summary>
 /// Turns the AST of a translation unit into the declarations of an <c>ApiModel</c>, keeping only

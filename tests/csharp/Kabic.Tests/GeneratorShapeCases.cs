@@ -668,19 +668,19 @@ internal static class GeneratorShapeCases
                 var convention = ProbeConvention.Value;
                 var classified = Classifier.Classify(model, [], [], convention);
                 var provider = classified.Providers.Single();
-                var source = CSharpBackend.RenderProvider(model, provider, classified, "Probe", "Probe.Native", [], convention);
+                var source = CSharpWriter.RenderProvider(model, provider, classified, "Probe", "Probe.Native", [], convention);
                 emitted = source.Class + (source.Contract ?? "");
             }
             catch (Exception ex)
             {
-                if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
                 else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
                     failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
                 return;
             }
             if (throws is not null)
             {
-                failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
                 return;
             }
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
@@ -705,7 +705,7 @@ internal static class GeneratorShapeCases
             model.Structs.Add(component);
             foreach (var other in alongside ?? []) model.Structs.Add(other);
 
-            var emitted = CSharpBackend.RenderNodeType(model, component, "Probe", [], ProbeConvention.Value);
+            var emitted = CSharpWriter.RenderNodeType(model, component, "Probe", [], ProbeConvention.Value);
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
             foreach (var needle in contains)
@@ -731,18 +731,18 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderStruct(model, s, "Probe", [], ProbeConvention.Value);
+                emitted = CSharpWriter.RenderStruct(model, s, "Probe", [], ProbeConvention.Value);
             }
             catch (Exception ex)
             {
-                if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
                 else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
                     failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
                 return;
             }
             if (throws is not null)
             {
-                failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
                 return;
             }
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
@@ -787,12 +787,12 @@ internal static class GeneratorShapeCases
                 var convention = ProbeConvention.Value;
                 var classified = Classifier.Classify(model, [], [], convention);
                 var (owner, group) = classified.FreeFunctionGroups.Single();
-                emitted = CSharpBackend.RenderFreeFunctions(model, owner, group, "Probe", "Probe.Native",
+                emitted = CSharpWriter.RenderFreeFunctions(model, owner, group, "Probe", "Probe.Native",
                     [], "ke_probe", convention);
             }
             catch (Exception ex)
             {
-                failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+                failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
                 return;
             }
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
@@ -864,18 +864,18 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderStructSpans(model, s, "Probe.Native", ProbeConvention.Value);
+                emitted = CSharpWriter.RenderStructSpans(model, s, "Probe.Native", ProbeConvention.Value);
             }
             catch (Exception ex)
             {
-                if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
                 else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
                     failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
                 return;
             }
             if (throws is not null)
             {
-                failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
                 return;
             }
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
@@ -903,19 +903,19 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderView(model, s, "Probe", ["Probe.Common"],
+                emitted = CSharpWriter.RenderView(model, s, "Probe", ["Probe.Common"],
                     ProbeConvention.Value);
             }
             catch (Exception ex)
             {
-                if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
                 else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
                     failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
                 return;
             }
             if (throws is not null)
             {
-                failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
                 return;
             }
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
@@ -948,18 +948,18 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderBorrowed(model, s, "Probe", [], ProbeConvention.Value);
+                emitted = CSharpWriter.RenderBorrowed(model, s, "Probe", [], ProbeConvention.Value);
             }
             catch (Exception ex)
             {
-                if (throws is null) failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
                 else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
                     failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
                 return;
             }
             if (throws is not null)
             {
-                failures.Add($"{what}: expected the backend to refuse, it emitted instead");
+                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
                 return;
             }
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
@@ -999,11 +999,11 @@ internal static class GeneratorShapeCases
             string emitted;
             try
             {
-                emitted = CSharpBackend.RenderBorrowWrappers(kinds, "Probe", ProbeConvention.Value);
+                emitted = CSharpWriter.RenderBorrowWrappers(kinds, "Probe", ProbeConvention.Value);
             }
             catch (Exception ex)
             {
-                failures.Add($"{what}: the backend threw {ex.GetType().Name}: {ex.Message}");
+                failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
                 return;
             }
             if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);

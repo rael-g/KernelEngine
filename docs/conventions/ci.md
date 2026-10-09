@@ -23,7 +23,7 @@ written once and a path or binary name never differs by runner. The Windows leg 
 | Zig | `mlugg/setup-zig@v2`, version `0.16.0` | both |
 | .NET | `actions/setup-dotnet@v4`, `10.0.x` | both |
 | vcpkg cache | restores `build/tools` and `build/vcpkg-installed`, keyed on `vcpkg.json`, `vcpkg-configuration.json` and `vcpkg-triplets/**` | both |
-| clang headers cache | `build/cache`, keyed on `Kabic.ClangSharpBackend/ClangResourceDir.cs` | Linux |
+| clang headers cache | `build/cache`, keyed on `Kabic.Bindings/ClangResourceDir.cs` | Linux |
 | NuGet cache | `~/.nuget/packages`, keyed on every `.csproj`, with the OS prefix as fallback | both |
 | native build | `dotnet run scripts/verify.cs -- build` | both |
 | save vcpkg | saves the vcpkg cache after the build, even when the build failed, unless the restore was a hit | both |
@@ -50,8 +50,8 @@ It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 The nine gates are the `kabic check` commands `drift`, `bindings`, `api-coverage`, `reconstruction` and `out-params`,
 and the engine's scripts `check_abi_layout`, `check_component_fields`, `check_generator_contract` and `check_managed_handwritten`. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
-What each one fails on is in
-`docs/architecture/kabic.md`. They are Linux-only: they compare generated text against headers and
+What each one fails on is stated by the check itself, in `src/csharp/kabic/Kabic.Cli/` and in the
+scripts. They are Linux-only: they compare generated text against headers and
 read no compiler or linker output, so the answer cannot differ by runner.
 
 ## What `visual` checks
@@ -90,5 +90,5 @@ body. It runs after the push, so it reports a violation and does not prevent one
 - **Coverage.** `scripts/coverage.cs` is not called.
 - **Artifacts.** The libraries it builds are discarded with the runner; the only upload is the images of
   a failed `visual`.
-- **Zig generation.** Nothing calls `kabic zig`; the Zig shape tests of `Kabic.Tests` exercise the Zig
+- **Zig generation.** Nothing calls `kabic write zig`; the Zig shape tests of `Kabic.Tests` exercise the Zig
   backend on synthetic shapes only.

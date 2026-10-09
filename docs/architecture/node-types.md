@@ -9,16 +9,16 @@ it at bind time. There are two ways to declare one, and both end in the same Ros
 
 A component struct whose doc carries `[node:Name]` becomes a class `Name`
 (`src/c/render/kernel_engine/render/components.h:14`, `[node:Camera,base:Node3D,value]`). kabic
-emits it (`CSharpBackend.RenderNodeType`, `src/csharp/kabic/Kabic.CSharpBackend/CSharpBackend.cs:432`,
+emits it (`CSharpWriter.RenderNodeType`, `src/csharp/kabic/Kabic.CSharp/CSharpWriter.cs:432`,
 driven from `Kabic.Pipeline/Generation.cs:90-106`). What it writes:
 
 - `[GeneratedNodeComponent(typeof(<state>), "<component name>")]` on a `public partial class`
-  (`CSharpBackend.cs:447-448`; the attribute is `Scene/GeneratedNodeComponentAttribute.cs:17`). The
+  (`CSharpWriter.cs:447-448`; the attribute is `Scene/GeneratedNodeComponentAttribute.cs:17`). The
   component name is the struct name without the `ke_` prefix and the `_component` suffix
   (`Convention.ComponentNameFor`, `src/csharp/kabic/Kabic.Core/Convention.cs:46`,
   `Convention.KernelEngine` at `:126-131`): `ke_camera_component` is `"camera"`.
 - A constructor that seeds the state with the projection's `Default` when any field declares
-  `[default:]` (`CSharpBackend.cs:452-457`, `ComponentInit` at `:521-526`).
+  `[default:]` (`CSharpWriter.cs:452-457`, `ComponentInit` at `:521-526`).
 - One `public partial` property per field, each tagged `[NativeField("<Field>", Component = typeof(<state>))]`
   (`ComponentSurface`, `:532-546`). Fields tagged `[idiom]` get no property. It writes no accessor body.
 - `base:Other` becomes the C# base class `Other`, and `Other` must itself be tagged `[node:]` in the domain's model, compose headers

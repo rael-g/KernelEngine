@@ -4,7 +4,7 @@ using Kabic;
 using System.Text;
 
 /// <summary>
-/// kabic's Zig backend: renders a domain as a Zig module — the ABI declared in Zig
+/// kabic's Zig writer: renders a domain as a Zig module — the ABI declared in Zig
 /// rather than imported from the header, and a projection over it whose signatures
 /// are Zig's own (error unions, optionals, slices, sentinel-terminated strings).
 /// </summary>
@@ -55,7 +55,7 @@ using System.Text;
 /// holds.
 ///
 /// A parameter bag is one struct a slot takes by pointer. <c>Bag</c> splits its fields: closures
-/// and their states, and the count beside each span, are filled by the backend, and the rest
+/// and their states, and the count beside each span, are filled by the writer, and the rest
 /// are the caller's. <c>RenderBag</c> writes the caller's struct at the top level with each
 /// field's stated default, and <c>BagLines</c> builds the ABI struct from the caller's value,
 /// filling the trampolines, the states, the counts, and the data pointers of the string and
@@ -72,7 +72,7 @@ using System.Text;
 /// never reach the same name. <c>LocalNames</c> is the set of names this module puts in scope
 /// around a call, computed once.
 /// </remarks>
-public sealed class ZigBackend
+public sealed class ZigWriter
 {
     readonly ApiModel model;
     readonly ClassifiedModel classified;
@@ -93,7 +93,7 @@ public sealed class ZigBackend
     /// </summary>
     readonly IReadOnlyList<(string Kind, string Singleton)> errorKinds;
 
-    ZigBackend(ApiModel model, ClassifiedModel classified, Convention convention,
+    ZigWriter(ApiModel model, ClassifiedModel classified, Convention convention,
         IReadOnlyDictionary<string, ForeignType> foreign, ApiModel errorAbi)
     {
         this.errorAbi = errorAbi;
@@ -117,7 +117,7 @@ public sealed class ZigBackend
     /// </summary>
     public static string Render(ApiModel model, ClassifiedModel classified, Convention convention,
         IReadOnlyDictionary<string, ForeignType>? foreign, ApiModel errorAbi) =>
-        new ZigBackend(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>(), errorAbi)
+        new ZigWriter(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>(), errorAbi)
             .Render();
 
     string Render()
@@ -449,7 +449,7 @@ public sealed class ZigBackend
     /// The vtables this domain projects only because a call lends one out. A vtable with
     /// neither an owner wrapper nor a factory is not a provider a caller can hold, so
     /// nothing else would project it -- and without a projection the object the engine
-    /// lends would reach the caller as the raw pointer the whole backend exists to avoid.
+    /// lends would reach the caller as the raw pointer the whole writer exists to avoid.
     /// </summary>
     IEnumerable<ApiStruct> Lent =>
         model.Structs.SelectMany(s => s.Slots).SelectMany(s => s.Params)
@@ -562,7 +562,7 @@ public sealed class ZigBackend
             || slot.Params.Any(p => (model.CallbackOf(p.Type) is not null || p.Has("callback"))
                 && !p.Has("closure") && !IsConsumer(p) && p != cs.ExpandedParam))
             throw new NotSupportedException(
-                $"{slot.Name}: this backend renders no raw callback and no opaque payload yet.");
+                $"{slot.Name}: this writer renders no raw callback and no opaque payload yet.");
 
         var bag = cs.ExpandedParam is null ? null : Bag(cs);
         if (bag is not null) bags[bag.TypeName] = bag;
@@ -832,7 +832,7 @@ public sealed class ZigBackend
         if (vtable.Slots.Any(s => convention.IsFallible(s.Returns, s.Params)
                 || s.Params.Any(l => ReportOf(l, convention) is not ReportKind.None)))
             throw new NotSupportedException(
-                $"{where}: a slot of {vtable.Name} reports failure, which this backend does not"
+                $"{where}: a slot of {vtable.Name} reports failure, which this writer does not"
                 + " project yet");
         return new ConsumerForm(p, vtable, state[0],
             vtable.Fields.Where(f => f != state[0]).ToList());
@@ -876,7 +876,7 @@ public sealed class ZigBackend
     /// The default a bag field carries when the caller leaves it out. The header states it
     /// per field, and Zig is the one target language that can say it where the field is
     /// declared rather than at every call -- so a field with no stated default is one the
-    /// caller must fill, which is the header's statement and not this backend's.
+    /// caller must fill, which is the header's statement and not this writer's.
     /// </summary>
     static string? FieldDefault(ApiParam p) => p.TagValue("default") switch
     {

@@ -97,7 +97,7 @@ exists because C `bool` is not blittable through P/Invoke (`types.h:11-12`).
 A `///` or `/** */` comment on a contract member may open with bracketed tags that state what the
 signature cannot: `[out]` on a parameter the callee writes (`window.h:34`), `[borrowed,nullable]` on
 a pointer the callee does not own and may receive as null (`glfw_window.h:25`). kabic reads them
-(`src/csharp/kabic/Kabic.Frontend/DocParser.cs:9`) and projects them into each target language; a
+(`src/csharp/kabic/Kabic.Reader/DocParser.cs:9`) and projects them into each target language; a
 tag that is not there is a fact no projection can recover.
 
 ## How a resource is named

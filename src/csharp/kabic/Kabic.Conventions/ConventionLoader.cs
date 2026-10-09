@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using Kabic.Numerics;
 
-namespace Kabic;
+namespace Kabic.Conventions;
 
 /// <summary>
 /// The packs kabic ships, by the name a manifest uses for them, and the loader that reads a manifest's

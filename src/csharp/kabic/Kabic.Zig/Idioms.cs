@@ -3,7 +3,7 @@ namespace Kabic.Zig;
 using Kabic;
 
 /// <summary>
-/// How an ABI symbol is spelled in Zig. Separate from the C# backend's namesake
+/// How an ABI symbol is spelled in Zig. Separate from the C# writer's namesake
 /// because the two languages disagree about every case it answers: Zig types are
 /// PascalCase, its functions are camelCase, its fields and constants are
 /// snake_case, and its reserved words are not C#'s.
@@ -68,7 +68,7 @@ public static class Idioms
     public static string Ident(string s) => Keywords.Contains(s) ? $"@\"{s}\"" : s;
 
     /// <summary>
-    /// The Zig type name for an ABI symbol. Unlike the C# backend this deliberately
+    /// The Zig type name for an ABI symbol. Unlike the C# writer this deliberately
     /// ignores <c>TypeNameOverrides</c>: every override in that table exists to
     /// resolve a collision with a C# namespace segment, and a Zig module has no
     /// namespace segments to collide with.

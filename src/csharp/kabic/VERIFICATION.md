@@ -30,7 +30,7 @@ time a domain is migrated or a header changes.
 - [ ] `[try]` is on any slot where a boolean return means found/not-found,
       not succeeded/failed.
 
-## 2. Extraction (`kabic extract`, or `kabic generate --domain <name>`)
+## 2. Extraction (`kabic read`, or `kabic generate --domain <name>`)
 
 - [ ] Run twice with the exact same arguments; diff the two `ke_api.json`
       outputs. They must be byte-identical. A diff here means a path-identity
@@ -122,7 +122,7 @@ that have occurred; a defect outside this list is still possible.
 
 ## 5. Regenerate everything, not just the domain that changed
 
-Any change to `Kabic.Core` or `Kabic.CSharpBackend` can affect every
+Any change to `Kabic.Core` or `Kabic.CSharp` can affect every
 previously migrated domain, not just the one being worked on.
 
 ```bash
@@ -159,7 +159,7 @@ Run in this order; do not skip any step because an earlier one passed:
 - A previous domain's generated file being byte-identical after a kabic
   change is evidence the change didn't affect THAT shape — it says nothing
   about a shape combination that domain never exercised.
-- The tag vocabulary (the tags `Kabic.Frontend` recognises) is not
+- The tag vocabulary (the tags `Kabic.Reader` recognises) is not
   closed. A new domain can need a new tag. If a slot's meaning cannot be
   expressed with the existing vocabulary, add a tag — do not force an
   existing tag to mean something it wasn't defined to mean.

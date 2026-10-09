@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/cache
-          key: clang-resource-dir-${{ hashFiles('src/csharp/kabic/Kabic.ClangSharpBackend/ClangResourceDir.cs') }}
+          key: clang-resource-dir-${{ hashFiles('src/csharp/kabic/Kabic.Bindings/ClangResourceDir.cs') }}
 
       - name: Restore Zig global cache
         id: zig-global-cache

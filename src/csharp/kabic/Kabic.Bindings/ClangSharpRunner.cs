@@ -4,7 +4,7 @@ using static ClangSharp.Interop.CXDiagnosticSeverity;
 using static ClangSharp.Interop.CXErrorCode;
 using static ClangSharp.Interop.CXTranslationUnit_Flags;
 
-namespace Kabic.ClangSharpBackend;
+namespace Kabic.Bindings;
 
 /// <summary>
 /// Runs the ClangSharp generator for one <c>BindingJob</c> and reports what it logged.

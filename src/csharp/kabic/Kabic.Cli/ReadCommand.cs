@@ -1,9 +1,10 @@
 using Kabic.Pipeline;
+using Kabic.Conventions;
 
 namespace Kabic.Cli;
 
 /// <summary>
-/// Implements the command that extracts an API description from C headers.
+/// Implements the read command, which reads an API description from C headers.
 /// </summary>
 /// <remarks>
 /// Run separates the arguments into the output path, the zig override, the manifest, include
@@ -14,7 +15,7 @@ namespace Kabic.Cli;
 /// to the error stream. On success the output directory is created, the JSON is written there,
 /// and the path is printed.
 /// </remarks>
-internal static class ExtractCommand
+internal static class ReadCommand
 {
     /// <summary>
     /// Extracts the API of the given headers into the output path and returns zero. Returns one
@@ -46,7 +47,7 @@ internal static class ExtractCommand
 
         if (outPath is null || headers.Count == 0)
         {
-            Console.Error.WriteLine("usage: kabic extract --out <path> [-I <dir>]... "
+            Console.Error.WriteLine("usage: kabic read --out <path> [-I <dir>]... "
                 + "[--aux <header.h>]... [--compose <header.h>]... <header.h>...");
             return 1;
         }

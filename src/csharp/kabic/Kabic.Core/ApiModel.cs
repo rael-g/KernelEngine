@@ -24,7 +24,7 @@ public record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, s
     /// <summary>
     /// The type of the parameter the slot hangs off, which is not always the struct that
     /// declares it: an owner wrapper's <c>destroy</c> takes the value the wrapper holds,
-    /// not the wrapper. A backend that declares the ABI itself instead of importing the
+    /// not the wrapper. A writer that declares the ABI itself instead of importing the
     /// header has no other source for it, and a declaration naming the wrong pointer type
     /// still compiles.
     /// </summary>
@@ -56,7 +56,7 @@ public record ApiEnum(string Name, string? Doc, IReadOnlyList<ApiEnumValue> Valu
     /// <summary>
     /// Whether this enum came from a header this domain composes against rather than
     /// describes (<c>--compose</c>). Present because a composed struct's field can be
-    /// typed by it and a backend must name that type; the owning domain still emits it.
+    /// typed by it and a writer must name that type; the owning domain still emits it.
     /// </summary>
     public bool External { get; init; }
 }
@@ -111,7 +111,7 @@ public record ApiFunction(string Name, string Returns, string? Doc, string? Retu
 /// A function-pointer typedef described lane by lane. Which lane carries the caller's
 /// opaque context, which carries a utf8 string, and which is an outbound error channel
 /// is a contract the typedef's own parameter documentation declares; the string
-/// spelling of the type carries none of it, and a backend that has to guess gets it
+/// spelling of the type carries none of it, and a writer that has to guess gets it
 /// wrong. Lanes keep the order the prototype declares, so an index identifies one.
 /// </summary>
 public record ApiCallback(string Name, string Returns, string? Doc, IReadOnlyList<ApiParam> Lanes);
@@ -146,7 +146,7 @@ public class ApiModel
 
     /// <summary>
     /// Typedefs that resolve to a plain C primitive (<c>ke_entity</c> -&gt; <c>uint64_t</c>),
-    /// which every backend must see through — a language with no typedef concept has
+    /// which every writer must see through — a language with no typedef concept has
     /// nothing to map <c>ke_entity</c> onto otherwise. Typedefs naming a struct or enum
     /// are absent: those are real types the description already carries.
     /// </summary>

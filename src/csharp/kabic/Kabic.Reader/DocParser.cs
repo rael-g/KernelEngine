@@ -2,7 +2,7 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace Kabic.Frontend;
+namespace Kabic.Reader;
 
 /// <summary>
 /// Reads the doc comment the AST carries for a declaration and splits it into the summary, the
