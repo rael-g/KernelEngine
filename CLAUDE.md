@@ -17,7 +17,7 @@ vcpkg itself is fetched automatically (`build/tools/vcpkg-<version>/`) — no ma
 ```bash
 zig build --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global       # configure + build + install, one step
 zig build test --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global  # every plugin's own Zig tests
-zig build docs --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global  # build/native/docs/<plugin>.md, generated from the sources
+zig build docs --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global  # build/native/docs/{engine,kabic}/, pages generated from the sources
 build/native/bin/c_demo_01                                        # run a C example (c_demo_01.exe on Windows)
 ```
 
