@@ -64,7 +64,7 @@ Everything a build fetches or produces is under `build/`, apart from the `zig-pk
 `lib` (`build.zig:1212`) and every example's executable under `bin`, named after the example
 (`build.zig:1239-1242`), so all of them converge in one tree.
 
-A Zig package is declared by URL and hash in a `build.zig.zon`: `zigdoc` in the root's, `zmath` in
+A Zig package is declared by URL and hash in a `build.zig.zon`: `docir` in the root's, `zmath` in
 that of each plugin that imports it. Zig 0.16 unpacks every package of a build into `zig-pkg/` beside
 the `build.zig` that was invoked and offers no option to move it, so the root build keeps one
 `zig-pkg/` at the repository root, ignored by git. It is the one thing a build writes outside
@@ -125,7 +125,7 @@ a Windows runner costs minutes even when nothing was rebuilt.
 
 `zig build docs` writes `<--prefix>/docs/<plugin>.json` and `<plugin>.md` for every plugin, from its
 module in the build graph: the plugin's sources, the contract directory named in its `ctx.member`
-call and the headers both include. The step comes from `zigdoc`, a dependency of the root
+call and the headers both include. The step comes from `docir`, a dependency of the root
 `build.zig.zon` whose `build.zig` the root imports (`build.zig:3`).
 
 ## Shaders

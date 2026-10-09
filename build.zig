@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const zigdoc = @import("zigdoc");
+const docir = @import("docir");
 
 const abi_stamp = @import("scripts/abi_stamp.zig");
 
@@ -1221,7 +1221,7 @@ const Ctx = struct {
             },
         }
 
-        ctx.docs_step.dependOn(zigdoc.addDocs(b, artifact.root_module, .{
+        ctx.docs_step.dependOn(docir.addDocs(b, b.dependency("docir", .{ .target = b.graph.host, .optimize = .ReleaseSafe }).artifact("docir"), artifact.root_module, .{
             .name = name,
             .documented_dirs = if (contract) |dir| b.allocator.dupe(std.Build.LazyPath, &.{b.path(dir)}) catch @panic("OOM") else &.{},
         }));
