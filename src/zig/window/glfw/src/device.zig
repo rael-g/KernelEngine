@@ -1,4 +1,8 @@
+//! The seam between the window core and the platform. A backend supplies a `VTable`, `Device`
+//! pairs it with the backend pointer, and the core calls only through that pair. Events leave the
+//! backend as `Event` values handed to an `EventSink` while it polls.
 
+/// The window parameters a backend receives when it is started.
 pub const Config = struct {
     title: [*:0]const u8,
     width: u32,
@@ -7,6 +11,8 @@ pub const Config = struct {
     vsync: bool,
 };
 
+/// The kinds of event `pollEvents` can deliver. The GLFW device never produces `focus_gained` or
+/// `focus_lost`.
 pub const EventType = enum(u8) {
     close,
     resize,
@@ -20,6 +26,8 @@ pub const EventType = enum(u8) {
     mouse_scroll,
 };
 
+/// One drained event. `type` says which arm of `data` is set; events with no payload, such as
+/// close, keep the default arm, "none".
 pub const Event = struct {
     type: EventType,
     data: union {
@@ -32,12 +40,15 @@ pub const Event = struct {
     } = .{ .none = {} },
 };
 
-/// Called once per event drained by pollEvents.
+/// Passed by value to `pollEvents` and used only during that call. `ctx` is the caller's own
+/// pointer and is handed back unchanged to `on_event`.
 pub const EventSink = struct {
     ctx: *anyopaque,
     on_event: *const fn (ctx: *anyopaque, ev: Event) void,
 };
 
+/// The operations a backend supplies. `Device` calls each slot with the backend pointer. `destroy`
+/// runs after `shutdown`, when `Core` releases the backend.
 pub const VTable = struct {
     initialize: *const fn (self: *anyopaque, config: Config) bool,
     shutdown: *const fn (self: *anyopaque) void,
@@ -46,10 +57,11 @@ pub const VTable = struct {
     set_title: *const fn (self: *anyopaque, title: [*:0]const u8) void,
     get_size: *const fn (self: *anyopaque, width: *u32, height: *u32) void,
     get_native_handle: *const fn (self: *anyopaque) ?*anyopaque,
-    /// Releases whatever the device itself allocated; called after shutdown.
     destroy: *const fn (self: *anyopaque) void,
 };
 
+/// Pairs a backend object with its vtable. The backend is borrowed: its owner keeps it alive until
+/// `destroy` has run.
 pub const Device = struct {
     ptr: *anyopaque,
     vtable: *const VTable,

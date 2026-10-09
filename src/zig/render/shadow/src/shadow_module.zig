@@ -1,3 +1,21 @@
+//! The shadow pass is the render-phase system "render.shadow". Each frame it takes the direction
+//! of the directional light, builds an orthographic light view-projection around the origin, and
+//! draws every mesh with a world transform into a square depth map, the "shadow_map" target, with
+//! "shadow_depth" as its depth attachment. The light matrix is published to the render service as
+//! the buffer "shadow_lvp".
+//!
+//! `ShadowModule` carries the whole pass. `ke_render_shadow_create` allocates it and `setup` builds
+//! it in a fixed order, resolving the parameters first and creating the light uniform before the
+//! enabled flag decides the rest: a disabled pass keeps only that uniform and registers no system.
+//! An enabled pass declares its targets, loads shaders, builds the pipeline, bind groups and per
+//! object uniform, and last fills the access list and queries it declares to the runtime.
+//!
+//! `system` draws without a pinned thread. It returns early when there is no light or the pass
+//! cannot begin. Each mesh gets its own slot of the object uniform and is drawn at that slot's
+//! dynamic offset, until the draw cap is reached. A failed step, a refused registration or a null
+//! argument returns an empty handle, and a failed step releases what was created through
+//! `destroyModule`.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -19,6 +37,8 @@ const default_params = c.ke_render_shadow_params{
     .far_plane = 50.0,
 };
 
+/// Called by `setup` before anything is created, so the rest of the module only sees the
+/// resolved parameters.
 fn paramsOr(params: [*c]const c.ke_render_shadow_params) c.ke_render_shadow_params {
     const p = params orelse return default_params;
     return .{
@@ -32,6 +52,10 @@ fn paramsOr(params: [*c]const c.ke_render_shadow_params) c.ke_render_shadow_para
 
 const ShadowObj = extern struct { model: [16]f32 };
 
+/// The state of one shadow pass, allocated by `ke_render_shadow_create` and freed by
+/// `destroyHandle`. The registered system keeps a pointer to it as user data from registration on.
+/// Fields that `setup` has not reached keep their initial values, so `destroyModule` releases only
+/// what exists. `view` is set only when the pass is enabled.
 const ShadowModule = struct {
     enabled: bool = false,
 
@@ -61,6 +85,8 @@ const ShadowModule = struct {
     queries: [2]c.ke_query_decl = undefined,
 };
 
+/// Called by `system` each tick with the direction it read from the directional light. The result
+/// is the matrix uploaded to the light uniform, which is bound to group 0 for the pass.
 fn lightViewProj(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, p: c.ke_render_shadow_params, ldir_in: zm.Vec) zm.Mat {
     const ldir = zm.normalize3(ldir_in);
     const eye3 = ldir * zm.f32x4s(-p.light_distance);
@@ -78,6 +104,8 @@ fn lightViewProj(vs: *c.ke_view_space, ndc: c.ke_ndc_convention, p: c.ke_render_
     return zm.mul(zm.loadMat(&view.m), zm.loadMat(&proj.m));
 }
 
+/// Reads the first row of the light query, which the draw uses as the direction the light shines;
+/// null when the query has no row.
 fn lightDirOf(ctx: ?*c.ke_system_ctx) ?zm.Vec {
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &segc);
@@ -90,6 +118,9 @@ inline fn moduleOf(user: ?*anyopaque) *ShadowModule {
     return @alignCast(@ptrCast(user.?));
 }
 
+/// The render-phase body that `setup` registers as "render.shadow". It returns true on every path,
+/// including the early exits for a missing light or a pass that cannot begin, and it ignores its
+/// error parameter.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const sh = moduleOf(user);
     const core = sh.core;
@@ -139,6 +170,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
+/// Called once by `ke_render_shadow_create`. A step that fails returns false and leaves the handles
+/// created before it stored in the module, for `destroyModule` to release. Failures that the render
+/// service and the device report go into out_error through those calls; a pipeline that cannot be
+/// created is reported as `KE_ERROR_NOT_INITIALIZED`.
 fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          ndc: c.ke_ndc_convention, view_space: *c.ke_view_space, enabled: bool, mesh_cid: c.ke_component_id,
          world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
@@ -255,6 +290,8 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+/// Called after a failed `setup` and by `destroyHandle`. It releases only the GPU objects that were
+/// created, and leaves freeing the module to its caller.
 fn destroyModule(sh: *const ShadowModule) void {
     const dev = sh.device;
     if (sh.obj_bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, sh.obj_bg);
@@ -265,12 +302,18 @@ fn destroyModule(sh: *const ShadowModule) void {
     if (sh.lvp_bgl != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.lvp_bgl);
 }
 
+/// The `destroy` slot of the handle `ke_render_shadow_create` returns. It is the only path that
+/// frees a module whose creation succeeded.
 fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
     const sh: *ShadowModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(sh);
     gpa.destroy(sh);
 }
 
+/// Returns an empty handle when a required pointer is null, the allocation fails, `setup` fails or
+/// the runtime refuses the system, and every such path frees the module. Failures that the service,
+/// the device or the runtime report are left in out_error. The system is registered only when the
+/// enabled argument is set; the light uniform is created either way and the handle owns it.
 export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
                                    enabled: c.ke_bool, mesh_cid: c.ke_component_id,

@@ -1,3 +1,24 @@
+//! Binds the 2D physics world to the entity component store: the component that describes a body
+//! is the authority over it until the world steps, and the world is the authority after.
+//!
+//! Creating the module registers the component ids it needs and two update-phase systems, both
+//! pinned to the same worker, with a `Module` that holds their query declarations and borrows the
+//! physics handle. The world owns the bodies; the module only holds their ids in components.
+//!
+//! `bodySystem` is the loop. Components that have no body get one, components whose stored state
+//! differs from the world's push it in, the world steps, and every body's state is written back
+//! into its component and its transform. A body is therefore simulated in the update that created
+//! it. `colliderSystem` is the second system: it does nothing until `anyUnattached` finds a
+//! collider without a fixture, then resolves each such collider to a body, its own ancestors
+//! being searched through `findBody`, and adds the fixture. A collider that fails to resolve or
+//! attach stays unattached and is tried again on later updates.
+//!
+//! Failure is soft inside the systems and strict at creation: a failed body or fixture is
+//! retried, not reported, while the create function returns a null handle when an argument is
+//! missing, memory runs out or the runtime refuses a system, leaving no system registered.
+//! `ke_physics_register_scene_apply` is the separate export that makes scene blocks for the body
+//! and collider components applicable.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -7,6 +28,10 @@ const c = @import("cimport.zig").c;
 const heap = @import("heap");
 var gpa = heap.gpa;
 
+/// The state behind the handle `ke_physics_body2d_module_create` returns, owned by that handle.
+/// The query declarations point into this struct's own term arrays, so its address must stay
+/// fixed while the two systems are registered. `physics` and `logger` are borrowed from the
+/// params; `logger` may be null.
 const Module = struct {
     physics: *c.ke_physics_2d,
     logger: ?*c.ke_logger = null,
@@ -28,6 +53,11 @@ fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anyt
     if (lg.log) |f| f(lg, &ev);
 }
 
+/// The update-phase system that reconciles every body with its component. It runs before the world
+/// step, so a body created here is simulated in the same update. A component whose stored position
+/// is exactly zero first takes the transform's position and rotation. A failed creation leaves the
+/// component without a body, to be retried on the next update; nothing is written to the error
+/// output and the system still returns true.
 fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const m = moduleOf(user);
     const p = m.physics;
@@ -93,6 +123,8 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
     return true;
 }
 
+/// Lets `colliderSystem` return before it builds any index when every collider already has its
+/// fixture.
 fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &segc);
@@ -105,6 +137,10 @@ fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
     return false;
 }
 
+/// The update-phase system that attaches fixtures to colliders. Its entity indexes are complete
+/// before the first fixture is added, so an out-of-memory failure, reported through the error
+/// output, leaves every collider unattached. A shape that resolves to no body, or whose fixture the
+/// world refuses, is logged and stays unattached; neither is reported through the error output.
 fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     _ = dt;
     const m = moduleOf(user);
@@ -177,6 +213,9 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
     return true;
 }
 
+/// Walks the parent links above `start`, the shape's own entity, and returns the first body found
+/// on that chain, or null when the chain ends first. The shape's own entity is not checked, only
+/// its ancestors. The steps are bounded by the size of the parent index, so a cycle ends the walk.
 fn findBody(
     parents: *std.AutoHashMap(c.ke_entity, c.ke_entity),
     bodies: *std.AutoHashMap(c.ke_entity, c.ke_body_2d),
@@ -191,11 +230,17 @@ fn findBody(
     return null;
 }
 
+/// The `destroy` slot of the handle `ke_physics_body2d_module_create` returns, called by the owner
+/// of that handle.
 fn destroyHandle(self: ?*c.ke_physics_body2d_module) callconv(.c) void {
     const m: *Module = @ptrCast(@alignCast(self orelse return));
     gpa.destroy(m);
 }
 
+/// Registers the component ids with the ECS, then the body system and the collider system, both in
+/// the update phase. A missing argument or a failed allocation returns a null handle and sets
+/// nothing on the error output. A system the runtime refuses passes the runtime's error through
+/// the error output and returns a null handle. On success, the handle's `destroy` frees the module.
 export fn ke_physics_body2d_module_create(
     params: ?*const c.ke_physics_body2d_module_params,
     out_error: ?*?*c.ke_error,
@@ -258,6 +303,10 @@ fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
 }
 
+/// Registers the body and collider component ids with `ecs`, then their field tables with `world`,
+/// so scene blocks for those components apply to it. Returns false when either pointer is null.
+/// The result of each field-table registration is discarded, so true does not confirm that the
+/// tables were accepted.
 export fn ke_physics_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) callconv(.c) bool {
     const e = ecs orelse return false;
     const w = world orelse return false;

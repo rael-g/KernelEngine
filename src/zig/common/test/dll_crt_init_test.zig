@@ -1,3 +1,6 @@
+//! Windows-only check of the mingw entry point re-export: it loads a probe DLL with the re-export
+//! and one without, and asks each whether its C++ static initializers ran. The one without is a
+//! canary that fails when they ran anyway. Both tests are skipped on other targets.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -12,6 +15,8 @@ extern "kernel32" fn GetProcAddress(module: *anyopaque, name: [*:0]const u8) cal
 const CtorRanFn = *const fn () callconv(.c) c_int;
 const MarkerFn = *const fn () callconv(.c) [*c]const u8;
 
+/// A loaded probe DLL. It reads the two accessors the probes export, and `unload` frees the
+/// library.
 const Probe = struct {
     module: *anyopaque,
 

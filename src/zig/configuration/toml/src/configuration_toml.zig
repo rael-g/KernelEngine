@@ -1,3 +1,11 @@
+//! Loads one TOML file into a configuration through the setter slots of its contract, keeping no
+//! state between calls. `ke_configuration_toml_load` parses the whole file before it writes
+//! anything, so a parse error leaves the configuration untouched, and a file that cannot be opened
+//! is no error. `walkTable` then flattens the tree: each table becomes a section named by its path
+//! joined with dots, arrays are skipped, and `setScalar` writes every other key as an integer, a
+//! double, a boolean or a string, tried in that order. The first failed write stops the walk, and
+//! the writes before it stay.
+//! calling thread, and no lock is taken.
 
 const std = @import("std");
 
@@ -18,6 +26,8 @@ fn setErr(out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]c
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
 
+/// Called by `walkTable` for each key that is neither a table nor an array. A value that matches
+/// none of the four readings is skipped without an error.
 fn setScalar(cfg: [*c]ke.ke_configuration, section: [:0]const u8, key: [*c]const u8, tab: ?*toml.toml_table_t, out_error: ?*?*ke.ke_error) bool {
     const di = toml.toml_int_in(tab, key);
     if (di.ok != 0) return cfg.*.set_int.?(cfg, section.ptr, key, di.u.i, out_error);
@@ -36,6 +46,9 @@ fn setScalar(cfg: [*c]ke.ke_configuration, section: [:0]const u8, key: [*c]const
     return true;
 }
 
+/// Recursive; `ke_configuration_toml_load` makes the first call. A failed write or a failed section
+/// allocation returns false at once, and writes already made are not undone. The section path of
+/// a sub-table is freed when its recursive call returns.
 fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:0]const u8, out_error: ?*?*ke.ke_error) bool {
     const n = toml.toml_table_nkval(tab) + toml.toml_table_narr(tab) + toml.toml_table_ntab(tab);
     var i: c_int = 0;
@@ -65,6 +78,8 @@ fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:
     return true;
 }
 
+/// The only export of this plugin. A file that cannot be opened returns true with nothing written.
+/// A parse error returns false before any write, so the configuration is left unchanged.
 export fn ke_configuration_toml_load(cfg: [*c]ke.ke_configuration, path: [*c]const u8, out_error: ?*?*ke.ke_error) bool {
     if (cfg == null or path == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
@@ -87,12 +102,15 @@ export fn ke_configuration_toml_load(cfg: [*c]ke.ke_configuration, path: [*c]con
 
 const RecVal = union(enum) { int: i64, double: f64, boolean: bool, string: [:0]u8 };
 
+/// A write captured by a mock setter. `section`, `key` and a string `value` are owned copies,
+/// freed by `clearRecs`.
 const Rec = struct {
     section: [:0]u8,
     key: [:0]u8,
     value: RecVal,
 };
 
+/// Writes captured by the mock setters until `clearRecs` empties it.
 var g_recs: std.ArrayListUnmanaged(Rec) = .empty;
 
 fn recPush(section: [*c]const u8, key: [*c]const u8, value: RecVal) void {

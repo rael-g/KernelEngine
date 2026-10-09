@@ -1,3 +1,31 @@
+//! The asset resolver turns the paths a scene or a material names into engine data, and keeps
+//! none of it: a decoded texture, a baked primitive mesh, a parsed material spec or a baked font
+//! belongs to the caller until it hands it back to the matching free slot. The `State` that
+//! `ke_asset_resolver_create` allocates borrows the image and font loaders, owns a copy of the
+//! project root, and holds the vtable whose handle points back at it; `vtDestroy` frees the copy
+//! and the `State`.
+//!
+//! There are two levels of slot. The plain ones, `vtResolveTexture`, `vtResolveMesh`,
+//! `vtResolveMaterial` and `vtResolveFont`, produce data and stop. A path that begins with
+//! "res://" is rewritten by `resolvePath` against the project root, any other path is used as
+//! written, and a file is checked with `fileExists` before a loader is asked to read it. A mesh
+//! has no file: only paths under the primitive prefix are accepted, and the name after it picks
+//! the shape that `vtResolveMesh` bakes. A material is a TOML file read by `parseMaterialFile`,
+//! which starts from default values so that a key the file omits keeps its default.
+//!
+//! The "into" slots, `vtResolveTextureInto`, `vtResolveMeshInto` and `vtResolveMaterialInto`,
+//! add a borrowed render service and a cache keyed by the authored path. Each asks the service
+//! first and returns what it holds without touching a file; on a miss it runs the plain slot,
+//! uploads the result under the authored path, and releases the decoded or baked data whatever
+//! the upload returns. A material resolves and uploads its textures through the same texture
+//! slot before it is created, and any failure there ends the call without creating it.
+//!
+//! Every slot rejects a missing resolver, handle or pointer with the invalid-argument error.
+//! Beyond that, a missing file or an unknown primitive is not-found, a material that cannot be
+//! opened or parsed is io, an allocation is out-of-memory, and the loaders and the render
+//! service report through the same out-error parameter. Nothing here starts a thread, so each slot
+//! runs on the thread that calls it.
+
 const std = @import("std");
 
 const c = @import("c.zig").c;
@@ -13,6 +41,10 @@ const primitive_prefix = "res://primitives/";
 
 const path_buf_max = 1024;
 
+/// Allocated by `ke_asset_resolver_create` and freed by `vtDestroy`. `api` is the vtable the handle
+/// refers to. The loaders are borrowed and stay null when none was injected, which makes the
+/// resolving slots that need them fail. `project_root` is the only memory the state owns, and it is
+/// null exactly when no root was given.
 const State = struct {
     api: c.ke_asset_resolver,
     image_loader: ?*c.ke_image_loader,
@@ -24,11 +56,15 @@ fn stateOf(self: *c.ke_asset_resolver) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// Returns null for a null input and also when the allocation fails, so a caller that needs to tell
+/// the two apart must check its own input.
 fn dupCStr(s: [*c]const u8) ?[:0]u8 {
     if (s == null) return null;
     return heap.gpa.dupeZ(u8, std.mem.span(s)) catch null;
 }
 
+/// Opens the file for binary reading and closes it again, so it reports whether the file can be
+/// opened, not whether it holds data.
 fn fileExists(path: [*:0]const u8) bool {
     const f = std.c.fopen(path, "rb") orelse return false;
     _ = std.c.fclose(f);
@@ -66,6 +102,8 @@ fn joinPath(out: []u8, root: []const u8, remainder: []const u8) void {
     out[i] = 0;
 }
 
+/// Called by the texture, font and material slots before they open a file. The buffer it writes is
+/// always terminated, so the path can be passed on as a C string.
 fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
     const p = std.mem.span(path);
     if (std.mem.startsWith(u8, p, res_prefix)) {
@@ -96,6 +134,9 @@ fn tomlNumberAt(arr: ?*c.toml_array_t, idx: c_int) ?f32 {
     return null;
 }
 
+/// The only reader of material files, called by vtResolveMaterial with the path it resolved. Every
+/// field it sets is first written with its default, so a key the file leaves out keeps that
+/// default. On failure the spec holds only those defaults.
 fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
     out.base_color[0] = 1.0;
     out.base_color[1] = 1.0;
@@ -156,6 +197,8 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
     return true;
 }
 
+/// Also the decode step of vtResolveTextureInto, reached only on a cache miss. A missing loader and
+/// a missing file are reported here, before the loader is called.
 fn vtResolveTexture(
     self_in: ?*c.ke_asset_resolver,
     path: [*c]const u8,
@@ -197,6 +240,8 @@ fn vtFreeTexture(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_texture_data) call
     }
 }
 
+/// Also the bake step of vtResolveMeshInto, reached only on a cache miss. The shape it fills
+/// belongs to the caller until vtFreeMesh releases it.
 fn vtResolveMesh(
     self_in: ?*c.ke_asset_resolver,
     path: [*c]const u8,
@@ -239,6 +284,7 @@ fn vtFreeMesh(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_mesh_shape_data) call
     mesh_shape.ke_mesh_shape_free_internal(data);
 }
 
+/// Also the first step of vtResolveMaterialInto, reached only on a cache miss.
 fn vtResolveMaterial(
     self_in: ?*c.ke_asset_resolver,
     path: [*c]const u8,
@@ -263,6 +309,7 @@ fn vtResolveMaterial(
     return true;
 }
 
+/// Same order of checks as vtResolveTexture, against the font loader.
 fn vtResolveFont(
     self_in: ?*c.ke_asset_resolver,
     path: [*c]const u8,
@@ -316,6 +363,9 @@ fn vtFreeFont(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_font_data) callconv(.
     }
 }
 
+/// Checks the service's cache first, so a path it already holds costs no file access. Uploads under
+/// the authored path, not the resolved one, so the service keys the texture by what the caller
+/// wrote.
 fn vtResolveTextureInto(
     self_in: ?*c.ke_asset_resolver,
     core_in: ?*c.ke_render_service,
@@ -349,6 +399,8 @@ fn vtResolveTextureInto(
 
 const gpu_floats_per_vertex = 11;
 
+/// Checks the service's cache first, as vtResolveTextureInto does. The shape is freed on every path
+/// once it is baked, so none of its memory outlives the call.
 fn vtResolveMeshInto(
     self_in: ?*c.ke_asset_resolver,
     core_in: ?*c.ke_render_service,
@@ -412,6 +464,9 @@ fn vtResolveMeshInto(
     return h;
 }
 
+/// Checks the service's cache first. The albedo and normal textures go through
+/// vtResolveTextureInto, so each is cached under its own path, and a failure there ends the call
+/// before the material is created.
 fn vtResolveMaterialInto(
     self_in: ?*c.ke_asset_resolver,
     core_in: ?*c.ke_render_service,
@@ -465,6 +520,7 @@ fn vtResolveMaterialInto(
     );
 }
 
+/// Runs as the destroy slot of the handle that `ke_asset_resolver_create` returns.
 fn vtDestroy(self_in: ?*c.ke_asset_resolver) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -473,6 +529,8 @@ fn vtDestroy(self_in: ?*c.ke_asset_resolver) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
+/// Frees the state again before returning when the root copy fails. The loaders are kept by pointer
+/// and are never freed here.
 export fn ke_asset_resolver_create(
     image_loader: ?*c.ke_image_loader,
     font_loader: ?*c.ke_font_loader,

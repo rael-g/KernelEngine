@@ -1,7 +1,34 @@
+//! Fakes of the engine contracts that the render and framework code is written against, for unit
+//! tests that must run with no GPU, window or ecs. `Stubs` takes the translated C namespace and
+//! returns one struct per contract: `Device`, `Target`, `Core` (the render service), `Runtime`,
+//! `Ecs` and `World`. Each struct embeds its vtable, points the handle of that vtable back at
+//! itself and fills every slot with a function of the same struct, so an instance must stay where
+//! `init` put it.
+//!
+//! The fakes count instead of doing. Handles and ids come from a counter of the struct that mints
+//! them, and the device also tracks how many handles are live and how many of those are compute
+//! pipelines, so a test can check that everything created was released. Refusal is set by the
+//! test: the device refuses buffers, bind groups and shader modules once its budget of fallible
+//! creations is spent, the render service refuses shader loads while told to, the runtime refuses
+//! a registration at its limit, and a target refuses a present that no acquire preceded. A refusal
+//! is an invalid handle, a null id or false, it never fills the error output and it leaves every
+//! counter as it was.
+//!
+//! Command recording keeps no history. The device hands back one record per kind of pass and keeps
+//! only the latest label and the depth of open debug groups; ending, submitting and polling do
+//! nothing. The ecs mints ids and the world accepts every registration without storing it.
+
 const std = @import("std");
 
+/// Returns the fake structs for the contract types of `c`, the cimport it is given. Each struct
+/// stores its own address as the vtable `handle`, so it must not move between `init` and its last
+/// use.
 pub fn Stubs(comptime c: type) type {
     return struct {
+        /// Fake of the GPU device contract. `api` returns the vtable pointer and is valid only
+        /// after `init`. `live` counts the handles minted and not released, `compute_live` counts
+        /// the compute pipelines among them, and `fallible_created` against `fallible_budget` is
+        /// the only way a creation is refused.
         pub const Device = struct {
             vtable: c.ke_gpu_device,
             next: u64,
@@ -75,12 +102,16 @@ pub fn Stubs(comptime c: type) type {
                 return @ptrCast(@alignCast(pass.?.handle.?));
             }
 
+            /// Every begin returns the same render pass record, so the label of the latest begin
+            /// replaces the one before it.
             fn beginRenderPass(enc: ?*c.ke_gpu_command_encoder, p: [*c]const c.ke_gpu_render_pass_params) callconv(.c) [*c]c.ke_gpu_render_pass {
                 const self = encoderOwner(enc);
                 self.render_pass_label = p.*.label;
                 return &self.render_pass;
             }
 
+            /// Every begin returns the same compute pass record, so the label of the latest begin
+            /// replaces the one before it.
             fn beginComputePass(enc: ?*c.ke_gpu_command_encoder, p: [*c]const c.ke_gpu_compute_pass_params) callconv(.c) [*c]c.ke_gpu_compute_pass {
                 const self = encoderOwner(enc);
                 self.compute_pass_label = if (p != null) p.*.label else null;
@@ -97,6 +128,7 @@ pub fn Stubs(comptime c: type) type {
                 self.debug_groups_open += 1;
             }
 
+            /// Nothing pairs it with a push, so the depth can drop below zero.
             fn popDebugGroup(pass: ?*c.ke_gpu_compute_pass) callconv(.c) void {
                 passOwner(pass).debug_groups_open -= 1;
             }
@@ -125,12 +157,16 @@ pub fn Stubs(comptime c: type) type {
                 return @ptrCast(@alignCast(self.?.handle));
             }
 
+            /// Counts the handle in `live` and returns the value `next` held before this call. Both
+            /// updates are atomic, so the device can mint from several threads at once.
             fn mint(self: ?*c.ke_gpu_device) u64 {
                 const d = of(self);
                 _ = @atomicRmw(i64, &d.live, .Add, 1, .monotonic);
                 return @atomicRmw(u64, &d.next, .Add, 1, .monotonic);
             }
 
+            /// Called by the creations that can be refused, before they mint. Plain operations,
+            /// unlike `mint`, so it is not safe to call from several threads at once.
             fn spendFallible(self: ?*c.ke_gpu_device) bool {
                 const d = of(self);
                 if (d.fallible_created >= d.fallible_budget) return false;
@@ -138,6 +174,8 @@ pub fn Stubs(comptime c: type) type {
                 return true;
             }
 
+            /// Refused through `spendFallible`: once the budget is spent it returns the invalid
+            /// handle and writes nothing to the error output.
             fn createBuffer(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_buffer_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_buffer {
                 if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
                 return mint(self);
@@ -147,11 +185,14 @@ pub fn Stubs(comptime c: type) type {
                 return mint(self);
             }
 
+            /// Refused through `spendFallible`: once the budget is spent it returns the invalid
+            /// handle and writes nothing to the error output.
             fn createBindGroup(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group {
                 if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
                 return mint(self);
             }
 
+            /// Also counts toward `compute_live`, which `destroyComputePipeline` releases.
             fn createComputePipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_compute_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
                 _ = @atomicRmw(i64, &of(self).compute_live, .Add, 1, .monotonic);
                 return mint(self);
@@ -170,6 +211,8 @@ pub fn Stubs(comptime c: type) type {
                 return mint(self);
             }
 
+            /// Refused through `spendFallible`: once the budget is spent it returns the invalid
+            /// handle and writes nothing to the error output.
             fn createShaderModule(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_shader_module_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
                 if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
                 return mint(self);
@@ -179,6 +222,8 @@ pub fn Stubs(comptime c: type) type {
                 return c.KE_GPU_SHADER_LANG_WGSL;
             }
 
+            /// Calls the callback before returning, with a freshly minted handle, so the callback
+            /// never runs later.
             fn createRenderPipelineAsync(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params, on_ready: ?*const fn (c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
                 if (on_ready) |ready| ready(mint(self), user);
             }
@@ -207,11 +252,15 @@ pub fn Stubs(comptime c: type) type {
                 return .{ .z_zero_to_one = 1, .y_flip = 1, .clip_left_handed = 1 };
             }
 
+            /// The handle is not checked: each call gives back one count, so releasing the same
+            /// handle twice counts twice.
             fn destroyHandle(self: ?*c.ke_gpu_device, _: u64) callconv(.c) void {
                 _ = @atomicRmw(i64, &of(self).live, .Sub, 1, .monotonic);
             }
         };
 
+        /// Fake render target. `acquired` is a flag set by `acquire`, not a count, and
+        /// `presented` is the only tally kept.
         pub const Target = struct {
             vtable: c.ke_gpu_render_target,
             acquired: bool,
@@ -234,11 +283,13 @@ pub fn Stubs(comptime c: type) type {
                 return @ptrCast(@alignCast(self.?.handle));
             }
 
+            /// Repeated acquires are not counted: `acquired` is a flag.
             fn acquire(self: ?*c.ke_gpu_render_target, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
                 of(self).acquired = true;
                 return 1;
             }
 
+            /// Returns false and leaves `presented` alone unless an acquire came first.
             fn present(self: ?*c.ke_gpu_render_target, _: [*c][*c]c.ke_error) callconv(.c) bool {
                 const t = of(self);
                 if (!t.acquired) return false;
@@ -257,6 +308,8 @@ pub fn Stubs(comptime c: type) type {
             }
         };
 
+        /// Fake render service. Every id it hands out is read from and advanced in `next`, one
+        /// sequence shared by all its methods.
         pub const Core = struct {
             vtable: c.ke_render_service,
             next: u64,
@@ -292,6 +345,8 @@ pub fn Stubs(comptime c: type) type {
                 return &self.vtable;
             }
 
+            /// Returns the current `next` and advances it without atomics, unlike the device's
+            /// `mint`, so calls must not overlap.
             fn mint(self: ?*c.ke_render_service) u64 {
                 const core: *Core = @ptrCast(@alignCast(self.?.handle));
                 const h = core.next;
@@ -299,6 +354,8 @@ pub fn Stubs(comptime c: type) type {
                 return h;
             }
 
+            /// Returns the invalid handle while `shader_loads_fail` is set, and writes nothing to
+            /// the error output.
             fn loadShader(self: ?*c.ke_render_service, _: [*c]const u8, _: c.ke_gpu_shader_stage, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
                 const core: *Core = @ptrCast(@alignCast(self.?.handle));
                 if (core.shader_loads_fail) return c.KE_GPU_INVALID_HANDLE;
@@ -309,6 +366,7 @@ pub fn Stubs(comptime c: type) type {
                 return mint(self);
             }
 
+            /// Does not remember the name, so the same name gives a different id on each call.
             fn cid(self: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_component_id {
                 return @intCast(mint(self));
             }
@@ -366,6 +424,8 @@ pub fn Stubs(comptime c: type) type {
             }
         };
 
+        /// Fake runtime. `live` holds the registered system ids in registration order, valid up to
+        /// `live_count`. `registered` only grows, so a system id is never handed out twice.
         pub const Runtime = struct {
             vtable: c.ke_runtime,
             registered: u32,
@@ -385,6 +445,8 @@ pub fn Stubs(comptime c: type) type {
                 return &self.vtable;
             }
 
+            /// Returns the null system id and changes nothing once `registered` has reached
+            /// `limit`. Otherwise the new id is appended to `live`.
             fn registerSystem(self: ?*c.ke_runtime, _: [*c]const c.ke_runtime_system_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
                 const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
                 if (rt.registered >= rt.limit) return 0;
@@ -394,6 +456,8 @@ pub fn Stubs(comptime c: type) type {
                 return rt.registered;
             }
 
+            /// Returns false for an id that is not in `live`. Removing an id shifts the later ones
+            /// down, keeping registration order. `registered` is not lowered, so ids stay unique.
             fn unregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, _: [*c][*c]c.ke_error) callconv(.c) bool {
                 const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
                 for (0..rt.live_count) |i| {
@@ -412,6 +476,7 @@ pub fn Stubs(comptime c: type) type {
             }
         };
 
+        /// Fake ecs. Component and query ids are both drawn from `next`, so they never collide.
         pub const Ecs = struct {
             vtable: c.ke_ecs,
             next: u32,
@@ -443,6 +508,8 @@ pub fn Stubs(comptime c: type) type {
             }
         };
 
+        /// Fake world. It stores nothing: every field table and apply function is accepted as
+        /// given.
         pub const World = struct {
             vtable: c.ke_world,
 

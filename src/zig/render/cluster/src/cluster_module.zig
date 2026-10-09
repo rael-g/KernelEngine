@@ -1,3 +1,20 @@
+//! The cluster pass is the render-phase system "render.cull". Each frame it copies the point and
+//! spot lights its queries find into two GPU storage buffers, then dispatches a compute shader
+//! that bins them into a view-space grid of clusters, writing per-cluster index lists and counts
+//! into further storage buffers. Those buffers and a grid uniform are published to the render
+//! service as the bind group "cluster_lights", and the pass declares that it writes the tag
+//! imported as "light_clusters".
+//!
+//! `ClusterModule` carries the whole pass. `ke_render_cluster_create` allocates it, `setup` creates
+//! the GPU objects in a fixed order and fills the access list and queries, and the system is then
+//! registered with them. A failed step leaves the earlier objects set, and `destroyModule`
+//! releases only handles that are not invalid, so a half-built module is released like a whole one.
+//!
+//! `system` stages light records in a chunk and uploads the chunk each time it fills and once more
+//! at the end. The records are capped while the totals keep counting, and an overflow is reported
+//! once per kind through `logLightOverflow`. A frame with no camera uploads the lights and stops;
+//! otherwise it also uploads the cull parameters and the grid, and dispatches the compute pipeline.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -23,6 +40,8 @@ const SpotLightGpu = extern struct {
     cone: [4]f32,
 };
 
+/// Mirrors the C spot light component, so the spot column is read through this layout, while the
+/// point column is read through its C type.
 const SpotLightComp = extern struct {
     dir: [3]f32,
     color: [3]f32,
@@ -45,6 +64,11 @@ const ClusterParams = extern struct {
     view: [16]f32,
 };
 
+/// State of one cluster pass, allocated by `ke_render_cluster_create` and freed by `destroyHandle`.
+/// The core, device, logger, view space and camera are borrowed: the module stores them and never
+/// releases them. The component ids, grid fields and access data are assigned by `setup`, so they
+/// are undefined until it runs; the GPU fields are the invalid handle until their own creation
+/// succeeds.
 const ClusterModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -88,6 +112,8 @@ const ClusterModule = struct {
     spot_overflow_warned: bool = false,
 };
 
+/// Logs the overflow warning through the logger when there is one. The text is formatted into a
+/// fixed stack buffer, and a text that does not fit is dropped silently.
 fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: usize) void {
     const lg = logger orelse return;
     var buf: [192]u8 = undefined;
@@ -96,10 +122,14 @@ fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: 
     lg.log.?(lg, &ev);
 }
 
+/// Recovers the module that `ke_render_cluster_create` passed as the system's user data.
 inline fn moduleOf(user: ?*anyopaque) *ClusterModule {
     return @alignCast(@ptrCast(user.?));
 }
 
+/// The per-frame body that `ke_render_cluster_create` registers. It ignores its error out-parameter
+/// and returns true on every path. A frame without a camera still uploads the light records it
+/// gathered.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const cm = moduleOf(user);
     const core = cm.core;
@@ -212,6 +242,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
+/// Writes the grid uniform that the shading passes read through "cluster_lights": the grid
+/// dimensions, the viewport and depth range, and the view space depth conversion.
 fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) void {
     const core = cm.core;
     const grid_data = ClusterGridUniform{
@@ -232,6 +264,9 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, ou
     }, out_error);
 }
 
+/// Runs once, from `ke_render_cluster_create`, before the module is registered. A failed step
+/// returns false with the error placed in the out-error parameter, and the objects created before
+/// it stay set for `destroyModule` to release.
 fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
              logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
@@ -392,6 +427,8 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+/// Releases every GPU object whose handle is not the invalid handle, so it is safe on a module that
+/// `setup` did not finish. The device and the borrowed pointers are not released.
 fn destroyModule(cm: *const ClusterModule) void {
     const dev = cm.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
@@ -412,12 +449,18 @@ fn destroyModule(cm: *const ClusterModule) void {
     }
 }
 
+/// The `destroy` slot of the handle `ke_render_cluster_create` returns. It releases the GPU objects
+/// and frees the module, so the `ref` it was given is invalid afterwards.
 fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
     const cm: *ClusterModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(cm);
     gpa.destroy(cm);
 }
 
+/// Builds a cluster pass on the render service and device given, and registers its system with the
+/// runtime given. The handle's `ref` is null when a required pointer is null, when `setup` fails,
+/// or when the runtime refuses the registration; in the last two cases the objects created so far
+/// are released. Only failures that `setup` checks reach the out-error parameter.
 export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
                                     grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,

@@ -1,3 +1,4 @@
+//! Imports every C header the plugin uses in one translation unit, exported as `c`.
 
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");

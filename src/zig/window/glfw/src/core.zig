@@ -1,3 +1,17 @@
+//! The window backend's state and its vtable slots. `Core` owns a device and borrows an optional
+//! input; `create` fills a `ke_window` table whose handle points back at the Core, so each slot
+//! recovers its state from the table it is given. The device is started by `initialize`, and the
+//! Core remembers that, so a repeated start does not reach the device again.
+//!
+//! Teardown has two forms. The shutdown slot stops the device and keeps everything, so the window
+//! can be started again. `destroyApi` stops the device, destroys it and frees the Core, and is the
+//! only place that memory is released.
+//!
+//! Polling hands the device `handleEvent` as its sink. During the poll it translates key, mouse
+//! button, cursor and scroll events into the input's callbacks, and drops every other event and
+//! any event whose callback is absent. A slot given a null table reports invalid argument, except
+//! the should-close slot, which says the window should close, and the native-handle slot, which
+//! returns null.
 
 const std = @import("std");
 
@@ -5,14 +19,20 @@ const c = @import("c.zig").c;
 const device = @import("device.zig");
 const heap = @import("heap");
 
+/// Reports failures into the error out-parameter, bound to this plugin's C declarations.
 const E = @import("kerror").Errors(c);
 
+/// The backend object behind `ke_window`. Created by `create` and freed by `destroyApi`, which
+/// also destroys the owned `dev`. `input` is borrowed and may be null; `initialized` is set by
+/// `initialize` and cleared by `shutdownInternal`.
 pub const Core = struct {
     api: c.ke_window,
     dev: ?device.Device,
     input: ?*c.ke_input,
     initialized: bool,
 
+    /// Returns null when the heap cannot provide the Core. The Core starts uninitialized, and a
+    /// null `input` is accepted: events are then dropped.
     pub fn create(dev: device.Device, input: ?*c.ke_input) ?*Core {
         const self = heap.gpa.create(Core) catch return null;
         self.* = .{
@@ -31,6 +51,8 @@ pub const Core = struct {
         return self;
     }
 
+    /// Starts the device at most once. A second call returns true without reaching the device. A
+    /// refused call leaves the Core uninitialized, so a later call reaches the device again.
     pub fn initialize(self: *Core, config: device.Config) bool {
         const dev = self.dev orelse return false;
         if (self.initialized) return true;
@@ -39,6 +61,7 @@ pub const Core = struct {
         return true;
     }
 
+    /// The returned pointer stays valid until `destroyApi` frees the Core.
     pub fn toApi(self: *Core) *c.ke_window {
         return &self.api;
     }
@@ -48,12 +71,15 @@ pub const Core = struct {
         return @ptrCast(@alignCast(s.handle));
     }
 
+    /// Stops the device but keeps `dev`, so `initialize` can start the same device again.
     fn shutdownInternal(self: *Core) void {
         if (self.dev) |dev| dev.shutdown();
         self.initialized = false;
     }
 
-    /// Owner-handle destroy: tears the device down, then releases both.
+    /// The owner handle's `destroy` slot, and the factory's rollback when `initialize` fails. The
+    /// `ke_window` pointer handed out earlier is dangling once it returns. A null handle does
+    /// nothing.
     pub fn destroyApi(self_in: ?*c.ke_window) callconv(.c) void {
         const self = from(self_in) orelse return;
         self.shutdownInternal();
@@ -79,6 +105,7 @@ pub const Core = struct {
         return true;
     }
 
+    /// A missing handle or device answers that the window should close.
     fn shouldClose(self_in: ?*c.ke_window) callconv(.c) c.ke_bool {
         const self = from(self_in) orelse return 1;
         const dev = self.dev orelse return 1;
@@ -120,6 +147,8 @@ pub const Core = struct {
         return dev.getNativeHandle();
     }
 
+    /// Runs inside the device's poll, once per drained event. Each input callback is optional and
+    /// is checked when the event arrives; an event whose callback is absent is dropped.
     fn handleEvent(ctx: *anyopaque, ev: device.Event) void {
         const self: *Core = @ptrCast(@alignCast(ctx));
         const input = self.input orelse return;

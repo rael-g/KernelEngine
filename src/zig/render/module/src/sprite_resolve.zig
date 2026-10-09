@@ -1,3 +1,17 @@
+//! Gives each 2D sprite a mesh component carrying a quad and a material that match its fields.
+//! `system` makes two passes per tick. The first visits the sprites that already own a mesh
+//! component: it marks each as attached, builds its quad with `quadFor` and its material with
+//! `materialFor`, and stores both into the mesh component through `swapMesh` and `swapMaterial`.
+//! The second visits the sprites still unmarked after that, the ones without a mesh component: it
+//! marks each and queues an attach of the mesh component on the commands of the context, so the
+//! first pass reaches the sprite on a later tick. The quad and the material are asked for again on
+//! every tick under keys spelled from the fields they depend on, so an edit to a sprite yields
+//! another object, while the swaps release the handle they replace and keep one reference per
+//! component. `materialFor` resolves the texture first, through `resolveTexture`, so the texture
+//! is part of the material's key. Only a refused attach is reported, and it makes `system` return
+//! false. The upload, the material creation and the texture resolve get no error output, so their
+//! failures are not reported. The services come from the borrowed pointers held by `State`.
+
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
@@ -6,6 +20,8 @@ const std = @import("std");
 const cache_key = @import("cache_key.zig");
 const bitsOf = cache_key.bits;
 
+/// Its memory layout is what `quadFor` uploads as raw bytes, so it is `extern` and not left to
+/// the compiler.
 const Vertex = extern struct {
     position: [3]f32,
     normal: [3]f32,
@@ -13,12 +29,19 @@ const Vertex = extern struct {
     tangent: [3]f32,
 };
 
+/// The user data of `system`, stored inside the module's state, whose address the runtime is
+/// given. `core` and `resolver` are pointers the module passed in, and this type does not own
+/// them. `resolver` is null when no asset resolver was supplied, and then no texture is ever
+/// loaded.
 pub const State = struct {
     core: *c.ke_render_service,
     mesh_cid: c.ke_component_id,
     resolver: ?*c.ke_asset_resolver,
 };
 
+/// Uploads a quad for the sprite's shape and returns its handle, which `swapMesh` takes over.
+/// The key covers every field the vertices and indices are computed from, so sprites of one
+/// shape name the same upload. The upload gets no error out-parameter.
 fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_mesh_handle {
     const w = sp.size.x;
     const h = sp.size.y;
@@ -53,6 +76,9 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
     return core.upload_mesh.?(core, k, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, null);
 }
 
+/// Keeps the resolved handle in `texture_handle` and returns it, so a handle that is not empty
+/// skips the resolver from then on. With no resolver the sprite gets the empty texture and
+/// nothing is stored, so the next call tries again. The resolver gets no error out-parameter.
 fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle {
     if (sp.texture[0] == 0) return c.KE_TEXTURE_NONE;
     if (sp.texture_handle.bits != c.KE_HANDLE_NONE) return sp.texture_handle;
@@ -62,6 +88,9 @@ fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle 
     return sp.texture_handle;
 }
 
+/// Asks the core for a material under a key of the color, the resolved texture and the alpha
+/// fields, so a change to any of them yields another material. The creation gets no error
+/// out-parameter.
 fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
     const core = st.core;
     const col = sp.color;
@@ -88,6 +117,8 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
     );
 }
 
+/// Takes over the handle passed in and releases the one the component held, so across ticks the
+/// component keeps one reference to its mesh rather than one per call.
 fn swapMesh(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c.ke_mesh_handle) void {
     if (resolved.bits == c.KE_HANDLE_NONE) return;
     const held = m.mesh;
@@ -95,6 +126,7 @@ fn swapMesh(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c.ke_
     if (held.bits != c.KE_HANDLE_NONE) core.release_mesh.?(core, held);
 }
 
+/// The same convention as `swapMesh`, for the material of the component.
 fn swapMaterial(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c.ke_material_handle) void {
     if (resolved.bits == c.KE_HANDLE_NONE) return;
     const held = m.material;
@@ -102,6 +134,8 @@ fn swapMaterial(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c
     if (held.bits != c.KE_HANDLE_NONE) core.release_material.?(core, held);
 }
 
+/// The update-phase body the module registers. A refused attach returns false with the error
+/// the commands set, and the sprite stays marked, so a later tick does not queue it again.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 

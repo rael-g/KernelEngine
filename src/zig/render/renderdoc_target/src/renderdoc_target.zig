@@ -1,3 +1,13 @@
+//! This file wraps another render target and brackets the chosen frames with a RenderDoc capture,
+//! forwarding everything else. `RenderdocTarget` holds the borrowed inner target, the RenderDoc
+//! function table, the window of frames to capture, a frame counter and whether a capture is open.
+//!
+//! RenderDoc is used only if it is already in the process: `loadedApi` finds its entry point
+//! through `loadedGetApi` and `ke_gpu_render_target_renderdoc_create` passes the table to `create`,
+//! which validates its arguments before allocating. Each frame, `acquire` opens a capture before
+//! the inner acquire when `chosen` accepts the counter, and `present` closes it. `destroy` discards
+//! a capture still open.
+
 const std = @import("std");
 const builtin = @import("builtin");
 
@@ -15,6 +25,9 @@ const E = @import("kerror").Errors(c);
 
 const Api = c.RENDERDOC_API_1_4_0;
 
+/// The state behind a handle: `vtable.handle` points back at it, which is how `of` recovers it from
+/// the vtable pointer callers hold. `capturing` is true only between an `acquire` that opened a
+/// capture and the `present` or `destroy` that closes it. `create` allocates it; `destroy` frees.
 const RenderdocTarget = struct {
     vtable: c.ke_gpu_render_target,
     inner: *c.ke_gpu_render_target,
@@ -29,10 +42,14 @@ fn of(self: [*c]c.ke_gpu_render_target) *RenderdocTarget {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
+/// True while the frame counter lies inside the window that starts at `first_frame` and spans
+/// `frame_count` frames.
 fn chosen(t: *const RenderdocTarget) bool {
     return t.frame >= t.first_frame and t.frame - t.first_frame < t.frame_count;
 }
 
+/// Runs at the start of each frame. A capture it starts stays open until `present` ends it or
+/// `destroy` discards it, and is discarded here when the inner target yields no view.
 fn acquire(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
     const t = of(self);
     const capture = chosen(t) and !t.capturing;
@@ -46,6 +63,8 @@ fn acquire(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) call
     return view;
 }
 
+/// Runs at the end of each frame. The open capture is ended whether or not the inner `present`
+/// succeeded; `frame` moves on only when it did, so a failed present keeps the frame number.
 fn present(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const t = of(self);
     const presented = t.inner.present.?(t.inner, out_error);
@@ -67,17 +86,21 @@ fn format(self: [*c]c.ke_gpu_render_target) callconv(.c) c.ke_gpu_texture_format
     return t.inner.format.?(t.inner);
 }
 
+/// Runs when the handle is released. A capture still open is discarded rather than ended, and the
+/// borrowed inner target is not destroyed.
 fn destroy(self: [*c]c.ke_gpu_render_target) callconv(.c) void {
     const t = of(self);
     if (t.capturing) _ = t.api.DiscardFrameCapture.?(null, null);
     gpa.destroy(t);
 }
 
+/// The RenderDoc entry point that fills a function table for a requested version.
 const GetApi = *const fn (c.RENDERDOC_Version, *?*anyopaque) callconv(.c) c_int;
 
 extern "kernel32" fn GetModuleHandleA(name: [*:0]const u8) callconv(.winapi) ?*anyopaque;
 extern "kernel32" fn GetProcAddress(module: *anyopaque, name: [*:0]const u8) callconv(.winapi) ?*anyopaque;
 
+/// Never loads RenderDoc itself: a library not already in the process yields null.
 fn loadedGetApi() ?GetApi {
     const symbol: ?*anyopaque = switch (builtin.target.os.tag) {
         .windows => blk: {
@@ -93,6 +116,8 @@ fn loadedGetApi() ?GetApi {
     return @ptrCast(@alignCast(symbol orelse return null));
 }
 
+/// The only source of the table `ke_gpu_render_target_renderdoc_create` passes to `create`; a null
+/// table there is reported as RenderDoc not being loaded.
 fn loadedApi() ?*Api {
     const get = loadedGetApi() orelse return null;
     var api: ?*anyopaque = null;
@@ -100,6 +125,9 @@ fn loadedApi() ?*Api {
     return @ptrCast(@alignCast(api orelse return null));
 }
 
+/// Holds the checks and the allocation behind `ke_gpu_render_target_renderdoc_create`, taking the
+/// table as a parameter rather than looking it up. A failed check or an allocation failure fills
+/// `out_error` and returns a null `ref`, with nothing left allocated.
 fn create(
     inner: ?*c.ke_gpu_render_target,
     params: ?*const c.ke_gpu_render_target_renderdoc_params,
@@ -135,6 +163,8 @@ fn create(
     return .{ .ref = &t.vtable, .destroy = destroy };
 }
 
+/// Wraps `inner` with the table of the RenderDoc already loaded in the process. Fails with the
+/// errors of `create`, among them not found when RenderDoc is not loaded.
 export fn ke_gpu_render_target_renderdoc_create(
     inner: ?*c.ke_gpu_render_target,
     params: ?*const c.ke_gpu_render_target_renderdoc_params,

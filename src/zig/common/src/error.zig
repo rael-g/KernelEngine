@@ -1,3 +1,11 @@
+//! The C ABI side of the error contract in kernel_engine/common/error.h. It exports the singleton
+//! generic error types, named by error_types.zig, and `ke_error_set`, `ke_error_last`,
+//! `ke_error_is` and `ke_error_fatal`. It also turns off the signal stack of the standard library.
+//!
+//! State is per thread: two records with a text buffer each, used alternately, so an error handed
+//! out by one set stays valid through one more set on the same thread. The message is copied and
+//! cut; the file name and the cause are kept by pointer. A type matches by walking its parent
+//! links, and a fatal error prints its chain of causes and exits.
 
 const std = @import("std");
 
@@ -8,6 +16,8 @@ const c = @cImport({
     @cInclude("stdio.h");
 });
 
+/// Win32 entry point for the Windows branch of `ke_error_fatal`. The `extern` is referenced only
+/// from that branch, so other targets never link it.
 const windows = struct {
     const SEM_FAILCRITICALERRORS: u32 = 0x0001;
     const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
@@ -29,11 +39,14 @@ export const KE_ERROR_NOT_INITIALIZED: c.ke_error_type = .{ .name = names.not_in
 export const KE_ERROR_NOT_SUPPORTED: c.ke_error_type = .{ .name = names.not_supported, .parent = null };
 export const KE_ERROR_ALREADY_EXISTS: c.ke_error_type = .{ .name = names.already_exists, .parent = null };
 
+/// A type without a name matches nothing, not even another type without one.
 fn sameName(a: *const c.ke_error_type, b: *const c.ke_error_type) bool {
     if (a.name == null or b.name == null) return false;
     return std.mem.eql(u8, std.mem.span(a.name), std.mem.span(b.name));
 }
 
+/// Walks the parent chain from the error's own type, so a category matches every type beneath it.
+/// A node also matches when it carries the wanted name at another address.
 export fn ke_error_is(err_in: ?*const c.ke_error, type_in: ?*const c.ke_error_type) callconv(.c) bool {
     const err = err_in orelse return false;
     const wanted = type_in orelse return false;
@@ -49,6 +62,8 @@ threadlocal var slots: [slot_count]c.ke_error = std.mem.zeroes([slot_count]c.ke_
 threadlocal var messages: [slot_count][message_max]u8 = std.mem.zeroes([slot_count][message_max]u8);
 threadlocal var next_slot: usize = 0;
 
+/// Runs at the failing call, through the `KE_ERROR_SET` and `KE_ERROR_WRAP` macros of the header.
+/// It reports nothing back but the record: the caller returns its own sentinel.
 export fn ke_error_set(
     out_error: [*c][*c]c.ke_error,
     err_type: ?*const c.ke_error_type,
@@ -81,6 +96,8 @@ export fn ke_error_set(
     if (out_error != null) out_error.* = e;
 }
 
+/// Also returns null when the most recent set passed a null type, not only on a thread that has
+/// set no error.
 export fn ke_error_last() callconv(.c) ?*const c.ke_error {
     const last = 1 - next_slot;
     return if (slots[last].type != null) &slots[last] else null;
@@ -91,6 +108,8 @@ fn stderrFile() ?*c.FILE {
     return c.stderr;
 }
 
+/// Never returns. Writes the chain from the given error through its `cause` links to standard
+/// error, or a fixed line when no error is given, and ends the process.
 export fn ke_error_fatal(err_in: ?*const c.ke_error) callconv(.c) noreturn {
     if (@import("builtin").os.tag == .windows) {
         _ = windows.SetErrorMode(windows.SEM_FAILCRITICALERRORS |

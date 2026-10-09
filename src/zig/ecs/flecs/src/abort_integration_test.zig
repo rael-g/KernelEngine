@@ -1,3 +1,5 @@
+//! Runs the abort probe as a child process and checks that it exits with a failure status and
+//! leaves the fatal error chain, carrying flecs's own message, on standard error.
 
 const std = @import("std");
 const testing = std.testing;

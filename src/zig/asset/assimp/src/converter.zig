@@ -1,10 +1,26 @@
+//! Converts an Assimp mesh and an Assimp material into the loader's records, `ke_mesh_data` and
+//! `ke_material_data`. Nothing is kept between calls; each conversion fills the record it is
+//! given.
+//!
+//! A mesh record owns a vertex array and an index array, allocated together in `convertMesh` and
+//! released by `freeMesh`. If either allocation fails nothing is left allocated. Every attribute
+//! a mesh may lack has a fixed substitute: a normal along the z axis, zero texture coordinates,
+//! and a tangent that `fallbackTangent` derives from the normal. When the mesh carries tangents,
+//! the sign of each tangent records the side its bitangent lies on. Faces are cut to at most three
+//! indices, and the record's index count is the number copied.
+//!
+//! A material record is plain data, so `convertMaterial` cannot fail. It starts from opaque white,
+//! and from default metallic and roughness values, and replaces each only for the property slots
+//! the material has: the base colour slot first, then the diffuse one. `directoryOf` serves the
+//! caller that resolves texture paths against the model file.
+
 const std = @import("std");
 
 const c = @import("c.zig").c;
 const log = @import("log.zig");
 
-/// Returns the directory part of `path`, including the trailing separator, or
-/// an empty slice when the path has none.
+/// The leading part of a path up to and including its last separator, either kind, or an empty
+/// string when the path has none.
 pub fn directoryOf(path: []const u8) []const u8 {
     const slash = std.mem.lastIndexOfAny(u8, path, "/\\") orelse return "";
     return path[0 .. slash + 1];
@@ -22,6 +38,10 @@ fn hasTangents(am: *const c.aiMesh) bool {
     return am.mTangents != null and am.mBitangents != null;
 }
 
+/// Derives a unit tangent from a normal by projecting a reference axis onto the plane the normal
+/// defines; the up axis is replaced by another when it is nearly parallel to the normal. The
+/// result is orthogonal to the normal only when the normal has unit length, because the projection
+/// does not divide by the normal's squared length.
 fn fallbackTangent(nx: f32, ny: f32, nz: f32) [3]f32 {
     var ux: f32 = 0;
     var uy: f32 = 1;
@@ -49,14 +69,17 @@ fn fallbackTangent(nx: f32, ny: f32, nz: f32) [3]f32 {
     return .{ tx, ty, tz };
 }
 
-/// Releases the buffers `convertMesh` attached to `md`. Both counts on the
-/// record are the exact allocation lengths, which is what the allocator needs
-/// to match the block — see the shrink at the end of `convertMesh`.
+/// Releases the vertex and index arrays of a converted mesh through the allocator that made
+/// them. The record's counts are the lengths of those allocations, so they must be unchanged
+/// since conversion. A null array is skipped.
 pub fn freeMesh(gpa: std.mem.Allocator, md: *const c.ke_mesh_data) void {
     if (md.vertices) |v| gpa.free(v[0..md.vertex_count]);
     if (md.indices) |i| gpa.free(i[0..md.index_count]);
 }
 
+/// Fills a mesh record from an Assimp mesh. Returns false when either array cannot be allocated;
+/// the record then has null arrays, but its vertex count is already set. On true the record owns
+/// both arrays until `freeMesh`. The material index is left zero for the caller to set.
 pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *c.ke_mesh_data) bool {
     md.* = std.mem.zeroes(c.ke_mesh_data);
     log.copyString(&md.name, &am.mName.data);
@@ -128,6 +151,7 @@ pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *c.ke_mesh_d
     return true;
 }
 
+/// Names one material property slot; the key alone selects the slot for every constant here.
 const MatKey = struct {
     key: [*:0]const u8,
     type: c_uint = 0,
@@ -148,6 +172,9 @@ fn getFloat(am: *const c.aiMaterial, k: MatKey, out: *f32) bool {
     return c.aiGetMaterialFloatArray(am, k.key, k.type, k.index, out, null) == c.aiReturn_SUCCESS;
 }
 
+/// Fills a material record from an Assimp material, taking the name, base colour, metallic and
+/// roughness from the slots the material has. The two texture index fields are left zero for the
+/// caller to set.
 pub fn convertMaterial(am: *const c.aiMaterial, md: *c.ke_material_data) void {
     md.* = std.mem.zeroes(c.ke_material_data);
 

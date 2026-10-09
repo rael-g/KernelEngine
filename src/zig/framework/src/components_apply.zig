@@ -1,3 +1,12 @@
+//! The table appliers of the two transform components, for the keys whose authored form is not the
+//! stored one. Each applier walks the authored entries, claims the ones it understands by marking
+//! them consumed, and leaves every other entry unmarked for the generic field writer. A claimed
+//! entry of the wrong type stops the walk with an invalid-argument error.
+//!
+//! The 2D applier turns the rotation the component already holds from degrees into radians; the
+//! generic writer must have stored the authored number there first. The 3D applier builds the
+//! stored quaternion from the three degree angles of "rotation_euler", and, for a two-component
+//! "scale", sets the depth scale to one, because the generic writer leaves it at zero.
 
 const std = @import("std");
 
@@ -12,6 +21,8 @@ fn entries(e: [*c]c.ke_variant_table_entry, n: u32) []c.ke_variant_table_entry {
     return e[0..n];
 }
 
+/// Marks the entry consumed whenever its key matches, even if the caller then refuses its value,
+/// so a claimed key never reaches the generic writer.
 fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     if (entry.key == null) return false;
     if (!std.mem.eql(u8, std.mem.span(entry.key), name)) return false;
@@ -23,6 +34,7 @@ fn isNumber(v: *const c.ke_variant) bool {
     return v.type == c.KE_VARIANT_FLOAT or v.type == c.KE_VARIANT_INT;
 }
 
+/// Composes the three axis rotations from angles in degrees into one unit quaternion.
 fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     const k = pi / 180.0 * 0.5;
     const x = dx * k;
@@ -42,6 +54,9 @@ fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     };
 }
 
+/// Registered by world.zig as the table applier of the 2D transform component. Once it returns
+/// true, a "rotation" entry has been converted from degrees to radians in place. A "rotation"
+/// entry that is not a number reports an invalid argument and returns false.
 pub export fn ke_framework_apply_transform2d(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
@@ -61,6 +76,10 @@ pub export fn ke_framework_apply_transform2d(
     return true;
 }
 
+/// Registered by world.zig as the table applier of the 3D transform component. Once it returns
+/// true, "rotation_euler" has replaced the stored rotation and a two-component "scale" has a depth
+/// scale of one. A "rotation_euler" entry that is not a three-component vector reports an invalid
+/// argument and returns false.
 pub export fn ke_framework_apply_transform(
     _: ?*anyopaque,
     ptr: ?*anyopaque,

@@ -1,3 +1,18 @@
+//! The keyboard and mouse state of one window, behind `ke_input`. The window backend feeds raw
+//! key, button, move and scroll notifications into sink slots, and the game reads the result once
+//! per frame, as live queries, as a snapshot, or as a queue of discrete events.
+//!
+//! The state separates what is held from what happened this frame. Held keys, held buttons and
+//! the mouse position persist; the pressed and released edges and the mouse and scroll deltas
+//! accumulate from one `inputUpdate` to the next and are cleared by it. Events go into a queue
+//! that holds only so many, drops the rest and notes the overflow, and a run of mouse moves
+//! collapses into one event carrying the latest position.
+//!
+//! A snapshot is a packed copy of the state, and its queries read only that copy, so it stays
+//! fixed while the live state moves on. Out-of-range codes and null arguments are answered with
+//! false or ignored; the one reported error is a null input in `inputUpdate`. The file takes no
+//! lock, so nothing orders the sinks against the frame boundary.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -15,6 +30,11 @@ const E = @import("kerror").Errors(c);
 const MAX_KEYS = c.KE_INPUT_MAX_KEYS;
 const EVENT_CAPACITY = 512;
 
+/// Allocated by `ke_input_create` and freed by `inputDestroy`. A zeroed `State` is the initial
+/// state: no key or button held, an empty queue, and `move_event` zero, which means no move event
+/// is open. `move_event` is the position in `events` plus one, so zero can stand for none. Once
+/// `event_overflow` is set, `pushEvent` refuses events until the queue is cleared, and no move
+/// event is recorded as open.
 const State = struct {
     keys_down: [MAX_KEYS]bool,
     keys_pressed: [MAX_KEYS]bool,
@@ -40,6 +60,8 @@ fn stateOf(self: *c.ke_input) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// Called by the four sinks that queue events. A full queue drops the event and sets
+/// `event_overflow`, and the queue stays full until `inputUpdate` or `inputDrainEvents` empties it.
 fn pushEvent(s: *State, kind: c.ke_input_event_kind, code: i32, x: f32, y: f32) void {
     if (s.event_count >= EVENT_CAPACITY) {
         s.event_overflow = true;
@@ -53,6 +75,8 @@ fn pushEvent(s: *State, kind: c.ke_input_event_kind, code: i32, x: f32, y: f32) 
     e.y = y;
 }
 
+/// Closes the frame: the edges and deltas the queries read are those accumulated since the previous
+/// call. The held keys and buttons and the mouse position carry over.
 fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const api = self orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -75,6 +99,8 @@ fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) b
     return true;
 }
 
+/// A press while the key is already held queues a key-down event but does not raise the pressed
+/// edge again, so key repeat from the backend does not show up as a new press.
 fn inputOnKey(self: ?*c.ke_input, key: i32, action: i32) callconv(.c) void {
     const api = self orelse return;
     if (key < 0 or key >= MAX_KEYS) return;
@@ -91,6 +117,9 @@ fn inputOnKey(self: ?*c.ke_input, key: i32, action: i32) callconv(.c) void {
     }
 }
 
+/// The delta grows by the distance from the previous reported position, which is the only
+/// position the next move is measured from. While a move event is open, the event is rewritten
+/// with the new position instead of a second one being queued.
 fn inputOnMouseMove(self: ?*c.ke_input, x: f32, y: f32) callconv(.c) void {
     const api = self orelse return;
     const s = stateOf(api);
@@ -108,6 +137,7 @@ fn inputOnMouseMove(self: ?*c.ke_input, x: f32, y: f32) callconv(.c) void {
     if (!s.event_overflow) s.move_event = s.event_count;
 }
 
+/// Keeps the same edge rule as `inputOnKey`, on the button masks rather than the key arrays.
 fn inputOnMouseButton(self: ?*c.ke_input, button: i32, action: i32) callconv(.c) void {
     const api = self orelse return;
     if (button < 0 or button >= c.KE_INPUT_MAX_MOUSE_BUTTONS) return;
@@ -124,6 +154,7 @@ fn inputOnMouseButton(self: ?*c.ke_input, button: i32, action: i32) callconv(.c)
     }
 }
 
+/// Adds to the scroll delta and queues a scroll event carrying this notification's amounts.
 fn inputOnMouseScroll(self: ?*c.ke_input, dx: f32, dy: f32) callconv(.c) void {
     const api = self orelse return;
     const s = stateOf(api);
@@ -132,6 +163,8 @@ fn inputOnMouseScroll(self: ?*c.ke_input, dx: f32, dy: f32) callconv(.c) void {
     pushEvent(s, c.KE_INPUT_EVENT_MOUSE_SCROLL, 0, dx, dy);
 }
 
+/// Events beyond the buffer's capacity are not kept: the whole queue is emptied either way. A null
+/// buffer or a zero capacity returns zero and leaves the queue as it is.
 fn inputDrainEvents(self: ?*c.ke_input, out_buf: [*c]c.ke_input_event, capacity: u32) callconv(.c) u32 {
     const api = self orelse return 0;
     if (out_buf == null or capacity == 0) return 0;
@@ -144,24 +177,31 @@ fn inputDrainEvents(self: ?*c.ke_input, out_buf: [*c]c.ke_input_event, capacity:
     return n;
 }
 
+/// True from the notification that raised the edge until the next `inputUpdate`. Out-of-range
+/// codes and a null input answer false.
 fn inputIsKeyPressed(self: ?*c.ke_input, key: i32) callconv(.c) c.ke_bool {
     const api = self orelse return 0;
     if (key < 0 or key >= MAX_KEYS) return 0;
     return @intFromBool(stateOf(api).keys_pressed[@intCast(key)]);
 }
 
+/// True from the notification that released the key until the next `inputUpdate`. Out-of-range
+/// codes and a null input answer false.
 fn inputIsKeyReleased(self: ?*c.ke_input, key: i32) callconv(.c) c.ke_bool {
     const api = self orelse return 0;
     if (key < 0 or key >= MAX_KEYS) return 0;
     return @intFromBool(stateOf(api).keys_released[@intCast(key)]);
 }
 
+/// True while the key is held, across updates. Out-of-range codes and a null input answer false.
 fn inputIsKeyDown(self: ?*c.ke_input, key: i32) callconv(.c) c.ke_bool {
     const api = self orelse return 0;
     if (key < 0 or key >= MAX_KEYS) return 0;
     return @intFromBool(stateOf(api).keys_down[@intCast(key)]);
 }
 
+/// Writes the whole state into the caller's struct, which is zeroed first. The snapshot queries
+/// read only this copy, so a snapshot taken before a later tick does not change with it.
 fn inputGetSnapshot(self: ?*c.ke_input, out: [*c]c.ke_input_snapshot) callconv(.c) void {
     const api = self orelse return;
     if (out == null) return;
@@ -188,6 +228,7 @@ fn inputGetSnapshot(self: ?*c.ke_input, out: [*c]c.ke_input_snapshot) callconv(.
     o.mouse_buttons_released = s.mouse_buttons_released;
 }
 
+/// Reads one key from a snapshot's packed words; a null snapshot or out-of-range key is false.
 fn keyBit(snapshot: [*c]const c.ke_input_snapshot, words: *const [c.KE_INPUT_KEY_WORDS]u64, key: i32) c.ke_bool {
     if (snapshot == null) return 0;
     if (key < 0 or key >= MAX_KEYS) return 0;
@@ -196,6 +237,7 @@ fn keyBit(snapshot: [*c]const c.ke_input_snapshot, words: *const [c.KE_INPUT_KEY
     return @intFromBool((words[idx / 64] & bit) != 0);
 }
 
+/// Reads one button from a snapshot's mask; a null snapshot or out-of-range button is false.
 fn buttonBit(snapshot: [*c]const c.ke_input_snapshot, mask: u32, button: i32) c.ke_bool {
     if (snapshot == null) return 0;
     if (button < 0 or button >= c.KE_INPUT_MAX_MOUSE_BUTTONS) return 0;
@@ -238,12 +280,16 @@ fn snapshotIsMouseButtonReleased(self: ?*c.ke_input, snapshot: [*c]const c.ke_in
     return buttonBit(snapshot, snapshot.*.mouse_buttons_released, button);
 }
 
+/// Frees the `State` and the vtable block that `ke_input_create` allocated; a null input is
+/// ignored.
 fn inputDestroy(self: ?*c.ke_input) callconv(.c) void {
     const api = self orelse return;
     gpa.destroy(stateOf(api));
     gpa.destroy(api);
 }
 
+/// Builds the vtable and its `State`, starting with the zeroed state, and returns a handle whose
+/// `destroy` is `inputDestroy`. The logger is not used.
 export fn ke_input_create(log: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_handle {
     _ = log;
     const empty = c.ke_input_handle{ .ref = null, .destroy = null };

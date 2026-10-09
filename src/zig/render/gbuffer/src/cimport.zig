@@ -1,3 +1,5 @@
+//! The one C import of the gbuffer plugin, exposed as `c`.
+
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/ecs/ecs.h");

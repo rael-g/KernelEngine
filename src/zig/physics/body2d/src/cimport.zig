@@ -1,3 +1,5 @@
+//! Imports every C header the body2d module uses in one translation unit, exported as `c`.
+
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/ecs/ecs.h");

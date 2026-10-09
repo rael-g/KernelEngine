@@ -1,3 +1,5 @@
+//! Imports the C headers of the audio module into one namespace, `c`.
+
 pub const c = @cImport({
     @cInclude("kernel_engine/ecs/ke_ecs.h");
     @cInclude("kernel_engine/audio/components.h");

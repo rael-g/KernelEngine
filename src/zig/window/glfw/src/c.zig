@@ -1,3 +1,4 @@
+//! The one place this plugin imports its C declarations: the contract headers and GLFW.
 
 const builtin = @import("builtin");
 

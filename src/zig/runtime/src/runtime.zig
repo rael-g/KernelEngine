@@ -1,3 +1,42 @@
+//! This file is the whole runtime plugin: the `ke_runtime` table behind a handle, and the loop that
+//! runs registered systems against an ecs and a scheduler it borrows and never frees. It holds no
+//! component data. A system declares the components it reads and writes, and the runtime uses those
+//! declarations twice: to cut each phase into waves of systems that cannot touch the same data, and
+//! to resolve the queries a body reads through. Everything lives in one `RuntimeState` inside the
+//! `RuntimeHandle` that `ke_runtime_create` returns; each system is a `RegisteredSystem`, a private
+//! copy of what the caller declared, so the caller's arrays need not outlive the call.
+//!
+//! Registration may arrive from inside a running tick, including from a body, so the system list
+//! is only edited while nothing is running. During a tick or a render phase,
+//! `runtimeRegisterSystem` and `runtimeUnregisterSystem` push onto lock-free lists of
+//! `RuntimeState`, and `runtimeTick` drains them in call order before it starts. Modules are plain
+//! load and unload hooks; unload runs in reverse order of registration at `runtimeDestroy`.
+//!
+//! A tick is `runtimeTickBody`: bind the queries of new systems, run the startup phase once, then
+//! the pre-update phase, the fixed phase as often as its accumulator allows, the update phase and
+//! the post-update phase. The accumulator is capped, so a long stall cannot trigger an unbounded
+//! burst of fixed steps. `runtimeRunPhase` runs one phase by ordering its systems as registered and
+//! letting `debugComputeWaves` close a wave whenever the next system conflicts with one already in
+//! it, so order is never changed. Each system becomes one or more `TaskPkg`, each with its own
+//! context, scheduled by `runWaveBody` and all waited for before the next wave is built.
+//!
+//! Structure changes are never made in a body. The commands handed to a body record into the
+//! `DeferQueue` of its package, a spawn reserving its id at once so later commands can use it, and
+//! `deferFlush` applies the queues in package order once the wave has returned. So no body of a
+//! wave sees storage move under it, and the next wave sees every change of the previous one.
+//!
+//! The render phase is the one that overlaps the sim. Its bodies never read the ecs: after the sim
+//! phases, `runtimeExtractRenderState` copies what each render query matched into the
+//! `ExtractedQuery` buffers of the system, and `runtimeTickBody` dispatches the phase as a
+//! `RenderJob` and returns. The next tick may then write the ecs while the previous frame is drawn,
+//! and it joins that job, through `runtimeJoinPendingRender`, before it overwrites the copies. The
+//! render phase has no command queue.
+//!
+//! A body that returns false fails its wave. The wave is still waited for and flushed, a
+//! `PhaseFailure` carries the first failure in package order together with its system's name, and
+//! the rest of the tick is skipped. A render failure is held in its job and reaches the caller at
+//! the next tick or at `runtimeFlushRender`.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -23,6 +62,8 @@ fn cAlloc(comptime T: type, n: usize) ?[*]T {
     return slice.ptr;
 }
 
+/// Frees a block that `cAlloc` returned. The count must be the one it was allocated with, because
+/// the allocator frees by length.
 fn cFree(comptime T: type, p: ?[*]T, n: usize) void {
     if (p) |pp| heap.gpa.free(pp[0..n]);
 }
@@ -45,6 +86,9 @@ const DeferKind = enum(c_int) {
     callback = 5,
 };
 
+/// One recorded structural change. `kind` decides which other fields mean something: `cid` names
+/// the component for attach and detach, `attach_offset` and `attach_size` locate the payload in the
+/// queue's arena for attach and callback, and `fn_` is set only for callback.
 const DeferCommand = struct {
     kind: DeferKind,
     entity: c.ke_entity,
@@ -54,6 +98,9 @@ const DeferCommand = struct {
     fn_: c.ke_defer_fn,
 };
 
+/// The changes one package records during its body. It starts empty for each package and grows as
+/// commands are recorded. `deferFlush` empties it, and `runtimeRunPhase` frees its buffers after
+/// that, so arena offsets are meaningful only within the wave that recorded them.
 const DeferQueue = struct {
     cmds: ?[*]DeferCommand = null,
     count: usize = 0,
@@ -63,6 +110,9 @@ const DeferQueue = struct {
     arena_capacity: usize = 0,
 };
 
+/// The state behind both the `ke_system_ctx` and the `ke_ecs_commands` of one package, which share
+/// it. `runtimeRunPhase` sets it for each package: `defer_q` is null in the render phase, where no
+/// body may record a change, and the segment arrays point at what the wave resolved for the system.
 const CtxState = struct {
     ecs: ?*c.ke_ecs,
     access_list: ?[*]const c.ke_component_access,
@@ -86,6 +136,9 @@ fn commandsOf(ptr: ?*c.ke_ecs_commands) ?*CtxState {
     return @ptrCast(@alignCast(cmds.handle));
 }
 
+/// Wires the context and the commands of one package to its `CtxState`, and installs the view and
+/// slice entries. `runtimeRunPhase` calls it while it builds each package, before the wave is
+/// dispatched.
 fn bindCtx(ctx: *c.ke_system_ctx, commands: *c.ke_ecs_commands, state: *CtxState) void {
     commands.* = .{
         .handle = state,
@@ -136,6 +189,9 @@ fn conflictOnTerm(b: *const c.ke_runtime_system_params, cid: c.ke_component_id, 
     return paramsAccesses(b, cid, &b_writes) and (a_writes or b_writes);
 }
 
+/// Reports whether two systems must not share a wave. Both arguments are registered parameters
+/// whose queries `buildSystem` has already folded into the access list, so only access lists take
+/// part. A conflict is a shared component with a writer on either side.
 fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_system_params) bool {
     if (a.queries) |queries| {
         for (0..a.query_count) |q| {
@@ -155,6 +211,9 @@ fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_
     return false;
 }
 
+/// Called by `runtimeRunPhase` with the systems of one phase in registration order. It writes each
+/// system's wave into the assignments array and the number of waves into the count pointer; the
+/// count stays zero when there are no systems or a pointer is null, and nothing is reported.
 fn debugComputeWaves(
     systems: [*c]const c.ke_runtime_system_params,
     system_count: u32,
@@ -196,6 +255,9 @@ fn debugComputeWaves(
     out_wave_count.* = current_wave + 1;
 }
 
+/// The `view` entry of every system context. It returns the segments `runtimeRunPhase` resolved for
+/// the query, or the copies `runtimeExtractRenderState` made for a render system, and gives their
+/// number through the count pointer.
 fn ctxView(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
     if (out_count != null) out_count.* = 0;
     const s = ctxOf(ctx) orelse return null;
@@ -204,6 +266,8 @@ fn ctxView(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callc
     return s.seg_ptrs.?[query_index];
 }
 
+/// Grows the command array of a queue by doubling until it holds the needed count, keeping the
+/// recorded commands. Returns false when the allocation fails, leaving the queue as it was.
 fn deferReserve(q: *DeferQueue, needed: usize) bool {
     if (needed <= q.capacity) return true;
     var new_cap: usize = if (q.capacity != 0) q.capacity * 2 else 16;
@@ -220,6 +284,10 @@ fn deferReserve(q: *DeferQueue, needed: usize) bool {
 
 const defer_arena_align: usize = 16;
 
+/// Appends the bytes at the data pointer to the arena of a queue and returns their offset, which
+/// the recorded command keeps, since the arena moves when it grows. A null data pointer only
+/// reserves the space. A size of zero records nothing and returns zero. The maximum usize value is
+/// returned when the arena cannot grow.
 fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
     if (size == 0) return 0;
     q.arena_used = std.mem.alignForward(usize, q.arena_used, defer_arena_align);
@@ -243,12 +311,17 @@ fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
     return offset;
 }
 
+/// The `slice` entry of every system context. The index and count are the ones `runtimeRunPhase`
+/// took from `sliceCountFor` when it built the package.
 fn ctxSlice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
     const s = ctxOf(ctx);
     if (out_index != null) out_index.* = if (s) |st| st.slice_index else 0;
     if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
 }
 
+/// Finds the queue a recording call writes to. It fails with `invalid_argument` for a null or
+/// unbound commands table, and with `not_supported` when the package has no queue, which is the
+/// case in the render phase.
 fn recordTarget(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferQueue {
     const s = commandsOf(self) orelse {
         E.fail(out_error, .invalid_argument, "invalid command queue", src);
@@ -260,6 +333,8 @@ fn recordTarget(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error, src: s
     };
 }
 
+/// Appends an empty command to the queue and returns it for the caller to fill. It fails with
+/// `out_of_memory` when the command array cannot grow.
 fn recordCommand(q: *DeferQueue, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferCommand {
     if (!deferReserve(q, q.count + 1)) {
         E.fail(out_error, .out_of_memory, "command queue is full", src);
@@ -270,6 +345,8 @@ fn recordCommand(q: *DeferQueue, out_error: [*c][*c]c.ke_error, src: std.builtin
     return cmd;
 }
 
+/// Runs in a body. The id is reserved at once, so the body can attach to it in the same queue; the
+/// entity enters the world when `deferFlush` reaches the spawn.
 fn commandsSpawn(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_entity {
     const q = recordTarget(self, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
     const ecs = commandsOf(self).?.ecs orelse {
@@ -287,6 +364,9 @@ fn commandsSpawn(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error) callc
     return entity;
 }
 
+/// Runs in a body. The payload is copied into the arena now, so the caller's buffer may be reused
+/// after the call. A non-zero size is checked against the component size here, and the copy into
+/// the component happens in `deferFlush`.
 fn commandsAttach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const q = recordTarget(self, out_error, @src()) orelse return false;
     if (size != 0) {
@@ -330,6 +410,8 @@ fn commandsDespawn(self: ?*c.ke_ecs_commands, entity: c.ke_entity, out_error: [*
     return true;
 }
 
+/// Runs in a body. `deferFlush` later calls the function with the world and a pointer to a copy of
+/// the user bytes taken here, so the caller's bytes need not outlive the call.
 fn commandsDefer(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const q = recordTarget(self, out_error, @src()) orelse return false;
     if (func == null) {
@@ -349,8 +431,12 @@ fn commandsDefer(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const a
     return true;
 }
 
+/// Process-wide count of the commands `deferFlush` has applied, across every runtime.
 var s_defer_applied_total: u32 = 0;
 
+/// Called by `runtimeRunPhase` once every task of a wave has returned, for each package in package
+/// order. It applies the recorded commands in the order they were recorded, then empties the queue;
+/// the caller frees its buffers afterwards.
 fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) void {
     for (0..q.count) |i| {
         const cmd = &q.cmds.?[i];
@@ -384,11 +470,16 @@ fn resetDeferApplied() void {
     s_defer_applied_total = 0;
 }
 
+/// A query of a registered system. Its `terms` point into the system's own term storage, not into
+/// the array the caller passed.
 const QueryDecl = struct {
     terms: [*]const c.ke_component_access,
     term_count: u32,
 };
 
+/// The render copy of one query: the matched entities and one column buffer per term, all sized to
+/// `capacity`. The buffers are kept across ticks and grown by `runtimeExtractRenderState`, which
+/// points `seg` at them.
 const ExtractedQuery = struct {
     seg: c.ke_ecs_segment,
     entities_buf: ?[*]c.ke_entity,
@@ -399,6 +490,8 @@ const ExtractedQuery = struct {
     elem_sizes_cached: bool,
 };
 
+/// Storage for the segments one query resolves into, with one column pointer per term for each
+/// segment. A `RegisteredSystem` owns one per query.
 const SegBuf = struct {
     ptr: ?[*]c.ke_ecs_segment = null,
     cap: usize = 0,
@@ -411,6 +504,8 @@ const SegBuf = struct {
         self.* = .{};
     }
 
+    /// Replaces both arrays when either is too small for the requested number of segments and
+    /// columns. The old contents are not carried over.
     fn reserve(self: *SegBuf, needed: usize, terms: usize) bool {
         if (needed <= self.cap and needed * terms <= self.cols_cap) return true;
         const segments = cAlloc(c.ke_ecs_segment, needed) orelse return false;
@@ -425,6 +520,9 @@ const SegBuf = struct {
     }
 };
 
+/// Resolves a query into the buffer, growing it to the match count the ecs reports and asking
+/// again. Returns the number of matched segments, or null when the buffer cannot grow or the
+/// count does not settle within the attempts allowed.
 fn resolveInto(ecs: *c.ke_ecs, query: c.ke_query_id, buf: *SegBuf, terms: usize) ?usize {
     if (!buf.reserve(initial_segments_per_query, terms)) return null;
     for (0..resolve_attempts) |_| {
@@ -436,6 +534,9 @@ fn resolveInto(ecs: *c.ke_ecs, query: c.ke_query_id, buf: *SegBuf, terms: usize)
     return null;
 }
 
+/// A system as the runtime holds it: its own copy of the declaration, the storage of its queries,
+/// and the access list that the conflict rule reads. It is linked through `pending_next` while it
+/// waits in `RuntimeState.pending_systems`, and `releaseSystem` frees all of it.
 const RegisteredSystem = struct {
     id: u64,
     pending_next: ?*RegisteredSystem,
@@ -464,6 +565,9 @@ fn allocZeroed(comptime T: type, n: usize) ?[]T {
     return slice;
 }
 
+/// Allocates every array a registered system needs for its queries in one pass, so `buildSystem`
+/// only fills them. On failure it returns false with the arrays allocated so far still attached to
+/// the system, for `releaseSystem` to free.
 fn allocQueryStorage(rs: *RegisteredSystem, queries: [*c]const c.ke_query_decl, query_count: usize, total_terms: usize, access_count: usize) bool {
     rs.term_storage = allocZeroed(c.ke_component_access, total_terms) orelse return false;
     rs.query_decls = allocZeroed(QueryDecl, query_count) orelse return false;
@@ -482,6 +586,8 @@ fn allocQueryStorage(rs: *RegisteredSystem, queries: [*c]const c.ke_query_decl, 
     return true;
 }
 
+/// Frees everything a registered system owns, its own record included. It runs when a system is
+/// removed, when its registration fails, and when a system is still pending at teardown.
 fn releaseSystem(rs: *RegisteredSystem) void {
     for (rs.extracted) |*eq| {
         if (eq.entities_buf) |eb| cFree(c.ke_entity, eb, eq.capacity);
@@ -511,6 +617,9 @@ const RegisteredModule = struct {
     on_unload: c.ke_module_unload_fn,
 };
 
+/// The render phase of one tick. One job is allocated and reused for every tick. `runtimeTickBody`
+/// sets `h` and `dt` before dispatch, and `runtimeJoinPendingRender` reads `failure` back once the
+/// task has been waited for.
 const RenderJob = struct {
     h: *RuntimeHandle,
     dt: f32,
@@ -522,6 +631,11 @@ const PendingRemoval = struct {
     next: ?*PendingRemoval,
 };
 
+/// The state every function of the file works on. `in_tick` and `in_render` decide whether a
+/// registration waits in `pending_systems`. `systems_prepared` counts the systems at the front of
+/// the array whose queries are bound. The per-phase scratch arrays hold one block of
+/// `max_systems_per_phase` entries per phase, and `pending_render_task` with `render_job` describe
+/// the render phase in flight, if any.
 const RuntimeState = struct {
     ecs: *c.ke_ecs,
     scheduler: *c.ke_scheduler,
@@ -554,6 +668,9 @@ const RuntimeState = struct {
     render_job: ?*RenderJob,
 };
 
+/// What the `ke_runtime` handle points to. `ke_runtime_create` fills the `api` table with this
+/// file's functions and points the table's handle field back here, so every entry reaches the state
+/// through `handleOf`. It is allocated by `ke_runtime_create` and freed by `runtimeDestroy`.
 const RuntimeHandle = struct {
     api: c.ke_runtime,
     state: RuntimeState,
@@ -563,6 +680,11 @@ fn handleOf(self: *c.ke_runtime) *RuntimeHandle {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// Returns the module's id, or zero with the error set. Fails with `invalid_argument` for a null
+/// runtime or a missing load hook, with `out_of_memory` when the module array cannot grow, and
+/// with the hook's own error when it returns false. The hook runs with the module already
+/// recorded, so systems it registers are registered before the call returns; a refused module has
+/// its unload hook cleared and is never unloaded.
 fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_module_id {
     if (self == null or self.?.handle == null or p == null or p.*.on_load == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -597,6 +719,8 @@ fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_
     return id;
 }
 
+/// Adds a component access to `derived_access`, or-ing the access bits into the entry the same
+/// component already has, so each component appears once in the list the conflict rule reads.
 fn mergeAccess(rs: *RegisteredSystem, want: c.ke_component_access) void {
     for (0..rs.derived_access_count) |d| {
         if (rs.derived_access[d].cid == want.cid) {
@@ -608,6 +732,11 @@ fn mergeAccess(rs: *RegisteredSystem, want: c.ke_component_access) void {
     rs.derived_access_count += 1;
 }
 
+/// Copies a registration into a new `RegisteredSystem` that owns its name, its query terms and its
+/// access list. When the declaration has queries, their terms are merged with its access list into
+/// `derived_access`, and the copy's `params` drops the queries, so from then on the access list
+/// alone describes the system. On failure nothing stays allocated, and null comes back with the
+/// error set.
 fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
     var total_terms: usize = 0;
     if (p.*.query_count > 0) {
@@ -708,6 +837,9 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
     return rs;
 }
 
+/// Appends a system to the list in registration order. It refuses, with the error set, a system
+/// whose phase already holds the maximum number of systems. A refused system is not added and stays
+/// owned by the caller.
 fn appendSystem(h: *RuntimeHandle, rs: *RegisteredSystem, out_error: [*c][*c]c.ke_error) bool {
     var in_phase: u32 = 0;
     for (0..h.state.system_count) |si| {
@@ -737,6 +869,9 @@ fn appendSystem(h: *RuntimeHandle, rs: *RegisteredSystem, out_error: [*c][*c]c.k
     return true;
 }
 
+/// Returns the id at once, whether or not the system is yet in the list. While a tick or a render
+/// phase is in flight the system is pushed onto `RuntimeState.pending_systems` with a
+/// compare-exchange; otherwise the render phase in flight is joined and the system is appended now.
 fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
     if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -761,6 +896,10 @@ fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_
     return rs.id;
 }
 
+/// Called at the start of `runtimeTick`, before `in_tick` is raised. When anything is pending it
+/// first joins the render phase in flight, then appends the pending systems in call order and
+/// applies the pending removals in call order, so a removal queued for a system registered in the
+/// same window still finds it.
 fn applyPendingSystems(h: *RuntimeHandle) void {
     var stack = h.state.pending_systems.swap(null, .acq_rel);
     var removals = h.state.pending_removals.swap(null, .acq_rel);
@@ -791,6 +930,10 @@ fn applyPendingSystems(h: *RuntimeHandle) void {
     }
 }
 
+/// Removes the system with the given id from the list, shifting the later ones down and keeping
+/// `systems_prepared` in step, then releases it. Returns false when no system has that id. Both
+/// callers have joined the render phase first, since the removed system may be one a render job
+/// reads.
 fn removeSystemNow(h: *RuntimeHandle, id: c.ke_system_id) bool {
     const systems = h.state.systems orelse return false;
     for (0..h.state.system_count) |i| {
@@ -805,6 +948,11 @@ fn removeSystemNow(h: *RuntimeHandle, id: c.ke_system_id) bool {
     return false;
 }
 
+/// Refuses, with the error set, an id that no registration has issued. While a tick or a render
+/// phase is in flight the removal is pushed onto `RuntimeState.pending_removals` and reported as
+/// done; it is looked up only when the next tick applies it, so an id already removed passes here
+/// and is dropped there without an error. Otherwise the render phase in flight is joined and the
+/// system is removed now.
 fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or self.?.handle == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -833,6 +981,8 @@ fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: 
     return false;
 }
 
+/// Returns the id of the last system in the list, or zero when the list is empty. A system still
+/// waiting in `RuntimeState.pending_systems` is not in the list and is not counted.
 fn runtimeLastSystem(self: ?*c.ke_runtime) callconv(.c) c.ke_system_id {
     if (self == null or self.?.handle == null) return 0;
     const h = handleOf(self.?);
@@ -841,6 +991,9 @@ fn runtimeLastSystem(self: ?*c.ke_runtime) callconv(.c) c.ke_system_id {
     return systems[h.state.system_count - 1].?.id;
 }
 
+/// The work one scheduler task runs: one slice of one system, with its own context, commands and
+/// queue. `ctx` refers to `commands` and `state`, and its address is handed to the scheduler, so
+/// the package stays in its slot until the wave has been waited for.
 const TaskPkg = struct {
     state: CtxState,
     ctx: c.ke_system_ctx,
@@ -852,6 +1005,9 @@ const TaskPkg = struct {
     allow_defer: bool,
 };
 
+/// The first failure of a phase or of a wave: the error type and the name of the system that raised
+/// it. Both are null when there is no failure. `firstOf` keeps the earlier one when both have a
+/// type.
 const PhaseFailure = struct {
     type: ?*const c.ke_error_type = null,
     system: [*c]const u8 = null,
@@ -861,6 +1017,9 @@ const PhaseFailure = struct {
     }
 };
 
+/// The scheduler's entry for one package, run on a worker. The body runs with the package's own
+/// context. When it fails, only the error's type is handed back through the failure out-pointer,
+/// and the waiting thread reads that type back through the scheduler and raises it again.
 fn taskPkgRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
     const pkg: *TaskPkg = @ptrCast(@alignCast(data.?));
     if (pkg.allow_defer) pkg.state.defer_q = &pkg.defer_q;
@@ -873,6 +1032,8 @@ fn taskPkgRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) cal
         E.typeOf(.general);
 }
 
+/// What `runWaveBody` needs for one wave: the packages built for it, a task slot and a pinned
+/// worker index for each, and their number. The arrays are the runtime's per-phase scratch.
 const WaveRunCtx = struct {
     h: *RuntimeHandle,
     pkgs: [*]TaskPkg,
@@ -881,6 +1042,9 @@ const WaveRunCtx = struct {
     wave_size: u32,
 };
 
+/// Dispatches every package of the wave, the pinned ones to their worker and the others to any
+/// worker, then waits for all of them, including after one has failed. The failure it returns is
+/// the first in package order, with the name of its system.
 fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
     const sched = wc.h.state.scheduler;
     var t: u32 = 0;
@@ -904,6 +1068,9 @@ fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
     return failure;
 }
 
+/// Frees the per-phase arrays that `ke_runtime_create` allocated, each holding
+/// `max_systems_per_phase` entries per phase, and the extraction scratch. It runs when creation
+/// fails and at teardown.
 fn freePhaseScratch(h: *RuntimeHandle) void {
     h.state.extract_scratch.free();
     const n: usize = @as(usize, h.state.max_systems_per_phase) * KE_RUNTIME_PHASE_COUNT;
@@ -921,10 +1088,15 @@ fn freePhaseScratch(h: *RuntimeHandle) void {
     h.state.phase_pinned = null;
 }
 
+/// The failure that names a system whose segment or extraction buffers could not be allocated.
 fn segmentAllocationFailed(rs: *const RegisteredSystem) PhaseFailure {
     return .{ .type = E.typeOf(.out_of_memory), .system = rs.params.name };
 }
 
+/// Runs one phase wave by wave until it finishes or its first failure stops it. For the render
+/// phase it raises `in_render` for the whole run, which makes registrations wait. A phase with no
+/// systems returns no failure, and so does a call whose scratch arrays were never allocated; the
+/// latter is not reported.
 fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
     if (phase == c.KE_PHASE_RENDER) h.state.in_render.store(true, .release);
     defer if (phase == c.KE_PHASE_RENDER) h.state.in_render.store(false, .release);
@@ -1017,6 +1189,9 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
     return failure;
 }
 
+/// Returns how many packages a system gets in the wave being built, never more than the room left
+/// in it. A system is split only when it declared per-entity work and has no pinned thread, and
+/// only when the scheduler reports more than one worker, which is read here.
 fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: u32) u32 {
     if (room == 0) return 0;
     if (!p.per_entity or p.pinned_thread != 0) return 1;
@@ -1026,6 +1201,10 @@ fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: 
     return @min(workers, room);
 }
 
+/// Registers with the ecs the queries of the systems from the first index up to the last, and
+/// stores each id in its system. Returns the first system the ecs refuses, or whose id buffer
+/// cannot be allocated, and null when all are bound. With no query registration in the ecs it binds
+/// nothing and returns null.
 fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) ?*RegisteredSystem {
     if (h.state.ecs.query_register == null) return null;
     for (first..last) |si| {
@@ -1042,6 +1221,9 @@ fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) ?*Registered
     return null;
 }
 
+/// Called at the start of each tick. It binds the queries of the systems appended since the last
+/// successful bind. The prepared count moves forward only when all of them bind, so a refused
+/// system is tried again on the next tick, and the failure names it.
 fn runtimePrepareSystems(h: *RuntimeHandle) PhaseFailure {
     if (h.state.systems_prepared >= h.state.system_count) return .{};
     const first = h.state.systems_prepared;
@@ -1053,6 +1235,11 @@ fn runtimePrepareSystems(h: *RuntimeHandle) PhaseFailure {
     return .{};
 }
 
+/// Called by `runtimeTickBody` after the sim phases, once the render phase in flight has been
+/// joined and before the next one is dispatched, so no render task reads the buffers being written.
+/// For each query of each render system it resolves the matches, grows the query's copy buffers
+/// when the matches exceed their capacity, copies the entities and every column, and writes one
+/// segment holding them all.
 fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
     if (h.state.ecs.query_resolve == null) return .{};
     const scratch = &h.state.extract_scratch;
@@ -1133,6 +1320,8 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
     return .{};
 }
 
+/// The scheduler's entry for the render phase, run on a worker. The failure stays in the job for
+/// `runtimeJoinPendingRender` to read, and its type is also handed back to the scheduler.
 fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
     const job: *RenderJob = @ptrCast(@alignCast(data.?));
     job.failure = runtimeRunPhase(job.h, c.KE_PHASE_RENDER, job.dt);
@@ -1141,6 +1330,8 @@ fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) c
     }
 }
 
+/// Waits for the render phase in flight, if any, and returns the failure it recorded. The record is
+/// cleared when read, so a failure is returned once.
 fn runtimeJoinPendingRender(h: *RuntimeHandle) PhaseFailure {
     const task = h.state.pending_render_task orelse return .{};
     _ = h.state.scheduler.wait.?(h.state.scheduler, task, null);
@@ -1151,6 +1342,9 @@ fn runtimeJoinPendingRender(h: *RuntimeHandle) PhaseFailure {
     return failure;
 }
 
+/// Entry point of a tick. It applies the pending system changes before raising `in_tick`, so a
+/// registration made from inside the tick waits for the next one, and it lowers `in_tick` on
+/// return, failure included.
 fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or self.?.handle == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -1163,6 +1357,13 @@ fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) cal
     return runtimeTickBody(self, dt, out_error);
 }
 
+/// Runs the sim phases of one tick, then joins the previous render phase, extracts the render
+/// state and dispatches the next render phase, which it does not wait for. Returns false at the
+/// first failing step, with `invalid_argument` for a null runtime or a negative dt and otherwise
+/// with the type and system name of the failure. The render phase in flight is joined before a
+/// failure is reported, and a failed tick dispatches no render phase. The startup phase is marked
+/// started before it runs, so a startup that fails is not run again. Without a render job record
+/// the render phase runs inline and its failure is reported here.
 fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) bool {
     if (self == null or self.?.handle == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -1224,6 +1425,9 @@ fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error)
     return true;
 }
 
+/// Waits for the render phase dispatched by the last tick and reports its failure. A tick returns
+/// before that phase finishes, so a failure of the phase reaches the caller only here or at the
+/// next tick.
 fn runtimeFlushRender(self: ?*c.ke_runtime, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or self.?.handle == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -1237,6 +1441,9 @@ fn runtimeFlushRender(self: ?*c.ke_runtime, out_error: [*c][*c]c.ke_error) callc
     return true;
 }
 
+/// The handle's destroy entry. It joins the render phase, runs `KE_PHASE_SHUTDOWN` if the runtime
+/// ever started, unloads the modules in reverse order of registration, and releases the pending and
+/// registered systems and the scratch. The ecs and the scheduler are not touched.
 fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     if (self == null or self.?.handle == null) return;
     const h = handleOf(self.?);
@@ -1278,6 +1485,12 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
     cFree(RuntimeHandle, @ptrCast(h), 1);
 }
 
+/// Creates a runtime over an ecs and a scheduler that it does not own: it keeps the pointers and
+/// never frees them. A null ecs or scheduler fails with `invalid_argument`, and an allocation
+/// failure with `out_of_memory`. The params pointer may be null, and a zero in `fixed_dt`,
+/// `fixed_dt_max_accum` or `max_systems_per_phase` takes that field's default. The per-phase
+/// scratch arrays are allocated here, and if that fails the result is an empty handle with the
+/// error set.
 export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params: [*c]const c.ke_runtime_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_runtime_handle {
     const empty = c.ke_runtime_handle{ .ref = null, .destroy = null };
     if (ecs == null or scheduler == null) {

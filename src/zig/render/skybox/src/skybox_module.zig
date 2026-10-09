@@ -1,3 +1,20 @@
+//! The skybox pass is the render-phase system "render.skybox". Each frame it draws one full-screen
+//! triangle into the "hdr" target, keeping what is already there, with a fragment shader that
+//! looks up the environment cubemap of the skybox component along the direction of each pixel. It
+//! reads the "depth" target as well, and a frame whose skybox query has no row passes the "none"
+//! texture handle as the environment.
+//!
+//! `SkyboxModule` carries the whole pass. `ke_render_skybox_create` allocates it, `setup` creates
+//! the layout, pipeline and uniform buffer and fills the pass description, access list and
+//! queries, and only then is the system registered. `destroyModule` releases the handles that are
+//! valid, so a failed step, a refused registration and `destroyHandle` all release a module the
+//! same way.
+//!
+//! `system` rebuilds nothing but the uniform and the bind group. The uniform receives the inverse
+//! of the camera rotation and projection product, so a pixel can be turned back into a direction,
+//! and the bind group is recreated because the environment texture and the depth view can change
+//! between frames. A frame without a camera does nothing.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -10,6 +27,10 @@ const gpa = heap.gpa;
 
 const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
+/// The state of one skybox pass. `ke_render_skybox_create` allocates it, and `destroyHandle` frees
+/// it, or `ke_render_skybox_create` does when creation fails. The runtime keeps its address as the
+/// user data of the system, so it must not be moved. `io` and the query terms point into its own
+/// arrays. After `setup`, only `bind_group` changes.
 const SkyboxModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -36,6 +57,11 @@ inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
     return @alignCast(@ptrCast(user.?));
 }
 
+/// The body of the "render.skybox" system, which the runtime calls as its `execute` in the render
+/// phase. Returns true with no pass when the first query has no camera, or when the render service
+/// gives no pass; no error is set in either case. A bind group that cannot be created ends the
+/// pass, puts the error into the error output, returns false, and leaves `bind_group` invalid
+/// until the next call.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const sm = moduleOf(user);
     const core = sm.core;
@@ -105,6 +131,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     return true;
 }
 
+/// Called once by `ke_render_skybox_create`, before the system is registered. On false it has
+/// stopped at a failing step, and the objects made before that step stay in the module for
+/// `destroyModule` to release.
 fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          render_camera: *c.ke_render_camera, camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
@@ -191,6 +220,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+/// Releases each handle that is valid, so it also releases a module that `setup` left half built.
 fn destroyModule(sm: *const SkyboxModule) void {
     const dev = sm.device;
     if (sm.bind_group != c.KE_GPU_INVALID_HANDLE)
@@ -201,12 +231,19 @@ fn destroyModule(sm: *const SkyboxModule) void {
         dev.destroy_bind_group_layout.?(dev, sm.bgl);
 }
 
+/// The `destroy` slot of the handle `ke_render_skybox_create` returns. Releases the GPU objects,
+/// then frees the module. A null argument is ignored.
 fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
     const sm: *SkyboxModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(sm);
     gpa.destroy(sm);
 }
 
+/// Creates the skybox pass as a render phase system of `runtime`, using `core` for render service
+/// calls, `device` for GPU objects and `render_camera` for the view and projection. Returns an
+/// empty handle, with the error output untouched, when one of those pointers is null or the
+/// module cannot be allocated. When `setup` or the registration fails, it returns an empty
+/// handle, and the error output holds whatever that step set.
 export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                    device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                    camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,

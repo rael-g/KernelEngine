@@ -1,8 +1,13 @@
+//! Row-major 4x4 matrix arithmetic for the framework's transforms, with no state. Vectors are row
+//! vectors and the translation sits in the last row, so in a product the first factor applies
+//! first. The two constructors write a whole matrix from a pose and read none, while `mul` is the
+//! only function that reads existing matrices: it composes a local matrix with a parent's. No
+//! function takes an error argument, so none can fail.
 
 const c = @import("c.zig").c;
 
-/// Row-major 4x4 multiply: out = a * b. Computed into a temporary so `out` may
-/// alias either input.
+/// Writes `a` times `b` to `out`. The product is finished in a temporary before the output is
+/// written, so the output may be the same matrix as either input.
 pub fn mul(out: *c.ke_mat4, a: *const c.ke_mat4, b: *const c.ke_mat4) void {
     var res: [16]f32 = undefined;
     for (0..4) |i| {
@@ -17,8 +22,9 @@ pub fn mul(out: *c.ke_mat4, a: *const c.ke_mat4, b: *const c.ke_mat4) void {
     out.m = res;
 }
 
-/// Composes translation, rotation (quaternion) and scale into a row-major
-/// affine matrix with translation in the last row.
+/// Writes the matrix of a scale, then a rotation, then a translation. The quaternion is used as
+/// given and never normalized, so one that is not of unit length makes the rotation block
+/// non-orthogonal.
 pub fn fromTransform(
     out: *c.ke_mat4,
     pos: *const c.ke_vec3,
@@ -48,7 +54,8 @@ pub fn fromTransform(
     };
 }
 
-/// Composes a 2D pose into a row-major affine matrix, rotating about Z.
+/// Writes the matrix of a 2D pose in the same layout as `fromTransform`: the rotation turns about
+/// the z axis, and depth lands in the z translation. The z scale is one.
 pub fn fromTransform2d(
     out: *c.ke_mat4,
     pos: *const c.ke_vec2,

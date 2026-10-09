@@ -1,6 +1,22 @@
+//! An in-memory store of typed values addressed by section and key, with change notification per
+//! section. It keeps no file and no defaults: a getter returns the fallback its caller passes when
+//! the key is missing or holds a value of another type, the one conversion being an integer read
+//! as a double.
+//!
+//! Everything lives in one `State`, allocated by `ke_configuration_create` and reached through the
+//! `api` table of the handle. `entries` holds at most one `Entry` per section and key, since
+//! `upsert` looks before it appends. A setter rejects null arguments, stores the value, and only
+//! then calls `notify`, so a subscriber sees the new value. A failure before the store is written
+//! leaves the store as it was.
+//!
+//! Subscriptions are slots of `subs`. `subscribe` reuses the first inactive `Sub` or appends one
+//! and takes its id from `next_sub_id`, which only grows, so an id names at most one active slot.
+//! There is no locking: every call runs on the thread that makes it.
 
 const std = @import("std");
 
+/// Sets the standard library's signal stack size option to null, so no alternate signal stack is
+/// set up.
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const ke = @cImport({
     @cInclude("kernel_engine/common/error.h");
@@ -8,10 +24,14 @@ const ke = @cImport({
 });
 
 const heap = @import("heap");
+/// The allocator every allocation in this file goes through, taken from the heap module.
 const gpa = heap.gpa;
 
+/// The sentinel `subscribe` returns on failure, and the id `unsubscribe` ignores.
 const NONE: u32 = std.math.maxInt(u32);
 
+/// The typed payload of an `Entry`. A `string` is an owned, zero-terminated copy, and the other
+/// variants hold their value inline. The active variant is the type the key was last written with.
 const Value = union(enum) {
     int: i64,
     double: f64,
@@ -19,12 +39,17 @@ const Value = union(enum) {
     string: [:0]u8,
 };
 
+/// One key of the store. Its `section` and `key` copies live as long as the entry. `value` is the
+/// only part a setter changes, and when the old value is a string, its payload is freed before the
+/// new value is stored.
 const Entry = struct {
     section: [:0]u8,
     key: [:0]u8,
     value: Value,
 };
 
+/// One subscription slot. An inactive slot has no callback and keeps its `section` copy until
+/// `subscribe` reuses it or `destroy` frees it, so `subs` never shrinks.
 const Sub = struct {
     id: u32,
     section: [:0]u8,
@@ -33,6 +58,9 @@ const Sub = struct {
     active: bool,
 };
 
+/// The store behind a handle. The handle's `ref` is the address of `api`, and `api.handle` points
+/// back at this `State`, which is how every function in the table reaches the store. `next_sub_id`
+/// only grows, so subscription ids are never repeated.
 const State = struct {
     api: ke.ke_configuration,
     entries: std.ArrayListUnmanaged(Entry),
@@ -48,6 +76,8 @@ fn setErr(out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]c
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
 
+/// The entry for this section and key, or null. The pointer is invalidated by the next append to
+/// `entries`, which only `upsert` makes.
 fn findEntry(st: *State, section: []const u8, key: []const u8) ?*Entry {
     for (st.entries.items) |*e| {
         if (std.mem.eql(u8, e.section, section) and std.mem.eql(u8, e.key, key)) return e;
@@ -55,6 +85,8 @@ fn findEntry(st: *State, section: []const u8, key: []const u8) ?*Entry {
     return null;
 }
 
+/// Frees the string of `e` when it holds one. `value` still refers to the freed slice, so the
+/// caller must store a new value before anything reads the entry.
 fn freeStringPayload(e: *Entry) void {
     switch (e.value) {
         .string => |s| gpa.free(s),
@@ -62,6 +94,10 @@ fn freeStringPayload(e: *Entry) void {
     }
 }
 
+/// Returns the entry for this section and key, creating it when missing. An existing entry's string
+/// payload is freed here, so the setter must store a new value before anything reads it. A new
+/// entry starts with a placeholder integer that the setter always overwrites. On failure it sets an
+/// out-of-memory error and returns null, and no entry is added.
 fn upsert(st: *State, section: []const u8, key: []const u8, out_error: ?*?*ke.ke_error) ?*Entry {
     if (findEntry(st, section, key)) |e| {
         freeStringPayload(e);
@@ -86,6 +122,9 @@ fn upsert(st: *State, section: []const u8, key: []const u8, out_error: ?*?*ke.ke
     return &st.entries.items[st.entries.items.len - 1];
 }
 
+/// Runs the callbacks of the active subscriptions on `section`, in list order, on the calling
+/// thread. Each callback gets the section pointer the setter received, not a copy, so it is valid
+/// only during that call.
 fn notify(st: *State, section_c: [*c]const u8) void {
     const section = std.mem.span(section_c);
     for (st.subs.items) |*s| {
@@ -106,6 +145,7 @@ fn getInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u
     return fallback;
 }
 
+/// The one getter that converts: an integer entry is returned as a double.
 fn getDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: f64) callconv(.c) f64 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
@@ -129,6 +169,8 @@ fn getBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const 
     return fallback;
 }
 
+/// Returns the entry's own string, not a copy, so the pointer stops being valid at the next write
+/// to its key or at `destroy`.
 fn getString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: [*c]const u8) callconv(.c) [*c]const u8 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
@@ -140,6 +182,9 @@ fn getString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
     return fallback;
 }
 
+/// Reports an invalid-argument error and returns false when an argument is null, and an
+/// out-of-memory error when the entry cannot be created. Otherwise the new value is stored and
+/// the subscribers of the section run before it returns. `setDouble` and `setBool` do the same.
 fn setInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: i64, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (self == null or section == null or key == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
@@ -176,6 +221,9 @@ fn setBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const 
     return true;
 }
 
+/// Copies the value before the entry is looked up, so a failed copy or entry creation leaves the
+/// store unchanged. A successful write frees the previous string, which makes the pointer an
+/// earlier `getString` returned for this key invalid.
 fn setString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: [*c]const u8, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (self == null or section == null or key == null or value == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
@@ -195,6 +243,9 @@ fn setString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
     return true;
 }
 
+/// Stores the subscription in the first inactive slot, or appends a slot, and returns the id taken
+/// from `next_sub_id`. A reused slot takes the new id, so the id of its previous subscription no
+/// longer matches it. On failure it returns `NONE` and changes neither `subs` nor `next_sub_id`.
 fn subscribe(self: [*c]ke.ke_configuration, section: [*c]const u8, cb: ke.ke_configuration_change_func, ctx: ?*anyopaque) callconv(.c) ke.ke_configuration_subscription {
     if (self == null or section == null or cb == null) return NONE;
     const st = state(self);
@@ -224,6 +275,7 @@ fn subscribe(self: [*c]ke.ke_configuration, section: [*c]const u8, cb: ke.ke_con
     return id;
 }
 
+/// Deactivates the slot with this id, if one is active, and clears its callback.
 fn unsubscribe(self: [*c]ke.ke_configuration, sub: ke.ke_configuration_subscription) callconv(.c) void {
     if (self == null or sub == NONE) return;
     const st = state(self);
@@ -236,6 +288,8 @@ fn unsubscribe(self: [*c]ke.ke_configuration, sub: ke.ke_configuration_subscript
     }
 }
 
+/// After it returns, the `State`, the handle's `ref` and every pointer from `getString` are
+/// invalid.
 fn destroy(self: [*c]ke.ke_configuration) callconv(.c) void {
     if (self == null) return;
     const st = state(self);
@@ -250,6 +304,9 @@ fn destroy(self: [*c]ke.ke_configuration) callconv(.c) void {
     gpa.destroy(st);
 }
 
+/// Allocates a store and returns a handle whose `ref` is its `api` table and whose `destroy` frees
+/// it. On allocation failure it sets an out-of-memory error and returns a handle with null `ref`
+/// and `destroy`.
 export fn ke_configuration_create(out_error: ?*?*ke.ke_error) ke.ke_configuration_handle {
     const st = gpa.create(State) catch {
         setErr(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "configuration: state allocation failed", @src());

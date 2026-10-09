@@ -1,3 +1,14 @@
+//! Loads a font file into one RGBA atlas plus a metrics record per glyph of a codepoint range,
+//! behind the font-loader contract. A loader owns only a `State`; every load works on buffers that
+//! live for that call, so loads share nothing and keep nothing.
+//!
+//! A load reads the whole file, packs the range into an alpha-only buffer with the stb packer,
+//! and only then widens that buffer into white pixels carrying the alpha. Glyph rectangles come
+//! back from the packer as pixels and are stored as texture coordinates. The result is allocated
+//! last, so a caller gets either a complete `ke_font_data` or null with the cause in the error
+//! output, never a partial one, and every earlier allocation is released on each failure path.
+//! The result is released only through the loader's `free_font` slot.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -22,10 +33,14 @@ const c = @cImport({
 
 const E = @import("kerror").Errors(c);
 
+/// Reached only through the `handle` field of its loader; it lives exactly as long as that loader,
+/// from creation until `destroy`.
 const State = struct {
     logger: ?*c.ke_logger,
 };
 
+/// Frees the `State` and the loader record that `ke_font_loader_stb_create` allocated. A null
+/// loader is ignored. Fonts already loaded are separate allocations and stay valid until freed.
 fn destroy(self: ?*c.ke_font_loader) callconv(.c) void {
     const loader = self orelse return;
     const state: *State = @ptrCast(@alignCast(loader.handle));
@@ -33,6 +48,8 @@ fn destroy(self: ?*c.ke_font_loader) callconv(.c) void {
     gpa.destroy(loader);
 }
 
+/// Returns the whole file, or null when it cannot be opened, is empty, cannot be allocated, or
+/// reads short. Null covers all of these causes, so the caller reports them as one error.
 fn readFile(path: [*c]const u8) ?[]u8 {
     const fp = libc.fopen(path, "rb") orelse return null;
     defer _ = libc.fclose(fp);
@@ -50,6 +67,14 @@ fn readFile(path: [*c]const u8) ?[]u8 {
     return buf;
 }
 
+/// Runs in the `load_font` slot, on the calling thread. On success the caller owns the result and
+/// releases it through `free_font`; its metrics place each glyph's box in the atlas as fractions
+/// of the atlas size. On failure nothing it allocated survives the call, the pack context is
+/// ended whenever it was begun, and null comes back with the cause in the error output: an
+/// invalid-argument error for a null loader or path, a non-positive pixel size, or a zero atlas
+/// size or codepoint count; an I/O error when the file cannot be read; an out-of-memory error for
+/// any allocation; and a general error when the packer cannot begin or pack the range, or the
+/// font cannot be initialised.
 fn loadFont(
     self: ?*c.ke_font_loader,
     path: [*c]const u8,
@@ -166,6 +191,8 @@ fn loadFont(
     return fd;
 }
 
+/// Runs in the `free_font` slot. It sizes the atlas and glyph arrays from `atlas_width`,
+/// `atlas_height` and `glyph_count`, so those fields must still hold what `loadFont` wrote.
 fn freeFont(self: ?*c.ke_font_loader, data: [*c]c.ke_font_data) callconv(.c) void {
     _ = self;
     if (data == null) return;
@@ -180,6 +207,10 @@ fn freeFont(self: ?*c.ke_font_loader, data: [*c]c.ke_font_data) callconv(.c) voi
     gpa.destroy(d);
 }
 
+/// Allocates the `State` and the loader and fills the `load_font` and `free_font` slots. On success
+/// the handle's `destroy` releases both. Fails with an invalid-argument error on null params and
+/// with an out-of-memory error on either allocation; then nothing stays allocated and `ref` is
+/// null.
 export fn ke_font_loader_stb_create(
     params: [*c]const c.ke_font_loader_stb_params,
     out_error: [*c][*c]c.ke_error,

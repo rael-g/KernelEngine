@@ -1,3 +1,16 @@
+//! Keeps every entity's world matrix equal to its local matrix composed with its parent's world
+//! matrix. The file stores no scene data: parent links, local transforms and world matrices are
+//! components of the ecs it was created with, and its one runtime system, `propagateSystem`, reads
+//! the first two and writes the third once per tick in the post-update phase.
+//!
+//! The system lists the entities with `flatten` so that a parent always precedes its children,
+//! then makes one pass over the list, composing each local matrix with the parent's world matrix,
+//! which needs no recursion. An entity without a world transform is passed over, and one without
+//! a parent composes with the identity.
+//!
+//! `ke_scene_hierarchy_create` resolves the component ids, builds the `State` and registers the
+//! system; the handle it returns owns the `State`. An allocation failure while the list fills is
+//! not reported: the entities left out keep the world matrices they had.
 
 const std = @import("std");
 
@@ -7,6 +20,10 @@ const mat4 = @import("mat4.zig");
 
 const E = @import("kerror").Errors(c);
 
+/// Created by `ke_scene_hierarchy_create`, owned by the handle it returns, and freed by
+/// `vtDestroy`. The runtime keeps its address as the user data of `propagateSystem`, so the record
+/// must not be moved or copied: `queries` and `access` are pointed at from the registration, and
+/// the query's terms point into `queries_terms`.
 const State = struct {
     ecs: *c.ke_ecs,
     transform_cid: c.ke_component_id,
@@ -45,6 +62,9 @@ fn identityMatrix() c.ke_mat4 {
     return m;
 }
 
+/// Appends the subtree below the root to `order` through `stack`, without recursion. A parent is
+/// appended before its children. An allocation failure is not reported: the entities
+/// it prevents from being pushed or appended are left out of `order`.
 fn pushSubtree(s: *State, root: c.ke_entity) void {
     s.stack.append(heap.gpa, root) catch return;
     while (s.stack.pop()) |entity| {
@@ -58,6 +78,8 @@ fn pushSubtree(s: *State, root: c.ke_entity) void {
     }
 }
 
+/// Runs at the start of every tick, before any world matrix is written, so `order` reflects the
+/// parent links of that tick.
 fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
     s.order.clearRetainingCapacity();
 
@@ -74,6 +96,9 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
     }
 }
 
+/// The system registered by `ke_scene_hierarchy_create`: rebuilds `order` and writes the world
+/// matrix of each listed entity that has one, parents first. Always returns true and reports
+/// nothing. Without a `State` it does nothing.
 fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const s: *State = @ptrCast(@alignCast(user orelse return true));
     flatten(s, ctx);
@@ -102,6 +127,8 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c
     return true;
 }
 
+/// This file has no unregister call: the registration keeps the `State` as user data, and nothing
+/// here clears that reference.
 fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {
     const self = self_in orelse return;
     const s: *State = @ptrCast(@alignCast(self));
@@ -110,6 +137,8 @@ fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
+/// Fails with a not-found error when any of the four components is not registered on the ecs.
+/// When the registration with the runtime fails, the `State` is freed and a zeroed handle returns.
 export fn ke_scene_hierarchy_create(
     runtime_in: ?*c.ke_runtime,
     ecs_in: ?*c.ke_ecs,

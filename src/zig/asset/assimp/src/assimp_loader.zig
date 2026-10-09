@@ -1,3 +1,28 @@
+//! The Assimp implementation of the `ke_asset_loader` contract: it imports a model file and hands
+//! the caller a `ke_model_data` of plain records that own their memory. The sibling files carry
+//! the pieces: c.zig the translated C headers, log.zig the logging and string-copy helpers,
+//! converter.zig the conversion of one mesh and one material, and texture_decoder.zig the
+//! decoding of one texture.
+//!
+//! `ke_asset_loader_assimp_create` builds a `State` that holds the vtable, the logger and the
+//! allocator every record of every later load comes from. Nothing else is kept between loads.
+//!
+//! `loadModel` does one whole load. The scene is imported with `import_flags`, and is released
+//! before the call returns, so the records are copied out of a scene that is still alive and
+//! never refer to it. Materials are converted first, and while they are, `registerTexture` collects
+//! the textures they name into a `TextureTable`, one entry per distinct name, so a texture shared
+//! by several materials is decoded once. The table is decoded, the resulting indices are written
+//! into the materials, and the meshes are converted last, each pointing at its material by index.
+//! A texture that cannot be decoded does not fail the load; an import that yields no usable scene,
+//! or a failed allocation of the model's arrays, does, and the arrays already made are released.
+//!
+//! The synchronous slot runs `loadModel` on the caller's thread and reports a failure through the
+//! out-parameter. The asynchronous slot copies the path into an `AsyncCtx` and has the scheduler
+//! run `asyncBody`, which runs the same `loadModel` and delivers exactly one completion callback,
+//! carrying the model or a fixed failure, before it frees the context. `vtFreeModel` releases a
+//! model's records, and `vtDestroy` releases the `State`; in a Debug build every allocation goes
+//! through a leak-tracking heap, and `vtDestroy` warns if models are still live.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -9,10 +34,15 @@ const log = @import("log.zig");
 const converter = @import("converter.zig");
 const textures = @import("texture_decoder.zig");
 
+/// Error helpers from kerror, bound to the C declarations in `c`.
 const E = @import("kerror").Errors(c);
 
+/// Vertex count given to Assimp's large-mesh split through the import properties.
 const vertex_limit: c_int = 65534;
 
+/// The post-processing every import asks for: triangulated, smooth-shaded geometry with tangent
+/// space, merged vertices and flipped texture coordinates, sorted by primitive type and split
+/// at `vertex_limit`.
 const import_flags: c_uint = c.aiProcess_Triangulate |
     c.aiProcess_GenSmoothNormals |
     c.aiProcess_CalcTangentSpace |
@@ -21,11 +51,16 @@ const import_flags: c_uint = c.aiProcess_Triangulate |
     c.aiProcess_SortByPType |
     c.aiProcess_SplitLargeMeshes;
 
+/// Capacity of the path buffers in each `TextureRef`; a longer name is cut to fit.
 const texture_path_max = 1024;
 
 const debug_heap = @import("builtin").mode == .Debug;
 const TrackingHeap = std.heap.DebugAllocator(.{ .thread_safe = true });
 
+/// The loader that `ke_asset_loader_assimp_create` allocates and `vtDestroy` frees. The field
+/// `handle` of `api` points back at the State, which is how each slot reaches its loader. `gpa` is
+/// the allocator every record comes from: the leak-tracking `heap` in a Debug build, and a
+/// thread-safe standard allocator otherwise.
 const State = struct {
     api: c.ke_asset_loader,
     logger: ?*c.ke_logger,
@@ -33,12 +68,18 @@ const State = struct {
     gpa: std.mem.Allocator,
 };
 
+/// Allocator of the `State` alone, kept apart from `gpa` so the leak check does not count the
+/// loader's own storage.
 const state_heap = std.heap.smp_allocator;
 
 fn stateOf(self: *c.ke_asset_loader) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// One entry of a `TextureTable`. An embedded entry holds in `embedded` the scene texture its index
+/// named, which stays null when the index did not resolve; that entry is then decoded from its
+/// `resolved_path`, which is empty for an embedded entry. A file entry has its path in
+/// `resolved_path` and leaves `embedded` null.
 const TextureRef = struct {
     key: [texture_path_max]u8,
     embedded: ?*const c.aiTexture,
@@ -46,10 +87,15 @@ const TextureRef = struct {
     is_embedded: bool,
 };
 
+/// The textures one `loadModel` call needs: one entry per distinct name, shared by every material
+/// of the model. It lives only for that call and is released when the call returns; the decoded
+/// records it fed are what outlives the call.
 const TextureTable = struct {
     items: std.ArrayList(TextureRef),
     gpa: std.mem.Allocator,
 
+    /// Compares against the stored keys, which were cut to fit their buffer, so two names
+    /// that agree up to that cut are treated as one entry.
     fn indexOfKey(self: *const TextureTable, key: []const u8) ?u32 {
         for (self.items.items, 0..) |*e, i| {
             if (std.mem.eql(u8, std.mem.sliceTo(&e.key, 0), key)) return @intCast(i);
@@ -58,6 +104,11 @@ const TextureTable = struct {
     }
 };
 
+/// Called by `loadModel` for each texture kind of each material: base colour before diffuse, and
+/// normals before height. It returns the position of the name's entry, adding one the first time
+/// the name is seen, or a negative index when the material names no texture of that kind, the name
+/// is empty, or the table cannot grow. An embedded name whose index does not parse still gets an
+/// entry, with neither an embedded texture nor a path, so its decode falls back.
 fn registerTexture(
     table: *TextureTable,
     scene: *const c.aiScene,
@@ -108,6 +159,11 @@ fn registerTexture(
     return @intCast(table.items.items.len - 1);
 }
 
+/// Performs one whole import and returns the new model, or null on any failure. The failure is
+/// written to the out-parameter when the caller gave one; the asynchronous body gives none and
+/// relies on the null alone. It runs on the caller's thread for the synchronous slot and on a
+/// worker for the asynchronous one. It reads only the logger and the allocator from the State and
+/// writes nothing into it.
 fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.ke_model_data {
     if (path == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -228,6 +284,8 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     return model;
 }
 
+/// The `load_model` slot, run on the caller's thread. A missing loader or handle is reported here;
+/// everything else is reported by `loadModel`.
 fn vtLoadModel(
     self_in: ?*c.ke_asset_loader,
     path: [*c]const u8,
@@ -244,6 +302,9 @@ fn vtLoadModel(
     return loadModel(stateOf(self), path, out_error);
 }
 
+/// The `free_model` slot. It releases the records `loadModel` allocated for a model, through the
+/// allocator of the loader it is given, which is the allocator those records were made with. A null
+/// loader, handle or model is ignored.
 fn vtFreeModel(self_in: ?*c.ke_asset_loader, data_in: ?*c.ke_model_data) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -267,6 +328,7 @@ fn vtFreeModel(self_in: ?*c.ke_asset_loader, data_in: ?*c.ke_model_data) callcon
     gpa.destroy(data);
 }
 
+/// Handed to the completion callback when the context for an async load cannot be allocated.
 const oom_error = c.ke_error{
     .type = E.typeOf(.out_of_memory),
     .message = "out of memory preparing async model load",
@@ -278,6 +340,8 @@ const load_failed_type = c.ke_error_type{
     .name = "ke.asset.assimp.load_failed",
     .parent = E.typeOf(.io),
 };
+/// Handed to an async callback when `loadModel` returned no model. Its message is fixed, so the
+/// cause is only what `loadModel` logged, and some failures log nothing.
 const load_failed_error = c.ke_error{
     .type = &load_failed_type,
     .message = "model load failed",
@@ -286,6 +350,9 @@ const load_failed_error = c.ke_error{
     .cause = null,
 };
 
+/// The heap context that carries an async load from `vtLoadModelAsync` to `asyncBody`. It owns
+/// the path copy and itself; `asyncBody` frees both after the callback returns. `state` is
+/// borrowed from the loader, not owned.
 const AsyncCtx = struct {
     state: *State,
     path: [:0]u8,
@@ -293,6 +360,9 @@ const AsyncCtx = struct {
     user_data: ?*anyopaque,
 };
 
+/// The task body that the dispatch runs on the thread it chooses. It runs `loadModel`, calls the
+/// completion callback once with the model or the load failure, and frees the context. A failure is
+/// reported only through the callback: the task's failure out-parameter is left unset.
 fn asyncBody(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
     _ = out_failure;
     const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return));
@@ -305,6 +375,9 @@ fn asyncBody(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) call
     gpa.destroy(ctx);
 }
 
+/// The `load_model_async` slot. It returns whatever dispatch returns, and the body may already have
+/// run by then if dispatch runs it inline. When the context or its path copy cannot be allocated,
+/// the callback is called at once on the calling thread and the result is null.
 fn vtLoadModelAsync(
     self_in: ?*c.ke_asset_loader,
     scheduler_in: ?*c.ke_scheduler,
@@ -339,6 +412,8 @@ fn vtLoadModelAsync(
     return scheduler.dispatch.?(scheduler, asyncBody, ctx);
 }
 
+/// The `destroy` slot. It frees the State, and logs a warning, not an error, when the leak check
+/// finds live memory. Models that `free_model` has not released are what that check reports.
 fn vtDestroy(self_in: ?*c.ke_asset_loader) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -349,6 +424,10 @@ fn vtDestroy(self_in: ?*c.ke_asset_loader) callconv(.c) void {
     state_heap.destroy(s);
 }
 
+/// Factory for the Assimp loader. It returns a handle whose ref is the vtable, or one whose ref is
+/// null when the params argument is null or the State cannot be allocated, with the out-parameter
+/// filled for those two failures. The logger is kept as the pointer given, and each call builds its
+/// own State, so each loader has its own leak tracking in a Debug build.
 export fn ke_asset_loader_assimp_create(
     params_in: ?*const c.ke_asset_loader_assimp_params,
     out_error: [*c][*c]c.ke_error,

@@ -1,3 +1,18 @@
+//! Per-thread error recording for one translated C namespace. `Errors` takes the namespace that
+//! declares the error record and its type, and returns the functions that fill an error and the
+//! one that ends the process on it. The result owns one error record and one text buffer per
+//! thread, so the error a failing call hands out points at storage of the calling thread, and the
+//! next failure on that thread overwrites it.
+//!
+//! `fail` takes the type of the error from `Kind`, which selects among the singleton types
+//! `typeOf` returns, and `failWithType` takes a type from its caller. Both copy the message, cut
+//! to the buffer, record the file and line of the failing call, set no cause, and point the
+//! caller's error output at the record when it is not null. `fatal` writes the chain of an error
+//! to standard error, following its causes, and exits with a failure status.
+//!
+//! The file also declares `_DllMainCRTStartup`, the mingw DLL entry point, so that a plugin root
+//! can re-export it and have the static initializers of its linked C and C++ code run.
+
 const std = @import("std");
 
 const names = @import("src/error_types.zig");
@@ -13,12 +28,9 @@ const windows = struct {
     extern "kernel32" fn SetErrorMode(uMode: u32) callconv(.winapi) u32;
 };
 
-/// Workaround for a Zig defect on `x86_64-windows-gnu`. Re-export from the root
-/// module of any plugin that links C or C++ static libraries:
-///
-/// pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
-///
-/// Do not hand-roll a `DllMain` instead.
+/// The mingw DLL entry point, declared so that a plugin root can re-export it. Zig's own DLL entry
+/// point does not run the static initializers of linked C and C++ libraries; the re-export is what
+/// makes them run.
 pub extern fn _DllMainCRTStartup(
     hinst: std.os.windows.HINSTANCE,
     reason: std.os.windows.DWORD,
@@ -32,6 +44,9 @@ fn stderrFile() [*c]io.FILE {
 
 pub fn Errors(comptime c: type) type {
     return struct {
+        /// The kinds of singleton error type that `typeOf` returns. Each value indexes `types`,
+        /// which has one entry per name in `names.generic`, so the kinds pair with those names by
+        /// position.
         pub const Kind = enum {
             general,
             not_found,
@@ -49,15 +64,20 @@ pub fn Errors(comptime c: type) type {
             break :blk t;
         };
 
-        /// The program-lifetime singleton for `kind`.
+        /// Returns the same address for a kind on every call. The entries are fixed at compile
+        /// time, so the pointer stays valid for the life of the program.
         pub fn typeOf(kind: Kind) *const c.ke_error_type {
             return &types[@intFromEnum(kind)];
         }
 
         const message_max = 512;
+        /// The error record that `fail` and `failWithType` fill, one per thread.
         threadlocal var slot: c.ke_error = undefined;
+        /// The text buffer behind the message of `slot`, one per thread.
         threadlocal var message: [message_max]u8 = undefined;
 
+        /// Returns a pointer into the thread's message buffer, which the next failure on that
+        /// thread overwrites. A null message returns null.
         fn own(msg: [*c]const u8) [*c]const u8 {
             if (msg == null) return null;
             const text = std.mem.span(msg);
@@ -67,9 +87,8 @@ pub fn Errors(comptime c: type) type {
             return &message;
         }
 
-        /// Fill the C error ABI at an exported boundary: point *out_error (when
-        /// non-null) at a thread-local ke_error describing `kind` with `msg`,
-        /// tagged with the caller's source location. Pass @src() from the export.
+        /// Records a failure of the given kind in the calling thread's error slot. When the
+        /// out-parameter is not null, it is set to point at that slot.
         pub fn fail(out_error: [*c][*c]c.ke_error, kind: Kind, msg: [*c]const u8, src: std.builtin.SourceLocation) void {
             slot = .{
                 .type = &types[@intFromEnum(kind)],
@@ -81,9 +100,8 @@ pub fn Errors(comptime c: type) type {
             if (out_error != null) out_error.* = &slot;
         }
 
-        /// Raise an error whose type was decided elsewhere, here on the calling
-        /// thread. The message describes where the failure was picked up, not what
-        /// went wrong.
+        /// Like `fail`, but the error type is the one passed in, and it is stored by pointer, so it
+        /// must outlive the error.
         pub fn failWithType(out_error: [*c][*c]c.ke_error, error_type: *const c.ke_error_type,
                             msg: [*c]const u8, src: std.builtin.SourceLocation) void {
             slot = .{
@@ -96,8 +114,8 @@ pub fn Errors(comptime c: type) type {
             if (out_error != null) out_error.* = &slot;
         }
 
-        /// Prints the error chain to stderr and ends the process, with no OS crash
-        /// dialog. Mirrors ke_common's ke_error_fatal.
+        /// Writes the error chain to standard error and ends the process with a failure status,
+        /// so no defer of the caller runs. Only standard error is flushed.
         pub fn fatal(err_in: ?*const c.ke_error) noreturn {
             if (@import("builtin").os.tag == .windows) {
                 _ = windows.SetErrorMode(windows.SEM_FAILCRITICALERRORS |

@@ -1,3 +1,29 @@
+//! The input actions map turns the keys and mouse buttons held in one frame into named actions
+//! that a game polls. Everything lives behind the handle that `ke_input_actions_create` returns:
+//! a `State` holding the vtable and a growable array of `Action` values, each owning its own
+//! growable array of `Binding` values. Both arrays grow through `growArray`, which keeps the old
+//! buffer when an allocation fails.
+//!
+//! A binding names no key by text. Names such as "Space" or "Left" are turned into codes by
+//! `lookupKey` and `lookupMouseButton` once, when a binding is created from a file, so evaluation
+//! deals only in codes. A binding is a key, a mouse button, a pair of keys on one axis, or a quad
+//! of keys on two axes. Actions come from two routes that end in the same representation: `vtLoad`
+//! replaces the whole set from a TOML file, reading each binding table with `parseBindingTable`
+//! and skipping one that does not parse, while `vtAddAction` and the bind slots append to the
+//! set, so ids already handed out stay valid.
+//!
+//! The map is driven by `vtEvaluate`, once per frame, on a snapshot of the input. Each action
+//! moves its current values to its previous ones, samples every binding with `sampleBinding`,
+//! and keeps the result: a button action is active when any binding is, and an axis action takes
+//! the largest magnitude per component. Transitions between the two frames are reported to the
+//! event callback before the call returns, as started, canceled, or performed for an axis that
+//! moved while held. The queries only read the stored values, never the snapshot, which is how
+//! they report both a held state and a press or release edge.
+//!
+//! Slots that take an error output report an invalid argument for a null handle or pointer; those
+//! that return a sentinel set no error. No thread is started and no lock is taken, so one handle
+//! is not safe to use from several threads at once.
+
 const std = @import("std");
 
 const c = @import("c.zig").c;
@@ -86,6 +112,7 @@ const mouse_table = [_]KeyNameEntry{
     .{ .name = "Middle", .code = c.KE_MOUSE_BUTTON_MIDDLE },
 };
 
+/// A name that matches no entry gives `KE_KEY_UNKNOWN`, which `isKeyDown` never reports as held.
 fn lookupKey(name: [*c]const u8) c_int {
     if (name == null) return c.KE_KEY_UNKNOWN;
     const n = std.mem.span(name);
@@ -95,6 +122,7 @@ fn lookupKey(name: [*c]const u8) c_int {
     return c.KE_KEY_UNKNOWN;
 }
 
+/// A name that matches no entry gives a negative value, which `isMouseDown` never reports as held.
 fn lookupMouseButton(name: [*c]const u8) c_int {
     if (name == null) return -1;
     const n = std.mem.span(name);
@@ -115,6 +143,10 @@ fn parseActionType(s: [*c]const u8) c.ke_action_type {
 
 const BindingKind = enum(u8) { key, key_pair, key_quad, mouse_button };
 
+/// One binding of an action. Which of `k0` through `k3` it reads depends on `kind`: a key or a
+/// mouse button reads `k0` alone, a key pair reads `k0` as its negative key and `k1` as its
+/// positive key, and a key quad reads `k0` up, `k1` down, `k2` left and `k3` right. The unused
+/// fields stay zero.
 const Binding = struct {
     kind: BindingKind,
     k0: c_int = 0,
@@ -123,6 +155,11 @@ const Binding = struct {
     k3: c_int = 0,
 };
 
+/// One named action, held by value in the `actions` array of its `State`. `name` is NUL-terminated
+/// within its buffer. `bindings` stays null until the first binding is appended, and its buffer is
+/// freed only by `clearActions`. The current values are written by `vtEvaluate`, which copies them
+/// to the previous ones before sampling. The edge queries compare `curr_active` with
+/// `prev_active`.
 const Action = struct {
     name: [action_name_max]u8,
     type: c.ke_action_type,
@@ -158,6 +195,10 @@ const Action = struct {
     }
 };
 
+/// The object behind the handle that `ke_input_actions_create` returns, freed by `vtDestroy`. `api`
+/// is the vtable the handle's ref points at, and its `handle` field points back at this `State`,
+/// which is how each vtable function reaches it through `stateOf`. `actions` stays null until the
+/// first action is added or loaded.
 const State = struct {
     api: c.ke_input_actions,
     actions: ?[*]Action,
@@ -169,6 +210,9 @@ fn stateOf(self: *c.ke_input_actions) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// On allocation failure it returns null and leaves the old buffer and its capacity untouched, so
+/// the caller keeps every item it had. On success the old buffer is freed, so the caller must store
+/// the returned pointer.
 fn growArray(
     comptime T: type,
     buf: ?[*]T,
@@ -201,6 +245,8 @@ fn ensureBindingCapacity(a: *Action, needed: u32) bool {
     return true;
 }
 
+/// Frees the bindings of every action and forgets the actions, but keeps the action array allocated
+/// at its capacity, so the next add or load reuses it.
 fn clearActions(s: *State) void {
     if (s.actions) |actions| {
         for (actions[0..s.action_count]) |*a| {
@@ -213,6 +259,8 @@ fn clearActions(s: *State) void {
     s.action_count = 0;
 }
 
+/// Compares the whole given name with each stored name, and returns -1 when none matches. A name
+/// longer than `action_name_max` was stored truncated, so only its truncated form matches.
 fn findActionByName(s: *const State, name: []const u8) i32 {
     const actions = s.actions orelse return -1;
     for (actions[0..s.action_count], 0..) |*a, i| {
@@ -227,12 +275,15 @@ fn copyName(dst: []u8, src: []const u8) void {
     dst[n] = 0;
 }
 
+/// A code outside the bits the snapshot carries, including `KE_KEY_UNKNOWN`, is never reported
+/// held.
 fn isKeyDown(snap: *const c.ke_input_snapshot, key: c_int) bool {
     if (key < 0 or key >= key_bit_count) return false;
     const k: usize = @intCast(key);
     return (snap.keys_down[k / 64] >> @intCast(k % 64)) & 1 != 0;
 }
 
+/// A negative button, which is what an unknown mouse button name gives, is never reported held.
 fn isMouseDown(snap: *const c.ke_input_snapshot, button: c_int) bool {
     if (button < 0) return false;
     return (snap.mouse_buttons_down >> @intCast(button)) & 1 != 0;
@@ -244,6 +295,9 @@ fn axisOf(down: bool) f32 {
 
 const Sample = struct { x: f32 = 0, y: f32 = 0, z: f32 = 0 };
 
+/// The flag is the activity `vtEvaluate` acts on, and it is set when a component is nonzero. A quad
+/// whose opposite keys are both held cancels to zero on that axis, so a binding whose keys cancel
+/// out is inactive.
 fn sampleBinding(b: *const Binding, snap: *const c.ke_input_snapshot) struct { Sample, bool } {
     var out: Sample = .{};
     switch (b.kind) {
@@ -262,10 +316,14 @@ fn sampleBinding(b: *const Binding, snap: *const c.ke_input_snapshot) struct { S
     return .{ out, out.x != 0.0 or out.y != 0.0 or out.z != 0.0 };
 }
 
+/// Releases the string that the TOML string lookup allocated for a found value. A lookup that did
+/// not find its key allocates nothing, so there is nothing to release.
 fn freeDatumStr(d: c.toml_datum_t) void {
     if (d.ok != 0 and d.u.s != null) std.c.free(d.u.s);
 }
 
+/// Writes `out` only when it returns true. It returns false when the table has no "kind" string,
+/// when the kind is not one it knows, or when a field that kind needs is missing.
 fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding) bool {
     const kind = c.toml_string_in(bt, "kind");
     if (kind.ok == 0) return false;
@@ -318,6 +376,11 @@ fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding) bool {
     return false;
 }
 
+/// Clears all actions before reading, so a failure leaves the earlier set gone and keeps only the
+/// actions read before the failure. Ids handed out before a load are not valid after it. It reports
+/// not found when the file cannot be opened, an I/O error when the text does not parse, and out of
+/// memory when an action or a binding cannot be allocated. A file without an "action" table
+/// succeeds with no actions.
 fn vtLoad(
     self_in: ?*c.ke_input_actions,
     path: [*c]const u8,
@@ -396,6 +459,9 @@ fn vtGetActionId(self_in: ?*c.ke_input_actions, name: [*c]const u8) callconv(.c)
     return findActionByName(stateOf(self), std.mem.span(name));
 }
 
+/// Appends the action after those already present, so earlier ids keep their meaning. Returns -1
+/// for a null or empty name, for a name already present, and when the array cannot grow. Each of
+/// those leaves the actions unchanged, and none of them sets an error.
 fn vtAddAction(
     self_in: ?*c.ke_input_actions,
     name: [*c]const u8,
@@ -417,11 +483,15 @@ fn vtAddAction(
     return id;
 }
 
+/// The pointer addresses an element of the action array, so it is valid only until that array
+/// grows.
 fn getActionMut(s: *State, id: i32) ?*Action {
     if (id < 0 or @as(u32, @intCast(id)) >= s.action_count) return null;
     return &s.actions.?[@intCast(id)];
 }
 
+/// Appends one binding to the action with the given id. It reports not found when no action has
+/// that id, and out of memory when the bindings cannot grow. The action is unchanged in both cases.
 fn appendBinding(s: *State, id: i32, b: Binding, out_error: [*c][*c]c.ke_error) bool {
     const a = getActionMut(s, id) orelse {
         E.fail(out_error, .not_found, "action not found", @src());
@@ -436,6 +506,8 @@ fn appendBinding(s: *State, id: i32, b: Binding, out_error: [*c][*c]c.ke_error) 
     return true;
 }
 
+/// Stores the key code as given. A code the snapshot cannot carry is not refused here, and it is
+/// never reported as held.
 fn vtBindKey(
     self_in: ?*c.ke_input_actions,
     action_id: i32,
@@ -519,6 +591,10 @@ fn vtBindKeyQuad(
     }, out_error);
 }
 
+/// Runs one frame: it samples the snapshot into the action values and reports the transitions
+/// through the event callback, synchronously and on the calling thread. An action's callback sees
+/// its own new state, while actions later in the order still hold the previous frame's values.
+/// A null handle or a null snapshot reports invalid argument and changes nothing.
 fn vtEvaluate(
     self_in: ?*c.ke_input_actions,
     snapshot_in: ?*const c.ke_input_snapshot,
@@ -598,6 +674,8 @@ fn vtEvaluate(
     return true;
 }
 
+/// Returns a pointer into the action array, valid until the next add or load, or null for a null
+/// handle or an id that names no action.
 fn getAction(self_in: ?*c.ke_input_actions, id: i32) ?*const Action {
     const self = self_in orelse return null;
     if (self.handle == null) return null;
@@ -647,6 +725,8 @@ fn vtGetAxis3d(
     if (out_z != null) out_z.* = if (a) |act| act.curr_z else 0.0;
 }
 
+/// Frees the bindings, the action array and the `State`. The `api` that the handle's ref pointed at
+/// is invalid afterwards.
 fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -656,6 +736,8 @@ fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
+/// On allocation failure it reports out of memory through the error output and returns a zeroed
+/// handle.
 export fn ke_input_actions_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_actions_handle {
     const null_handle = std.mem.zeroes(c.ke_input_actions_handle);
 

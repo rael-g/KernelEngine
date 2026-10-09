@@ -1,3 +1,5 @@
+//! The one C import of the framework plugin, so that every file taking its C types from `c` sees
+//! the same types.
 
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");

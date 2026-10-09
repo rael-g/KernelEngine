@@ -1,3 +1,16 @@
+//! The window render target of the webgpu plugin: a `ke_gpu_render_target` whose frames are the
+//! images of a window's surface. The factory refuses a missing window and a device this plugin did
+//! not create, makes the surface from the window's native handle with `createSurface`, picks a
+//! format with `chooseFormat`, and allocates a `WindowTarget`. Each failing step releases what the
+//! earlier ones made.
+//!
+//! A frame is held between `acquire` and `present`, as the texture and view of the target. The
+//! surface is configured lazily to the window's size: at creation when the window is not empty, and
+//! afterwards by `acquire` whenever the size changes or the surface reports a stale texture. An
+//! empty window or a stale texture yields the invalid handle without an error, so the caller skips
+//! the frame; anything else that goes wrong is an error and leaves no frame held. `destroy`
+//! releases the frame, the surface and, on Linux, the display the surface was made on.
+
 const std = @import("std");
 const builtin = @import("builtin");
 const dev_impl = @import("gpu_device_webgpu.zig");
@@ -5,6 +18,12 @@ const wgpu = dev_impl.wgpu;
 const ke = dev_impl.ke;
 const gpa = dev_impl.gpa;
 
+/// The state of one window render target. `ke_gpu_render_target_webgpu_window_create` allocates
+/// it from `gpa` and hands out `vtable` as the target, with `handle` pointing back at it; the
+/// `destroy` slot frees it. `texture` and `view` are null except between `acquire` and `present`.
+/// `width` and `height` are zero until the surface is first configured, and afterwards hold the
+/// size it was last configured to. `display` is non-null only on Linux, where it is the display
+/// the surface was made on.
 const WindowTarget = struct {
     vtable: ke.ke_gpu_render_target,
     device: *dev_impl.DeviceState,
@@ -21,6 +40,8 @@ const WindowTarget = struct {
 
 const x11 = if (builtin.os.tag == .linux) @cImport(@cInclude("X11/Xlib.h")) else struct {};
 
+/// What `createSurface` returns: the surface and, on Linux, the display opened to create it. Once
+/// the surface is released, the display is closed with `closeDisplay`.
 const Surface = struct { surface: wgpu.WGPUSurface, display: ?*anyopaque };
 
 fn closeDisplay(display: ?*anyopaque) void {
@@ -28,6 +49,10 @@ fn closeDisplay(display: ?*anyopaque) void {
     if (display) |d| _ = x11.XCloseDisplay(@ptrCast(d));
 }
 
+/// Sets no error itself: a null return means the window has no native handle, the instance refused
+/// the surface, or the operating system is none of Windows, Linux or macOS, and the caller reports
+/// it. On Linux a display opened here is closed when the surface cannot be made, and otherwise
+/// travels in the returned `Surface` for the caller to close.
 fn createSurface(instance: wgpu.WGPUInstance, window: *ke.ke_window) ?Surface {
     const native = window.get_native_handle.?(window) orelse return null;
     switch (builtin.os.tag) {
@@ -73,10 +98,15 @@ fn of(self: [*c]ke.ke_gpu_render_target) *WindowTarget {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
+/// Records the error at the source location the caller passes, so it names the failing line of the
+/// caller rather than this function. Returning the failure sentinel is left to the caller.
 fn fail(out_error: [*c][*c]ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]const u8, src: std.builtin.SourceLocation) void {
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
 
+/// Called by the factory for a non-empty window, by `acquire` when the window size differs from the
+/// cached one, and by `acquire` again after a texture is refused. Afterwards `width` and `height`
+/// hold the configured size, which `size` reports.
 fn configure(t: *WindowTarget, width: u32, height: u32) void {
     const config = wgpu.WGPUSurfaceConfiguration{
         .nextInChain = null,
@@ -95,6 +125,8 @@ fn configure(t: *WindowTarget, width: u32, height: u32) void {
     t.height = height;
 }
 
+/// Reads the window's client size, with negative values clamped to zero. When the window cannot
+/// report it, returns null and leaves in the out error parameter the error its `get_size` set.
 fn windowSize(t: *WindowTarget, out_error: [*c][*c]ke.ke_error) ?[2]u32 {
     var w: i32 = 0;
     var h: i32 = 0;
@@ -102,6 +134,8 @@ fn windowSize(t: *WindowTarget, out_error: [*c][*c]ke.ke_error) ?[2]u32 {
     return .{ @intCast(@max(w, 0)), @intCast(@max(h, 0)) };
 }
 
+/// Releases the held frame, the view before the texture it was created from, and clears both
+/// fields. With no frame held it does nothing. `present` and `destroy` are the callers.
 fn releaseFrame(t: *WindowTarget) void {
     if (t.view) |v| wgpu.wgpuTextureViewRelease(v);
     if (t.texture) |tex| wgpu.wgpuTextureRelease(tex);
@@ -109,6 +143,10 @@ fn releaseFrame(t: *WindowTarget) void {
     t.texture = null;
 }
 
+/// Begins a frame and returns its view, which stays valid until `present`. A timed-out, outdated or
+/// lost texture is not an error: the surface is configured again and the invalid handle is returned
+/// with no error set. A failure after the surface produced a texture releases that texture and
+/// leaves no frame held.
 fn acquire(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) callconv(.c) ke.ke_gpu_texture_view {
     const t = of(self);
     if (t.view != null) {
@@ -149,6 +187,8 @@ fn acquire(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) ca
     return @intFromPtr(view);
 }
 
+/// Presents the held frame and releases it. The result of the surface's present is discarded, so a
+/// failed present is not reported, and the frame is released either way.
 fn present(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) callconv(.c) bool {
     const t = of(self);
     if (t.view == null) {
@@ -160,6 +200,8 @@ fn present(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) ca
     return true;
 }
 
+/// Reports the cached `width` and `height` without asking the window. Those fields change only in
+/// `configure`.
 fn size(self: [*c]ke.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
     const t = of(self);
     if (out_w != null) out_w.* = t.width;
@@ -170,6 +212,9 @@ fn format(self: [*c]ke.ke_gpu_render_target) callconv(.c) ke.ke_gpu_texture_form
     return of(self).format;
 }
 
+/// The function behind the `destroy` slot of the factory's handle. It releases a held frame before
+/// the surface it was drawn from, and closes the display last, after the surface made on it is
+/// gone.
 fn destroy(self: [*c]ke.ke_gpu_render_target) callconv(.c) void {
     const t = of(self);
     releaseFrame(t);
@@ -181,6 +226,9 @@ fn destroy(self: [*c]ke.ke_gpu_render_target) callconv(.c) void {
 
 const Choice = struct { ke_format: ke.ke_gpu_texture_format, wgpu_format: wgpu.WGPUTextureFormat };
 
+/// Returns the first format in the surface's listing that is BGRA8 or RGBA8, so the order the
+/// driver lists them decides between the two. Returns null when the capabilities cannot be read
+/// or neither format is listed. The capabilities are freed before it returns.
 fn chooseFormat(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter) ?Choice {
     var caps = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
     if (wgpu.wgpuSurfaceGetCapabilities(surface, adapter, &caps) != wgpu.WGPUStatus_Success) return null;
@@ -196,6 +244,9 @@ fn chooseFormat(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter) ?Choice {
     return null;
 }
 
+/// The exported factory. Every failure returns the empty handle with the error set, and releases
+/// the surface and display made so far, so nothing is left allocated. A device is refused unless
+/// its `get_default_queue` slot is the function this plugin installs.
 export fn ke_gpu_render_target_webgpu_window_create(
     device: [*c]ke.ke_gpu_device,
     window: ?*ke.ke_window,
@@ -249,6 +300,8 @@ export fn ke_gpu_render_target_webgpu_window_create(
     return .{ .ref = &t.vtable, .destroy = destroy };
 }
 
+/// Frees a target that the factory abandons before configuring its surface. It releases the surface
+/// and display and frees the target, without the unconfigure and frame release that `destroy` runs.
 fn destroyUnconfigured(t: *WindowTarget) void {
     wgpu.wgpuSurfaceRelease(t.surface);
     closeDisplay(t.display);

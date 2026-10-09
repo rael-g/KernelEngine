@@ -1,3 +1,21 @@
+//! A world is the handle through which the framework reaches the ecs, the runtime and the scene
+//! tree it was created with, and through which a component is given the two things a scene needs
+//! to fill it: a field table that maps authored keys to memory, and an apply callback for keys
+//! that need more than that. Those pointers are borrowed from the creation params and never
+//! freed, and the world owns no component data.
+//!
+//! The registry that holds the tables is an array of `ApplyEntry`, one per component id, grown by
+//! doubling and searched linearly. `entryFor` is the only place an entry is created, and the two
+//! registration slots each write their own half of it, so registering fields never replaces a
+//! callback or the reverse. The lookup slots read the halves back, and the logger and signal bus
+//! given at creation are exposed to the rest of the plugin through `loggerOf` and `signalBusOf`.
+//!
+//! `ke_world_create` makes one allocation, a `Block` that holds the `State` and the vtable, so the
+//! destroy function of the returned handle frees both with the registry buffer. Creation also
+//! registers the transform, 2D transform and world transform components on the ecs through
+//! `registerBuiltin`, with the appliers of components_apply.zig, and fails whole if one of them
+//! fails.
+
 const std = @import("std");
 
 const c = @import("c.zig").c;
@@ -9,6 +27,8 @@ const apply = @import("components_apply.zig");
 
 const apply_initial_capacity: u32 = 16;
 
+/// One entry per component id. The apply half (`fn_ptr`, `ctx`) and the fields half (`fields`,
+/// `field_count`) are written by separate registration slots, so either half may stay unset.
 const ApplyEntry = struct {
     cid: c.ke_component_id,
     fn_ptr: c.ke_component_apply_fn,
@@ -17,6 +37,9 @@ const ApplyEntry = struct {
     field_count: u32,
 };
 
+/// The state of one world, held by `Block`. The pointers it holds are borrowed from the creation
+/// params and never freed. `apply_registry` stays null until the first registration, and
+/// `apply_capacity` is the length of the buffer it points to, which is what `worldDestroy` frees.
 const State = struct {
     scheduler: ?*c.ke_scheduler,
     ecs: ?*c.ke_ecs,
@@ -31,6 +54,9 @@ const State = struct {
     apply_capacity: u32,
 };
 
+/// The single allocation of a world: the state and the vtable. The `ref` of the handle returned by
+/// `ke_world_create` points at the `world` field, and `handle` of that vtable points at `state`,
+/// so the destroy function reaches both from either.
 const Block = struct {
     state: State,
     world: c.ke_world,
@@ -40,12 +66,12 @@ fn stateOf(self: *c.ke_world) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-/// The logger the world was built with, for plugin-internal diagnostics.
+/// Returns the logger given at creation. The world only borrows it, and null if none was given.
 pub fn loggerOf(self: *c.ke_world) ?*c.ke_logger {
     return stateOf(self).logger;
 }
 
-/// The signal bus the world was built with, for plugin-internal wiring.
+/// Returns the signal bus given at creation. The world only borrows it, and null if none was given.
 pub fn signalBusOf(self: *c.ke_world) ?*c.ke_signal_bus {
     return stateOf(self).signal_bus;
 }
@@ -65,6 +91,10 @@ fn worldSceneTree(self_in: ?*c.ke_world) callconv(.c) ?*c.ke_scene_tree {
     return stateOf(self).scene_tree;
 }
 
+/// Returns the entry for the given component id, appending an empty one when there is none. Both
+/// registration slots go through it. Appending can replace the whole buffer, so an entry pointer
+/// kept across a later call is not valid after that call. On an allocation failure the error is
+/// set, null is returned and the registry is unchanged.
 fn entryFor(s: *State, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) ?*ApplyEntry {
     if (s.apply_registry) |reg| {
         for (reg[0..s.apply_count]) |*entry| {
@@ -92,6 +122,8 @@ fn entryFor(s: *State, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) ?*
     return entry;
 }
 
+/// Reached through the `register_component_apply` slot, and from `registerBuiltin` during
+/// `ke_world_create` for each builtin component that has a callback.
 fn worldRegisterComponentApply(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
@@ -113,6 +145,8 @@ fn worldRegisterComponentApply(
     return true;
 }
 
+/// Reached through the `register_component_fields` slot, and from `registerBuiltin` during
+/// `ke_world_create` for each builtin component that has a field table.
 fn worldRegisterComponentFields(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
@@ -134,6 +168,8 @@ fn worldRegisterComponentFields(
     return true;
 }
 
+/// Lookup slot for the fields half of an entry. An id whose entry has no fields returns null, not
+/// an empty table.
 fn worldGetComponentFields(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
@@ -152,6 +188,8 @@ fn worldGetComponentFields(
     return null;
 }
 
+/// Lookup slot for the apply half of an entry. The context is written whenever the id has an entry,
+/// so a null callback can still come back together with a context.
 fn worldGetComponentApply(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
@@ -169,6 +207,8 @@ fn worldGetComponentApply(
     return null;
 }
 
+/// Reached through the destroy function of the handle, and from `ke_world_create` when a builtin
+/// registration fails. Frees the registry buffer, then the block.
 fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -177,6 +217,8 @@ fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     heap.gpa.destroy(@as(*Block, @fieldParentPtr("state", s)));
 }
 
+/// Called by `ke_world_create` once for each builtin component. The ecs registration comes first,
+/// and its result is the only one this function returns.
 fn registerBuiltin(
     world: *c.ke_world,
     e: *c.ke_ecs,
@@ -194,6 +236,9 @@ fn registerBuiltin(
     return true;
 }
 
+/// Returns a handle whose `ref` is the world and whose destroy is `worldDestroy`. A null params
+/// pointer, or a missing ecs or runtime, fails as an invalid argument. A failed builtin
+/// registration, or a failed block allocation, returns a null handle.
 export fn ke_world_create(
     params_in: ?*const c.ke_world_params,
     out_error: [*c][*c]c.ke_error,

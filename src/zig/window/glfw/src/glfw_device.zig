@@ -1,3 +1,13 @@
+//! The GLFW backend of the device seam. `GlfwDevice` holds the window, which exists between a
+//! successful initialize and shutdown, and a sink that exists only while a poll runs.
+//! Initialization starts the library, creates a window without a client API, on the primary
+//! monitor when fullscreen is requested, stores the device as the window's user pointer and
+//! installs callbacks for keys, cursor, buttons, scroll, size and close. Shutdown destroys the
+//! window and terminates the library, and also runs after a failed initialize.
+//!
+//! GLFW invokes those callbacks only inside its event polling, on the polling thread. Each builds
+//! an `Event` and gives it to `emit`, which recovers the device from the user pointer and forwards
+//! the event to the sink, dropping it when no poll is running.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -6,16 +16,21 @@ const c = @import("c.zig").c;
 const heap = @import("heap");
 const device = @import("device.zig");
 
+/// The GLFW backend of `Device`. `window` is null before `initialize` succeeds and after
+/// `shutdown`. Created by `create` and freed by `destroy`.
 pub const GlfwDevice = struct {
     window: ?*c.GLFWwindow = null,
     sink: ?device.EventSink = null,
 
+    /// Returns null when the heap cannot provide storage. No window exists until `initialize`
+    /// succeeds.
     pub fn create() ?*GlfwDevice {
         const self = heap.gpa.create(GlfwDevice) catch return null;
         self.* = .{};
         return self;
     }
 
+    /// The returned `Device` borrows this object and is valid until `destroy` runs.
     pub fn asDevice(self: *GlfwDevice) device.Device {
         return .{ .ptr = self, .vtable = &vtable };
     }
@@ -35,6 +50,8 @@ pub const GlfwDevice = struct {
         return @ptrCast(@alignCast(ptr));
     }
 
+    /// Returns false if library initialization or window creation fails. If window creation
+    /// fails, GLFW is already initialized, so `shutdown` must still run to terminate it.
     fn initialize(ptr: *anyopaque, config: device.Config) bool {
         const self = from(ptr);
         if (c.glfwInit() == 0) return false;
@@ -59,6 +76,7 @@ pub const GlfwDevice = struct {
         return true;
     }
 
+    /// Also runs after a failed `initialize`, which may have initialized GLFW before it failed.
     fn shutdown(ptr: *anyopaque) void {
         const self = from(ptr);
         if (self.window) |w| {
@@ -68,6 +86,8 @@ pub const GlfwDevice = struct {
         c.glfwTerminate();
     }
 
+    /// `sink` is set only for the duration of the poll, so `emit` drops any callback that runs
+    /// outside it.
     fn pollEvents(ptr: *anyopaque, sink: device.EventSink) void {
         const self = from(ptr);
         self.sink = sink;
@@ -75,6 +95,8 @@ pub const GlfwDevice = struct {
         self.sink = null;
     }
 
+    /// Answers true when no window exists, which is the state before `initialize` succeeds and
+    /// after `shutdown`.
     fn shouldClose(ptr: *anyopaque) bool {
         const self = from(ptr);
         const w = self.window orelse return true;
@@ -96,6 +118,8 @@ pub const GlfwDevice = struct {
         height.* = @intCast(@max(ih, 0));
     }
 
+    /// On Linux the X11 window id is returned as an address-sized value, not as a pointer to a
+    /// window object.
     fn getNativeHandle(ptr: *anyopaque) ?*anyopaque {
         const self = from(ptr);
         const w = self.window orelse return null;
@@ -106,10 +130,14 @@ pub const GlfwDevice = struct {
         };
     }
 
+    /// Frees the `GlfwDevice` only. It does not terminate GLFW or destroy the window, so
+    /// `shutdown` must come first.
     fn destroy(ptr: *anyopaque) void {
         heap.gpa.destroy(from(ptr));
     }
 
+    /// Called by GLFW inside its event polling, on the polling thread. It finds the device through
+    /// the user pointer that `initialize` set.
     fn emit(window: ?*c.GLFWwindow, ev: device.Event) void {
         const self: *GlfwDevice = @ptrCast(@alignCast(c.glfwGetWindowUserPointer(window) orelse return));
         const sink = self.sink orelse return;
@@ -136,6 +164,7 @@ pub const GlfwDevice = struct {
         });
     }
 
+    /// GLFW's button callback carries no cursor position, so the event's `x` and `y` stay zero.
     fn mouseButtonCallback(window: ?*c.GLFWwindow, button: c_int, action: c_int, mods: c_int) callconv(.c) void {
         _ = mods;
         emit(window, .{
