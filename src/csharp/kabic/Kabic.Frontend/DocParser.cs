@@ -4,10 +4,27 @@ using System.Text.RegularExpressions;
 
 namespace Kabic.Frontend;
 
+/// <summary>
+/// Reads the doc comment the AST carries for a declaration and splits it into the summary, the
+/// documentation of each named parameter and the return documentation, each with its leading tags.
+/// </summary>
+/// <remarks>
+/// Only the first <c>FullComment</c> child of the node is walked. A <c>ParamCommandComment</c>
+/// sends the text beneath it to the chunks of the parameter it names, and a
+/// <c>BlockCommandComment</c> named return sends the text beneath it to the return chunks. Text
+/// outside those goes to the part the walk is in, which starts as the summary. Inline command
+/// comments contribute their argument words. The chunks of each part are joined with single
+/// spaces, the blocks written in square brackets at its start are removed one at a time, and
+/// their comma-separated names become its tags. Runs of spaces left in the text are collapsed.
+/// </remarks>
 public static class DocParser
 {
     static readonly Regex TagBlock = new(@"^\s*\[([^\]]+)\]\s*");
 
+    /// <summary>
+    /// Parses the doc comment of <paramref name="node"/>. A null node, or one with no full
+    /// comment, yields an empty summary, no parameter documentation and no return documentation.
+    /// </summary>
     public static (List<string> SummaryTags, string Summary, Dictionary<string, (List<string> Tags, string Doc)> Params,
                    List<string> ReturnTags, string ReturnDoc)
         Parse(JsonObject? node)

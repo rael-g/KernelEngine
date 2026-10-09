@@ -4,8 +4,49 @@ using System.Text.RegularExpressions;
 
 namespace Kabic.Frontend;
 
+/// <summary>
+/// Turns the AST of a translation unit into the declarations of an <c>ApiModel</c>, keeping only
+/// those declared in the files the caller owns.
+/// </summary>
+/// <remarks>
+/// <c>Extract</c> visits the top-level nodes of the AST in order. A node takes the file named in
+/// its location, or the file of the node before it when it names none, and that file's name decides
+/// ownership: a name in the full set is owned entirely, a name in the compose set is owned for
+/// typedefs, records and enums, and a name in the auxiliary set is owned for typedefs alone. Nodes
+/// of any other file are skipped.
+///
+/// A named enum becomes an enum. A complete record becomes a struct. A function whose name starts
+/// with the prefix and that has no static storage becomes a function. An extern variable with no
+/// static storage becomes a variable. A typedef records an alias unless its target is a struct, an
+/// enum or its own name, and becomes a callback when its type is a function prototype.
+///
+/// Enumerators are numbered from zero and from the last integer-valued one. An initializer that is
+/// a bare identifier is kept as that name, is not evaluated, and does not advance the count. Any
+/// other value comes from the constant folded into the AST, or else from a literal initializer that
+/// parses as a number. The source text for enumerator initializers and slot parameter names is the
+/// bytes of the owning file, or the first entry of the bytes table when that file has none.
+///
+/// A struct field whose type is a function pointer becomes a slot. Its receiver is the first lane,
+/// and each later lane takes its name from <see cref="DeclText.FnPtrParamNames"/> and its
+/// documentation from the field's comment. A field with no name writes a note to standard error and
+/// is skipped. A documented parameter that matches no lane is recorded as an error. Functions treat
+/// their parameters the same way, with names taken from the AST. Callbacks take their lane names
+/// from the parameter indices in the comment, and record no errors.
+/// </remarks>
 public static class Extractor
 {
+    /// <summary>
+    /// Extracts the declarations owned by the files named in the arguments, and returns them with
+    /// the errors found on the way as messages.
+    /// </summary>
+    /// <param name="headerNames">File names, without directories, whose declarations are owned in
+    /// full.</param>
+    /// <param name="sourceBytes">The source text of each file, keyed by its full path.</param>
+    /// <param name="auxHeaderNames">File names whose typedefs alone are extracted.</param>
+    /// <param name="composeHeaderNames">File names whose typedefs, records and enums are
+    /// extracted.</param>
+    /// <param name="symbolPrefix">Only functions whose names start with this prefix are
+    /// extracted.</param>
     public static (ApiModel Model, List<string> Errors) Extract(JsonObject ast, HashSet<string> headerNames,
         Dictionary<string, byte[]> sourceBytes, HashSet<string>? auxHeaderNames = null,
         HashSet<string>? composeHeaderNames = null, string symbolPrefix = "")

@@ -5,8 +5,25 @@ using Kabic.Zig;
 
 namespace Kabic.Cli;
 
+/// <summary>
+/// Implements the command that renders the Zig projection of one domain.
+/// </summary>
+/// <remarks>
+/// Run reads the manifest path, the domain name, the output directory and the providers.
+/// Without the first three it writes the usage to the error stream and returns one. The root is
+/// the parent of the manifest's directory, and each domain's API file is resolved under it. The
+/// named domain must be in the manifest. Every other domain whose API file exists contributes
+/// its structs and enums that are not external, and all of its type aliases, to a table of
+/// foreign types, each mapped to that domain's Zig file. The named domain's model is then
+/// classified against the providers and rendered with that table and the error ABI. The text is
+/// written to a file named after the domain in the output directory.
+/// </remarks>
 internal static class ZigCommand
 {
+    /// <summary>
+    /// Writes the Zig projection of the named domain and returns zero. Returns one when a
+    /// required option is missing or the named domain is not in the manifest.
+    /// </summary>
     public static int Run(IReadOnlyList<string> args)
     {
         string? domainsPath = null, domain = null, outDir = null;

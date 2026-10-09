@@ -6,6 +6,17 @@ namespace Kabic.C;
 /// somebody wrote by hand for that one component. The table's entry type and the spelling of each
 /// kind of field come from the convention.
 /// </summary>
+/// <remarks>
+/// <see cref="RenderFieldTables"/> writes one C header. It opens the include guard, includes the
+/// header that the convention's field table names, then the headers it was passed and
+/// <c>stddef.h</c>. For each struct of <see cref="Named"/> it emits a macro, spelled by
+/// <see cref="NameMacro"/>, whose value is the component name that <c>ComponentNameFor</c> gives.
+/// For each struct of <see cref="Describable"/> it emits a static array named after the struct
+/// with a <c>_fields</c> suffix, holding one entry per field that <c>Describes</c> accepts: the
+/// field's name, its kind constant, its offset and its size, and the initializer that
+/// <c>DefaultOf</c> renders. It then closes the guard and normalizes the line endings to LF.
+/// It throws an <c>InvalidOperationException</c> when the convention declares no field table.
+/// </remarks>
 public static class CBackend
 {
     /// <summary>
@@ -56,13 +67,6 @@ public static class CBackend
     }
 
     /// <summary>
-    /// The structs this backend describes: a domain's own component structs, in
-    /// declaration order. A vtable is behavior; a composed struct belongs to the
-    /// domain that owns it, which emits its table there; and a plain helper
-    /// struct a component happens to be built out of is not itself addressable
-    /// by a scene file, which is what the component suffix tells them apart by.
-    /// </summary>
-    /// <summary>
     /// The component structs this domain names. Wider than <see cref="Describable"/>: a
     /// component a scene file cannot author still has to be registered under a name, and
     /// every language reaching it needs the same one. A component with no describable field
@@ -76,17 +80,16 @@ public static class CBackend
     public static string NameMacro(ApiStruct s, Convention convention) =>
         convention.FieldTable!.NameMacroPrefix + convention.ComponentNameFor(s.Name).ToUpperInvariant();
 
+    /// <summary>
+    /// The structs a scene file can address: the domain's own component structs, in declaration
+    /// order, that have at least one field <c>Describes</c> accepts.
+    /// </summary>
     public static IEnumerable<ApiStruct> Describable(ApiModel model, Convention convention) =>
         model.Structs.Where(s => !s.IsVtable
             && !s.External
             && s.Name.EndsWith(convention.ComponentSuffix, StringComparison.Ordinal)
             && s.Fields.Any(f => Describes(model, f, convention.FieldTable!, convention)));
 
-    /// <summary>
-    /// Whether a scene file can address this field at all. <c>[output]</c> is a
-    /// field a system writes every tick; describing it would invite a scene to
-    /// author a value that is overwritten before anything reads it.
-    /// </summary>
     /// <summary>
     /// Renders a field's <c>[default:]</c> as an initializer for the table's
     /// ke_variant, or the null variant when the header declares none.
@@ -120,6 +123,11 @@ public static class CBackend
     /// <summary>A C floating literal: "5" is not one, "5.0" is.</summary>
     private static string CDouble(string raw) => raw.Contains('.') ? raw : raw + ".0";
 
+    /// <summary>
+    /// Whether a scene file can address this field at all. <c>[output]</c> is a
+    /// field a system writes every tick; describing it would invite a scene to
+    /// author a value that is overwritten before anything reads it.
+    /// </summary>
     private static bool Describes(ApiModel model, ApiField f, FieldTableConvention table, Convention convention) =>
         !f.Has("output") && VariantOf(model, f, table, convention) is not null;
 

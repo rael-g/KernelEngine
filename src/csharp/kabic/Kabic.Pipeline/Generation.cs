@@ -4,8 +4,32 @@ using Kabic.CSharp;
 
 namespace Kabic.Pipeline;
 
+/// <summary>
+/// Writes the C# projection, the C field tables and the error-kind mapping of an API
+/// description.
+/// </summary>
+/// <remarks>
+/// <c>CSharp</c> classifies the API model against the providers and callbacks, then writes
+/// files in a fixed order. The enums that are not external go into one file in the contract
+/// directory. Each value, borrowed and view struct gets its own file there. A struct with array
+/// fields that is neither a params type, a view nor borrowed gets a spans file in the output
+/// directory. An enum that declares borrow kinds gets a wrappers file. Each provider writes a
+/// class to the output directory and, when it has a contract, an interface to the contract
+/// directory. Each callback writes a native interface. Each component tagged as a node writes a
+/// node type, and the nodes together get one registrar named after the domain, which requires a
+/// domain name. Free functions are written per owner, which requires a library name.
+///
+/// <c>CFieldTable</c> renders the field tables from the model. <c>ErrorKinds</c> renders the
+/// managed error mapping from the convention: one switch over the named errors, a general error
+/// constructor, and a class for each kind that extends another type.
+/// </remarks>
 public static class Generation
 {
+    /// <summary>
+    /// The inputs of one C# projection: API JSON, namespaces, directories, domain, library,
+    /// providers,
+    /// callbacks, usings and convention.
+    /// </summary>
     public sealed record CSharpRequest(
         string ApiJson,
         string Namespace,
@@ -19,6 +43,11 @@ public static class Generation
         IReadOnlyList<string> Usings,
         Convention Convention);
 
+    /// <summary>
+    /// Writes the C# projection of one API description into the output and contract
+    /// directories. Throws <c>InvalidOperationException</c> when a node-tagged component exists
+    /// and no domain is given, or when free functions exist and no library is given.
+    /// </summary>
     public static void CSharp(CSharpRequest r)
     {
         var model = ApiReader.Read(JsonNode.Parse(r.ApiJson)!.AsObject());
@@ -115,6 +144,10 @@ public static class Generation
         }
     }
 
+    /// <summary>
+    /// Renders the C field tables of an API description with the given guard and includes, and
+    /// writes them to the output path.
+    /// </summary>
     public static void CFieldTable(string apiJson, string outPath, string guard, IReadOnlyList<string> includes, Convention convention)
     {
         var model = ApiReader.Read(JsonNode.Parse(apiJson)!.AsObject());
@@ -123,6 +156,9 @@ public static class Generation
         File.WriteAllText(outPath, text);
     }
 
+    /// <summary>
+    /// Returns the source of the native-error mapping for the convention's error kinds.
+    /// </summary>
     public static string ErrorKinds(Convention convention)
     {
         var o = new List<string>

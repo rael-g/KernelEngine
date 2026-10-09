@@ -5,13 +5,46 @@ using System.Text.RegularExpressions;
 namespace Kabic.ClangSharpBackend;
 
 /// <summary>
-/// Derives, from the <c>bindings</c> array of the manifest and the headers it names, the ClangSharp job of every binding assembly.
+/// Derives, from the <c>bindings</c> array of the manifest and the headers it names, the ClangSharp
+/// job of every binding assembly.
 /// </summary>
+/// <remarks>
+/// The planner scans every header under the source tree that lies in an include directory of the
+/// convention, skipping cache folders. For each header it records the first header, in path order,
+/// that declares each type with the symbol prefix: the closing name of a struct, enum or union
+/// body, a typedef of a braced definition, or an opaque typedef. A name that appears only as the
+/// target of a plain typedef, and is declared nowhere, is an alias: it is never remapped or
+/// traversed.
+///
+/// Each binding claims its headers, and every type declared in those headers is owned by the
+/// binding's namespace. A header claimed by two bindings is collected, and after all bindings are
+/// read the planner throws listing each one.
+///
+/// For each binding, the include directories are those of the headers reachable from its headers
+/// through angle-bracket includes. The projects it can reach are those its project file references,
+/// followed transitively. The planner then traverses from the binding's headers: it collects every
+/// type name written in the headers traversed so far. An alias is skipped. A type owned by a
+/// reachable project's namespace is remapped to that namespace and excluded, unless the owner is
+/// the binding's own namespace. A type declared in the binding's own headers is kept. Any other
+/// type declared in a source header adds that header to the traversed set. The traversal repeats
+/// until no header is added, and the remaps and excludes are recomputed on each pass.
+///
+/// A binding with one header generates from that header in place. A binding with several headers
+/// generates from an umbrella whose text is returned in <c>UmbrellaBody</c>, with one include
+/// per header. The first binding of each project is the only one whose config carries the helper
+/// types switch.
+/// </remarks>
 public static class BindingsPlanner
 {
     static readonly Regex Include = new(@"#\s*include\s*<([^>]+)>", RegexOptions.Compiled);
     static readonly Regex ProjectReference = new(@"ProjectReference\s+Include=""([^""]+)""", RegexOptions.Compiled);
 
+    /// <summary>
+    /// Plans the job of every binding in the manifest at <paramref name="manifestPath"/>, with
+    /// <paramref name="rootDir"/> as the repository root. Throws
+    /// <see cref="InvalidOperationException"/> when the manifest has no bindings array, or when a
+    /// header belongs to more than one binding.
+    /// </summary>
     public static IReadOnlyList<BindingJob> Plan(string rootDir, string manifestPath)
     {
         var convention = ConventionLoader.Load(manifestPath);

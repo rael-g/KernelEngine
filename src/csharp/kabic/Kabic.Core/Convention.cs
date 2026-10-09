@@ -1,9 +1,5 @@
 namespace Kabic;
 
-/// <summary>
-/// The naming and shape conventions of the C ABI being compiled — everything
-/// `kabic` "knows" about its consumer that is NOT intrinsic to C itself.
-/// </summary>
 /// <summary>How one kind of field is spelled in the generated table.</summary>
 public sealed record FieldVariant(string Constant, string Member);
 
@@ -25,6 +21,19 @@ public sealed record FieldTableConvention(
 /// </summary>
 public sealed record ErrorKindSpec(string Singleton, string NativeName, string Managed, string Zig, string? Extends = null);
 
+/// <summary>
+/// The naming and shape conventions of the C ABI being compiled: everything <c>kabic</c> knows about
+/// its consumer that is not intrinsic to C itself.
+/// </summary>
+/// <remarks>
+/// A convention holds the spellings a header's names are read with: the symbol prefix, the suffixes
+/// that mark handles, factories, components and parameter bags, the failure type and its kinds, the
+/// bindings and managed namespaces, and the packs. Its predicates and name functions answer from those
+/// spellings alone. <c>FromJson</c> reads them from the convention object of a manifest through a
+/// <see cref="ConventionBuilder"/>. <c>ShapeOf</c>, <c>GroupOf</c> and <c>Project</c> ask the packs in
+/// declaration order, and the first pack that recognises the type gives the answer; <c>Imports</c> and
+/// <c>Libraries</c> collect the answers of every pack.
+/// </remarks>
 public sealed class Convention
 {
     /// <summary>Prefix every public symbol in this ABI carries (<c>ke_input</c>, <c>ke_logger_create</c>).</summary>

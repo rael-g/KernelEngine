@@ -1,13 +1,34 @@
 namespace Kabic.Pipeline;
 
+/// <summary>
+/// The committed paths the artifacts of one domain are written to.
+/// </summary>
 public sealed record DomainOutput(
     string ApiJson,
     string OutDir,
     string ContractDir,
     string? CFieldTableFile);
 
+/// <summary>
+/// Plans, extracts and generates the artifacts of each domain in the manifest.
+/// </summary>
+/// <remarks>
+/// <c>Plan</c> maps each committed path of a domain through a placement function, and the
+/// contract directory falls back to the output directory when the domain has no abstractions
+/// directory. <c>ExtractOne</c> turns the domain's headers, resolved under the root, into API
+/// JSON through <c>RequestFor</c>. <c>ExtractAll</c> does this for every domain in parallel,
+/// keeps the results by name, and throws one <c>InvalidOperationException</c> that lists each
+/// failed domain. <c>GenerateOne</c> hands the API JSON to <c>Generation.CSharp</c> with the
+/// domain's settings and no callbacks, then writes the C field table when the domain declares
+/// one. <c>ExtractErrorAbi</c> extracts the error ABI header of the convention on its own.
+/// </remarks>
 public static class Regeneration
 {
+    /// <summary>
+    /// Returns the committed paths of a domain, each passed through the placement function. The
+    /// contract directory is the output directory when the domain has no abstractions
+    /// directory.
+    /// </summary>
     public static DomainOutput Plan(DomainSpec spec, Func<string, string> place)
     {
         var outDir = place(spec.OutDir);
@@ -18,6 +39,10 @@ public static class Regeneration
             spec.CFieldTable is null ? null : place(spec.CFieldTable.File));
     }
 
+    /// <summary>
+    /// Returns the extraction request of a domain, with its header, include and auxiliary paths
+    /// resolved under the root directory.
+    /// </summary>
     public static Extraction.Request RequestFor(DomainSpec spec, string rootDir, string? zig, Convention convention)
     {
         List<string> Rooted(IEnumerable<string> paths) => paths.Select(p => Path.Combine(rootDir, p)).ToList();
@@ -25,6 +50,10 @@ public static class Regeneration
             Rooted(spec.AuxHeaders), Rooted(spec.ComposeHeaders), zig, convention);
     }
 
+    /// <summary>
+    /// Extracts the error ABI header of the convention, resolved under the root directory, and
+    /// returns its model.
+    /// </summary>
     public static ApiModel ExtractErrorAbi(Convention convention, string rootDir, string? zig)
     {
         string Rooted(string path) => Path.Combine(rootDir, path);
@@ -33,9 +62,16 @@ public static class Regeneration
         return ApiReader.Read(System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject());
     }
 
+    /// <summary>
+    /// Extracts the headers of one domain and returns their API as JSON.
+    /// </summary>
     public static string ExtractOne(DomainSpec spec, string rootDir, string? zig, Convention convention) =>
         Extraction.Run(RequestFor(spec, rootDir, zig, convention));
 
+    /// <summary>
+    /// Generates the C# projection of one domain from its API JSON, and writes its C field
+    /// table when the domain declares one and a path was planned for it.
+    /// </summary>
     public static void GenerateOne(DomainSpec spec, string apiJson, DomainOutput output, Convention convention)
     {
         Generation.CSharp(new Generation.CSharpRequest(
@@ -46,6 +82,10 @@ public static class Regeneration
             Generation.CFieldTable(apiJson, file, c.Guard, c.Includes, convention);
     }
 
+    /// <summary>
+    /// Extracts every domain in parallel and returns each API JSON keyed by domain name. Throws
+    /// <c>InvalidOperationException</c> listing every domain whose extraction failed.
+    /// </summary>
     public static IReadOnlyDictionary<string, string> ExtractAll(
         IReadOnlyList<DomainSpec> specs, string rootDir, string? zig, Convention convention)
     {

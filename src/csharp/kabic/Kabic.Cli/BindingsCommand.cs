@@ -2,8 +2,31 @@ using Kabic.ClangSharpBackend;
 
 namespace Kabic.Cli;
 
+/// <summary>
+/// Generates, checks and restores the C# bindings of the domains selected from the binding
+/// plan.
+/// </summary>
+/// <remarks>
+/// Generate runs one ClangSharp job per selected binding and writes its output to the committed
+/// directory of that job. Before a job runs, an existing directory is moved aside to a sibling
+/// path. If the job throws and a previous directory existed, that directory is moved back and
+/// the exception propagates. If the job leaves no C# file in the target, the job is reported as
+/// failed and a previous directory is restored. Otherwise the moved-aside directory is deleted
+/// once the job has written files.
+///
+/// CheckDrift runs every selected job into a scratch directory under the system temporary path
+/// and compares the result with the committed directory, file set and bytes alike. A missing
+/// committed directory counts as drift. The scratch directory is deleted in a finally block.
+/// Both operations obtain the clang resource directory from ClangResourceDir before any job
+/// runs.
+/// </remarks>
 internal static class BindingsCommand
 {
+    /// <summary>
+    /// Regenerates the bindings of the selected domains and returns zero only when every one of
+    /// them was written. When the print switch is in <c>Raw</c>, it prints each job's
+    /// configuration and returns zero without generating anything.
+    /// </summary>
     public static int Generate(Options options)
     {
         var jobs = Select(options);
@@ -57,6 +80,11 @@ internal static class BindingsCommand
         return succeeded == jobs.Count ? 0 : 1;
     }
 
+    /// <summary>
+    /// Compares the bindings the headers produce with the committed bindings of the selected
+    /// domains. Returns one when a committed output is missing or differs, two when a job wrote
+    /// no C# file and no drift was found, and zero when every output matches.
+    /// </summary>
     public static int CheckDrift(Options options)
     {
         var jobs = Select(options);

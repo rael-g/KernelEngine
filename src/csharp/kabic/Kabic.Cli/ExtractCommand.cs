@@ -2,8 +2,24 @@ using Kabic.Pipeline;
 
 namespace Kabic.Cli;
 
+/// <summary>
+/// Implements the command that extracts an API description from C headers.
+/// </summary>
+/// <remarks>
+/// Run separates the arguments into the output path, the zig override, the manifest, include
+/// directories, auxiliary headers, compose headers and primary headers. Any other argument,
+/// including an unrecognised flag, is a primary header. Without an output path or a primary
+/// header the usage is written to the error stream and the command returns one. Otherwise
+/// <c>Extraction.Run</c> produces the JSON, and its <c>InvalidOperationException</c> is written
+/// to the error stream. On success the output directory is created, the JSON is written there,
+/// and the path is printed.
+/// </remarks>
 internal static class ExtractCommand
 {
+    /// <summary>
+    /// Extracts the API of the given headers into the output path and returns zero. Returns one
+    /// when an argument is missing or the extraction fails.
+    /// </summary>
     public static int Run(IReadOnlyList<string> args)
     {
         string? outPath = null;

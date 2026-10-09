@@ -6,10 +6,30 @@ using static ClangSharp.Interop.CXTranslationUnit_Flags;
 
 namespace Kabic.ClangSharpBackend;
 
+/// <summary>
+/// Runs the ClangSharp generator for one <c>BindingJob</c> and reports what it logged.
+/// </summary>
+/// <remarks>
+/// <c>Run</c> first writes the job's umbrella file, when it has an umbrella body, into the
+/// umbrellas folder under the build folder of the root directory; otherwise it takes the job's file
+/// in its native directory. The file is then given relative to that directory. Each remap is split
+/// at its first equals sign and stored in one dictionary, and the fixed remaps are added last so
+/// they override a job remap of the same name. The generator options start from the Unix-types
+/// setting on hosts other than Windows, then each config switch is applied in order, and an
+/// unknown switch throws. The clang arguments are the language, a warning suppression for pragma
+/// once outside a header, one include directory per job entry, the resource directory and the
+/// additional arguments.
+/// </remarks>
 public static class ClangSharpRunner
 {
     static readonly string[] FixedRemaps = ["uint64_t=ulong", "int64_t=long"];
 
+    /// <summary>
+    /// Generates the bindings of <paramref name="job"/> into <paramref name="outputDirectory"/>.
+    /// Returns whether no error was counted, with the log of what the parse and the generator
+    /// reported. The current directory is the job's native directory while the generator runs and
+    /// is restored afterwards, also when it throws.
+    /// </summary>
     public static BindingRun Run(BindingJob job, string rootDir, string resourceDir, string outputDirectory)
     {
         var umbrellaDir = Path.Combine(rootDir, "build", "kabic", "umbrellas");
@@ -118,4 +138,8 @@ public static class ClangSharpRunner
     };
 }
 
+/// <summary>
+/// The outcome of one <see cref="ClangSharpRunner.Run"/>: whether it counted no error, and the log
+/// of what was reported.
+/// </summary>
 public sealed record BindingRun(bool Succeeded, IReadOnlyList<string> Log);

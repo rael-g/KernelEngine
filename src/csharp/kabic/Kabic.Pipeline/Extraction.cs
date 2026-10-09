@@ -5,8 +5,26 @@ using Kabic.Frontend;
 
 namespace Kabic.Pipeline;
 
+/// <summary>
+/// Extracts the public API of C headers by running zig cc in AST-dump mode.
+/// </summary>
+/// <remarks>
+/// Run resolves the zig executable and writes one translation unit that includes the headers,
+/// then the auxiliary headers, then the compose headers, into a scratch directory.
+/// <c>RunAstDump</c> parses that unit, and the scratch directory is deleted in a finally block.
+/// The bytes of every header are read, and the AST is given to <c>Extractor.Extract</c> with
+/// the file names of each header group and the symbol prefix of the convention. Extractor
+/// errors are raised as one <c>InvalidOperationException</c>; otherwise the API is written as
+/// indented JSON. <c>RunAstDump</c> points the zig cache into the scratch directory. It fails
+/// when stdout does not start with a JSON object, or when stderr holds an error line other than
+/// the file-not-found error of the unit itself.
+/// </remarks>
 public static class Extraction
 {
+    /// <summary>
+    /// The inputs of one extraction: its headers, auxiliary and compose headers, include
+    /// directories, zig override and convention.
+    /// </summary>
     public sealed record Request(
         IReadOnlyList<string> Headers,
         IReadOnlyList<string> IncludeDirs,
@@ -15,6 +33,11 @@ public static class Extraction
         string? Zig,
         Convention Convention);
 
+    /// <summary>
+    /// Extracts the API of the request and returns it as indented JSON. Throws
+    /// <c>InvalidOperationException</c> when zig produces no AST, a header fails to parse, or
+    /// the extractor reports errors.
+    /// </summary>
     public static string Run(Request request)
     {
         var zig = ResolveZig(request.Zig);
@@ -50,6 +73,11 @@ public static class Extraction
     static HashSet<string> Names(IEnumerable<string> paths) =>
         paths.Select(Path.GetFileName).Where(n => n is not null).Select(n => n!).ToHashSet();
 
+    /// <summary>
+    /// Returns the zig executable: the override when given, else the first zig on the PATH,
+    /// else the fallback under the home directory. Throws <c>InvalidOperationException</c> when
+    /// none is found.
+    /// </summary>
     public static string ResolveZig(string? overridePath)
     {
         if (overridePath is not null) return overridePath;
