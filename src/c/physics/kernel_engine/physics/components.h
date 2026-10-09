@@ -11,13 +11,9 @@ extern "C"
 #endif
 
     /// [node:Body2D,base:Node2D]
-    /// A 2D rigid body. Pose and motion are stored here because the simulation owns them
-    /// between ticks; the node's own transform2d is written back from this component each
-    /// tick by the physics plugin's own system, so what a script reads and what the
-    /// hierarchy composes are the same two dimensions the body moves in. The same system
-    /// creates and destroys the underlying body by reconciling this component against the
-    /// world, so the entity is the identity and a script never acquires, threads, or
-    /// releases a handle.
+    /// A 2D rigid body. Holds the pose and motion of its entity, which the simulation
+    /// updates each tick. The entity is the identity of the body: a caller never acquires,
+    /// passes, or releases a body handle.
     typedef struct ke_body2d_component
     {
         ke_body_type_2d type;
@@ -29,12 +25,11 @@ extern "C"
         float           angular_velocity;
         /// Multiplies world gravity for this body alone. 1 = normal, 0 = weightless.
         float           gravity_scale; ///< [default:1]
-        /// Keeps the body's angle fixed against every torque, including contacts. What
-        /// anything that must stay upright sets — characters, projectiles.
+        /// Keeps the body's angle fixed against every torque, including contacts.
         bool            fixed_rotation;
 
-        /// [idiom] The plugin's body for this entity, assigned when it reconciles the
-        /// component. Authoring it would name a body the world does not own.
+        /// [idiom] The body for this entity, assigned when the component is reconciled.
+        /// Callers do not write it.
         ke_body_2d      body;
     } ke_body2d_component;
 
@@ -46,11 +41,8 @@ extern "C"
 
     /// [node:Collider2D,base:Node2D]
     /// One collision fixture, attached to the nearest ancestor that carries a
-    /// ke_body2d_component. Named for what it holds — a kind, extents, density,
-    /// friction, restitution — rather than for a shape it is not. It is a node of
-    /// its own rather than a field on the body because it has an offset the body
-    /// does not, and because a body may carry several. The physics plugin's own system attaches the fixture by reconciling
-    /// this component against the hierarchy, so a script never names a body.
+    /// ke_body2d_component. The fixture is attached by reconciling this component against
+    /// the hierarchy. A caller never names a body.
     typedef struct ke_collider2d_component
     {
         ke_shape_kind_2d kind;
@@ -70,9 +62,8 @@ extern "C"
         /// one's layer bit is set in the other's mask.
         uint32_t         mask; ///< [default:4294967295]
 
-        /// [idiom] Whether the fixture has been attached to its body. Set by the
-        /// plugin once the ancestor body exists; authoring it would claim a fixture
-        /// the world does not have.
+        /// [idiom] Whether the fixture has been attached to its body. Set once the
+        /// ancestor body exists. Callers do not write it.
         bool             attached;
     } ke_collider2d_component;
 

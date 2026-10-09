@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>Directional light node. Init properties feed the per-frame light state the renderer consumes.</summary>
+/// <summary>Directional light node. Its properties give the light's direction, color, intensity and ambient term.</summary>
 [GeneratedNodeComponent(typeof(DirectionalLightComponent), "directional_light")]
 public partial class DirectionalLight : Node3D
 {

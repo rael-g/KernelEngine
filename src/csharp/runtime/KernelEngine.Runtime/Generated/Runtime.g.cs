@@ -17,7 +17,7 @@ public unsafe interface INativeRuntime
     ke_runtime* Native { get; }
 }
 
-/// <summary>Owns the simulation world, dispatches systems across the worker pool and drives the frame loop. Game code names this rather than the scheduler behind it, so what a module registers against says nothing about which runtime is carrying it.</summary>
+/// <summary>Owns the simulation world, dispatches systems across the worker pool and drives the frame loop.</summary>
 public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
 {
     private ke_runtime* _native;
@@ -181,10 +181,10 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
     /// <param name="phase">Which phase of the tick the body runs in.</param>
     /// <param name="execute">The body itself.</param>
-    /// <param name="queries">Queries the system reads through. The runtime registers them, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view.</param>
-    /// <param name="accessList">Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and component access made without a query. Declaring nothing is not "no opinion" -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage says so.</param>
+    /// <param name="queries">Queries the system reads through; the body reads their resolved segments via ke_system_ctx_view.</param>
+    /// <param name="accessList">Cids the system touches that no query term covers, such as ordering-only tags and component access made without a query. Declaring nothing is not "no opinion" -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage declares it here.</param>
     /// <param name="pinnedThread">The worker the body must run on, or 0 to let any wave thread take it.</param>
-    /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
+    /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. What breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false)
@@ -290,7 +290,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         return Handle->last_system(Handle);
     }
 
-    /// <summary>Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body's error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.</summary>
+    /// <summary>Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Tick(float dt)
     {
@@ -300,7 +300,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         DrainCallbackFailures();
     }
 
-    /// <summary>Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
+    /// <summary>Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Flush()
     {

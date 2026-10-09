@@ -114,7 +114,7 @@
           "name": "get_native_handle",
           "returns": "void *",
           "tags": [],
-          "doc": "Returns the platform-specific native handle (HWND, X11 Window, ...).",
+          "doc": "Returns the platform-specific native window handle.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_window *"

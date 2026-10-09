@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Asset;
 
-/// <summary>Raw CPU-side material data returned by ke_asset_loader::load_model. Pass to ke_render::create_material after uploading textures.</summary>
+/// <summary>Raw CPU-side material data returned by ke_asset_loader::load_model.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public unsafe partial struct MaterialData
 {

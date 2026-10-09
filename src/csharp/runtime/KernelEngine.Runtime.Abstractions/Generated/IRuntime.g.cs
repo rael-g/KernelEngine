@@ -14,7 +14,7 @@ public delegate void ModuleLoad(IRuntime runtime);
 public delegate void ModuleUnload(IRuntime runtime);
 
 /// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
-/// <param name="ctx">The body's only doorway to component memory for this call. Opaque to a managed caller, which forwards it to the entry points that take one.</param>
+/// <param name="ctx">The body's only doorway to component memory for this call. Opaque; pass it to the entry points that take one.</param>
 /// <param name="dt">Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE.</param>
 public delegate void SystemExecute(nint ctx, float dt);
 
@@ -31,10 +31,10 @@ public interface IRuntime : IDisposable
     /// <param name="name">Identifies the system in diagnostics and in the failure a body raises.</param>
     /// <param name="phase">Which phase of the tick the body runs in.</param>
     /// <param name="execute">The body itself.</param>
-    /// <param name="queries">Queries the system reads through. The runtime registers them, derives the scheduling access list from their terms, and resolves them into segments the body reads via ke_system_ctx_view.</param>
-    /// <param name="accessList">Cids the system touches that no query term covers, folded into the derived set so the wave-builder still orders on them: ordering-only tags (render resources carry no data) and component access made without a query. Declaring nothing is not "no opinion" -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage says so.</param>
+    /// <param name="queries">Queries the system reads through; the body reads their resolved segments via ke_system_ctx_view.</param>
+    /// <param name="accessList">Cids the system touches that no query term covers, such as ordering-only tags and component access made without a query. Declaring nothing is not "no opinion" -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage declares it here.</param>
     /// <param name="pinnedThread">The worker the body must run on, or 0 to let any wave thread take it.</param>
-    /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. Two entities are two rows, so per-entity work cannot overlap; what breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
+    /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. What breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false);
@@ -43,10 +43,10 @@ public interface IRuntime : IDisposable
     void UnregisterSystem(ulong id);
     /// <summary>The id of the system registered last and still registered, or 0 when there is none.</summary>
     ulong LastSystem();
-    /// <summary>Runs one tick: every sim phase in order, then the render phase. A system body written in a managed language cannot let an exception cross this boundary, so its binding reports the failure through the body's error lane and leaves the exception itself with the runtime. This is where a body that failed during the tick is answered for.</summary>
+    /// <summary>Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Tick(float dt);
-    /// <summary>Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources (GPU device, swapchain surface) must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
+    /// <summary>Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Flush();
 }

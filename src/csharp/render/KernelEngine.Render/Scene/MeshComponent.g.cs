@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Framework;
 
-/// <summary>Renders a mesh with a material. `mesh`/`material` double as output: the native "render.mesh.resolve" system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig) fills them whenever `primitive` names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles just writes them and leaves `primitive` empty — the resolve system only acts where a handle is still invalid, so the two paths never conflict.</summary>
+/// <summary>Renders a mesh with a material. `mesh` and `material` double as output: the engine fills them, at KE_PHASE_UPDATE, whenever `primitive` names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles writes them and leaves `primitive` empty; the engine only acts where a handle is still invalid.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct MeshComponent
 {
@@ -19,7 +19,7 @@ public partial struct MeshComponent
 
     public KernelEngine.Render.MeshHandle Mesh;
     public KernelEngine.Render.MaterialHandle Material;
-    /// <summary>Resolved by the scene loader's property-apply path into `mesh`; a node authoring it directly would have the value overwritten.</summary>
+    /// <summary>Resolved into `mesh` by the engine; a node authoring `mesh` directly would have the value overwritten.</summary>
     public PrimitiveBuffer Primitive;
     public Vector4 BaseColor;
     public float Roughness;

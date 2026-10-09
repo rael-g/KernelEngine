@@ -17,16 +17,8 @@ extern "C"
     /// bound to it, and answers the questions a script asks about the scene around
     /// itself.
     ///
-    /// ke_scene_loader already calls out to a language to build that object, and
-    /// then forgets it: the loader learns a type name, hands over an entity, and
-    /// the binding lives on in whatever map the language happened to keep. That map
-    /// is engine state wearing a language's clothes — every runtime that wants to
-    /// host scripts rebuilds it, and none of them can see each other's nodes.
-    ///
-    /// Holding it here is what makes the association language-neutral. The instance
-    /// is an opaque pointer this host never dereferences; whose heap it lives in is
-    /// the binding runtime's business, and two runtimes can bind nodes in the same
-    /// scene without either one owning the map.
+    /// The instance is an opaque pointer this host stores and never dereferences.
+    /// Several binding runtimes may bind entities in the same scene.
     typedef struct ke_script_host ke_script_host;
 
     /// Identifies a registered script type. Zero is never a valid id, so a zeroed
@@ -43,39 +35,31 @@ extern "C"
         /// so their work cannot overlap.
         KE_SCRIPT_REACH_SELF = 0,
         /// Reaches entities it was not handed — a borrow, a lookup by name, a query.
-        /// Anything unproven belongs here: over-declaring costs parallelism, while
-        /// under-declaring corrupts memory.
+        /// Anything unproven belongs here.
         KE_SCRIPT_REACH_ANY = 1,
     } ke_script_reach;
 
-    /// Why a resolve answered the way it did. Without it "no node answers" and "two
-    /// nodes answer" arrive as the same invalid entity, and a binding runtime can only
-    /// tell its author the borrow found nothing — sending them to look for a node that
-    /// is there twice.
+    /// Reports why a resolve answered the way it did.
     typedef enum ke_script_resolve
     {
         /// Exactly one entity answered, and it is the one returned.
         KE_SCRIPT_RESOLVE_FOUND = 0,
         /// Nothing answered. The borrow names a node that is not there.
         KE_SCRIPT_RESOLVE_NONE = 1,
-        /// More than one answered, so none was returned. Naming the borrow settles it.
+        /// More than one answered, so none was returned.
         KE_SCRIPT_RESOLVE_AMBIGUOUS = 2,
     } ke_script_resolve;
 
-    /// [borrow_kinds] Where a borrow looks for the node it names. One question asked
-    /// three ways rather than three questions: a borrow is always "an instance of
-    /// this type, optionally by this name", and only the region searched differs.
+    /// [borrow_kinds] Where a borrow looks for the node it names. A borrow is always
+    /// an instance of a type, optionally with a name; only the region searched differs.
     typedef enum ke_script_borrow
     {
-        /// Below the borrower, depth-first. A node reaches a grandchild it names
-        /// without every level in between forwarding it.
+        /// Below the borrower, depth-first.
         KE_SCRIPT_BORROW_DESCENDANT = 0,
-        /// The nearest above the borrower. An ancestor chain has one node per level,
-        /// so this is the one reach that can never answer ambiguous.
+        /// The nearest above the borrower. This is the only reach that never answers
+        /// ambiguous.
         KE_SCRIPT_BORROW_ANCESTOR = 1,
-        /// Anywhere the type is bound, ignoring the borrower's position. What a node
-        /// reporting to a sibling subsystem needs, and the reason this is asked here
-        /// rather than by a binding walking every node it knows about.
+        /// Anywhere the type is bound, ignoring the borrower's position.
         KE_SCRIPT_BORROW_ANYWHERE = 2,
     } ke_script_borrow;
 
@@ -86,8 +70,7 @@ extern "C"
         /// Registers a script type under `name`, described by the components its
         /// instances carry and how far its behaviour reaches. Registering the same
         /// name twice returns the existing id when the description matches and
-        /// fails when it does not — two languages naming one type differently would
-        /// otherwise disagree about what a node in a scene file is.
+        /// fails when it does not.
         /// @param name [utf8]
         /// @param components [array_of:component_count]
         /// @param out_id [out]
@@ -99,8 +82,7 @@ extern "C"
                               ke_script_type_id     *out_id,
                               ke_error             **out_error);
 
-        /// [try] Resolves a type by name without registering it, so a scene naming
-        /// a type nobody declared fails instead of inventing an empty one.
+        /// [try] Resolves a type by name without registering it. An undeclared name fails.
         /// @param name [utf8]
         /// @param out_id [out]
         bool (*type_lookup)(struct ke_script_host *self,
@@ -108,8 +90,7 @@ extern "C"
                             ke_script_type_id     *out_id);
 
         /// The components a registered type's instances carry, in registration
-        /// order. This is what a host turns into the type's query and access list,
-        /// so it is read back rather than re-derived by each binding.
+        /// order.
         /// @param out_count [out]
         /// @return [array_of:out_count]
         const ke_component_id *(*type_components)(struct ke_script_host *self,
@@ -117,14 +98,12 @@ extern "C"
                                                   uint32_t              *out_count);
 
         /// How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for
-        /// an unknown id, because refusing to parallelise something unknown is the
-        /// safe direction.
+        /// an unknown id.
         ke_script_reach (*type_reach)(struct ke_script_host *self, ke_script_type_id type);
 
         /// Binds `instance` to `entity` as an instance of `type`. The pointer is
         /// stored and never dereferenced. Binding an entity that already carries an
-        /// instance fails rather than replacing it silently, since the previous
-        /// binding's owner would then never learn its object was dropped.
+        /// instance fails rather than replacing it.
         /// @param instance [rooted:entity]
         bool (*bind)(struct ke_script_host *self,
                      ke_entity              entity,
@@ -155,9 +134,8 @@ extern "C"
                                 ke_ecs_commands       *commands,
                                 ke_error             **out_error);
 
-        /// [try] The instance bound to `entity`. False when none is, which is the
-        /// normal answer rather than a failure: an entity a scene made without a
-        /// script, or one another runtime owns, matches the same queries.
+        /// [try] The instance bound to `entity`. False when none is, which is a normal
+        /// answer, not a failure.
         /// @param out_type [out]
         /// @param out_instance [out,rooted]
         bool (*instance_of)(struct ke_script_host *self,
@@ -165,19 +143,13 @@ extern "C"
                             ke_script_type_id     *out_type,
                             void                 **out_instance);
 
-        /// How many entities are currently bound as instances of `type`. What lets
-        /// a host tell "this type had nothing to do" apart from "this type's query
-        /// stopped matching", which are indistinguishable from inside the body.
+        /// How many entities are currently bound as instances of `type`.
         uint32_t (*instance_count)(struct ke_script_host *self, ke_script_type_id type);
 
-        /// The entities bound as instances of `type`, in binding order. What lets a
-        /// binding runtime drive a type's instances without keeping a parallel list
-        /// of its own — the list that only its own language can see, and that drifts
-        /// from the bindings the moment anything else unbinds one.
+        /// The entities bound as instances of `type`, in binding order.
         ///
         /// The slice belongs to the host and is invalidated by the next bind or
-        /// unbind of that type, which is the same tick's structural change a caller
-        /// already defers to the wave barrier.
+        /// unbind of that type.
         /// @param out_count [out]
         /// @return [array_of:out_count]
         const ke_entity *(*instances)(struct ke_script_host *self,

@@ -18,13 +18,13 @@
 extern "C" {
 #endif
 
-/// @brief Construction parameters for the stb_image-backed image loader.
+/// @brief Construction parameters for the image loader.
 typedef struct ke_image_loader_stb_params
 {
     struct ke_logger    *logger;    ///< Optional; may be NULL
 } ke_image_loader_stb_params;
 
-/// @brief Creates a stb_image-backed ke_image_loader.
+/// @brief Creates a ke_image_loader.
 /// @param params  Non-null construction parameters.
 /// @return        Handle whose @c ref is NULL on failure.
 KE_ASSET_STB_IMAGE_API ke_image_loader_handle ke_image_loader_stb_create(

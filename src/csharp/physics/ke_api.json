@@ -89,7 +89,7 @@
   "vtables": [
     {
       "name": "ke_physics_2d",
-      "doc": "ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins. Not thread-safe \u2014 call all methods on the same thread.",
+      "doc": "A 2D rigid-body physics world. One instance is one world; several worlds take several instances. Not thread-safe \u2014 call all methods on the same thread.",
       "tags": [],
       "fields": [
         {
@@ -196,7 +196,7 @@
           "name": "add_box_fixture",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin. The offset is what lets one body carry several shapes in different places \u2014 a character\u0027s feet and torso, a paddle\u0027s rounded ends.",
+          "doc": "Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin.",
           "return_doc": null,
           "params": [
             {
@@ -370,7 +370,7 @@
           "name": "set_body_position",
           "returns": "void",
           "tags": [],
-          "doc": "Teleports the body. Skips collision response \u2014 prefer apply_impulse for dynamic moves.",
+          "doc": "Teleports the body and skips collision response.",
           "return_doc": null,
           "params": [
             {
@@ -466,7 +466,7 @@
           "name": "set_body_fixed_rotation",
           "returns": "void",
           "tags": [],
-          "doc": "Locks or unlocks the body\u0027s rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked. Needed by anything that must stay upright \u2014 characters, projectiles, and any box whose collisions would otherwise set it spinning.",
+          "doc": "Locks or unlocks the body\u0027s rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked.",
           "return_doc": null,
           "params": [
             {
@@ -488,7 +488,7 @@
           "name": "set_body_gravity_scale",
           "returns": "void",
           "tags": [],
-          "doc": "Scales world gravity for this body alone. 1 leaves it at the world\u0027s value, 0 makes the body weightless, and a negative value makes it fall upward. What a floating pickup or a balloon sets, rather than each such body needing its own world.",
+          "doc": "Scales world gravity for this body alone. 1 leaves it at the world\u0027s value, 0 makes the body weightless, and a negative value makes it fall upward.",
           "return_doc": null,
           "params": [
             {

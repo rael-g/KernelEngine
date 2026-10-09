@@ -24,10 +24,8 @@ extern "C"
 #endif
 #endif
 
-    /// Sizing for one signal bus. Every field is a workload shape, not a law:
-    /// how many distinct signals a game declares, how many wires it draws, and
-    /// how much traffic one frame carries are the game's business, so exceeding
-    /// a default is a reason to raise it rather than a ceiling to design around.
+    /// Sizing for one signal bus. Each field's default is a convenience, not a
+    /// ceiling.
     typedef struct ke_signal_bus_params
     {
         uint32_t max_signals;      ///< Distinct signal names; 0 uses the default.

@@ -24,17 +24,15 @@ extern "C"
 #endif
 #endif
 
-    /// Sizing for one script host. How many node types a game declares is a workload
-    /// shape, so the default is a convenience rather than a ceiling. Instances need no
-    /// sizing: a binding lives on its own entity, so the ECS already bounds them.
+    /// Sizing for one script host. The defaults are conveniences, not ceilings.
+    /// Instances need no sizing.
     typedef struct ke_script_host_params
     {
         uint32_t max_types; ///< Distinct script types; 0 uses the default.
     } ke_script_host_params;
 
-    /// Allocates a script host reading the scene graph out of @c ecs, which is what
-    /// lets it answer descendant and ancestor lookups without the binding runtime
-    /// walking the hierarchy itself. @c params may be NULL to take every default.
+    /// Allocates a script host that reads the scene graph out of @c ecs.
+    /// @c params may be NULL to take every default.
     /// @return Handle whose @c ref is NULL on failure.
     KE_FRAMEWORK_API ke_script_host_handle ke_script_host_create(
         ke_ecs                      *ecs,

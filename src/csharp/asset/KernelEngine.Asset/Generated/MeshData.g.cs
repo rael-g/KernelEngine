@@ -6,7 +6,7 @@ using KernelEngine.Common;
 
 namespace KernelEngine.Asset;
 
-/// <summary>Raw CPU-side mesh data returned by ke_asset_loader::load_model. Vertices are ready to pass directly to ke_render::create_mesh.</summary>
+/// <summary>Raw CPU-side mesh data returned by ke_asset_loader::load_model.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public unsafe partial struct MeshData
 {

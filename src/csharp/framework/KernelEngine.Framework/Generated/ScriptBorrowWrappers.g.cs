@@ -19,7 +19,7 @@ public sealed class NodeBorrowAttribute : Attribute
 }
 
 /// <summary>
-/// Below the borrower, depth-first. A node reaches a grandchild it names without every level in between forwarding it. Obtained as a parameter rather
+/// Below the borrower, depth-first. Obtained as a parameter rather
 /// than stored in a field: re-resolved each time it is handed over, so it can never
 /// dangle, and its type is what puts <typeparamref name="T"/>'s components into the
 /// borrowing body's access list.
@@ -44,7 +44,7 @@ public readonly ref struct Descendant<T> where T : class
 }
 
 /// <summary>
-/// The nearest above the borrower. An ancestor chain has one node per level, so this is the one reach that can never answer ambiguous. Obtained as a parameter rather
+/// The nearest above the borrower. This is the only reach that never answers ambiguous. Obtained as a parameter rather
 /// than stored in a field: re-resolved each time it is handed over, so it can never
 /// dangle, and its type is what puts <typeparamref name="T"/>'s components into the
 /// borrowing body's access list.
@@ -69,7 +69,7 @@ public readonly ref struct Ancestor<T> where T : class
 }
 
 /// <summary>
-/// Anywhere the type is bound, ignoring the borrower's position. What a node reporting to a sibling subsystem needs, and the reason this is asked here rather than by a binding walking every node it knows about. Obtained as a parameter rather
+/// Anywhere the type is bound, ignoring the borrower's position. Obtained as a parameter rather
 /// than stored in a field: re-resolved each time it is handed over, so it can never
 /// dangle, and its type is what puts <typeparamref name="T"/>'s components into the
 /// borrowing body's access list.

@@ -213,7 +213,7 @@
           "name": "rotation",
           "type": "float",
           "tags": [],
-          "doc": "Radians, CCW positive; a scene authors degrees."
+          "doc": "Radians, CCW positive."
         },
         {
           "name": "scale",
@@ -252,7 +252,7 @@
     },
     {
       "name": "ke_audio_player_component",
-      "doc": "A single audio clip, loaded from the path the scene declares and played on demand. The clip is one node\u0027s, not one system\u0027s: two AudioPlayer children under the same parent are two clips, told apart by node name.",
+      "doc": "A single audio clip, loaded from the path the scene declares and played on demand. Each node holds its own clip: two AudioPlayer children under the same parent are two clips, told apart by node name.",
       "tags": [
         "node:AudioPlayer",
         "base:Node3D"

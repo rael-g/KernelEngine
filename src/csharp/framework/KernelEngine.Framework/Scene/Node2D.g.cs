@@ -18,7 +18,7 @@ public partial class Node2D : Node
     [NativeField("Position", Component = typeof(Transform2dComponent))]
     public partial Vector2 Position { get; set; }
 
-    /// <summary>Radians, CCW positive; a scene authors degrees.</summary>
+    /// <summary>Radians, CCW positive.</summary>
     [NativeField("Rotation", Component = typeof(Transform2dComponent))]
     public partial float Rotation { get; set; }
 

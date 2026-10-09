@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 /**
- * @brief Creates a scheduler implementation based on enkiTS.
+ * @brief Creates a scheduler.
  * @return Handle whose @c ref is NULL on failure.
  */
 KE_SCHEDULER_API ke_scheduler_handle ke_scheduler_enki_create(struct ke_error **out_error);

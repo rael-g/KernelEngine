@@ -9,7 +9,7 @@ extern "C"
 {
 #endif
 
-    /// [value] Per-vertex data expected by ke_render::create_mesh.
+    /// [value] Per-vertex data of a mesh, as uploaded.
     typedef struct ke_vertex
     {
         float x, y, z;       ///< Object-space position

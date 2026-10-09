@@ -34,10 +34,9 @@ typedef struct ke_gpu_device ke_gpu_device;
 extern const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION;
 
 /// A resource creation call (buffer, bind group, ...) was rejected by backend
-/// validation — e.g. a buffer or binding range exceeding a device limit. The
-/// limit itself (like max buffer binding size) is backend/hardware-specific and
-/// not something the engine hardcodes; the caller who requested the resource
-/// decides how to react (retry smaller, surface to the user, etc).
+/// validation, e.g. a buffer or binding range exceeding a device limit. The
+/// device limit is backend-specific. The caller that requested the resource
+/// decides how to react.
 extern const ke_error_type KE_ERROR_GPU_RESOURCE_CREATION;
 
 
@@ -365,7 +364,6 @@ typedef struct ke_gpu_device
     const void *(*query_extension)(struct ke_gpu_device *self, const char *name);
 
     /// Shader source language this device accepts in create_shader_module.
-    /// Appended at the tail so adding it never shifts existing slot offsets.
     ke_gpu_shader_language (*shader_language)(struct ke_gpu_device *self);
 
     /// Clip-space convention this backend expects projections built in.
@@ -374,10 +372,7 @@ typedef struct ke_gpu_device
     /// Kicks a background pipeline compile — the driver compiles off the
     /// caller's thread; `on_ready` fires later (during this device's normal
     /// event pump, e.g. at queue_poll) with the finished pipeline, or
-    /// KE_GPU_INVALID_HANDLE on failure. The raw async primitive: no caching,
-    /// no fallback — see ke_render_service::get_or_create_pipeline for the policy layer
-    /// built on top.
-    /// Appended at the tail so adding it never shifts existing slot offsets.
+    /// KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.
     void (*create_render_pipeline_async)(struct ke_gpu_device *self,
                                          const ke_gpu_render_pipeline_params *p,
                                          void (*on_ready)(ke_gpu_pipeline pso, void *user),
@@ -386,8 +381,7 @@ typedef struct ke_gpu_device
     /// Blocks until every pipeline compile kicked via
     /// create_render_pipeline_async has invoked its on_ready callback. Call
     /// before destroying anything an in-flight callback might still write
-    /// into (e.g. before destroying a ke_render_service PSO cache that owns the
-    /// entries those callbacks update). A no-op if nothing is pending.
+    /// into. A no-op if nothing is pending.
     void (*flush_pipeline_compiles)(struct ke_gpu_device *self);
 
     /// Starts mapping [offset, offset + size) of a buffer created with

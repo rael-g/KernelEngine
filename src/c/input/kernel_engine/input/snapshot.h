@@ -24,8 +24,7 @@ extern "C"
      * Passed from the input poll to its readers so reads are consistent and thread-safe.
      *
      * The key fields are bitsets. Read them through the snapshot_is_* slots of ke_input rather
-     * than indexing directly: the packing is a detail of this contract, and a
-     * caller that reimplements it silently breaks if the packing ever changes.
+     * than indexing them directly; the bit packing is not part of the contract.
      */
     typedef struct ke_input_snapshot
     {

@@ -30,7 +30,7 @@ typedef struct ke_window_glfw_params {
     bool              fullscreen;
 } ke_window_glfw_params;
 
-/** Creates a GLFW-backed window. Returns a handle whose `ref` is NULL on failure. */
+/** Creates a window. Returns a handle whose `ref` is NULL on failure. */
 KE_WINDOW_API ke_window_handle ke_window_glfw_create(const ke_window_glfw_params *params, ke_error **out_error);
 
 #ifdef __cplusplus

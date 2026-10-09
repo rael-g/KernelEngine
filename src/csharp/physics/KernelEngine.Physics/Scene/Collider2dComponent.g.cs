@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Framework;
 
-/// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. Named for what it holds — a kind, extents, density, friction, restitution — rather than for a shape it is not. It is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin's own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.</summary>
+/// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. The fixture is attached by reconciling this component against the hierarchy. A caller never names a body.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct Collider2dComponent
 {
@@ -22,7 +22,7 @@ public partial struct Collider2dComponent
     public float Restitution;
     public uint Layer;
     public uint Mask;
-    /// <summary>Whether the fixture has been attached to its body. Set by the plugin once the ancestor body exists; authoring it would claim a fixture the world does not have.</summary>
+    /// <summary>Whether the fixture has been attached to its body. Set once the ancestor body exists. Callers do not write it.</summary>
     public bool Attached;
 
     /// <summary>The value every <c>[default:]</c> field of <c>ke_collider2d_component</c> declares. A zero-initialized instance is not the same thing: zero is a value the ABI reads as itself, so a field whose neutral value is not zero has to be seeded.</summary>

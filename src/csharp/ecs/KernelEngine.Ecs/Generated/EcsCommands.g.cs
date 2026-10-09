@@ -15,7 +15,7 @@ public unsafe interface INativeEcsCommands
     ke_ecs_commands* Native { get; }
 }
 
-/// <summary>A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation's effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording is what makes these operations callable from code that must not touch the world: a system body running beside other systems records, and the runtime applies every body's queue while nothing else runs. An implementation that cannot accept an operation fails it with the reason in `out_error` and leaves the queue unchanged.</summary>
+/// <summary>A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation's effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation fails it with the reason in `out_error` and leaves the queue unchanged.</summary>
 public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
 {
     private ke_ecs_commands* _native;

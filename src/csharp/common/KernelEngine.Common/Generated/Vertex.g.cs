@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Common;
 
-/// <summary>Per-vertex data expected by ke_render::create_mesh.</summary>
+/// <summary>Per-vertex data of a mesh, as uploaded.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct Vertex
 {

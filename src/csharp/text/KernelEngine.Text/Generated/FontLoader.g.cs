@@ -15,7 +15,7 @@ public unsafe interface INativeFontLoader
     ke_font_loader* Native { get; }
 }
 
-/// <summary>ABI-stable vtable for decoding font files (TTF/OTF/…) on CPU. Async dispatch is the caller's concern (C# wraps with Task.Run on a worker); this contract stays minimal. Mirrors the ke_image_loader pattern — load returns raw bytes + metadata, texture upload happens later via ke_render.</summary>
+/// <summary>Decodes font files (TTF/OTF/…) on the CPU. Async dispatch is the caller's concern.</summary>
 public unsafe partial class FontLoader : IDisposable, INativeFontLoader
 {
     private ke_font_loader* _native;

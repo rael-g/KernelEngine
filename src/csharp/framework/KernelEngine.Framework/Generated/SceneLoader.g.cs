@@ -81,7 +81,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         _borrowed = borrowed;
     }
 
-    /// <summary>Loads the scene at path, instantiating every entity it declares. This is where a script factory that refused an entity is answered for.</summary>
+    /// <summary>Loads the scene at path, instantiating every entity it declares. A script factory's refusal of an entity fails the load.</summary>
     /// <param name="path">Path to the scene file.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Load(string path)

@@ -53,7 +53,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         _borrowed = borrowed;
     }
 
-    /// <summary>Registers a script type under `name`, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails when it does not — two languages naming one type differently would otherwise disagree about what a node in a scene file is.</summary>
+    /// <summary>Registers a script type under `name`, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails when it does not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint RegisterType(string name, Span<uint> components, ScriptReach reach)
     {
@@ -70,7 +70,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         }
     }
 
-    /// <summary>Resolves a type by name without registering it, so a scene naming a type nobody declared fails instead of inventing an empty one.</summary>
+    /// <summary>Resolves a type by name without registering it. An undeclared name fails.</summary>
     public bool TryTypeLookup(string name, out uint id)
     {
         uint idLocal;
@@ -83,7 +83,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         }
     }
 
-    /// <summary>The components a registered type's instances carry, in registration order. This is what a host turns into the type's query and access list, so it is read back rather than re-derived by each binding.</summary>
+    /// <summary>The components a registered type's instances carry, in registration order.</summary>
     public ReadOnlySpan<uint> TypeComponents(uint type)
     {
         uint countLocal = 0;
@@ -91,13 +91,13 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         return front == null ? default : new ReadOnlySpan<uint>(front, (int)countLocal);
     }
 
-    /// <summary>How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id, because refusing to parallelise something unknown is the safe direction.</summary>
+    /// <summary>How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id.</summary>
     public ScriptReach TypeReach(uint type)
     {
         return (ScriptReach)Handle->type_reach(Handle, type);
     }
 
-    /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it silently, since the previous binding's owner would then never learn its object was dropped.</summary>
+    /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Bind(ulong entity, uint type, object instance)
     {
@@ -118,7 +118,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         if (_rooted.TryRemove(entity, out var freed)) freed.Free();
     }
 
-    /// <summary>The instance bound to `entity`. False when none is, which is the normal answer rather than a failure: an entity a scene made without a script, or one another runtime owns, matches the same queries.</summary>
+    /// <summary>The instance bound to `entity`. False when none is, which is a normal answer, not a failure.</summary>
     public bool TryInstanceOf(ulong entity, out uint type, out object? instance)
     {
         uint typeLocal;
@@ -129,13 +129,13 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         return found;
     }
 
-    /// <summary>How many entities are currently bound as instances of `type`. What lets a host tell "this type had nothing to do" apart from "this type's query stopped matching", which are indistinguishable from inside the body.</summary>
+    /// <summary>How many entities are currently bound as instances of `type`.</summary>
     public uint InstanceCount(uint type)
     {
         return Handle->instance_count(Handle, type);
     }
 
-    /// <summary>The entities bound as instances of `type`, in binding order. What lets a binding runtime drive a type's instances without keeping a parallel list of its own — the list that only its own language can see, and that drifts from the bindings the moment anything else unbinds one. The slice belongs to the host and is invalidated by the next bind or unbind of that type, which is the same tick's structural change a caller already defers to the wave barrier.</summary>
+    /// <summary>The entities bound as instances of `type`, in binding order. The slice belongs to the host and is invalidated by the next bind or unbind of that type.</summary>
     public ReadOnlySpan<ulong> Instances(uint type)
     {
         uint countLocal = 0;

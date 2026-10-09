@@ -60,7 +60,7 @@ public unsafe partial class World : IDisposable, INativeWorld
         _borrowed = borrowed;
     }
 
-    /// <summary>Registers the table describing how a scene block's keys land in this component's memory. Pure data, so a component becomes authorable without anyone writing code for it in any language — the table is generated from the header that declares the struct. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed, and must outlive the world; generated tables have static storage.</summary>
+    /// <summary>Registers the table describing how a scene block's keys land in this component's memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the world.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void RegisterComponentFields(uint cid, ke_component_field* fields, uint fieldCount)
     {

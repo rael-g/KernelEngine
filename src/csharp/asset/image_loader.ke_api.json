@@ -4,7 +4,7 @@
   "vtables": [
     {
       "name": "ke_image_loader",
-      "doc": "ABI-stable vtable for decoding 2D images (PNG/JPG/...) from disk into RGBA8. Concrete implementations are provided as separate plugins; async dispatch is the caller\u0027s responsibility, so this contract stays minimal.",
+      "doc": "Decodes 2D images (PNG/JPG/...) from disk into RGBA8. Async dispatch is the caller\u0027s responsibility.",
       "tags": [],
       "fields": [
         {

@@ -45,7 +45,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         _borrowed = borrowed;
     }
 
-    /// <summary>Declares a transient resource the core allocates and recycles.</summary>
+    /// <summary>Declares a transient resource the service allocates and recycles.</summary>
     /// <returns>The tag-component cid to place in a pass's access_list.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint Declare(ke_render_resource_desc* desc)
@@ -67,7 +67,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return result;
     }
 
-    /// <summary>Mints a tag cid under `name` with no GPU payload, for an ordering dependency between two passes that carries no data of its own.</summary>
+    /// <summary>Mints a tag cid under `name` with no GPU payload.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint ImportTag(sbyte* name)
     {
@@ -133,7 +133,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
 
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
     /// <param name="key">Dedup cache key; required.</param>
-    /// <returns>A handle a ke_mesh_component references.</returns>
+    /// <returns>The handle of the uploaded mesh.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ke_mesh_handle UploadMesh(string key, void* vertices, nuint verticesSize, ushort* indices, uint indexCount)
     {
@@ -147,7 +147,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>Resolves a mesh handle to its GPU buffers (for a pass to bind + draw). Returns false for a handle this service never uploaded, so a pass skips the draw instead of binding whatever the out parameters held.</summary>
+    /// <summary>Resolves a mesh handle to its GPU buffers. Returns false for a handle this service never uploaded.</summary>
     public bool TryMeshBuffers(ke_mesh_handle h, out ulong vbo, out ulong ibo, out uint indexCount)
     {
         ulong vboLocal;
@@ -199,7 +199,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>The per-material bind-group layout (descriptor set 1) a forward pipeline must declare so its set-1 bind groups (from material_bind_group) are valid.</summary>
+    /// <summary>The per-material bind-group layout (descriptor set 1) a pipeline must declare so its set-1 bind groups (from material_bind_group) are valid.</summary>
     public ulong MaterialLayout()
     {
         return Handle->material_layout(Handle);
@@ -237,7 +237,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>The GPU view for a texture/cubemap handle (for a pass to bind it).</summary>
+    /// <summary>The GPU view for a texture/cubemap handle.</summary>
     public ulong TextureView(ke_texture_handle h)
     {
         return Handle->texture_view(Handle, h);
@@ -348,7 +348,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         Handle->release_material(Handle, h);
     }
 
-    /// <summary>Path-keyed probe for a resident mesh upload: on a hit, retains and writes the resident handle on the caller's behalf, so a loader can skip decoding a file whose upload is already resident. try_get_texture also serves cubemaps (shared cache).</summary>
+    /// <summary>Path-keyed probe for a resident mesh upload: on a hit, retains and writes the resident handle to `out`. try_get_texture also serves cubemaps (shared cache).</summary>
     /// <param name="key">Dedup cache key.</param>
     /// <param name="@out">Receives the resident handle on a cache hit.</param>
     public bool TryGetMesh(string key, out ke_mesh_handle @out)
@@ -399,7 +399,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return Handle->white_texture(Handle);
     }
 
-    /// <summary>── Shader loading (build-time compiled, runtime resolved) ───────────── Resolves a shader by logical NAME + STAGE to a device-ready module.</summary>
+    /// <summary>Resolves a shader by logical NAME + STAGE to a device-ready module.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong LoadShader(sbyte* name, uint stage)
     {

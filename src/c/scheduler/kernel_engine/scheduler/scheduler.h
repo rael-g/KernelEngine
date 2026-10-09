@@ -16,11 +16,8 @@ extern "C"
     /**
      * Body of a scheduled task, run on a worker thread.
      *
-     * The failure is reported as a type rather than a ke_error because the two travel
-     * differently: a ke_error_type is an immortal singleton, while a ke_error points into
-     * the failing thread's own storage and is recycled by the failures after it. The task
-     * outlives the thread that ran it, so only the type can make the trip. The caller of
-     * wait() mints a ke_error from it on its own thread.
+     * The failure is reported as a ke_error_type. The caller of wait() mints a ke_error
+     * from it on its own thread.
      *
      * @param data        [context] [borrowed] Opaque context handed to the dispatch call.
      * @param out_failure Receives the type the body failed with. Left untouched on success.
@@ -61,12 +58,10 @@ extern "C"
 
         /**
          * Blocks the calling thread until the task completes, then reports whatever the
-         * task body failed with. A task nobody waits on carries its failure to its grave,
-         * which is why a dispatch with no completion channel cannot be projected.
+         * task body failed with. A task that nobody waits on reports its failure nowhere.
          *
-         * The error is raised here, on the waiting thread, from the type the body named.
-         * What the body meant by it does not survive the crossing: the message names the
-         * slot rather than the failure.
+         * The error is created on the waiting thread from the type the body named. Its
+         * message names the slot rather than the failure.
          */
         bool (*wait)(struct ke_scheduler *self, ke_task *task, ke_error **out_error);
 

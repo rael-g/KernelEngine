@@ -6,7 +6,7 @@ using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. Named for what it holds — a kind, extents, density, friction, restitution — rather than for a shape it is not. It is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin's own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.</summary>
+/// <summary>One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. The fixture is attached by reconciling this component against the hierarchy. A caller never names a body.</summary>
 [GeneratedNodeComponent(typeof(Collider2dComponent), "collider2d")]
 public partial class Collider2D : Node2D
 {

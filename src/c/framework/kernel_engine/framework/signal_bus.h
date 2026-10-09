@@ -12,25 +12,16 @@ extern "C"
 {
 #endif
 
-    /// Routes one node's emission to the nodes connected to it, splitting the two
-    /// lifetimes a signal has.
+    /// Routes one node's emissions to the entities connected to it.
     ///
     /// An emission is a single frame's event: queued while systems run, joined
     /// against the connection table once, readable until the next frame clears it.
-    /// A connection is durable and language-neutral — it names a target entity and
-    /// a handler, never a closure in one runtime's heap — so a node authored in one
-    /// language can be wired to a signal a node in another language raises.
-    ///
-    /// The join is what keeps an emitter from knowing its listeners: a node calls
-    /// emit against its own entity, and who receives that is a fact of the scene,
-    /// changeable without touching either node.
+    /// A connection is durable. It names a target entity and a handler selector.
     typedef struct ke_signal_bus ke_signal_bus;
 
-/// Passed as the payload size by a caller that only needs the signal's id and
-/// does not know its layout — a scene file wiring two nodes together names the
-/// signal but has no way to know how many bytes it carries. The size stays
-/// unknown until whoever owns the payload type declares it, and only then does
-/// a conflicting declaration become an error.
+/// Payload size passed by a caller that only needs the signal's id and does not
+/// know its layout. The size stays unknown until the owner of the payload type
+/// declares it; a conflicting declaration is then an error.
 #define KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN 0xFFFFFFFFu
 
     /// One delivery of one emission to one connected target.
@@ -52,10 +43,8 @@ extern "C"
 
         /// [interns] Resolves a signal by name, registering it on first use.
         ///
-        /// The payload size is part of the identity, not metadata: two languages
-        /// naming the same signal with different payload layouts would otherwise
-        /// alias one id and read each other's bytes at the wrong stride. A second
-        /// registration under a different size fails instead.
+        /// The payload size is part of the identity: a second registration of the
+        /// name under a different size fails.
         /// @param name [utf8, type_name]
         /// @param payload_size [type_size]
         /// @param out_id [out]
@@ -65,10 +54,8 @@ extern "C"
                           uint32_t             *out_id,
                           ke_error            **out_error);
 
-        /// [try] Resolves a signal by name without registering it, so a caller that
-        /// did not author the name can tell an existing signal from a typo. A scene
-        /// file is exactly that caller: signal_id would happily invent the signal
-        /// its author misspelled, and the connection would then never fire.
+        /// [try] Resolves a signal by name without registering it. An unregistered
+        /// name fails.
         /// @param name [utf8]
         /// @param out_id [out]
         bool (*signal_lookup)(struct ke_signal_bus *self,
@@ -76,7 +63,7 @@ extern "C"
                               uint32_t             *out_id);
 
         /// Wires one source entity's signal to one target entity, tagged with a
-        /// handler selector the receiving language interprets. Connecting the same
+        /// handler selector. Connecting the same
         /// quadruple twice is a no-op rather than a duplicate delivery.
         bool (*connect)(struct ke_signal_bus *self,
                         ke_entity             source,
@@ -93,8 +80,7 @@ extern "C"
                            ke_entity             target,
                            uint32_t              handler_id);
 
-        /// Drops every connection naming this entity as source or target, so a
-        /// destroyed node cannot be delivered to or emit through a stale wire.
+        /// Drops every connection naming this entity as source or target.
         void (*forget_entity)(struct ke_signal_bus *self, ke_entity entity);
 
         /// Queues one emission for this frame. The payload is copied into frame

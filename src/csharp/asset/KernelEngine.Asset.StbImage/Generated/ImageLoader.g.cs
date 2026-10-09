@@ -15,7 +15,7 @@ public unsafe interface INativeImageLoader
     ke_image_loader* Native { get; }
 }
 
-/// <summary>ABI-stable vtable for decoding 2D images (PNG/JPG/...) from disk into RGBA8. Concrete implementations are provided as separate plugins; async dispatch is the caller's responsibility, so this contract stays minimal.</summary>
+/// <summary>Decodes 2D images (PNG/JPG/...) from disk into RGBA8. Async dispatch is the caller's responsibility.</summary>
 public unsafe partial class ImageLoader : IDisposable, INativeImageLoader
 {
     private ke_image_loader* _native;

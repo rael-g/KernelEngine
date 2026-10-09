@@ -22,8 +22,7 @@ extern "C"
     } ke_glyph_metrics;
 
     /** CPU-side font data produced by a loader. Caller owns; release via the loader's
-     * free_font. Atlas is RGBA8 (white RGB + alpha from coverage) so it goes through
-     * ke_render.create_texture_rgba without a new texture format. */
+     * free_font. Atlas is RGBA8 (white RGB + alpha from coverage). */
     typedef struct ke_font_data {
         uint8_t          *atlas_rgba;     ///< width * height * 4 bytes
         uint32_t          atlas_width;
@@ -34,10 +33,7 @@ extern "C"
         float             ascent;          ///< Pixels above baseline to top of tallest glyph
     } ke_font_data;
 
-    /** ABI-stable vtable for decoding font files (TTF/OTF/…) on CPU. Async dispatch is
-     * the caller's concern (C# wraps with Task.Run on a worker); this contract stays minimal.
-     * Mirrors the ke_image_loader pattern — load returns raw bytes + metadata, texture upload
-     * happens later via ke_render. */
+    /** Decodes font files (TTF/OTF/…) on the CPU. Async dispatch is the caller's concern. */
     typedef struct ke_font_loader
     {
         void *handle;

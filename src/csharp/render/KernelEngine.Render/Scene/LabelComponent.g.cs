@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A screen-space text label. Text/anchor/offset/color/font are the caller's input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick by the "render.ui.labels" system and read by "render.ui" (KE_PHASE_RENDER) to draw them — the same sim-writes/render-reads split every other render component uses, so there is no per-glyph entity, no CPU-side accumulator, no pool to grow or reuse.</summary>
+/// <summary>A screen-space text label. Text, anchor, offset, color and font are the caller's input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct LabelComponent
 {
@@ -23,7 +23,7 @@ public partial struct LabelComponent
     /// <summary>Elements <c>Glyphs</c> has room for, as the ABI fixes it. A caller composing the field from a set it does not control checks this first -- there is no element past it to write.</summary>
     public const int GlyphsCapacity = 256;
 
-    /// <summary>Font file to draw with, baked by the "render.label.resolve" system.</summary>
+    /// <summary>Font file to draw with.</summary>
     public FontBuffer Font;
     public float FontSize;
     /// <summary>Resolved from `font`.</summary>
@@ -34,7 +34,7 @@ public partial struct LabelComponent
     public Vector2 Offset;
     public Vector4 Color;
     public TextBuffer Text;
-    /// <summary>Written by "render.ui.labels"; a node authoring it would have the value overwritten on the next tick.</summary>
+    /// <summary>Written by the engine each tick; a node authoring it would have the value overwritten on the next tick.</summary>
     public uint GlyphCount;
     /// <summary>Shaped output, see glyph_count.</summary>
     public GlyphsBuffer Glyphs;

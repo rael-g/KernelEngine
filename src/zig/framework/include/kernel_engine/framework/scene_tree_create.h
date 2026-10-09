@@ -29,12 +29,11 @@ extern "C"
     /// Creates a scene_tree backed by the supplied ecs. Registers the
     /// transform/hierarchy/name components by name (idempotent — if a previous
     /// scene_tree on the same ecs already registered them, the existing cids
-    /// are picked up via component_lookup). Returns the tree via out_tree;
+    /// are reused). Returns the tree via out_tree;
     /// caller invokes tree->destroy(tree) when done.
     /// `runtime` may be NULL, in which case no systems are registered and the
     /// caller is responsible for calling propagate_transforms itself. Passing one
-    /// registers the hierarchy maintenance that keeps world matrices current, so
-    /// a host driving a runtime never has to remember to ask.
+    /// registers the hierarchy maintenance that keeps world matrices current.
     KE_FRAMEWORK_API ke_scene_tree_handle ke_scene_tree_create(
         ke_ecs     *ecs,
         ke_runtime *runtime,

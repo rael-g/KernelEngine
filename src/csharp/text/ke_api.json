@@ -70,7 +70,7 @@
     },
     {
       "name": "ke_font_data",
-      "doc": "CPU-side font data produced by a loader. Caller owns; release via the loader\u0027s free_font. Atlas is RGBA8 (white RGB \u002B alpha from coverage) so it goes through ke_render.create_texture_rgba without a new texture format.",
+      "doc": "CPU-side font data produced by a loader. Caller owns; release via the loader\u0027s free_font. Atlas is RGBA8 (white RGB \u002B alpha from coverage).",
       "tags": [],
       "fields": [
         {
@@ -121,7 +121,7 @@
   "vtables": [
     {
       "name": "ke_font_loader",
-      "doc": "ABI-stable vtable for decoding font files (TTF/OTF/\u2026) on CPU. Async dispatch is the caller\u0027s concern (C# wraps with Task.Run on a worker); this contract stays minimal. Mirrors the ke_image_loader pattern \u2014 load returns raw bytes \u002B metadata, texture upload happens later via ke_render.",
+      "doc": "Decodes font files (TTF/OTF/\u2026) on the CPU. Async dispatch is the caller\u0027s concern.",
       "tags": [],
       "fields": [
         {
