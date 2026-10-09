@@ -1,3 +1,5 @@
+//! The one C translation of the module, shared by all its files.
+
 pub const c = @cImport({
     @cInclude("kernel_engine/runtime/runtime.h");
     @cInclude("kernel_engine/runtime/system_ctx.h");

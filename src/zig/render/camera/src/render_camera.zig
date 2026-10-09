@@ -1,3 +1,13 @@
+//! This file implements the camera vtable by delegating matrix construction to the view space the
+//! camera is created over: the view, the rotation-only view and both projections come from its
+//! functions, in the clip convention copied at creation. Only the perspective frustum is computed
+//! here, from the field of view, the aspect and the planes.
+//!
+//! One allocation, `State`, holds the vtable, the borrowed view space and the clip copy.
+//! `ke_render_camera_create` validates its arguments before allocating and `destroy` frees only the
+//! `State`. Every slot is total: a null self, input or output, or a view space function that is
+//! missing, makes it return without a report.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -7,6 +17,10 @@ const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
+/// The allocation `ke_render_camera_create` makes and `destroy` frees. The vtable is stored inside
+/// it and its `handle` points back at it, so the `ref` handed out is the address of `api`.
+/// `view_space` is kept by pointer, so the view space must outlive the camera; `clip` is a value
+/// copied at creation.
 const State = struct {
     api: c.ke_render_camera,
     view_space: *c.ke_view_space,
@@ -17,11 +31,14 @@ fn stateOf(self: *c.ke_render_camera) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// Leaves the output untouched when the view space has no `view_from_transform`.
 fn viewOf(s: *State, camera_world: [*c]const c.ke_mat4, out_view: [*c]c.ke_mat4) void {
     const from_transform = s.view_space.view_from_transform orelse return;
     from_transform(s.view_space, camera_world, out_view);
 }
 
+/// Writes the view of the camera's world transform, as the view space derives it. Writes nothing
+/// when self, the transform or the output is null, or when the view space cannot derive a view.
 fn cameraView(
     self_in: ?*c.ke_render_camera,
     camera_world: [*c]const c.ke_mat4,
@@ -32,6 +49,8 @@ fn cameraView(
     viewOf(stateOf(self), camera_world, out_view);
 }
 
+/// Like `cameraView`, then clears the translation column, so only the rotation remains. The
+/// column is cleared even when the view space wrote nothing.
 fn cameraViewRotation(
     self_in: ?*c.ke_render_camera,
     camera_world: [*c]const c.ke_mat4,
@@ -46,12 +65,18 @@ fn cameraViewRotation(
     m[14] = 0;
 }
 
+/// Reached from `cameraProjection` for a component that is not orthographic, and from
+/// `cameraPerspectiveProjection` for any component. The clip convention passed on is the copy
+/// made at creation, not a pointer the caller supplied.
 fn perspective(s: *State, camera: [*c]const c.ke_camera_component, aspect: f32, out_proj: [*c]c.ke_mat4) void {
     const build = s.view_space.perspective orelse return;
     const fov_y = camera.*.fov * std.math.rad_per_deg;
     build(s.view_space, fov_y, aspect, camera.*.near_plane, camera.*.far_plane, &s.clip, out_proj);
 }
 
+/// Writes the projection of the component: orthographic, in a box twice `orthographic_size` tall
+/// and the aspect times that wide, when its orthographic flag is set; perspective otherwise.
+/// Writes nothing on a null argument or when the view space lacks the function it needs.
 fn cameraProjection(
     self_in: ?*c.ke_render_camera,
     camera: [*c]const c.ke_camera_component,
@@ -71,6 +96,8 @@ fn cameraProjection(
     perspective(s, camera, aspect, out_proj);
 }
 
+/// Writes the perspective projection whatever the orthographic flag says. Writes nothing on a
+/// null argument or when the view space has no `perspective`.
 fn cameraPerspectiveProjection(
     self_in: ?*c.ke_render_camera,
     camera: [*c]const c.ke_camera_component,
@@ -82,6 +109,8 @@ fn cameraPerspectiveProjection(
     perspective(stateOf(self), camera, aspect, out_proj);
 }
 
+/// The one slot computed here rather than by the view space. It needs no view space function, so
+/// it answers even when the view space has no `perspective`, and it reports the planes as given.
 fn cameraPerspectiveFrustum(
     self_in: ?*c.ke_render_camera,
     camera: [*c]const c.ke_camera_component,
@@ -98,12 +127,16 @@ fn cameraPerspectiveFrustum(
     };
 }
 
+/// Frees the `State` only. The view space it points to was borrowed at creation and is left alone.
 fn destroy(self_in: ?*c.ke_render_camera) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     heap.gpa.destroy(stateOf(self));
 }
 
+/// Returns the handle whose `ref` is the camera's vtable and whose `destroy` ends its lifetime.
+/// When the view space or the clip convention is missing, or the allocation fails, the error output
+/// is set and the returned handle is zeroed, with nothing left allocated.
 export fn ke_render_camera_create(
     view_space: ?*c.ke_view_space,
     clip: [*c]const c.ke_ndc_convention,

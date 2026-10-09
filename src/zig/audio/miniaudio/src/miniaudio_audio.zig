@@ -1,3 +1,17 @@
+//! Implements the audio contract over a miniaudio engine, with the resource cache deciding how
+//! long each sound lives. Loaded sounds are slots in a map from sound id to `LoadedSound`; the
+//! ids are what the contract hands out, and the cache reference-counts them by id and by path.
+//!
+//! Loading a path the cache already knows returns its id with one more reference; a new path is
+//! opened, stored under a fresh id, and registered with the cache. Unloading only gives a
+//! reference back. When the last one goes the cache calls back, and that callback is the one place
+//! a slot is uninitialised and freed, so an id that was released stops resolving. Playing and
+//! stopping reach a sound only through its id, so an unknown id fails or does nothing.
+//!
+//! The backend is built in dependency order: engine, then cache, then the contract struct, each
+//! failure undoing the steps before it. Teardown reverses it with the cache first, because the
+//! cache's callback still needs the map and the engine. Everything runs on the calling thread.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -20,11 +34,19 @@ const c = @cImport({
 
 const E = @import("kerror").Errors(c);
 
+/// One loaded sound, allocated per load and owned by `sounds` until `destroySoundResource` frees
+/// it. `sound` is uninitialised only when `initialized` is set, which happens once the file has
+/// opened.
 const LoadedSound = struct {
     sound: ma.ma_sound,
     initialized: bool,
 };
 
+/// The backend's whole state: allocated by `ke_audio_miniaudio_create`, freed by `audioDestroy`,
+/// and passed to the cache as the context of `destroySoundResource`. `engine` is uninitialised only
+/// when `engine_ready` is set. `cache` and `cache_destroy` are undefined until the cache is
+/// created, and the destroy callback reads `sounds`, so the map must still exist while the cache is
+/// alive.
 const State = struct {
     logger: ?*c.ke_logger,
     engine: ma.ma_engine,
@@ -35,18 +57,22 @@ const State = struct {
     cache_destroy: *const fn (?*c.ke_resource_cache) callconv(.c) void,
 };
 
+/// Sends a warning tagged "miniaudio" to the logger, or nothing when there is none.
 fn logWarn(logger: ?*c.ke_logger, msg: [*c]const u8) void {
     const lg = logger orelse return;
     var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "miniaudio", .message = msg };
     lg.log.?(lg, &ev);
 }
 
+/// Sends an informational message tagged "miniaudio" to the logger, or nothing when there is none.
 fn logInfo(logger: ?*c.ke_logger, msg: [*c]const u8) void {
     const lg = logger orelse return;
     var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_INFO, .tag = "miniaudio", .message = msg };
     lg.log.?(lg, &ev);
 }
 
+/// Destroy callback the cache calls when the last reference to an id goes. It removes the slot from
+/// `sounds` before freeing it, so the id stops resolving.
 fn destroySoundResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(ctx.?));
     const slot: ?*LoadedSound = if (state.sounds.fetchRemove(handle)) |kv| kv.value else null;
@@ -56,6 +82,9 @@ fn destroySoundResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv
     }
 }
 
+/// Tears the backend down in the order the cache callback requires: the cache first, which frees
+/// every sound still held, then the engine if it was initialised, then the map, the state and the
+/// struct. A null backend is ignored.
 fn audioDestroy(self: ?*c.ke_audio) callconv(.c) void {
     const api = self orelse return;
     const state: *State = @ptrCast(@alignCast(api.handle));
@@ -66,6 +95,11 @@ fn audioDestroy(self: ?*c.ke_audio) callconv(.c) void {
     gpa.destroy(api);
 }
 
+/// Returns the id the cache already holds for the path, with one more reference, or a new id that
+/// starts with one reference. The caller gives that reference back through `audioUnloadSound`.
+/// Returns the invalid sound id on failure, leaving no slot in the map: an invalid-argument error
+/// for a null backend or path, an out-of-memory error for the slot or the map entry, and a
+/// not-found error when miniaudio cannot open the file, which is also logged as a warning.
 fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_audio_sound {
     if (self == null or path == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -107,16 +141,23 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
     return id;
 }
 
+/// Gives back one reference on the id to the cache, which frees the sound when none remain. A null
+/// backend or the invalid id is ignored.
 fn audioUnloadSound(self: ?*c.ke_audio, id: c.ke_audio_sound) callconv(.c) void {
     if (self == null or id == c.KE_AUDIO_SOUND_INVALID) return;
     const state: *State = @ptrCast(@alignCast(self.?.handle));
     _ = state.cache.release.?(state.cache, id, null);
 }
 
+/// Resolves an id to its slot, or null when it was never loaded or has been released.
 fn findSound(state: *State, id: c.ke_audio_sound) ?*LoadedSound {
     return state.sounds.get(id);
 }
 
+/// A sound already playing is restarted from its first frame, with the given volume and looping
+/// flag. When the start fails, the sound is left stopped. Fails with an invalid-argument error for
+/// a null backend or the invalid id, with a not-found error for an id that is not loaded, and with
+/// a general error when miniaudio cannot start the sound.
 fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: c.ke_bool, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or id == c.KE_AUDIO_SOUND_INVALID) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -143,6 +184,8 @@ fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: c.ke_b
     return true;
 }
 
+/// Stops the sound without releasing it. A null backend, the invalid id or an unknown id is
+/// ignored.
 fn audioStop(self: ?*c.ke_audio, id: c.ke_audio_sound) callconv(.c) void {
     if (self == null or id == c.KE_AUDIO_SOUND_INVALID) return;
     const state: *State = @ptrCast(@alignCast(self.?.handle));
@@ -151,12 +194,19 @@ fn audioStop(self: ?*c.ke_audio, id: c.ke_audio_sound) callconv(.c) void {
     }
 }
 
+/// Sets the volume of the engine, which scales every sound. A null backend is ignored.
 fn audioSetMasterVolume(self: ?*c.ke_audio, volume: f32) callconv(.c) void {
     const api = self orelse return;
     const state: *State = @ptrCast(@alignCast(api.handle));
     _ = ma.ma_engine_set_volume(&state.engine, volume);
 }
 
+/// Builds the state, the engine, the cache and the contract struct, in that order, and logs that
+/// the backend initialised. Each failure path releases the steps before it, so a failed call
+/// leaves no engine, cache or state behind and returns a null handle. Fails with an
+/// invalid-argument error on null params, an out-of-memory error on the state or the struct, a
+/// general error when the engine cannot start (also logged), and whatever error the cache
+/// creation reports.
 export fn ke_audio_miniaudio_create(
     params: [*c]const c.ke_audio_miniaudio_params,
     out_error: [*c][*c]c.ke_error,

@@ -1,3 +1,30 @@
+//! This is the root file of the render service plugin. It holds the state every other file of the
+//! plugin works on, `CoreState`, and the one factory, `ke_render_service_create`, that builds it
+//! and fills the `ke_render_service` vtable with functions from those files. The vtable carries a
+//! pointer to the state as its handle, `coreOf` gets the state back from it, and `passOf` does the
+//! same for the `PassState` behind a pass context. The file starts no thread.
+//!
+//! The state is one device-side picture of the service: the named entries in `resources`, one
+//! command encoder and one compute record per command slot, the upload records with their arena,
+//! the stores of meshes, textures, materials and shaders with the resource caches that own them,
+//! the sampler and the material bind group layout, the default resources, and the pipeline cache.
+//!
+//! The factory builds in an order its steps depend on: the target's size and the device's queue
+//! and NDC convention first, then the resource caches, each given its destroy function and the
+//! state as context, then the "backbuffer" entry of `resources`, then the vtable, then the sampler
+//! and the material layout. The default resources come last because they are uploaded through the
+//! functions of the vtable just built. `destroyCore` undoes this in reverse and frees the vtable
+//! last.
+//!
+//! The other files each carry one part of the vtable. resource_table.zig declares and imports the
+//! named resources and answers lookups on them. pass_recording.zig opens and closes passes and
+//! records their render and compute work. frame_lifecycle.zig begins and ends a frame and queues
+//! buffer uploads. asset_upload.zig creates meshes, textures, cubemaps and materials and runs the
+//! caches' destroy callbacks. shader_loader.zig loads shader modules from the shader directory.
+//! pipeline_cache.zig answers pipeline requests with a fallback until the real pipeline is ready.
+//! slot_map.zig is the generational store behind the handles. cimport.zig is a separate import of
+//! C headers that none of the files here uses.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -33,6 +60,8 @@ pub const MAX_SHADER_NAME = 64;
 pub const DEFAULT_MATERIAL_SHADER = "standard";
 const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024;
 
+/// One buffer write queued during a frame: where it goes on the GPU and the bytes it copies out
+/// of the upload arena.
 pub const UploadRecord = struct {
     buffer: c.ke_gpu_buffer,
     gpu_offset: u64,
@@ -40,17 +69,21 @@ pub const UploadRecord = struct {
     size: usize,
 };
 
+/// A mesh in `mesh_store`: the vertex and index buffers it owns and the number of indices.
 pub const Mesh = struct {
     vbo: c.ke_gpu_buffer,
     ibo: c.ke_gpu_buffer,
     index_count: u32,
 };
 
+/// A texture in `texture_store`: the GPU texture it owns and its default view.
 pub const Texture = struct {
     tex: c.ke_gpu_texture,
     view: c.ke_gpu_texture_view,
 };
 
+/// A material in `material_store`: its uniform buffer and bind group, its alpha mode and cutoff,
+/// the name of its shader, and the albedo and normal textures it samples.
 pub const Material = struct {
     ubo: c.ke_gpu_buffer,
     bind_group: c.ke_gpu_bind_group,
@@ -61,6 +94,9 @@ pub const Material = struct {
     normal: c.ke_texture_handle,
 };
 
+/// One named entry of `resources`. The fields from `buffer` on keep their defaults unless an import
+/// sets them: `importBuffer` sets the buffer and its size, and `importBindGroup` the bind group and
+/// its layout.
 pub const Resource = struct {
     name: [*c]const u8,
     cid: c.ke_component_id,
@@ -77,6 +113,8 @@ pub const Resource = struct {
 };
 
 pub const MAX_COMPUTE_CMDS = 32;
+/// The `?u32` labels are offsets into the `labels` of the record that holds the command, not
+/// pointers. They are null when no text was stored.
 pub const ComputeCmd = union(enum) {
     set_pipeline: c.ke_gpu_pipeline,
     set_bind_group: struct { index: u32, bg: c.ke_gpu_bind_group, offsets: [4]u32, count: u32 },
@@ -86,6 +124,8 @@ pub const ComputeCmd = union(enum) {
     pop_debug_group,
     insert_debug_marker: ?u32,
 };
+/// The commands of one compute pass, recorded into `cmds` up to `count`. Labels are copied into
+/// `labels` by `storeLabel`, so a command never keeps a pointer the caller owns.
 pub const ComputeRecord = struct {
     pass: c.ke_gpu_compute_pass,
     cmds: [MAX_COMPUTE_CMDS]ComputeCmd,
@@ -94,6 +134,9 @@ pub const ComputeRecord = struct {
     pass_label: ?u32,
     labels: std.ArrayList(u8),
 
+    /// Copies the text into `labels`, so the label outlives the caller's buffer. Returns an offset
+    /// rather than a pointer, because a later append may move `labels`. Null means nothing was
+    /// stored.
     pub fn storeLabel(self: *ComputeRecord, text: [*c]const u8) ?u32 {
         if (text == null) return null;
         const offset: u32 = @intCast(self.labels.items.len);
@@ -105,12 +148,16 @@ pub const ComputeRecord = struct {
         return offset;
     }
 
+    /// The pointer points into `labels`, so it is valid only until the next `storeLabel` on it.
     pub fn label(self: *const ComputeRecord, offset: ?u32) [*c]const u8 {
         const at = offset orelse return null;
         return self.labels.items[at..].ptr;
     }
 };
 
+/// The state a render service is built on. `ke_render_service_create` makes it and `destroyCore`
+/// frees it. Only the first `resource_count` entries of `resources` are set, and `materialAt` falls
+/// back to `white_material` for a handle it does not know. The two upload counters are atomic.
 pub const CoreState = struct {
     device: *c.ke_gpu_device,
     ecs: *c.ke_ecs,
@@ -163,10 +210,12 @@ pub const CoreState = struct {
 
     pipeline_cache: pipeline_cache.PipelineCache,
 
+    /// Null when the handle is stale or was never issued.
     pub fn meshAt(self: *CoreState, h: c.ke_mesh_handle) ?*Mesh {
         return self.mesh_store.get(h.bits);
     }
 
+    /// Null when the handle is stale or was never issued.
     pub fn textureAt(self: *CoreState, h: c.ke_texture_handle) ?*Texture {
         return self.texture_store.get(h.bits);
     }
@@ -176,6 +225,7 @@ pub const CoreState = struct {
             self.material_store.get(self.white_material.bits).?;
     }
 
+    /// Scans the first `resource_count` entries by name; null when none carries it.
     pub fn find(self: *CoreState, name: [*c]const u8) ?*Resource {
         var i: u32 = 0;
         while (i < self.resource_count) : (i += 1) {
@@ -187,6 +237,8 @@ pub const CoreState = struct {
     }
 };
 
+/// What a pass context stands for while a pass is open: the state, the pass's declared io, the
+/// command encoder it records into and whether it records compute work.
 pub const PassState = struct {
     core: *CoreState,
     io: c.ke_render_pass_io,
@@ -194,17 +246,25 @@ pub const PassState = struct {
     is_compute: bool,
 };
 
+/// The state behind a render service vtable.
 pub inline fn coreOf(self: [*c]c.ke_render_service) *CoreState {
     return @alignCast(@ptrCast(self.*.handle));
 }
+/// The state behind a pass context.
 pub inline fn passOf(self: [*c]c.ke_render_pass_ctx) *PassState {
     return @alignCast(@ptrCast(self.*.handle));
 }
 
+/// True for the depth and depth-stencil formats.
 pub fn isDepthFormat(fmt: c.ke_gpu_texture_format) bool {
     return fmt >= c.KE_GPU_TEXTURE_FORMAT_D16_UNORM and fmt <= c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT;
 }
 
+/// The `destroy` of the handle `ke_render_service_create` returns. It flushes the device's pending
+/// pipeline compiles first, so no compile still runs against what follows. It then releases the
+/// GPU objects of transient resources, the caches and stores, the sampler, the material layout and
+/// the pipeline cache, and frees the memory the state owns. After it, neither the state nor the
+/// vtable is valid.
 fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     const st = coreOf(self);
     if (st.device.flush_pipeline_compiles) |flush| flush(st.device);
@@ -234,6 +294,10 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     gpa.destroy(@as(*c.ke_render_service, @ptrCast(self)));
 }
 
+/// The factory of the render service. A null device or ecs returns a null ref without setting the
+/// error. A null target or shader directory sets the invalid-argument error. Any other failure
+/// returns a null ref with no error set. On success the ref is the new vtable and `destroy` is
+/// `destroyCore`.
 export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu_render_target, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
     const dev = device orelse return .{ .ref = null, .destroy = null };
     const tgt = target orelse {

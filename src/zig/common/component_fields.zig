@@ -1,7 +1,22 @@
+//! Writing a variant into the memory of a component, at the place one of its fields describes.
+//! `Fields` takes the translated C namespace and returns the functions; nothing is allocated and
+//! no state is kept.
+//!
+//! `write` dispatches on the declared type of the field, not on the type of the value. It converts
+//! the value to the declared type where a conversion exists and stores it at the field's offset.
+//! Conversions are permissive between related variants: integer, float and boolean convert among
+//! themselves, vectors convert between widths, and a quaternion reads as a four-component vector.
+//! Anything else is refused. Every fixed-width store ends in one check that the converted value
+//! has the size of the field, so a width mismatch is refused before any byte moves. A string is
+//! the exception: it is cut to leave room for a terminating zero, so its length never refuses it.
+//! `seedDefaults` applies `write` to the default of each field of a table and ignores what is
+//! refused.
+
 const std = @import("std");
 
 pub fn Fields(comptime c: type) type {
     return struct {
+        /// Accepts a float or an integer; any other variant has no float reading.
         fn asFloat(v: *const c.ke_variant) ?f32 {
             return switch (v.type) {
                 c.KE_VARIANT_FLOAT => @floatCast(v.unnamed_0.f),
@@ -10,6 +25,8 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
+        /// Accepts an integer, a float, which saturates, or a boolean; any other variant has no
+        /// integer reading.
         fn asInt(v: *const c.ke_variant) ?i64 {
             return switch (v.type) {
                 c.KE_VARIANT_INT => v.unnamed_0.i,
@@ -19,6 +36,8 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
+        /// Accepts a boolean, or an integer, which is true when not zero, and yields 1 or 0 for
+        /// the integer store.
         fn asBool(v: *const c.ke_variant) ?i64 {
             return switch (v.type) {
                 c.KE_VARIANT_BOOL => @intFromBool(v.unnamed_0.b),
@@ -27,6 +46,8 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
+        /// Accepts a four-component vector, a quaternion, or a three-component vector, which gains
+        /// a last component of one.
         fn asVec4(v: *const c.ke_variant) ?c.ke_vec4 {
             return switch (v.type) {
                 c.KE_VARIANT_VEC4 => v.unnamed_0.v4,
@@ -36,6 +57,8 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
+        /// Accepts a three-component vector, a four-component one, which drops its last component,
+        /// or a two-component one, which gains a last component of zero.
         fn asVec3(v: *const c.ke_variant) ?c.ke_vec3 {
             return switch (v.type) {
                 c.KE_VARIANT_VEC3 => v.unnamed_0.v3,
@@ -45,6 +68,7 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
+        /// Accepts a two-component vector, or a wider one, which drops its extra components.
         fn asVec2(v: *const c.ke_variant) ?c.ke_vec2 {
             return switch (v.type) {
                 c.KE_VARIANT_VEC2 => v.unnamed_0.v2,
@@ -54,6 +78,7 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
+        /// Copies the bytes to the field's offset only when their count is the field's size.
         fn writeBytes(base: [*]u8, field: *const c.ke_component_field, src: []const u8) bool {
             if (src.len != field.size) return false;
             @memcpy(base[field.offset..][0..src.len], src);
@@ -64,6 +89,8 @@ pub fn Fields(comptime c: type) type {
             return writeBytes(base, field, std.mem.asBytes(&value));
         }
 
+        /// Stores the low bytes of the integer when the field's size is one of the integer widths
+        /// of one, two, four or eight bytes, and refuses any other size.
         fn writeInt(base: [*]u8, field: *const c.ke_component_field, value: i64) bool {
             return switch (field.size) {
                 1 => writeBytes(base, field, std.mem.asBytes(&@as(u8, @truncate(@as(u64, @bitCast(value)))))),
@@ -74,6 +101,10 @@ pub fn Fields(comptime c: type) type {
             };
         }
 
+        /// Stores the value into the place the field describes inside the component, converted to
+        /// the field's declared type. Returns false, and stores nothing, when the component, the
+        /// field or the value pointer is null, when the value's variant type does not convert to
+        /// the declared type, or when the field's size does not fit that type.
         pub fn write(component: ?*anyopaque, field: ?*const c.ke_component_field, value: ?*const c.ke_variant) bool {
             const base: [*]u8 = @ptrCast(component orelse return false);
             const f = field orelse return false;
@@ -118,6 +149,9 @@ pub fn Fields(comptime c: type) type {
             }
         }
 
+        /// Stores the default of each field among the first entries of the table, as many as the
+        /// count gives, through `write`. Defaults of the null variant are skipped. A default that
+        /// `write` refuses is passed over with no report, and its field keeps the bytes it held.
         pub fn seedDefaults(component: ?*anyopaque, fields: ?[*]const c.ke_component_field, field_count: u32) void {
             if (component == null) return;
             const table = fields orelse return;

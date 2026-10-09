@@ -12,22 +12,9 @@ extern "C" {
 /// Error type singleton. ke_error_is() matches a type by address or by name and walks
 /// the parent chain; never compare type addresses directly.
 ///
-/// Error types form an inheritance tree. The generics below (KE_ERROR_*) are the
-/// shared roots; it is physically impossible to enumerate every error in existence
-/// here, so this header deliberately stays small. Each DOMAIN declares its own,
-/// more specific error types as global const instances next to its own API, and
-/// points each one's `parent` at a generic root (or another domain type) when the
-/// category fits — or leaves `parent` NULL when nothing fits.
-///
-/// A domain type therefore stays catchable both specifically and by category:
-///
-///     // in the render domain, beside the GPU device API:
-///     const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION = {
-///         .name = "ke.render.gpu.shader_compilation", .parent = &KE_ERROR_INVALID_ARGUMENT };
-///
-///     // a caller can match either the exact type or its whole category:
-///     if (ke_error_is(err, &KE_ERROR_GPU_SHADER_COMPILATION)) { ... }   // specific
-///     if (ke_error_is(err, &KE_ERROR_INVALID_ARGUMENT))       { ... }   // category
+/// A type's parent is the more generic category it belongs to, or NULL when none fits.
+/// ke_error_is() against a category matches every type beneath it, so a caller can match
+/// one error exactly or match its whole category.
 ///
 /// Names are dotted and domain-scoped: "ke.<domain>.<...>.<reason>".
 typedef struct ke_error_type {
@@ -46,7 +33,7 @@ typedef struct ke_error {
     const struct ke_error* cause;    ///< [optional] wrapped inner error, or NULL
 } ke_error;
 
-/// Generic error type singletons (defined in error.c, exported from ke_common.dll).
+/// Generic error type singletons.
 KE_COMMON_API extern const ke_error_type KE_ERROR_GENERAL;
 KE_COMMON_API extern const ke_error_type KE_ERROR_NOT_FOUND;
 KE_COMMON_API extern const ke_error_type KE_ERROR_IO;
@@ -81,16 +68,9 @@ KE_COMMON_API void ke_error_set(ke_error** out_error, const ke_error_type* type,
     ke_error_set(out_error, type, message, __FILE__, __LINE__, cause)
 
 /// Prints the full error chain (type name, message, file:line, then each
-/// `cause` in turn) to stderr and terminates the process.
-///
-/// This is the engine's only sanctioned "give up and end the program" path.
-/// It exists for the caller who has already decided — after a `ke_error`
-/// reached them with nowhere left to propagate to — that there is no
-/// recourse but to end the process; it is never called automatically inside
-/// engine code. Unlike abort()/raise()/__builtin_trap(), it never triggers an
-/// OS crash dialog (Windows Error Reporting, Watson, etc.) and always prints
-/// a readable message before exiting, matching the "never silent" doctrine.
-/// `err` may be NULL (falls back to a generic message). Does not return.
+/// `cause` in turn) to stderr and terminates the process. Does not return.
+/// Call it only once no recourse remains for `err`; the engine never calls it itself.
+/// It does not raise an OS crash dialog. `err` may be NULL (falls back to a generic message).
 KE_COMMON_API _Noreturn void ke_error_fatal(const ke_error* err);
 
 #ifdef __cplusplus

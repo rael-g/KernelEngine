@@ -4,6 +4,15 @@ namespace Kabic;
 /// Builds the <see cref="Convention"/> of an ABI by declaring what it names, one call per fact.
 /// Every list is open: an ABI adds as many failure kinds, vector types or handle types as it has.
 /// </summary>
+/// <remarks>
+/// Each method records one fact in a private field, or adds one entry to a list, and returns the
+/// builder, so a convention is declared as a chain of calls. Most string facts start as the empty
+/// string, the out-parameter prefix, the failure lane name and the bindings methods class have
+/// non-empty field initializers, the field table starts as null, and the lists start empty. The builder does
+/// not check that a fact was declared. <c>Build</c> copies the handle types, the type-name overrides,
+/// the error kinds and the packs into new collections, so a convention built earlier is unaffected by
+/// later calls on the same builder.
+/// </remarks>
 public sealed class ConventionBuilder
 {
     string symbolPrefix = "", handleSuffix = "", factorySuffix = "", componentSuffix = "", paramsSuffix = "";
@@ -110,6 +119,8 @@ public sealed class ConventionBuilder
         return this;
     }
 
+    /// <summary>Builds the <see cref="Convention"/> from the facts declared so far, without checking them.</summary>
+    /// <returns>A convention holding a copy of the handle types, the type-name overrides, the error kinds and the packs.</returns>
     public Convention Build() => new()
     {
         SymbolPrefix = symbolPrefix,

@@ -61,10 +61,7 @@ KE_RENDER_CORE_API ke_render_service *ke_render_module_core(ke_render_module *mo
 
 /**
  * Registers a font's glyph table (see ke_render_ui.load_font), deduped by
- * @p key. KE_UI_FONT_NONE on failure. Queuing a UI quad no longer goes
- * through the render module — game code attaches the "ui_quad" ECS component
- * directly, resolved by the "render.ui" pass the same way every other
- * render-phase pass consumes sim-written data.
+ * @p key. KE_UI_FONT_NONE on failure.
  * @param key [utf8]
  * @param glyphs [borrowed,array_of:glyph_count]
  */

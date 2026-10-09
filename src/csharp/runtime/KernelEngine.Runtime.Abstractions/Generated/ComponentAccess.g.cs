@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Runtime;
 
-/// <summary>One component a system touches, and how. The scheduler groups systems into parallel waves by comparing these: two systems conflict when they name the same component and at least one writes it, and conflicting systems are placed in different waves. A system that declares nothing conflicts with nothing, and is therefore free to run concurrently with everything.</summary>
+/// <summary>One component a system touches, and how. Two systems conflict when they name the same component and at least one writes it; conflicting systems never run in the same wave. A system that declares nothing conflicts with nothing, and is therefore free to run concurrently with everything.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct ComponentAccess
 {

@@ -5,7 +5,7 @@ using System;
 
 namespace KernelEngine.Runtime;
 
-/// <summary>A query a system reads through: a tuple of components matched together, each with the access mode the scheduler orders waves by. The terms are read while register_system runs, and the runtime keeps its own copy.</summary>
+/// <summary>A query a system reads through: a tuple of components matched together, each with its access mode. The terms are read while register_system runs, and the runtime keeps its own copy.</summary>
 public partial struct QueryDecl
 {
     /// <summary>The terms the query matches together.</summary>

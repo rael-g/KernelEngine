@@ -20,9 +20,8 @@ extern "C"
     } ke_camera_frustum;
 
     /**
-     * What a camera component and its world transform mean as matrices. Every
-     * pass that draws from a camera asks this interface instead of working the
-     * matrices out for itself, so all of them see the same camera.
+     * The matrices and projection that a camera component and its world
+     * transform describe.
      *
      * Every slot is callable at any time and tolerates a null `self`, a null
      * input or a null output by writing nothing.
@@ -41,8 +40,8 @@ extern "C"
                      ke_mat4                 *out_view);
 
         /**
-         * The same view with its translation removed, for what is drawn
-         * infinitely far away and so must not shift as the camera moves.
+         * The view matrix of `view` with its translation removed, leaving only
+         * the rotation.
          * @param camera_world [borrowed] The camera's world transform.
          * @param out_view [out] Receives the view matrix.
          */

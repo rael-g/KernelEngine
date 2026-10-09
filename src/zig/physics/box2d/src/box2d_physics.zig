@@ -1,3 +1,23 @@
+//! The Box2D backend of the 2D physics contract: one factory, and a vtable of slots that all
+//! work on a single world.
+//!
+//! The factory allocates a `State`, creates the Box2D world inside it and wires the vtable that
+//! the state holds; the handle it returns points at that vtable and carries `destroy`, which
+//! releases the world and everything else the state owns. Each slot recovers the state from the
+//! vtable's handle, so one process can hold several independent worlds.
+//!
+//! Contract-side bodies are small integer ids. The state keeps a growing table of `Entry` values
+//! and an id is a position in it, shifted by one so zero stays the invalid sentinel. A destroyed
+//! body leaves its entry in place, marked dead, which keeps positions from being reused and makes
+//! a stale id fail `lookup` instead of reaching another body. Fixtures are not tracked: they
+//! belong to the Box2D body and go with it.
+//!
+//! Slots that name a body treat a missing, invalid or destroyed id as nothing to do, and only the
+//! factory and the slots that create a body or a fixture report errors, through the out-error
+//! argument. Angles cross the contract as radians and live in Box2D as rotations, converted by
+//! `makeRot` and `rotAngle`. Nothing here locks or starts threads, so a world must be driven from
+//! one thread at a time.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -7,17 +27,24 @@ pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 const c = @import("c.zig").c;
 const heap = @import("heap");
 
+/// Error reporter bound to this file's C error types; every failure in this file is reported
+/// through it.
 const E = @import("kerror").Errors(c);
 
 const sub_step_count: c_int = 4;
 
 const initial_body_capacity: u32 = 64;
 
+/// One position of the body table. Once `live` is false the Box2D body has been destroyed and
+/// `body` is no longer valid. The entry stays in the table so its position is not reused.
 const Entry = struct {
     body: c.b2BodyId,
     live: bool,
 };
 
+/// Allocated by the factory and freed by `destroy`. `bodies` is null until the first body is
+/// created, and then holds `body_capacity` entries, of which the first `body_count` are used.
+/// `world` is assigned before the factory returns the state's vtable.
 const State = struct {
     api: c.ke_physics_2d,
     logger: ?*c.ke_logger,
@@ -41,6 +68,8 @@ fn logInfo(logger: ?*c.ke_logger, msg: [*:0]const u8) void {
     if (lg.log) |f| f(lg, &ev);
 }
 
+/// Every operation on an existing body resolves its id here. A null result means the operation
+/// does nothing or reports that the body was not found.
 fn lookup(s: *State, id: c.ke_body_2d) ?c.b2BodyId {
     if (id == c.KE_BODY_2D_INVALID) return null;
     const idx = id - 1;
@@ -49,18 +78,25 @@ fn lookup(s: *State, id: c.ke_body_2d) ?c.b2BodyId {
     return if (entry.live) entry.body else null;
 }
 
+/// Takes effect on the next step; a null vtable or handle is ignored.
 fn setGravity(self_in: ?*c.ke_physics_2d, x: f32, y: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     c.b2World_SetGravity(stateOf(self).world, .{ .x = x, .y = y });
 }
 
+/// Advances the world by the given seconds, split into `sub_step_count` sub-steps. It does not
+/// read the body table.
 fn step(self_in: ?*c.ke_physics_2d, dt: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     c.b2World_Step(stateOf(self).world, dt, sub_step_count);
 }
 
+/// Grows the body table before the body is created, so a failed table allocation returns the
+/// invalid id with nothing created. If Box2D refuses the body, the grown table is kept and the
+/// count does not change. On success the returned id is the new count. Reports invalid_argument
+/// for a null vtable or handle and out_of_memory for a failed table growth or a refused body.
 fn createBody(
     self_in: ?*c.ke_physics_2d,
     body_type: c.ke_body_type_2d,
@@ -111,6 +147,8 @@ fn createBody(
     return @intCast(s.body_count);
 }
 
+/// Destroys the Box2D body together with its fixtures and marks its entry dead; an id that does
+/// not resolve does nothing.
 fn destroyBody(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -120,6 +158,8 @@ fn destroyBody(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d) callconv(.c) void {
     s.bodies.?[id - 1].live = false;
 }
 
+/// A null filter leaves Box2D's default filter, which collides with everything; otherwise the
+/// filter's layer and mask become the shape's category and mask bits.
 fn makeShapeDef(
     density: f32,
     friction: f32,
@@ -137,6 +177,8 @@ fn makeShapeDef(
     return def;
 }
 
+/// Attaches a box, offset and rotated relative to the body, and returns true. Reports
+/// invalid_argument for a null vtable or handle and not_found when the id does not resolve.
 fn addBoxFixture(
     self_in: ?*c.ke_physics_2d,
     id: c.ke_body_2d,
@@ -170,6 +212,7 @@ fn addBoxFixture(
     return true;
 }
 
+/// Attaches a circle centred at the offset and returns true. Fails like `addBoxFixture`.
 fn addCircleFixture(
     self_in: ?*c.ke_physics_2d,
     id: c.ke_body_2d,
@@ -201,6 +244,7 @@ fn addCircleFixture(
     return true;
 }
 
+/// The output is zeroed first, so a body that does not resolve reads as an all-zero state.
 fn getBodyState(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, out_in: ?*c.ke_body_state_2d) callconv(.c) void {
     const out = out_in orelse return;
     out.* = std.mem.zeroes(c.ke_body_state_2d);
@@ -219,6 +263,7 @@ fn getBodyState(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, out_in: ?*c.ke_bod
     out.angular_velocity = c.b2Body_GetAngularVelocity(body);
 }
 
+/// Teleports the body to the position and angle, in radians, keeping its velocity.
 fn setBodyPosition(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, x: f32, y: f32, angle: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -258,10 +303,13 @@ fn makeRot(radians: f32) c.b2Rot {
     return .{ .c = @cos(radians), .s = @sin(radians) };
 }
 
+/// The result is in the range that the standard arctangent returns, so an angle set outside that
+/// range reads back as an equivalent angle inside it.
 fn rotAngle(q: c.b2Rot) f32 {
     return std.math.atan2(q.s, q.c);
 }
 
+/// Tears down the world, then the body table, then the state, in that order.
 fn destroy(self_in: ?*c.ke_physics_2d) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -271,6 +319,9 @@ fn destroy(self_in: ?*c.ke_physics_2d) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
+/// Returns a handle whose reference is null on failure, with the cause set through the out-error
+/// argument; a failure after the state exists frees the state first. On success the handle's
+/// destroy slot releases the world and everything the state owns.
 export fn ke_physics_2d_box2d_create(
     params_in: ?*const c.ke_physics_2d_box2d_params,
     out_error: [*c][*c]c.ke_error,

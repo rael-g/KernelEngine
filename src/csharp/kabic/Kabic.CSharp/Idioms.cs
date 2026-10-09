@@ -4,6 +4,26 @@ namespace Kabic.CSharp;
 using Kabic;
 using System.Text.RegularExpressions;
 
+/// <summary>
+/// Maps the spellings of a C ABI to the spellings a C# file uses: names to PascalCase and
+/// camelCase, reserved words escaped, enum members and type names stripped of their prefixes, and C
+/// scalar types to their C# types.
+/// </summary>
+/// <remarks>
+/// <c>Pascal</c> splits a name on underscores, drops the empty pieces, and gives each piece an
+/// upper-case first letter over a lower-case rest. <c>Camel</c> applies <c>Pascal</c> and then
+/// lower-cases the first letter. <c>Ident</c> camel-cases a name and prefixes it with <c>@</c> when
+/// the result is listed in <c>CsKeywords</c>. <c>EnumMember</c> tries the enum's name, upper-cased
+/// and followed by an underscore, as a prefix of the raw member name. It starts with the whole name
+/// and drops one trailing word at a time, and returns the first remainder that is not empty and
+/// does not begin with a digit; when none qualifies, it returns <c>Pascal</c> of the raw name.
+/// <c>TypeName</c> returns the convention's override for the symbol when there is one, and
+/// otherwise <c>Pascal</c> of the symbol with its prefix stripped. <c>CsPrimitive</c> maps the
+/// byte-boolean type to <c>bool</c> and the void pointer to <c>nint</c>, and otherwise looks the
+/// trimmed name up in the primitive table. <c>CsForeignType</c> maps the byte-boolean type to
+/// <c>bool</c> and a primitive without a pointer through the same table, and otherwise keeps the
+/// name with a single trailing <c>*</c> when the type is a pointer.
+/// </remarks>
 public static class Idioms
 {
     static readonly Dictionary<string, string> Prim = new()
@@ -23,6 +43,10 @@ public static class Idioms
         "try", "catch", "finally", "throw", "int", "uint", "long", "ulong", "short", "ushort",
         "byte", "sbyte", "float", "double", "decimal", "bool", "char", "void", "enum", "const"];
 
+    /// <summary>
+    /// Converts a snake_case name to PascalCase. Returns <paramref name="s"/> unchanged when it is
+    /// empty.
+    /// </summary>
     public static string Pascal(string s)
     {
         if (s.Length == 0) return s;
@@ -30,23 +54,31 @@ public static class Idioms
             .Select(p => char.ToUpperInvariant(p[0]) + p[1..].ToLowerInvariant()));
     }
 
+    /// <summary>
+    /// Converts a snake_case name to camelCase. Returns an empty string when
+    /// <paramref name="s"/> holds no words.
+    /// </summary>
     public static string Camel(string s)
     {
         var p = Pascal(s);
         return p.Length == 0 ? p : char.ToLowerInvariant(p[0]) + p[1..];
     }
 
-    /// A C# identifier for a parameter name, escaping reserved words (`event` is
-    /// the recurring one — ke_log_event's own parameter is literally named that).
+    /// <summary>
+    /// A C# identifier for <paramref name="s"/>: its camelCase form, prefixed with <c>@</c> when
+    /// that form is one of the C# keywords kabic escapes.
+    /// </summary>
     public static string Ident(string s)
     {
         var c = Camel(s);
         return CsKeywords.Contains(c) ? "@" + c : c;
     }
 
+    /// <summary>
     /// Strips the longest `ke_`/domain prefix that still leaves a valid,
     /// non-digit-leading C# identifier. `KE_MOUSE_BUTTON_1` would otherwise
     /// become the invalid `1`, so it backs off to `Button1`.
+    /// </summary>
     public static string EnumMember(string raw, string enumName)
     {
         var prefix = enumName.ToUpperInvariant() + "_";
@@ -63,13 +95,20 @@ public static class Idioms
         return Pascal(raw);
     }
 
+    /// <summary>
     /// The C# type name for an ABI symbol: strips the ABI's own symbol prefix
     /// (which carries no meaning in a namespaced language) and PascalCases the rest.
+    /// </summary>
     public static string TypeName(string name, Convention convention) =>
         convention.TypeNameOverrides.TryGetValue(name, out var overridden)
             ? overridden
             : Pascal(convention.StripPrefix(name));
 
+    /// <summary>
+    /// The C# spelling of a C scalar type name: the convention's byte-boolean type is <c>bool</c>,
+    /// a void pointer is <c>nint</c>, and any other trimmed name is looked up in the primitive
+    /// table and returned unchanged when the table does not hold it.
+    /// </summary>
     public static string CsPrimitive(string cType, Convention convention)
     {
         var t = cType.Trim();
@@ -78,11 +117,12 @@ public static class Idioms
         return Prim.GetValueOrDefault(t, t);
     }
 
-    /// A C pointer type used verbatim in generated C# (e.g. a factory param
-    /// pointing into another domain, `struct ke_logger *`): strips `struct `/
-    /// `const ` and normalizes spacing so it reads as a C# pointer type
-    /// (`ke_logger*`). The caller is responsible for bringing the target
-    /// type's namespace into scope (see --using).
+    /// <summary>
+    /// The C# spelling of a C type that may be a pointer: strips <c>const</c> and <c>struct</c>,
+    /// returns <c>bool</c> for the byte-boolean type, and maps a primitive name without a pointer
+    /// through the primitive table. Any other name is returned without its trailing pointer marks,
+    /// with one <c>*</c> appended when the type is a pointer.
+    /// </summary>
     public static string CsForeignType(string cType, Convention convention)
     {
         var t = cType.Trim().Replace("const ", "").Replace("struct ", "");

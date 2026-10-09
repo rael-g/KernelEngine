@@ -1,3 +1,26 @@
+//! Turns a scene file into scene-tree nodes, their components and their signal connections. The
+//! loader keeps no scene data: nodes come from the world's `ke_scene_tree`, components from its
+//! `ke_ecs`, connections from its signal bus. What it owns is one `State`, with an `Arena` that
+//! holds every string and table read from a scene, and the `created` list of the nodes the current
+//! load has made. The arena lives as long as the loader, so what a load read stays valid until
+//! `vtDestroy`.
+//!
+//! A load is two passes over each file. `loadSceneRecursive` parses the file and runs
+//! `processEntity` over its entities in file order, recording names in a `NameMap` private to that
+//! file; only when the last entity exists does `applyConnections` run, so a connection may name an
+//! entity declared after it. An entity with a "scene" key creates no node of its own: the file it
+//! names is loaded by the same recursion and its first entity takes the name, the parent and the
+//! extra component tables of the referencing entity. The script factory is asked about the entity's
+//! "type" through `dispatchScript`.
+//!
+//! Component tables are applied by `applyComponentBlock` through the field mapping or apply
+//! callback the world holds for each component: fields are seeded with defaults only on a component
+//! the entity lacked, and an authored entry that nothing consumed fails the load.
+//!
+//! Every failure fills the out error and returns false; faults in what a scene says go through
+//! `structural`, which also logs them. A failed `vtLoad` calls `discardCreated`, so a load leaves
+//! either all of its nodes or none. Nothing here starts a thread, so a load runs on its caller's.
+
 const std = @import("std");
 
 const c = @import("c.zig").c;
@@ -12,6 +35,9 @@ const resolved_path_max = 1024;
 
 const res_prefix = "res://";
 
+/// Owns the strings and variant tables read from scene files. Nothing frees an allocation on its
+/// own; `deinit` releases all of them together, so a pointer handed out stays valid until the
+/// loader that owns this arena is destroyed.
 const Arena = struct {
     inner: std.heap.ArenaAllocator,
 
@@ -24,6 +50,7 @@ const Arena = struct {
         return self.inner.allocator().alloc(T, n) catch null;
     }
 
+    /// The copy lives until the arena is deinitialized, so the caller may free its source at once.
     fn dupeZ(self: *Arena, src: [*c]const u8) ?[*:0]u8 {
         if (src == null) return null;
         const owned = self.inner.allocator().dupeZ(u8, std.mem.span(src)) catch return null;
@@ -35,6 +62,9 @@ const Arena = struct {
     }
 };
 
+/// Private state of one loader, allocated by `ke_scene_loader_create` and freed by the handle's
+/// destroy. `api.handle` points back here. `created` is cleared when a load starts and emptied by
+/// `discardCreated` when one fails, so after a successful load it lists that load's nodes.
 const State = struct {
     api: c.ke_scene_loader,
     world: *c.ke_world,
@@ -89,6 +119,9 @@ fn variantTable(t: *const c.ke_variant_table) c.ke_variant {
     return .{ .type = c.KE_VARIANT_TABLE, .unnamed_0 = .{ .t = t } };
 }
 
+/// A one-element or empty array becomes null. A longer one becomes a vector variant sized by its
+/// length, up to the widest vector, so elements beyond that are dropped. An element that is not a
+/// number stays zero, and nothing reports it.
 fn variantFromArray(arr: *c.toml_array_t) c.ke_variant {
     const n = c.toml_array_nelem(arr);
     var comps = [_]f32{ 0, 0, 0, 0 };
@@ -129,6 +162,9 @@ fn variantFromTable(s: *State, tbl: *c.toml_table_t) c.ke_variant {
     return variantTable(&vtbl_mem[0]);
 }
 
+/// Reads the value of `key` in `tbl` by trying the TOML kinds in turn: string, integer, float,
+/// boolean, array, table. A string is copied into the arena and its TOML buffer freed here. A value
+/// of any other kind, such as a date, reads as null, and nothing reports it.
 fn readVarIn(s: *State, tbl: *c.toml_table_t, key: [*c]const u8) c.ke_variant {
     const ds = c.toml_string_in(tbl, key);
     if (ds.ok != 0) {
@@ -159,6 +195,8 @@ fn pathDirname(path: []const u8, out: []u8) []const u8 {
     return out[0..n];
 }
 
+/// Copies the parts into out one after another and terminates the result. It stops at the buffer's
+/// capacity without an error, so a longer path is opened in its truncated form.
 fn writeJoined(out: []u8, parts: []const []const u8) void {
     var i: usize = 0;
     for (parts) |part| {
@@ -171,6 +209,9 @@ fn writeJoined(out: []u8, parts: []const []const u8) void {
     out[i] = 0;
 }
 
+/// Writes the path a scene reference names into out. A "res://" reference joins the project root,
+/// or stands alone when no root was given; an absolute path stands as written; any other joins the
+/// directory of the file making the reference. Nothing here checks that the file exists.
 fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8, out: []u8) void {
     if (std.mem.startsWith(u8, ref, res_prefix)) {
         const rest = ref[res_prefix.len..];
@@ -192,6 +233,9 @@ fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8, out: []u8
 
 const type_name_max = 128;
 
+/// Returns the type name spelled the way the script factory receives it, or null when the result
+/// would not fit the buffer; a longer name is refused, never truncated. Applying it to its own
+/// result returns the same name.
 fn normalizeTypeName(name: [*c]const u8, out: *[type_name_max]u8) ?[*:0]const u8 {
     if (name == null) return null;
     const src = std.mem.sliceTo(name, 0);
@@ -229,6 +273,10 @@ fn normalizeTypeName(name: [*c]const u8, out: *[type_name_max]u8) ?[*:0]const u8
     return @ptrCast(out);
 }
 
+/// Passes the entity's type name, normalized, to the script factory and returns its verdict. With
+/// no factory registered it does nothing and succeeds. A name that cannot be normalized fails
+/// before the factory is called. A factory that fails without an error of its own gets a general
+/// one.
 fn dispatchScript(
     s: *State,
     entity: c.ke_entity,
@@ -257,6 +305,9 @@ fn tableEntryCount(tbl: *c.toml_table_t) usize {
     return @intCast(c.toml_table_nkval(tbl) + c.toml_table_narr(tbl) + c.toml_table_ntab(tbl));
 }
 
+/// Reads every entry of a component table into arena memory and returns them, or null when the
+/// table has no entries or the arena cannot hold them. The caller treats both as an unreadable
+/// block.
 fn buildEntries(s: *State, tbl: *c.toml_table_t) ?[]c.ke_variant_table_entry {
     const n = tableEntryCount(tbl);
     if (n == 0) return null;
@@ -274,6 +325,9 @@ fn buildEntries(s: *State, tbl: *c.toml_table_t) ?[]c.ke_variant_table_entry {
     return entries[0..count];
 }
 
+/// Logs at the given level under the loader's own tag. The text is formatted into a fixed buffer,
+/// and a message that does not fit is dropped without a record. Does nothing when the world has no
+/// logger.
 fn log(world: *c.ke_world, level: c_int, comptime fmt: []const u8, args: anytype) void {
     const lg = world_impl.loggerOf(world) orelse return;
     var buf: [256]u8 = undefined;
@@ -282,6 +336,8 @@ fn log(world: *c.ke_world, level: c_int, comptime fmt: []const u8, args: anytype
     if (lg.log) |f| f(lg, &ev);
 }
 
+/// Reports a fault in what the scene says: logs it at error level and fails the out error as an
+/// invalid argument. A message longer than its buffer is replaced by a generic one.
 fn structural(
     world: *c.ke_world,
     out_error: [*c][*c]c.ke_error,
@@ -294,6 +350,11 @@ fn structural(
     E.fail(out_error, .invalid_argument, msg, @src());
 }
 
+/// Applies one component table of an entity. The component must be registered, and the world must
+/// supply a field mapping or an apply callback for it. A component the entity lacks is added,
+/// zeroed and given its declared defaults; one it already has keeps its values. Generic fields are
+/// written first, then the domain callback gets the entries, and an entry that neither consumed
+/// fails the load.
 fn applyComponentBlock(
     s: *State,
     entity: c.ke_entity,
@@ -381,6 +442,8 @@ fn internalComponent(key: [*c]const u8) bool {
         std.mem.eql(u8, k, c.KE_COMPONENT_NAME_HIERARCHY);
 }
 
+/// Walks the component tables of one entity table in file order and stops at the first one refused,
+/// so the tables after it are never read.
 fn applyComponentBlocks(
     s: *State,
     entity: c.ke_entity,
@@ -408,6 +471,9 @@ fn applyComponentBlocks(
     return true;
 }
 
+/// Makes the connections one entity table declares. It runs only after every entity of its file
+/// exists. `source` is the entity that declared them and `names` is the file's own name map. The
+/// first connection that fails stops the rest, and connections made before it are not undone.
 fn applyConnections(
     s: *State,
     source: c.ke_entity,
@@ -461,6 +527,9 @@ fn applyConnections(
     return true;
 }
 
+/// Maps the names one scene file declares to their entities, so a later entity can name one as its
+/// parent and a connection can name one as its target. The name copies live in the arena; the item
+/// array is heap memory that `deinit` frees. A map belongs to one file's load.
 const NameMap = struct {
     const Entry = struct { name: [*:0]u8, entity: c.ke_entity };
 
@@ -471,6 +540,9 @@ const NameMap = struct {
 
     const initial_capacity: u32 = 16;
 
+    /// Records a name and its entity, growing the item array when it is full. When the array cannot
+    /// grow or the name cannot be copied, the name is dropped without an error, and a later
+    /// reference to it fails.
     fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity) void {
         if (self.count == self.capacity) {
             const cap = if (self.capacity != 0) self.capacity * 2 else initial_capacity;
@@ -501,6 +573,9 @@ const NameMap = struct {
     }
 };
 
+/// The inputs to processEntity for one entity. The three override fields are set only for the
+/// first entity of a spliced subscene, which takes its name, its attach parent and the outer table
+/// from the entity that referenced the file. Every other entity has them cleared.
 const ProcessArgs = struct {
     base_dir: []const u8,
     entity_tbl: *c.toml_table_t,
@@ -510,6 +585,10 @@ const ProcessArgs = struct {
     override_outer: ?*c.toml_table_t,
 };
 
+/// Creates the node of one entity table, or for an entity that splices a subscene loads that file
+/// and reports the root of it through out_entity. A node is recorded in `created` as soon as it
+/// exists. The entity's name enters the file's name map only after its components and its script
+/// type have been applied.
 fn processEntity(
     s: *State,
     args: ProcessArgs,
@@ -604,6 +683,10 @@ fn processEntity(
     return true;
 }
 
+/// Loads one scene file: parses it, creates its entities in file order, then makes their
+/// connections, and reports the first entity through out_root. out_root is optional, and is set to
+/// the invalid entity when the file declares none. Nodes created before a failure are left for the
+/// caller to discard.
 fn loadSceneRecursive(
     s: *State,
     path: [*:0]const u8,
@@ -684,6 +767,8 @@ fn loadSceneRecursive(
     return true;
 }
 
+/// The `load` slot. Fails on a null loader or path, and with whatever `loadSceneRecursive`
+/// reports; a failed load removes the nodes it made before it returns false.
 fn vtLoad(
     self_in: ?*c.ke_scene_loader,
     path: [*c]const u8,
@@ -704,6 +789,8 @@ fn vtLoad(
     return false;
 }
 
+/// Destroys every node in `created`, the most recently recorded first, then empties the list. A
+/// parent is always recorded before its children, so a child is removed before its parent.
 fn discardCreated(s: *State) void {
     const tree = treeOf(s.world) orelse return;
     var i = s.created.items.len;
@@ -714,6 +801,8 @@ fn discardCreated(s: *State) void {
     s.created.clearRetainingCapacity();
 }
 
+/// The `register_script_factory` slot. Replaces the factory and its context for later loads. Fails
+/// on a null loader or factory.
 fn vtRegisterScriptFactory(
     self_in: ?*c.ke_scene_loader,
     factory: c.ke_script_factory_func,
@@ -734,6 +823,8 @@ fn vtRegisterScriptFactory(
     return true;
 }
 
+/// The handle's destroy. `api` is embedded in `State`, so freeing the state releases the vtable
+/// too.
 fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -743,6 +834,9 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
+/// Builds a loader over the given world, copying the project root into its state. A root longer
+/// than the buffer is cut short, and nothing reports it. Returns a null handle when the world is
+/// null or the state cannot be allocated.
 export fn ke_scene_loader_create(
     world_in: ?*c.ke_world,
     project_root: [*c]const u8,

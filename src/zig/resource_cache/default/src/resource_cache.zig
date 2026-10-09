@@ -1,3 +1,20 @@
+//! A resource is a handle kept alive by a reference count, and a path is a name that may lead to
+//! one. A `State` holds both as open-addressed `Table`s: `resources`, keyed by the handle, and
+//! `paths`, keyed by a hash of the text, where each `Slot` also keeps its own copy of the text so
+//! that two paths with the same hash remain two entries.
+//!
+//! Only the count keeps a resource alive; a path entry points at a resource and holds no
+//! reference. The release that takes the count to zero removes the resource and every path naming
+//! it, and only then calls the destroy callback given at creation, so the callback never finds
+//! the handle still cached. Destroying the cache calls it for whatever is still registered.
+//!
+//! A removed slot becomes a tombstone that a later insertion may reuse. A `Table` grows before an
+//! insertion would pass its load limit, tombstones included, and growing drops them; if it cannot
+//! grow, the insertion stops with nothing changed.
+//!
+//! Failing calls set the out-error and return false, except the two path lookups, which report a
+//! miss. The file starts no thread and takes no lock.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -12,6 +29,7 @@ const c = @cImport({
 
 const E = @import("kerror").Errors(c);
 
+/// Hashes path text; a null path hashes to zero, which `keyFromPath` moves off the empty marker.
 fn hashString(str: ?[*:0]const u8) u64 {
     const s = str orelse return 0;
     var h: u64 = 5381;
@@ -26,6 +44,9 @@ const RC_EMPTY: u64 = 0;
 const RC_TOMBSTONE: u64 = std.math.maxInt(u64);
 const HANDLE_NONE: c.ke_resource_handle = std.math.maxInt(u32);
 
+/// One entry of a `Table`. In `resources` only `key`, `refcount` and `handle` are set. In `paths`
+/// `text` is the slot's own copy of the path, freed by `drop` or `deinit`, and `handle` names the
+/// resource cached under it.
 const Slot = struct {
     key: u64 = 0,
     refcount: u32 = 0,
@@ -39,6 +60,8 @@ const Slot = struct {
     }
 };
 
+/// An open-addressed index probed linearly. `occupied` counts every non-empty slot, tombstones
+/// included, and `active` counts the live ones.
 const Table = struct {
     slots: []Slot,
     capacity: usize,
@@ -51,6 +74,8 @@ const Table = struct {
         return .{ .slots = slots, .capacity = initial_capacity, .occupied = 0, .active = 0 };
     }
 
+    /// Turns a live slot into a tombstone and frees its path text. `occupied` is left as it was, so
+    /// the tombstone still uses up the load limit until the next rehash.
     fn drop(t: *Table, slot: *Slot) void {
         if (slot.text) |text| gpa.free(text);
         slot.text = null;
@@ -58,6 +83,8 @@ const Table = struct {
         t.active -= 1;
     }
 
+    /// Frees the path text of every slot and the slot array. Called by `vtDestroy`, and by
+    /// `ke_resource_cache_create` when the second table cannot be built.
     fn deinit(t: *Table) void {
         for (t.slots) |*slot| {
             if (slot.text) |text| gpa.free(text);
@@ -74,6 +101,9 @@ const Table = struct {
         return t.probeText(key, null, found);
     }
 
+    /// A hit returns the matching slot. A miss returns the first tombstone passed on the chain, or
+    /// else the empty slot that ends it, so an insertion reuses a tombstone. Index zero is returned
+    /// only when the table has no empty slot, which `reserve` prevents.
     fn probeText(t: *const Table, key: u64, text: ?[*:0]const u8, found: *bool) usize {
         const mask = t.capacity - 1;
         var index = @as(usize, @intCast(key & mask));
@@ -97,11 +127,16 @@ const Table = struct {
         return if (first_tombstone != std.math.maxInt(usize)) first_tombstone else 0;
     }
 
+    /// Tombstones count toward the load limit through `occupied`, so a table doubles even when
+    /// most of its slots are tombstones. Returns false when the doubled array cannot be allocated,
+    /// and the table is then unchanged.
     fn reserve(t: *Table) bool {
         if ((t.occupied + 1) * 10 < t.capacity * 7) return true;
         return t.rehash(t.capacity * 2);
     }
 
+    /// Moves only the live slots into a new array, which drops every tombstone, then frees the old
+    /// array. When the new array cannot be allocated, the table is left unchanged.
     fn rehash(t: *Table, new_capacity: usize) bool {
         const old_slots = t.slots;
         const new_slots = gpa.alloc(Slot, new_capacity) catch return false;
@@ -125,10 +160,13 @@ const Table = struct {
     }
 };
 
+/// Shifts the handle up by one, so handle zero is an ordinary key and never the empty marker.
 fn keyFromHandle(h: c.ke_resource_handle) u64 {
     return @as(u64, h) + 1;
 }
 
+/// Table key of a path: its hash, moved off the two values `Table` reserves for empty and
+/// removed slots.
 fn keyFromPath(path: ?[*:0]const u8) u64 {
     const k = hashString(path);
     if (k == RC_EMPTY) return 1;
@@ -136,6 +174,9 @@ fn keyFromPath(path: ?[*:0]const u8) u64 {
     return k;
 }
 
+/// Created by `ke_resource_cache_create` and freed by `vtDestroy`. `api` is the vtable the caller
+/// holds, and its handle field points back to this state. `resources` holds the refcounts and
+/// `paths` the cached path texts; they relate only through the handle a path slot names.
 const State = struct {
     api: c.ke_resource_cache,
     destroy_fn: c.ke_resource_destroy_func,
@@ -148,6 +189,9 @@ fn stateOf(self: *c.ke_resource_cache) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// Starts the resource at one reference, after making room, so a failure changes nothing. Fails
+/// with invalid argument for a null cache or the none handle, and with already exists for a
+/// registered handle. A table that cannot grow returns false and sets no error.
 fn vtRegister(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or handle == HANDLE_NONE) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -170,6 +214,8 @@ fn vtRegister(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_err
     return true;
 }
 
+/// Adds one reference. Fails with invalid argument for a null cache or the none handle, and with
+/// not found for a handle that is not registered.
 fn vtRetain(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or handle == HANDLE_NONE) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -186,12 +232,18 @@ fn vtRetain(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error
     return true;
 }
 
+/// Scans the whole `paths` table and drops every entry naming the handle, so no path outlives
+/// the resource it leads to.
 fn evictPathsForHandle(s: *State, handle: c.ke_resource_handle) void {
     for (s.paths.slots) |*p| {
         if (p.key != RC_EMPTY and p.key != RC_TOMBSTONE and p.handle == handle) s.paths.drop(p);
     }
 }
 
+/// Removes one reference. The release that reaches zero tombstones the slot, drops the handle's
+/// path entries, and only then calls the destroy callback, so it never finds the handle still
+/// cached. Fails with invalid argument for a null cache or the none handle, with not found for an
+/// unregistered handle, and with a general error for a count already at zero.
 fn vtRelease(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or handle == HANDLE_NONE) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -223,6 +275,9 @@ fn vtRelease(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_erro
     return true;
 }
 
+/// Looks the path up by hash and stored text. A hit retains the handle for the caller and writes
+/// it out. An entry whose handle is no longer registered is dropped and reported as a miss. A
+/// miss and a null argument both return false and set no error.
 fn vtTryGetCached(self: ?*c.ke_resource_cache, key: [*c]const u8, out_handle: [*c]c.ke_resource_handle) callconv(.c) bool {
     if (self == null or key == null or out_handle == null) return false;
     const s = stateOf(self.?);
@@ -239,6 +294,10 @@ fn vtTryGetCached(self: ?*c.ke_resource_cache, key: [*c]const u8, out_handle: [*
     return true;
 }
 
+/// Stores a copy of the path for the handle. The entry takes no reference: the count is
+/// unchanged, and the entry is dropped when the last release runs. Fails with invalid argument
+/// for a null cache, key or the none handle, with a general error when `paths` cannot grow,
+/// with already exists for a cached path, and with out of memory when the copy fails.
 fn vtCacheInsert(self: ?*c.ke_resource_cache, key: [*c]const u8, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or key == null or handle == HANDLE_NONE) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -268,6 +327,8 @@ fn vtCacheInsert(self: ?*c.ke_resource_cache, key: [*c]const u8, handle: c.ke_re
     return true;
 }
 
+/// Drops the entry for the path and leaves the resource and its count alone. An absent entry or
+/// a null argument does nothing.
 fn vtCacheEvict(self: ?*c.ke_resource_cache, key: [*c]const u8) callconv(.c) void {
     if (self == null or key == null) return;
     const s = stateOf(self.?);
@@ -277,6 +338,8 @@ fn vtCacheEvict(self: ?*c.ke_resource_cache, key: [*c]const u8) callconv(.c) voi
     s.paths.drop(&s.paths.slots[idx]);
 }
 
+/// Calls `destroy_fn` once for every live resource whatever its count, so resources that still
+/// had references are destroyed without a release call.
 fn vtDestroy(self: ?*c.ke_resource_cache) callconv(.c) void {
     const api = self orelse return;
     const s = stateOf(api);
@@ -293,6 +356,10 @@ fn vtDestroy(self: ?*c.ke_resource_cache) callconv(.c) void {
     gpa.destroy(s);
 }
 
+/// Builds the `State`, its two tables and the vtable, and returns the handle whose destroy slot is
+/// `vtDestroy`. Fails with invalid argument for null parameters and with out of memory when the
+/// state or either table cannot be allocated; each failure frees what was allocated before it
+/// and returns a handle with no ref.
 export fn ke_resource_cache_create(params: [*c]const c.ke_resource_cache_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_resource_cache_handle {
     const empty = c.ke_resource_cache_handle{ .ref = null, .destroy = null };
     if (params == null) {

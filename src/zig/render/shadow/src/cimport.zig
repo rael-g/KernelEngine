@@ -1,3 +1,5 @@
+//! Imports, as one C namespace, the contract headers the shadow pass reads and the factory header.
+
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/common/types.h");

@@ -1,3 +1,7 @@
+//! Applies the render-owned fields of a scene entity's authored table: one callback each for
+//! the camera, the mesh and the 2D sprite, each claiming only the key it owns through `keyIs`
+//! and rejecting an invalid value with an error.
+
 const std = @import("std");
 
 const c = @import("cimport.zig").c;
@@ -9,6 +13,8 @@ fn entries(e: [*c]c.ke_variant_table_entry, n: u32) []c.ke_variant_table_entry {
     return e[0..n];
 }
 
+/// Claims the entry when its key matches `name` exactly. It sets `consumed` before the caller
+/// checks the value, so an entry that matches and then fails validation stays consumed.
 fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     if (entry.key == null) return false;
     if (!std.mem.eql(u8, std.mem.span(entry.key), name)) return false;
@@ -16,6 +22,7 @@ fn keyIs(entry: *c.ke_variant_table_entry, name: []const u8) bool {
     return true;
 }
 
+/// Reads a float or an integer variant as a float; a variant of any other type gives null.
 fn asFloat(v: *const c.ke_variant) ?f32 {
     return switch (v.type) {
         c.KE_VARIANT_FLOAT => @floatCast(v.unnamed_0.f),
@@ -24,6 +31,11 @@ fn asFloat(v: *const c.ke_variant) ?f32 {
     };
 }
 
+/// Claims "fov_degrees" and writes `fov` from each matching entry in order. A later entry with
+/// the same key overwrites an earlier one; entries before a failing one stay applied.
+/// On a value that is not a number, or lies
+/// outside the open range from zero to a half turn, it fills the error output and returns false
+/// at that entry.
 pub export fn ke_render_apply_camera(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
@@ -47,6 +59,8 @@ pub export fn ke_render_apply_camera(
     return true;
 }
 
+/// Maps only the three names to their enumerators. Any other value, including a number or a null
+/// string, gives null, and no default is substituted for it.
 fn alphaModeOf(v: *const c.ke_variant) ?u32 {
     if (v.type != c.KE_VARIANT_STRING or v.unnamed_0.s == null) return null;
     const mode = std.mem.span(v.unnamed_0.s);
@@ -56,6 +70,9 @@ fn alphaModeOf(v: *const c.ke_variant) ?u32 {
     return null;
 }
 
+/// Claims "alpha_mode" and writes `alpha_mode` from each matching entry in order. On a value
+/// `alphaModeOf` does not map it fills the error output and returns false; that entry leaves
+/// `alpha_mode` unchanged.
 pub export fn ke_render_apply_mesh(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
@@ -74,6 +91,8 @@ pub export fn ke_render_apply_mesh(
     return true;
 }
 
+/// Writes `alpha_mode` from each matching entry in order. On a value `alphaModeOf` does not map it
+/// fills the error output and returns false; that entry leaves `alpha_mode` unchanged.
 pub export fn ke_render_apply_sprite2d(
     _: ?*anyopaque,
     ptr: ?*anyopaque,

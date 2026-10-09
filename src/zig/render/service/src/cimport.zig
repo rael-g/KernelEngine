@@ -1,3 +1,5 @@
+//! Imports the C headers listed below into one translation unit, exposed as `c`.
+
 pub const c = @cImport({
     @cInclude("kernel_engine/runtime/runtime.h");
     @cInclude("kernel_engine/ecs/ke_ecs.h");

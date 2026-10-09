@@ -4,7 +4,74 @@ namespace Kabic.CSharp;
 using System.Text.RegularExpressions;
 using Kabic;
 
-public static class CSharpBackend
+/// <summary>
+/// Renders the C# source kabic generates from one parsed ABI model: vtable projections,
+/// structs, enums, node types, borrow wrappers and free-function classes.
+/// </summary>
+/// <remarks>
+/// The class holds no state: its only fields are constants. Each entry point is a function of one
+/// declaration, the model and the <see cref="Convention"/> that names its managed types, and it
+/// returns the text of one generated file. That text opens with the header, then the usings, the
+/// namespace and the declarations; nothing is written to disk here.
+///
+/// A struct tagged <c>[value]</c> becomes a managed mirror over the same bytes. Each fixed array
+/// is wrapped in an <c>[InlineArray]</c> struct, the fields that declare a default are set in a
+/// static <c>Default</c>, and a pointer field is refused, because a value cannot state the
+/// lifetime of what it reaches. A <c>[view]</c> struct keeps private fields laid out as the ABI
+/// lays them out: a counted pointer is read as a span of its count, and a fixed char array as
+/// text. A <c>[borrowed]</c> struct holds each counted pointer as read-only memory whose length
+/// is taken from the call, so the count is not a field of the mirror.
+///
+/// A node component becomes a partial class named by its <c>[node:]</c> tag, deriving from the
+/// node its <c>[base:]</c> tag names, or from <c>Node</c>. Its constructor seeds the component's
+/// <c>Default</c> when a field declares one, and every field not tagged idiom becomes a property
+/// that names its component, so the source generator completing the class can route it. An enum
+/// the model does not mark external becomes a C# enum: a numeric value stays a number, and any
+/// other value is spelled as an enum member name.
+///
+/// <see cref="RenderProvider"/> projects a vtable in a fixed order. It emits the interface that
+/// exposes the raw pointer, then the delegate of each closure the slots take, then the owned
+/// projection of a <c>[releases]</c> slot. The class follows: a constructor from a factory or
+/// from an owner handle, which runs the lifecycle init slot when there is one; a static
+/// <c>Borrow</c> that never destroys; one method per projected slot; the interning caches; and a
+/// <c>Dispose</c> that calls <c>OnDispose</c>, frees every retained handle, runs the shutdown slot
+/// when there is one, and calls the destroy function unless the instance is borrowed. A vtable
+/// tagged as an interface also yields a contract text, which is refused when it names any ABI
+/// struct or an external enum.
+///
+/// <see cref="RenderSlotMethod"/> chooses a body from each slot's classified shape. A property
+/// slot becomes a getter. A slot with a <c>[completion]</c> parameter returns a <c>Task</c>.
+/// Otherwise the shape decides: a return written through an out parameter, a tuple of written
+/// outputs, a bool-returning <c>Try</c> method, a fallible call whose failure is raised through
+/// the convention's error helper, or a plain call. A fallible call with closures frees its scoped
+/// handles in a <c>finally</c>, and stores its retained handles in their fields only once the
+/// call has succeeded; on failure it frees them and throws.
+///
+/// A closure is a function-pointer parameter with its context. <see cref="CallbackPairs"/> pairs
+/// them and <see cref="ClosureGroups"/> groups the pairs that share one context, so one
+/// <c>GCHandle</c> target answers for all of them. Each trampoline is an unmanaged entry point
+/// that recovers the managed handler from the context and calls it. An exception from the handler
+/// is written to the callback's error lane when it has one. Otherwise it is parked in a
+/// thread-static field and rethrown by the call that observes it. A retained handler with an
+/// error lane reports to the provider's failure queue when the vtable has a <c>[drains]</c> slot,
+/// and that slot throws what the queue holds.
+///
+/// A slot with a <c>[completion]</c> parameter creates a <c>TaskCompletionSource</c> that
+/// continues asynchronously, pins a state object with a <c>GCHandle</c>, and passes the handle as
+/// the context of the completion. The completion trampoline frees the handle and answers the
+/// source with the result or the failure. If the native call itself throws, the handle is freed
+/// before the exception leaves.
+///
+/// <see cref="RenderFreeFunctions"/> writes the free functions of one owner as static methods of
+/// a partial class. Each calls a <c>DllImport</c> declared in a nested <c>Native</c> class under
+/// the exact entry-point name. A <c>[ctx]</c> receiver is passed through as the opaque token it
+/// is; any other receiver is pinned with <c>fixed</c> so its address reaches the call.
+///
+/// A declaration the projection cannot spell is rejected while its text is rendered. The
+/// rejection is an <see cref="InvalidOperationException"/> that names the declaration and the
+/// rule it breaks, and no text is returned for that declaration.
+/// </remarks>
+public static class CSharpWriter
 {
     const string Header = "// <auto-generated/>\n// Derived from ke_api.json. Do not edit; edit the C header instead.\n";
 
@@ -22,9 +89,11 @@ public static class CSharpBackend
 
     static string Escape(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
+    /// <summary>
     /// Emits the `fixed` pinning prologue encoding every [utf8] parameter as a
     /// NUL-terminated byte buffer, returning the lines and the number of braces
     /// the caller must close.
+    /// </summary>
     static (List<string> Lines, int Depth) Utf8Prologue(IEnumerable<ApiParam> ps, string indent)
     {
         var lines = new List<string>();
@@ -40,12 +109,14 @@ public static class CSharpBackend
         return (lines, depth);
     }
 
+    /// <summary>
     /// Emits the pinning prologue for every pointer+count pair, returning the lines and the
     /// number of blocks the caller must close. Composes with the [utf8] prologue: both only
     /// open blocks, in whatever order the caller emits them. A sequence of <c>[borrowed]</c>
     /// structs opens two -- the <c>try</c> its pins are released from, and the <c>fixed</c>
     /// over the native elements built from them -- which is what <see cref="SequenceClosers"/>
     /// closes.
+    /// </summary>
     static (List<string> Lines, int Depth) SequencePrologue(ApiModel model,
         IEnumerable<SequencePair> seqs, string indent, Convention convention)
     {
@@ -76,9 +147,11 @@ public static class CSharpBackend
         return (lines, depth);
     }
 
+    /// <summary>
     /// The blocks <see cref="SequencePrologue"/> opened, outermost first, each as the lines
     /// that close it. A pin is released where the <c>try</c> ends, so a call that threw lets
     /// go of what it held exactly as one that returned does.
+    /// </summary>
     static List<string[]> SequenceClosers(ApiModel model, IEnumerable<SequencePair> seqs)
     {
         var closers = new List<string[]>();
@@ -109,7 +182,9 @@ public static class CSharpBackend
         }
     }
 
+    /// <summary>
     /// The <c>[borrowed]</c> struct a sequence's elements are, or null for any other element.
+    /// </summary>
     static ApiStruct? BorrowedOf(ApiModel model, ApiParam seq)
     {
         if (!CTypes.IsPointer(seq.Type)) return null;
@@ -117,8 +192,10 @@ public static class CSharpBackend
         return model.Structs.FirstOrDefault(v => v.Name == element && IsBorrowed(v));
     }
 
+    /// <summary>
     /// The loop building a native element out of each managed one: its memory pinned for
     /// the call, the pointer and the count taken from the memory, so the two cannot disagree.
+    /// </summary>
     static IEnumerable<string> BorrowedFill(ApiModel model, ApiStruct b, string n, Convention convention)
     {
         var at = $"{n}At";
@@ -141,16 +218,20 @@ public static class CSharpBackend
         yield return "}";
     }
 
+    /// <summary>
     /// The element type a sequence parameter is spelled with. A <c>[value]</c> element
     /// takes its managed mirror, so a caller composes the span out of the projection it
     /// already holds rather than the native spelling of the same bytes.
+    /// </summary>
     static string SequenceElement(ApiModel model, SequencePair s, Convention convention) =>
         ValueTypeName(model, StripQualifiers(CTypes.Deref(s.Seq.Type)), convention);
 
+    /// <summary>
     /// The pinned pointer a sequence parameter hands the vtable. A <c>[value]</c> element is
     /// pinned as its managed mirror, which the slot takes under the native spelling of the
     /// same bytes -- so the cast is between two projections of one declaration, not between
     /// a generated type and a hand-written guess at its layout.
+    /// </summary>
     static string SequenceArg(ApiModel model, SequencePair s, Convention convention)
     {
         var n = Idioms.Ident(s.Seq.Name!);
@@ -209,9 +290,11 @@ public static class CSharpBackend
         return t.Trim();
     }
 
+    /// <summary>
     /// A C type mapped to C#. Typedef aliases resolve first; pointers recurse so
     /// `const`/`struct` qualifiers are dropped and the pointee receives the same
     /// mapping as any other type. An opaque `void *` maps to `nint`.
+    /// </summary>
     static string CsType(ApiModel model, string cType, Convention convention)
     {
         var t = cType.Trim();
@@ -227,9 +310,11 @@ public static class CSharpBackend
         return FunctionPointerType(model, resolved, convention) ?? Idioms.CsPrimitive(resolved, convention);
     }
 
+    /// <summary>
     /// A C function-pointer type (`void (*)(ke_ecs *, void *)`) as a C# function
     /// pointer. The C name is only ever an alias, so leaving it verbatim emits an
     /// identifier that resolves to nothing; the callable type has to be spelled out.
+    /// </summary>
     static string? FunctionPointerType(ApiModel model, string cType, Convention convention)
     {
         var m = Regex.Match(cType.Trim(), @"^(.+?)\s*\(\s*\*\s*\)\s*\((.*)\)$");
@@ -244,17 +329,14 @@ public static class CSharpBackend
         return $"delegate* unmanaged[Cdecl]<{string.Join(", ", parameters.Append(returns))}>";
     }
 
+    /// <summary>
     /// The element type a returned sequence is spelled with, taking a <c>[value]</c>
     /// element's managed mirror for the same reason a sequence parameter does: the caller
     /// reads the bytes through the projection it already holds.
+    /// </summary>
     static string ReturnElement(ApiModel model, ApiSlot slot, Convention convention) =>
         ValueTypeName(model, StripQualifiers(CTypes.Deref(slot.Returns)), convention);
 
-    /// <summary>
-    /// What a parameter the callee writes holds, once the indirection carrying it back is
-    /// gone. A declared <c>[enum]</c> is the managed spelling here as much as anywhere else:
-    /// the pointer type alone only says which bytes are written, not which type names them.
-    /// </summary>
     /// <summary>
     /// What a slot answers with, as its caller reads it. A declared enum names its own
     /// values, and a parameter of that type is already projected by the name -- a return of
@@ -633,6 +715,10 @@ public static class CSharpBackend
         : model.Enums.Any(e => e.Name == f.Type.Trim()) ? Idioms.TypeName(f.Type.Trim(), convention)
         : f.Has("bool") ? "bool" : CsType(model, f.Type, convention);
 
+    /// <summary>
+    /// Renders every enum the model does not mark external as a C# enum, in one file under
+    /// <paramref name="ns"/>.
+    /// </summary>
     public static string RenderEnums(ApiModel model, string ns, Convention convention)
     {
         var o = new List<string> { Header, $"namespace {ns};\n" };
@@ -1232,8 +1318,14 @@ public static class CSharpBackend
     /// the contract in whichever assembly holds the native call, so depending on the
     /// capability drags the implementation along with it.
     /// </summary>
+    /// <param name="Class">The source of the class that projects the vtable.</param>
+    /// <param name="Contract">The contract source, or null when the vtable declares none.</param>
     public readonly record struct ProviderSource(string Class, string? Contract);
 
+    /// <summary>
+    /// Projects one vtable into the class that wraps it, and into the contract interface when the
+    /// vtable is tagged as an interface. Throws when a declaration cannot be spelled.
+    /// </summary>
     public static ProviderSource RenderProvider(ApiModel model, ApiStruct vtable, ClassifiedModel classified,
         string ns, string nativeNs, IReadOnlyList<string> extraUsings, Convention convention)
     {
@@ -1858,7 +1950,6 @@ public static class CSharpBackend
             TrampolineName(slot, fn));
     }
 
-    /// <summary>The field that keeps a retained closure reachable for as long as the engine holds it.</summary>
     /// <summary>
     /// Every closure reached through one context parameter. A context is a single
     /// pointer, so the closures sharing it have to share the one object it points at:
@@ -1866,9 +1957,19 @@ public static class CSharpBackend
     /// call happened to write last. A group of one needs no such object and keeps the
     /// delegate as the handle's target directly.
     /// </summary>
+    /// <remarks>
+    /// A group holds the closures reached through one context parameter, with the name of the
+    /// state object that context points at and the owner that receives failures. It is shared
+    /// when it has more than one closure, and it uses the state object when it is shared or needs
+    /// an owner. An owner is needed when a handler takes the provider as a lane, or when one of its
+    /// handlers reports to the provider's queue. Its lifetime is the longest of its members, so
+    /// the root is not freed before the last of them can need it. A group keyed by a parameter or
+    /// by the return keeps one root per key in a dictionary, rather than one root in total.
+    /// </remarks>
     internal sealed record ClosureGroup(ApiParam Ctx, IReadOnlyList<CallbackPair> Pairs, string StateType,
         string ReturnType, string Owner, bool OwnerDrains)
     {
+        /// <summary>Whether more than one closure is reached through this context.</summary>
         public bool Shared => Pairs.Count > 1;
 
         /// <summary>
@@ -2037,14 +2138,6 @@ public static class CSharpBackend
     }
 
     /// <summary>
-    /// The trampoline a <see cref="CallbackPair"/> needs: the unmanaged entry point the
-    /// engine calls, which unwraps the handle back into the delegate. A managed exception
-    /// cannot cross the native frame. Where the callback declares an error channel it is
-    /// translated into one and reported as a failure; where it does not, it is parked and
-    /// rethrown by the call site once the native stack has unwound, which only holds
-    /// because a closure without a channel is never allowed to outlive its call.
-    /// </summary>
-    /// <summary>
     /// The object a shared context points at: one field per closure reached through it,
     /// so a single GC root answers for all of them.
     /// </summary>
@@ -2062,6 +2155,14 @@ public static class CSharpBackend
         o.Add("");
     }
 
+    /// <summary>
+    /// The trampoline a <see cref="CallbackPair"/> needs: the unmanaged entry point the
+    /// engine calls, which unwraps the handle back into the delegate. A managed exception
+    /// cannot cross the native frame. Where the callback declares an error channel it is
+    /// translated into one and reported as a failure; where it does not, it is parked and
+    /// rethrown by the call site once the native stack has unwound, which only holds
+    /// because a closure without a channel is never allowed to outlive its call.
+    /// </summary>
     static void RenderTrampoline(ApiModel model, List<string> o, CallbackPair pair, ClosureGroup group, Convention convention)
     {
         var lanes = pair.Callback.Lanes;
@@ -2854,6 +2955,10 @@ public static class CSharpBackend
         string CsParamType2(ApiParam p) => p.Has("enum") ? Idioms.TypeName(p.TagValue("enum")!, convention) : Idioms.CsPrimitive(p.Type, convention);
     }
 
+    /// <summary>
+    /// Renders the managed interface a callback struct is implemented against: one method for
+    /// each slot other than <c>destroy</c>.
+    /// </summary>
     public static string RenderCallbackInterface(ApiStruct cbType, string ns, string nativeNs, Convention convention)
     {
         var ifaceName = "I" + Idioms.TypeName(cbType.Name, convention) + "Native";
@@ -3014,6 +3119,10 @@ public static class CSharpBackend
         o.Add("");
     }
 
+    /// <summary>
+    /// Renders the free functions of one owner as static methods of a partial class, with a
+    /// nested <c>Native</c> class declaring each entry point.
+    /// </summary>
     public static string RenderFreeFunctions(ApiModel model, string owner, List<GroupedFunction> fns, string ns, string nativeNs,
         IReadOnlyList<string> extraUsings, string libraryName, Convention convention)
     {

@@ -30,8 +30,7 @@ extern "C"
     typedef struct ke_render_shadow ke_render_shadow;
 
     /**
-     * Shape of the directional shadow map. Every field is a workload choice, not
-     * a property of the algorithm: a scene larger than `extent` loses shadows
+     * Shape of the directional shadow map. A scene larger than `extent` loses shadows
      * outside it, and a caster farther than `light_distance` stops casting.
      */
     typedef struct ke_render_shadow_params

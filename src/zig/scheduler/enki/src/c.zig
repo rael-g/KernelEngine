@@ -1,3 +1,4 @@
+//! Imports the scheduler, error and enkiTS C headers under the one namespace `c`.
 
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");

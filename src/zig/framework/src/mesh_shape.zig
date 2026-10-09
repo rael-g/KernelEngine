@@ -1,3 +1,15 @@
+//! Generates the geometry of the primitive meshes, so that a primitive needs no file. A bake
+//! chooses the vertex and index counts of the primitive, allocates both buffers from the heap
+//! module, and has a baker fill them with positions, normals, texture coordinates and tangents.
+//! The quad and the plane are one four-corner shape facing different ways, the cube gives each
+//! face its own four vertices so its normals stay sharp, and the sphere is a grid of rings and
+//! segments whose seam column is duplicated.
+//!
+//! The file keeps no state. On success the caller's data record owns both buffers until
+//! `ke_mesh_shape_free_internal` releases them, and that release leaves the record empty so a
+//! repeat does nothing. Failure is only the false return, and it leaves the record empty and
+//! nothing allocated.
+
 const std = @import("std");
 
 const c = @import("c.zig").c;
@@ -5,6 +17,8 @@ const heap = @import("heap");
 
 const pi: f32 = 3.14159265358979323846;
 
+/// Returns null both for a zero count and for a failed allocation, so the caller cannot tell them
+/// apart.
 fn allocArray(comptime T: type, count: u32) ?[*]T {
     if (count == 0) return null;
     const slice = heap.gpa.alloc(T, count) catch return null;
@@ -42,6 +56,8 @@ fn setVertex(
 
 const Vec3 = [3]f32;
 
+/// Writes the four corners in the order given, with one shared normal and tangent, as the two
+/// triangles over corners 0, 1, 2 and 0, 2, 3.
 fn bakeQuadLike(
     vtx: [*]c.ke_vertex,
     idx: [*]u16,
@@ -70,6 +86,7 @@ const CubeFace = struct {
     p: [4]Vec3,
 };
 
+/// Each face's normal and tangent, and its four corners in the order its vertices are written.
 const cube_faces = [6]CubeFace{
     .{ .n = .{ 1, 0, 0 }, .t = .{ 0, 0, -1 }, .p = .{ .{ 0.5, -0.5, 0.5 }, .{ 0.5, -0.5, -0.5 }, .{ 0.5, 0.5, -0.5 }, .{ 0.5, 0.5, 0.5 } } },
     .{ .n = .{ -1, 0, 0 }, .t = .{ 0, 0, 1 }, .p = .{ .{ -0.5, -0.5, -0.5 }, .{ -0.5, -0.5, 0.5 }, .{ -0.5, 0.5, 0.5 }, .{ -0.5, 0.5, -0.5 } } },
@@ -111,6 +128,8 @@ fn bakeCube(vtx: [*]c.ke_vertex, idx: [*]u16) void {
     }
 }
 
+/// The seam column is written twice, once at each end of a ring, so a ring holds one more vertex
+/// than there are segments.
 fn sphereVertexCount(segments: u32, rings: u32) u32 {
     return (rings + 1) * (segments + 1);
 }
@@ -119,6 +138,8 @@ fn sphereIndexCount(segments: u32, rings: u32) u32 {
     return rings * segments * 6;
 }
 
+/// Indices are typed u16, so every vertex index of the grid must fit in u16; the baker does not
+/// check this.
 fn bakeSphere(vtx: [*]c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void {
     var v: usize = 0;
     var r: u32 = 0;
@@ -173,6 +194,11 @@ fn bakeSphere(vtx: [*]c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void 
     }
 }
 
+/// Chooses the counts, allocates both buffers and bakes the primitive into them. A sphere
+/// takes its grid from the segment count, and a count that is zero or too small is raised to
+/// a usable one. A null output, an unknown primitive and a failed allocation return false.
+/// On success the caller owns both buffers and releases them with `ke_mesh_shape_free_internal`;
+/// on false nothing is owned.
 pub export fn ke_mesh_shape_bake_internal(
     prim: c.ke_mesh_primitive,
     segments_in: u32,
@@ -249,6 +275,8 @@ pub export fn ke_mesh_shape_bake_internal(
     return true;
 }
 
+/// The counts in the data are the lengths the buffers were allocated with, so they must not be
+/// altered between the bake and the free.
 pub export fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callconv(.c) void {
     const data = data_in orelse return;
     if (data.vertices) |v| heap.gpa.free(@as([*]c.ke_vertex, @ptrCast(v))[0..data.vertex_count]);

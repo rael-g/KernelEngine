@@ -1,3 +1,5 @@
+//! The one C import of this plugin, exported as `c`: the headers of the UI pass.
+
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/ecs/ecs.h");

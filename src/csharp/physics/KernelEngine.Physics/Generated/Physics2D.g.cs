@@ -16,7 +16,7 @@ public unsafe interface INativePhysics2d
     ke_physics_2d* Native { get; }
 }
 
-/// <summary>ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins. Not thread-safe — call all methods on the same thread.</summary>
+/// <summary>A 2D rigid-body physics world. One instance is one world; several worlds take several instances. Not thread-safe — call all methods on the same thread.</summary>
 public unsafe partial class Physics2D : IDisposable, INativePhysics2d
 {
     private ke_physics_2d* _native;
@@ -74,7 +74,7 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
         Handle->destroy_body(Handle, body);
     }
 
-    /// <summary>Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin. The offset is what lets one body carry several shapes in different places — a character's feet and torso, a paddle's rounded ends.</summary>
+    /// <summary>Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin.</summary>
     /// <param name="offsetAngle">Radians, CCW positive, about the offset center.</param>
     /// <param name="filter">Layers the fixture occupies and tests against. NULL leaves it colliding with everything.</param>
     /// <exception cref="Exception">The native call failed.</exception>
@@ -101,7 +101,7 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
         return result;
     }
 
-    /// <summary>Teleports the body. Skips collision response — prefer apply_impulse for dynamic moves.</summary>
+    /// <summary>Teleports the body and skips collision response.</summary>
     public void SetBodyPosition(uint body, Vector2 position, float angle)
     {
         Handle->set_body_position(Handle, body, position.X, position.Y, angle);
@@ -119,13 +119,13 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
         Handle->apply_impulse(Handle, body, impulse.X, impulse.Y);
     }
 
-    /// <summary>Locks or unlocks the body's rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked. Needed by anything that must stay upright — characters, projectiles, and any box whose collisions would otherwise set it spinning.</summary>
+    /// <summary>Locks or unlocks the body's rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked.</summary>
     public void SetBodyFixedRotation(uint body, bool @fixed)
     {
         Handle->set_body_fixed_rotation(Handle, body, @fixed);
     }
 
-    /// <summary>Scales world gravity for this body alone. 1 leaves it at the world's value, 0 makes the body weightless, and a negative value makes it fall upward. What a floating pickup or a balloon sets, rather than each such body needing its own world.</summary>
+    /// <summary>Scales world gravity for this body alone. 1 leaves it at the world's value, 0 makes the body weightless, and a negative value makes it fall upward.</summary>
     public void SetBodyGravityScale(uint body, float scale)
     {
         Handle->set_body_gravity_scale(Handle, body, scale);

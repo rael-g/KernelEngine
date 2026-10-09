@@ -28,7 +28,7 @@ extern "C"
     {
         void *handle;
 
-        /// Registers a new resource with refcount = 1. Returns KE_ERROR_INVALID_ARGUMENT
+        /// Registers a new resource with refcount = 1. Sets out_error to KE_ERROR_INVALID_ARGUMENT
         /// if handle == KE_RESOURCE_HANDLE_NONE or if already registered.
         bool (*register_resource)(struct ke_resource_cache *self,
                                   ke_resource_handle         handle,

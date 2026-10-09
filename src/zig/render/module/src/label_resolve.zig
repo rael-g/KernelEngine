@@ -1,8 +1,14 @@
+//! Gives each label the font it names, making one attempt per label. `system` stores the result
+//! of `bake` in each label that names a font and has no font handle. A failure is logged by
+//! `reportUnresolved` and yields the failed-font handle, which `system` does not retry.
+
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
 const std = @import("std");
 
+/// Borrows the services `bake` calls and frees none of them. A null `resolver` is not rejected
+/// here: `bake` reports each label that reaches it.
 pub const State = struct {
     core: *c.ke_render_service,
     ui: *c.ke_render_ui,
@@ -10,6 +16,8 @@ pub const State = struct {
     logger: ?*c.ke_logger = null,
 };
 
+/// Logs an error under the tag "render.label" naming the path and the reason. Does nothing when
+/// `logger` is null, and drops the message unlogged when it does not fit its buffer.
 fn reportUnresolved(st: *State, path: []const u8, reason: []const u8) void {
     const lg = st.logger orelse return;
     var buf: [320]u8 = undefined;
@@ -18,6 +26,12 @@ fn reportUnresolved(st: *State, path: []const u8, reason: []const u8) void {
     lg.log.?(lg, &ev);
 }
 
+/// Asks the asset resolver for the font at the label's size over a fixed glyph range and atlas
+/// size, uploads the glyph atlas as a texture and registers the font with the ui service, both
+/// under one key spelled from the path, size, range and atlas size. Returns the registered
+/// font, or `KE_UI_FONT_FAILED` after `reportUnresolved` has named the
+/// step that failed. The resolver's font data is released by the time it returns, on every path
+/// that received it.
 fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     const path = std.mem.sliceTo(&l.font, 0);
 
@@ -63,6 +77,9 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     return font;
 }
 
+/// Runs in the update phase over the label view. Afterwards every label that named a font and had
+/// no handle holds either the registered font or the failed-font handle. It always returns true
+/// and sets no error, since each failure is logged by `bake` instead.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 

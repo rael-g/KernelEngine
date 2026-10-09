@@ -22,7 +22,7 @@ extern "C"
     typedef struct ke_transform2d_component
     {
         ke_vec2 position;
-        float   rotation; ///< Radians, CCW positive; a scene authors degrees.
+        float   rotation; ///< Radians, CCW positive.
         ke_vec2 scale; ///< [default:1 1]
         float   depth; ///< Where the plane sits along Z.
     } ke_transform2d_component;

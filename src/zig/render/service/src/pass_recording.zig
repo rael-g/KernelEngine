@@ -1,7 +1,22 @@
+//! How a pass records its work: `beginPass` hands out a pass context, `endPass` takes it back, and
+//! between them the pass either draws or records compute.
+//!
+//! A context carries a `PassState` for one command slot and function slots that resolve resource
+//! names through the table of `CoreState`, open a render pass on the slot's encoder, or open a
+//! compute pass. The encoder is the slot's precreated one, or a fresh one for a higher slot. Render
+//! work goes straight to the encoder. Compute work is only recorded: the compute pass
+//! `ctxBeginCompute` returns appends a `ComputeCmd` per call to the slot's `ComputeRecord`, and
+//! the end of the frame replays it. `endPass` hands the encoder back to the slot and flags it for
+//! submission unless the pass was compute, so a slot is either finished as a render encoder or
+//! replayed from its record.
+
 const rc = @import("render_service.zig");
 const c = rc.c;
 const gpa = rc.gpa;
 
+/// Opens a pass in the command slot of the io. The pass and its context stay allocated until
+/// `endPass` frees them. Returns null, filling no error, when no frame is live or an allocation
+/// fails.
 pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
     const st = rc.coreOf(self);
     if (!st.frame_live) return null;
@@ -31,6 +46,9 @@ pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_i
     return ctx;
 }
 
+/// Hands the encoder back to its slot and frees the pass and its context, so the context pointer
+/// is invalid afterwards. A slot past the command-buffer limit has no entry in the slot arrays, so
+/// its encoder is destroyed here instead.
 pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) callconv(.c) void {
     const st = rc.coreOf(self);
     const ps = rc.passOf(ctx);
@@ -45,12 +63,19 @@ pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) cal
     gpa.destroy(@as(*c.ke_render_pass_ctx, @ptrCast(ctx)));
 }
 
+/// Returns the view of the named resource, or the invalid view for an unknown name. Also serves
+/// the write slot of the context, so a write resolves its name the same way as a read.
 fn ctxRead(self: [*c]c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
     const ps = rc.passOf(self);
     if (ps.core.find(name)) |r| return r.view;
     return c.KE_GPU_INVALID_HANDLE;
 }
 
+/// Attachments follow the order of the pass's writes at the moment of this call; its reads never
+/// become attachments. A write that names no resource is skipped, and so is a color write past
+/// the attachment limit. A depth write is cleared, or loaded when the pass asks to load. A color
+/// write takes its resource's clear value when that value's alpha is not zero, and the service's
+/// clear color otherwise. The render pass it opens belongs to the caller, which ends it.
 fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_render_pass {
     const ps = rc.passOf(self);
     var colors: [rc.MAX_COLOR_ATTACH]c.ke_gpu_color_attachment = undefined;
@@ -106,6 +131,9 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     return ps.encoder.begin_render_pass.?(ps.encoder, &params);
 }
 
+/// Replaces the slot's record with an empty one and returns a compute pass that records into it;
+/// nothing runs until the frame replays the record. A slot past the command-buffer limit gets
+/// null.
 fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_compute_pass {
     const ps = rc.passOf(self);
     ps.is_compute = true;
@@ -133,6 +161,7 @@ fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_com
 inline fn recOf(self: [*c]c.ke_gpu_compute_pass) *rc.ComputeRecord {
     return @alignCast(@ptrCast(self.*.handle));
 }
+/// Drops the command without a report when the record is full.
 fn cpAppend(rec: *rc.ComputeRecord, cmd: rc.ComputeCmd) void {
     if (rec.count >= rc.MAX_COMPUTE_CMDS) return;
     rec.cmds[rec.count] = cmd;
@@ -141,6 +170,8 @@ fn cpAppend(rec: *rc.ComputeRecord, cmd: rc.ComputeCmd) void {
 fn cpSetPipeline(self: [*c]c.ke_gpu_compute_pass, pipe: c.ke_gpu_pipeline) callconv(.c) void {
     cpAppend(recOf(self), .{ .set_pipeline = pipe });
 }
+/// Copies the dynamic offsets into the command at record time, so the caller's array need not
+/// outlive the call.
 fn cpSetBindGroup(self: [*c]c.ke_gpu_compute_pass, group_index: u32, bg: c.ke_gpu_bind_group,
                   dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
     var off: [4]u32 = .{ 0, 0, 0, 0 };
@@ -155,6 +186,7 @@ fn cpDispatch(self: [*c]c.ke_gpu_compute_pass, x: u32, y: u32, z: u32) callconv(
 fn cpDispatchIndirect(self: [*c]c.ke_gpu_compute_pass, indirect_buf: c.ke_gpu_buffer, offset: usize) callconv(.c) void {
     cpAppend(recOf(self), .{ .dispatch_indirect = .{ .buf = indirect_buf, .offset = offset } });
 }
+/// Has no effect: the commands are already in the record, and the frame replays them.
 fn cpEnd(self: [*c]c.ke_gpu_compute_pass) callconv(.c) void {
     _ = self;
 }

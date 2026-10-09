@@ -20,8 +20,7 @@ extern "C"
 /**
  * Builds a stateless sink that formats entries as `[LEVEL] tag: message`
  * and writes them to the process's standard error stream, flushing after
- * every entry. Every language wants this as a default; native so none of
- * them re-derive the format.
+ * every entry.
  */
 KE_LOGGER_SIMPLE_API ke_logger_sink ke_console_sink_create(void);
 

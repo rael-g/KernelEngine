@@ -32,13 +32,10 @@ typedef struct ke_ecs_flecs_params
     uint32_t world_id_base;
 } ke_ecs_flecs_params;
 
-/// Creates a ke_ecs vtable backed by an internally-owned flecs world.
-/// Also installs process-wide ecs_os_api log + abort handlers: flecs calls
-/// abort() on an internal assertion failure, and the installed handler ends
-/// the process through ke_error_fatal instead (readable message, no OS crash
-/// dialog) rather than resuming — flecs offers no way to recover a world past
-/// an internal assertion, so continuing would run against a world already
-/// known to be broken.
+/// Creates a ke_ecs vtable backed by an internally-owned world.
+/// Also installs process-wide log and abort handlers: an internal assertion
+/// failure in the world ends the process through ke_error_fatal, with a
+/// readable message, and does not return.
 KE_ECS_FLECS_API ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
                                                    ke_error                 **out_error);
 

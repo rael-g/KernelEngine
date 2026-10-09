@@ -123,10 +123,19 @@ a Windows runner costs minutes even when nothing was rebuilt.
 
 ## Documentation
 
-`zig build docs` writes `<--prefix>/docs/<plugin>.json` and `<plugin>.md` for every plugin, from its
-module in the build graph: the plugin's sources, the contract directory named in its `ctx.member`
-call and the headers both include. The step comes from `docir`, a dependency of the root
-`build.zig.zon` whose `build.zig` the root imports (`build.zig:3`).
+`zig build docs` reads the sources as two documents and writes each under `<--prefix>/docs/`: as
+one JSON file, as one Markdown file, and as a directory of pages with an `index.md` and a `toc.yml`
+that a site generator takes as it is. `engine` is every C header and Zig file under `src`, each
+once, at the path it has there: the contracts under `c/`, each plugin under `zig/` with its factory
+header and its implementation files apart. `kabic` is `src/csharp/kabic`, one page per namespace
+and per type. Every `build.zig` and every `third_party` directory is left out, and so are
+`src/csharp` and `src/shaders` from the first. The steps come from `docir`, a dependency of the
+root `build.zig.zon` whose `build.zig` the root imports (`build.zig:3`).
+
+The same program is installed as `<--prefix>/bin/docir` by the default build and by `zig build
+docs`. `docir query <name> src` answers from the sources directly, with no document made first.
+`.claude/skills/docir/SKILL.md` is the skill that teaches a coding agent to use it, as the pinned
+release of docir publishes it.
 
 ## Shaders
 

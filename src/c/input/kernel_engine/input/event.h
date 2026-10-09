@@ -9,8 +9,7 @@ extern "C"
 #endif
 
     /**
-     * Direction of a key or mouse-button transition, as reported to the
-     * ke_input sinks by a window backend.
+     * Direction of a key or mouse-button transition.
      */
     typedef enum ke_input_action
     {
@@ -33,7 +32,6 @@ extern "C"
     /**
      * @brief One discrete input event captured during the input poll.
      *
-     * Flat layout (no anonymous unions) for friction-free C# P/Invoke binding.
      * Field interpretation depends on @c kind:
      *   - KEY_DOWN / KEY_UP:           code = a ke_key value
      *   - MOUSE_BUTTON_DOWN/UP:        code = button index

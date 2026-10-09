@@ -15,7 +15,8 @@ extern "C"
 #define KE_CONFIGURATION_SUBSCRIPTION_NONE UINT32_MAX
 
     /// Change callback: invoked with the section whose value(s) changed, plus the
-    /// unchanged ctx supplied at subscribe time. Latch-only — see doctrine above.
+    /// ctx supplied at subscribe time, passed back unchanged. The callback must be
+    /// latch-only: it records that the section changed and does nothing else.
     typedef void (*ke_configuration_change_func)(const char *section, void *ctx);
 
     typedef struct ke_configuration

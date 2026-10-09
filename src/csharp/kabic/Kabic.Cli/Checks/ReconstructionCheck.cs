@@ -2,8 +2,22 @@ using System.Text.Json.Nodes;
 
 namespace Kabic.Cli.Checks;
 
+/// <summary>
+/// Checks that the committed generated artifacts can be rebuilt from the headers alone.
+/// </summary>
+/// <remarks>
+/// Execute runs the generate command into a uniquely named scratch directory under the system
+/// temporary path, then walks every file it produced. A produced file with no counterpart at
+/// the same relative path under the root is reported as missing. One whose bytes differ from
+/// its counterpart is reported as differing. The check fails when either list is not empty. The
+/// scratch directory is deleted in a finally block.
+/// </remarks>
 internal static class ReconstructionCheck
 {
+    /// <summary>
+    /// Returns zero when every produced artifact matches the committed tree. Returns one when
+    /// regeneration fails or when a produced artifact is missing or differs.
+    /// </summary>
     public static int Execute(Options options)
     {
         var rootDir = options.Root;

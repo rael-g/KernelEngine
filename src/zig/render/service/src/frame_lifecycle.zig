@@ -1,6 +1,21 @@
+//! One frame of the render service: it opens the frame, carries buffer uploads queued during it,
+//! and closes it.
+//!
+//! `beginFrame` discards what the last frame left in `CoreState`, acquires the render target and
+//! creates the precreated encoders. Between the two calls, passes record into their slots, and
+//! `uploadBuffer` may be called from any worker: it reserves a record and a range of the upload
+//! arena atomically, then copies into it. `endFrame` writes the queued uploads through the device
+//! first, so the buffers hold them when the frame's commands run, then finishes or replays each
+//! slot's work, submits it as one batch, releases the encoders and presents.
+
 const rc = @import("render_service.zig");
 const c = rc.c;
 
+/// Opens a frame. The previous frame's slot flags, compute records and upload counters are
+/// cleared before the target is acquired, so a failed acquire leaves the frame closed and
+/// returns zero with the target's error. Once it has returned one, the precreated encoders
+/// exist, the backbuffer size is read from the target, the "backbuffer" entry holds the acquired
+/// view and the frame is live.
 pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     const st = rc.coreOf(self);
     st.frame_live = false;
@@ -24,6 +39,12 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     return 1;
 }
 
+/// Closes the frame. The queued uploads are written to their buffers before any command buffer
+/// is finished. Each slot flagged by `endPass` has its encoder finished, and a slot that holds
+/// only a compute record has the record replayed on its encoder first. The command buffers are
+/// submitted in one call and destroyed, the precreated encoders are destroyed, and the frame
+/// stops being live. Returns the result of the present, with the target's error on failure; the
+/// queue is polled whatever it returned. Returns zero and does nothing when no frame is live.
 pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     const st = rc.coreOf(self);
     if (!st.frame_live) return 0;
@@ -87,6 +108,9 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
     return @intFromBool(presented);
 }
 
+/// Copies the bytes into the upload arena and queues a record for `endFrame` to write them to
+/// the buffer. Nothing is returned, so an upload dropped for the record limit or the arena end,
+/// or with a zero size or null data, is silent.
 pub fn uploadBuffer(self: [*c]c.ke_render_service, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
     if (size == 0 or data == null) return;
     const st = rc.coreOf(self);

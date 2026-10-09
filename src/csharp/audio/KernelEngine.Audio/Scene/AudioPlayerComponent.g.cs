@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A single audio clip, loaded from the path the scene declares and played on demand. The clip is one node's, not one system's: two AudioPlayer children under the same parent are two clips, told apart by node name.</summary>
+/// <summary>A single audio clip, loaded from the path the scene declares and played on demand. Each node holds its own clip: two AudioPlayer children under the same parent are two clips, told apart by node name.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct AudioPlayerComponent
 {

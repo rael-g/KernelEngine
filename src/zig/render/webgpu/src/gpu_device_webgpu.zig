@@ -1,3 +1,42 @@
+//! The WebGPU backend of the `ke_gpu_device` contract, on wgpu-native. The factory
+//! `ke_gpu_device_webgpu_create` builds a `DeviceState` holding the wgpu instance, adapter, device
+//! and queue, the borrowed scheduler and the list of in-flight pipeline compiles, and a vtable
+//! whose handle is that state; every slot recovers it through `state`. `createDeviceState` brings
+//! the wgpu objects up in order, each guarded so a later failure releases the earlier ones, and
+//! `setError` turns the failure into an engine error. `deviceDestroy` releases everything the
+//! factory made, without waiting for compiles still listed.
+//!
+//! Most slots are thin translations: `to*` and `map*` functions convert contract enums and flag
+//! sets to wgpu ones, and an unknown value falls back to a fixed default. Objects are handed out as
+//! pointer-sized handles, and destroy slots release them. Fences are not implemented: creation
+//! returns the invalid handle and waiting reports not supported.
+//!
+//! Creation of buffers, shader modules and bind groups is checked. Each pushes a validation error
+//! scope, creates the object, pops the scope into a `ScopeError` through `popErrorCallback` and
+//! polls the device, so the message is in place before the creator looks. A captured error
+//! releases the object and returns the invalid handle. Textures, views and samplers are
+//! unchecked, and `createTexture` uploads initial data layer by layer, repacking rows when they
+//! are not padded to the copy row alignment.
+//!
+//! A render pipeline is described by a `RenderPipelineDescBuild`, which owns every array its
+//! descriptor points at. `createRenderPipeline` compiles on the caller. `createRenderPipelineAsync`
+//! compiles inline when there is no scheduler or the pending list is full, and otherwise copies the
+//! parameters into an `AsyncCompileJob`, dispatches `runAsyncCompileJob` to the scheduler and lists
+//! the task. `reapCompletedCompiles` retires finished tasks and `flushPipelineCompiles` waits for
+//! all of them.
+//!
+//! Command encoders, render passes, compute passes and command buffers wrap the raw wgpu objects
+//! in contract structs allocated from `gpa`; ending or destroying one frees its wrapper. Texture
+//! copies to and from buffers refuse a row pitch that is not aligned. `mapBufferRead` is
+//! asynchronous: it keeps the caller's callback in a `MapReadRequest` that `mapReadDone` frees.
+//! `getCapabilities` reports the adapter limits.
+//!
+//! The file creates no threads of its own. Its only concurrency is the compile jobs, which touch
+//! nothing but their own copies and the wgpu device.
+//!
+//! The sibling file `window_target.zig` implements the window render target on top of the device
+//! state exported here, and is pulled into the build from this file.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -19,6 +58,8 @@ pub const ke = @cImport({
     @cInclude("kernel_engine/scheduler/scheduler.h");
 });
 
+/// Read once by `ke_gpu_device_webgpu_create`. The `scheduler` it carries is borrowed: the state
+/// keeps the pointer, and this file never frees it.
 const Params = extern struct {
     logger:            ?*anyopaque,
     enable_validation: ke.ke_bool,
@@ -33,6 +74,9 @@ const GpuError = error{
     NotImplemented,
 };
 
+/// Created by `createDeviceState`, reached from the vtable through its handle, and freed by
+/// `deviceDestroy`. `scheduler` is borrowed and never freed here. Only the first
+/// `pending_compiles_count` entries of `pending_compiles` are live.
 pub const DeviceState = struct {
     instance:                wgpu.WGPUInstance,
     adapter:                 wgpu.WGPUAdapter,
@@ -50,10 +94,14 @@ fn ptr(dev: [*c]ke.ke_gpu_device) *ke.ke_gpu_device {
     return @ptrCast(dev);
 }
 
+/// The vtable's handle points at a `DeviceState`; this recovers it for any slot of the vtable.
 pub fn state(dev: [*c]ke.ke_gpu_device) *DeviceState {
     return @ptrCast(@alignCast(ptr(dev).handle));
 }
 
+/// Maps a `GpuError` to the engine error type it is reported as: allocation failure to out of
+/// memory, a missing adapter or a failed device to not initialised, an unimplemented feature to
+/// not supported. The location recorded is the one the caller passes.
 fn setError(
     out_error: ?*?*ke.ke_error,
     err: GpuError,
@@ -241,6 +289,8 @@ fn toWgpuVertexStepMode(m: ke.ke_gpu_vertex_step_mode) wgpu.WGPUVertexStepMode {
 const heap = @import("heap");
 pub const gpa = heap.gpa;
 
+/// The adapter and device are read from locals that the request callbacks write, immediately after
+/// each request call, so each request is expected to have finished inside its call.
 fn createDeviceState(instance_flags: wgpu.WGPUInstanceFlag) GpuError!*DeviceState {
     const s = gpa.create(DeviceState) catch return GpuError.OutOfMemory;
     errdefer gpa.destroy(s);
@@ -288,6 +338,8 @@ fn createDeviceState(instance_flags: wgpu.WGPUInstanceFlag) GpuError!*DeviceStat
     return s;
 }
 
+/// Builds the vtable half of the device with the state as its handle. On failure the factory
+/// releases the state.
 fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
     const dev = gpa.create(ke.ke_gpu_device) catch return GpuError.OutOfMemory;
     dev.* = .{
@@ -335,6 +387,8 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
     return dev;
 }
 
+/// Reads `Params` once. A failed creation is reported through `out_error` and returns a null `ref`,
+/// with every object created on the way already released.
 pub export fn ke_gpu_device_webgpu_create(
     params: ?*const Params,
     out_error: ?*?*ke.ke_error,
@@ -363,6 +417,8 @@ pub export fn ke_gpu_device_webgpu_create(
     return .{ .ref = dev, .destroy = deviceDestroy };
 }
 
+/// The destroy slot of the factory's owner wrapper. It does not wait for the tasks still listed in
+/// `pending_compiles`.
 fn deviceDestroy(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     const s = state(dev);
     wgpu.wgpuQueueRelease(s.queue);
@@ -373,6 +429,8 @@ fn deviceDestroy(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     gpa.destroy(ptr(dev));
 }
 
+/// Runs inside the adapter request made by `createDeviceState`. The status is ignored, so a failed
+/// request leaves the local null.
 fn adapterCallback(
     _: wgpu.WGPURequestAdapterStatus,
     adapter: wgpu.WGPUAdapter,
@@ -384,6 +442,8 @@ fn adapterCallback(
     out.* = adapter;
 }
 
+/// Runs inside the device request made by `createDeviceState`. As with the adapter, a failure is
+/// seen only as a null device.
 fn deviceCallback(
     _: wgpu.WGPURequestDeviceStatus,
     device: wgpu.WGPUDevice,
@@ -399,6 +459,8 @@ pub fn getDefaultQueue(dev: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_queue {
     return @intFromPtr(state(dev).queue);
 }
 
+/// Submits at most as many command buffers as its local array holds. Any beyond that are dropped
+/// with no error set.
 fn queueSubmit(
     _: [*c]ke.ke_gpu_device,
     q: ke.ke_gpu_queue,
@@ -412,6 +474,9 @@ fn queueSubmit(
     wgpu.wgpuQueueSubmit(@ptrFromInt(q), @intCast(n), &buf);
 }
 
+/// Called by `queuePoll` and by `createRenderPipelineAsync` before it checks the pending list. A
+/// completed task is waited on and removed; removal moves the last pending entry into the freed
+/// slot, so pending tasks are not kept in dispatch order.
 fn reapCompletedCompiles(s: *DeviceState) void {
     const sched = s.scheduler orelse return;
     var i: u32 = 0;
@@ -511,6 +576,8 @@ fn encInsertDebugMarker(enc: [*c]ke.ke_gpu_command_encoder, label: [*c]const u8)
     wgpu.wgpuCommandEncoderInsertDebugMarker(@ptrCast(enc.*.handle), labelView(label));
 }
 
+/// Initial data is copied in with a queue write only after the error scope has passed, so a
+/// rejected buffer receives no data.
 fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_buffer {
     const pp = @as(*const ke.ke_gpu_buffer_params, @ptrCast(p));
     const s = state(dev);
@@ -546,6 +613,8 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params,
     return @intFromPtr(handle);
 }
 
+/// Has no error output: a failed create returns the invalid handle. A repack buffer that cannot be
+/// allocated returns the texture with the layers from that one on not uploaded.
 fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params) callconv(.c) ke.ke_gpu_texture {
     const pp = @as(*const ke.ke_gpu_texture_params, @ptrCast(p));
     const s = state(dev);
@@ -668,11 +737,16 @@ export const KE_ERROR_WGPU_RESOURCE_CREATION: ke.ke_error_type = .{
     .parent = &KE_ERROR_GPU_RESOURCE_CREATION,
 };
 
+/// Lives on the caller's stack for one error scope. `popErrorCallback` writes it during the poll
+/// that follows the pop, so the caller reads it only after that poll. The message is cut to fit
+/// `buf`.
 const ScopeError = struct {
     captured: bool,
     buf: [512]u8,
 };
 
+/// Each error it is given sets `captured` and replaces the message, so the last error the scope
+/// reports is the one kept.
 fn popErrorCallback(
     _: wgpu.WGPUPopErrorScopeStatus,
     etype: wgpu.WGPUErrorType,
@@ -692,6 +766,9 @@ fn popErrorCallback(
     }
 }
 
+/// Reads the code as SPIR-V when it is at least four bytes long and its first word is
+/// `SPIRV_MAGIC`, otherwise as WGSL. A captured error sets the shader error and returns the invalid
+/// handle.
 fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_module_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_shader_module {
     const pp = @as(*const ke.ke_gpu_shader_module_params, @ptrCast(p));
     const device = state(dev).device;
@@ -739,6 +816,9 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
     return @intFromPtr(handle);
 }
 
+/// Every pointer in `desc` points into this struct, so it must not move until `desc` has been
+/// consumed. `pipeline_layout` is created by `buildRenderPipelineDescriptor` and released by its
+/// caller.
 const RenderPipelineDescBuild = struct {
     desc: wgpu.WGPURenderPipelineDescriptor,
     pipeline_layout: wgpu.WGPUPipelineLayout,
@@ -751,6 +831,8 @@ const RenderPipelineDescBuild = struct {
     bgl_handles: [4]wgpu.WGPUBindGroupLayout,
 };
 
+/// Fills `build` in place. Attributes and vertex buffers beyond the fixed capacities of the arrays
+/// in `build` are dropped with no error.
 fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params, build: *RenderPipelineDescBuild) void {
     const pp = @as(*const ke.ke_gpu_render_pipeline_params, @ptrCast(p));
 
@@ -888,6 +970,8 @@ fn colorTargetsDeclared(p: [*c]const ke.ke_gpu_render_pipeline_params) bool {
     return true;
 }
 
+/// Compiles on the calling thread and never touches the scheduler. Returns the invalid handle when
+/// a fragment target has no mappable format.
 fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
     if (!colorTargetsDeclared(p)) return ke.KE_GPU_INVALID_HANDLE;
     var build: RenderPipelineDescBuild = undefined;
@@ -896,11 +980,16 @@ fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render
     return @intFromPtr(wgpu.wgpuDeviceCreateRenderPipeline(state(dev).device, &build.desc));
 }
 
+/// Copies the text into `gpa`, null-terminated. Null input and a failed copy both yield null; the
+/// failed copy sets no error.
 fn ownedText(text: [*c]const u8) ?[:0]u8 {
     if (text == null) return null;
     return gpa.dupeZ(u8, std.mem.span(text)) catch null;
 }
 
+/// Created by `createRenderPipelineAsync` and freed by `runAsyncCompileJob` on the worker that runs
+/// it. It owns the copied names, takes one reference to each shader module it names, and holds the
+/// raw `device` without a reference of its own.
 const AsyncCompileJob = struct {
     label: ?[:0]u8,
     vertex_entry: ?[:0]u8,
@@ -914,6 +1003,9 @@ const AsyncCompileJob = struct {
 extern "kernel32" fn Sleep(dwMilliseconds: c_ulong) callconv(.winapi) void;
 extern "c" fn usleep(usec: c_uint) c_int;
 
+/// The delay a job sleeps before compiling: zero unless "KE_PSO_ASYNC_DELAY_MS" parses to a
+/// positive number of milliseconds. With "KE_PSO_ASYNC_DELAY_BLEND_ONLY" also set, the delay
+/// applies only to a pipeline whose first colour target blends.
 fn debugAsyncDelayMs(build: *const RenderPipelineDescBuild) u64 {
     const raw = std.c.getenv("KE_PSO_ASYNC_DELAY_MS") orelse return 0;
     const ms = std.fmt.parseInt(u64, std.mem.span(raw), 10) catch 0;
@@ -934,6 +1026,8 @@ fn debugSleepMs(ms: u64) void {
     }
 }
 
+/// Runs on a scheduler worker as the task body. It calls `on_ready` once, then frees the job and
+/// its copies.
 fn runAsyncCompileJob(data: ?*anyopaque, out_failure: [*c][*c]const ke.ke_error_type) callconv(.c) void {
     _ = out_failure;
     const job: *AsyncCompileJob = @ptrCast(@alignCast(data.?));
@@ -949,6 +1043,8 @@ fn runAsyncCompileJob(data: ?*anyopaque, out_failure: [*c][*c]const ke.ke_error_
     gpa.destroy(job);
 }
 
+/// Calls back before returning when there is no scheduler, when the pending list is full, or when
+/// the job cannot be allocated. Otherwise the callback comes later from a worker.
 fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params,
                              on_ready: ?*const fn (ke.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
     const cb = on_ready orelse return;
@@ -998,6 +1094,8 @@ fn createRenderPipelineAsync(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_r
     s.pending_compiles_count += 1;
 }
 
+/// Waits for every task still listed in `pending_compiles`, so every callback has run when it
+/// returns, and then empties the list.
 fn flushPipelineCompiles(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     const s = state(dev);
     const sched = s.scheduler orelse return;
@@ -1099,6 +1197,9 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
     return @intFromPtr(wgpu.wgpuDeviceCreateBindGroupLayout(state(dev).device, &desc));
 }
 
+/// Shares the error scope protocol of `createBuffer`: a validation error captured while the group
+/// is made releases it, sets `KE_ERROR_WGPU_RESOURCE_CREATION` and returns the invalid handle.
+/// Entries beyond the capacity of the local entry array are dropped with no error.
 fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_bind_group {
     const pp = @as(*const ke.ke_gpu_bind_group_params, @ptrCast(p));
     const n = @min(pp.entry_count, 32);
@@ -1203,6 +1304,8 @@ fn rpDrawIndexed(rp: [*c]ke.ke_gpu_render_pass, idx_count: u32, inst_count: u32,
 fn rpDrawIndirect(rp: [*c]ke.ke_gpu_render_pass, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderDrawIndirect(@ptrCast(rp.*.handle), @ptrFromInt(indirect_buf), offset);
 }
+/// Ends the raw pass, releases it and frees the wrapper `encBeginRenderPass` allocated, so the
+/// wrapper must not be used afterwards.
 fn rpEnd(rp: [*c]ke.ke_gpu_render_pass) callconv(.c) void {
     wgpu.wgpuRenderPassEncoderEnd(@ptrCast(rp.*.handle));
     wgpu.wgpuRenderPassEncoderRelease(@ptrCast(rp.*.handle));
@@ -1221,6 +1324,8 @@ fn cpDispatch(cp: [*c]ke.ke_gpu_compute_pass, x: u32, y: u32, z: u32) callconv(.
 fn cpDispatchIndirect(cp: [*c]ke.ke_gpu_compute_pass, indirect_buf: ke.ke_gpu_buffer, offset: usize) callconv(.c) void {
     wgpu.wgpuComputePassEncoderDispatchWorkgroupsIndirect(@ptrCast(cp.*.handle), @ptrFromInt(indirect_buf), offset);
 }
+/// Ends the raw pass, releases it and frees the wrapper `encBeginComputePass` allocated, so the
+/// wrapper must not be used afterwards.
 fn cpEnd(cp: [*c]ke.ke_gpu_compute_pass) callconv(.c) void {
     wgpu.wgpuComputePassEncoderEnd(@ptrCast(cp.*.handle));
     wgpu.wgpuComputePassEncoderRelease(@ptrCast(cp.*.handle));
@@ -1232,6 +1337,8 @@ fn cmdBufDestroy(cmd: [*c]ke.ke_gpu_command_buffer) callconv(.c) void {
     gpa.destroy(@as(*ke.ke_gpu_command_buffer, @ptrCast(cmd)));
 }
 
+/// Copies the attachments into local arrays, so the caller's params need not outlive the call.
+/// Failure is reported as a null pointer with no error set.
 fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu_render_pass_params) callconv(.c) [*c]ke.ke_gpu_render_pass {
     const pp = @as(*const ke.ke_gpu_render_pass_params, @ptrCast(p));
 
@@ -1300,6 +1407,8 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
     return rp;
 }
 
+/// Wraps a raw compute pass in a wrapper from `gpa` that `cpEnd` frees. A failed pass or wrapper
+/// allocation is reported as a null pointer with no error set.
 fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu_compute_pass_params) callconv(.c) [*c]ke.ke_gpu_compute_pass {
     const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = labelView(if (p != null) p.*.label else null), .timestampWrites = null };
     const raw = wgpu.wgpuCommandEncoderBeginComputePass(@ptrCast(enc.*.handle), &desc) orelse return null;
@@ -1331,6 +1440,8 @@ fn rowPitchValid(bytes_per_row: u32, out_error: ?*?*ke.ke_error, src: std.builti
     return false;
 }
 
+/// Refuses a row pitch that is not a multiple of `copy_row_alignment`: it sets an invalid-argument
+/// error, records nothing and returns false.
 fn encCopyBufferToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buffer, src_off: usize, bytes_per_row: u32, dst: ke.ke_gpu_texture, x: u32, y: u32, z: u32, width: u32, height: u32, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (!rowPitchValid(bytes_per_row, out_error, @src())) return false;
     const src_info = wgpu.WGPUTexelCopyBufferInfo{
@@ -1348,6 +1459,8 @@ fn encCopyBufferToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buf
     return true;
 }
 
+/// Refuses a row pitch that is not a multiple of `copy_row_alignment`, as `encCopyBufferToTexture`
+/// does.
 fn encCopyTextureToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_texture, x: u32, y: u32, z: u32, dst: ke.ke_gpu_buffer, dst_off: usize, bytes_per_row: u32, width: u32, height: u32, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (!rowPitchValid(bytes_per_row, out_error, @src())) return false;
     const src_info = wgpu.WGPUTexelCopyTextureInfo{
@@ -1365,6 +1478,8 @@ fn encCopyTextureToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_tex
     return true;
 }
 
+/// Not checked against `copy_row_alignment` and reports no error. The copy always starts at the
+/// origin of both textures and covers mip level zero.
 fn encCopyTextureToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_texture, dst: ke.ke_gpu_texture, width: u32, height: u32) callconv(.c) void {
     const src_info = wgpu.WGPUTexelCopyTextureInfo{
         .texture = @ptrFromInt(src),
@@ -1428,18 +1543,25 @@ fn mapBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: 
     return @constCast(wgpu.wgpuBufferGetConstMappedRange(buffer, offset, size));
 }
 
+/// Owned by `mapBufferRead` until `mapReadDone` frees it. The wgpu callback receives only this
+/// request, so it is where the caller's callback and user pointer are kept.
 const MapReadRequest = struct {
     buffer: ke.ke_gpu_buffer,
     on_ready: *const fn (ke.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void,
     user: ?*anyopaque,
 };
 
+/// The wgpu callback of `mapBufferRead`: reports success only for a successful map status to the
+/// caller's callback, then frees the request.
 fn mapReadDone(status: wgpu.WGPUMapAsyncStatus, _: wgpu.WGPUStringView, userdata1: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
     const req: *MapReadRequest = @ptrCast(@alignCast(userdata1.?));
     req.on_ready(req.buffer, status == wgpu.WGPUMapAsyncStatus_Success, req.user);
     gpa.destroy(req);
 }
 
+/// The callback runs from device event processing, since the request uses the allow-process-events
+/// mode. The one exception is a request that cannot be allocated: the callback then runs at once
+/// with false.
 fn mapBufferRead(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer, offset: usize, size: usize,
                  on_ready: ?*const fn (ke.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
     const cb = on_ready orelse return;
@@ -1463,6 +1585,7 @@ fn unmapBuffer(_: [*c]ke.ke_gpu_device, h: ke.ke_gpu_buffer) callconv(.c) void {
     wgpu.wgpuBufferUnmap(@ptrFromInt(h));
 }
 
+/// A failed adapter limits query leaves `out` zeroed and sets no error.
 fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) callconv(.c) void {
     const p = @as(*ke.ke_gpu_capabilities, @ptrCast(out));
     p.* = std.mem.zeroes(ke.ke_gpu_capabilities);

@@ -29,8 +29,7 @@ extern "C"
     /// @param count     Number of entries.
     /// @param out_error Set when the callback rejects a value; the load fails with it.
     /// @return false when a key the callback owns carries a value it cannot map,
-    /// which fails the load. Only the callback holds that mapping, so only it can
-    /// tell a value apart from a typo.
+    /// which fails the load.
     typedef bool (*ke_component_apply_fn)(void                   *ctx,
                                           void                   *component,
                                           ke_variant_table_entry *entries,
@@ -57,23 +56,20 @@ extern "C"
     {
         void *handle;
 
-        /** [idiom] Superseded by the managed Ecs property (DI-injected IEcsRegistry), same name. */
+        /** [idiom] The ecs the world was created with. */
         ke_ecs         *(*ecs)(struct ke_world *self);
-        /** [idiom] Superseded by the managed Runtime property (DI-injected IRuntime), same name. */
+        /** [idiom] The runtime the world was created with. */
         ke_runtime     *(*runtime)(struct ke_world *self);
-        /** [idiom] Superseded by the managed SceneTree property, same name. */
+        /** [idiom] The scene tree the world was created with. */
         struct ke_scene_tree *(*scene_tree)(struct ke_world *self);
 
         /** Registers the table describing how a scene block's keys land in this
-         * component's memory. Pure data, so a component becomes authorable
-         * without anyone writing code for it in any language — the table is
-         * generated from the header that declares the struct.
+         * component's memory.
          *
          * Runs before the apply callback registered for the same component, if
          * any: the table covers every field it can describe, the callback is
          * left with what a description cannot express (a unit conversion, an
-         * enum spelled as a string). Borrowed, and must outlive the world;
-         * generated tables have static storage. */
+         * enum spelled as a string). Borrowed; must outlive the world. */
         bool (*register_component_fields)(struct ke_world          *self,
                                           ke_component_id           cid,
                                           const ke_component_field *fields,

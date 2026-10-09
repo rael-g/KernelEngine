@@ -316,7 +316,7 @@
           "name": "rotation",
           "type": "float",
           "tags": [],
-          "doc": "Radians, CCW positive; a scene authors degrees."
+          "doc": "Radians, CCW positive."
         },
         {
           "name": "scale",
@@ -355,7 +355,7 @@
     },
     {
       "name": "ke_body2d_component",
-      "doc": "A 2D rigid body. Pose and motion are stored here because the simulation owns them between ticks; the node\u0027s own transform2d is written back from this component each tick by the physics plugin\u0027s own system, so what a script reads and what the hierarchy composes are the same two dimensions the body moves in. The same system creates and destroys the underlying body by reconciling this component against the world, so the entity is the identity and a script never acquires, threads, or releases a handle.",
+      "doc": "A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle.",
       "tags": [
         "node:Body2D",
         "base:Node2D"
@@ -403,7 +403,7 @@
           "name": "fixed_rotation",
           "type": "_Bool",
           "tags": [],
-          "doc": "Keeps the body\u0027s angle fixed against every torque, including contacts. What anything that must stay upright sets \u2014 characters, projectiles."
+          "doc": "Keeps the body\u0027s angle fixed against every torque, including contacts."
         },
         {
           "name": "body",
@@ -411,13 +411,13 @@
           "tags": [
             "idiom"
           ],
-          "doc": "The plugin\u0027s body for this entity, assigned when it reconciles the component. Authoring it would name a body the world does not own."
+          "doc": "The body for this entity, assigned when the component is reconciled. Callers do not write it."
         }
       ]
     },
     {
       "name": "ke_collider2d_component",
-      "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. Named for what it holds \u2014 a kind, extents, density, friction, restitution \u2014 rather than for a shape it is not. It is a node of its own rather than a field on the body because it has an offset the body does not, and because a body may carry several. The physics plugin\u0027s own system attaches the fixture by reconciling this component against the hierarchy, so a script never names a body.",
+      "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. The fixture is attached by reconciling this component against the hierarchy. A caller never names a body.",
       "tags": [
         "node:Collider2D",
         "base:Node2D"
@@ -489,7 +489,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "Whether the fixture has been attached to its body. Set by the plugin once the ancestor body exists; authoring it would claim a fixture the world does not have."
+          "doc": "Whether the fixture has been attached to its body. Set once the ancestor body exists. Callers do not write it."
         }
       ]
     }
@@ -497,7 +497,7 @@
   "vtables": [
     {
       "name": "ke_physics_2d",
-      "doc": "ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a game wanting multiple worlds creates multiple instances. Concrete implementations come from plugins. Not thread-safe \u2014 call all methods on the same thread.",
+      "doc": "A 2D rigid-body physics world. One instance is one world; several worlds take several instances. Not thread-safe \u2014 call all methods on the same thread.",
       "tags": [],
       "fields": [
         {
@@ -604,7 +604,7 @@
           "name": "add_box_fixture",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin. The offset is what lets one body carry several shapes in different places \u2014 a character\u0027s feet and torso, a paddle\u0027s rounded ends.",
+          "doc": "Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin.",
           "return_doc": null,
           "params": [
             {
@@ -778,7 +778,7 @@
           "name": "set_body_position",
           "returns": "void",
           "tags": [],
-          "doc": "Teleports the body. Skips collision response \u2014 prefer apply_impulse for dynamic moves.",
+          "doc": "Teleports the body and skips collision response.",
           "return_doc": null,
           "params": [
             {
@@ -874,7 +874,7 @@
           "name": "set_body_fixed_rotation",
           "returns": "void",
           "tags": [],
-          "doc": "Locks or unlocks the body\u0027s rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked. Needed by anything that must stay upright \u2014 characters, projectiles, and any box whose collisions would otherwise set it spinning.",
+          "doc": "Locks or unlocks the body\u0027s rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked.",
           "return_doc": null,
           "params": [
             {
@@ -896,7 +896,7 @@
           "name": "set_body_gravity_scale",
           "returns": "void",
           "tags": [],
-          "doc": "Scales world gravity for this body alone. 1 leaves it at the world\u0027s value, 0 makes the body weightless, and a negative value makes it fall upward. What a floating pickup or a balloon sets, rather than each such body needing its own world.",
+          "doc": "Scales world gravity for this body alone. 1 leaves it at the world\u0027s value, 0 makes the body weightless, and a negative value makes it fall upward.",
           "return_doc": null,
           "params": [
             {

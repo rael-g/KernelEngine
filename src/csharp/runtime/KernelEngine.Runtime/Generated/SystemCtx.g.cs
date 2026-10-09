@@ -39,7 +39,7 @@ public unsafe partial class SystemCtx : IDisposable, INativeSystemCtx
         _borrowed = borrowed;
     }
 
-    /// <summary>The system body's only path to component memory. Returns the resolved archetype segments for the system's query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call: the segments were resolved single-threaded before the wave, because an ECS iterator allocates from storage shared across the wave's parallel systems. Returns NULL for an out-of-range index or a system that declared no queries.</summary>
+    /// <summary>The system body's only path to component memory. Returns the resolved archetype segments for the system's query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call. Returns NULL for an out-of-range index or a system that declared no queries.</summary>
     public ReadOnlySpan<ke_ecs_segment> View(uint queryIndex)
     {
         nuint countLocal = 0;
@@ -47,7 +47,7 @@ public unsafe partial class SystemCtx : IDisposable, INativeSystemCtx
         return front == null ? default : new ReadOnlySpan<ke_ecs_segment>(front, (int)countLocal);
     }
 
-    /// <summary>Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1, so a body written against this reads the whole set without asking whether it was sliced.</summary>
+    /// <summary>Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1.</summary>
     public (uint Index, uint Count) Slice()
     {
         uint index;

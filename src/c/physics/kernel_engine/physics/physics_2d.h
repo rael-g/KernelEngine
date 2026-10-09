@@ -46,9 +46,8 @@ extern "C"
     } ke_body_state_2d;
 
     /**
-     * ABI-stable vtable for a 2D rigid-body physics world. One instance == one world; a
-     * game wanting multiple worlds creates multiple instances. Concrete implementations
-     * come from plugins. Not thread-safe — call all methods on the same thread.
+     * A 2D rigid-body physics world. One instance is one world; several worlds take
+     * several instances. Not thread-safe — call all methods on the same thread.
      */
     typedef struct ke_physics_2d
     {
@@ -77,8 +76,7 @@ extern "C"
 
         /**
          * Attaches a box fixture, sized by its half-extents and placed at the given offset
-         * from the body origin. The offset is what lets one body carry several shapes in
-         * different places — a character's feet and torso, a paddle's rounded ends.
+         * from the body origin.
          * @param half_w [vector2:half_extents]
          * @param offset_x [vector2:offset]
          * @param offset_angle Radians, CCW positive, about the offset center.
@@ -110,7 +108,7 @@ extern "C"
         void (*get_body_state)(struct ke_physics_2d *self, ke_body_2d body, ke_body_state_2d *out);
 
         /**
-         * Teleports the body. Skips collision response — prefer apply_impulse for dynamic moves.
+         * Teleports the body and skips collision response.
          * @param x [vector2:position]
          */
         void (*set_body_position)(struct ke_physics_2d *self, ke_body_2d body, float x, float y, float angle);
@@ -130,16 +128,12 @@ extern "C"
         /**
          * Locks or unlocks the body's rotation. A locked body keeps its current angle and
          * ignores every torque, including the one a contact imparts. Bodies start unlocked.
-         * Needed by anything that must stay upright — characters, projectiles, and any box
-         * whose collisions would otherwise set it spinning.
          */
         void (*set_body_fixed_rotation)(struct ke_physics_2d *self, ke_body_2d body, bool fixed);
 
         /**
          * Scales world gravity for this body alone. 1 leaves it at the world's value, 0
-         * makes the body weightless, and a negative value makes it fall upward. What a
-         * floating pickup or a balloon sets, rather than each such body needing its own
-         * world.
+         * makes the body weightless, and a negative value makes it fall upward.
          */
         void (*set_body_gravity_scale)(struct ke_physics_2d *self, ke_body_2d body, float scale);
 

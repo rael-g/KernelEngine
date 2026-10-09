@@ -1,3 +1,17 @@
+//! Implements the view-space contract once, for both handednesses. Each factory hands `create` the
+//! handedness it fixes; the `State` that `create` allocates stores it beside the vtable, and every
+//! slot recovers it from the handle and picks the matching zmath function. The factories differ
+//! in nothing else.
+//!
+//! Points and directions reach the matrix builders as vectors told apart by their homogeneous
+//! component. A camera transform is turned into a view by reading its axes and translation
+//! directly, with a look at the origin as the fallback for a transform that has no rotation.
+//! Projections follow the clip convention given on each call, so the same vtable serves any
+//! framebuffer and depth range.
+//!
+//! Slots report no errors: a null input makes a slot return without writing. The only failure the
+//! file reports is the allocation in `create`, through the out_error parameter.
+
 const std = @import("std");
 const zm = @import("zmath");
 
@@ -10,8 +24,11 @@ const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
+/// The handedness a factory fixes. Only `create` stores it, and every slot switches on it.
 const Handedness = enum { right, left };
 
+/// The allocation behind one handle, freed by `destroy`. `api` is the vtable the handle's `ref`
+/// points at, and its `handle` field points back here, which is how a slot finds `hand`.
 const State = struct {
     api: c.ke_view_space,
     hand: Handedness,
@@ -21,15 +38,21 @@ fn stateOf(self: *c.ke_view_space) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// Packs a vector into a lane with the given homogeneous component: one for a point, zero for a
+/// direction.
 fn vec(v: *const c.ke_vec3, w: f32) zm.Vec {
     return zm.f32x4(v.x, v.y, v.z, w);
 }
 
+/// Writes `m` through `out`. A null `out` is skipped, so a slot given no destination changes
+/// nothing.
 fn store(out: [*c]c.ke_mat4, m: zm.Mat) void {
     if (out == null) return;
     zm.storeMat(out.*.m[0..16], m);
 }
 
+/// Reports the factor that turns a view-space z into a distance in front of the camera: negative
+/// for right-handed, positive for left-handed. Returns zero when self or its handle is null.
 fn viewSpaceParams(self_in: ?*c.ke_view_space) callconv(.c) c.ke_view_space_params {
     const self = self_in orelse return .{ .depth_from_view_z = 0.0 };
     if (self.handle == null) return .{ .depth_from_view_z = 0.0 };
@@ -39,6 +62,9 @@ fn viewSpaceParams(self_in: ?*c.ke_view_space) callconv(.c) c.ke_view_space_para
     } };
 }
 
+/// Builds a view matrix from an eye point, a forward direction and an up direction, with the
+/// look-to function of the handedness. Returns without writing when self, its handle or any of
+/// the three inputs is null.
 fn viewSpaceLookTo(
     self_in: ?*c.ke_view_space,
     eye: [*c]const c.ke_vec3,
@@ -57,6 +83,9 @@ fn viewSpaceLookTo(
     });
 }
 
+/// Builds a view matrix from an eye point, a target point and an up direction, with the look-at
+/// function of the handedness. Returns without writing when self, its handle or any of the three
+/// inputs is null.
 fn viewSpaceLookAt(
     self_in: ?*c.ke_view_space,
     eye: [*c]const c.ke_vec3,
@@ -75,6 +104,10 @@ fn viewSpaceLookAt(
     });
 }
 
+/// Builds a view matrix from a camera's world matrix: the eye is its translation, up is its second
+/// axis, and the facing is its third axis, negated for right-handed. A matrix whose off-diagonal
+/// rotation elements are all near zero looks at the origin from the eye with world up instead.
+/// Returns without writing when self, its handle or the matrix is null.
 fn viewSpaceFromTransform(
     self_in: ?*c.ke_view_space,
     camera_world: [*c]const c.ke_mat4,
@@ -110,12 +143,17 @@ fn viewSpaceFromTransform(
     });
 }
 
+/// Applies the adjustment zmath leaves to the caller: negates the vertical scale of `p_in` when
+/// `y_flip` of the clip convention is set.
 fn intoClip(p_in: zm.Mat, clip: c.ke_ndc_convention) zm.Mat {
     var p = p_in;
     if (clip.y_flip != 0) p[1][1] = -p[1][1];
     return p;
 }
 
+/// Builds a perspective projection of the handedness, in the zero-to-one depth range when
+/// `z_zero_to_one` of the clip convention is set and in the GL range otherwise, then applies
+/// `intoClip`. Returns without writing when self, its handle or the clip convention is null.
 fn viewSpacePerspective(
     self_in: ?*c.ke_view_space,
     fov_y: f32,
@@ -142,6 +180,9 @@ fn viewSpacePerspective(
     store(out_proj, intoClip(p, clip));
 }
 
+/// Builds an orthographic projection of the handedness, with the depth range and the vertical flip
+/// chosen as `viewSpacePerspective` does. Returns without writing when self, its handle or the
+/// clip convention is null.
 fn viewSpaceOrthographic(
     self_in: ?*c.ke_view_space,
     width: f32,
@@ -168,12 +209,18 @@ fn viewSpaceOrthographic(
     store(out_proj, intoClip(p, clip));
 }
 
+/// Frees the `State` that `create` allocated. After it returns, the vtable that lived inside that
+/// `State` is gone, so any `ref` taken from the handle no longer points at live memory.
 fn destroy(self_in: ?*c.ke_view_space) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     heap.gpa.destroy(stateOf(self));
 }
 
+/// Allocates the `State` for the handedness, wires every vtable slot, and returns the handle whose
+/// `ref` is that vtable and whose `destroy` is `destroy`. When the allocation fails it sets an
+/// out-of-memory error on the out_error parameter and returns a null handle, leaving nothing
+/// allocated.
 fn create(hand: Handedness, out_error: [*c][*c]c.ke_error) c.ke_view_space_handle {
     const null_handle = std.mem.zeroes(c.ke_view_space_handle);
 
@@ -193,12 +240,14 @@ fn create(hand: Handedness, out_error: [*c][*c]c.ke_error) c.ke_view_space_handl
     return .{ .ref = &s.api, .destroy = destroy };
 }
 
+/// Creates a right-handed view space through `create`.
 export fn ke_view_space_rh_create(
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_view_space_handle {
     return create(.right, out_error);
 }
 
+/// Creates a left-handed view space through `create`.
 export fn ke_view_space_lh_create(
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_view_space_handle {

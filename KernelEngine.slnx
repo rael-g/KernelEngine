@@ -41,12 +41,12 @@
     <Project Path="src/csharp/logger/KernelEngine.Logger/KernelEngine.Logger.csproj" />
     <Project Path="src/csharp/view/KernelEngine.View/KernelEngine.View.csproj" />
     <Project Path="src/csharp/kabic/Kabic.Core/Kabic.Core.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Frontend/Kabic.Frontend.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.CSharpBackend/Kabic.CSharpBackend.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.Reader/Kabic.Reader.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.CSharp/Kabic.CSharp.csproj" />
     <Project Path="src/csharp/kabic/Kabic.Pipeline/Kabic.Pipeline.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.ClangSharpBackend/Kabic.ClangSharpBackend.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.Bindings/Kabic.Bindings.csproj" />
     <Project Path="src/csharp/kabic/Kabic.Numerics/Kabic.Numerics.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Packs/Kabic.Packs.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.Conventions/Kabic.Conventions.csproj" />
     <Project Path="src/csharp/kabic/Kabic.Cli/Kabic.Cli.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input/KernelEngine.Input.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs/KernelEngine.Ecs.csproj" />

@@ -22,9 +22,8 @@ typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
 /// observable before then. A caller needing a change visible at once uses ke_ecs, which
 /// mutates immediately.
 ///
-/// Recording is what makes these operations callable from code that must not touch the
-/// world: a system body running beside other systems records, and the runtime applies
-/// every body's queue while nothing else runs.
+/// Recording never touches the world, so these operations may be called while other code
+/// reads it. The queue is applied while nothing else runs.
 ///
 /// An implementation that cannot accept an operation fails it with the reason in
 /// `out_error` and leaves the queue unchanged.

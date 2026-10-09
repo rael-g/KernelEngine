@@ -16,6 +16,6 @@ public interface IWindow : IDisposable
     /// <summary>Retrieves the current client-area size in pixels.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     (int Width, int Height) GetSize();
-    /// <summary>Returns the platform-specific native handle (HWND, X11 Window, ...).</summary>
+    /// <summary>Returns the platform-specific native window handle.</summary>
     nint GetNativeHandle();
 }

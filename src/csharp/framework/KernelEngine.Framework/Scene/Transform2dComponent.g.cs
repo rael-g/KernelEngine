@@ -14,7 +14,7 @@ public partial struct Transform2dComponent
     public const string Name = "transform2d";
 
     public Vector2 Position;
-    /// <summary>Radians, CCW positive; a scene authors degrees.</summary>
+    /// <summary>Radians, CCW positive.</summary>
     public float Rotation;
     public Vector2 Scale;
     /// <summary>Where the plane sits along Z.</summary>

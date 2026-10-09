@@ -3,7 +3,7 @@
   "structs": [
     {
       "name": "ke_vertex",
-      "doc": "Per-vertex data expected by ke_render::create_mesh.",
+      "doc": "Per-vertex data of a mesh, as uploaded.",
       "tags": [
         "value"
       ],

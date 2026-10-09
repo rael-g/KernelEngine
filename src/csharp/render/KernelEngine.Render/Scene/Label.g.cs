@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A screen-space text label. Text/anchor/offset/color/font are the caller's input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick by the "render.ui.labels" system and read by "render.ui" (KE_PHASE_RENDER) to draw them — the same sim-writes/render-reads split every other render component uses, so there is no per-glyph entity, no CPU-side accumulator, no pool to grow or reuse.</summary>
+/// <summary>A screen-space text label. Text, anchor, offset, color and font are the caller's input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick.</summary>
 [GeneratedNodeComponent(typeof(LabelComponent), "label")]
 public partial class Label : Node3D
 {
@@ -14,7 +14,7 @@ public partial class Label : Node3D
         _generatedState0 = LabelComponent.Default;
     }
 
-    /// <summary>Font file to draw with, baked by the "render.label.resolve" system.</summary>
+    /// <summary>Font file to draw with.</summary>
     [NativeField("Font", Component = typeof(LabelComponent))]
     public partial string Font { get; set; }
 

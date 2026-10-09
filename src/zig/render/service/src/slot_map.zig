@@ -1,3 +1,10 @@
+//! A generational store: handles are `u32` values packing a slot index with the slot's generation.
+//!
+//! `insert` reuses an index taken from the free list or appends a slot. `remove` advances the
+//! generation of the slot it retires, skipping zero, so a handle left over from an earlier occupant
+//! of the index stops resolving, and `get` compares generations before it touches a value.
+//! `forEach` walks the occupied slots in index order. Nothing is locked.
+
 const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
@@ -5,10 +12,13 @@ const c = rc.c;
 const handles = @import("handle").Handles(c);
 const GENERATION_FIRST: u32 = 1;
 
+/// A generational array of `T` that owns `slots` and `free`, both allocated through `alloc`.
 pub fn SlotMap(comptime T: type) type {
     return struct {
         const Self = @This();
 
+        /// A slot outlives its value: `occupied` is false while its index is on `free`, and
+        /// `generation` counts on through every removal. The payload of an empty slot is not read.
         const Slot = struct {
             payload: T,
             generation: u32,
@@ -23,11 +33,15 @@ pub fn SlotMap(comptime T: type) type {
             return .{ .slots = .empty, .free = .empty, .alloc = alloc };
         }
 
+        /// Frees `slots` and `free`. The values are not destroyed.
         pub fn deinit(self: *Self) void {
             self.slots.deinit(self.alloc);
             self.free.deinit(self.alloc);
         }
 
+        /// Stores the value and returns its handle. Returns `KE_HANDLE_NONE` and leaves the map
+        /// unchanged when the index does not fit the handle or when `slots` cannot grow. Nothing
+        /// is reported beyond that sentinel.
         pub fn insert(self: *Self, value: T) u32 {
             if (self.free.pop()) |idx| {
                 const s = &self.slots.items[idx];
@@ -41,6 +55,9 @@ pub fn SlotMap(comptime T: type) type {
             return handles.make(idx, GENERATION_FIRST);
         }
 
+        /// Returns null for the none handle, an index past the slots, an empty slot or a stale
+/// generation. The pointer points into `slots`, so it is valid only until an `insert` that must
+/// append.
         pub fn get(self: *Self, bits: u32) ?*T {
             if (bits == c.KE_HANDLE_NONE) return null;
             const idx = handles.index(bits);
@@ -50,6 +67,9 @@ pub fn SlotMap(comptime T: type) type {
             return &s.payload;
         }
 
+        /// Returns the value and retires the handle, or null when `get` would not resolve it.
+        /// Retires it even when the index cannot be pushed onto `free`. Then the index is never
+        /// reused and its slot stays unoccupied.
         pub fn remove(self: *Self, bits: u32) ?T {
             const idx = handles.index(bits);
             if (bits == c.KE_HANDLE_NONE or idx >= self.slots.items.len) return null;
@@ -63,6 +83,7 @@ pub fn SlotMap(comptime T: type) type {
             return payload;
         }
 
+        /// Calls the function on every occupied slot's value, in index order.
         pub fn forEach(self: *Self, ctx: anytype, comptime f: fn (@TypeOf(ctx), *T) void) void {
             for (self.slots.items) |*s| {
                 if (s.occupied) f(ctx, &s.payload);

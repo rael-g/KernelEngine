@@ -31,9 +31,8 @@ extern "C"
         void *handle;
 
         /**
-         * Registers a font's glyph table, deduped by `key` (same upload-key
-         * convention as ke_render_service's upload_* — a resident key retains and
-         * returns the existing handle without copying `glyphs` again). `glyphs` is
+         * Registers a font's glyph table, deduped by `key`: a resident key retains and
+         * returns the existing handle without copying `glyphs` again. `glyphs` is
          * copied; the caller may free its own copy after this returns.
          * KE_UI_FONT_NONE on failure.
          * @param key [utf8]

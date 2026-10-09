@@ -212,7 +212,7 @@
           "name": "rotation",
           "type": "float",
           "tags": [],
-          "doc": "Radians, CCW positive; a scene authors degrees."
+          "doc": "Radians, CCW positive."
         },
         {
           "name": "scale",

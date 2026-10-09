@@ -8,7 +8,7 @@ namespace Kabic.Zig;
 /// <param name="ImportPath">
 /// The path <c>@import</c> is given. Carried rather than derived from
 /// <paramref name="Module"/> so the directory layout of the generated modules stays a
-/// question for whatever drives the generator, not a rule compiled into the backend.
+/// question for whatever drives the generator, not a rule compiled into the writer.
 /// </param>
 /// <param name="IsStruct">
 /// Whether the owning domain declares it inside its ABI block. A struct is part of the

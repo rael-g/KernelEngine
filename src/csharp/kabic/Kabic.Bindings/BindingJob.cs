@@ -1,10 +1,20 @@
 using System.Text;
 
-namespace Kabic.ClangSharpBackend;
+namespace Kabic.Bindings;
 
 /// <summary>
-/// Everything ClangSharp is told to generate one binding assembly's raw surface. Paths are relative to <see cref="NativeDir"/>, which is also the working directory of the run.
+/// Everything ClangSharp is told to generate one binding assembly's raw surface. Paths are relative
+/// to <see cref="NativeDir"/>, which is also the working directory of the run.
 /// </summary>
+/// <remarks>
+/// <see cref="Print"/> writes the fields as the argument list of the generator. Each switch is
+/// written on its own line, as a double dash followed by its name, and each of its values follows
+/// on its own line. The output, namespace, traversal list, methods class, prefix and config and
+/// language switches are always written, even with no values. The library path, include
+/// directories, additional arguments, with-using mapping, remaps and excludes are written only
+/// when they are set or non-empty, and the with-using mapping only when the common namespace is
+/// set and differs from the namespace.
+/// </remarks>
 public sealed record BindingJob(
     string Name,
     string NativeDir,
@@ -23,6 +33,9 @@ public sealed record BindingJob(
     string CommonNamespace,
     string MethodsClass)
 {
+    /// <summary>
+    /// Returns the argument list of this job as text, one switch per line with its values after it.
+    /// </summary>
     public string Print()
     {
         var sb = new StringBuilder();

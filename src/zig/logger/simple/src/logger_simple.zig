@@ -1,3 +1,16 @@
+//! A logger that fans each event out to a set of sinks, and the console sink that writes to
+//! stderr. The logger is one `State` behind its `handle`: `ke_logger_create` zeroes it, wires the
+//! `log`, `flush` and `add_sink` slots, and returns a handle whose destroy function is
+//! `loggerDestroy`. `loggerAddSink` copies a sink into the next free place of `sinks`, up to a
+//! fixed capacity. `loggerLog`, `loggerFlush` and `loggerDestroy` walk the used places in the order
+//! the sinks were added, and `loggerLog` calls only the sinks whose minimum level the event
+//! reaches. Nothing is locked, so a sink runs on the thread that called the logger.
+//!
+//! The console sink, made by `ke_console_sink_create`, has no handle and the trace level as its
+//! minimum, so it admits every event. `consoleSinkLog` passes the event to `consoleSinkWrite`,
+//! which formats one line with `writeEvent` under the stderr lock and flushes it. Write failures
+//! are dropped, and the sink has nothing else to flush or release. `levelToString` gives the label.
+
 const std = @import("std");
 const testing = std.testing;
 
@@ -18,11 +31,17 @@ const E = @import("kerror").Errors(c);
 
 const MAX_SINKS = 8;
 
+/// Reached through the `handle` of the logger, allocated by `ke_logger_create` and freed by
+/// `loggerDestroy`. Only the first `sink_count` entries of `sinks` are in use; the rest are never
+/// read.
 const State = struct {
     sinks: [MAX_SINKS]c.ke_logger_sink,
     sink_count: c_int,
 };
 
+/// The destroy function of the handle `ke_logger_create` returns. Sinks are destroyed while the
+/// state still holds them; both allocations are freed on return, so the logger and its state are
+/// invalid afterwards.
 fn loggerDestroy(self: ?*c.ke_logger) callconv(.c) void {
     const logger = self orelse return;
     const s: *State = @ptrCast(@alignCast(logger.handle));
@@ -34,6 +53,8 @@ fn loggerDestroy(self: ?*c.ke_logger) callconv(.c) void {
     gpa.destroy(logger);
 }
 
+/// Calls the `log` function of each sink whose minimum level the event reaches. A sink without one
+/// is skipped, and a null logger or event does nothing.
 fn loggerLog(self: ?*c.ke_logger, event: [*c]const c.ke_log_event) callconv(.c) void {
     if (self == null or event == null) return;
     const s: *State = @ptrCast(@alignCast(self.?.handle));
@@ -46,6 +67,7 @@ fn loggerLog(self: ?*c.ke_logger, event: [*c]const c.ke_log_event) callconv(.c) 
     }
 }
 
+/// Calls the `flush` function of each sink that has one. A null logger does nothing.
 fn loggerFlush(self: ?*c.ke_logger) callconv(.c) void {
     const logger = self orelse return;
     const s: *State = @ptrCast(@alignCast(logger.handle));
@@ -55,6 +77,9 @@ fn loggerFlush(self: ?*c.ke_logger) callconv(.c) void {
     }
 }
 
+/// The `add_sink` slot. On success the logger keeps its own copy of the sink, and `loggerDestroy`
+/// will call that copy's destroy function. On failure the set is unchanged, `out_error` receives
+/// the error and the result is false.
 fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const logger = self orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -70,6 +95,8 @@ fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c
     return true;
 }
 
+/// Writes the event as one line of level label, tag and message. A null tag or message is written
+/// as empty text. Fails only with the writer's own error.
 fn writeEvent(writer: *std.Io.Writer, event: *const c.ke_log_event) std.Io.Writer.Error!void {
     const label = std.mem.span(levelToString(event.level));
     const tag: []const u8 = if (event.tag != null) std.mem.span(event.tag) else "";
@@ -77,6 +104,8 @@ fn writeEvent(writer: *std.Io.Writer, event: *const c.ke_log_event) std.Io.Write
     try writer.print("[{s}] {s}: {s}\n", .{ label, tag, message });
 }
 
+/// Writes one entry to stderr under the stderr lock and flushes it before returning. A failed write
+/// or flush is dropped, since the sink has nowhere to report it.
 fn consoleSinkWrite(event: *const c.ke_log_event) void {
     var buffer: [256]u8 = undefined;
     const locked = std.debug.lockStderr(&buffer);
@@ -86,20 +115,25 @@ fn consoleSinkWrite(event: *const c.ke_log_event) void {
     writer.flush() catch return;
 }
 
+/// The `log` function of the console sink. A null event does nothing.
 fn consoleSinkLog(self: ?*c.ke_logger_sink, event: [*c]const c.ke_log_event) callconv(.c) void {
     _ = self;
     if (event == null) return;
     consoleSinkWrite(&event.*);
 }
 
+/// Nothing to flush: `consoleSinkWrite` flushes stderr after every entry.
 fn consoleSinkFlush(self: ?*c.ke_logger_sink) callconv(.c) void {
     _ = self;
 }
 
+/// Nothing to release: the sink holds no handle and writes to the process's stderr.
 fn consoleSinkDestroy(self: ?*c.ke_logger_sink) callconv(.c) void {
     _ = self;
 }
 
+/// Returns the sink by value, with no handle and the trace level as its minimum, so the level
+/// filter of a logger it is added to admits every level the enum defines.
 export fn ke_console_sink_create() callconv(.c) c.ke_logger_sink {
     return .{
         .handle = null,
@@ -110,6 +144,7 @@ export fn ke_console_sink_create() callconv(.c) c.ke_logger_sink {
     };
 }
 
+/// The label of a level, or "UNKNOWN" for a value that is not one of the defined levels.
 fn levelToString(level: i32) [*c]const u8 {
     return switch (level) {
         c.KE_LOG_LEVEL_TRACE => "TRACE",
@@ -122,6 +157,9 @@ fn levelToString(level: i32) [*c]const u8 {
     };
 }
 
+/// Returns a handle whose `ref` is the new logger and whose `destroy` is `loggerDestroy`. If the
+/// state allocation fails, the logger is freed, the handle comes back with a null `ref` and a null
+/// `destroy`, and `out_error` receives an out-of-memory error.
 export fn ke_logger_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_logger_handle {
     const empty = c.ke_logger_handle{ .ref = null, .destroy = null };
 

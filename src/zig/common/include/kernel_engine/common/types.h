@@ -9,7 +9,7 @@ extern "C"
 #endif
 
     /// @brief ABI-stable boolean type. Use in vtable slots and struct fields that cross the C ABI
-    ///        boundary (e.g. P/Invoke from C#). Plain C `bool` is non-blittable in .NET.
+    ///        boundary, in place of plain C `bool`.
     typedef uint8_t ke_bool;
 
 #ifdef __cplusplus

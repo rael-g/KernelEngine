@@ -1,3 +1,24 @@
+//! The transparent forward pass draws the meshes whose material is blended, on top of the lit
+//! opaque result. The plugin exports one function, `ke_render_forward_create`, which builds a
+//! `ForwardModule`, registers `system` with the runtime and returns a handle owning the module.
+//! The module keeps no scene data between frames, only the GPU objects it created, the cubemap
+//! its frame group was built for and the list of collected draws; the scene is read through the
+//! system context each frame, by the component ids the factory was given.
+//!
+//! Creation does everything that can fail before the first frame. `setup` builds the layouts and
+//! the pipeline template, resolves the default material shader and requests one pipeline from it,
+//! creates the uniform buffers and the "hdr_opaque" target, and fills the pass io, the access list
+//! and the queries. A failed setup or a refused registration releases what was made through
+//! `destroyModule` and yields the empty handle.
+//!
+//! Each frame `system` does nothing when the scene has no camera. Otherwise it copies "hdr" into
+//! "hdr_opaque", so the blended materials can sample what lies behind them, fills `PerFrame` from
+//! the camera and the lights, and keeps the frame group matching the sky through
+//! `rebuildFrameBindGroup`. `collectDraws` selects the blended meshes the camera's cull mask
+//! admits and orders them farthest first, so blending composites back to front. A draw whose
+//! geometry or shader is missing is skipped. A pass that was begun is always ended, and a frame
+//! never reports failure to the runtime.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -8,14 +29,21 @@ const c = cimport.c;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
+/// The number of draws the pass can record in one frame, and the number of object slots
+/// `obj_uniform` is sized for.
 const MAX_DRAWS = 512;
+/// The byte distance between consecutive draw slots of `obj_uniform`; a draw's dynamic offset is
+/// its index times this.
 const UNIFORM_STRIDE = 256;
 
+/// One draw's transform record, uploaded into that draw's slot of `obj_uniform`.
 const PerObject = extern struct {
     mvp: [16]f32,
     model: [16]f32,
 };
 
+/// The uniform that `system` uploads whole into `frame_uniform` every frame. The buffer is created
+/// with this type's size.
 const PerFrame = extern struct {
     camera_pos: [4]f32,
     light_dir: [4]f32,
@@ -26,6 +54,9 @@ const PerFrame = extern struct {
     view: [16]f32,
 };
 
+/// A collected draw. `mesh` and `world` are borrowed pointers into the segment columns that
+/// `collectDraws` was given, not copies, so they are valid only while those segments are.
+/// `view_distance_sq` is the key `drawFartherFirst` sorts by.
 const Draw = struct {
     mesh: *const c.ke_mesh_component,
     world: *const c.ke_world_transform_component,
@@ -36,6 +67,9 @@ fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
     return a.view_distance_sq > b.view_distance_sq;
 }
 
+/// Called once per frame by `system` with the segments of its mesh query. Returns how many entries
+/// of `out` it filled. Those entries are sorted farthest first, and `system` records them in that
+/// order, so the blend composites back to front.
 fn collectDraws(
     core: *c.ke_render_service,
     cam: *const c.ke_camera_component,
@@ -64,6 +98,11 @@ fn collectDraws(
     return count;
 }
 
+/// The state of one pass. `ke_render_forward_create` allocates it on the heap and `destroyHandle`
+/// frees it, and nothing else takes ownership. `core`, `device` and `camera` are borrowed for its
+/// whole life and never released here. The GPU objects are made by `setup` and released by
+/// `destroyModule`, and `frame_bind_group` is replaced whenever the environment cubemap changes.
+/// Several fields point into the struct itself, so it must not be moved after `setup`.
 const ForwardModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -100,6 +139,11 @@ const ForwardModule = struct {
     queries_terms: [7]c.ke_component_access = undefined,
     queries: [5]c.ke_query_decl = undefined,
 
+    /// Loads the vertex and fragment shaders of the pass for the material shader named `shader`
+    /// and stores them in `pipeline_template`. `setup` calls it for the default material, and
+    /// `system` calls it for each draw before it fetches that draw's pipeline. Returns false when
+    /// a load fails or the name does not fit the buffer it is formatted into. It reports nothing:
+    /// `setup` turns the false into an error, and `system` skips the draw.
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
         var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
         const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
@@ -117,6 +161,9 @@ const PASS_NAME = "forward";
 const DEFAULT_MATERIAL_SHADER = "standard";
 const MAX_SHADER_QUALIFIED = 128;
 
+/// Writes one error-level line tagged "render_forward" when both a logger and an error are given,
+/// and does nothing otherwise. The error is read, not freed or cleared. The line is dropped, not
+/// cut, when its text does not fit the buffer it is formatted in.
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
     const lg = logger orelse return;
     const e = err orelse return;
@@ -130,6 +177,11 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
     return @alignCast(@ptrCast(user.?));
 }
 
+/// Replaces `frame_bind_group` with a group over `frame_uniform`, the "hdr_opaque" view, the
+/// shadow map view (or the white texture when no "shadow_map" view exists), the "shadow_lvp"
+/// buffer, and the environment cubemap, which is the black cube when `ibl_enabled` is false.
+/// `setup` calls it once, and `system` calls it when the skybox's cubemap changes. A creation
+/// failure goes to `logGpuError`, and `frame_bind_group` then holds whatever creation returned.
 fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const dev = fwd.device;
     const core = fwd.core;
@@ -166,6 +218,9 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame bind group");
 }
 
+/// The render-phase system that `ke_render_forward_create` registers. The runtime calls it on the
+/// worker that `pinned_thread` names, as that factory set it. It returns true on every path. Once
+/// `begin_pass` has returned a pass context, every path reaches `end_pass`.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const fwd = moduleOf(user);
     const core = fwd.core;
@@ -275,6 +330,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
+/// Called once by `ke_render_forward_create` on a module that still has its default fields. On
+/// failure it returns false with `out_error` set, and leaves the handles it had already made in
+/// the module, where `destroyModule` finds and releases them.
 fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          render_camera: *c.ke_render_camera, logger: ?*c.ke_logger, ibl_enabled: bool,
          mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
@@ -469,6 +527,10 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+/// Releases the bind groups, buffers and layouts the module holds, skipping any handle still
+/// invalid, so it also works after a partial `setup`. It does not free the module, and it does not
+/// release the pipeline or the "hdr_opaque" resource, which `setup` obtained from the render
+/// service.
 fn destroyModule(fwd: *const ForwardModule) void {
     const dev = fwd.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
@@ -480,12 +542,19 @@ fn destroyModule(fwd: *const ForwardModule) void {
     if (fwd.obj_bgl != invalid) dev.destroy_bind_group_layout.?(dev, fwd.obj_bgl);
 }
 
+/// The `destroy` slot of the handle that `ke_render_forward_create` returns. It is the only place
+/// that frees a module created successfully.
 fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
     const fwd: *ForwardModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(fwd);
     gpa.destroy(fwd);
 }
 
+/// Factory declared in the plugin's forward_create.h. On success the returned handle's `ref` is the
+/// module, and its `destroy` must be called to release it. On failure `ref` is null and the module
+/// and its GPU objects are released. A null argument returns the null handle without setting
+/// `out_error`. A failure in `setup` sets it, and so does a failed registration, which passes
+/// `out_error` on to `register_system`.
 export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                     logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,

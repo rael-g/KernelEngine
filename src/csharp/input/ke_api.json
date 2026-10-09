@@ -2,7 +2,7 @@
   "enums": [
     {
       "name": "ke_input_action",
-      "doc": "Direction of a key or mouse-button transition, as reported to the ke_input sinks by a window backend.",
+      "doc": "Direction of a key or mouse-button transition.",
       "values": [
         {
           "name": "KE_INPUT_ACTION_RELEASE",
@@ -733,7 +733,7 @@
   "structs": [
     {
       "name": "ke_input_snapshot",
-      "doc": "Frozen snapshot of all input state for a single frame. Passed from the input poll to its readers so reads are consistent and thread-safe. The key fields are bitsets. Read them through the snapshot_is_* slots of ke_input rather than indexing directly: the packing is a detail of this contract, and a caller that reimplements it silently breaks if the packing ever changes.",
+      "doc": "Frozen snapshot of all input state for a single frame. Passed from the input poll to its readers so reads are consistent and thread-safe. The key fields are bitsets. Read them through the snapshot_is_* slots of ke_input rather than indexing them directly; the bit packing is not part of the contract.",
       "tags": [],
       "fields": [
         {
@@ -812,7 +812,7 @@
     },
     {
       "name": "ke_input_event",
-      "doc": "One discrete input event captured during the input poll. Flat layout (no anonymous unions) for friction-free C# P/Invoke binding. Field interpretation depends on kind: - KEY_DOWN / KEY_UP: code = a ke_key value - MOUSE_BUTTON_DOWN/UP: code = button index - MOUSE_MOVE: x, y = absolute cursor position - MOUSE_SCROLL: x, y = scroll delta x, y",
+      "doc": "One discrete input event captured during the input poll. Field interpretation depends on kind: - KEY_DOWN / KEY_UP: code = a ke_key value - MOUSE_BUTTON_DOWN/UP: code = button index - MOUSE_MOVE: x, y = absolute cursor position - MOUSE_SCROLL: x, y = scroll delta x, y",
       "tags": [],
       "fields": [
         {

@@ -1,3 +1,14 @@
+//! The tonemap pass is the render-phase system "render.tonemap". Each frame it draws one
+//! full-screen triangle that samples the "hdr" target and writes the "backbuffer" target through
+//! the shader named "tonemap", with no vertex input and no depth test.
+//!
+//! `TonemapModule` carries the whole pass. `ke_render_tonemap_create` allocates it, `setup` loads
+//! the shader, creates the layout, fills the pipeline parameters and asks the service for the
+//! pipeline once so a failure surfaces at creation, and only then is `system` registered. The bind
+//! group is the one object created per frame, because the "hdr" view is read from the pass each
+//! time. A failed step or a refused registration returns an empty handle after `destroyModule`,
+//! which releases only the handles that are valid; `destroyHandle` releases the same way.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -7,6 +18,10 @@ const c = cimport.c;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
+/// The state of one tonemap pass. The factory allocates it and `destroyHandle` frees it. The
+/// runtime receives it as the context of `system` at registration. `io` points into `reads` and
+/// `writes` of this same struct, which stays valid because the module is never moved after
+/// allocation.
 pub const TonemapModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -22,6 +37,9 @@ pub const TonemapModule = struct {
     access: [2]c.ke_component_access = undefined,
 };
 
+/// Writes one error line to the logger, for a failure `system` has to report while it draws. Does
+/// nothing when the logger or the error is absent, and drops a message that does not fit its
+/// buffer.
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
     const lg = logger orelse return;
     const e = err orelse return;
@@ -35,6 +53,10 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
     return @alignCast(@ptrCast(user.?));
 }
 
+/// The render-phase body that `ke_render_tonemap_create` registers, called by the runtime with the
+/// module as its context. A frame in which the service begins no pass returns true without drawing.
+/// When the bind group cannot be created, the pass is ended, and the error output receives
+/// `KE_ERROR_NOT_INITIALIZED` with the bind group error as its cause; the body then returns false.
 fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const tm = moduleOf(user);
     const core = tm.core;
@@ -74,6 +96,9 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
     return true;
 }
 
+/// Fills the module during `ke_render_tonemap_create`, before `system` is registered. A failed
+/// shader load returns false before the layout exists. A failed pipeline request destroys the
+/// layout here and then returns false. The caller releases the module after any false return.
 fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          logger: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) bool {
     tm.core = core;
@@ -135,6 +160,8 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+/// Releases the bind group of the last frame and the layout, each only when it is valid. Runs from
+/// `destroyHandle` and from the failure paths of `ke_render_tonemap_create`.
 fn destroyModule(tm: *const TonemapModule) void {
     const dev = tm.device;
     if (tm.bind_group != c.KE_GPU_INVALID_HANDLE)
@@ -143,12 +170,19 @@ fn destroyModule(tm: *const TonemapModule) void {
         dev.destroy_bind_group_layout.?(dev, tm.bgl);
 }
 
+/// The `destroy` slot of the handle `ke_render_tonemap_create` returns. It releases the GPU objects
+/// and frees the module; a null argument is ignored.
 fn destroyHandle(self: ?*c.ke_render_tonemap) callconv(.c) void {
     const tm: *TonemapModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(tm);
     gpa.destroy(tm);
 }
 
+/// The factory declared in tonemap_create.h. A null runtime, service or device returns a handle
+/// with a null reference and leaves the error output untouched, as does a failed allocation. A
+/// failed shader load in `setup`, or the runtime refusing `system`, sets the error output and
+/// returns the null handle. On success the runtime holds the module as the context of `system`, and
+/// the handle frees it.
 export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_tonemap_handle {

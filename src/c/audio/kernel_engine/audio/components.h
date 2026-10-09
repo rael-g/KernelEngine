@@ -13,8 +13,8 @@ extern "C"
 
     /// [node:AudioPlayer,base:Node3D]
     /// A single audio clip, loaded from the path the scene declares and played on
-    /// demand. The clip is one node's, not one system's: two AudioPlayer children
-    /// under the same parent are two clips, told apart by node name.
+    /// demand. Each node holds its own clip: two AudioPlayer children under the same
+    /// parent are two clips, told apart by node name.
     typedef struct ke_audio_player_component
     {
         /// Path to the audio file, resolved against the project's base directory.

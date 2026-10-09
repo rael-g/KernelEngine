@@ -8,6 +8,16 @@ namespace Kabic.Numerics;
 /// <c>float[2..4]</c>, and a run of parameters tagged <c>[vector2:name]</c> or <c>[vector3:name]</c>. C# spells
 /// them with <c>System.Numerics</c>, which the .NET base library already provides.
 /// </summary>
+/// <remarks>
+/// <c>Recognize</c> tries three shapes in order. A bare float array of at least two and at most
+/// the length of <c>LaneNames</c> is a vector, with its lanes named by <c>LaneNames</c>. Otherwise
+/// the non-vtable struct the type names is a matrix when it is tagged matrix and its only field is
+/// a float array of sixteen elements, and it is a quaternion or a vector when it is tagged so, has
+/// between two and four fields, and every field is a float. <c>GroupOf</c> opens a group on a
+/// parameter tagged vector2 or vector3, the first of the two tags it carries, and names the group
+/// after the value of that tag. <c>Project</c> spells vectors, quaternions and matrices for C# and
+/// for the field table, and returns null for any other pairing of language and shape.
+/// </remarks>
 public sealed class NumericsPack : IShapePack
 {
     /// <summary>The kinds this pack recognises.</summary>
@@ -16,6 +26,10 @@ public sealed class NumericsPack : IShapePack
     static readonly string[] LaneNames = ["x", "y", "z", "w"];
     static readonly Regex FloatArray = new(@"^float\s*\[(\d+)\]$", RegexOptions.Compiled);
 
+    /// <summary>
+    /// The shape <paramref name="cType"/> has when it is a bare float array or a non-vtable struct
+    /// of the model that this pack recognises; null for any other type.
+    /// </summary>
     public TypeShape? Recognize(ApiModel model, string cType)
     {
         var type = cType.Replace("const ", "").Replace("struct ", "").Trim();
@@ -35,6 +49,11 @@ public sealed class NumericsPack : IShapePack
         return new TypeShape(kind, s.Fields.Select(f => f.Name).ToArray());
     }
 
+    /// <summary>
+    /// The group <paramref name="parameter"/> opens when it is tagged vector2 or vector3; null when
+    /// it carries neither tag. Throws <see cref="InvalidOperationException"/> when the tag names no
+    /// vector.
+    /// </summary>
     public ParamGroup? GroupOf(ApiParam parameter)
     {
         var arity = parameter.Has("vector2") ? 2 : parameter.Has("vector3") ? 3 : 0;
@@ -45,6 +64,10 @@ public sealed class NumericsPack : IShapePack
         return new ParamGroup(name, new TypeShape(Vector, LaneNames[..arity]));
     }
 
+    /// <summary>
+    /// How <paramref name="language"/> spells <paramref name="shape"/>, or null when the pack has
+    /// no spelling for that shape in that language.
+    /// </summary>
     public string? Project(string language, TypeShape shape) => (language, shape.Kind, shape.Lanes.Count) switch
     {
         (Languages.CSharp, Vector, 2 or 3 or 4) => $"Vector{shape.Lanes.Count}",
@@ -55,8 +78,16 @@ public sealed class NumericsPack : IShapePack
         _ => null,
     };
 
+    /// <summary>
+    /// The namespaces <paramref name="language"/> imports for the projections: System.Numerics for
+    /// C# only.
+    /// </summary>
     public IReadOnlyList<string> Imports(string language) => language == Languages.CSharp ? ["System.Numerics"] : [];
 
+    /// <summary>
+    /// The libraries <paramref name="language"/> references for the projections; this pack names
+    /// none.
+    /// </summary>
     public IReadOnlyList<string> Libraries(string language) => [];
 }
 

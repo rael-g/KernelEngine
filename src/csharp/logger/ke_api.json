@@ -231,7 +231,7 @@
     {
       "name": "ke_console_sink_create",
       "returns": "ke_logger_sink",
-      "doc": "Builds a stateless sink that formats entries as \u0060[LEVEL] tag: message\u0060 and writes them to the process\u0027s standard error stream, flushing after every entry. Every language wants this as a default; native so none of them re-derive the format.",
+      "doc": "Builds a stateless sink that formats entries as \u0060[LEVEL] tag: message\u0060 and writes them to the process\u0027s standard error stream, flushing after every entry.",
       "return_doc": null,
       "params": []
     }

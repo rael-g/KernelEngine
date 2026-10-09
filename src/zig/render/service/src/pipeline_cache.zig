@@ -1,3 +1,20 @@
+//! Pipeline requests are answered at once and upgraded later: a new pipeline starts as a fallback
+//! that draws magenta, and becomes the real pipeline when the device finishes compiling it.
+//!
+//! A request is reduced to a `PsoKey`, the fields of its params that decide a pipeline. One `Entry`
+//! exists per key, holding the fallback, built synchronously from the caller's params with a
+//! magenta fragment module, and the real pipeline, requested asynchronously with those params. The
+//! device's callback publishes the real pipeline with a release store, and `Entry.current` returns
+//! it from then on, the fallback before that and after a pipeline reported as invalid.
+//!
+//! Lookups take no lock. The entries live in a copy-on-write `Snapshot`, an open-addressed table
+//! that is never changed once published. `PipelineCache.insert` builds a grown copy holding the new
+//! entry and swaps it in with a compare-and-swap, repeating the search when another insert wins.
+//! Replaced snapshots are retired rather than freed so a reader still searching one stays valid,
+//! and `PipelineCache.destroyAll` releases the entries, every snapshot and the shared fallback
+//! modules. `getOrCreatePipeline` drives all of it, and falls back to a synchronous, uncached
+//! pipeline when an allocation fails.
+
 const std = @import("std");
 const heap = @import("heap");
 const rc = @import("render_service.zig");
@@ -5,6 +22,9 @@ const c = rc.c;
 
 const MAX_COLOR_TARGETS = 8;
 
+/// The fields of a render pipeline params that decide which pipeline it is, copied so the key
+/// outlives the params. The entry names are copied, but the vertex buffer array is kept only by
+/// its address, so an identical array at another address makes another key.
 const PsoKey = struct {
     vertex_module: c.ke_gpu_shader_module,
     fragment_module: c.ke_gpu_shader_module,
@@ -54,6 +74,9 @@ fn copyEntry(dst: *[64]u8, src: [*c]const u8) void {
 
 const PipelineState = enum(u8) { pending, ready };
 
+/// One request for a distinct key. The fallback exists from creation; the real pipeline is written
+/// by the device's callback and is read only through `current`. An entry is freed by `destroyAll`,
+/// or by `getOrCreatePipeline` when another entry won its key.
 const Entry = struct {
     key: PsoKey,
     hash: u64,
@@ -61,11 +84,16 @@ const Entry = struct {
     real_pso: c.ke_gpu_pipeline,
     fallback_pso: c.ke_gpu_pipeline,
 
+    /// The acquire load pairs with the release store in `onRealPipelineReady`, so a reader that
+    /// sees the real pipeline as current also sees its handle.
     fn current(self: *const Entry) c.ke_gpu_pipeline {
         return if (self.state.load(.acquire) == .ready) self.real_pso else self.fallback_pso;
     }
 };
 
+/// Called by the device from its event pump once the asynchronous request made by
+/// `getOrCreatePipeline` finishes. An invalid pipeline is dropped, leaving the entry on its
+/// fallback.
 fn onRealPipelineReady(pso: c.ke_gpu_pipeline, user: ?*anyopaque) callconv(.c) void {
     const entry: *Entry = @ptrCast(@alignCast(user.?));
     if (pso == c.KE_GPU_INVALID_HANDLE) return;
@@ -78,6 +106,10 @@ const eqlKey = std.hash_map.getAutoEqlFn(PsoKey, void);
 
 const first_capacity = 16;
 
+/// A table of entries with open addressing and a count. Slots are written only while the snapshot
+/// is being built, which is what lets readers search a published one without a lock.
+/// `retired_next` is used only after the snapshot has been replaced, to link it onto the cache's
+/// retired list.
 const Snapshot = struct {
     slots: []?*Entry,
     count: usize,
@@ -99,6 +131,8 @@ const Snapshot = struct {
         heap.gpa.destroy(self);
     }
 
+    /// Probes from the hash's slot until an empty slot. `grownWith` grows a snapshot before it
+    /// fills, so an empty slot always ends the probe.
     fn find(self: *const Snapshot, hash: u64, key: *const PsoKey) ?*Entry {
         const mask = self.slots.len - 1;
         var i: usize = @intCast(hash & mask);
@@ -108,6 +142,7 @@ const Snapshot = struct {
         return null;
     }
 
+    /// Used only on a snapshot that no reader can see yet.
     fn place(self: *Snapshot, entry: *Entry) void {
         const mask = self.slots.len - 1;
         var i: usize = @intCast(entry.hash & mask);
@@ -116,6 +151,8 @@ const Snapshot = struct {
         self.count += 1;
     }
 
+    /// Never changes the old snapshot, which a reader may still be searching. The new one is
+    /// published only by `insert`.
     fn grownWith(self: ?*const Snapshot, entry: *Entry) ?*Snapshot {
         const have = if (self) |snap| snap.count else 0;
         var capacity: usize = if (self) |snap| snap.slots.len else first_capacity;
@@ -131,12 +168,17 @@ const Snapshot = struct {
     }
 };
 
+/// The outcome of `PipelineCache.insert`: the entry was published, another entry already held its
+/// key, or the grown snapshot could not be allocated.
 const Insert = union(enum) {
     published,
     existing: *Entry,
     failed,
 };
 
+/// Holds the current snapshot, the retired snapshots and the fallback modules of one render
+/// service. It is a field of the service's `CoreState`, and its contents are freed by
+/// `destroyAll`.
 pub const PipelineCache = struct {
     current: std.atomic.Value(?*Snapshot),
     retired: std.atomic.Value(?*Snapshot),
@@ -152,11 +194,15 @@ pub const PipelineCache = struct {
         return cache;
     }
 
+    /// Takes no lock: it reads the snapshot that is current when the pointer is loaded.
     fn find(self: *PipelineCache, hash: u64, key: *const PsoKey) ?*Entry {
         const snap = self.current.load(.acquire) orelse return null;
         return snap.find(hash, key);
     }
 
+    /// Publishes the entry unless another entry already holds its key, and returns that holder
+    /// instead. When another insert publishes first, the search repeats on the newer snapshot.
+    /// Returns the failed outcome when the grown snapshot cannot be allocated.
     fn insert(self: *PipelineCache, entry: *Entry) Insert {
         while (true) {
             const base = self.current.load(.acquire);
@@ -180,6 +226,9 @@ pub const PipelineCache = struct {
         }
     }
 
+    /// Frees the entries and their pipelines, every snapshot including the retired ones, and the
+    /// fallback modules. Each one is taken out of the cache before it is freed, so calling it
+    /// again frees nothing.
     pub fn destroyAll(self: *PipelineCache, device: *c.ke_gpu_device) void {
         if (self.current.swap(null, .acq_rel)) |snap| {
             for (snap.slots) |slot| {
@@ -202,6 +251,8 @@ pub const PipelineCache = struct {
     }
 };
 
+/// Every fallback of one target count shares one module, created on the first request for that
+/// count and destroyed by `destroyAll`.
 fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) c.ke_gpu_shader_module {
     const n = @max(@min(target_count, MAX_COLOR_TARGETS), 1);
     const slot = &st.pipeline_cache.magenta_fs[n - 1];
@@ -233,6 +284,8 @@ fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) c.ke_gpu_shader_m
     return made;
 }
 
+/// The result is returned as it is, even when the device failed to create it: nothing here or in
+/// `getOrCreatePipeline` checks it.
 fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_params) c.ke_gpu_pipeline {
     const p = @as(*const c.ke_gpu_render_pipeline_params, @ptrCast(params));
     var fallback_params = p.*;
@@ -241,6 +294,10 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_p
     return st.device.create_render_pipeline.?(st.device, &fallback_params);
 }
 
+/// Answers the render service's pipeline request. A key already in the table returns its current
+/// pipeline. A new key returns its fallback while the real pipeline compiles, and the same key
+/// returns the real pipeline once the device has delivered it. Only when the entry or the grown
+/// table cannot be allocated is the pipeline created synchronously, and then it is not cached.
 pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
     const st = rc.coreOf(self);
     const key = PsoKey.fromParams(params);

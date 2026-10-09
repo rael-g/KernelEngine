@@ -10,7 +10,6 @@ extern "C"
 #endif
 
     /// [view] Raw CPU-side mesh data returned by ke_asset_loader::load_model.
-    ///        Vertices are ready to pass directly to ke_render::create_mesh.
     typedef struct ke_mesh_data
     {
         ke_vertex *vertices;   ///< [array_of:vertex_count] Vertices with pos, normal, UV, tangent
@@ -22,7 +21,6 @@ extern "C"
     } ke_mesh_data;
 
     /// [view] Raw CPU-side material data returned by ke_asset_loader::load_model.
-    ///        Pass to ke_render::create_material after uploading textures.
     typedef struct ke_material_data
     {
         float   base_color_r, base_color_g, base_color_b, base_color_a;

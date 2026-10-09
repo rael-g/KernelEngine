@@ -12,8 +12,7 @@ extern "C"
 {
 #endif
 
-/// Opaque — the per-pass recording context
-/// (kernel_engine/render/service/pass_context.h).
+/// Opaque: the per-pass recording context.
 typedef struct ke_render_pass_ctx ke_render_pass_ctx;
 
 typedef struct ke_render_service ke_render_service;
@@ -65,7 +64,7 @@ struct ke_render_service
 {
     void *handle;
 
-    /// Declares a transient resource the core allocates and recycles.
+    /// Declares a transient resource the service allocates and recycles.
     /// @return The tag-component cid to place in a pass's access_list.
     ke_component_id (*declare)(struct ke_render_service *self,
                                const ke_render_resource_desc *desc, ke_error **out_error);
@@ -73,8 +72,7 @@ struct ke_render_service
     /// @return Its tag-component cid.
     ke_component_id (*import_texture)(struct ke_render_service *self, const char *name,
                                       ke_gpu_texture tex, ke_error **out_error);
-    /// Mints a tag cid under `name` with no GPU payload, for an ordering
-    /// dependency between two passes that carries no data of its own.
+    /// Mints a tag cid under `name` with no GPU payload.
     ke_component_id (*import_tag)(struct ke_render_service *self, const char *name,
                                   ke_error **out_error);
     /// Publishes an externally-owned GPU buffer under `name` for another pass to
@@ -105,15 +103,14 @@ struct ke_render_service
     ke_bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
-    /// @return A handle a ke_mesh_component references.
+    /// @return The handle of the uploaded mesh.
     /** @param key [utf8] Dedup cache key; required. */
     ke_mesh_handle (*upload_mesh)(struct ke_render_service *self, const char *key,
                                   const void *vertices, size_t vertices_size,
                                   const uint16_t *indices, uint32_t index_count,
                                   ke_error **out_error);
-    /// [try] Resolves a mesh handle to its GPU buffers (for a pass to bind +
-    /// draw). Returns false for a handle this service never uploaded, so a pass
-    /// skips the draw instead of binding whatever the out parameters held.
+    /// [try] Resolves a mesh handle to its GPU buffers. Returns false for a
+    /// handle this service never uploaded.
     /// @param out_vbo [out]
     /// @param out_ibo [out]
     /// @param out_index_count [out]
@@ -144,7 +141,7 @@ struct ke_render_service
                                           float distortion_strength,
                                           const char *shader,
                                           ke_error **out_error);
-    /// The per-material bind-group layout (descriptor set 1) a forward pipeline
+    /// The per-material bind-group layout (descriptor set 1) a pipeline
     /// must declare so its set-1 bind groups (from material_bind_group) are
     /// valid.
     ke_gpu_bind_group_layout (*material_layout)(struct ke_render_service *self);
@@ -161,7 +158,7 @@ struct ke_render_service
     ke_texture_handle (*upload_cubemap)(struct ke_render_service *self, const char *key,
                                         uint32_t face_size, const void *faces,
                                         ke_error **out_error);
-    /// The GPU view for a texture/cubemap handle (for a pass to bind it).
+    /// The GPU view for a texture/cubemap handle.
     ke_gpu_texture_view (*texture_view)(struct ke_render_service *self, ke_texture_handle h);
     /// The shared filtering sampler the core creates (linear, repeat).
     ke_gpu_sampler (*sampler)(struct ke_render_service *self);
@@ -217,9 +214,8 @@ struct ke_render_service
 
     /**
      * [try] Path-keyed probe for a resident mesh upload: on a hit, retains and
-     * writes the resident handle on the caller's behalf, so a loader can skip
-     * decoding a file whose upload is already resident. try_get_texture also
-     * serves cubemaps (shared cache).
+     * writes the resident handle to `out`. try_get_texture also serves cubemaps
+     * (shared cache).
      * @param key [utf8] Dedup cache key.
      * @param out [out] Receives the resident handle on a cache hit.
      */
@@ -241,7 +237,6 @@ struct ke_render_service
     /// is wanted.
     ke_texture_handle (*white_texture)(struct ke_render_service *self);
 
-    /// ── Shader loading (build-time compiled, runtime resolved) ─────────────
     /// Resolves a shader by logical NAME + STAGE to a device-ready module.
     ke_gpu_shader_module (*load_shader)(struct ke_render_service *self, const char *name,
                                         ke_gpu_shader_stage stage, ke_error **out_error);

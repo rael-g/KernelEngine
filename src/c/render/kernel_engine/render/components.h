@@ -24,7 +24,7 @@ extern "C"
         uint32_t cull_mask; ///< [default:4294967295]
     } ke_camera_component;
 
-    /** [node:DirectionalLight,base:Node3D,value] Directional light node. Init properties feed the per-frame light state the renderer consumes. */
+    /** [node:DirectionalLight,base:Node3D,value] Directional light node. Its properties give the light's direction, color, intensity and ambient term. */
     typedef struct ke_directional_light_component
     {
         ke_vec3 direction; ///< [default:0.2 1 0.5]
@@ -68,21 +68,19 @@ extern "C"
     } ke_skybox_component;
 
     /// [node:MeshRenderer,base:Node3D,value]
-    /// Renders a mesh with a material. `mesh`/`material` double as output:
-    /// the native "render.mesh.resolve" system (KE_PHASE_UPDATE,
-    /// src/zig/render/service/src/mesh_resolve.zig) fills them whenever
-    /// `primitive` names a known shape and/or the surface fields below have not
-    /// already resolved to a valid handle. A caller holding real handles just
-    /// writes them and leaves `primitive` empty — the resolve system only acts
-    /// where a handle is still invalid, so the two paths never conflict.
+    /// Renders a mesh with a material. `mesh` and `material` double as output:
+    /// the engine fills them, at KE_PHASE_UPDATE, whenever `primitive` names a
+    /// known shape and/or the surface fields below have not already resolved to
+    /// a valid handle. A caller holding real handles writes them and leaves
+    /// `primitive` empty; the engine only acts where a handle is still invalid.
     typedef struct ke_mesh_component
     {
         /// [name:mesh_handle]
         ke_mesh_handle     mesh;
         /// [name:material_handle]
         ke_material_handle material;
-        /// [idiom,name:mesh] Resolved by the scene loader's property-apply path into
-        /// `mesh`; a node authoring it directly would have the value overwritten.
+        /// [idiom,name:mesh] Resolved into `mesh` by the engine; a node authoring
+        /// `mesh` directly would have the value overwritten.
         char               primitive[32];
 
         ke_vec4  base_color; ///< [default:1 1 1 1,name:color]
@@ -98,7 +96,7 @@ extern "C"
 
     /// [node:Sprite2D,base:Node2D]
     /// A textured quad in the plane, resolved into geometry and a material by the
-    /// "render.sprite2d.resolve" system.
+    /// engine.
     typedef struct ke_sprite2d_component
     {
         /// Image to sample. Empty draws the plain tinted quad.
@@ -117,7 +115,7 @@ extern "C"
         uint32_t alpha_mode; ///< [default:0] ke_alpha_mode.
         float    alpha_cutoff; ///< [default:0.5]
 
-        /// [idiom] The image resolved from `texture`, assigned by the resolve system.
+        /// [idiom] The image resolved from `texture`.
         ke_texture_handle texture_handle;
 
         /// [idiom] Whether the quad this sprite draws through has been attached.

@@ -50,8 +50,8 @@
         .c_demo_14 = .{ .path = "examples/c/14_forward_mesh" },
         .c_demo_16 = .{ .path = "examples/c/16_forward_capture" },
         .docir = .{
-            .url = "https://github.com/rael-g/docir/archive/65d7f0aa615815cfd8d8a13e21c281ef2537828f.tar.gz",
-            .hash = "docir-0.1.0-dEniGqXEBwBRjRYHiUiOypImuSvWlXCXO0oZ4CT-SE1j",
+            .url = "https://github.com/rael-g/docir/archive/92fa1477310221be30e8781d582e02b905a6cfd0.tar.gz",
+            .hash = "docir-0.2.0-dEniGgTnCAB0aSs5nozhZqPcCNPRFnraLliHTUGGog_y",
         },
     },
     .paths = .{"."},

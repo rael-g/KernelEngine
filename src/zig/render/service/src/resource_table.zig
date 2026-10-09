@@ -1,6 +1,22 @@
+//! The named resources a pass can refer to: a table in `CoreState`, filled in call order.
+//!
+//! Every adder registers the name as a component with the service's ecs and appends one entry, or
+//! returns the invalid component id and changes nothing when the table is full. `declare` creates
+//! the texture and view itself and marks the entry transient; the import adders record handles the
+//! caller owns, with the view left invalid. No adder fills its error out-parameter. The lookups
+//! scan the table by name through `find` and answer an unknown name with the invalid id or handle
+//! of the field asked for, and `resourceBufferSize` with zero.
+
 const rc = @import("render_service.zig");
 const c = rc.c;
 
+/// Declares a texture resource: registers the name, creates a texture and its view on the device,
+/// and appends a transient entry that records the format and the clear value. A depth format gets
+/// a depth attachment, any other a color attachment. A size relative to the backbuffer is scaled
+/// from the size the service last read from the target. Entries made here are the only
+/// transient ones: `destroyCore` destroys the texture and view of transient entries and of no
+/// other entry. Returns the invalid component id when the table is full; a texture the device
+/// fails to create is not detected.
 pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resource_desc, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
     const st = rc.coreOf(self);
@@ -62,6 +78,8 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
     return cid;
 }
 
+/// Appends an entry for a texture owned by the caller, with no view. Returns the invalid component
+/// id when the table is full.
 pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.ke_gpu_texture, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
     const st = rc.coreOf(self);
@@ -81,6 +99,8 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
     return cid;
 }
 
+/// Appends an entry that names a resource with no handle, so passes can order on it. Returns the
+/// invalid component id when the table is full.
 pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
     const st = rc.coreOf(self);
@@ -100,6 +120,8 @@ pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [
     return cid;
 }
 
+/// Appends an entry for a buffer owned by the caller, recording its size. Returns the invalid
+/// component id when the table is full.
 pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c.ke_gpu_buffer, size: u64, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
     const st = rc.coreOf(self);
@@ -121,6 +143,8 @@ pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c
     return cid;
 }
 
+/// Appends an entry for a bind group and its layout, both owned by the caller. Returns the invalid
+/// component id when the table is full.
 pub fn importBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8, bg: c.ke_gpu_bind_group,
                        layout: c.ke_gpu_bind_group_layout, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     _ = out_error;
@@ -164,11 +188,14 @@ pub fn resourceBuffer(self: [*c]c.ke_render_service, name: [*c]const u8) callcon
     return r.buffer;
 }
 
+/// Returns the size recorded by `importBuffer`; zero for an unknown name and for an entry that is
+/// not a buffer.
 pub fn resourceBufferSize(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) u64 {
     const r = rc.coreOf(self).find(name) orelse return 0;
     return r.buffer_size;
 }
 
+/// Reports the size read from the target when the service was created. The target is not asked.
 pub fn backbufferSize(self: [*c]c.ke_render_service, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
     const st = rc.coreOf(self);
     if (out_w != null) out_w.* = st.backbuffer_w;
@@ -185,6 +212,8 @@ pub fn resourceBindGroupLayout(self: [*c]c.ke_render_service, name: [*c]const u8
     return r.bind_group_layout;
 }
 
+/// Asks the render target for its format on every call, not the format recorded for the
+/// backbuffer entry when the service was created.
 pub fn backbufferFormat(self: [*c]c.ke_render_service) callconv(.c) c.ke_gpu_texture_format {
     const st = rc.coreOf(self);
     return st.target.format.?(st.target);

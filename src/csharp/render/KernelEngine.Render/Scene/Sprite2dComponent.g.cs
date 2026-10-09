@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A textured quad in the plane, resolved into geometry and a material by the "render.sprite2d.resolve" system.</summary>
+/// <summary>A textured quad in the plane, resolved into geometry and a material by the engine.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct Sprite2dComponent
 {
@@ -28,7 +28,7 @@ public partial struct Sprite2dComponent
     /// <summary>ke_alpha_mode.</summary>
     public uint AlphaMode;
     public float AlphaCutoff;
-    /// <summary>The image resolved from `texture`, assigned by the resolve system.</summary>
+    /// <summary>The image resolved from `texture`.</summary>
     public KernelEngine.Render.TextureHandle TextureHandle;
     public byte Attached;
 

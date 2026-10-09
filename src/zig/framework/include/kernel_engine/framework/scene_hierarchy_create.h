@@ -30,8 +30,7 @@ extern "C"
     /// against `runtime`, reading the scene graph out of `ecs`. The
     /// transform/hierarchy components are resolved by the names a scene_tree
     /// already registers them under, so a scene_tree must exist on this ecs
-    /// first; creating a hierarchy without one is an error rather than a silent
-    /// no-op, since every later tick would quietly leave world matrices stale.
+    /// first; creating a hierarchy without one is an error.
     KE_FRAMEWORK_API ke_scene_hierarchy_handle ke_scene_hierarchy_create(
         ke_runtime *runtime,
         ke_ecs     *ecs,

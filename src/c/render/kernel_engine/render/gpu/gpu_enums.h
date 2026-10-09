@@ -200,7 +200,7 @@ typedef enum ke_gpu_binding_type
     KE_GPU_BINDING_TYPE_STORAGE_BUFFER,          ///< read-write storage (compute only)
     KE_GPU_BINDING_TYPE_STORAGE_TEXTURE,
     KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER, ///< read-only storage (usable in fragment)
-    KE_GPU_BINDING_TYPE_DEPTH_TEXTURE,           ///< depth-format texture, sampled/texel-fetched (e.g. deferred G-buffer depth)
+    KE_GPU_BINDING_TYPE_DEPTH_TEXTURE,           ///< depth-format texture, sampled or texel-fetched
 } ke_gpu_binding_type;
 
 typedef union ke_gpu_clear_value
@@ -210,7 +210,7 @@ typedef union ke_gpu_clear_value
 } ke_gpu_clear_value;
 
 /// Shader source language a device accepts. Query via
-/// `ke_gpu_device::shader_language`; the shader-build layer compiles to it.
+/// `ke_gpu_device::shader_language`.
 typedef enum ke_gpu_shader_language
 {
     KE_GPU_SHADER_LANG_WGSL  = 0,

@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A textured quad in the plane, resolved into geometry and a material by the "render.sprite2d.resolve" system.</summary>
+/// <summary>A textured quad in the plane, resolved into geometry and a material by the engine.</summary>
 [GeneratedNodeComponent(typeof(Sprite2dComponent), "sprite2d")]
 public partial class Sprite2D : Node2D
 {

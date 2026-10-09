@@ -199,7 +199,7 @@
           "name": "first_child",
           "returns": "ke_entity",
           "tags": [],
-          "doc": "The first of \u0060entity\u0060\u0027s children, or KE_ENTITY_INVALID when it has none. Paired with next_sibling this walks the child list a step at a time, which is the shape parenthood already has: it is an intrusive list, so answering with an array would mean building one on every call, and a caller after just the first child would pay for all of them.",
+          "doc": "The first of \u0060entity\u0060\u0027s children, or KE_ENTITY_INVALID when it has none. Paired with next_sibling this walks the child list one entry at a time.",
           "return_doc": null,
           "params": [
             {

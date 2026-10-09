@@ -3,7 +3,7 @@
   "structs": [
     {
       "name": "ke_mesh_data",
-      "doc": "Raw CPU-side mesh data returned by ke_asset_loader::load_model. Vertices are ready to pass directly to ke_render::create_mesh.",
+      "doc": "Raw CPU-side mesh data returned by ke_asset_loader::load_model.",
       "tags": [
         "view"
       ],
@@ -53,7 +53,7 @@
     },
     {
       "name": "ke_material_data",
-      "doc": "Raw CPU-side material data returned by ke_asset_loader::load_model. Pass to ke_render::create_material after uploading textures.",
+      "doc": "Raw CPU-side material data returned by ke_asset_loader::load_model.",
       "tags": [
         "view"
       ],
@@ -213,7 +213,7 @@
   "vtables": [
     {
       "name": "ke_asset_loader",
-      "doc": "ABI-stable vtable interface for loading 3D assets. Concrete implementations (e.g., Assimp) are provided as separate plugins.",
+      "doc": "Loads 3D assets into ke_model_data.",
       "tags": [
         "interface"
       ],
@@ -256,7 +256,7 @@
           "tags": [
             "releases:Model"
           ],
-          "doc": "Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.",
+          "doc": "Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.",
           "return_doc": null,
           "params": [
             {

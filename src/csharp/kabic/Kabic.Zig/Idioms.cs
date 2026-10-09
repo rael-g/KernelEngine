@@ -3,11 +3,23 @@ namespace Kabic.Zig;
 using Kabic;
 
 /// <summary>
-/// How an ABI symbol is spelled in Zig. Separate from the C# backend's namesake
+/// How an ABI symbol is spelled in Zig. Separate from the C# writer's namesake
 /// because the two languages disagree about every case it answers: Zig types are
 /// PascalCase, its functions are camelCase, its fields and constants are
 /// snake_case, and its reserved words are not C#'s.
 /// </summary>
+/// <remarks>
+/// <c>Pascal</c> splits its argument at the underscores, drops the empty pieces, and
+/// upper-cases the first letter of each piece while lower-casing the rest. <c>Camel</c> is
+/// <c>Pascal</c> with its first letter lower-cased. <c>Ident</c> wraps a name found in
+/// <c>Keywords</c> in Zig's quoted-identifier form. <c>EnumMember</c> tries the prefixes of
+/// the enum's name from the longest to an empty one, removes the first one the member name
+/// starts with, and keeps the rest lower-cased when it is not empty and does not begin with
+/// a digit; when no prefix qualifies, the whole member name is lower-cased. <c>Primitive</c>
+/// answers the Zig boolean for the convention's byte-bool type, and otherwise looks the base
+/// C type up in <c>Prim</c>. <c>Base</c> removes the <c>const</c>, <c>struct</c> and
+/// <c>enum</c> words from a C type spelling and trims what is left.
+/// </remarks>
 public static class Idioms
 {
     static readonly Dictionary<string, string> Prim = new()
@@ -35,10 +47,17 @@ public static class Idioms
         "anyframe", "anyopaque", "callconv", "noinline", "nosuspend", "null", "undefined", "true",
         "false"];
 
+    /// <summary>
+    /// The underscore-separated pieces of <paramref name="s"/>, each with its first letter
+    /// upper-cased and the rest lower-cased, joined with no separator.
+    /// </summary>
     public static string Pascal(string s) =>
         string.Concat(s.Split('_').Where(p => p.Length > 0)
             .Select(p => char.ToUpperInvariant(p[0]) + p[1..].ToLowerInvariant()));
 
+    /// <summary>
+    /// The Pascal spelling of <paramref name="s"/> with its first letter lower-cased.
+    /// </summary>
     public static string Camel(string s)
     {
         var p = Pascal(s);
@@ -49,7 +68,7 @@ public static class Idioms
     public static string Ident(string s) => Keywords.Contains(s) ? $"@\"{s}\"" : s;
 
     /// <summary>
-    /// The Zig type name for an ABI symbol. Unlike the C# backend this deliberately
+    /// The Zig type name for an ABI symbol. Unlike the C# writer this deliberately
     /// ignores <c>TypeNameOverrides</c>: every override in that table exists to
     /// resolve a collision with a C# namespace segment, and a Zig module has no
     /// namespace segments to collide with.
@@ -75,9 +94,18 @@ public static class Idioms
         return Ident(raw.ToLowerInvariant());
     }
 
+    /// <summary>
+    /// The Zig spelling of <paramref name="cType"/> when it names a primitive, or
+    /// <c>null</c> when it does not. A byte-bool type of the convention reads as the Zig
+    /// boolean.
+    /// </summary>
     public static string? Primitive(string cType, Convention convention) =>
         Base(cType) == convention.ByteBoolType ? "bool" : Prim.GetValueOrDefault(Base(cType));
 
+    /// <summary>
+    /// The C type spelling <paramref name="cType"/> with its <c>const</c>, <c>struct</c> and
+    /// <c>enum</c> words removed and the surrounding spaces trimmed.
+    /// </summary>
     public static string Base(string cType) =>
         cType.Replace("const ", "").Replace("struct ", "").Replace("enum ", "").Trim();
 }

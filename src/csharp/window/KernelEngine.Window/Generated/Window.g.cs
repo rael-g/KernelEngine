@@ -72,7 +72,7 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
         return (width, height);
     }
 
-    /// <summary>Returns the platform-specific native handle (HWND, X11 Window, ...).</summary>
+    /// <summary>Returns the platform-specific native window handle.</summary>
     public nint GetNativeHandle()
     {
         return (nint)Handle->get_native_handle(Handle);

@@ -36,7 +36,7 @@ extern "C"
          */
         bool (*get_size)(struct ke_window *self, int32_t *width, int32_t *height, ke_error **out_error);
 
-        /** Returns the platform-specific native handle (HWND, X11 Window, ...). */
+        /** Returns the platform-specific native window handle. */
         void *(*get_native_handle)(struct ke_window *self);
     } ke_window;
 

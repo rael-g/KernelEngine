@@ -1,3 +1,5 @@
+//! Imports the C contracts this plugin implements into one namespace, `c`.
+
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");
     @cInclude("kernel_engine/math/math.h");

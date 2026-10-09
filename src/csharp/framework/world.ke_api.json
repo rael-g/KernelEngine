@@ -71,7 +71,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "Superseded by the managed Ecs property (DI-injected IEcsRegistry), same name.",
+          "doc": "The ecs the world was created with.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_world *"
@@ -82,7 +82,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "Superseded by the managed Runtime property (DI-injected IRuntime), same name.",
+          "doc": "The runtime the world was created with.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_world *"
@@ -93,7 +93,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "Superseded by the managed SceneTree property, same name.",
+          "doc": "The scene tree the world was created with.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_world *"
@@ -102,7 +102,7 @@
           "name": "register_component_fields",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Registers the table describing how a scene block\u0027s keys land in this component\u0027s memory. Pure data, so a component becomes authorable without anyone writing code for it in any language \u2014 the table is generated from the header that declares the struct. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed, and must outlive the world; generated tables have static storage.",
+          "doc": "Registers the table describing how a scene block\u0027s keys land in this component\u0027s memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the world.",
           "return_doc": null,
           "params": [
             {

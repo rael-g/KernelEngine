@@ -1,21 +1,30 @@
+//! Turns a texture into the pixels of a `ke_texture_data`, which owns them afterwards. A texture
+//! comes either from an image file (`decodeExternal`) or from the model itself (`decodeEmbedded`).
+//! Compressed images are decoded by the image decoder and then copied into the record's own
+//! allocation, so the decoder's buffer is never kept; uncompressed embedded texels are converted
+//! directly. Every pixel buffer is allocated with `pixel_align` and released by `freePixels`.
+//!
+//! A decode that fails is absorbed: `fallbackWhite` gives the record a one-texel white image, so
+//! a bad texture does not fail the model. Only a failed allocation is reported, as a false return.
 
 const std = @import("std");
 
 const c = @import("c.zig").c;
 const log = @import("log.zig");
 
-/// Alignment every pixel buffer here is allocated with; `freePixels` must be
-/// given the same one or the allocator cannot match the block.
+/// Alignment of every pixel buffer this file allocates.
 pub const pixel_align: std.mem.Alignment = .@"4";
 
-/// Releases a buffer produced by this module. The extent is the one the texture
-/// record declares, which is exactly the count that was allocated.
+/// Releases the pixels of one record with the length it declares. A record with no pixels, left
+/// by a decode that ran out of memory, is skipped.
 pub fn freePixels(gpa: std.mem.Allocator, tex: *const c.ke_texture_data) void {
     const px = tex.pixels orelse return;
     const base: [*]align(4) u8 = @ptrCast(@alignCast(px));
     gpa.free(base[0..tex.byte_count]);
 }
 
+/// Stands in for a decode that failed, so the record still has pixels. It returns true when the
+/// white texel was allocated, which makes the fallback look like a successful decode to the caller.
 fn fallbackWhite(gpa: std.mem.Allocator, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {
     log.warn(logger, "Failed to load texture; using white fallback");
     const px = gpa.alignedAlloc(u8, pixel_align, 4) catch return false;
@@ -27,6 +36,8 @@ fn fallbackWhite(gpa: std.mem.Allocator, logger: ?*c.ke_logger, out: *c.ke_textu
     return true;
 }
 
+/// Moves decoder-owned RGBA pixels into a buffer the record owns, and fills the record's size.
+/// Returns false when that buffer cannot be allocated. The decoder's buffer stays the caller's.
 fn copyToOwnStorage(gpa: std.mem.Allocator, raw: [*]const u8, w: c_int, h: c_int, out: *c.ke_texture_data) bool {
     const byte_count = @as(usize, @intCast(w)) * @as(usize, @intCast(h)) * 4;
     const px = gpa.alignedAlloc(u8, pixel_align, byte_count) catch return false;
@@ -38,6 +49,10 @@ fn copyToOwnStorage(gpa: std.mem.Allocator, raw: [*]const u8, w: c_int, h: c_int
     return true;
 }
 
+/// Called by `loadModel` for each texture that names a file, and for an embedded name whose index
+/// did not resolve: that call passes an empty path, and the decode falls back. The record's path is
+/// set before the pixels are allocated, so an allocation failure leaves a path with no pixels.
+/// Returns false only when that allocation fails.
 pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {
     var w: c_int = 0;
     var h: c_int = 0;
@@ -49,6 +64,10 @@ pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, logger: ?*c.k
     return ok;
 }
 
+/// Called by `loadModel` for an embedded texture whose index resolved to a texture of the scene. A
+/// texture of zero height is compressed and is decoded with the same fallback as `decodeExternal`;
+/// any other texture is copied as it is, without decoding. Allocation failure makes either return
+/// false.
 pub fn decodeEmbedded(gpa: std.mem.Allocator, et: *const c.aiTexture, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {
     if (et.mHeight == 0) {
         var w: c_int = 0;

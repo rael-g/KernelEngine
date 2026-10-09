@@ -26,7 +26,7 @@ extern "C"
         void *handle;
 
         /** [drains] Loads the scene at @p path, instantiating every entity it declares.
-         * This is where a script factory that refused an entity is answered for.
+         * A script factory's refusal of an entity fails the load.
          * @param path [utf8] Path to the scene file. */
         bool (*load)(struct ke_scene_loader *self, const char *path, ke_error **out_error);
 

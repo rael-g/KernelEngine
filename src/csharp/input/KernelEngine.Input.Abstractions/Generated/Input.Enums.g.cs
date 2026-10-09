@@ -3,7 +3,7 @@
 
 namespace KernelEngine.Input;
 
-/// <summary>Direction of a key or mouse-button transition, as reported to the ke_input sinks by a window backend.</summary>
+/// <summary>Direction of a key or mouse-button transition.</summary>
 public enum InputAction
 {
     Release = 0,

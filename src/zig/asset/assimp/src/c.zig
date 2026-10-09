@@ -1,3 +1,5 @@
+//! Gathers the C headers the plugin works with into one namespace, so that the other files
+//! share a single set of C types instead of each importing the headers on its own.
 
 pub const c = @cImport({
     @cInclude("kernel_engine/common/error.h");

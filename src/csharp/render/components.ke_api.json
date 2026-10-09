@@ -213,7 +213,7 @@
           "name": "rotation",
           "type": "float",
           "tags": [],
-          "doc": "Radians, CCW positive; a scene authors degrees."
+          "doc": "Radians, CCW positive."
         },
         {
           "name": "scale",
@@ -311,7 +311,7 @@
     },
     {
       "name": "ke_directional_light_component",
-      "doc": "Directional light node. Init properties feed the per-frame light state the renderer consumes.",
+      "doc": "Directional light node. Its properties give the light\u0027s direction, color, intensity and ambient term.",
       "tags": [
         "node:DirectionalLight",
         "base:Node3D",
@@ -482,7 +482,7 @@
     },
     {
       "name": "ke_mesh_component",
-      "doc": "Renders a mesh with a material. \u0060mesh\u0060/\u0060material\u0060 double as output: the native \u0022render.mesh.resolve\u0022 system (KE_PHASE_UPDATE, src/zig/render/service/src/mesh_resolve.zig) fills them whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles just writes them and leaves \u0060primitive\u0060 empty \u2014 the resolve system only acts where a handle is still invalid, so the two paths never conflict.",
+      "doc": "Renders a mesh with a material. \u0060mesh\u0060 and \u0060material\u0060 double as output: the engine fills them, at KE_PHASE_UPDATE, whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles writes them and leaves \u0060primitive\u0060 empty; the engine only acts where a handle is still invalid.",
       "tags": [
         "node:MeshRenderer",
         "base:Node3D",
@@ -512,7 +512,7 @@
             "idiom",
             "name:mesh"
           ],
-          "doc": "Resolved by the scene loader\u0027s property-apply path into \u0060mesh\u0060; a node authoring it directly would have the value overwritten."
+          "doc": "Resolved into \u0060mesh\u0060 by the engine; a node authoring \u0060mesh\u0060 directly would have the value overwritten."
         },
         {
           "name": "base_color",
@@ -575,7 +575,7 @@
     },
     {
       "name": "ke_sprite2d_component",
-      "doc": "A textured quad in the plane, resolved into geometry and a material by the \u0022render.sprite2d.resolve\u0022 system.",
+      "doc": "A textured quad in the plane, resolved into geometry and a material by the engine.",
       "tags": [
         "node:Sprite2D",
         "base:Node2D"
@@ -657,7 +657,7 @@
           "tags": [
             "idiom"
           ],
-          "doc": "The image resolved from \u0060texture\u0060, assigned by the resolve system."
+          "doc": "The image resolved from \u0060texture\u0060."
         },
         {
           "name": "attached",

@@ -6,7 +6,7 @@ using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A 2D rigid body. Pose and motion are stored here because the simulation owns them between ticks; the node's own transform2d is written back from this component each tick by the physics plugin's own system, so what a script reads and what the hierarchy composes are the same two dimensions the body moves in. The same system creates and destroys the underlying body by reconciling this component against the world, so the entity is the identity and a script never acquires, threads, or releases a handle.</summary>
+/// <summary>A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle.</summary>
 [GeneratedNodeComponent(typeof(Body2dComponent), "body2d")]
 public partial class Body2D : Node2D
 {
@@ -35,7 +35,7 @@ public partial class Body2D : Node2D
     [NativeField("GravityScale", Component = typeof(Body2dComponent))]
     public partial float GravityScale { get; set; }
 
-    /// <summary>Keeps the body's angle fixed against every torque, including contacts. What anything that must stay upright sets — characters, projectiles.</summary>
+    /// <summary>Keeps the body's angle fixed against every torque, including contacts.</summary>
     [NativeField("FixedRotation", Component = typeof(Body2dComponent))]
     public partial bool FixedRotation { get; set; }
 }

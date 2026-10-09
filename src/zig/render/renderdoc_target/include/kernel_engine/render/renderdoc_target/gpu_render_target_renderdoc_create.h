@@ -32,8 +32,7 @@ typedef struct ke_gpu_render_target_renderdoc_params
 /**
  * @brief Creates a render target that draws into another one and has RenderDoc capture the chosen
  *        frames, each from its acquire to its present. RenderDoc must already be loaded into the
- *        process, which is what launching the program through RenderDoc does; where the capture
- *        files go is set by that launch.
+ *        process. Where the capture files go is set when the process is launched.
  * @param inner Borrowed, must outlive the target; every call is forwarded to it.
  * @return Handle whose @c ref is NULL on failure: KE_ERROR_INVALID_ARGUMENT for a NULL inner target
  *         or params, KE_ERROR_NOT_FOUND when RenderDoc is not loaded into the process.

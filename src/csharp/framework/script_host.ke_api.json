@@ -12,13 +12,13 @@
         {
           "name": "KE_SCRIPT_REACH_ANY",
           "value": 1,
-          "doc": "Reaches entities it was not handed \u2014 a borrow, a lookup by name, a query. Anything unproven belongs here: over-declaring costs parallelism, while under-declaring corrupts memory."
+          "doc": "Reaches entities it was not handed \u2014 a borrow, a lookup by name, a query. Anything unproven belongs here."
         }
       ]
     },
     {
       "name": "ke_script_resolve",
-      "doc": "Why a resolve answered the way it did. Without it \u0022no node answers\u0022 and \u0022two nodes answer\u0022 arrive as the same invalid entity, and a binding runtime can only tell its author the borrow found nothing \u2014 sending them to look for a node that is there twice.",
+      "doc": "Reports why a resolve answered the way it did.",
       "values": [
         {
           "name": "KE_SCRIPT_RESOLVE_FOUND",
@@ -33,28 +33,28 @@
         {
           "name": "KE_SCRIPT_RESOLVE_AMBIGUOUS",
           "value": 2,
-          "doc": "More than one answered, so none was returned. Naming the borrow settles it."
+          "doc": "More than one answered, so none was returned."
         }
       ]
     },
     {
       "name": "ke_script_borrow",
-      "doc": "Where a borrow looks for the node it names. One question asked three ways rather than three questions: a borrow is always \u0022an instance of this type, optionally by this name\u0022, and only the region searched differs.",
+      "doc": "Where a borrow looks for the node it names. A borrow is always an instance of a type, optionally with a name; only the region searched differs.",
       "values": [
         {
           "name": "KE_SCRIPT_BORROW_DESCENDANT",
           "value": 0,
-          "doc": "Below the borrower, depth-first. A node reaches a grandchild it names without every level in between forwarding it."
+          "doc": "Below the borrower, depth-first."
         },
         {
           "name": "KE_SCRIPT_BORROW_ANCESTOR",
           "value": 1,
-          "doc": "The nearest above the borrower. An ancestor chain has one node per level, so this is the one reach that can never answer ambiguous."
+          "doc": "The nearest above the borrower. This is the only reach that never answers ambiguous."
         },
         {
           "name": "KE_SCRIPT_BORROW_ANYWHERE",
           "value": 2,
-          "doc": "Anywhere the type is bound, ignoring the borrower\u0027s position. What a node reporting to a sibling subsystem needs, and the reason this is asked here rather than by a binding walking every node it knows about."
+          "doc": "Anywhere the type is bound, ignoring the borrower\u0027s position."
         }
       ],
       "tags": [
@@ -81,7 +81,7 @@
           "name": "register_type",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Registers a script type under \u0060name\u0060, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails when it does not \u2014 two languages naming one type differently would otherwise disagree about what a node in a scene file is.",
+          "doc": "Registers a script type under \u0060name\u0060, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails when it does not.",
           "return_doc": null,
           "params": [
             {
@@ -135,7 +135,7 @@
           "tags": [
             "try"
           ],
-          "doc": "Resolves a type by name without registering it, so a scene naming a type nobody declared fails instead of inventing an empty one.",
+          "doc": "Resolves a type by name without registering it. An undeclared name fails.",
           "return_doc": null,
           "params": [
             {
@@ -161,7 +161,7 @@
           "name": "type_components",
           "returns": "const ke_component_id *",
           "tags": [],
-          "doc": "The components a registered type\u0027s instances carry, in registration order. This is what a host turns into the type\u0027s query and access list, so it is read back rather than re-derived by each binding.",
+          "doc": "The components a registered type\u0027s instances carry, in registration order.",
           "return_doc": null,
           "params": [
             {
@@ -188,7 +188,7 @@
           "name": "type_reach",
           "returns": "ke_script_reach",
           "tags": [],
-          "doc": "How far the registered type\u0027s behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id, because refusing to parallelise something unknown is the safe direction.",
+          "doc": "How far the registered type\u0027s behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id.",
           "return_doc": null,
           "params": [
             {
@@ -204,7 +204,7 @@
           "name": "bind",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Binds \u0060instance\u0060 to \u0060entity\u0060 as an instance of \u0060type\u0060. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it silently, since the previous binding\u0027s owner would then never learn its object was dropped.",
+          "doc": "Binds \u0060instance\u0060 to \u0060entity\u0060 as an instance of \u0060type\u0060. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it.",
           "return_doc": null,
           "params": [
             {
@@ -338,7 +338,7 @@
           "tags": [
             "try"
           ],
-          "doc": "The instance bound to \u0060entity\u0060. False when none is, which is the normal answer rather than a failure: an entity a scene made without a script, or one another runtime owns, matches the same queries.",
+          "doc": "The instance bound to \u0060entity\u0060. False when none is, which is a normal answer, not a failure.",
           "return_doc": null,
           "params": [
             {
@@ -371,7 +371,7 @@
           "name": "instance_count",
           "returns": "uint32_t",
           "tags": [],
-          "doc": "How many entities are currently bound as instances of \u0060type\u0060. What lets a host tell \u0022this type had nothing to do\u0022 apart from \u0022this type\u0027s query stopped matching\u0022, which are indistinguishable from inside the body.",
+          "doc": "How many entities are currently bound as instances of \u0060type\u0060.",
           "return_doc": null,
           "params": [
             {
@@ -387,7 +387,7 @@
           "name": "instances",
           "returns": "const ke_entity *",
           "tags": [],
-          "doc": "The entities bound as instances of \u0060type\u0060, in binding order. What lets a binding runtime drive a type\u0027s instances without keeping a parallel list of its own \u2014 the list that only its own language can see, and that drifts from the bindings the moment anything else unbinds one. The slice belongs to the host and is invalidated by the next bind or unbind of that type, which is the same tick\u0027s structural change a caller already defers to the wave barrier.",
+          "doc": "The entities bound as instances of \u0060type\u0060, in binding order. The slice belongs to the host and is invalidated by the next bind or unbind of that type.",
           "return_doc": null,
           "params": [
             {

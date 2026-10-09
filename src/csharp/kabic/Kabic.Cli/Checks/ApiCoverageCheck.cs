@@ -1,9 +1,27 @@
 using System.Text.Json.Nodes;
+using Kabic.Conventions;
 
 namespace Kabic.Cli.Checks;
 
+/// <summary>
+/// Checks that every public header is described by kabic, ClangSharp or a recorded exclusion.
+/// </summary>
+/// <remarks>
+/// Execute starts from a table of excluded headers, each with the reason it stays unbound. It
+/// collects the headers the manifest's domains name as headers, auxiliary headers and compose
+/// headers, and the headers the ClangSharp binding plan traverses. It then walks every header
+/// under the two source roots whose path includes the include directory name. A header is a
+/// hole when it is in neither collection, is not excluded, is not the generated field table,
+/// and is not inline-only, which the local function <c>IsInlineOnly</c> decides. Headers are
+/// compared by the path that follows the include directory name, and headers inside a zig cache
+/// are skipped. Holes are listed on the error stream.
+/// </remarks>
 internal static class ApiCoverageCheck
 {
+    /// <summary>
+    /// Returns zero when every public header is covered. Returns one after listing the
+    /// uncovered headers on the error stream.
+    /// </summary>
     public static int Execute(Options options)
     {
         var rootDir = options.Root;
@@ -42,7 +60,7 @@ internal static class ApiCoverageCheck
                     describedByKabic.Add(Norm(h!.GetValue<string>()));
 
         var describedByClangSharp = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var job in Kabic.ClangSharpBackend.BindingsPlanner.Plan(rootDir, options.Manifest))
+        foreach (var job in Kabic.Bindings.BindingsPlanner.Plan(rootDir, options.Manifest))
             foreach (var header in job.Traverse)
                 describedByClangSharp.Add(Norm(Path.GetFullPath(Path.Combine(job.NativeDir, header))));
 

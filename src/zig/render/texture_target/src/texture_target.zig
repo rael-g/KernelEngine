@@ -1,3 +1,9 @@
+//! This file is a render target whose frame is a view of a texture the caller owns, so drawing
+//! into the target draws into that texture. `TextureTarget` is its whole state: the view it owns,
+//! the borrowed device that releases it, the size and format copied at creation, and a flag that
+//! says whether a frame is open. `acquire` and `present` only toggle that flag, each refusing a
+//! call that contradicts it, and every frame is the same view.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -13,6 +19,10 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 const E = @import("kerror").Errors(c);
 
+/// The state behind a texture-target handle, allocated by `ke_gpu_render_target_texture_create`
+/// and freed by `destroy`. The `vtable` field is handed out, and its `handle` points back here.
+/// The device is borrowed; `view` is owned and released through it. `acquired` is true only
+/// between `acquire` and `present`.
 const TextureTarget = struct {
     vtable: c.ke_gpu_render_target,
     device: *c.ke_gpu_device,
@@ -27,6 +37,9 @@ fn of(self: [*c]c.ke_gpu_render_target) *TextureTarget {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
+/// Opens a frame and hands out the view built by `ke_gpu_render_target_texture_create`, the same
+/// one every frame. Fails with an invalid-argument error and KE_GPU_INVALID_HANDLE while a frame
+/// is already open, leaving that frame open.
 fn acquire(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
     const t = of(self);
     if (t.acquired) {
@@ -37,6 +50,8 @@ fn acquire(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) call
     return t.view;
 }
 
+/// Closes the frame that `acquire` opened. Fails with an invalid-argument error, leaving the flag
+/// clear, when no frame is open. It records and submits nothing; it only clears `acquired`.
 fn present(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const t = of(self);
     if (!t.acquired) {
@@ -57,12 +72,19 @@ fn format(self: [*c]c.ke_gpu_render_target) callconv(.c) c.ke_gpu_texture_format
     return of(self).format;
 }
 
+/// Runs through the handle's `destroy` field, not through the vtable. Releases the view and frees
+/// the target, after which the handle's `ref` is dangling.
 fn destroy(self: [*c]c.ke_gpu_render_target) callconv(.c) void {
     const t = of(self);
     t.device.destroy_texture_view.?(t.device, t.view);
     gpa.destroy(t);
 }
 
+/// Builds the color view of the texture, then allocates the target, so a failed allocation has
+/// only the view to undo. Fails with an invalid-argument error when the device or the params are
+/// missing, when the texture, the format or either size is unset, or when the device yields no
+/// color view; fails with an out-of-memory error when the allocation fails. A failure returns a
+/// handle whose `ref` is null, with no view or target left allocated.
 export fn ke_gpu_render_target_texture_create(
     device: ?*c.ke_gpu_device,
     params: ?*const c.ke_gpu_render_target_texture_params,

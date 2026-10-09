@@ -4,11 +4,75 @@ using Kabic;
 using System.Text;
 
 /// <summary>
-/// kabic's Zig backend: renders a domain as a Zig module — the ABI declared in Zig
+/// kabic's Zig writer: renders a domain as a Zig module — the ABI declared in Zig
 /// rather than imported from the header, and a projection over it whose signatures
 /// are Zig's own (error unions, optionals, slices, sentinel-terminated strings).
 /// </summary>
-public sealed class ZigBackend
+/// <remarks>
+/// An instance renders one domain as one Zig module and keeps, for the length of that render,
+/// the state it discovers on the way: the imports reached, the opaque types, the bag types,
+/// the vtables projected, and the messages of the slots it could not project. The constructor
+/// checks that the error header exports the singleton of every kind the convention lists in
+/// <c>ErrorKinds</c>, and throws otherwise. It then keeps the convention's <c>NamedErrors</c>
+/// as the error kinds the module raises.
+///
+/// <c>Render</c> writes the module in a fixed order. The type aliases that resolve to a
+/// primitive become constants first, then each non-external enum goes through
+/// <c>RenderEnum</c>, then the error vocabulary from <c>Preamble</c>. The ABI follows:
+/// <c>Declare</c> writes the error header, then the model, as callbacks, non-external structs
+/// with their fields and slots, functions and variables. Every provider in the classified
+/// model is projected by <c>RenderProvider</c> as owned, and every vtable only lent to a call
+/// is projected as borrowed. The bag types and the opaque declarations are written after the
+/// projections, because projecting a slot is what registers them. The imports reached while
+/// rendering come out at the top, under the header comment that lists the unprojected slots.
+///
+/// <c>RenderSlot</c> turns one slot into a method. It throws for a slot that carries a blob, or
+/// a raw callback parameter that is neither a closure nor a consumer, and <c>RenderProvider</c>
+/// records that message instead of the method. Otherwise it spells each parameter from its
+/// tags, in ABI order: the error out-parameter becomes the address of a local, a closure
+/// becomes its trampoline with its state cast to a pointer, a consumer becomes a vtable value
+/// built from the caller's type, a lent object is passed by its reference, a count parameter
+/// passes the length of the span it counts, and a written-back parameter that is not a span
+/// passes the address of a local. The body declares those locals before the call, then reads
+/// the results. A slot that returns a count gives back the filled part of its buffer, a
+/// try-shaped slot gives an optional, a fallible slot that signals failure by its return value
+/// raises the error, and any other fallible slot raises it when the error local is set.
+///
+/// <c>Preamble</c> emits the error set: a general member and one per named kind. <c>raise</c>
+/// stores the reported error in <c>last_error</c> and returns the member whose kind the
+/// convention's error-is function confirms, or the general one. <c>errorType</c> and
+/// <c>errorFrom</c> run the other way: one turns a member into the singleton a handler reports,
+/// the other turns a reported singleton into a member, or into nothing when none is reported.
+///
+/// A closure parameter gets a trampoline struct, named for the parameter, whose <c>call</c>
+/// takes the callback's lanes, reads the caller's state back from the context lane, and hands
+/// the caller's handler the lanes that are neither the context nor the error lane. A failure
+/// the handler returns as an error is reported through the lane the callback names for it, as
+/// a kind or as a fact, as <c>ReportKind</c> says. A consumer parameter is the reverse:
+/// <c>ConsumerLines</c> emits a struct whose slots forward to the methods of the caller's own
+/// type, reached through the state field, and fills the vtable value with the state pointer
+/// and the plain fields. Neither retains anything: the state is the pointer the caller already
+/// holds.
+///
+/// A parameter bag is one struct a slot takes by pointer. <c>Bag</c> splits its fields: closures
+/// and their states, and the count beside each span, are filled by the writer, and the rest
+/// are the caller's. <c>RenderBag</c> writes the caller's struct at the top level with each
+/// field's stated default, and <c>BagLines</c> builds the ABI struct from the caller's value,
+/// filling the trampolines, the states, the counts, and the data pointers of the string and
+/// span fields.
+///
+/// <c>LentType</c> says whether a parameter crosses as a projected object. It must carry the
+/// engine-object tag, and its type is either a vtable this domain declares, named directly, or
+/// one another domain declares, reached through the import that <c>Bind</c> names. <c>Lent</c>
+/// lists the vtables that appear as engine-object parameters and are neither providers nor
+/// callbacks, so they are projected as borrowed.
+///
+/// An imported module is bound to its own name, or to a suffixed one when a top-level
+/// declaration of this module already takes that name, so that an import and a declaration
+/// never reach the same name. <c>LocalNames</c> is the set of names this module puts in scope
+/// around a call, computed once.
+/// </remarks>
+public sealed class ZigWriter
 {
     readonly ApiModel model;
     readonly ClassifiedModel classified;
@@ -19,9 +83,17 @@ public sealed class ZigBackend
     readonly Dictionary<string, BagForm> bags = [];
     readonly SortedSet<string> unprojected = [];
     readonly ApiModel errorAbi;
+
+    /// <summary>
+    /// The kinds the error hierarchy names, paired with the singleton each is reached by.
+    /// One list because three functions have to agree about it: the set a caller catches,
+    /// the reading of a failure the engine reported, and the writing of one the caller's
+    /// own handler raised. Kept apart, a kind added to one of them is a kind the other two
+    /// silently flatten to <c>General</c>.
+    /// </summary>
     readonly IReadOnlyList<(string Kind, string Singleton)> errorKinds;
 
-    ZigBackend(ApiModel model, ClassifiedModel classified, Convention convention,
+    ZigWriter(ApiModel model, ClassifiedModel classified, Convention convention,
         IReadOnlyDictionary<string, ForeignType> foreign, ApiModel errorAbi)
     {
         this.errorAbi = errorAbi;
@@ -45,7 +117,7 @@ public sealed class ZigBackend
     /// </summary>
     public static string Render(ApiModel model, ClassifiedModel classified, Convention convention,
         IReadOnlyDictionary<string, ForeignType>? foreign, ApiModel errorAbi) =>
-        new ZigBackend(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>(), errorAbi)
+        new ZigWriter(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>(), errorAbi)
             .Render();
 
     string Render()
@@ -165,14 +237,6 @@ public sealed class ZigBackend
             abi.AppendLine($"    pub extern const {v.Name}: {AbiType(v.Type, null, "")};");
         if (m.Variables.Count > 0) abi.AppendLine();
     }
-
-    /// <summary>
-    /// The kinds the error hierarchy names, paired with the singleton each is reached by.
-    /// One list because three functions have to agree about it: the set a caller catches,
-    /// the reading of a failure the engine reported, and the writing of one the caller's
-    /// own handler raised. Kept apart, a kind added to one of them is a kind the other two
-    /// silently flatten to <c>General</c>.
-    /// </summary>
 
     /// <summary>
     /// The error vocabulary every module opens with: the set, the thread-local carrying
@@ -385,7 +449,7 @@ public sealed class ZigBackend
     /// The vtables this domain projects only because a call lends one out. A vtable with
     /// neither an owner wrapper nor a factory is not a provider a caller can hold, so
     /// nothing else would project it -- and without a projection the object the engine
-    /// lends would reach the caller as the raw pointer the whole backend exists to avoid.
+    /// lends would reach the caller as the raw pointer the whole writer exists to avoid.
     /// </summary>
     IEnumerable<ApiStruct> Lent =>
         model.Structs.SelectMany(s => s.Slots).SelectMany(s => s.Params)
@@ -475,6 +539,10 @@ public sealed class ZigBackend
         sb.AppendLine();
     }
 
+    /// <summary>
+    /// One value a result carries: its name in the result, its Zig type, and the expression
+    /// that reads it.
+    /// </summary>
     record Reading(string Name, string Type, string Expr);
 
     /// <summary>
@@ -494,7 +562,7 @@ public sealed class ZigBackend
             || slot.Params.Any(p => (model.CallbackOf(p.Type) is not null || p.Has("callback"))
                 && !p.Has("closure") && !IsConsumer(p) && p != cs.ExpandedParam))
             throw new NotSupportedException(
-                $"{slot.Name}: this backend renders no raw callback and no opaque payload yet.");
+                $"{slot.Name}: this writer renders no raw callback and no opaque payload yet.");
 
         var bag = cs.ExpandedParam is null ? null : Bag(cs);
         if (bag is not null) bags[bag.TypeName] = bag;
@@ -643,11 +711,8 @@ public sealed class ZigBackend
         IReadOnlyList<ApiParam> OutcomeLanes);
 
     /// <summary>
-    /// How a handler tells the engine it failed. The two spellings are not
-    /// interchangeable: a <c>ke_error</c> points into the failing thread's own storage and
-    /// there is no exported way to mint one, so that channel can only carry the fact of a
-    /// failure and the kind is lost; a <c>ke_error_type</c> is an immortal singleton, so
-    /// that one carries the kind whole.
+    /// How a handler reports a failure to the engine: not at all, as the fact of one through an
+    /// error slot, or as the kind of one through an error-kind slot.
     /// </summary>
     enum ReportKind { None, Fact, Kind }
 
@@ -767,7 +832,7 @@ public sealed class ZigBackend
         if (vtable.Slots.Any(s => convention.IsFallible(s.Returns, s.Params)
                 || s.Params.Any(l => ReportOf(l, convention) is not ReportKind.None)))
             throw new NotSupportedException(
-                $"{where}: a slot of {vtable.Name} reports failure, which this backend does not"
+                $"{where}: a slot of {vtable.Name} reports failure, which this writer does not"
                 + " project yet");
         return new ConsumerForm(p, vtable, state[0],
             vtable.Fields.Where(f => f != state[0]).ToList());
@@ -811,7 +876,7 @@ public sealed class ZigBackend
     /// The default a bag field carries when the caller leaves it out. The header states it
     /// per field, and Zig is the one target language that can say it where the field is
     /// declared rather than at every call -- so a field with no stated default is one the
-    /// caller must fill, which is the header's statement and not this backend's.
+    /// caller must fill, which is the header's statement and not this writer's.
     /// </summary>
     static string? FieldDefault(ApiParam p) => p.TagValue("default") switch
     {

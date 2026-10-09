@@ -47,7 +47,7 @@ public unsafe sealed class Model : IDisposable
     }
 }
 
-/// <summary>ABI-stable vtable interface for loading 3D assets. Concrete implementations (e.g., Assimp) are provided as separate plugins.</summary>
+/// <summary>Loads 3D assets into ke_model_data.</summary>
 public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAssetLoader
 {
     private ke_asset_loader* _native;
@@ -92,7 +92,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         }
     }
 
-    /// <summary>Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A loader owns its memory, so a foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.</summary>
+    /// <summary>Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.</summary>
     internal void FreeModel(ModelData* data)
     {
         Handle->free_model(Handle, (ke_model_data*)data);

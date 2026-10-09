@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 namespace KernelEngine.Framework;
 
-/// <summary>Directional light node. Init properties feed the per-frame light state the renderer consumes.</summary>
+/// <summary>Directional light node. Its properties give the light's direction, color, intensity and ambient term.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct DirectionalLightComponent
 {

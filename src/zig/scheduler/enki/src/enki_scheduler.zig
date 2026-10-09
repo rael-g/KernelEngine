@@ -1,3 +1,16 @@
+//! The `ke_scheduler` contract implemented on enkiTS. Each dispatch turns a function and its data
+//! into a heap `Task`, hands that to enkiTS as a task set or, when pinned, as a pinned task, and
+//! returns the `Task` address as the caller's task value, with the low bit saying which kind it is.
+//!
+//! A worker runs the body through `Task.run`, which publishes completion before it calls the
+//! completion callback, and records the failure type the body leaves. The task value stays valid
+//! until `wait`, the only operation that ends a task: it blocks, releases the enkiTS object, frees
+//! the `Task` and raises the recorded failure on the calling thread. `destroy` drains enkiTS and
+//! frees the scheduler, so a task nobody waited on keeps its `Task`.
+//!
+//! A null scheduler or function is refused with a null task or false. Only the factory and
+//! `wait` report errors.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -11,6 +24,9 @@ const E = @import("kerror").Errors(c);
 
 const pinned_tag: usize = 1;
 
+/// One dispatched body and its outcome, allocated by `allocTask` and freed by `wait`, so it lives
+/// from dispatch until the task is waited on. The worker writes `completed` and `failure`; the
+/// waiting thread reads `failure` only after enkiTS reports the task finished.
 const Task = struct {
     func: c.ke_task_func,
     data: ?*anyopaque,
@@ -21,6 +37,8 @@ const Task = struct {
     tagged_self: ?*c.ke_task,
     failure: ?*const c.ke_error_type,
 
+    /// Runs on the worker that takes the task. `completed` is stored before the completion
+    /// callback is called, so the callback can rely on `isCompleted` reporting true.
     fn run(self: *Task) void {
         if (self.func) |f| f(self.data, &self.failure);
         self.completed.store(true, .release);
@@ -28,6 +46,9 @@ const Task = struct {
     }
 };
 
+/// The allocation behind one handle. `api` is the vtable the handle's `ref` points at, and its
+/// `handle` slot points back at this block. `ets` is created by the factory and deleted by
+/// `destroy`.
 const State = struct {
     api: c.ke_scheduler,
     ets: ?*c.enkiTaskScheduler,
@@ -37,6 +58,8 @@ fn stateOf(self: *c.ke_scheduler) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
+/// Packs `pinned` into the low bit of the `Task` address. This holds because a `Task` is allocated
+/// with at least pointer alignment, which leaves that bit clear.
 fn tag(task: *Task, pinned: bool) *c.ke_task {
     const raw = @intFromPtr(task) | (if (pinned) pinned_tag else 0);
     return @ptrFromInt(raw);
@@ -50,6 +73,8 @@ fn untag(task: *c.ke_task) struct { task: *Task, pinned: bool } {
     };
 }
 
+/// The enkiTS task-set entry point. `dispatchOnComplete` adds each set with a size of one, so the
+/// range and thread index enkiTS passes carry nothing and are ignored.
 fn taskSetExecute(start: u32, end: u32, threadnum: u32, args: ?*anyopaque) callconv(.c) void {
     _ = start;
     _ = end;
@@ -63,6 +88,9 @@ fn pinnedTaskExecute(args: ?*anyopaque) callconv(.c) void {
     task.run();
 }
 
+/// Allocates a `Task` with `completed` false, `failure` null and no enkiTS object yet. The caller
+/// fills `handle` and `tagged_self` once the enkiTS object exists. Returns null, having allocated
+/// nothing, when the allocation fails.
 fn allocTask(
     func: c.ke_task_func,
     data: ?*anyopaque,
@@ -83,6 +111,7 @@ fn allocTask(
     return task;
 }
 
+/// Queues the body with no completion callback, exactly as `dispatchOnComplete` does.
 fn dispatch(
     self_in: ?*c.ke_scheduler,
     func: c.ke_task_func,
@@ -92,6 +121,9 @@ fn dispatch(
     return dispatchOnComplete(self, func, data, null, null);
 }
 
+/// Queues a task set that runs the body and returns the tagged `Task`. The body may already be
+/// running when this returns. On failure the `Task` is freed, nothing is queued, and null is
+/// returned.
 fn dispatchOnComplete(
     self_in: ?*c.ke_scheduler,
     func: c.ke_task_func,
@@ -116,6 +148,8 @@ fn dispatchOnComplete(
     return task.tagged_self;
 }
 
+/// Queues the body as a pinned task on the worker index passed in. Unlike `dispatchOnComplete` it
+/// stores no completion callback. On failure it frees the `Task` and returns null.
 fn dispatchPinned(
     self_in: ?*c.ke_scheduler,
     thread_num: u32,
@@ -139,6 +173,9 @@ fn dispatchPinned(
     return task.tagged_self;
 }
 
+/// Blocks until enkiTS reports the task finished, then frees the `Task`. Afterwards the tagged
+/// value refers to freed memory. If the body failed, the failure type is raised as a `ke_error` on
+/// the calling thread and false is returned.
 fn wait(self_in: ?*c.ke_scheduler, task_in: ?*c.ke_task, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const self = self_in orelse return false;
     const tagged = task_in orelse return false;
@@ -165,12 +202,14 @@ fn wait(self_in: ?*c.ke_scheduler, task_in: ?*c.ke_task, out_error: [*c][*c]c.ke
     return true;
 }
 
+/// Reads `completed` without ending the task, so the tagged value stays usable until `wait` runs.
 fn isCompleted(self_in: ?*c.ke_scheduler, task_in: ?*c.ke_task) callconv(.c) bool {
     _ = self_in;
     const tagged = task_in orelse return true;
     return untag(tagged).task.completed.load(.acquire);
 }
 
+/// The enkiTS thread count includes the calling thread, which is not counted as a worker.
 fn getNumWorkers(self_in: ?*c.ke_scheduler) callconv(.c) u32 {
     const self = self_in orelse return 0;
     if (self.handle == null) return 0;
@@ -179,6 +218,8 @@ fn getNumWorkers(self_in: ?*c.ke_scheduler) callconv(.c) u32 {
     return if (total > 0) total - 1 else 0;
 }
 
+/// Waits for everything enkiTS holds, deletes the enkiTS object and frees the `State`. `Task`
+/// allocations of tasks that were never waited on are not freed here.
 fn destroy(self_in: ?*c.ke_scheduler) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -191,6 +232,9 @@ fn destroy(self_in: ?*c.ke_scheduler) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
+/// Returns a handle whose `ref` is null when the `State` or the enkiTS object cannot be created,
+/// with the reason set in the error output. In that case the `State` is freed, so nothing stays
+/// allocated.
 export fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle {
     const null_handle = std.mem.zeroes(c.ke_scheduler_handle);
 

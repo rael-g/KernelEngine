@@ -8,28 +8,28 @@ public enum ScriptReach
 {
     /// <summary>Touches only the entity it is bound to. Two instances are two entities, so their work cannot overlap.</summary>
     Self = 0,
-    /// <summary>Reaches entities it was not handed — a borrow, a lookup by name, a query. Anything unproven belongs here: over-declaring costs parallelism, while under-declaring corrupts memory.</summary>
+    /// <summary>Reaches entities it was not handed — a borrow, a lookup by name, a query. Anything unproven belongs here.</summary>
     Any = 1,
 }
 
-/// <summary>Why a resolve answered the way it did. Without it "no node answers" and "two nodes answer" arrive as the same invalid entity, and a binding runtime can only tell its author the borrow found nothing — sending them to look for a node that is there twice.</summary>
+/// <summary>Reports why a resolve answered the way it did.</summary>
 public enum ScriptResolve
 {
     /// <summary>Exactly one entity answered, and it is the one returned.</summary>
     Found = 0,
     /// <summary>Nothing answered. The borrow names a node that is not there.</summary>
     None = 1,
-    /// <summary>More than one answered, so none was returned. Naming the borrow settles it.</summary>
+    /// <summary>More than one answered, so none was returned.</summary>
     Ambiguous = 2,
 }
 
-/// <summary>Where a borrow looks for the node it names. One question asked three ways rather than three questions: a borrow is always "an instance of this type, optionally by this name", and only the region searched differs.</summary>
+/// <summary>Where a borrow looks for the node it names. A borrow is always an instance of a type, optionally with a name; only the region searched differs.</summary>
 public enum ScriptBorrow
 {
-    /// <summary>Below the borrower, depth-first. A node reaches a grandchild it names without every level in between forwarding it.</summary>
+    /// <summary>Below the borrower, depth-first.</summary>
     Descendant = 0,
-    /// <summary>The nearest above the borrower. An ancestor chain has one node per level, so this is the one reach that can never answer ambiguous.</summary>
+    /// <summary>The nearest above the borrower. This is the only reach that never answers ambiguous.</summary>
     Ancestor = 1,
-    /// <summary>Anywhere the type is bound, ignoring the borrower's position. What a node reporting to a sibling subsystem needs, and the reason this is asked here rather than by a binding walking every node it knows about.</summary>
+    /// <summary>Anywhere the type is bound, ignoring the borrower's position.</summary>
     Anywhere = 2,
 }

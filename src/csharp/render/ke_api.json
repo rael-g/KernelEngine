@@ -163,7 +163,7 @@
           "name": "declare",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Declares a transient resource the core allocates and recycles.",
+          "doc": "Declares a transient resource the service allocates and recycles.",
           "return_doc": "The tag-component cid to place in a pass\u0027s access_list.",
           "params": [
             {
@@ -213,7 +213,7 @@
           "name": "import_tag",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Mints a tag cid under \u0060name\u0060 with no GPU payload, for an ordering dependency between two passes that carries no data of its own.",
+          "doc": "Mints a tag cid under \u0060name\u0060 with no GPU payload.",
           "return_doc": null,
           "params": [
             {
@@ -384,7 +384,7 @@
           "returns": "ke_mesh_handle",
           "tags": [],
           "doc": "Uploads interleaved vertices and 16-bit indices to device buffers.",
-          "return_doc": "A handle a ke_mesh_component references.",
+          "return_doc": "The handle of the uploaded mesh.",
           "params": [
             {
               "name": "key",
@@ -433,7 +433,7 @@
           "tags": [
             "try"
           ],
-          "doc": "Resolves a mesh handle to its GPU buffers (for a pass to bind \u002B draw). Returns false for a handle this service never uploaded, so a pass skips the draw instead of binding whatever the out parameters held.",
+          "doc": "Resolves a mesh handle to its GPU buffers. Returns false for a handle this service never uploaded.",
           "return_doc": null,
           "params": [
             {
@@ -636,7 +636,7 @@
           "name": "material_layout",
           "returns": "ke_gpu_bind_group_layout",
           "tags": [],
-          "doc": "The per-material bind-group layout (descriptor set 1) a forward pipeline must declare so its set-1 bind groups (from material_bind_group) are valid.",
+          "doc": "The per-material bind-group layout (descriptor set 1) a pipeline must declare so its set-1 bind groups (from material_bind_group) are valid.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_render_service *"
@@ -729,7 +729,7 @@
           "name": "texture_view",
           "returns": "ke_gpu_texture_view",
           "tags": [],
-          "doc": "The GPU view for a texture/cubemap handle (for a pass to bind it).",
+          "doc": "The GPU view for a texture/cubemap handle.",
           "return_doc": null,
           "params": [
             {
@@ -1040,7 +1040,7 @@
           "tags": [
             "try"
           ],
-          "doc": "Path-keyed probe for a resident mesh upload: on a hit, retains and writes the resident handle on the caller\u0027s behalf, so a loader can skip decoding a file whose upload is already resident. try_get_texture also serves cubemaps (shared cache).",
+          "doc": "Path-keyed probe for a resident mesh upload: on a hit, retains and writes the resident handle to \u0060out\u0060. try_get_texture also serves cubemaps (shared cache).",
           "return_doc": null,
           "params": [
             {
@@ -1131,7 +1131,7 @@
           "name": "load_shader",
           "returns": "ke_gpu_shader_module",
           "tags": [],
-          "doc": "\u2500\u2500 Shader loading (build-time compiled, runtime resolved) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Resolves a shader by logical NAME \u002B STAGE to a device-ready module.",
+          "doc": "Resolves a shader by logical NAME \u002B STAGE to a device-ready module.",
           "return_doc": null,
           "params": [
             {

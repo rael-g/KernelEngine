@@ -108,7 +108,7 @@
   "vtables": [
     {
       "name": "ke_ecs",
-      "doc": "Entity lifetime plus component storage: the engine\u0027s ECS contract.",
+      "doc": "Entity lifetime and component storage.",
       "tags": [],
       "fields": [
         {
@@ -173,7 +173,7 @@
                 "borrowed",
                 "optional"
               ],
-              "doc": "The type\u0027s field layout, normally its generated field table. Must outlive the ecs. NULL registers the size alone."
+              "doc": "The type\u0027s field layout, normally its field table. Must outlive the ecs. NULL registers the size alone."
             },
             {
               "name": "field_count",
@@ -388,7 +388,7 @@
           "name": "entity_reserve",
           "returns": "ke_entity",
           "tags": [],
-          "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, which the runtime does at the wave barrier. An implementation may not satisfy this by forwarding to entity_create: the contract is concurrent callability, and a backend whose id allocator walks shared state must keep a separate one for this.",
+          "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_ecs *"
@@ -437,7 +437,7 @@
     },
     {
       "name": "ke_ecs_commands",
-      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording is what makes these operations callable from code that must not touch the world: a system body running beside other systems records, and the runtime applies every body\u0027s queue while nothing else runs. An implementation that cannot accept an operation fails it with the reason in \u0060out_error\u0060 and leaves the queue unchanged.",
+      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation fails it with the reason in \u0060out_error\u0060 and leaves the queue unchanged.",
       "tags": [],
       "fields": [
         {

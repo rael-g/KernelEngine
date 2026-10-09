@@ -1,3 +1,7 @@
+//! `loadShader` resolves a name, a stage and the device's shader language to one file in the
+//! service's shader directory, and answers from the cache keyed by that path before touching the
+//! disk. A module it creates is owned by the cache, which gives it back to `destroyShaderResource`.
+
 const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
@@ -6,6 +10,7 @@ const libc = @cImport({
     @cInclude("stdio.h");
 });
 
+/// Any language the file does not list falls back to the WGSL extension.
 fn extForLanguage(lang: c.ke_gpu_shader_language) []const u8 {
     return switch (lang) {
         c.KE_GPU_SHADER_LANG_WGSL => "wgsl",
@@ -16,6 +21,7 @@ fn extForLanguage(lang: c.ke_gpu_shader_language) []const u8 {
     };
 }
 
+/// Null unless the stage is exactly one of vertex, fragment or compute.
 fn stageSuffix(stage: c.ke_gpu_shader_stage) ?[]const u8 {
     return switch (stage) {
         c.KE_GPU_SHADER_STAGE_VERTEX => "vs",
@@ -25,6 +31,15 @@ fn stageSuffix(stage: c.ke_gpu_shader_stage) ?[]const u8 {
     };
 }
 
+/// The service's shader-loading slot. The file read is "<shader dir>/<name>.<vs|fs|cs>.<ext>", and
+/// the resolved path is the cache key. A cache hit returns the stored module without reading the
+/// disk and leaves the error out-parameter untouched. On a miss the module is created on the
+/// device, stored, registered with the cache and cached under the path. Every failure returns the
+/// invalid handle and fills the error: invalid argument for a stage that is not exactly one or a
+/// path too long for its buffer; not found when the file does not open; I/O when it cannot be
+/// sized or fully read; out of memory when the file buffer or the store cannot be allocated, in
+/// which case a module already created is destroyed on the device first. A failure of the device
+/// call is the device's own error.
 pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke_gpu_shader_stage, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
     const st = rc.coreOf(self);
 
@@ -87,6 +102,8 @@ pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke
     return module;
 }
 
+/// The destroy callback `shader_cache` calls for a module registered by `loadShader`. The context
+/// is the `CoreState` of the service, and a handle that `shader_store` no longer holds is ignored.
 pub fn destroyShaderResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     const st: *rc.CoreState = @alignCast(@ptrCast(ctx));
     if (st.shader_store.remove(handle)) |module| {

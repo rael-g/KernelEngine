@@ -1,3 +1,22 @@
+//! The deferred lighting pass is a render-phase system that turns the gbuffer targets into lit
+//! colour: one full-screen draw reads albedo, normal, emissive and depth, the light clusters and,
+//! when the service has one, the shadow map, and writes the "hdr" target that `setup` declares.
+//! The plugin exports one function, `ke_render_deferred_lighting_create`, which builds a
+//! `DeferredLightingModule`, registers `system` with the runtime and returns a handle owning it.
+//!
+//! The pass has two kinds of input. The scene is read through four queries: the camera with its
+//! world transform, the sky, the directional light and the ambient light. `system` turns them
+//! into one `DeferredFrame` uploaded each tick, and each light is optional: a missing segment
+//! leaves its fields zero. The render service supplies the rest as bind groups: the gbuffer views
+//! are wrapped in a fresh group every tick, since the targets can be recreated, while the frame
+//! group, which also carries the shadow map, the shadow matrices and the environment cubemap,
+//! is rebuilt by `rebuildFrameBindGroup` only at setup and when the sky names another cubemap.
+//!
+//! Creation does everything that can fail before the first frame, shaders and pipeline included.
+//! A failed setup or a refused registration releases what was made through `destroyModule` and
+//! yields the empty handle. Once `system` has begun a pass it ends it on every path; a missing
+//! camera ends an empty pass, and only a failure to create the gbuffer group is reported.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -8,6 +27,8 @@ const c = cimport.c;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
+/// The uniform that `system` uploads whole into `frame_uniform` every tick. The buffer is created
+/// with this type's size.
 const DeferredFrame = extern struct {
     camera_pos: [4]f32,
     light_dir: [4]f32,
@@ -19,6 +40,10 @@ const DeferredFrame = extern struct {
     inv_view_proj: [16]f32,
 };
 
+/// The state of one pass, created by `ke_render_deferred_lighting_create` and freed by
+/// `destroyHandle`. A GPU handle field stays KE_GPU_INVALID_HANDLE until `setup` or `system`
+/// creates it, and `system` replaces `gbuf_bind_group` each tick. `queries`, `access` and `io`
+/// are handed to the runtime and to `begin_pass` by address, so the block is never copied.
 const DeferredLightingModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -51,6 +76,8 @@ const DeferredLightingModule = struct {
     access_count: u32 = 0,
 };
 
+/// Reports a failed GPU call to the logger at error level under the pass's tag, and does nothing
+/// without a logger or an error.
 fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
     const lg = logger orelse return;
     const e = err orelse return;
@@ -64,6 +91,11 @@ inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
     return @alignCast(@ptrCast(user.?));
 }
 
+/// Recreates `frame_bind_group` over `frame_uniform`, the shadow map, the shadow matrix buffer and
+/// the environment cubemap. The black cube stands in for the environment when `ibl_enabled` is
+/// false, and the white texture stands in for the shadow map when the service has none. It runs
+/// from `setup`, and from `system` when the sky cubemap changes. A failure is logged and not
+/// returned, so `frame_bind_group` then holds what the device returned.
 fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     const dev = dl.device;
     const core = dl.core;
@@ -96,6 +128,10 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
     if (err != null) logGpuError(dl.logger, err, "deferred frame bind group");
 }
 
+/// The `execute` of the system that `ke_render_deferred_lighting_create` registers in the render
+/// phase. It ends the pass on every path that began one. A missing pass returns true without
+/// work, and a missing camera returns true after ending an empty pass; neither is a failure. Only
+/// a failure to create the G-buffer bind group sets the error out-parameter and returns false.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const dl = moduleOf(user);
     const core = dl.core;
@@ -207,6 +243,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     return true;
 }
 
+/// Called once by `ke_render_deferred_lighting_create` on a freshly reset block. It returns true
+/// only when every object it creates exists, the pipeline included, and the io, access list and
+/// queries are filled. On false, the objects already created stay in the block for the caller to
+/// release through `destroyModule`.
 fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          render_camera: *c.ke_render_camera, logger: ?*c.ke_logger, ibl_enabled: bool,
          camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
@@ -364,6 +404,9 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     return true;
 }
 
+/// Releases each GPU object in the block that is not KE_GPU_INVALID_HANDLE. It leaves the
+/// pipeline, the shader modules and the "hdr" resource alone, and does not free the block, so it
+/// can release a partly built one.
 fn destroyModule(dl: *const DeferredLightingModule) void {
     const dev = dl.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
@@ -376,12 +419,19 @@ fn destroyModule(dl: *const DeferredLightingModule) void {
     if (dl.empty_bgl != invalid) dev.destroy_bind_group_layout.?(dev, dl.empty_bgl);
 }
 
+/// The `destroy` slot of the handle that `ke_render_deferred_lighting_create` returns. It releases
+/// the GPU objects and then frees the block.
 fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
     const dl: *DeferredLightingModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(dl);
     gpa.destroy(dl);
 }
 
+/// Builds the pass and registers its system in the render phase, with `pinned_thread` set to zero.
+/// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A null
+/// argument returns an empty handle. A failed setup or a refused registration also returns an
+/// empty handle, after the block is released; errors those steps report go to the error
+/// out-parameter.
 export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                               device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                               logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,

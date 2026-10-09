@@ -15,7 +15,7 @@ public unsafe interface INativeEcs
     ke_ecs* Native { get; }
 }
 
-/// <summary>Entity lifetime plus component storage: the engine's ECS contract.</summary>
+/// <summary>Entity lifetime and component storage.</summary>
 public unsafe partial class EcsRegistry : IDisposable, INativeEcs
 {
     private ke_ecs* _native;
@@ -60,7 +60,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same layout as its first registration. With `fields` the two are compared field by field; without it, only `element_size` is compared, which a same-size field swap or a reordering satisfies.</summary>
     /// <param name="name">Unique component name.</param>
     /// <param name="elementSize">Bytes per entity; 0 registers a tag (no storage).</param>
-    /// <param name="fields">The type's field layout, normally its generated field table. Must outlive the ecs. NULL registers the size alone.</param>
+    /// <param name="fields">The type's field layout, normally its field table. Must outlive the ecs. NULL registers the size alone.</param>
     /// <param name="fieldCount">Entries in `fields`; 0 when `fields` is NULL.</param>
     /// <returns>The component's id, or 0 on error.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
@@ -140,7 +140,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         }
     }
 
-    /// <summary>Reserves an entity id, callable concurrently from any wave thread — the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, which the runtime does at the wave barrier. An implementation may not satisfy this by forwarding to entity_create: the contract is concurrent callability, and a backend whose id allocator walks shared state must keep a separate one for this.</summary>
+    /// <summary>Reserves an entity id, callable concurrently from any wave thread — the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.</summary>
     public ulong EntityReserve()
     {
         return Handle->entity_reserve(Handle);

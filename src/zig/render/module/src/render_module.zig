@@ -1,3 +1,29 @@
+//! Assembles the render pipeline on one runtime and one world and hands it back as a single module
+//! handle. `ke_render_module_create` creates the render service core and a `ModuleState` that
+//! holds the core, the camera, the handle of every pass, the view space and the queries and state
+//! that the module's own systems read. With default passes off the handle wraps the core alone.
+//! With them on, it builds the camera on the view space, which is the one supplied or a new one
+//! the module owns, registers the component types, and then registers the systems and passes in
+//! dependency order: the mesh and sprite resolve systems, the begin and clear systems, the shadow,
+//! cluster, gbuffer, deferred lighting, skybox, forward, tonemap and ui passes, the label resolve
+//! system and the end system. The cluster grid and light cap come from the cluster parameters, and
+//! the shadow and image-based lighting switches from the feature parameters.
+//!
+//! The create is all or nothing. Each failing step goes to `failCreate`, which unregisters the
+//! systems added since the create began and calls `destroyModule`; that releases only the handles
+//! whose destroy slot is set, so a state filled in part is safe. A failed create returns a handle
+//! whose `ref` is null, and the component types it registered stay registered.
+//!
+//! Each frame is bracketed by `beginFrameSys` and `endFrameSys`, which wrap the core's frame start
+//! and end, with `clearSys` clearing the backbuffer between them; the passes run between the two
+//! through their own systems.
+//!
+//! The sibling files carry the parts. "component_apply.zig" holds the callbacks
+//! `ke_render_register_scene_apply` gives the world. "mesh_resolve.zig", "sprite_resolve.zig" and
+//! "label_resolve.zig" hold the update-phase systems that give meshes, sprites and labels their
+//! GPU objects. "cache_key.zig" builds the keys those systems cache objects under, and
+//! "cimport.zig" is the one C translation they all share.
+
 const std = @import("std");
 const cimport = @import("cimport.zig");
 const component_apply = @import("component_apply.zig");
@@ -17,6 +43,11 @@ const DEFAULT_GRID_Y: u32 = 18;
 const DEFAULT_GRID_Z: u32 = 24;
 const DEFAULT_MAX_LIGHTS_PER_CLUSTER: u32 = 256;
 
+/// Allocated by `ke_render_module_create` and freed by `destroyModule`. The begin, clear and
+/// end systems receive its address, and the queries and the pass `io` point into its own
+/// fields, so it must not be copied after creation. Its pass handles and camera are null until
+/// the create reaches their step, and `view_space` is destroyed only when `owns_view_space` is
+/// set.
 const ModuleState = struct {
     core: c.ke_render_service_handle,
     device: *c.ke_gpu_device,
@@ -56,6 +87,8 @@ inline fn stateOf(user: ?*anyopaque) *ModuleState {
     return @alignCast(@ptrCast(user.?));
 }
 
+/// Registers the component type with the ecs under its name, its size and its field table, and
+/// returns the id the ecs gives it.
 fn registerComponent(
     e: *c.ke_ecs,
     name: [*c]const u8,
@@ -66,11 +99,15 @@ fn registerComponent(
     return e.component_register.?(e, name, @sizeOf(T), table, @intCast(fields.len), null);
 }
 
+/// Render-phase system that starts the frame on the core and returns false with the core's own
+/// error when it cannot.
 fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
     return st.core.ref.*.begin_frame.?(st.core.ref, out_error) != 0;
 }
 
+/// Render-phase system that opens and closes a pass over the state's `io` so the backbuffer is
+/// cleared. It draws nothing and returns true even when the core grants no pass.
 fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
     const pc = st.core.ref.*.begin_pass.?(st.core.ref, &st.io);
@@ -81,11 +118,15 @@ fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
+/// Render-phase system that ends the frame on the core and returns false with the core's own
+/// error when it cannot.
 fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
     return st.core.ref.*.end_frame.?(st.core.ref, out_error) != 0;
 }
 
+/// Registers a render-phase system pinned to the first worker, with the access list given and
+/// `user` as its data. Returns false with the runtime's error when the runtime refuses it.
 fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
                access: [*c]const c.ke_component_access, access_count: u32,
                user: anytype, exec: ExecFn, out_error: [*c][*c]c.ke_error) bool {
@@ -100,11 +141,15 @@ fn registerSys(rt: *c.ke_runtime, name: [*c]const u8,
     return rt.register_system.?(rt, &params, out_error) != 0;
 }
 
+/// The core the module created. The pointer stays valid until `destroyModule` releases the
+/// core.
 export fn ke_render_module_core(module: ?*c.ke_render_module) callconv(.c) ?*c.ke_render_service {
     const st: *ModuleState = @alignCast(@ptrCast(module orelse return null));
     return st.core.ref;
 }
 
+/// Forwards to the ui pass with the caller's error out-parameter. A null module yields the none
+/// font and sets no error.
 export fn ke_render_module_load_font(module: ?*c.ke_render_module, key: [*c]const u8,
                                      atlas: c.ke_texture_handle, glyphs: [*c]const c.ke_glyph_metrics,
                                      glyph_count: u32, line_height: f32, ascent: f32,
@@ -113,6 +158,11 @@ export fn ke_render_module_load_font(module: ?*c.ke_render_module, key: [*c]cons
     return st.ui.ref.*.load_font.?(st.ui.ref, key, atlas, glyphs, glyph_count, line_height, ascent, out_error);
 }
 
+/// The destroy slot of the handle `ke_render_module_create` returns, and the cleanup of a
+/// failed create. Each pass handle and the core are released only when their destroy slot is
+/// set, so a partly built state is safe to pass. The passes are released in a fixed order that
+/// is not the creation order, then the camera, the core, the view space when owned, and finally
+/// the state.
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(self orelse return));
     if (st.tonemap.destroy) |d| d(st.tonemap.ref);
@@ -133,6 +183,10 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
 
 const empty = c.ke_render_module_handle{ .ref = null, .destroy = null };
 
+/// Registers the render components in the ecs and gives the world their field tables, then the
+/// apply callbacks of the camera, the mesh and the sprite. Returns false, setting no error, when
+/// the ecs or the world is null or the world refuses one of its apply callbacks. Components
+/// registered before that point stay registered.
 export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) callconv(.c) bool {
     const e = ecs orelse return false;
     const w = world orelse return false;
@@ -163,11 +217,14 @@ export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) c
     return true;
 }
 
+/// Gives the world the field table of a component so that scene files can author it.
 fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
 }
 
+/// Stops unregistering at the first system the runtime refuses to remove, so the systems after
+/// that one stay registered.
 fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_render_module_handle {
     while (rt.last_system.?(rt) > mark) {
         if (!rt.unregister_system.?(rt, rt.last_system.?(rt), null)) break;
@@ -176,6 +233,10 @@ fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_re
     return empty;
 }
 
+/// Reports a failure through the error out-parameter only where a step sets it: a missing
+/// runtime, ecs or device, and a failed state allocation return the empty handle with no error
+/// set. A failed create removes the systems added before the failing step, but the component
+/// types it registered in the ecs stay registered.
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
                                   target: ?*c.ke_gpu_render_target,
                                   world: ?*c.ke_world, default_passes: c.ke_bool, logger: ?*c.ke_logger,

@@ -1,3 +1,19 @@
+//! The gbuffer pass is a render-phase system that rasterises the opaque meshes a camera sees into
+//! the albedo, normal and emissive targets and the depth target, which it declares on the render
+//! service. The plugin exports one function, `ke_render_gbuffer_create`, which builds a
+//! `GBufferModule`, registers `system` with the runtime and hands back a handle owning the module.
+//!
+//! Everything that can fail is done at creation. `setup` creates the layouts, the object uniform
+//! buffer and the targets, and it asks for the pipeline at once, so a missing shader or a refused
+//! pipeline fails creation instead of the first frame. A failure there, or a runtime that refuses
+//! the registration, releases what was made and yields the empty handle.
+//!
+//! Each frame `system` pairs the camera with the meshes `collectDraws` selects: those on a layer
+//! the camera's cull mask names, minus the blended ones, which are not drawn into the gbuffer. A
+//! draw writes its matrices into the next slot of one shared uniform buffer and binds that slot by
+//! dynamic offset; a draw whose geometry or shader is missing is skipped without consuming a slot.
+//! A pass that was begun is always ended, so the targets are recorded even when nothing is drawn.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -8,22 +24,34 @@ const c = cimport.c;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
+/// The suffix `resolvePipeline` appends to a material shader name to pick this pass's variant.
 const PASS_NAME = "gbuffer";
+/// The material shader `setup` loads for the pipeline template; each draw loads its own material's.
 const DEFAULT_MATERIAL_SHADER = "standard";
 
+/// The number of draws the pass can select in one body call, and the number of object slots
+/// `obj_uniform` is sized for.
 const MAX_DRAWS = 512;
+/// The byte distance between consecutive draw slots of `obj_uniform`. Each draw's dynamic offset is
+/// its slot index times this.
 const UNIFORM_STRIDE = 256;
 
+/// One draw's transform record, uploaded into that draw's slot of `obj_uniform`. The upload and the
+/// object binding both take their size from this type.
 const PerObject = extern struct {
     mvp: [16]f32,
     model: [16]f32,
 };
 
+/// A selected mesh and its world transform, as pointers into the query columns rather than copies.
+/// They are valid only for the body that collected them.
 const Draw = struct {
     mesh: *const c.ke_mesh_component,
     world: *const c.ke_world_transform_component,
 };
 
+/// Called by `system` once the camera is known and before any draw is issued. The selection it
+/// returns is the whole list of draws for the body, never longer than the length the caller passed.
 fn collectDraws(
     core: *c.ke_render_service,
     cam: *const c.ke_camera_component,
@@ -47,6 +75,11 @@ fn collectDraws(
     return count;
 }
 
+/// The state of one gbuffer pass, allocated by `ke_render_gbuffer_create` and freed by
+/// `destroyHandle`. Handles start as KE_GPU_INVALID_HANDLE and are filled by `setup`, which is what
+/// lets `destroyModule` release a module whose setup stopped partway. `io` is handed to the render
+/// service on every `begin_pass`, and its `writes` points into this module, so the module must not
+/// move.
 const GBufferModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -72,6 +105,10 @@ const GBufferModule = struct {
     queries_terms: [4]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
 
+    /// Loads the vertex and fragment stages of the given material shader under this pass's name,
+    /// and stores both in `pipeline_template` only when both loads succeed, so a false return
+    /// leaves the template as it was. `setup` calls it for the default material and `system` for
+    /// each draw.
     fn resolvePipeline(gb: *GBufferModule, shader: [*c]const u8) bool {
         var name_buf: [rc_MAX_SHADER_QUALIFIED]u8 = undefined;
         const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
@@ -85,12 +122,17 @@ const GBufferModule = struct {
     }
 };
 
+/// The size of the buffer `resolvePipeline` formats the qualified shader name into. A longer name
+/// fails the load.
 const rc_MAX_SHADER_QUALIFIED = 128;
 
 inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
     return @alignCast(@ptrCast(user.?));
 }
 
+/// Runs as the body of the system `ke_render_gbuffer_create` registers, receiving the module as its
+/// user argument. Once it has begun a pass it always ends it, so a pass is recorded even when
+/// nothing is drawn.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const gb = moduleOf(user);
     const core = gb.core;
@@ -164,6 +206,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
+/// Called once by `ke_render_gbuffer_create`. It creates the GPU objects and fills
+/// `pipeline_template`, `io`, `access` and `queries`, and it requests the pipeline now, so a
+/// failure there fails creation instead of the first frame. On failure it returns false with the
+/// error written to the error output, and the module keeps the handles it made for `destroyModule`.
 fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          render_camera: *c.ke_render_camera, mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          camera_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
@@ -325,6 +371,9 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
+/// Releases the GPU objects `setup` created, skipping any still at KE_GPU_INVALID_HANDLE, so it
+/// also serves a module whose setup stopped partway. Used on creation failure and by
+/// `destroyHandle`.
 fn destroyModule(gb: *const GBufferModule) void {
     const dev = gb.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
@@ -335,12 +384,19 @@ fn destroyModule(gb: *const GBufferModule) void {
     if (gb.empty_bgl != invalid) dev.destroy_bind_group_layout.?(dev, gb.empty_bgl);
 }
 
+/// The destroy slot of the handle `ke_render_gbuffer_create` returns: releases the module's GPU
+/// objects and frees the module. A null ref does nothing.
 fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
     const gb: *GBufferModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(gb);
     gpa.destroy(gb);
 }
 
+/// The factory the plugin exports, declared in the plugin's factory header. On success it returns
+/// the module as the handle's ref and `destroyHandle` as its destroy slot. A null runtime, render
+/// service, device or camera, or a failed allocation, returns the empty handle without writing the
+/// error output. A failing setup, or a runtime that refuses the registration, writes the error and
+/// returns the empty handle after releasing the module.
 export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
                                     mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,

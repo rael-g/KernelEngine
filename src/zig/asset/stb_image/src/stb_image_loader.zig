@@ -1,3 +1,14 @@
+//! Implements the `ke_image_loader` contract on stb_image: `loadImage` decodes an image file to
+//! RGBA pixels and returns a `ke_texture_data` that owns a copy of them, and `freeImage` releases
+//! it. The copy is what makes the result independent of stb_image's allocator; the decoder's own
+//! buffer is released before `loadImage` returns, on every path.
+//!
+//! The loader's only state is a `State` holding the logger, reached through the vtable's handle.
+//! `ke_image_loader_stb_create` allocates the state and then the vtable, wires the two slots, and
+//! gives back a handle whose `destroy` releases both. Every function releases what it has taken
+//! before it reports a failure, so a failed call leaves nothing allocated. A load runs on the
+//! calling thread and takes no lock.
+
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
@@ -18,16 +29,21 @@ const c = @cImport({
 
 const E = @import("kerror").Errors(c);
 
+/// Reached only through the loader's `handle`. The factory allocates it before the loader and
+/// `destroy` frees it, so it lives exactly as long as the loader. `logger` is the logger from the
+/// params and stays null when the params carried none.
 const State = struct {
     logger: ?*c.ke_logger,
 };
 
+/// Sends a warning to the logger under the loader's tag; with no logger it does nothing.
 fn logWarn(logger: ?*c.ke_logger, msg: [*c]const u8) void {
     const lg = logger orelse return;
     var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "stb_image", .message = msg };
     lg.log.?(lg, &ev);
 }
 
+/// The handle's `destroy`: releases the state and then the vtable. A null loader is ignored.
 fn destroy(self: ?*c.ke_image_loader) callconv(.c) void {
     const loader = self orelse return;
     const state: *State = @ptrCast(@alignCast(loader.handle));
@@ -35,6 +51,10 @@ fn destroy(self: ?*c.ke_image_loader) callconv(.c) void {
     gpa.destroy(loader);
 }
 
+/// Called through the `load_image` slot. A decode failure logs stb's failure reason as a warning
+/// and reports a not-found error; an allocation failure reports an out-of-memory error. Either way
+/// the call returns null with nothing left allocated. On success the result is released through
+/// `freeImage`.
 fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) [*c]c.ke_texture_data {
     if (self == null or path == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -83,6 +103,8 @@ fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c
     return data;
 }
 
+/// Called through the `free_image` slot on a result of `loadImage`. The pixel buffer is released
+/// with the length `loadImage` recorded in `byte_count`, which is the length it was allocated with.
 fn freeImage(self: ?*c.ke_image_loader, data: [*c]c.ke_texture_data) callconv(.c) void {
     if (self == null or data == null) return;
     const d: *c.ke_texture_data = @ptrCast(data);
@@ -92,6 +114,10 @@ fn freeImage(self: ?*c.ke_image_loader, data: [*c]c.ke_texture_data) callconv(.c
     gpa.destroy(d);
 }
 
+/// The exported factory. On success the handle's `ref` is set, its `handle` and both vtable slots
+/// are wired, and its `destroy` releases the state and then the loader. On failure `ref` is null
+/// and `out_error` is set: an invalid-argument error for null params, or an out-of-memory error
+/// when the state or the loader cannot be allocated, after the state already taken is released.
 export fn ke_image_loader_stb_create(
     params: [*c]const c.ke_image_loader_stb_params,
     out_error: [*c][*c]c.ke_error,

@@ -36,7 +36,7 @@ public interface IShapePack
     /// <summary>
     /// What the generated code for <paramref name="language"/> has to import to spell the projections, in that
     /// language's own sense of the word: a namespace to <c>using</c> in C#, a header to <c>#include</c> in C++, a
-    /// module to <c>@import</c> in Zig. The backend renders each in its own syntax.
+    /// module to <c>@import</c> in Zig. The writer renders each in its own syntax.
     /// </summary>
     IReadOnlyList<string> Imports(string language);
 

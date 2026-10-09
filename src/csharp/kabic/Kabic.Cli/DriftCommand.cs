@@ -1,9 +1,28 @@
 using Kabic.Pipeline;
+using Kabic.Conventions;
 
 namespace Kabic.Cli;
 
+/// <summary>
+/// Checks whether the committed API descriptions, generated C# and C field tables match what
+/// the headers produce now.
+/// </summary>
+/// <remarks>
+/// Run loads the domain specs and the convention, then extracts the headers of every domain in
+/// parallel. An extraction that throws an <c>InvalidOperationException</c> is recorded with its
+/// message. The domains are then compared in manifest order. A domain whose extraction failed
+/// is reported, and the check is marked as not completed. Otherwise the fresh API description
+/// is compared with the committed one, and the C# output and the C field table are generated
+/// into a scratch directory and compared with the committed files. A generation failure is
+/// reported the same way. After every domain, the error-kinds file is compared with what
+/// <c>Generation.ErrorKinds</c> produces. The scratch directory is deleted in a finally block.
+/// </remarks>
 internal static class DriftCommand
 {
+    /// <summary>
+    /// Returns zero when nothing drifted, one when a committed artifact is out of date, and two
+    /// when a check could not run. Drift takes precedence over a check that could not run.
+    /// </summary>
     public static int Run(Options options)
     {
         var rootDir = options.Root;

@@ -37,10 +37,9 @@ typedef enum ke_access {
     KE_ACCESS_WRITE = 1 << 1,
 } ke_access;
 
-/// [value] One component a system touches, and how. The scheduler groups systems into
-/// parallel waves by comparing these: two systems conflict when they name the same
-/// component and at least one writes it, and conflicting systems are placed in
-/// different waves. A system that declares nothing conflicts with nothing, and is
+/// [value] One component a system touches, and how. Two systems conflict when they name
+/// the same component and at least one writes it; conflicting systems never run in the
+/// same wave. A system that declares nothing conflicts with nothing, and is
 /// therefore free to run concurrently with everything.
 typedef struct ke_component_access {
     ke_component_id cid;
@@ -48,7 +47,7 @@ typedef struct ke_component_access {
 } ke_component_access;
 
 /// [borrowed] A query a system reads through: a tuple of components matched together, each
-/// with the access mode the scheduler orders waves by. The terms are read while
+/// with its access mode. The terms are read while
 /// register_system runs, and the runtime keeps its own copy.
 typedef struct ke_query_decl {
     /// [array_of:term_count] The terms the query matches together.
@@ -93,8 +92,7 @@ typedef struct ke_runtime_module_params {
 /// of the same wave still run — they were already dispatched — but no later phase
 /// of that tick starts.
 /// @param ctx       [ctx] The body's only doorway to component memory for this
-///                  call. Opaque to a managed caller, which forwards it to the
-///                  entry points that take one.
+///                  call. Opaque; pass it to the entry points that take one.
 /// @param user_data [context] Opaque context forwarded from register_system.
 /// @param dt        Seconds since the previous tick, or the fixed timestep in
 ///                  KE_PHASE_FIXED_UPDATE.
@@ -115,18 +113,16 @@ typedef struct ke_runtime_system_params {
     /// [closure:user_data, retained:return] The body itself.
     ke_system_execute_fn execute;
 
-    /// [array_of:query_count, default:empty] Queries the system reads through. The runtime
-    /// registers them, derives the scheduling access list from their terms, and resolves
-    /// them into segments the body reads via ke_system_ctx_view.
+    /// [array_of:query_count, default:empty] Queries the system reads through; the body reads
+    /// their resolved segments via ke_system_ctx_view.
     const ke_query_decl *queries;
     uint32_t             query_count;
 
     /// [array_of:access_count, default:empty] Cids the system touches that no query term
-    /// covers, folded into the derived set so the wave-builder still orders on them:
-    /// ordering-only tags (render resources carry no data) and component access made
-    /// without a query. Declaring nothing is not "no opinion" -- it says the system
-    /// conflicts with nobody, so it may run concurrently with every other system in its
-    /// phase. Anything touching component storage says so.
+    /// covers, such as ordering-only tags and component access made without a query.
+    /// Declaring nothing is not "no opinion" -- it says the system conflicts with nobody,
+    /// so it may run concurrently with every other system in its phase. Anything touching
+    /// component storage declares it here.
     const ke_component_access *access_list;
     uint32_t                   access_count;
 
@@ -138,15 +134,13 @@ typedef struct ke_runtime_system_params {
     /// same entity set, each body call handling the share ke_system_ctx_slice
     /// reports. False keeps the body one call over the whole set.
     ///
-    /// Two entities are two rows, so per-entity work cannot overlap; what breaks
-    /// the promise is a body reaching an entity other than the one it is
+    /// What breaks the promise is a body reaching an entity other than the one it is
     /// visiting, or touching state shared across the set.
     bool per_entity;
 } ke_runtime_system_params;
 
 /// [interface] Owns the simulation world, dispatches systems across the worker pool and
-/// drives the frame loop. Game code names this rather than the scheduler behind it, so
-/// what a module registers against says nothing about which runtime is carrying it.
+/// drives the frame loop.
 typedef struct ke_runtime {
     void *handle;
 
@@ -168,10 +162,7 @@ typedef struct ke_runtime {
 
     /// [drains] Runs one tick: every sim phase in order, then the render phase.
     ///
-    /// A system body written in a managed language cannot let an exception cross this
-    /// boundary, so its binding reports the failure through the body's error lane and
-    /// leaves the exception itself with the runtime. This is where a body that failed
-    /// during the tick is answered for.
+    /// This is where a body that failed during the tick is answered for.
     /// @return false when a body of this tick failed.
     bool (*tick)(ke_runtime *self, float dt, ke_error **out_error);
 
@@ -181,8 +172,7 @@ typedef struct ke_runtime {
     /// reported rather than by the tick that started it.
     ///
     /// tick() dispatches render asynchronously and returns before it completes;
-    /// callers that need to tear down render-owned native resources (GPU device,
-    /// swapchain surface) must call this first, or the still-running render phase
+    /// callers that need to tear down render-owned native resources must call this first, or the still-running render phase
     /// races the teardown. A no-op if nothing is pending.
     /// @return false when a body of the render phase failed.
     bool (*flush_render)(ke_runtime *self, ke_error **out_error);

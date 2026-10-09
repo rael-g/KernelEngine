@@ -121,7 +121,7 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         return Handle->parent(Handle, entity);
     }
 
-    /// <summary>The first of `entity`'s children, or KE_ENTITY_INVALID when it has none. Paired with next_sibling this walks the child list a step at a time, which is the shape parenthood already has: it is an intrusive list, so answering with an array would mean building one on every call, and a caller after just the first child would pay for all of them.</summary>
+    /// <summary>The first of `entity`'s children, or KE_ENTITY_INVALID when it has none. Paired with next_sibling this walks the child list one entry at a time.</summary>
     public ulong FirstChild(ulong entity)
     {
         return Handle->first_child(Handle, entity);

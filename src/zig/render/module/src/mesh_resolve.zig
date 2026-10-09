@@ -1,3 +1,14 @@
+//! Fills in the mesh and the material of every mesh component in the view, each only while its
+//! handle is still empty. `system` visits the first column of each segment and runs `resolveMesh`
+//! and then `resolveMaterial` on every component. `resolveMesh` maps the name in the component's
+//! primitive field to one of the built-in shapes, built by `quad`, `plane`, `cube` and `uvSphere`
+//! in the shared `Vertex` layout, and uploads it under a key that names the shape, so components
+//! of one shape share one upload; an unknown name leaves the handle empty. `resolveMaterial`
+//! spells a key from every value that shades the surface and creates the material with no
+//! textures. Neither call is given an error output and `system` always returns true, so a failed
+//! upload or creation is not reported, leaves the handle empty and is attempted again on the next
+//! pass.
+
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
@@ -6,6 +17,8 @@ const std = @import("std");
 const cache_key = @import("cache_key.zig");
 const bitsOf = cache_key.bits;
 
+/// The vertex layout of every built-in shape. The shapes are uploaded as the raw bytes of an array
+/// of these, and `extern` fixes the field order those bytes carry.
 const Vertex = extern struct {
     position: [3]f32,
     normal: [3]f32,
@@ -13,6 +26,7 @@ const Vertex = extern struct {
     tangent: [3]f32,
 };
 
+/// A unit square in the plane facing the positive z axis, uploaded under the key of the quad.
 fn quad(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_handle {
     const t = [3]f32{ 1, 0, 0 };
     const verts = [4]Vertex{
@@ -25,6 +39,7 @@ fn quad(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_han
     return core.upload_mesh.?(core, "primitive:quad", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out_error);
 }
 
+/// A unit square lying flat with its normal along the positive y axis, uploaded under its own key.
 fn plane(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_handle {
     const n = [3]f32{ 0, 1, 0 };
     const t = [3]f32{ 1, 0, 0 };
@@ -47,6 +62,8 @@ fn normalize(v: [3]f32) [3]f32 {
     return .{ v[0] / len, v[1] / len, v[2] / len };
 }
 
+/// Gives each face vertices of its own, carrying that face's normal, so no vertex is shared between
+/// two faces. The tangent of a face runs along the edge from its first vertex to its second.
 fn cube(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_handle {
     const h = 0.5;
     var verts: [24]Vertex = undefined;
@@ -82,6 +99,8 @@ fn cube(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_han
 const sphere_rings = 24;
 const sphere_segments = 32;
 
+/// Builds a grid with one more vertex per ring than it has cells. The extra vertex repeats the
+/// position of the first one in its ring, with the texture coordinate at the far edge.
 fn uvSphere(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_handle {
     const radius = 0.5;
     const vert_count = (sphere_rings + 1) * (sphere_segments + 1);
@@ -131,6 +150,8 @@ fn uvSphere(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh
     return core.upload_mesh.?(core, "primitive:sphere:0.5:24:32", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out_error);
 }
 
+/// Leaves the component alone when it has a mesh or names no primitive, and stores no handle for
+/// a name that is none of the built-in shapes.
 fn resolveMesh(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void {
     const mc: *c.ke_mesh_component = @ptrCast(m);
     if (mc.mesh.bits != c.KE_HANDLE_NONE or mc.primitive[0] == 0) return;
@@ -147,6 +168,8 @@ fn resolveMesh(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void {
         c.KE_MESH_NONE;
 }
 
+/// The key spells every value this call varies, so a material's key changes whenever one of the
+/// values that shade it does. The textures passed are always none.
 fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void {
     const mc: *c.ke_mesh_component = @ptrCast(m);
     if (mc.material.bits != c.KE_HANDLE_NONE) return;
@@ -176,6 +199,8 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
     );
 }
 
+/// Runs in the update phase over the mesh view. Afterwards each component has been offered a mesh
+/// and a material, and it always returns true.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const core: *c.ke_render_service = @ptrCast(@alignCast(user.?));
 

@@ -1,9 +1,26 @@
 using Kabic.Pipeline;
+using Kabic.Conventions;
 
 namespace Kabic.Cli;
 
-internal static class CSharpCommand
+/// <summary>
+/// Implements the command that projects one API description into C# files.
+/// </summary>
+/// <remarks>
+/// Run reads the flags into the paths and names of one projection. A flag consumes the argument
+/// that follows it, and an unrecognised argument is ignored. The API file, the namespace, the
+/// native namespace and the output directory are required; without them the usage is written to
+/// the error stream and the command returns one. The contract directory defaults to the output
+/// directory, and the manifest defaults to the default manifest path. <c>Generation.CSharp</c>
+/// writes the projection, and an <c>InvalidOperationException</c> it throws is written to the
+/// error stream with the command returning one.
+/// </remarks>
+internal static class WriteCSharpCommand
 {
+    /// <summary>
+    /// Runs the command over the arguments and returns zero when the projection was written, or
+    /// one when a required option is missing or generation fails.
+    /// </summary>
     public static int Run(IReadOnlyList<string> args)
     {
         string? manifest = null, apiPath = null, ns = null, nativeNs = null, outDir = null, contractOutDir = null, library = null, domain = null;
@@ -31,7 +48,7 @@ internal static class CSharpCommand
 
         if (apiPath is null || ns is null || nativeNs is null || outDir is null)
         {
-            Console.Error.WriteLine("usage: kabic csharp --api <ke_api.json> "
+            Console.Error.WriteLine("usage: kabic write csharp --api <ke_api.json> "
                 + "--namespace <NS> --native-namespace <NS.Native> --out <dir> "
                 + "[--contract-out <dir>] [--provider <vtable>]... [--callback <vtable>]... [--using <NS>]..."
                 + " [--library <so-name>] [--domain <name>] [--manifest <api_domains.json>]");

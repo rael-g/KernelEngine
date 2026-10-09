@@ -1,3 +1,4 @@
+//! Tests of the window core against a fake device and an input spy.
 
 const std = @import("std");
 const testing = std.testing;

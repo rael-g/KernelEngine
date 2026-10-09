@@ -1,10 +1,26 @@
 
 using System.Text.Json.Nodes;
 
-namespace Kabic.Frontend;
+namespace Kabic.Reader;
 
+/// <summary>
+/// Writes the declarations of an <c>ApiModel</c> and of its parts as JSON objects under fixed key
+/// names.
+/// </summary>
+/// <remarks>
+/// The model is written as one object holding the enum, struct, vtable, function and callback
+/// arrays, and the type aliases as an object from alias name to target. The variables array is
+/// added only when the model has variables. A struct is written under vtables when it is a
+/// vtable and under structs otherwise, and it gets slots only when it has any. An enum gets
+/// external only when it is external, and tags only when it has any. An enum value is written as
+/// a number when it is an integer and as text otherwise. A slot gets return tags only when it has
+/// any, and a receiver only when it has one. A function gets return tags only when it has any.
+/// </remarks>
 public static class Serialization
 {
+    /// <summary>
+    /// Writes the model as one JSON object, as described in the remarks.
+    /// </summary>
     public static JsonObject ToJson(this ApiModel m)
     {
         var json = new JsonObject
@@ -25,6 +41,9 @@ public static class Serialization
         return json;
     }
 
+    /// <summary>
+    /// Writes a parameter as an object with its name, type, tags and documentation.
+    /// </summary>
     public static JsonObject ToJson(this ApiParam p) => new()
     {
         ["name"] = p.Name,
@@ -33,6 +52,10 @@ public static class Serialization
         ["doc"] = p.Doc,
     };
 
+    /// <summary>
+    /// Writes an enumerator as an object with its name, its value and its documentation. The value
+    /// is a number when the enumerator is an integer and text otherwise.
+    /// </summary>
     public static JsonObject ToJson(this ApiEnumValue v) => new()
     {
         ["name"] = v.Name,
@@ -40,6 +63,10 @@ public static class Serialization
         ["doc"] = v.Doc,
     };
 
+    /// <summary>
+    /// Writes an enum as an object with its name, documentation and values, adding external and
+    /// tags when they are set.
+    /// </summary>
     public static JsonObject ToJson(this ApiEnum e)
     {
         var o = new JsonObject
@@ -53,6 +80,9 @@ public static class Serialization
         return o;
     }
 
+    /// <summary>
+    /// Writes a struct field as an object with its name, type, tags and documentation.
+    /// </summary>
     public static JsonObject ToJson(this ApiField f) => new()
     {
         ["name"] = f.Name,
@@ -61,6 +91,10 @@ public static class Serialization
         ["doc"] = f.Doc,
     };
 
+    /// <summary>
+    /// Writes a vtable slot as an object with its name, return type, tags, documentation, return
+    /// documentation and parameters, adding return tags and receiver when they are present.
+    /// </summary>
     public static JsonObject ToJson(this ApiSlot s)
     {
         var o = new JsonObject
@@ -78,6 +112,10 @@ public static class Serialization
         return o;
     }
 
+    /// <summary>
+    /// Writes a struct as an object with its name, documentation, tags and fields, adding slots and
+    /// external when they are present.
+    /// </summary>
     public static JsonObject ToJson(this ApiStruct s)
     {
         var o = new JsonObject
@@ -93,6 +131,9 @@ public static class Serialization
         return o;
     }
 
+    /// <summary>
+    /// Writes a callback as an object with its name, return type, documentation and lanes.
+    /// </summary>
     public static JsonObject ToJson(this ApiCallback c) => new()
     {
         ["name"] = c.Name,
@@ -101,6 +142,10 @@ public static class Serialization
         ["lanes"] = new JsonArray(c.Lanes.Select(l => (JsonNode)l.ToJson()).ToArray()),
     };
 
+    /// <summary>
+    /// Writes a function as an object with its name, return type, documentation, return
+    /// documentation and parameters, adding return tags when they are present.
+    /// </summary>
     public static JsonObject ToJson(this ApiFunction f)
     {
         var o = new JsonObject

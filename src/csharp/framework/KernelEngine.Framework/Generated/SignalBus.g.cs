@@ -45,7 +45,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
         _borrowed = borrowed;
     }
 
-    /// <summary>Resolves a signal by name, registering it on first use. The payload size is part of the identity, not metadata: two languages naming the same signal with different payload layouts would otherwise alias one id and read each other's bytes at the wrong stride. A second registration under a different size fails instead.</summary>
+    /// <summary>Resolves a signal by name, registering it on first use. The payload size is part of the identity: a second registration of the name under a different size fails.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint SignalId(string name, uint payloadSize)
     {
@@ -59,7 +59,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
         }
     }
 
-    /// <summary>Resolves a signal by name without registering it, so a caller that did not author the name can tell an existing signal from a typo. A scene file is exactly that caller: signal_id would happily invent the signal its author misspelled, and the connection would then never fire.</summary>
+    /// <summary>Resolves a signal by name without registering it. An unregistered name fails.</summary>
     public bool TrySignalLookup(string name, out uint id)
     {
         uint idLocal;
@@ -72,7 +72,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
         }
     }
 
-    /// <summary>Wires one source entity's signal to one target entity, tagged with a handler selector the receiving language interprets. Connecting the same quadruple twice is a no-op rather than a duplicate delivery.</summary>
+    /// <summary>Wires one source entity's signal to one target entity, tagged with a handler selector. Connecting the same quadruple twice is a no-op rather than a duplicate delivery.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Connect(ulong source, uint signalId, ulong target, uint handlerId)
     {
@@ -86,7 +86,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
         return Handle->disconnect(Handle, source, signalId, target, handlerId);
     }
 
-    /// <summary>Drops every connection naming this entity as source or target, so a destroyed node cannot be delivered to or emit through a stale wire.</summary>
+    /// <summary>Drops every connection naming this entity as source or target.</summary>
     public void ForgetEntity(ulong entity)
     {
         Handle->forget_entity(Handle, entity);

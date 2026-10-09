@@ -1,8 +1,11 @@
+//! Builds the cache keys of the resolve systems with no allocation and no failure path: a `Key`
+//! is sized at compile time for its prefix and field count, `init` writes the text, and `bits`
+//! turns a float into a field.
+
 const std = @import("std");
 
-/// A cache key built from a fixed number of scalars. Every scalar is written as
-/// its 32-bit pattern in hex, so building one cannot fail and two values that
-/// differ anywhere in the mantissa get different keys.
+/// Owns the storage its key text is written into. The text sits in `buf`, sized at compile time
+/// from the prefix and the field count, so building a key never allocates.
 pub fn Key(comptime prefix: []const u8, comptime field_count: usize) type {
     return struct {
         const Self = @This();
@@ -10,6 +13,10 @@ pub fn Key(comptime prefix: []const u8, comptime field_count: usize) type {
 
         buf: [len + 1]u8 = undefined,
 
+        /// Writes the prefix, then each 32-bit field as a colon and eight lowercase hex digits,
+        /// and ends with a zero byte so the result is a C string. Equal inputs give equal text.
+        /// Overwrites `buf` on every call, so a pointer returned by an earlier call is invalid
+        /// once this one has run, and the pointer is valid only while this value stays in place.
         pub fn init(self: *Self, fields: [field_count]u32) [*:0]const u8 {
             @memcpy(self.buf[0..prefix.len], prefix);
             var at = prefix.len;
@@ -24,7 +31,8 @@ pub fn Key(comptime prefix: []const u8, comptime field_count: usize) type {
     };
 }
 
-/// Reads a float as the bits it is, so a key never depends on how it prints.
+/// Returns the bit pattern of the float, so floats that print alike but differ in the last
+/// mantissa bit still give different keys.
 pub fn bits(v: f32) u32 {
     return @bitCast(v);
 }

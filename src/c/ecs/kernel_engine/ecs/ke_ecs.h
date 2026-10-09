@@ -28,7 +28,7 @@ extern "C"
         uint32_t         column_count;
     } ke_ecs_segment;
 
-    /** Entity lifetime plus component storage: the engine's ECS contract. */
+    /** Entity lifetime and component storage. */
     typedef struct ke_ecs
     {
         void *handle;
@@ -50,7 +50,7 @@ extern "C"
          * @param name [borrowed,utf8] Unique component name.
          * @param element_size Bytes per entity; 0 registers a tag (no storage).
          * @param fields [borrowed,optional] The type's field layout, normally its
-         *        generated field table. Must outlive the ecs. NULL registers the
+         *        field table. Must outlive the ecs. NULL registers the
          *        size alone.
          * @param field_count Entries in `fields`; 0 when `fields` is NULL.
          * @param out_error [out,optional] Set when the layout conflicts with the name's
@@ -129,11 +129,10 @@ extern "C"
          * Reserves an entity id, callable concurrently from any wave thread —
          * the one entity operation that is. The id is usable immediately as a
          * reference; the entity itself appears in the world when component_add
-         * first runs for it, which the runtime does at the wave barrier.
+         * first runs for it, at the wave barrier.
          *
-         * An implementation may not satisfy this by forwarding to entity_create:
-         * the contract is concurrent callability, and a backend whose id
-         * allocator walks shared state must keep a separate one for this.
+         * An implementation may not satisfy this by forwarding to entity_create,
+         * which is single-threaded.
          */
         ke_entity (*entity_reserve)(struct ke_ecs *self);
 
