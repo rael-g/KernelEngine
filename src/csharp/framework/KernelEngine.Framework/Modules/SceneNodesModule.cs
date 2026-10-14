@@ -9,7 +9,7 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Runtime module "SceneNodes", depending on <see cref="FrameworkModule"/>. It registers the
 /// <see cref="ScriptHost"/> and the spatial node types, and registers these systems: "Scene.Input"
-/// (pre-update, on the pinned worker: releases retired handles, updates and snapshots input and
+/// (pre-update, writing <see cref="ScriptHost.StateCid"/>: releases retired handles, updates and snapshots input and
 /// evaluates actions), "Scene.Signals.Clear" (pre-update) and "Scene.Signals.Deliver"
 /// (post-update) when a <see cref="SignalBus"/> is registered, and one system
 /// "Scene.Behaviors.&lt;type&gt;" in the update phase for each node type with behavior,
@@ -17,12 +17,10 @@ namespace KernelEngine.Framework;
 /// of the type's <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
 /// query and the reached ones its access list, with hierarchy and name always read, and it is
 /// sliced per entity when the type reaches only itself. <c>OnLoad</c> declares the signals of
-/// every registered node type and then runs the setup callback on the pinned worker.
+/// every registered node type and then runs the setup callback on the calling thread.
 /// </summary>
 public sealed class SceneNodesModule : IRuntimeModule
 {
-    private const uint SetupWorker = 1;
-
     private readonly Action<ScriptHost, IServiceProvider> _setup;
 
     private KernelEngine.Input.IInputReader? _inputSnapshot;
@@ -77,8 +75,8 @@ public sealed class SceneNodesModule : IRuntimeModule
     }
 
     /// <summary>
-    /// Registers the systems, declares the signals, and runs the setup callback on the pinned
-    /// worker.
+    /// Registers the systems, declares the signals, and runs the setup callback on the calling
+    /// thread.
     /// </summary>
     /// <exception cref="InvalidOperationException">The setup callback throws.</exception>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
@@ -87,7 +85,6 @@ public sealed class SceneNodesModule : IRuntimeModule
         var world     = services.GetRequiredService<World>();
         var sceneTree = world.SceneTree;
         var input     = services.GetService<IInput>();
-        var scheduler = services.GetRequiredService<IScheduler>();
         var evaluator = services.GetService<IActionEvaluator>();
 
         var hierarchyCid = scriptHost.CidOfName("hierarchy");
@@ -99,7 +96,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             input?.Update();
             _inputSnapshot = input?.CaptureSnapshot();
             evaluator?.Evaluate(_inputSnapshot);
-        }, accessList: [], pinnedThread: 1);
+        }, accessList: [Touches(scriptHost.StateCid, writes: true)]);
 
         DeclareSignals(scriptHost, services);
 
@@ -184,16 +181,8 @@ public sealed class SceneNodesModule : IRuntimeModule
             }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };
 
-        var done = new System.Threading.ManualResetEventSlim(false);
-        Exception? err = null;
-        scheduler.DispatchPinned(SetupWorker, () =>
-        {
-            try   { _setup(scriptHost, services); }
-            catch (Exception ex) { err = ex; }
-            finally { done.Set(); }
-        });
-        done.Wait();
-        if (err != null) throw new InvalidOperationException("Scene setup failed", err);
+        try   { _setup(scriptHost, services); }
+        catch (Exception ex) { throw new InvalidOperationException("Scene setup failed", ex); }
     }
 
     private static ComponentAccess Touches(uint cid, bool writes) =>

@@ -60,3 +60,5 @@
   href: 0029-render-phase-reads-extracted-copies.md
 - name: "0030 Plugin shape where no language convention applies"
   href: 0030-plugin-shape-where-no-language-convention-applies.md
+- name: "0031 No system is pinned to a worker"
+  href: 0031-no-system-is-pinned-to-a-worker.md

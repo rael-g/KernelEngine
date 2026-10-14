@@ -137,7 +137,7 @@ A service locator is forbidden: injection happens in the orchestration area, nev
 
 ## Threading model
 
-There is one worker pool, behind `ke_scheduler`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it unless it asks to be pinned to an index. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md); read the pinning there before assuming any thread affinity.
+There is one worker pool, behind `ke_scheduler`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access ([`0031`](docs/decisions/0031-no-system-is-pinned-to-a-worker.md)). What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
 
 **Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 

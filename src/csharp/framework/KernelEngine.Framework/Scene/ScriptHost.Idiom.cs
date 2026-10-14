@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
@@ -194,8 +194,18 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
         _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
         _ = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
+        StateCid = ecs.RegisterComponent<ScriptHostState>("scene.script_host");
         return this;
     }
+
+    /// <summary>
+    /// The component no entity carries that stands for this host's own state. A system that
+    /// changes the host outside a node's components names it as written, so the runtime never runs
+    /// two such systems in one wave.
+    /// </summary>
+    public uint StateCid { get; private set; }
+
+    private struct ScriptHostState;
 
     /// <summary>
     /// Creates the entity of a node under <paramref name="parent"/>, deferred when a system
