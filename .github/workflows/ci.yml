@@ -116,6 +116,31 @@ jobs:
         if: runner.os == 'Linux'
         run: dotnet run scripts/verify.cs -- gates
 
+      - name: Documentation site
+        if: runner.os == 'Linux'
+        run: dotnet run scripts/verify.cs -- docs
+
+      - name: Upload documentation site
+        if: runner.os == 'Linux' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/docs-site
+
+  publish-docs:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
   visual:
     runs-on: ubuntu-latest
     timeout-minutes: 45

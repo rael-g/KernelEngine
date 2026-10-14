@@ -80,6 +80,13 @@ because passes record on several workers at once, so their order in the capture 
 runs. The capture stays in `build/capture/linux-lavapipe/`, where RenderDoc opens it; `--update` records
 the list.
 
+## Where the documentation site goes
+
+The Linux job builds the site with the `docs` stage on every push, so a document that no longer
+builds fails the run on the branch that broke it. On a push to `main` the same job uploads
+`build/docs-site`, and the `publish-docs` job deploys it to GitHub Pages. The repository's Pages
+source has to be set to GitHub Actions for the deployment to be accepted.
+
 ## What `main-history` checks
 
 Every commit on `main` has a Conventional Commit subject (`docs/conventions/git.md`), so the changelog is
