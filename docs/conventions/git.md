@@ -14,8 +14,7 @@ passed on it before it is pushed.
 - A message starts with a subject line: `feat`, `fix`, `refactor`, `docs`, `test` or `chore`, a colon and
   the summary. The changelog is read from the subject lines on `main`.
 - A message may have a body, a merge commit included. The body says why the change was made, which the
-  diff does not show; it does not retell the diff. The reason for a structural decision, one that outlives
-  the commit, is a record under `docs/decisions/` (`docs/conventions/docs.md`).
+  diff does not show; it does not retell the diff.
 - No `Co-Authored-By` footer.
 - Run `scripts/ci_local.cs` on `main`, cold on Linux and with `--windows` (`docs/conventions/ci.md`). If it
   passes, `main` is ready to push. If it fails, undo the commit or the merge, fix, and run it again.

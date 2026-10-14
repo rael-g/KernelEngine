@@ -4,9 +4,6 @@
 - name: Architecture
   href: architecture/
   homepage: architecture/index.md
-- name: Decisions
-  href: decisions/
-  homepage: decisions/index.md
 - name: Conventions
   href: conventions/
   homepage: conventions/index.md

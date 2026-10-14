@@ -23,11 +23,6 @@ If a document needs one of these to be understood, it is a plan and it does not 
 narrative, no `Supersedes:` chain. A document that has been superseded is deleted — `git` already
 keeps every word of it, and a reader who finds it in `docs/` cannot know it was retired.
 
-The record of a decision is the one exception. It describes a moment on purpose: what was known,
-what was chosen and what follows from it, with its date. It is never edited afterwards and never
-cited as a description of the system as it is. A decision that replaces another is a new record,
-and the replaced one gains a single line naming it.
-
 **3. No checkboxes and no "delivered" tables.** A list of what shipped is a log. It belongs in the
 kanban or in `git log`, both of which are better at it and neither of which pretends to be a
 contract.
@@ -67,9 +62,7 @@ Each kind of content is written in the place where something keeps it true.
   under `docs/guides/` quotes passages of an example and holds no code of its own. The passage is
   delimited in the example by a marker, `#region` in C# and a marker comment in Zig and C, which
   is the one comment an example may carry besides its doc comments.
-- **Why something was decided** is a record under `docs/decisions/`, one numbered file per
-  decision: context, decision, consequences. A change that makes a structural decision carries its
-  record in the same branch.
+- **Why something was changed** is the body of the commit that changed it.
 - **How the parts of a domain fit together** is a map under `docs/architecture/`: the parts by
   name, what each hands to which, and only what rarely changes. A map does not describe how a
   part works inside, and it names a part in backticks instead of linking to a line.

@@ -29,8 +29,7 @@ the one that may be called from any wave thread.
 
 **Nothing is pinned.** Index `0` is "any" for the runtime, and every system registers with it;
 an order between two systems is a component they both access. State that is not a component is
-named by a component no entity carries, such as `ScriptHost.StateCid`. Why:
-[0031](../decisions/0031-no-system-is-pinned-to-a-worker.md).
+named by a component no entity carries, such as `ScriptHost.StateCid`.
 
 **The window is not on the pool.** The host calls `IWindow.PollEvents` on the thread that created
 the window, before each `Tick`.

@@ -70,7 +70,6 @@ More examples are under `examples/c` and `examples/csharp`.
 - Guides: [Guides](docs/guides), starting with
   [how to start the engine from your own program](docs/guides/minimal-host.md).
 - Maps of each domain: [Architecture](docs/architecture).
-- Why a structural choice was made: [Decisions](docs/decisions).
 - Reference pages are generated from the doc comments of the sources.
 
 Build the site locally:

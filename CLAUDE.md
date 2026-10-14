@@ -26,7 +26,7 @@ build/native/bin/docir query <name> src                           # what the sou
 
 `--global-cache-dir` is not optional housekeeping: without it Zig caches into the user's home. The local cache is `.zig-cache` at the repository root, where Zig puts it by default; the root build gives `vcpkg install` both through `ZIG_LOCAL_CACHE_DIR` and `ZIG_GLOBAL_CACHE_DIR`, because vcpkg's CMake runs `zig cc` from directories of its own.
 
-Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native, RenderDoc), `build/vcpkg-installed/` for the ports, `build/vcpkg-archives/` and `build/vcpkg-registries/` for vcpkg's compiled-port archives and registry checkouts, `build/zig-global/` for Zig's global cache, and `build/nuget/` for the NuGet packages (`nuget.config` at the root points there). The two exceptions are at the repository root and ignored by git: `.zig-cache/`, the local cache of Zig, and `zig-pkg/`, where Zig unpacks the packages declared by URL in a `build.zig.zon` (zmath, docir). Why: [`0028`](docs/decisions/0028-zig-cache-and-zig-pkg-stay-at-the-root.md). Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
+Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native, RenderDoc), `build/vcpkg-installed/` for the ports, `build/vcpkg-archives/` and `build/vcpkg-registries/` for vcpkg's compiled-port archives and registry checkouts, `build/zig-global/` for Zig's global cache, and `build/nuget/` for the NuGet packages (`nuget.config` at the root points there). The two exceptions are at the repository root and ignored by git: `.zig-cache/`, the local cache of Zig, and `zig-pkg/`, where Zig unpacks the packages declared by URL in a `build.zig.zon` (zmath, docir). Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Running an example or `dotnet test` also needs `build/native/lib` on `LD_LIBRARY_PATH` — the copy step brings each plugin along, but a plugin's transitive `libke_common.so` is resolved by the dynamic loader, which does not look in the output directory.
 
 **Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
 
@@ -137,7 +137,7 @@ A service locator is forbidden: injection happens in the orchestration area, nev
 
 ## Threading model
 
-There is one worker pool, behind `ke_scheduler`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access ([`0031`](docs/decisions/0031-no-system-is-pinned-to-a-worker.md)). What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
+There is one worker pool, behind `ke_scheduler`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
 
 **Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
@@ -151,7 +151,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - No comments in any file: source, scripts, workflows, shaders, build files. The code and its names carry the meaning.
 - The exception is documentation the build generates pages from. A doc comment on a declaration (`///` in Zig, `///` and `<summary>` in C#, Doxygen in C headers) states what a caller relies on: what it passes, what it gets back, what fails. In a contract it is required on every public declaration. In an implementation file it is required on a function that implements a slot of a contract and on a type that holds state, where it states the part the declaration plays in the mechanism, never a retelling of its body; any other function carries one only for a precondition or an invariant its body does not show, and a field, an enum value or a test helper carries none. A file doc comment at the top of an implementation file (`//!` in Zig, `@file` in C) is a summary of one to three sentences saying what the file answers for. C# has no file doc comment: the `<summary>` of the type says it.
 - An example under `examples/` may also carry the marker that delimits a passage a guide quotes: `#region` in C#, a marker comment in Zig and C. The marker names the passage and says nothing else.
-- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. The reason for a change belongs in the body of its commit message, and the reason for a structural decision in a record under `docs/decisions/`. The rules a doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
+- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. The reason for a change belongs in the body of its commit message. The rules a doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
 
 ### C (contracts) and Zig (implementations)
 - **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
@@ -160,7 +160,15 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - **Error handling**: a call that can fail takes `ke_error **out_error` and, on failure, fills it with `KE_ERROR_SET` and returns its failure sentinel (`false`, a null handle, an invalid id). All callers check the return.
 - **Memory**: each plugin owns its allocation, and the factory functions do **not** take an allocator parameter. Raw pointers are non-owning unless documented otherwise.
 - **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
-- **Shape of a plugin**: the state is a struct named `State` embedding the vtable as `api`; a slot function is a camelCase verb named after its slot; no `impl_`, `Impl` or `_impl` in a name. The full list is in [`0030`](docs/decisions/0030-plugin-shape-where-no-language-convention-applies.md).
+- **Shape of a plugin**, where the language is silent:
+  - The entry file is named after the domain and the plugin; a render pass ends in `module`.
+  - The state is a struct named `State`, embedding the vtable as the field `api`, whose handle points back at it; one function named `stateOf` recovers it from a slot's first argument.
+  - A slot function is a camelCase verb named after its slot, prefixed only in a file that implements several vtables. No `impl_`, `Impl` or `_impl` in a name.
+  - A slot refuses a null first argument: silently without a result, as an invalid argument with one. A slot with an error lane fills it on every failure.
+  - A factory is `export` without `pub`, takes a params struct in which zero selects the default, and on failure frees what it took and returns the zeroed handle.
+  - C types reach a plugin through one file of imports; shared Zig source by module name.
+  - A test is named by a sentence stating the behaviour, uses the shared stubs, and the last test of a plugin checks that nothing leaked.
+  - A managed module is named in PascalCase with no dot; a command line tool exits 0, 1 on a failure, 2 when it could not run.
 
 ### C#
 - XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments).
@@ -179,9 +187,9 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 The rules below and the conventions above that a machine can check are checked by `scripts/check_engine_rules.cs`, which `scripts/verify.cs` runs with the other gates. Where a rule is already broken it holds a ceiling that can only go down.
 
-1. **A plugin exposes vtables behind one factory per header.** A contract header declares vtable shapes only; a plugin exports one create function per factory header; only the shared kernel library exports plain functions. Why: [`0019`](docs/decisions/0019-a-plugin-is-vtables-behind-one-factory.md).
+1. **A plugin exposes vtables behind one factory per header.** A contract header declares vtable shapes only; a plugin exports one create function per factory header; only the shared kernel library exports plain functions.
 
-2. **No `InternalsVisibleTo`.** A native handle crosses assemblies through the `Native` pointer of a generated `INative<Domain>` interface. Why: [`0015`](docs/decisions/0015-native-pointer-through-interface.md).
+2. **No `InternalsVisibleTo`.** A native handle crosses assemblies through the `Native` pointer of a generated `INative<Domain>` interface.
 
 3. **Search precedents before inventing — but judge the precedent first.** The project is mature enough that almost every structural decision has an existing example. Before designing a new plugin layout, a new binding `.rsp`, a new plugin `build.zig`, a new vtable split — find the closest existing case in the repo. Match the established pattern; if it's genuinely wrong, propose changing the pattern explicitly rather than diverging in parallel.
    - **Frequency is not endorsement.** A shape repeated across a hundred files is a precedent only if it was *decided*. Most of what exists here was written before the convention that now governs it, and the plan is deliberate: settle a convention, write all new code to it, and refactor the old separately — so that "old" shrinks instead of reproducing. Citing the old code as license to keep writing it defeats the entire plan.
@@ -190,21 +198,21 @@ The rules below and the conventions above that a machine can check are checked b
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
-5. **No mutex, condition variable or raw thread in a plugin.** The scheduler is the synchronisation layer: work is dispatched to `ke_scheduler` and waited on through it, and a producer and a consumer are ordered by phases. Why: [`0020`](docs/decisions/0020-the-scheduler-is-the-only-synchronisation.md).
+5. **No mutex, condition variable or raw thread in a plugin.** The scheduler is the synchronisation layer: work is dispatched to `ke_scheduler` and waited on through it, and a producer and a consumer are ordered by phases.
 
-6. **No `assert` and no `abort` in engine code.** Every failure, an internal guard included, fills a `ke_error` and returns the failure sentinel of the call. Why: [`0021`](docs/decisions/0021-a-failure-is-a-ke-error-never-an-abort.md).
+6. **No `assert` and no `abort` in engine code.** Every failure, an internal guard included, fills a `ke_error` and returns the failure sentinel of the call.
 
-7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its contracts in `src/c/framework/` and its factory headers. Why: [`0022`](docs/decisions/0022-the-framework-is-a-plugin-like-any-other.md).
+7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its contracts in `src/c/framework/` and its factory headers.
 
-8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a field of a params struct or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted. Why: [`0023`](docs/decisions/0023-a-tuning-value-is-a-parameter.md).
+8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a field of a params struct or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted.
 
-9. **The correct shape beats the easy one.** An idea is judged by whether it is the right shape, never by how much existing code would change; a design shown to be wrong is refactored all the way. A local workaround for a narrow problem is allowed and named as one. Why: [`0024`](docs/decisions/0024-the-narrow-path-is-chosen-over-the-easy-one.md).
+9. **The correct shape beats the easy one.** An idea is judged by whether it is the right shape, never by how much existing code would change; a design shown to be wrong is refactored all the way. A local workaround for a narrow problem is allowed and named as one.
 
 ---
 
 ## Key documents
 
-`docs/` holds contracts, mechanisms and the record of decisions, and nothing else; what it holds is listed in
+`docs/` holds contracts and mechanisms, and nothing else; what it holds is listed in
 [`docs/README.md`](docs/README.md), and the rules every one of its documents is written to are in
 [`docs/conventions/docs.md`](docs/conventions/docs.md). Anything that describes a moment lives in the
 unversioned kanban.
