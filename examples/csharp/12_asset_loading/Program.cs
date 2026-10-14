@@ -15,7 +15,7 @@ using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Asset;
 
-string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
+string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../examples/assets/Box.gltf"));
 
 var services = new ServiceCollection()
     .AddLogger()

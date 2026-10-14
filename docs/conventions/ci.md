@@ -63,7 +63,7 @@ read no compiler or linker output, so the answer cannot differ by runner.
 The job builds the image `scripts/ci/Dockerfile` describes, a base pinned by digest with packages from
 one apt snapshot, and runs `verify.cs -- build visual` inside it. `scripts/visual.cs` runs each capture
 example with the image's lavapipe software Vulkan driver, and compares the PNG it writes, texel by texel
-and with no tolerance, against the one of the same name under `golden/linux-lavapipe/`. The pinned driver
+and with no tolerance, against the one of the same name under `tests/visual/golden/linux-lavapipe/`. The pinned driver
 is what makes an exact comparison hold: another driver rounds differently, so the script
 refuses to run where lavapipe is not installed. A failure uploads `build/visual` as an artifact, with the images that were drawn.
 `scripts/ci_local.cs -- --update-golden` records the goldens from the same image.
@@ -75,7 +75,7 @@ starts `c_demo_16 --renderdoc` through the `renderdoccmd` the native build fetch
 on the same lavapipe driver, with the Vulkan layer manifest the build wrote beside it. The example then
 draws into a render target that has RenderDoc capture its last frame. The script converts the capture
 to XML with `renderdoccmd convert`, collects the debug labels the frame's passes were recorded under,
-sorts them, and compares the list against `golden/linux-lavapipe/c_demo_16.passes`. The list is sorted
+sorts them, and compares the list against `tests/visual/golden/linux-lavapipe/c_demo_16.passes`. The list is sorted
 because passes record on several workers at once, so their order in the capture file varies between
 runs. The capture stays in `build/capture/linux-lavapipe/`, where RenderDoc opens it; `--update` records
 the list.

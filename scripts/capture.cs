@@ -12,14 +12,14 @@ const string SoftwareIcd = "/usr/share/vulkan/icd.d/lvp_icd.json";
 string[] scenes = ["c_demo_16"];
 
 var update = args.Contains("--update");
-var goldenDir = Path.Combine(rootDir, "golden", Platform);
+var goldenDir = Path.Combine(rootDir, "tests", "visual", "golden", Platform);
 var outputDir = Path.Combine(rootDir, "build", "capture", Platform);
 var binDir = Path.Combine(rootDir, "build", "native", "bin");
 Directory.CreateDirectory(outputDir);
 
 if (!File.Exists(SoftwareIcd))
 {
-    Console.Error.WriteLine($"the pass lists under golden/{Platform} are recorded on the pinned lavapipe driver, and {SoftwareIcd} is missing; run this inside the ci image (scripts/ci_local.cs)");
+    Console.Error.WriteLine($"the pass lists under tests/visual/golden/{Platform} are recorded on the pinned lavapipe driver, and {SoftwareIcd} is missing; run this inside the ci image (scripts/ci_local.cs)");
     return 1;
 }
 
@@ -68,13 +68,13 @@ foreach (var scene in scenes)
     {
         Directory.CreateDirectory(goldenDir);
         File.Copy(actualPath, goldenPath, overwrite: true);
-        Console.WriteLine($"updated golden/{Platform}/{scene}.passes");
+        Console.WriteLine($"updated tests/visual/golden/{Platform}/{scene}.passes");
         continue;
     }
 
     if (!File.Exists(goldenPath))
     {
-        Console.Error.WriteLine($"FAIL {scene}: no golden/{Platform}/{scene}.passes; run with --update to record it");
+        Console.Error.WriteLine($"FAIL {scene}: no tests/visual/golden/{Platform}/{scene}.passes; run with --update to record it");
         failures++;
         continue;
     }

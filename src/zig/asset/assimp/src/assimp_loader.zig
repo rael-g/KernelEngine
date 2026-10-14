@@ -468,7 +468,7 @@ const climb_prefixes = [_][]const u8{
 fn boxGltfPath() ?[:0]const u8 {
     const cwd = std.Io.Dir.cwd();
     for (climb_prefixes) |prefix| {
-        const candidate = std.fmt.bufPrintZ(&box_gltf_buffer, "{s}assets/Box.gltf", .{prefix}) catch return null;
+        const candidate = std.fmt.bufPrintZ(&box_gltf_buffer, "{s}examples/assets/Box.gltf", .{prefix}) catch return null;
         cwd.access(testing.io, candidate, .{ .read = true }) catch continue;
         return candidate;
     }
