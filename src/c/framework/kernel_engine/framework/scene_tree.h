@@ -36,9 +36,8 @@ extern "C"
         ke_entity (*create_node_deferred)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_ecs_commands *commands, ke_error **out_error);
 
         /**
-         * Destroys a node and all its descendants, firing each on_destroy hook in
-         * post-order so a child is torn down before its parent. The node is gone when
-         * the call returns.
+         * Destroys a node and all its descendants, each child before its parent. The
+         * node is gone when the call returns.
          */
         bool (*destroy_node)(struct ke_scene_tree *self, ke_entity entity, ke_error **out_error);
 

@@ -98,7 +98,7 @@
           "name": "destroy_node",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent. The node is gone when the call returns.",
+          "doc": "Destroys a node and all its descendants, each child before its parent. The node is gone when the call returns.",
           "return_doc": null,
           "params": [
             {

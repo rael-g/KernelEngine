@@ -80,7 +80,7 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         }
     }
 
-    /// <summary>Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent. The node is gone when the call returns.</summary>
+    /// <summary>Destroys a node and all its descendants, each child before its parent. The node is gone when the call returns.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void DestroyNode(ulong entity)
     {
