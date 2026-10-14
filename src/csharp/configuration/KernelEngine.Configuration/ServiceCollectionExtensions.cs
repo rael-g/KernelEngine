@@ -18,23 +18,25 @@ public static class ServiceCollectionExtensions
     /// </param>
     public static IServiceCollection AddProjectConfig(this IServiceCollection services, string? path = null)
     {
-        services.TryAddConfigurationSingleton(path);
+        services.Replace(ServiceDescriptor.Singleton<IConfiguration>(_ => Load(path)));
         return services;
     }
 
     /// <summary>
-    /// Registers <see cref="IConfiguration"/> if not already registered. Plugins that need
-    /// config but may be composed without an explicit <see cref="AddProjectConfig"/> call
-    /// (e.g. examples wiring modules directly) call this from their own <c>AddX()</c>.
+    /// Registers <see cref="IConfiguration"/> if not already registered, from <paramref name="path"/>
+    /// or the <c>Project</c> file next to the executable. A later <see cref="AddProjectConfig"/>
+    /// replaces it.
     /// </summary>
     public static void TryAddConfigurationSingleton(this IServiceCollection services, string? path = null)
     {
-        services.TryAddSingleton<IConfiguration>(_ =>
-        {
-            var cfg = new Configuration();
-            cfg.LoadToml(ResolvePath(path ?? "Project")!);
-            return cfg;
-        });
+        services.TryAddSingleton<IConfiguration>(_ => Load(path));
+    }
+
+    private static Configuration Load(string? path)
+    {
+        var cfg = new Configuration();
+        cfg.LoadToml(ResolvePath(path ?? "Project")!);
+        return cfg;
     }
 
     private static string? ResolvePath(string? path)
