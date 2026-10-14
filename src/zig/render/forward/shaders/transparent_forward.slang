@@ -41,7 +41,7 @@ float4 ke_transparent_fs<T : IMaterial>(T material, VsOut input) {
 
     float3 ibl = ibl_contribution(n, v, albedo_c, metallic);
 
-    float3 ambient = frame.ambient.rgb * albedo_c * (1.0 - metallic);
+    float3 ambient = frame.ambient.rgb * albedo_c * (1.0 - metallic) * s.ao;
     float3 color   = ambient + lit + s.emissive + ibl;
 
     float3 refr = refraction_contribution(n, v, input.clip.xy / frame.viewport.xy, mat.ior, mat.distortion_strength);
