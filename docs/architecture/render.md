@@ -1,179 +1,80 @@
 # How does a frame get from the ECS to the GPU?
 
-A frame is produced by ordinary runtime systems in `KE_PHASE_RENDER`. There is no render graph
-object: ordering comes from the runtime's waves ([runtime.md](runtime.md#waves--what-may-run-concurrently)),
-and a render resource is a component id.
+This is a map: the parts of the render domain, what each receives and what it hands on. How a
+part works inside is on the generated page of its file. Contracts are under `src/c/render/`,
+plugins under `src/zig/render/`.
 
 ## The parts
 
-| part | what it is | where |
-|---|---|---|
-| GPU device | the device, resource and command contract; one implementation, WebGPU | `src/c/render/kernel_engine/render/gpu/gpu_device.h`; plugin `ke_gpu_device_webgpu` (`build.zig:280`) |
-| render service | resources by name, pass recording contexts, meshes, textures, materials, pipeline cache, frame lifecycle | `.../render/service/render_service.h:61`; `src/zig/render/service/` |
-| pass plugins | one plugin per pass: shadow, cluster, gbuffer, deferred lighting, skybox, forward, tonemap, UI | `src/zig/render/<pass>/` |
-| render module | composes the passes and registers the frame-edge systems | `src/zig/render/module/src/render_module.zig` |
+| part | contract | plugin | receives | hands on |
+|---|---|---|---|---|
+| device | `ke_gpu_device` | webgpu | optionally a `ke_scheduler` and a `ke_logger` | GPU objects, command encoders, the clip-space convention |
+| target | `ke_gpu_render_target` | webgpu, texture_target, renderdoc_target | the device, and a `ke_window` for the window target; the capture target wraps another target | the texture a frame ends in, and its presentation |
+| service | `ke_render_service` | service | device, target, `ke_ecs` | named resources, passes, uploads, materials, pipelines |
+| camera | `ke_render_camera` | camera | `ke_view_space`, the clip-space convention | view and projection matrices from a camera component |
+| pass | none; a `ke_runtime_system_params` and a `ke_render_pass_io` | one plugin per pass | `ke_runtime`, service, device, component ids | commands recorded into its slot |
+| module | none; `ke_render_module_create` | module | everything above, plus `ke_runtime` | a composed pipeline, and the service to the host |
 
-## A resource is a component id
+A host that wants the default pipeline calls `ke_render_module_create` and nothing else of this
+table. A host that composes its own creates the service and the passes it wants.
 
-`declare` allocates a transient GPU resource under a name and returns **the tag-component id to put
-in a pass's access list** (`render_service.h:65-68`). `import_texture`, `import_buffer`,
-`import_bind_group` and `import_tag` do the same for something owned elsewhere or for an ordering
-dependency that carries no data (`render_service.h:69-86`). `cid(name)` looks one up (`:87-88`).
+## What ties the parts together
 
-So "pass B reads what pass A writes" is written as the runtime already understands access: A lists
-the resource's cid with `KE_ACCESS_WRITE`, B with `KE_ACCESS_READ`.
+**The runtime is the render graph.** There is no graph object. A render resource is a component
+id: a pass declares or imports a resource by name through the service and receives an id, and
+puts that id in the access list of its system. The runtime orders and separates the passes from
+those access lists, as it does for any other system.
 
-## A pass is a runtime system
+**A pass is a system in `KE_PHASE_RENDER`.** Its `ke_render_pass_io` names what it reads and
+writes and the command slot it records into. Between `begin_pass` and `end_pass` it records
+through `ke_gpu_render_pass`; nothing reaches the GPU until the frame closes.
 
-A pass plugin's factory takes the runtime, the render service, the device and a logger, sets up its
-pipelines, and registers **one system** in `KE_PHASE_RENDER` whose access list names the resources it
-reads and writes. The tonemap pass is the smallest example: it reads `hdr`, writes `backbuffer`
-(`src/zig/render/tonemap/src/tonemap_module.zig:127-130`) and registers as `render.tonemap` in the
-render phase (`tonemap_module.zig:149-172`).
+**A frame has two edges, which are systems too.** The module registers "render.begin_frame",
+which acquires the target, and "render.end_frame", which submits the recorded slots in slot
+order and presents. Slot order, not registration order, is the order on the GPU.
 
-Inside its body a pass opens a recording context with `begin_pass(io)` and closes it with
-`end_pass` (`render_service.h:91-94`). `ke_render_pass_io` names the pass itself, its reads and writes and the
-command slot it records into (`render_service.h:47-59`). The context resolves those names to views,
-and offers a render pass, a compute pass and the raw encoder
-(`src/c/render/kernel_engine/render/service/pass_context.h:15-28`). The render or compute pass it
-opens is labeled with the io's `name`, and the texture and view of a declared resource are labeled with
-the name it was declared under, so a frame capture reads in the service's own vocabulary.
+**Scene data arrives as components.** Systems of the module in `KE_PHASE_UPDATE` turn mesh,
+sprite and label components into handles of the service; the passes read those handles, the
+camera component and the light components in the render phase.
 
-## The frame has two edges, and they are also systems
+**A pipeline is asked for, never waited for.** A pass asks the service for a pipeline each time
+it draws; the first request returns a placeholder and the real one replaces it when compiled.
 
-`render.begin_frame`, `render.clear` and `render.end_frame` are registered by the render module
-(`render_module.zig:313-314`, `379`), each with an access list over the `backbuffer` resource and a
-`render.frame` tag (`render_module.zig:232-246`):
+## The default pipeline
 
-| system | backbuffer | `render.frame` |
-|---|---|---|
-| `render.begin_frame` | write | write |
-| `render.clear` | write | read |
-| `render.end_frame` | read | write |
+Created by the module in this order; each is a plugin with one factory header.
 
-`begin_frame` acquires the backbuffer and clears the per-pass command slots
-(`render_service.h:96-98`; `src/zig/render/service/src/frame_lifecycle.zig:4-26`). `end_frame`
-flushes the queued buffer uploads, finishes every recorded slot, submits them in one call and
-presents (`render_service.h:99-100`; `frame_lifecycle.zig:29-90`).
+| pass | slot | reads | writes |
+|---|---|---|---|
+| clear (in the module) | 0 | | "backbuffer" |
+| shadow | 1 | | "shadow_map", "shadow_depth" |
+| cluster | 2 | | the "light_clusters" tag |
+| gbuffer | 3 | | "gbuffer_albedo", "gbuffer_normal", "gbuffer_emissive", "depth" |
+| deferred lighting | 4 | the gbuffer names, "depth", "light_clusters", and "shadow_map" when shadows are on | "hdr" |
+| skybox | 5 | "depth" | "hdr" |
+| forward | 6 | "shadow_map" | "hdr", "depth", and "hdr_opaque", its own copy of "hdr" |
+| tonemap | 7 | "hdr" | "backbuffer" |
+| ui | 8 | | "backbuffer" |
 
-Because a frame is exactly one `acquire` and one `present` of the render target, a target can wrap
-another one and act on those two edges. `ke_gpu_render_target_renderdoc`
-(`src/zig/render/renderdoc_target/`) does that to capture frames: on the frames its params choose it
-tells RenderDoc to start capturing before the inner `acquire` and to stop after the inner `present`, and
-it discards the capture when the inner target had nothing to draw into. It attaches to a RenderDoc that
-is already loaded into the process and is refused with `KE_ERROR_NOT_FOUND` otherwise, because RenderDoc
-has to be present before the device creates its graphics API instance; launching the program through
-`renderdoccmd capture` is what loads it. Names appear in the capture only when the device was created
-with `debug_labels` ([gpu-device.md](gpu-device.md#labels)).
+Opaque and alpha-masked surfaces go through gbuffer and deferred lighting; blended ones through
+forward, which shades them itself.
 
-## Two orders, which are not the same order
+## What the parts agree on without a contract
 
-**Execution order** is the runtime's: systems are placed into waves greedily **in registration
-order**, and a conflict only pushes a system into a later wave — it never moves a system ahead of
-one registered before it. The access lists therefore keep a reader and a writer of one resource
-apart; they do not put the writer first.
+These are string literals and numbers in the plugins. No header declares them, so a pass added
+by a host has to match them by reading the code.
 
-**Submission order** is the command slot's. `end_frame` walks slots `0` to `MAX_CMD_BUFFERS - 1`
-and submits each one that was recorded (`frame_lifecycle.zig:44-71`, `src/zig/render/service/src/render_service.zig:28`).
-Each pass chooses its own slot, as a literal in its own plugin:
+- The resource names of the table above, and the buffer "shadow_lvp" and the bind group
+  "cluster_lights" that the lighting passes import.
+- The slot numbers of the table above.
+- The layout of the per-frame uniform of each shading pass, between the Zig struct of the pass
+  and the `frame` block of its shader.
+- The name a shader is loaded by: the pass name for a pass, the material name followed by the
+  pass name for a material.
 
-| slot | pass | source |
-|---|---|---|
-| 0 | clear | `render_module.zig:228` |
-| 1 | shadow | `shadow_module.zig:233` |
-| 2 | cluster cull | `cluster_module.zig:365` |
-| 3 | gbuffer | `gbuffer_module.zig:298` |
-| 4 | deferred lighting | `deferred_lighting_module.zig:318` |
-| 5 | skybox | `skybox_module.zig:171` |
-| 6 | forward | `forward_module.zig:426` |
-| 7 | tonemap | `tonemap_module.zig:125` |
-| caller's | UI | `ui_module.zig:432`, a parameter of its setup |
+## A feature that is off
 
-What reaches the GPU is ordered by slot whatever order the bodies ran in.
-
-## Opaque and transparent surfaces take different passes
-
-A mesh's material carries an `alpha_mode` of `OPAQUE`, `MASK` or `BLEND`
-(`src/c/render/kernel_engine/render/handles.h:29-34`), and each mesh also has `layers` that a camera's
-`cull_mask` must overlap. The two drawing passes split the meshes between them by asking the service
-`material_alpha_mode`:
-
-| pass | draws | how |
-|---|---|---|
-| gbuffer | every mesh whose mode is not `BLEND` | encodes albedo, normal, roughness, emissive into the G-buffer and writes `depth` (`gbuffer_module.zig:27-46`, `:301-307`) |
-| deferred lighting | no mesh: a fullscreen triangle | reads the G-buffer and `depth`, shades every texel, writes `hdr` (`deferred_lighting_module.zig:311-318`) |
-| skybox | no mesh | loads `hdr`, reads `depth`, fills the texels geometry left empty (`skybox_module.zig:163-171`) |
-| forward | every mesh whose mode is `BLEND`, sorted farthest first | blends into `hdr`, depth-testing against `depth` without writing it (`forward_module.zig:35-63`, `:350-366`) |
-
-The order the four run in is fixed by their command slots (3, 4, 5, 6) and by their access lists: all
-four write `hdr` or `depth`, so the runtime never puts two of them in one wave.
-
-Before the forward pass opens its render pass it copies `hdr` into a second texture, `hdr_opaque`
-(`forward_module.zig:188`). The refraction term of a blended surface samples that copy, since it cannot
-sample the target it is writing. The shading both passes share is in [lighting.md](lighting.md); how a
-material becomes a pipeline for each of them is in [materials.md](materials.md).
-
-## What a camera component means
-
-Each pass takes the **first** camera in its query, the first row of the first segment
-(`gbuffer_module.zig:109`, `forward_module.zig:175`), and builds its own view and projection from
-that camera's world transform and component through the view space
-([view-space.md](view-space.md#how-a-camera-component-becomes-a-projection)). A camera's `cull_mask` is
-compared with each mesh's `layers`; a mesh is drawn only if they share a bit
-(`gbuffer_module.zig:41`). With no camera the gbuffer and deferred-lighting passes still open and close
-an empty render pass; the forward and cluster passes return without recording.
-
-## How the host composes the passes
-
-`ke_render_module_create` (declared in `src/zig/render/module/include/kernel_engine/render/module/render_module_create.h`, defined at
-`render_module.zig:174`) always creates the render service. Whether it builds the rest depends on its
-`default_passes` argument.
-
-- **`default_passes` non-zero.** It registers the camera, light, mesh, skybox, sprite and label components with
-  their generated field tables, the systems that resolve meshes, sprites and labels in `KE_PHASE_UPDATE`,
-  the frame bracket, and then creates the passes in dependency order: shadow, cluster, gbuffer, deferred
-  lighting, skybox, forward, tonemap, UI (`render_module.zig:245-365`). If any pass fails to be
-  created, the service is destroyed and the call returns an empty handle.
-- **`default_passes` zero.** Only the service exists. The host reaches it through
-  `ke_render_module_core` (`render_module.zig:105-108`) and composes whichever passes it wants by calling
-  their factories itself.
-
-The remaining parameters are all optional: `ke_render_cluster_params` (grid and lights per cluster),
-`ke_render_feature_params` (`enable_shadows`, `enable_ibl`; absent means both on,
-`render_module.zig:221-222`), `ke_render_shadow_params`, and a `ke_view_space` (absent means the
-module creates and owns the right-handed one, `render_module.zig:247-251`). A zero field in a params
-struct selects its default.
-
-## What a pass may record, and when it reaches the GPU
-
-A pass records through the context `begin_pass` returned. Three things are worth knowing about that
-context.
-
-**Compute is recorded through a proxy.** `begin_compute` does not return the device's compute pass. It
-returns a recorder owned by the service, one per command slot, that stores `set_pipeline`,
-`set_bind_group`, `dispatch` and `dispatch_indirect` as plain records, at most 32 per slot
-(`pass_recording.zig:109-156`, `render_service.zig:79-91`). `end_pass` marks the slot as a compute slot
-rather than a finished one (`pass_recording.zig:35-47`). `end_frame` then opens a real compute pass on
-that slot's encoder, replays the records in order, ends it and finishes the buffer
-(`frame_lifecycle.zig:49-70`). So a dispatch reaches the device at `end_frame`, in slot order, not at the
-moment the pass body calls it. The cluster cull is the one user (`cluster_module.zig:203-208`).
-
-**Uploads are staged.** `upload(buffer, offset, data, size)` does not touch the device. It reserves space
-in an 8 MiB arena and a record slot with atomic counters, copies the bytes into the arena and appends the
-record, so systems running on different workers can call it without a lock
-(`frame_lifecycle.zig:93-103`, `render_service.zig:31`, `:32`). `end_frame` writes every record to its
-buffer with the device's `write_buffer` before it submits anything (`frame_lifecycle.zig:34-39`);
-`begin_frame` resets both counters (`frame_lifecycle.zig:13-14`). An upload past 4096 records or past the
-arena is dropped without an error.
-
-**The rest of the device is reachable.** `encoder()` returns the slot's raw command encoder, which the
-forward pass uses for its texture copy (`forward_module.zig:188`). `query_ext(name)` forwards to the
-device's `query_extension` (`pass_recording.zig:162-165`). Storage buffers, indirect commands and storage
-textures are part of the device contract itself, described in [gpu-device.md](gpu-device.md); pipeline
-requests go through [pipeline-cache.md](pipeline-cache.md).
-
-## What the render phase reads
-
-Render systems do not read live component storage. Their queries resolve to copies the runtime
-extracted after the sim phases ([runtime.md](runtime.md#sim-and-render--how-they-are-decoupled)), and
-their structural operations are refused ([runtime.md](runtime.md#structural-change--the-defer-queue)).
+Shadows, clustered lights and image-based light are never compiled out of a shader. A feature
+that is off binds a neutral resource in its place (a white texture for the shadow map, a black
+cube for the environment), so the shading passes have one shader each whatever the host
+enables.

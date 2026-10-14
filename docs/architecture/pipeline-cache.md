@@ -1,79 +1,42 @@
 # What happens when a pass asks for a pipeline that has not been compiled yet?
 
-It gets a placeholder immediately, and the real pipeline replaces it on a later call. A pass never
-waits for a shader compile. The service's `get_or_create_pipeline` (`render_service.h:191-195`) is the
-policy layer; the device's `create_render_pipeline_async` is the primitive underneath it
-([gpu-device.md](gpu-device.md#pipelines-compile-off-the-callers-thread)).
+This is a map: the parts that take part in a pipeline request and what each hands on. How the
+cache works inside is on the generated page of its file.
 
-## What the cache is keyed on
+## The parts
 
-`PsoKey` is built from a `ke_gpu_render_pipeline_params` (`pipeline_cache.zig:8-46`): both shader
-modules, both entry-point names (copied into 64-byte arrays), topology, cull mode, front face, the vertex
-buffer count, blend state, depth and stencil state, the bind group layouts, alpha-to-coverage and the
-colour target formats. Two requests with equal keys share one entry.
+| part | declared as | receives | hands on |
+|---|---|---|---|
+| pass | a render system | its own `ke_gpu_render_pipeline_params` | the pipeline it was answered with, to `set_pipeline` |
+| service | `get_or_create_pipeline` of `ke_render_service` | the params of the pass | the current pipeline of that request |
+| cache | `PipelineCache` in `pipeline_cache.zig` of the service plugin | the params, reduced to a `PsoKey` | the fallback, then the real pipeline |
+| device | `create_render_pipeline_async` and `flush_pipeline_compiles` of `ke_gpu_device` | the params and a completion callback | the compiled pipeline, to the callback |
+| scheduler | `ke_scheduler`, handed to the device at creation | the compile job | the worker the job runs on |
 
-The vertex layout contributes the **address** of the `vertex_buffers` array, not what it contains
-(`pipeline_cache.zig:16`, `:35`). A pass that wants its requests to hit the same entry keeps its layout
-in storage that outlives the request, as the gbuffer and forward passes do by holding it in their module
-state (`gbuffer_module.zig:60-61`, `forward_module.zig:83-84`).
+## What ties the parts together
 
-## One request, step by step
+**A request never waits.** The first request for a set of params returns a fallback pipeline
+at once; the same request answered later returns the compiled one. A compile that fails leaves
+the fallback in place.
 
-`getOrCreatePipeline` (`pipeline_cache.zig:244-278`):
+**The cache is the policy, the device is the primitive.** The device compiles and reports
+through a callback; the cache decides what is returned meanwhile, and shares one entry between
+equal requests.
 
-1. **Hit.** The key is in the map. If the entry's state is `ready` it returns the real pipeline;
-   otherwise it returns the entry's fallback.
-2. **Miss.** It allocates an entry in state `pending`, builds a **fallback pipeline** from the same
-   parameters with the fragment stage replaced, inserts the entry, asks the device to compile the real
-   pipeline asynchronously, and returns the fallback.
+**Requests may come from several workers at once.** The cache is asked without a lock, and
+equal requests that race end on one entry.
 
-The fallback's fragment shader is generated WGSL that writes opaque magenta to every colour target,
-sized to the request's `color_target_count` (`pipeline_cache.zig:205-243`). The modules are
-cached per target count. A magenta surface on screen therefore means a request that has not yet
-resolved.
+**Teardown follows the callback.** A completion callback writes into a cache entry, so the
+service flushes the device's compiles (`flush_pipeline_compiles`) before it destroys the cache.
 
-When the device calls back, `onRealPipelineReady` stores the pipeline in the entry and sets the state to
-`ready` with release ordering; a reader's acquire load sees it (`pipeline_cache.zig:69-74`).
-A callback carrying the invalid handle leaves the entry `pending`, so a pipeline that fails to compile
-keeps returning its fallback on every later call.
+**Where the compile runs depends on the device.** The webgpu device compiles on the scheduler
+it was created with, and on the calling thread when it has none or has too many compiles
+outstanding; the callback has then already run when the request returns.
 
-Two allocation failures (the entry, the publication of a table that holds it) degrade to a synchronous
-`create_render_pipeline` call that leaves no entry behind. The completion context is the entry itself, so
-there is no third allocation whose failure could leave an entry `pending` for good.
+## What the parts agree on without a contract
 
-## Concurrent requests
-
-Passes in one wave ask for pipelines from different threads, and the contract forbids a lock. The table is
-a snapshot nobody mutates after publishing it: a lookup loads the current snapshot and probes it; a miss
-builds its entry, then publishes a copy of the snapshot that holds it with one compare-and-swap. A
-request that loses the swap looks again; if another thread published the same key meanwhile, it destroys
-the fallback it had built, never started its compile, and answers with the winner's entry. Replaced
-snapshots are kept on a list until the cache is destroyed, because a reader may still be probing one. The
-magenta fragment module for each target count is published the same way.
-
-## Where the compile runs
-
-On the WebGPU backend, when the device was created with a scheduler, the compile is dispatched to that
-worker pool and the completion callback runs on the worker that did the compile
-(`gpu_device_webgpu.zig:989-999`, `:998-1035`). Without a scheduler, or with `MAX_PENDING_COMPILES` = 64
-compiles already outstanding, the device compiles synchronously inside the call,
-and the callback has already fired when `create_render_pipeline_async` returns
-(`:1003-1024`). Even then the first call to the cache returns the fallback, and the real pipeline
-appears on the next.
-
-Finished compile tasks are reaped when the device presents (`gpu_device_webgpu.zig:505-523`).
-
-## Shutdown
-
-Destroying the render service first calls the device's `flush_pipeline_compiles`, which waits for every
-compile still in flight, and only then destroys the cache's pipelines
-(`render_service.zig:189`, `:210`). The order is the contract: a callback writes into a cache entry, so
-the cache cannot be destroyed while one may still run (`gpu_device.h:350-355`).
-
-## Who calls it
-
-Every pass that draws asks for its pipeline through this cache rather than the device: the shadow pass
-at setup and every frame (`shadow_module.zig:104`, `:215`), the gbuffer and forward passes for each draw
-after loading the material's modules ([materials.md](materials.md#how-a-pass-draws-with-it)), and the
-deferred-lighting pass (`deferred_lighting_module.zig:196`). The cull pass is a compute pass and uses
-`create_compute_pipeline` directly (`cluster_module.zig:352`); the cache holds render pipelines only.
+- The vertex layout is part of the key by the address of its array, not by what it holds. A
+  pass that wants its requests to share an entry keeps its layout in storage that outlives the
+  requests.
+- The fallback replaces the fragment stage with a generated shader whose entry point is
+  "fs_main" and which writes magenta to every colour target of the request.

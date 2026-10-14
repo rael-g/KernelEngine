@@ -1,138 +1,75 @@
 # What is the framework made of, and what does each piece depend on?
 
-The framework is one plugin, `src/zig/framework/`, built as `ke_framework` (`build.zig:146`). It
-exports eight factories, one per piece. Each piece is constructed on its own from the borrowed
-objects it needs; no piece is reachable except through its vtable
-([layers.md](layers.md#layer-2--a-plugin-exports-one-factory-and-nothing-else)).
+This is a map: the pieces of the framework plugin, what each receives and what it hands on. How a
+piece works inside is on the generated page of its file. Contracts are under `src/c/framework/`,
+the plugin under `src/zig/framework/`, the managed projection under `src/csharp/framework/`.
 
-| piece | factory | takes |
-|---|---|---|
-| input actions | `ke_input_actions_create` (`input_actions_create.h:27`) | nothing |
-| signal bus | `ke_signal_bus_create` (`signal_bus_create.h:42`) | a params struct of five capacities |
-| script host | `ke_script_host_create` (`script_host_create.h:39`) | `ke_ecs`, `max_types` |
-| scene hierarchy | `ke_scene_hierarchy_create` (`scene_hierarchy_create.h:35`) | `ke_runtime`, `ke_ecs` |
-| scene tree | `ke_scene_tree_create` (`scene_tree_create.h:38`) | `ke_ecs`, `ke_runtime` |
-| asset resolver | `ke_asset_resolver_create` (`asset_resolver_create.h:35`) | image loader, font loader, project root |
-| world | `ke_world_create` (`world_create.h:27`) | scheduler, `ke_ecs`, `ke_runtime`, scene tree, project root, logger, signal bus |
-| scene loader | `ke_scene_loader_create` (`scene_loader_create.h:36`) | a world, project root |
+## The pieces
 
-Every capacity a piece limits itself to is a params field with `0` selecting the default
-(`ke_signal_bus_params`, `ke_script_host_params`).
+The framework is one plugin, `ke_framework`, with one factory header per piece. A piece is reached
+only through its vtable.
 
-## The scene tree
+| piece | contract | factory | receives | hands on |
+|---|---|---|---|---|
+| input actions | `ke_input_actions` | `ke_input_actions_create` | nothing; a `ke_input_snapshot` at each `evaluate` | named actions, polled |
+| signal bus | `ke_signal_bus` | `ke_signal_bus_create` | `ke_signal_bus_params` | signal ids, connections, the deliveries of a frame |
+| script host | `ke_script_host` | `ke_script_host_create` | `ke_ecs`, `ke_script_host_params` | script types, bindings, `resolve` of a borrow |
+| scene hierarchy | `ke_scene_hierarchy` | `ke_scene_hierarchy_create` | `ke_runtime`, `ke_ecs` | world matrices, through one runtime system |
+| scene tree | `ke_scene_tree` | `ke_scene_tree_create` | `ke_ecs`, `ke_runtime` | nodes as entities, and the hierarchy it owns |
+| asset resolver | `ke_asset_resolver` | `ke_asset_resolver_create` | `ke_image_loader`, `ke_font_loader`, a project root | textures, meshes, materials, fonts; render service handles |
+| world | `ke_world` | `ke_world_create` | `ke_world_params`: scheduler, ecs, runtime, scene tree, project root, logger, signal bus | the registry of how a scene fills a component |
+| scene loader | `ke_scene_loader` | `ke_scene_loader_create` | a `ke_world`, a project root | nodes, components and connections built from a scene file |
 
-A node is an entity. `ke_scene_tree_create` registers five components — transform, 2D transform,
-world transform, hierarchy, name — if the ECS does not have them yet, then creates one root
-entity named `Root` carrying hierarchy and name (`src/zig/framework/src/scene_tree.zig:413-445`).
-The hierarchy component holds five entity ids — parent, first child, last child, next sibling and
-previous sibling (`components.h:12-18`) — as an intrusive list, so relinking is constant-time
-(`scene_hierarchy.h:14-16`).
+The managed side mirrors them as `World`, `SceneTree`, `ScriptHost`, `SignalBus`, `SceneLoader`,
+`NativeAssetResolver` and `NativeInputActions`, and composes them in three runtime modules:
+`FrameworkModule` (signal bus, world and the tree it owns), `SceneNodesModule` (script host,
+input, signal delivery, one behavior system per node type) and `SceneRouterModule` (scene
+switching). Each depends on the one before it.
 
-### Child order
+## What ties the pieces together
 
-A new node is **appended**: it is linked after its parent's `last_child`, and becomes `first_child`
-when the parent had none (`populateNode`, `src/zig/framework/src/scene_tree.zig:98-136`, link at
-`:133-141`). Walking `first_child` and then `next_sibling` therefore visits children in the order they
-were created, which `next_sibling` states as a guarantee (`scene_tree.h:58`; test
-`scene_tree.zig:746`). `last_child` and `prev_sibling` are what keep an append and an unlink
-constant-time (`destroySubtree`, `:263-282`).
+**The tree is a view over the ecs.** A node is an entity carrying the hierarchy, name and world
+transform components. The scene tree creates the hierarchy piece itself when it is given a
+runtime, and owns it; the hierarchy is destroyed only after the runtime has finished ticking.
 
-A parent of `KE_ENTITY_INVALID` means the root (`scene_tree.zig:163`). A node created through a system
-context gets its id at once but is linked when the deferred command is applied
-(`cbCreateNode`, `:152-156`; `vtCreateNode`, `:158-195`). `find_node` with a bare name searches
-depth-first from the root and returns the first match in child order; a name containing `/` is walked
-one segment at a time from the root (`findByName`, `childBySegment`, `vtFindNode`, `:198-247`).
+**The world is the loader's door.** The scene loader reaches the ecs and the scene tree through
+the slots of `ke_world`, and the logger and the signal bus through functions of the plugin that
+are not slots. For each component the world holds a field table (`ke_component_field`) and a
+callback (`ke_component_apply_fn`); a scene block is written through the table first, then the
+callback gets the entries. The world stores a scheduler and a project root that nothing reads.
 
-When a runtime is supplied, the tree also builds a scene hierarchy by calling that piece's own
-factory (`scene_tree.zig:459`). The hierarchy registers two systems: one flattens the tree into an
-array ordered parents-before-children, the other turns local transforms into world matrices by
-walking that array once, never recursing (`scene_hierarchy.h:14-23`). The hierarchy must be
-destroyed only after the runtime has finished ticking, because its systems are registered for the
-runtime's lifetime (`scene_hierarchy.h:26-28`).
+**A typed entity ends in a script factory.** The loader creates the entity and applies its
+blocks, then hands the entity and the normalized "type" string to the `ke_script_factory_func`
+registered on the loader. Without a factory the "type" key is ignored. The managed factory
+builds the node and binds it to the entity in the script host.
 
-## The world
+**Bindings are structural changes.** `bind` and `unbind` change the host at once and belong to
+code that no system body runs beside; `bind_deferred` and `unbind_deferred` record the change in
+the `ke_ecs_commands` of the running system. The managed `ScriptHost` chooses by whether a
+system context is current.
 
-`ke_world` holds seven borrowed pointers — scheduler, ecs, runtime, scene tree, project root,
-logger, signal bus — and a registry mapping a component id to how a scene block fills it
-(`src/zig/framework/src/world.zig:20-32`, stored at `world.zig:222-228`).
+**A signal must exist before a scene names it.** The loader resolves a connection's signal with
+`signal_lookup`, which never registers, and fails the load on an unknown name. The runtime that
+owns the node types registers each signal with `signal_id` before the first load; the managed
+side does so for every registered node type when `SceneNodesModule` loads.
 
-What it exposes (`world.h`, slots from line 55):
+**A project root is held three times.** The asset resolver, the scene loader and the world each
+keep their own copy, and each interprets "res://" itself.
 
-- three accessors, `ecs`, `runtime` and `scene_tree`, each tagged `[idiom]` as superseded by the
-  managed property of the same name;
-- `register_component_fields` / `get_component_fields`, a generated table describing a
-  component's fields;
-- `register_component_apply` / `get_component_apply`, a callback for what a table cannot describe.
+## What the parts agree on without a contract
 
-A scene load consults the field table first, then the callback (`world.h:72-74`).
-
-What reads the world: the scene loader takes the ecs and the scene tree through the accessors
-(`scene_loader.zig:53-59`), the logger and the signal bus through functions that are not vtable
-slots (`world.zig:44-52`; `scene_loader.zig:277`, `450`), and the registry. Nothing in the plugin
-reads the world's stored `scheduler` or `project_root`: `grep -n 'scheduler\|project_root'
-src/zig/framework/src/world.zig` shows them assigned at `world.zig:222` and `235` and nowhere else.
-
-## The project root
-
-A project root is passed separately to three pieces — the world, the scene loader, the asset
-resolver — and each keeps its own copy: the resolver duplicates it (`asset_resolver.zig:493`), the
-loader copies it into a fixed buffer (`scene_loader.zig:41`, `776-783`), the world stores the
-pointer. The resolver rewrites `res://x` to `<project_root>/x` and passes any other path through
-unchanged (`asset_resolver.zig:69-73`).
-
-## What a node type declares to the script host
-
-`ke_script_host` is the language-neutral record of which entities a scripting runtime has bound an
-object to (`script_host.h:15-28`). The object is an opaque pointer the host never reads; the binding
-is stored as a component, `script_instance`, on the entity itself
-(`src/zig/framework/src/script_host.zig:31`, `bind` at `:202-242`), so a lookup is one component read
-and a query can match scripted entities.
-
-A runtime declares a **script type** with `register_type(name, components, reach)`
-(`script_host.h:93`, `script_host.zig:81-148`). The declaration is the access a type's instances have:
-
-- `components` is the set of components an instance carries, read back by `type_components`; a host
-  turns it into the type's query and access list ([node-types.md](node-types.md#behavior));
-- `reach` is `KE_SCRIPT_REACH_SELF` when an instance touches only its own entity, so two instances
-  cannot overlap and the runtime may slice them across workers, or `KE_SCRIPT_REACH_ANY` when it
-  reaches entities it was not handed. Anything unproven is declared `ANY`, and an unknown type id
-  reads as `ANY` (`script_host.h:37-48`, `script_host.zig:182-187`).
-
-Registering a name twice returns the same id when the description matches and fails with
-`already_exists` when the components or the reach differ (`:126-140`). A name is at most 95 bytes, a
-type declares at most 16 components, and the table holds `max_types` types, default 64; past any of
-these registration fails (`:9`, `:14`, `:16`, `:113-120`, `:142-145`).
-
-`bind` refuses an entity that already carries an instance (`:223`); `unbind` is constant-time by
-swapping the last entity of the type into the vacated slot (`:244-261`), so `instances` is not in
-binding order once anything has been unbound.
-
-`bind` and `unbind` change the host at once and belong to code that no other body runs beside: the
-scene loader and startup. A system body uses `bind_deferred` and `unbind_deferred`, which record the
-change into the body's `ke_ecs_commands`; the host changes when the runtime applies that queue at the
-wave barrier, so `instances` is never rewritten while a body reads it. The managed projection picks
-between the two by whether a system context is current, and frees the root of an unbound node two
-ticks after it was recorded.
-
-`resolve(owner, type, name, reach)` answers a borrow: the one entity of that type, optionally of that
-name, found **below** the owner depth-first, **above** it nearest-first, or **anywhere** the type is
-bound. When two entities qualify it returns none and reports `KE_SCRIPT_RESOLVE_AMBIGUOUS`; the ancestor
-walk returns the nearest and so never reports it (`script_host.zig:286-353`).
-
-## Signals are declared before a scene loads
-
-`ke_signal_bus` has two ways to turn a signal name into an id, and a scene uses only one of them.
-`signal_id(name, payload_size)` registers the name on first use; the payload size is part of its
-identity, and a later registration with a different size fails (`signal_bus.h:52-63`,
-`src/zig/framework/src/signal_bus.zig:67-113`; `KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN` leaves the size to be
-fixed by the first caller that knows it, `:95-100`). `signal_lookup(name)` only looks; it never
-registers (`signal_bus.zig:115-130`).
-
-The scene loader resolves `signal = "..."` of a `[[entity.connect]]` with `signal_lookup`
-(`scene_loader.zig:446`), and a name that was not registered fails the load. A signal therefore exists
-for a scene only if some runtime called `signal_id` for it **before** the scene is read. The managed
-layer does that for every signal a node type emits or handles when `SceneNodesModule` loads
-([node-types.md](node-types.md#borrows-and-emitt)); a runtime in another language must do the same
-before its first `load`.
-
-A signal name is at most 63 bytes (`signal_bus.zig:9`, `:88`).
+- Component names: "transform", "transform2d", "world_transform", "hierarchy", "name", and
+  "script_instance" for a binding.
+- Node type names: the managed `NodeTypeRegistry.Normalize` and the loader's `normalizeTypeName`
+  apply one rule, so the factory receives the same spelling whichever casing a scene wrote.
+- Signal identity: the managed side names a signal by the payload type's name and its size; a
+  second registration with another size fails.
+- Scene keys: an entity's "name", "parent", "scene", "type" and "connect" array with "signal",
+  "target" and "handler"; "components" and "properties" blocks are refused.
+- Mesh paths: "res://primitives/quad", "plane", "cube", "sphere".
+- Worker index 1: `SceneNodesModule` pins "Scene.Input" to it and `SceneRouterModule` pins its
+  scene load and "Scene.Router.Flush" to it.
+- Managed system names: "Scene.Input", "Scene.Signals.Clear", "Scene.Signals.Deliver",
+  "Scene.Behaviors.<type>", "Scene.Router.Flush"; the hierarchy's is "scene.propagate_transforms".
+- Input file: an "action" table of actions with a "type" and "bindings" of kind "key",
+  "key_pair", "key_quad" or "mouse"; the managed map looks up each enum value by its name.

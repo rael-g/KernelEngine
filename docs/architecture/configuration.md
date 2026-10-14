@@ -1,107 +1,40 @@
 # How does a Project file reach the value a plugin reads, and how does a change reach it?
 
-Two native plugins and one managed wrapper make the path. `ke_configuration` is a typed
-`(section, key) -> value` store (`src/c/configuration/kernel_engine/configuration/configuration.h`,
-implemented in `src/zig/configuration/src/configuration.zig`). `ke_configuration_toml_load` fills it
-from a TOML file (`src/zig/configuration/toml/src/configuration_toml.zig:68`). `AddProjectConfig`
-registers the managed `IConfiguration` over both
-(`src/csharp/configuration/KernelEngine.Configuration/ServiceCollectionExtensions.cs:19`).
-Which keys the engine reads is in `formats/project-file.md`.
+This is a map: the parts of the configuration domain and what each hands on. How a part works
+inside is on the generated page of its file. The contract is under `src/c/configuration/`, the
+plugins under `src/zig/configuration/`, the managed side under `src/csharp/configuration/`.
 
-## The store
+## The parts
 
-The store is created by `ke_configuration_create`, which returns a `ke_configuration_handle`
-`{ref, destroy}` (`configuration.zig:253-278`). Entries live in one flat list, searched linearly by
-exact `(section, key)` (`configuration.zig:51-56`). Each entry holds one of four types: `int`
-(`i64`), `double`, `bool`, `string` (`configuration.zig:15-20`).
+| part | declared as | receives | hands on |
+|---|---|---|---|
+| store | `ke_configuration`, made by `ke_configuration_create` | typed writes by section and key | typed reads, and a call to each subscriber of a written section |
+| loader | `ke_configuration_toml_load` | a store and a file path | writes into the store through its setter slots |
+| managed store | `Configuration`, `IConfiguration` | a path through `LoadToml`, and typed writes | typed reads |
+| registration | `AddProjectConfig`, `TryAddConfigurationSingleton` | an optional path | the `IConfiguration` singleton |
 
-- **A read never fails.** A missing key, a null section or key, and a key of another type all return
-  the fallback the caller passed (`configuration.zig:98-140`). A key stored as an `int` read with
-  `get_double` is a type mismatch: it returns the fallback, not a converted value
-  (test `type mismatch returns fallback`, `configuration.zig:325`).
-- **A write overwrites.** `set_*` replaces the entry's value and type (`configuration.zig:65-69`,
-  `141-194`). A null argument fails with `KE_ERROR_INVALID_ARGUMENT`; an allocation failure with
-  `KE_ERROR_OUT_OF_MEMORY` (`configuration.zig:143-146`, `70-84`).
-- **A string read hands out the store's own pointer**, valid until that key is overwritten or the
-  store is destroyed (`configuration.h:28-30`; the old payload is freed by `freeStringPayload`
-  inside `upsert`, `configuration.zig:58-69`).
-- **There is no synchronisation.** Neither `State` nor any function in the file takes a lock; the
-  store is safe only under whatever exclusion its callers provide.
+The store is in the plugin `ke_configuration`, the loader in `ke_configuration_toml`; the loader
+knows the store only through its contract.
 
-## Loading a file
+## What ties the parts together
 
-`ke_configuration_toml_load(cfg, path, out_error)` is a plain exported function in its own plugin
-(`configuration_toml.h`), not a vtable slot, and it writes into the store only through that store's
-public `set_*` slots (`configuration_toml.zig:21-37`).
+**Reads take a fallback.** A getter returns the fallback its caller passes when the key is
+missing or holds a value of another type; an integer read as a double is converted.
 
-- A path that cannot be opened returns `true` and writes nothing (`configuration_toml.zig:73-74`).
-- A file that does not parse returns `false` with `KE_ERROR_GENERAL` carrying the tomlc99 message
-  (`configuration_toml.zig:78-82`).
-- A table becomes a section. A nested table becomes a section named by joining the path with a dot,
-  so `[runtime.window]` is section `runtime.window` (`configuration_toml.zig:46-58`). A scalar
-  directly under the root has section `""`.
-- A scalar is stored by the first type that accepts it, tried in the order int, double, bool, string
-  (`configuration_toml.zig:21-35`). `gravity_x = 0` is an int; `gravity_x = 0.0` is a double.
-- **Arrays are skipped without a word** (`configuration_toml.zig:59-60`). So are values of any other
-  TOML type: `setScalar` falls through to `return true` (`configuration_toml.zig:36`). The store has
-  no array type; the managed `GetFloatArray` reads the indexed scalars `key_0`, `key_1`, ... and
-  cannot read an authored TOML array (`Configuration.cs:123-135`).
-- The loader calls `set_*` for every scalar, so every load notifies subscribers
-  (see "Subscribing").
+**The loader flattens a file.** A table becomes a section, a nested table a section named by the
+path joined with dots, and a key directly under the root has the empty section. An array is
+skipped, which is why `GetFloatArray` and `SetFloatArray` use the keys `key_0`, `key_1`, and so on.
 
-## The managed layer
+**A write calls the subscribers of its section.** They run on the writing thread, after the
+value is stored, and receive the section, not the key. `Configuration` has no subscribe member.
 
-`Configuration` owns the native handle and exposes `IConfiguration`: `Get*`/`Set*` for the four
-types, plus `GetFloatArray`/`SetFloatArray` (`Configuration.cs:12-135`). `Get*` marshal to the
-native slot and pass the fallback through. A failed write or load throws the native `ke_error` as a
-managed exception (`Configuration.cs:33-34`, `81-82`). `Configuration` has no subscribe member.
+**The file is read once, on first resolution.** `TryAddConfigurationSingleton` registers the
+singleton only if none is registered, so the first registration decides the path. Modules read
+their keys when they are built or loaded and keep the result.
 
-`AddProjectConfig(path)` registers `IConfiguration` with `TryAddSingleton`
-(`ServiceCollectionExtensions.cs:32`). Three consequences, all from that one call:
+## What the parts agree on without a contract
 
-- **The file is read on first resolution**, not at registration. The factory builds a
-  `Configuration` and calls `LoadToml` (`ServiceCollectionExtensions.cs:34-36`).
-- **The first registration wins.** `AddConsoleSink`, `AddGlfwWindow` and `AddBox2D` each call
-  `TryAddConfigurationSingleton()` with no path, which registers the default if nothing did before
-  (`Logger/ServiceCollectionExtensions.cs:32`, `Window.Glfw/ServiceCollectionExtensions.cs:20`,
-  `Physics.Box2D/ServiceCollectionExtensions.cs:18`). A custom `path` passed to `AddProjectConfig`
-  takes effect only if that call comes before them.
-- **The path.** With no argument the file is `Project`, resolved against
-  `AppContext.BaseDirectory`; a relative argument resolves against the same directory, an absolute
-  one is used as is (`ServiceCollectionExtensions.cs:36`, `40-45`). A missing file is not an error,
-  so every reader's fallback applies.
-
-A host that never registers configuration is legal for readers that use
-`services.GetService<IConfiguration>()` and tolerate null: `WebgpuRenderModule` and
-`SceneRouterModule` do (`WebgpuRenderModule.cs:115`, `SceneRouterModule.cs:83-84`). Readers that
-use `GetRequiredService` fail without it, though each registers the default itself first.
-
-## Subscribing
-
-`subscribe(self, section, cb, ctx)` registers `cb` for writes to exactly that section string and
-returns a subscription id, or `KE_CONFIGURATION_SUBSCRIPTION_NONE` (`configuration.zig:197-224`).
-`unsubscribe` marks the slot inactive; a later `subscribe` reuses it (`configuration.zig:226-236`).
-
-A write calls every active subscriber of its section **synchronously, on the writing thread, inside
-the `set_*` call, after the value is stored** (`notify`, `configuration.zig:89-96`; called at
-`149`, `161`, `173`, `192`). The callback receives the section and its `ctx`, not the key and not
-the value; it must call a `get_*` to see what changed. There is no comparison: a write of the value
-already stored still notifies.
-
-## When a change reaches a module
-
-A subscription is the only way a change is pushed, and nothing outside the configuration plugin
-calls `subscribe` (`grep -rn 'subscribe' src --include='*.zig' --include='*.cs'` outside
-`src/zig/configuration` and generated code finds no configuration caller). So a module sees a value
-exactly when it reads one:
-
-| reader | reads at | cite |
-|---|---|---|
-| console sink level | the sink singleton's first resolution | `Logger/ServiceCollectionExtensions.cs:35-37` |
-| window size, title, fullscreen | the `IWindow` singleton's first resolution | `Window.Glfw/ServiceCollectionExtensions.cs:23-27` |
-| Box2D gravity | the `IPhysics2D` singleton's first resolution | `Physics.Box2D/ServiceCollectionExtensions.cs:21-23` |
-| render cluster grid, clear colour | `WebgpuRenderModule.OnLoad` | `WebgpuRenderModule.cs:115-124`, `147-156` |
-| initial scene | `SceneRouterModule.OnLoad` | `SceneRouterModule.cs:47`, `79-85` |
-
-Each of those reads once and keeps the result. A `Set*` or a second load after that point changes the
-store and nothing a module already built from it.
+- The default file is "Project"; a relative path resolves against `AppContext.BaseDirectory`.
+- The sections and keys each reader asks for ("logging" and "console_level" for the logger, and
+  those of the window, physics and render modules) are in those readers, not in a header.
+- A section name with a dot means a nested table of the file.

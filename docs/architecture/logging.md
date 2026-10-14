@@ -1,80 +1,44 @@
 # How does a log event reach a sink?
 
-There is one logger, a vtable `ke_logger` created by `ke_logger_create` (`src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h`), and any number of sinks,
-`ke_logger_sink` values the logger owns (`src/c/logger/kernel_engine/logger/logger.h:26-68`). The
-only implementation is `src/zig/logger/simple/src/logger_simple.zig`.
+This is a map: the parts of the logger domain and what each hands on. How a part works inside is
+on the generated page of its file. The contract is under `src/c/logger/`, the plugin under
+`src/zig/logger/`, the managed side under `src/csharp/logger/`.
 
-## The event
+## The parts
 
-A `ke_log_event` is three fields: an `int32_t level`, a `tag` and a `message`, both `const char *`
-(`logger.h:15-20`). It carries no timestamp, thread or source location. `tag` and `message` are
-valid only for the duration of the call that receives them, so a sink that wants to keep one copies
-it. `level` is a `ke_log_level`, `KE_LOG_LEVEL_TRACE` (0) through `KE_LOG_LEVEL_CRITICAL` (5)
-(`log_level.h:13-20`); the console sink prints any other value as `"UNKNOWN"`
-(`levelToString`, `logger_simple.zig:107-116`).
+| part | declared as | receives | hands on |
+|---|---|---|---|
+| event | `ke_log_event` | a level, a tag and a message from the emitter | itself, to the logger |
+| sink | `ke_logger_sink` | events whose level reaches its `min_level` | nothing; it writes them somewhere |
+| logger | `ke_logger`, made by `ke_logger_create` | events, and sinks by value through `add_sink` | each event to every sink that admits it |
+| console sink | `ke_console_sink_create` | events | one line on standard error |
+| managed logger | `Logger`, `ILogger` | strings and a `LogLevel` | `ke_log_event` to the native logger |
+| managed sink | `ILoggerSink` | events decoded to strings | whatever the sink does with them |
 
-## The native path
+The native logger and the console sink are both in the plugin `logger_simple`.
 
-`ke_logger.log(self, event)` walks the sinks in the order they were added and calls `sink.log` on
-each one whose `min_level` is at or below `event.level` (`logger_simple.zig:38-48`). The filter is
-per sink; the logger has no level of its own. A sink whose `log` slot is null is skipped
-(`logger_simple.zig:45`), and a null logger or event returns without effect (`logger_simple.zig:39`).
-`flush` calls every sink's `flush` the same way (`logger_simple.zig:50-57`).
+## What ties the parts together
 
-`add_sink` takes the sink by value and stores it. The logger holds at most `MAX_SINKS` of them,
-a constant of 8 behind a fixed array; the ninth call fails with `ke_error` "sink capacity exceeded"
-(`logger_simple.zig:19-22`, `:63-66`). `ke_logger_handle.destroy` calls each sink's `destroy` and
-frees the logger (`logger_simple.zig:26-36`). Nothing in the file synchronises: `log`, `add_sink` and
-`destroy` read and write the same sink array without a lock.
+**The filter is the sink's.** The logger has no level of its own; it offers an event to each
+sink whose `min_level` the event reaches, in the order the sinks were added.
 
-`ke_console_sink_create()` returns a ready sink with `min_level` `KE_LOG_LEVEL_TRACE`
-(`logger_simple.zig:97-105`). Its `log` writes `[LEVEL] tag: message` to standard error and flushes
-after each entry, with an empty string for a null tag or message (`logger_simple.zig:74-86`). It does
-not read its own `min_level`; only the logger does.
+**The logger owns what it is given.** `add_sink` takes the sink by value, and destroying the
+logger destroys its sinks.
 
-## Who emits events
+**A plugin that logs is handed a logger.** A plugin takes a borrowed `ke_logger` in its params
+and may be given none, in which case it emits nothing.
 
-A plugin that logs takes a borrowed `ke_logger *` in its params struct and calls the vtable
-directly: `lg.log.?(lg, &ev)` (`src/zig/asset/stb_image/src/stb_image_loader.zig:25-29`). The
-pointer is optional; a plugin handed none emits nothing (`stb_image_loader.zig:26`, and
-`src/zig/asset/stb_image/include/kernel_engine/asset/stb_image/stb_image_loader.h:24`). Other
-plugins that emit this way include the render passes, `render_module`, assimp and miniaudio. Each
-sets its own `tag` and one level; there is no shared helper.
+**The managed logger is a view of the native one.** `Logger` implements `ILogger` and
+`INativeLogger`, so a service that creates a native plugin passes the same `ke_logger` the game
+logs through. A managed sink reaches the native logger through an adapter registered with the
+`minLevel` given to `AddSink`.
 
-On the managed side, `AddLogger` registers a `Logger` singleton, and the same instance as `ILogger`
-and as `INativeLogger`, whose `Native` property is the `ke_logger *` (`Logger/ServiceCollectionExtensions.cs:10-22`;
-`Logger/Generated/Logger.g.cs:12-16`). Services that create native plugins read `INativeLogger` and
-put that pointer in the params they pass; `FrameworkModule` does so for the world
-(`src/csharp/framework/KernelEngine.Framework/Modules/FrameworkModule.cs:78`). Managed code logs
-through `Logger.Log(level, tag, message)`, which encodes both strings as ASCII, builds a
-`ke_log_event` and calls the native `log` (`Logger/Logger.Idiom.cs:17-32`).
+**Composition.** `AddLogger` registers the logger and, when it is first resolved, adds the
+`ILoggerSink` services registered by then. `AddConsoleSink` registers the console sink.
 
-## Managed sinks
+## What the parts agree on without a contract
 
-A managed sink implements `ILoggerSink`: `MinLevel`, `Log(level, tag, message)`, `Flush`
-(`Logger.Abstractions/ILogger.cs:17-27`). `Logger.AddSink(ILoggerSink, LogLevel minLevel = Trace)`
-wraps it in a `NativeSinkAdapter` and hands that to the generated
-`AddSink(ILoggerSinkNative, int minLevel)` (`Logger.Idiom.cs:44-58`). The generated method pins the
-adapter with a `GCHandle`, stores the handle in the sink's `handle`, fills the three slots with
-`UnmanagedCallersOnly` trampolines, and calls native `add_sink` (`Logger.g.cs:69-83`). The native
-`log` then reaches C# through `LogTrampoline`, which recovers the adapter and calls it; the adapter
-decodes `tag` and `message` with `Marshal.PtrToStringAnsi` and calls `ILoggerSink.Log`
-(`Logger.g.cs:93-98`; `Logger.Idiom.cs:50-55`). `DestroyTrampoline` frees the `GCHandle`
-(`Logger.g.cs:107-111`).
-
-`AddLogger` attaches every `ILoggerSink` registered **before** the `Logger` is first resolved; the
-sinks are read once, when the singleton is constructed (`ServiceCollectionExtensions.cs:12-18`). It
-attaches each with the default `minLevel` of `Trace`.
-
-`AddConsoleSink()` registers `NativeConsoleLoggerSink`, an `ILoggerSink` that wraps the native
-`ke_console_sink_create()` value, and reads `logging.console_level` from the project file to set
-that native value's `min_level` and its `MinLevel` property (`ServiceCollectionExtensions.cs:30-40`,
-`:59-65`). That level does not filter anything. `AddLogger` hands every sink to
-`Logger.AddSink(sink)`, which wraps it in a `NativeSinkAdapter` and registers a new native sink whose
-`min_level` is the `minLevel` argument, `Trace` by default (`ServiceCollectionExtensions.cs:16`,
-`Logger.Idiom.cs:44-45`). The native logger filters on that registered value
-(`logger_simple.zig:44`), and the adapter forwards to `ILoggerSink.Log`, never reading `MinLevel` or
-the wrapped native `min_level`. `ILoggerSink.MinLevel` has no reader anywhere in `src/` or
-`examples/` (`grep -rn MinLevel src examples --include='*.cs'` finds the interface member, its one
-implementation and the doc comment). So `logging.console_level` and `AddConsoleSink(LogLevel)` are
-accepted and have no effect on output; only the `minLevel` argument of `Logger.AddSink` filters.
+- The section "logging" and the key "console_level" of the project file, read by `AddConsoleSink`
+  and holding a `LogLevel` name.
+- The console format, `[LEVEL] tag: message`, and the label "UNKNOWN" for a level no label names.
+- The library name "ke_logger_simple", which the managed project asks the build to copy.
