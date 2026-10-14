@@ -48,6 +48,7 @@ var clock = System.Diagnostics.Stopwatch.StartNew();
 double prev = clock.Elapsed.TotalSeconds;
 while (!window.ShouldClose())
 {
+    window.PollEvents();
     double now = clock.Elapsed.TotalSeconds;
     runtime.Tick((float)(now - prev));
     prev = now;
