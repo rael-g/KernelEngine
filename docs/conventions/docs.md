@@ -67,7 +67,8 @@ Each kind of content is written in the place where something keeps it true.
   delimited in the example by a marker, `#region` in C# and a marker comment in Zig and C, which
   is the one comment an example may carry besides its doc comments.
 - **Why something was decided** is a record under `docs/decisions/`, one numbered file per
-  decision: context, decision, consequences.
+  decision: context, decision, consequences. A change that makes a structural decision carries its
+  record in the same branch.
 - **How the parts of a domain fit together** is a map under `docs/architecture/`: the parts by
   name, what each hands to which, and only what rarely changes. A map does not describe how a
   part works inside, and it names a part in backticks instead of linking to a line.
