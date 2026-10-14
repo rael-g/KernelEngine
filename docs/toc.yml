@@ -1,0 +1,80 @@
+- name: Guides
+  items:
+  - name: How do I start the engine from my own program?
+    href: guides/minimal-host.md
+  - name: How do I put something on screen?
+    href: guides/scene-on-screen.md
+  - name: How do I load a model into the scene?
+    href: guides/load-a-model.md
+- name: Architecture
+  items:
+  - name: "How does a call cross the C ABI, and how does a failure come back?"
+    href: architecture/abi.md
+  - name: "How does an asset path become a GPU resource, and what is shared between requests?"
+    href: architecture/assets.md
+  - name: "How does a Project file reach the value a plugin reads, and how does a change reach it?"
+    href: architecture/configuration.md
+  - name: "What does the ECS contract promise about threads and structural change, and how does the flecs plugin keep it?"
+    href: architecture/ecs.md
+  - name: "What is the framework made of, and what does each piece depend on?"
+    href: architecture/framework.md
+  - name: "What does the GPU device contract promise, and what does the WebGPU backend do with it?"
+    href: architecture/gpu-device.md
+  - name: "How does a key press reach a system body, and when is its edge visible?"
+    href: architecture/input.md
+  - name: "How is the engine divided into layers, and where does each kind of file live?"
+    href: architecture/layers.md
+  - name: "How do lights, shadows and image-based light reach a shading pass?"
+    href: architecture/lighting.md
+  - name: "How does a log event reach a sink?"
+    href: architecture/logging.md
+  - name: "How does the managed layer meet the native one?"
+    href: architecture/managed-layer.md
+  - name: "How does an authored material become something a pass can draw?"
+    href: architecture/materials.md
+  - name: "What does the engine derive from a node type's declaration?"
+    href: architecture/node-types.md
+  - name: "How do Body2D and Collider2D become a simulation, and what does each tick copy between them?"
+    href: architecture/physics.md
+  - name: "What happens when a pass asks for a pipeline that has not been compiled yet?"
+    href: architecture/pipeline-cache.md
+  - name: "How does a frame get from the ECS to the GPU?"
+    href: architecture/render.md
+  - name: "How does one runtime tick run, and what may run at the same time?"
+    href: architecture/runtime.md
+  - name: "Which threads exist, what runs on them, and how does work reach them?"
+    href: architecture/threading.md
+  - name: "How does the engine build view and projection matrices for the device's clip space?"
+    href: architecture/view-space.md
+- name: Decisions
+  items:
+  - name: "0001. Each kind of documentation lives where something keeps it true"
+    href: decisions/0001-each-kind-of-documentation-lives-where-something-keeps-it-true.md
+- name: Formats
+  items:
+  - name: "What does an input file say, and what does the loader do with it?"
+    href: formats/input-file.md
+  - name: "Which keys does a Project file have, and who reads each?"
+    href: formats/project-file.md
+  - name: "What does a scene file say, and what does the loader do with it?"
+    href: formats/scene-file.md
+- name: Conventions
+  items:
+  - name: "How does the build turn the tree into libraries, and where does everything land?"
+    href: conventions/build.md
+  - name: "What does CI run on a push, and what does it leave out?"
+    href: conventions/ci.md
+  - name: "How does work reach main?"
+    href: conventions/git.md
+  - name: "How is this project's documentation written?"
+    href: conventions/docs.md
+  - name: "How does a managed project get the native libraries it calls?"
+    href: conventions/managed-build.md
+- name: Reference
+  items:
+  - name: Engine
+    href: ../build/native/docs/engine/
+    homepage: ../build/native/docs/engine/index.md
+  - name: Kabic
+    href: ../build/native/docs/kabic/
+    homepage: ../build/native/docs/kabic/index.md
