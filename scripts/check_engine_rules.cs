@@ -1,6 +1,5 @@
 #!/usr/bin/env dotnet run
 
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
@@ -12,6 +11,12 @@ var tracked = Tracked(rootDir)
     .Where(p => !p.EndsWith(".g.cs", StringComparison.Ordinal))
     .OrderBy(p => p, StringComparer.Ordinal)
     .ToList();
+
+if (tracked.Count == 0)
+{
+    Console.Error.WriteLine("no source file was found; no rule can be checked");
+    return 1;
+}
 
 var sources = tracked.ToDictionary(p => p, p => File.ReadAllLines(Path.Combine(rootDir, p)));
 
@@ -113,12 +118,20 @@ static bool IsBuildFile(string path) => Path.GetFileName(path) == "build.zig";
 
 static IEnumerable<string> Tracked(string rootDir)
 {
-    var info = new ProcessStartInfo("git") { WorkingDirectory = rootDir, RedirectStandardOutput = true };
-    foreach (var a in new[] { "ls-files", "src", "scripts", "examples", "tests", "build.zig", "build.zig.zon", ".github" }) info.ArgumentList.Add(a);
-    using var process = Process.Start(info)!;
-    var output = process.StandardOutput.ReadToEnd();
-    process.WaitForExit();
-    return output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(p => File.Exists(Path.Combine(rootDir, p)));
+    string[] roots = ["src", "scripts", "examples", "tests", "build.zig", "build.zig.zon", ".github"];
+    string[] skipped = ["obj", "bin", "third_party", ".zig-cache", "zig-out", "zig-pkg", "node_modules"];
+    foreach (var root in roots)
+    {
+        var full = Path.Combine(rootDir, root);
+        if (File.Exists(full)) { yield return root; continue; }
+        if (!Directory.Exists(full)) continue;
+        foreach (var file in Directory.EnumerateFiles(full, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(rootDir, file).Replace('\\', '/');
+            if (relative.Split('/').Any(s => skipped.Contains(s))) continue;
+            yield return relative;
+        }
+    }
 }
 
 static IEnumerable<string> Lines(IEnumerable<KeyValuePair<string, string[]>> files, Func<string, bool> breaks, bool outsideTests = false)

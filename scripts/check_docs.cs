@@ -1,6 +1,5 @@
 #!/usr/bin/env dotnet run
 
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
@@ -18,9 +17,15 @@ var pages = Directory.EnumerateFiles(docsDir, "*.md", SearchOption.AllDirectorie
 
 var identifier = new Regex(@"[A-Za-z_][A-Za-z0-9_]*");
 var declared = new HashSet<string>(StringComparer.Ordinal);
-foreach (var file in Tracked(rootDir))
+foreach (var file in Tracked(rootDir).Where(p => Regex.IsMatch(p, @"\.(zig|h|c|cs|slang|json|zon|toml)$")))
     foreach (Match m in identifier.Matches(File.ReadAllText(Path.Combine(rootDir, file))))
         declared.Add(m.Value);
+
+if (declared.Count == 0)
+{
+    Console.Error.WriteLine("no source file was read; the names the documents cite cannot be checked");
+    return 1;
+}
 
 var backticked = new Regex(@"`([^`\n]+)`");
 var lineCitation = new Regex(@"\.(zig|h|c|cs|slang|json|toml|yml)`?:\d+|\(`:\d+");
@@ -71,13 +76,18 @@ static int Report(string rule, List<string> found, int ceiling)
 
 static IEnumerable<string> Tracked(string rootDir)
 {
-    var info = new ProcessStartInfo("git") { WorkingDirectory = rootDir, RedirectStandardOutput = true };
-    foreach (var a in new[] { "ls-files", "src", "examples", "scripts", "build.zig" }) info.ArgumentList.Add(a);
-    using var process = Process.Start(info)!;
-    var output = process.StandardOutput.ReadToEnd();
-    process.WaitForExit();
-    return output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-        .Where(p => !p.Contains("/third_party/", StringComparison.Ordinal))
-        .Where(p => Regex.IsMatch(p, @"\.(zig|h|c|cs|slang|json|zon|toml)$"))
-        .Where(p => File.Exists(Path.Combine(rootDir, p)));
+    string[] roots = ["src", "examples", "scripts", "build.zig"];
+    string[] skipped = ["obj", "bin", "third_party", ".zig-cache", "zig-out", "zig-pkg", "node_modules"];
+    foreach (var root in roots)
+    {
+        var full = Path.Combine(rootDir, root);
+        if (File.Exists(full)) { yield return root; continue; }
+        if (!Directory.Exists(full)) continue;
+        foreach (var file in Directory.EnumerateFiles(full, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(rootDir, file).Replace('\\', '/');
+            if (relative.Split('/').Any(s => skipped.Contains(s))) continue;
+            yield return relative;
+        }
+    }
 }
