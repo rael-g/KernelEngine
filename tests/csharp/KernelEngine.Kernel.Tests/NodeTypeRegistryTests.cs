@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using KernelEngine.Framework;
 using Xunit;
 
@@ -31,6 +31,13 @@ public class NodeTypeRegistryTests
         Assert.Equal("pong.menu_controller", NodeTypeRegistry.Normalize("Pong.MenuController"));
         Assert.Equal("sprite2d", NodeTypeRegistry.Normalize("Sprite2D"));
         Assert.Equal("ui_root", NodeTypeRegistry.Normalize("UIRoot"));
+    }
+
+    [Fact]
+    public void ACharacterOutsideAsciiKeepsItsCaseAsTheNativeLoaderDoes()
+    {
+        Assert.Equal("État_ball", NodeTypeRegistry.Normalize("ÉtatBall"));
+        Assert.Equal("Ω_node", NodeTypeRegistry.Normalize("ΩNode"));
     }
 
     [Fact]

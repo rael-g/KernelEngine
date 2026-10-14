@@ -1994,6 +1994,11 @@ test "a digit does not split the word it belongs to" {
     try testing.expectEqualStrings("collider2d", normalizedName("Collider2D"));
 }
 
+test "a character outside ascii keeps its case" {
+    try testing.expectEqualStrings("État_ball", normalizedName("ÉtatBall"));
+    try testing.expectEqualStrings("Ω_node", normalizedName("ΩNode"));
+}
+
 test "normalizing is idempotent, so a binding may apply it twice" {
     try testing.expectEqualStrings("paddle_controller", normalizedName("paddle_controller"));
     try testing.expectEqualStrings("pong.ball", normalizedName("pong.ball"));

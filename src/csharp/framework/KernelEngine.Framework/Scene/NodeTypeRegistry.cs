@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace KernelEngine.Framework;
 
@@ -63,7 +63,8 @@ public sealed class NodeTypeRegistry
 
     /// <summary>
     /// The spelling of a node type name: snake case, with a dot for each nesting. The native scene
-    /// loader applies the same rule to the type name it hands to the script factory.
+    /// loader applies the same rule to the type name it hands to the script factory. Only ASCII
+    /// letters change case; any other character is kept as written.
     /// </summary>
     public static string Normalize(string name)
     {
@@ -72,12 +73,12 @@ public sealed class NodeTypeRegistry
         {
             var ch = name[i];
             if (ch == '+') { sb.Append('.'); continue; }
-            if (char.IsUpper(ch))
+            if (char.IsAsciiLetterUpper(ch))
             {
                 var rawPrev = i > 0 ? name[i - 1] : '.';
                 var prev = rawPrev == '+' ? '.' : rawPrev;
-                var startsWord = prev != '.' && prev != '_' && !char.IsDigit(prev)
-                    && (!char.IsUpper(prev) || (i + 1 < name.Length && char.IsLower(name[i + 1])));
+                var startsWord = prev != '.' && prev != '_' && !char.IsAsciiDigit(prev)
+                    && (!char.IsAsciiLetterUpper(prev) || (i + 1 < name.Length && char.IsAsciiLetterLower(name[i + 1])));
                 if (startsWord) sb.Append('_');
                 sb.Append(char.ToLowerInvariant(ch));
             }
