@@ -724,3 +724,38 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
 }
+
+test "a pipeline is keyed by its vertex layout's content, not by where the layout lives" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
+    try testing.expect(h.ref != null);
+
+    const attrs = [_]c.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};
+    var first_layout = [_]c.ke_gpu_vertex_buffer_layout{.{ .stride = 12, .step_mode = 0, .attribute_count = 1, .attributes = &attrs }};
+    var copy_layout = first_layout;
+
+    var p = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    p.vertex_module = 5;
+    p.fragment_module = 6;
+    p.color_target_count = 1;
+    p.vertex_buffer_count = 1;
+
+    p.vertex_buffers = &first_layout;
+    _ = pipeline_cache.getOrCreatePipeline(h.ref, &p);
+    const from_first = pipeline_cache.getOrCreatePipeline(h.ref, &p);
+    p.vertex_buffers = &copy_layout;
+    try testing.expectEqual(from_first, pipeline_cache.getOrCreatePipeline(h.ref, &p));
+
+    first_layout[0].stride = 16;
+    p.vertex_buffers = &first_layout;
+    try testing.expect(pipeline_cache.getOrCreatePipeline(h.ref, &p) != from_first);
+
+    h.destroy.?(h.ref);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
