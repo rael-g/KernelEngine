@@ -16,8 +16,8 @@ namespace KernelEngine.Framework;
 /// registered when the first node of that type binds. That system declares the component access
 /// of the type's <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
 /// query and the reached ones its access list, with hierarchy and name always read, and it is
-/// sliced per entity when the type reaches only itself. <c>OnLoad</c> declares the signals of
-/// every registered node type and then runs the setup callback on the calling thread.
+/// sliced per entity when the type reaches only itself. <c>OnLoad</c> runs the setup callback on the
+/// calling thread.
 /// </summary>
 public sealed class SceneNodesModule : IRuntimeModule
 {
@@ -75,7 +75,7 @@ public sealed class SceneNodesModule : IRuntimeModule
     }
 
     /// <summary>
-    /// Registers the systems, declares the signals, and runs the setup callback on the calling
+    /// Registers the systems and runs the setup callback on the calling
     /// thread.
     /// </summary>
     /// <exception cref="InvalidOperationException">The setup callback throws.</exception>
@@ -97,8 +97,6 @@ public sealed class SceneNodesModule : IRuntimeModule
             _inputSnapshot = input?.CaptureSnapshot();
             evaluator?.Evaluate(_inputSnapshot);
         }, accessList: [Touches(scriptHost.StateCid, writes: true)]);
-
-        DeclareSignals(scriptHost, services);
 
         var signals = services.GetService<SignalBus>();
         if (signals is not null)
@@ -187,20 +185,4 @@ public sealed class SceneNodesModule : IRuntimeModule
 
     private static ComponentAccess Touches(uint cid, bool writes) =>
         new() { Cid = cid, Access = writes ? RuntimeAccess.Write : RuntimeAccess.Read };
-
-    /// <summary>
-    /// Registers every signal any registered node type emits or handles, by constructing one
-    /// unbound instance of each type. It runs before the first scene is read.
-    /// </summary>
-    private static void DeclareSignals(ScriptHost scriptHost, IServiceProvider services)
-    {
-        var registry = services.GetService<NodeTypeRegistry>();
-        if (registry is null) return;
-
-        foreach (var type in registry.RegisteredTypes)
-        {
-            var probe = (Node)ActivatorUtilities.CreateInstance(services, type);
-            probe.CollectSignalTypes(scriptHost);
-        }
-    }
 }

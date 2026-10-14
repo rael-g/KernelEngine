@@ -13,7 +13,7 @@ namespace KernelEngine.Framework;
 /// <see cref="DestroyNode"/> to its command queue, so structural changes made there apply at the
 /// wave barrier.
 /// </summary>
-public unsafe partial class ScriptHost : ISignalDeclarer
+public unsafe partial class ScriptHost
 {
     private World              _world = null!;
     private IEcsRegistry       _ecs = null!;
@@ -144,9 +144,13 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     internal unsafe uint SignalIdOf<T>() where T : unmanaged => _signals!.SignalIdOf<T>();
 
     /// <summary>
-    /// Registers the signal of a payload type, so that a scene can connect it by name.
+    /// Registers the signal of a payload type, so that a scene can connect it by name. A bound node
+    /// declares every signal it handles or emits; nothing happens when no signal bus is registered.
     /// </summary>
-    void ISignalDeclarer.Declare<T>() => _ = SignalIdOf<T>();
+    public void DeclareSignal<T>() where T : unmanaged
+    {
+        if (_signals is not null) _ = SignalIdOf<T>();
+    }
 
     /// <summary>
     /// Hands one delivery to the node it names. A delivery whose target is no longer bound, or

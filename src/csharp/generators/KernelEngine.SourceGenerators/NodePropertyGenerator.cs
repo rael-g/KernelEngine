@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
@@ -207,7 +207,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         var writtenSlots = new HashSet<string>();
 
-        EmitSignalTypeCollection(sb, classSymbol, borrows, overrideModifier);
+        var signalTypes = SignalTypesOf(classSymbol, borrows);
 
         var needsUtf8Helpers = false;
 
@@ -359,6 +359,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine($"    {overrideModifier} override void GeneratedBind(global::KernelEngine.Framework.ScriptHost scriptHost)");
         sb.AppendLine("    {");
         sb.AppendLine("        base.GeneratedBind(scriptHost);");
+        foreach (var t in signalTypes)
+            sb.AppendLine($"        scriptHost.DeclareSignal<{t}>();");
         foreach (var slot in slots)
         {
             var resolveCid = isNative
@@ -573,32 +575,17 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Emits <c>CollectSignalTypes</c>, declaring every payload type the class handles through
-    /// <c>On</c> and emits through an <c>Emit</c> parameter. Emits nothing when there is none.
+    /// Every payload type the class handles through <c>On</c> or emits through an <c>Emit</c>
+    /// parameter, declared by <c>GeneratedBind</c> so a scene may connect it.
     /// </summary>
-    static void EmitSignalTypeCollection(
-        StringBuilder sb,
-        INamedTypeSymbol classSymbol,
-        ImmutableArray<IParameterSymbol> borrows,
-        string overrideModifier)
-    {
-        var types = SignalHandlersOf(classSymbol)
+    static string[] SignalTypesOf(INamedTypeSymbol classSymbol, ImmutableArray<IParameterSymbol> borrows) =>
+        SignalHandlersOf(classSymbol)
             .Select(m => m.Parameters[0].Type.ToDisplayString())
             .Concat(borrows
                 .Where(b => BorrowKindOf(b.Type) == "Emit")
                 .Select(b => ((INamedTypeSymbol)b.Type).TypeArguments[0].ToDisplayString()))
             .Distinct()
             .ToArray();
-        if (types.Length == 0) return;
-
-        sb.AppendLine($"    {overrideModifier} override void CollectSignalTypes(global::KernelEngine.Framework.ISignalDeclarer into)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        base.CollectSignalTypes(into);");
-        foreach (var t in types)
-            sb.AppendLine($"        into.Declare<{t}>();");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-    }
 
     /// <summary>Every <c>On(in T)</c> this type declares itself.</summary>
     static IMethodSymbol[] SignalHandlersOf(INamedTypeSymbol classSymbol) =>

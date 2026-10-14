@@ -62,3 +62,5 @@
   href: 0030-plugin-shape-where-no-language-convention-applies.md
 - name: "0031 No system is pinned to a worker"
   href: 0031-no-system-is-pinned-to-a-worker.md
+- name: "0032 A signal is declared by the node that uses it"
+  href: 0032-a-signal-is-declared-by-the-node-that-uses-it.md

@@ -1,4 +1,4 @@
-using KernelEngine.Ecs;
+﻿using KernelEngine.Ecs;
 
 
 namespace KernelEngine.Framework;
@@ -89,12 +89,6 @@ public abstract class Node
     /// chain.
     /// </summary>
     protected internal virtual void CollectBehaviorComponents(List<NodeComponentUse> into) { }
-
-    /// <summary>
-    /// Declares every payload type this node type emits or handles. An override calls the base
-    /// first, as <see cref="CollectBehaviorComponents"/> does.
-    /// </summary>
-    protected internal virtual void CollectSignalTypes(ISignalDeclarer into) { }
 
     /// <summary>
     /// Creates <paramref name="child"/> as this node's child, under
