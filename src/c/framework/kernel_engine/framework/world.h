@@ -101,6 +101,27 @@ extern "C"
                                                      ke_component_id  cid,
                                                      void           **out_ctx);
 
+        /** Lets a scene name the component registered as `name` by `alias` as well. The alias
+         * answers only while it is unambiguous: a second name registered under the same alias,
+         * or a component registered under the alias itself, makes it ambiguous, and a scene must
+         * then write the full name. Registering the same pair twice changes nothing.
+         * @param alias [borrowed,utf8] The short name.
+         * @param name  [borrowed,utf8] The name the component is registered under. */
+        bool (*register_component_alias)(struct ke_world *self,
+                                         const char      *alias,
+                                         const char      *name,
+                                         ke_error       **out_error);
+
+        /** Resolves the component name a scene wrote: the component registered under it, else
+         * the one its alias stands for. Fails as not found when neither exists, and as an
+         * invalid argument naming the candidates when the alias is ambiguous.
+         * @param name     [borrowed,utf8] The name the scene wrote.
+         * @param out_meta [out] Receives the component's id, size and field metadata. */
+        bool (*resolve_component)(struct ke_world   *self,
+                                  const char        *name,
+                                  ke_component_meta *out_meta,
+                                  ke_error         **out_error);
+
     };
 
     typedef struct ke_world_handle

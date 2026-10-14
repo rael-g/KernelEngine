@@ -61,3 +61,5 @@ replaces another is a new record.
   applies](0030-plugin-shape-where-no-language-convention-applies.md)
 - [0031. No system is pinned to a worker](0031-no-system-is-pinned-to-a-worker.md)
 - [0032. A signal is declared by the node that uses it](0032-a-signal-is-declared-by-the-node-that-uses-it.md)
+- [0033. A scene names a component by its short name while it is
+  unambiguous](0033-a-scene-names-a-component-by-its-short-name-while-unambiguous.md)

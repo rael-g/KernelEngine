@@ -117,6 +117,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         if (!isNative && !slots.IsEmpty)
         {
+            sb.AppendLine("    private static readonly string GeneratedComponentName =");
+            sb.AppendLine($"        global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({className}).FullName!);");
+            sb.AppendLine("    private static readonly string GeneratedComponentAlias =");
+            sb.AppendLine($"        global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({className}).Name);");
+            sb.AppendLine();
             foreach (var p in properties.Where(p => p.Type.SpecialType == SpecialType.System_String))
             {
                 sb.AppendLine($"    [global::System.Runtime.CompilerServices.InlineArray({TextCapacityOf(p)})]");
@@ -313,7 +318,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    {");
         sb.AppendLine("        base.CollectBehaviorComponents(into);");
         foreach (var slot in slots)
-            sb.AppendLine($"        into.Add(new(\"{slot.ComponentName}\", {(writtenSlots.Contains(slot.ComponentName) ? "true" : "false")}, true));");
+            sb.AppendLine($"        into.Add(new({slot.NameExpression}, {(writtenSlots.Contains(slot.ComponentName) ? "true" : "false")}, true));");
         foreach (var b in borrows)
         {
             if (BorrowKindOf(b.Type) == "Emit") continue;
@@ -365,7 +370,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         {
             var resolveCid = isNative
                 ? $"scriptHost.CidOfName(\"{slot.ComponentName}\")"
-                : $"scriptHost.RegisterComponent<{slot.TypeName}>(\"{slot.ComponentName}\")";
+                : $"scriptHost.RegisterComponent<{slot.TypeName}>({slot.NameExpression})";
             sb.AppendLine($"        {slot.Cid} = {resolveCid};");
             sb.AppendLine($"        GeneratedSeed({slot.Cid}, in {slot.State});");
         }
@@ -416,8 +421,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Emits the static <c>RegisterSceneApply</c> of a game node: it registers the component under
-    /// the slot's name and an apply callback that reads each property of a supported type from
-    /// the block by its snake case key. A property of any other type has no scene key.
+    /// the node type's qualified name, the type's short name as an alias a scene may write while
+    /// no other component answers to it, and an apply callback that reads each property of a
+    /// supported type from the block by its snake case key. A property of any other type has no scene key.
     /// </summary>
     static void EmitSceneApply(StringBuilder sb, Slot slot, ImmutableArray<IPropertySymbol> properties)
     {
@@ -426,7 +432,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    internal static void RegisterSceneApply(global::KernelEngine.Framework.World world,"
             + " global::KernelEngine.Ecs.IEcsRegistry ecs)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        var cid = ecs.RegisterComponent<{slot.TypeName}>(\"{slot.ComponentName}\");");
+        sb.AppendLine($"        var cid = ecs.RegisterComponent<{slot.TypeName}>({slot.NameExpression});");
+        sb.AppendLine("        world.RegisterComponentAlias(GeneratedComponentAlias, GeneratedComponentName);");
         sb.AppendLine($"        world.RegisterComponentApply(cid, static (ref {slot.TypeName} comp,"
             + " in global::KernelEngine.Ecs.VariantReader reader) =>");
         sb.AppendLine("        {");
@@ -483,6 +490,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         public string TypeName { get; } = typeName;
         public string ComponentName { get; } = componentName;
         public int Index { get; } = index;
+
+        public string NameExpression => Symbol is null ? "GeneratedComponentName" : $"\"{ComponentName}\"";
 
         public string State => $"_generatedState{Index}";
         public string Cid => $"_generatedCid{Index}";

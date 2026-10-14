@@ -357,8 +357,10 @@ fn applyComponentBlock(
     };
 
     var meta: c.ke_component_meta = undefined;
-    if (!e.component_lookup.?(e, comp_name, &meta, null)) {
-        structural(world, out_error, "scene names component '{s}', which no module registered", .{comp_name});
+    var resolve_error: [*c]c.ke_error = null;
+    if (!world.resolve_component.?(world, comp_name, &meta, &resolve_error)) {
+        const reason: [*c]const u8 = if (resolve_error != null and resolve_error.*.message != null) resolve_error.*.message else "unknown component";
+        structural(world, out_error, "scene names component '{s}': {s}", .{ comp_name, reason });
         return false;
     }
 
