@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using KernelEngine.Common.Native;
 using KernelEngine.Logger.Native;
 
@@ -35,11 +35,13 @@ public sealed unsafe partial class Logger : ILogger
     public void Error(string tag, string message)    => Log(LogLevel.Error, tag, message);
     public void Critical(string tag, string message) => Log(LogLevel.Critical, tag, message);
 
-    /// <summary>Registers a managed sink to receive all subsequent log events.</summary>
+    /// <summary>
+    /// Registers a managed sink to receive every subsequent event at or above its
+    /// <see cref="ILoggerSink.MinLevel"/>.
+    /// </summary>
     /// <param name="sink">The sink implementation.</param>
-    /// <param name="minLevel">Minimum level forwarded to this sink. Defaults to <see cref="LogLevel.Trace"/>.</param>
-    public void AddSink(ILoggerSink sink, LogLevel minLevel = LogLevel.Trace) =>
-        AddSink(new NativeSinkAdapter(sink), (int)minLevel);
+    public void AddSink(ILoggerSink sink) =>
+        AddSink(new NativeSinkAdapter(sink), (int)sink.MinLevel);
 
     /// <summary>Adapts a game-facing <see cref="ILoggerSink"/> to the generated, native-event-shaped interface.</summary>
     private sealed class NativeSinkAdapter(ILoggerSink sink) : ILoggerSinkNative

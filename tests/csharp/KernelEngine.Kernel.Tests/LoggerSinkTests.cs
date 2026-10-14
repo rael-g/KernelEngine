@@ -10,8 +10,9 @@ public class LoggerSinkTests
     public void CustomSink_ReceivesLogEvents()
     {        using var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
-        
-        logger.AddSink(mockSink, LogLevel.Info);
+        mockSink.MinLevel.Returns(LogLevel.Info);
+
+        logger.AddSink(mockSink);
         
         logger.Info("TestTag", "Hello Info");
         logger.Trace("TestTag", "Hello Trace");

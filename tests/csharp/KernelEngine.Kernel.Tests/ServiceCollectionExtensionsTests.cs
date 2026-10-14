@@ -1,3 +1,4 @@
+﻿using NSubstitute;
 using Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Configuration;
@@ -38,6 +39,24 @@ public class ServiceCollectionExtensionsTests
 
         var sink = provider.GetRequiredService<ILoggerSink>();
         Assert.Equal(LogLevel.Error, sink.MinLevel);
+    }
+
+    [Fact]
+    public void AddLogger_AttachesEachSinkAtItsOwnMinimumLevel()
+    {
+        var sink = Substitute.For<ILoggerSink>();
+        sink.MinLevel.Returns(LogLevel.Error);
+        var services = new ServiceCollection();
+        services.AddSingleton(sink);
+        services.AddLogger();
+        using var provider = services.BuildServiceProvider();
+
+        var logger = provider.GetRequiredService<ILogger>();
+        logger.Info("T", "below");
+        logger.Error("T", "at");
+
+        sink.Received(1).Log(LogLevel.Error, "T", "at");
+        sink.DidNotReceive().Log(LogLevel.Info, Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Fact]
