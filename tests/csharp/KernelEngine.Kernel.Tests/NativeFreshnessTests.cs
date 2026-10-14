@@ -23,12 +23,12 @@ public class NativeFreshnessTests
             .Replace('\\', '/').TrimEnd('/');
         var stamp = Path.Combine([root, .. prefix.Split('/'), "abi.stamp"]);
         Assert.True(File.Exists(stamp),
-            $"{stamp} does not exist: build the native side first with `zig build --prefix build/native --cache-dir build/zig-cache`");
+            $"{stamp} does not exist: build the native side first with `zig build --prefix build/native`");
 
         var stale = Compare(root, File.ReadAllLines(stamp));
 
         Assert.True(stale.Count == 0,
-            "native libraries are older than these headers; rebuild with `zig build --prefix build/native --cache-dir build/zig-cache`:\n  "
+            "native libraries are older than these headers; rebuild with `zig build --prefix build/native`:\n  "
             + string.Join("\n  ", stale));
     }
 

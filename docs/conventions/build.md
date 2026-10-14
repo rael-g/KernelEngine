@@ -57,7 +57,7 @@ Everything a build fetches or produces is under `build/`, apart from the `zig-pk
 | `build/zig-global/` | Zig's global cache, when the root build is given `--global-cache-dir build/zig-global`, as `scripts/verify.cs` gives it; the vcpkg ports' `zig cc` is always given it |
 | `build/nuget/packages/` | NuGet's global packages folder, set by `nuget.config` at the repository root |
 | `build/nuget/http-cache/` | NuGet's HTTP cache, set by `scripts/verify.cs` for the commands it runs |
-| `build/zig-cache/` | the Zig cache of the one build process, when the root build is given `--cache-dir build/zig-cache`; the vcpkg ports' `zig cc` is always given it |
+| `.zig-cache/` at the root | the local cache of Zig, in its default place; the vcpkg ports' `zig cc` is given the same directory. `zig-pkg/` beside it is where Zig unpacks packages declared by URL |
 | `<--prefix>/lib`, `/bin`, `/gen` | plugin libraries, executables, generated shader output |
 
 `--prefix` is the install root the caller picks. The root installs every plugin's library under

@@ -5,14 +5,14 @@ using System.Runtime.CompilerServices;
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
-var nativeArgs = new[] { "--prefix", "build/native", "--cache-dir", "build/zig-cache", "--global-cache-dir", "build/zig-global" };
+var nativeArgs = new[] { "--prefix", "build/native", "--global-cache-dir", "build/zig-global" };
 
 var stages = new Dictionary<string, Func<List<Step>>>
 {
     ["build"] = () => [new Step("zig build", "zig", ["build", "--summary", "all", .. nativeArgs])],
     ["test-native"] = () => [new Step("zig build test", "zig", ["build", "test", .. nativeArgs])],
     ["test-managed"] = () => [new Step("dotnet test", "dotnet", ["test", "KernelEngine.slnx"])],
-    ["test-windows"] = () => [new Step("zig build test windows", "zig", ["build", "test", "-Dtarget=x86_64-windows-gnu", "-fwine", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win", "--global-cache-dir", "build/zig-global"])],
+    ["test-windows"] = () => [new Step("zig build test windows", "zig", ["build", "test", "-Dtarget=x86_64-windows-gnu", "-fwine", "--prefix", "build/cross-windows", "--global-cache-dir", "build/zig-global"])],
     ["test-managed-windows"] = ManagedWindowsTests,
     ["gates"] = Gates,
     ["docs"] = () =>
@@ -23,7 +23,7 @@ var stages = new Dictionary<string, Func<List<Step>>>
     ],
     ["visual"] = () => [new Step("visual", "dotnet", ["run", "scripts/visual.cs", .. args.Where(a => a == "--update")])],
     ["capture"] = () => [new Step("capture", "dotnet", ["run", "scripts/capture.cs", .. args.Where(a => a == "--update")])],
-    ["cross-windows"] = () => [new Step("zig build windows", "zig", ["build", "-Dtarget=x86_64-windows-gnu", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win", "--global-cache-dir", "build/zig-global"])],
+    ["cross-windows"] = () => [new Step("zig build windows", "zig", ["build", "-Dtarget=x86_64-windows-gnu", "--prefix", "build/cross-windows", "--global-cache-dir", "build/zig-global"])],
 };
 string[] order = ["build", "test-native", "test-managed", "gates", "docs", "visual", "capture", "cross-windows", "test-windows", "test-managed-windows"];
 

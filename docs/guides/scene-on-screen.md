@@ -30,6 +30,6 @@ arrives in the view it is given.
 ## Run it
 
 ```bash
-zig build --prefix build/native --cache-dir build/zig-cache --global-cache-dir build/zig-global
+zig build --prefix build/native --global-cache-dir build/zig-global
 LD_LIBRARY_PATH=build/native/lib dotnet run --project examples/csharp/01_window_scene
 ```

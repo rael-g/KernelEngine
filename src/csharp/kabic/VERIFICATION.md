@@ -145,7 +145,7 @@ Run in this order; do not skip any step because an earlier one passed:
 2. `dotnet test KernelEngine.slnx` — all pass, count matches or exceeds the
    prior run (a silently-dropped test file is not a passing run).
 3. `dotnet run scripts/verify.cs -- gates` — every `check_*.cs`, `kabic check drift` included, green.
-4. `zig build --prefix build/native --cache-dir build/zig-cache` — zero errors.
+4. `zig build --prefix build/native` — zero errors.
 5. If the domain has any live usage in an example or test that exercises the
    changed slot at runtime (not just at compile time), run it. A shape can
    compile correctly and still marshal the wrong bytes.

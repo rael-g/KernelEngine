@@ -39,7 +39,7 @@ are. A vcpkg cache that is restored but whose ports are rebuilt anyway means a p
 changed; the triplets pass `PATH` through as untracked for that reason, so a runner-specific `PATH`
 does not enter the hash.
 
-`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native --cache-dir build/zig-cache`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, `gates` runs every `scripts/check_*.cs` it finds, `docs` generates the reference pages and builds the site with DocFX into `build/docs-site`, failing on
+`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, `gates` runs every `scripts/check_*.cs` it finds, `docs` generates the reference pages and builds the site with DocFX into `build/docs-site`, failing on
 a warning such as a link to a section that does not exist, and `visual` is described below. With no stage it runs those six in that order and prints each step's time. `--keep-going` does not stop at the first failing step. Each stage runs alone when it is the only one named.
 
 Three more stages exist for the Windows target and are run only when named: `cross-windows` builds it, `test-windows` runs its Zig tests under Wine, and `test-managed-windows` builds each project under `tests/csharp/` against the Windows libraries and runs its assembly under Wine with the Windows .NET SDK. `scripts/ci_local.cs -- --windows` runs the three inside the image `scripts/ci/Dockerfile.wine` describes, which is where Wine and that SDK come from.

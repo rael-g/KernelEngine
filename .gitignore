@@ -2,13 +2,10 @@
 # build/native/   install prefix (bin, lib, gen)
 # build/tools/    fetched toolchains: vcpkg, slangc, wgpu-native
 # build/vcpkg-installed/  vcpkg's own install root, per triplet
-# build/zig-cache/        the one cache of the root build
 /build/
 
-# zig-pkg/ is where Zig unpacks the packages a build.zig.zon declares by URL, beside
-# the build.zig that was invoked: the root's for the root build. The other two appear
-# when a plugin's build.zig is invoked from its own directory, or when the root build
-# is run without --cache-dir.
+# The local cache of Zig and the directory where it unpacks the packages a build.zig.zon
+# declares by URL stay at the root, where Zig puts them.
 .zig-cache/
 zig-out/
 zig-pkg/

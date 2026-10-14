@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) void {
     const host_triplet = if (host_windows) "x64-windows-zig" else "x64-linux-zig";
 
     const tools_dir = b.pathJoin(&.{ root, "build", "tools" });
-    const zig_cache_dir = b.pathJoin(&.{ root, "build", "zig-cache" });
+    const zig_cache_dir = b.pathJoin(&.{ root, ".zig-cache" });
 
     const vcpkg_tool_version = "2026-07-13";
     const vcpkg_dir_default = b.pathJoin(&.{ tools_dir, b.fmt("vcpkg-{s}", .{vcpkg_tool_version}) });
