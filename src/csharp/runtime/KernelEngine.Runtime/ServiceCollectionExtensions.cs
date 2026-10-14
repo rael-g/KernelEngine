@@ -15,8 +15,7 @@ namespace KernelEngine.Runtime;
 ///         its <see cref="IRuntimeModule.Configure"/> runs synchronously here so the
 ///         module can register its own implementations under public contracts.</item>
 /// </list>
-/// Both overloads map directly to <c>IServiceCollection.AddSingleton</c>; no
-/// magic, no hidden side effects beyond the documented Configure call.
+/// Both overloads register a singleton; the only other effect is the documented Configure call.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -24,8 +23,7 @@ public static class ServiceCollectionExtensions
     /// Registers <typeparamref name="TImpl"/> as a singleton under
     /// <typeparamref name="TContract"/>. The DI container resolves
     /// <typeparamref name="TImpl"/>'s constructor parameters from other
-    /// registered services. Use when the impl has no per-instance config
-    /// (e.g. <c>EnkiScheduler</c> just needs the allocator from DI).
+    /// registered services.
     /// </summary>
     public static IServiceCollection Add<TContract, TImpl>(this IServiceCollection services)
         where TContract : class
@@ -36,8 +34,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Registers <paramref name="instance"/> as the singleton for
-    /// <typeparamref name="TContract"/>. Use when the impl carries config that
-    /// only the caller knows (e.g. <c>new WebgpuRenderModule(clearColor: ...)</c>).
+    /// <typeparamref name="TContract"/>.
     /// If the instance also implements <see cref="IRuntimeModule"/>, its
     /// <see cref="IRuntimeModule.Configure"/> runs immediately so the module can
     /// register its own contracts before the service provider is built.

@@ -1,9 +1,8 @@
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Indexes every <c>.ke-module</c> file the CLI can see, keyed by module id. Discovery walks the
-/// engine repo's <c>src/csharp/*/Modules/*.ke-module</c>. NuGet packages will later add a second
-/// discovery path (something like <c>$tool-state/packages/*/tools/ke-modules/*.ke-module</c>).
+/// Indexes the <c>.ke-module</c> files under <c>src/csharp/*/Modules</c> of the engine repo, keyed
+/// by module id. Two files declaring the same id make construction throw.
 /// </summary>
 public sealed class ModuleCatalog
 {

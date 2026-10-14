@@ -8,18 +8,6 @@ using Kabic;
 /// PascalCase, its functions are camelCase, its fields and constants are
 /// snake_case, and its reserved words are not C#'s.
 /// </summary>
-/// <remarks>
-/// <c>Pascal</c> splits its argument at the underscores, drops the empty pieces, and
-/// upper-cases the first letter of each piece while lower-casing the rest. <c>Camel</c> is
-/// <c>Pascal</c> with its first letter lower-cased. <c>Ident</c> wraps a name found in
-/// <c>Keywords</c> in Zig's quoted-identifier form. <c>EnumMember</c> tries the prefixes of
-/// the enum's name from the longest to an empty one, removes the first one the member name
-/// starts with, and keeps the rest lower-cased when it is not empty and does not begin with
-/// a digit; when no prefix qualifies, the whole member name is lower-cased. <c>Primitive</c>
-/// answers the Zig boolean for the convention's byte-bool type, and otherwise looks the base
-/// C type up in <c>Prim</c>. <c>Base</c> removes the <c>const</c>, <c>struct</c> and
-/// <c>enum</c> words from a C type spelling and trims what is left.
-/// </remarks>
 public static class Idioms
 {
     static readonly Dictionary<string, string> Prim = new()

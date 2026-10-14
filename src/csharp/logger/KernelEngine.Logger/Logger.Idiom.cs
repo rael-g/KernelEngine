@@ -5,12 +5,9 @@ using KernelEngine.Logger.Native;
 namespace KernelEngine.Logger;
 
 /// <summary>
-/// The parts of <see cref="Logger"/> that express the native surface in C# terms
-/// rather than mirroring it: string marshaling for <see cref="Log"/>, the
-/// severity-named convenience overloads, and the adapter from the game-facing
-/// <see cref="ILoggerSink"/> to the generated, native-shaped
-/// <see cref="ILoggerSinkNative"/>. Everything that is a direct image of the C
-/// ABI is generated in <c>Generated/Logger.g.cs</c>.
+/// The managed logger over the native one. Its hand-written part marshals strings for
+/// <see cref="Log"/>, offers an overload per severity, and registers an <see cref="ILoggerSink"/>
+/// through an adapter to <see cref="ILoggerSinkNative"/>. The rest is generated.
 /// </summary>
 public sealed unsafe partial class Logger : ILogger
 {

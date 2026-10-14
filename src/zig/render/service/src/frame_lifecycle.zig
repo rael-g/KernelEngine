@@ -1,12 +1,4 @@
-//! One frame of the render service: it opens the frame, carries buffer uploads queued during it,
-//! and closes it.
-//!
-//! `beginFrame` discards what the last frame left in `CoreState`, acquires the render target and
-//! creates the precreated encoders. Between the two calls, passes record into their slots, and
-//! `uploadBuffer` may be called from any worker: it reserves a record and a range of the upload
-//! arena atomically, then copies into it. `endFrame` writes the queued uploads through the device
-//! first, so the buffers hold them when the frame's commands run, then finishes or replays each
-//! slot's work, submits it as one batch, releases the encoders and presents.
+//! Opens and closes a frame of the render service, and carries the buffer uploads queued during it.
 
 const rc = @import("render_service.zig");
 const c = rc.c;
@@ -109,8 +101,10 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
 }
 
 /// Copies the bytes into the upload arena and queues a record for `endFrame` to write them to
-/// the buffer. Nothing is returned, so an upload dropped for the record limit or the arena end,
-/// or with a zero size or null data, is silent.
+/// the buffer. May be called from any worker between `beginFrame` and `endFrame`: the record and
+/// the arena range are reserved with atomic counters before the copy. Nothing is returned, so an
+/// upload dropped for the record limit or the arena end, or with a zero size or null data, is
+/// silent.
 pub fn uploadBuffer(self: [*c]c.ke_render_service, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
     if (size == 0 or data == null) return;
     const st = rc.coreOf(self);

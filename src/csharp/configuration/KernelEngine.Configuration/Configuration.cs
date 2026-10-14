@@ -5,9 +5,10 @@ using ConfigNative = KernelEngine.Configuration.Native.NativeMethods;
 namespace KernelEngine.Configuration;
 
 /// <summary>
-/// Owns a native <c>ke_configuration</c> store. Created empty; <see cref="LoadToml"/>
-/// populates it from a Project file (missing file is not an error — every getter's
-/// fallback then applies, per the native contract's doctrine).
+/// Owns a native <c>ke_configuration</c> store, created empty. <see cref="LoadToml"/> fills it
+/// from a file, and a missing file is not an error. A getter returns its fallback for a missing
+/// key or a value of another type; a setter throws when the native call fails. The store is
+/// released by <see cref="Dispose"/>.
 /// </summary>
 public sealed unsafe class Configuration : IConfiguration, IDisposable
 {

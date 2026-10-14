@@ -3,10 +3,8 @@ using System.Numerics;
 namespace KernelEngine.Render;
 
 /// <summary>
-/// Procedural mesh factories for the v2 render path. Each call uploads vertex +
-/// index buffers through an <see cref="IRenderResources"/> and returns a handle.
-/// Vertices carry position + normal + uv + tangent (the tangent is the +U
-/// direction, for tangent-space normal mapping). Call from the render worker.
+/// Procedural meshes. Each call uploads through an <see cref="IRenderResources"/> and returns the
+/// handle; the tangent of every vertex points along the U direction.
 /// </summary>
 public static class MeshPrimitives
 {

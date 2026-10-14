@@ -1,6 +1,5 @@
-//! Windows-only check of the mingw entry point re-export: it loads a probe DLL with the re-export
-//! and one without, and asks each whether its C++ static initializers ran. The one without is a
-//! canary that fails when they ran anyway. Both tests are skipped on other targets.
+//! Windows-only check that a plugin DLL re-exporting the mingw entry point runs the static
+//! initializers of its linked C++ code, and one that does not re-export it does not.
 
 const std = @import("std");
 const builtin = @import("builtin");

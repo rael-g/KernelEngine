@@ -8,21 +8,6 @@ namespace Kabic.Pipeline;
 /// Writes the C# projection, the C field tables and the error-kind mapping of an API
 /// description.
 /// </summary>
-/// <remarks>
-/// <c>CSharp</c> classifies the API model against the providers and callbacks, then writes
-/// files in a fixed order. The enums that are not external go into one file in the contract
-/// directory. Each value, borrowed and view struct gets its own file there. A struct with array
-/// fields that is neither a params type, a view nor borrowed gets a spans file in the output
-/// directory. An enum that declares borrow kinds gets a wrappers file. Each provider writes a
-/// class to the output directory and, when it has a contract, an interface to the contract
-/// directory. Each callback writes a native interface. Each component tagged as a node writes a
-/// node type, and the nodes together get one registrar named after the domain, which requires a
-/// domain name. Free functions are written per owner, which requires a library name.
-///
-/// <c>CFieldTable</c> renders the field tables from the model. <c>ErrorKinds</c> renders the
-/// managed error mapping from the convention: one switch over the named errors, a general error
-/// constructor, and a class for each kind that extends another type.
-/// </remarks>
 public static class Generation
 {
     /// <summary>

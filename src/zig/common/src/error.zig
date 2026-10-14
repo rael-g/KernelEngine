@@ -1,11 +1,5 @@
-//! The C ABI side of the error contract in kernel_engine/common/error.h. It exports the singleton
-//! generic error types, named by error_types.zig, and `ke_error_set`, `ke_error_last`,
-//! `ke_error_is` and `ke_error_fatal`. It also turns off the signal stack of the standard library.
-//!
-//! State is per thread: two records with a text buffer each, used alternately, so an error handed
-//! out by one set stays valid through one more set on the same thread. The message is copied and
-//! cut; the file name and the cause are kept by pointer. A type matches by walking its parent
-//! links, and a fatal error prints its chain of causes and exits.
+//! The C ABI side of the error contract in kernel_engine/common/error.h: the generic error types
+//! and the functions that record, query and end the process on an error.
 
 const std = @import("std");
 
@@ -58,6 +52,9 @@ export fn ke_error_is(err_in: ?*const c.ke_error, type_in: ?*const c.ke_error_ty
     return false;
 }
 
+/// Two error records per thread, each with its own text buffer, used alternately by
+/// `ke_error_set` through `next_slot`. An error handed out by one set therefore stays valid
+/// through one more set on the same thread, and the set after that overwrites it.
 threadlocal var slots: [slot_count]c.ke_error = std.mem.zeroes([slot_count]c.ke_error);
 threadlocal var messages: [slot_count][message_max]u8 = std.mem.zeroes([slot_count][message_max]u8);
 threadlocal var next_slot: usize = 0;

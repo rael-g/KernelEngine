@@ -5,14 +5,8 @@ using KernelEngine.Scheduler.Native;
 namespace KernelEngine.Scheduler;
 
 /// <summary>
-/// The parts of <see cref="Scheduler"/> that express fire-and-forget native
-/// dispatch as C# async — Task/TaskCompletionSource bridging, GCHandle-rooted
-/// trampolines for the three [raw_callback] slots kabic does not generate a
-/// method for (there is no ABI-derivable answer to "what should this look
-/// like in C#" the way there is for a fallible slot or a sequence; the value
-/// surface here is inherently this language's own async idiom). Everything
-/// that is a direct image of the C ABI is generated in
-/// <c>Generated/Scheduler.g.cs</c>.
+/// The part of <see cref="Scheduler"/> that implements <see cref="IScheduler"/> and exposes
+/// native dispatch as <see cref="Task"/> and <see cref="KernelTask"/>.
 /// </summary>
 public unsafe partial class Scheduler : IScheduler
 {
@@ -106,10 +100,8 @@ public unsafe partial class Scheduler : IScheduler
     }
 
     /// <summary>
-    /// Carries a dispatched body and whatever it threw from the worker thread to the
-    /// completion callback. The native channel hands on a <c>ke_error_type</c>, which
-    /// survives the thread crossing but names only the category; the exception itself
-    /// never leaves managed memory, so it reaches the task intact.
+    /// A dispatched body and the exception it threw, if any, carried from the worker thread to the
+    /// completion callback, which faults the task with it.
     /// </summary>
     private sealed class DispatchJob(Action body)
     {

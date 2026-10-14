@@ -1,9 +1,4 @@
-//! A generational store: handles are `u32` values packing a slot index with the slot's generation.
-//!
-//! `insert` reuses an index taken from the free list or appends a slot. `remove` advances the
-//! generation of the slot it retires, skipping zero, so a handle left over from an earlier occupant
-//! of the index stops resolving, and `get` compares generations before it touches a value.
-//! `forEach` walks the occupied slots in index order. Nothing is locked.
+//! A generational store whose handles are `u32` values packing a slot index with a generation.
 
 const std = @import("std");
 const rc = @import("render_service.zig");
@@ -39,7 +34,8 @@ pub fn SlotMap(comptime T: type) type {
             self.free.deinit(self.alloc);
         }
 
-        /// Stores the value and returns its handle. Returns `KE_HANDLE_NONE` and leaves the map
+        /// Stores the value in an index taken from the free list, or appends a slot, and returns
+        /// its handle. Returns `KE_HANDLE_NONE` and leaves the map
         /// unchanged when the index does not fit the handle or when `slots` cannot grow. Nothing
         /// is reported beyond that sentinel.
         pub fn insert(self: *Self, value: T) u32 {
@@ -56,8 +52,8 @@ pub fn SlotMap(comptime T: type) type {
         }
 
         /// Returns null for the none handle, an index past the slots, an empty slot or a stale
-/// generation. The pointer points into `slots`, so it is valid only until an `insert` that must
-/// append.
+        /// generation. The pointer points into `slots`, so it is valid only until an `insert`
+        /// that must append.
         pub fn get(self: *Self, bits: u32) ?*T {
             if (bits == c.KE_HANDLE_NONE) return null;
             const idx = handles.index(bits);
@@ -67,7 +63,9 @@ pub fn SlotMap(comptime T: type) type {
             return &s.payload;
         }
 
-        /// Returns the value and retires the handle, or null when `get` would not resolve it.
+        /// Returns the value and retires the handle, or null when `get` would not resolve it. The
+        /// generation of the slot advances, skipping zero, so a handle left from an earlier
+        /// occupant of the index stops resolving.
         /// Retires it even when the index cannot be pushed onto `free`. Then the index is never
         /// reused and its slot stays unoccupied.
         pub fn remove(self: *Self, bits: u32) ?T {

@@ -1,10 +1,8 @@
 namespace KernelEngine.Configuration;
 
 /// <summary>
-/// Thin wrapper over the native <c>ke_configuration</c> store: a format-agnostic,
-/// typed (section, key) -&gt; value settings store. A missing key or a type
-/// mismatch returns the given fallback — never an error, per the native
-/// contract's own doctrine.
+/// A typed (section, key) to value store. A getter returns the given fallback for a missing key or
+/// a value of another type, and never fails.
 /// </summary>
 public interface IConfiguration
 {
@@ -20,17 +18,15 @@ public interface IConfiguration
 
     /// <summary>
     /// Reads <paramref name="fallback"/>.Length scalar keys named <c>key_0</c>, <c>key_1</c>, ...
-    /// — the store itself has no array type (see <see cref="SetFloatArray"/>). Any index
-    /// missing or type-mismatched falls back to that index's <paramref name="fallback"/> value,
-    /// same as a scalar get.
+    /// An index that is missing or of another type takes that index's value of
+    /// <paramref name="fallback"/>.
     /// </summary>
     float[] GetFloatArray(string section, string key, float[] fallback);
 
     /// <summary>
-    /// Writes <paramref name="values"/> as scalar keys <c>key_0</c>, <c>key_1</c>, ... A native
-    /// TOML-authored array is NOT readable this way — <c>ke_configuration_toml</c> skips array
-    /// values entirely when loading a file, so a config file wanting this shape must author the
-    /// indexed keys directly. This method only round-trips values set at runtime.
+    /// Writes <paramref name="values"/> as scalar keys <c>key_0</c>, <c>key_1</c>, ... An array
+    /// in a TOML file is skipped when the file is loaded, so a file must author the indexed keys
+    /// itself to be read back by <see cref="GetFloatArray"/>.
     /// </summary>
     void SetFloatArray(string section, string key, float[] values);
 }

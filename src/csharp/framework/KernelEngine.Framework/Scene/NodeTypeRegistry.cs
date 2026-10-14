@@ -3,9 +3,9 @@ using System.Text;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Maps the names a <c>.scene.toml</c> file uses to the managed <see cref="Type"/>s
-/// <see cref="SceneLoader"/> instantiates. Built at startup via
-/// <c>services.AddNodeType&lt;T&gt;()</c>.
+/// Maps node type names to the managed <see cref="Type"/>s they stand for. Each type is filed
+/// under its qualified name, which is unique, and under its short name, which may be shared.
+/// Names are compared in the normalized form of <see cref="Normalize"/>.
 /// </summary>
 public sealed class NodeTypeRegistry
 {
@@ -35,7 +35,7 @@ public sealed class NodeTypeRegistry
         return this;
     }
 
-    /// <summary>Every node type registered, in no particular order.</summary>
+    /// <summary>Every node type registered, in no defined order.</summary>
     public IEnumerable<Type> RegisteredTypes => _qualified.Values;
 
     /// <summary>Resolves a name a scene file wrote to the type it names.</summary>
@@ -62,7 +62,8 @@ public sealed class NodeTypeRegistry
     }
 
     /// <summary>
-    /// The one spelling of a node type name: snake_case, dots between namespace parts.
+    /// The spelling of a node type name: snake case, with a dot for each nesting. The native scene
+    /// loader applies the same rule to the type name it hands to the script factory.
     /// </summary>
     public static string Normalize(string name)
     {

@@ -4,8 +4,14 @@ using KernelEngine.Ecs;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// The node-shaped face of the script host: spawning, destroying and reaching nodes,
-/// in the object vocabulary this language speaks.
+/// The managed face of the native script host: creates, destroys and finds <see cref="Node"/>
+/// objects, binds each to its entity as an instance of a script type registered per node class,
+/// resolves borrows and raises and delivers signals. Each bound node is held by a GC handle
+/// stored as the native instance; a node unbound inside a system has its handle freed two
+/// calls of <c>ReleaseRetired</c> later, so a system still reading it is not left with a freed
+/// handle. The system running on the current thread scopes <see cref="AddNode{T}"/> and
+/// <see cref="DestroyNode"/> to its command queue, so structural changes made there apply at the
+/// wave barrier.
 /// </summary>
 public unsafe partial class ScriptHost : ISignalDeclarer
 {
@@ -22,11 +28,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
     internal event Action<Type, Node>? BehaviorTypeAdded;
 
-    /// <summary>
-    /// The bound nodes of one type, read from the script host rather than from a list
-    /// kept here. A second list would be a copy of the bindings that only this language
-    /// can see, and that goes stale the moment anything else unbinds one of them.
-    /// </summary>
+    /// <summary>The bound nodes of one type, read from the native host on each call.</summary>
     internal List<Node> BehaviorsOf(Type type)
     {
         var nodes = new List<Node>();
@@ -38,8 +40,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Every currently-bound node. A caller needing its own node type filters
-    /// this with <c>OfType&lt;T&gt;()</c> — ScriptHost has no per-domain knowledge.
+    /// Every currently bound node, in no defined order.
     /// </summary>
     public IReadOnlyList<Node> AllNodes
     {
@@ -54,15 +55,9 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     [ThreadStatic] private static KernelEngine.Ecs.EcsCommands? _commands;
 
     /// <summary>
-    /// Scopes <see cref="AddNode{T}"/>/<see cref="DestroyNode"/> to a running
-    /// system's command queue for the duration of the returned handle, so structural
-    /// changes defer to the wave barrier. Restores the prior queue on dispose.
-    /// <para>
-    /// The context belongs to the thread running the system, not to the world: the
-    /// scheduler runs the systems of one wave concurrently, and a world-wide field
-    /// would hand one system the context of another. A world reached from two threads
-    /// at once is the normal case, not the exceptional one.
-    /// </para>
+    /// Scopes <see cref="AddNode{T}"/> and <see cref="DestroyNode"/> to a running system's command
+    /// queue on the current thread until the returned scope is disposed, so structural changes
+    /// defer to the wave barrier. Disposing restores the previous queue.
     /// </summary>
     internal SystemCtxScope EnterSystem(nint ctx) => new(ctx);
 
@@ -91,11 +86,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (int Stamp, uint[] Ids)> _assignableTypes = new();
 
     /// <summary>
-    /// The script type ids whose node type is <paramref name="wanted"/> or derives from
-    /// it. The native host matches one exact id, and that is deliberate: a base type
-    /// standing in for its subtypes is this projection's own idea, so the set of ids a
-    /// borrow accepts is widened here instead of every language sharing a contract that
-    /// has to model inheritance.
+    /// The script type ids whose node type is <paramref name="wanted"/> or derives from it.
     /// </summary>
     private uint[] ScriptTypesAssignableTo(Type wanted)
     {
@@ -113,9 +104,10 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
     /// <summary>
     /// The node <paramref name="owner"/> borrows: an instance of <paramref name="wanted"/>
-    /// within <paramref name="reach"/>, or null when none is or more than one answers.
-    /// Two ids answering is ambiguity the same way two nodes of one id are, so neither is
-    /// resolved by picking whichever type registered first.
+    /// within <paramref name="reach"/>, or null when none is or more than one answers, whether
+    /// the candidates share a script type or not. The native host is asked once per script type
+    /// that is <paramref name="wanted"/> or derives from it; an ancestor borrow whose number of
+    /// such types is not one is resolved by walking the parents here.
     /// </summary>
     internal Node? Borrow(Node owner, Type wanted, string name, ScriptBorrow reach)
     {
@@ -142,27 +134,23 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     private SignalBus? _signals;
-    /// <summary>The signal bus this world raises through, or null when none is registered.</summary>
+    /// <summary>The signal bus this host raises through, or null when none is registered.</summary>
     public SignalBus? Signals => _signals;
 
     /// <summary>
-    /// Resolves the signal id for payload type <typeparamref name="T"/>, registering
-    /// it on first use. The type's name and size are the identity, so a node in
-    /// another language naming the same signal lands on the same id.
+    /// Resolves the signal id for payload type <typeparamref name="T"/>, registering it on first
+    /// use. The type's name and size are the identity of the signal.
     /// </summary>
     internal unsafe uint SignalIdOf<T>() where T : unmanaged => _signals!.SignalIdOf<T>();
 
     /// <summary>
-    /// Declares a payload type's signal up front, so a scene naming it resolves and a
-    /// scene naming something else fails instead of inventing a signal nobody raises.
+    /// Registers the signal of a payload type, so that a scene can connect it by name.
     /// </summary>
     void ISignalDeclarer.Declare<T>() => _ = SignalIdOf<T>();
 
     /// <summary>
-    /// Hands one delivery to the node it names. A delivery whose target is no longer
-    /// bound, or whose signal this world never registered a payload type for, is
-    /// dropped: the bus is language-neutral, so an id raised by another runtime is a
-    /// normal case here, not an error.
+    /// Hands one delivery to the node it names. A delivery whose target is no longer bound, or
+    /// whose signal this world has no payload type for, is dropped.
     /// </summary>
     internal unsafe void Deliver(in KernelEngine.Framework.Native.ke_signal_delivery delivery)
     {
@@ -183,7 +171,10 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         _signals.Connect(source.Entity, SignalIdOf<T>(), target.Entity, 0);
     }
 
-    /// <summary>Removes a connection made by <see cref="Connect{T}"/>.</summary>
+    /// <summary>
+    /// Removes a connection made by <see cref="Connect{T}"/>; false when there was none or no
+    /// signal bus is registered.
+    /// </summary>
     public bool Disconnect<T>(Node source, Node target) where T : unmanaged =>
         _signals is not null && _signals.Disconnect(source.Entity, SignalIdOf<T>(), target.Entity, 0);
 
@@ -191,9 +182,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
     /// <summary>
-    /// Hands the host the collaborators its node-shaped surface needs, which the
-    /// generated constructor cannot take: it is derived from the C factory, and the
-    /// factory's business is the native host alone.
+    /// Gives the host the world, the ECS registry and the optional signal bus, and registers the
+    /// name, transform and hierarchy components.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
     internal ScriptHost Compose(World world, IEcsRegistry ecs, SignalBus? signals = null)
@@ -208,8 +198,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Registers a node in the world: creates a native entity via the scene tree,
-    /// binds the node to it, and lets the subclass materialize its components.
+    /// Creates the entity of a node under <paramref name="parent"/>, deferred when a system
+    /// context is current.
     /// </summary>
     private ulong CreateEntity(string name, Node? parent)
     {
@@ -222,6 +212,13 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     private static unsafe nint CommandsHandle(KernelEngine.Ecs.EcsCommands commands) =>
         (nint)((KernelEngine.Ecs.INativeEcsCommands)commands).Native;
 
+    /// <summary>
+    /// Creates an entity named <paramref name="name"/> under <paramref name="parent"/> (the root
+    /// when null), binds <paramref name="node"/> to it and returns the node. Inside a system the
+    /// entity and binding are recorded and apply at the wave barrier.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The node is already bound, or the parent
+    /// belongs to another world.</exception>
     public T AddNode<T>(T node, string name = "", Node? parent = null) where T : Node
     {
         if (node.IsBound)
@@ -237,9 +234,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// First phase used by the scene loader: assigns entity + name + parent,
-    /// but does NOT yet invoke the subclass's OnBind. The loader applies
-    /// component data then calls <see cref="CompleteAddNode"/>.
+    /// First half of <see cref="AddNode{T}"/>: creates the entity and binds the node to it without
+    /// calling its <see cref="Node.OnBind"/>, which <see cref="CompleteAddNode"/> does.
     /// </summary>
     internal void PreAddNode(Node node, string name, Node? parent)
     {
@@ -257,9 +253,9 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     internal void CompleteAddNode(Node node) => node.CompleteBind();
 
     /// <summary>
-    /// Resolves the native script type for a node's CLR type, registering it on first
-    /// use from what the node itself declares: the components it carries and whether
-    /// its behaviour reaches past its own entity.
+    /// Returns the native script type of a node's CLR type, registering it on first use with the
+    /// components the node owns and whether its behavior reaches only its own entity. The type
+    /// name is the full name of the CLR type.
     /// </summary>
     private uint ScriptTypeOf(Node node)
     {
@@ -330,15 +326,12 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// The node bound to <paramref name="entity"/>, or null when none is. Null is the
-    /// normal answer, not a failure: an entity the scene loader made without a script,
-    /// or one another language's runtime owns, carries the same components and matches
-    /// the same query without any node here standing behind it.
+    /// The node bound to <paramref name="entity"/>, or null when none is.
     /// </summary>
     internal Node? NodeOf(ulong entity) =>
         TryInstanceOf(entity, out _, out var instance) ? instance as Node : null;
 
-    /// <summary>Finds a node by its exact name or path, resolved through the native scene tree.</summary>
+    /// <summary>Finds a node by its name or path, resolved through the native scene tree.</summary>
     public Node? Find(string name)
     {
         var entity = _world.SceneTree.FindNode(name);
@@ -357,8 +350,9 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Removes <paramref name="node"/> from the world, destroys its native entity,
-    /// and clears its binding. Idempotent on unbound nodes.
+    /// Removes <paramref name="node"/> and its children, children first, calling
+    /// <see cref="Node.OnUnbind"/> on each, then destroys the native entities and clears the
+    /// bindings. Does nothing for a node that is not bound to this host.
     /// </summary>
     public void DestroyNode(Node node)
     {
@@ -378,8 +372,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Destroys every node currently in the world. Used by <see cref="SceneRouter"/>
-    /// to flush a scene before loading the next one.
+    /// Destroys every node currently in the world.
     /// </summary>
     public void Clear()
     {
@@ -388,9 +381,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Binds a managed Node to an entity that was already created by the native
-    /// scene loader (name/hierarchy already live in the ECS), skips native entity
-    /// creation, and calls OnBind normally.
+    /// Binds a node to an entity that already exists, such as one made by the native scene
+    /// loader, and calls <see cref="Node.OnBind"/>.
     /// </summary>
     internal void BindNativeEntity(Node node, ulong entity)
     {
@@ -399,9 +391,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Reads <paramref name="entity"/>'s display name straight from <c>ke_name_component</c>
-    /// — never cached, so a native rename is visible on the next read without any
-    /// sync step. "" for an entity with no name (or none at all).
+    /// Reads the name of <paramref name="entity"/> from <c>ke_name_component</c>; empty for an
+    /// entity with no name.
     /// </summary>
     internal string GetName(ulong entity)
     {
@@ -414,9 +405,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Resolves <paramref name="entity"/>'s parent node straight from
-    /// <c>ke_hierarchy_component</c>. Null when the entity has no parent, or when
-    /// the parent entity has no managed <see cref="Node"/> bound to it.
+    /// Resolves the parent node of <paramref name="entity"/>. Null when the entity has no parent,
+    /// or when the parent entity has no managed <see cref="Node"/> bound to it.
     /// </summary>
     internal Node? GetParent(ulong entity)
     {
@@ -425,11 +415,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Walks <paramref name="entity"/>'s children in the order they were added,
-    /// asking the scene tree for each step rather than reading the hierarchy
-    /// component here. How parenthood is stored is the tree's business; a second
-    /// walker over the same bytes is a second thing to fix when that changes.
-    /// Skips any child with no managed <see cref="Node"/> bound to it.
+    /// The children of <paramref name="entity"/> in creation order, walked through the scene
+    /// tree. Skips any child with no managed <see cref="Node"/> bound to it.
     /// </summary>
     internal IReadOnlyList<Node> GetChildren(ulong entity)
     {
@@ -459,9 +446,8 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
     /// <summary>
     /// Writes <paramref name="value"/> into the component registered under
-    /// <paramref name="cid"/>, attaching it when the entity does not carry it yet.
-    /// Takes the cid directly so a caller whose component identity is a registered
-    /// name rather than a managed type can write without a type-to-cid mapping.
+    /// <paramref name="cid"/>, attaching it when the entity does not carry it yet. Inside a
+    /// system, an attach is recorded and applies at the wave barrier.
     /// </summary>
     public void SetByCid<T>(ulong entity, uint cid, in T value) where T : unmanaged
     {
@@ -477,34 +463,29 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Registers <typeparamref name="T"/> under <paramref name="name"/>, or returns the
-    /// existing cid if that name is already registered. For component types with no C
-    /// header — a game-authored node's generated backing struct — this is the only
-    /// registration path; engine node types resolve an already-registered name instead
-    /// via <see cref="CidOfName"/>.
+    /// Registers <typeparamref name="T"/> under <paramref name="name"/>, or returns the existing
+    /// cid if that name is already registered.
     /// </summary>
     public uint RegisterComponent<T>(string name) where T : unmanaged => _ecs.RegisterComponent<T>(name);
 
     /// <summary>
-    /// Deferred-attaches component <paramref name="cid"/> to <paramref name="entity"/>
-    /// with <paramref name="value"/>, using <paramref name="view"/>'s system context.
-    /// The sanctioned channel for a script to write ECS data its own <c>OnUpdate</c>
-    /// call doesn't already own by binding (e.g. queuing a UI quad) — <see cref="View"/>
-    /// keeps its context internal, so this is the only path to it.
+    /// Attaches component <paramref name="cid"/> to <paramref name="entity"/> with
+    /// <paramref name="value"/> through the command queue of <paramref name="view"/>, so it
+    /// applies at the wave barrier.
     /// </summary>
     public void Attach<T>(in View view, ulong entity, uint cid, in T value) where T : unmanaged =>
         view.Commands.Attach(entity, cid, in value);
 
-    /// <summary>Resolves the cid a component is registered under, or throws when the name is unknown.</summary>
+    /// <summary>Returns the cid registered under the name.</summary>
+    /// <exception cref="InvalidOperationException">No component has that name.</exception>
     public uint CidOfName(string name) =>
         _ecs.TryLookupComponent(name, out var cid)
             ? cid
             : throw new InvalidOperationException($"Component '{name}' is not registered.");
 
     /// <summary>
-    /// Reads the component registered under <paramref name="cid"/> straight from the ECS.
-    /// Mirrors <see cref="SetByCid{T}"/> — a caller whose component identity is a registered
-    /// name reads the live value the same way it writes it, never through a managed cache.
+    /// Reads a copy of the component registered under <paramref name="cid"/>; false when the
+    /// entity does not carry it.
     /// </summary>
     public bool TryGetByCid<T>(ulong entity, uint cid, out T value) where T : unmanaged
     {
@@ -515,21 +496,15 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Hands out the component's live storage rather than a copy of it, so a caller
-    /// touching one field pays neither the read-back nor the write-back of the whole
-    /// struct. Empty when the entity does not carry the component — including while an
-    /// attach is still queued behind a wave barrier, when the value exists but its
-    /// storage does not yet.
+    /// The component's live storage rather than a copy. Empty when the entity does not carry the
+    /// component, including while an attach is still queued behind a wave barrier.
     /// </summary>
     internal Span<T> StorageByCid<T>(ulong entity, uint cid) where T : unmanaged =>
         _ecs.GetComponent<T>(entity, cid);
 
     /// <summary>
-    /// Calls <see cref="Node.OnReady"/> on every node, deepest first, walking the
-    /// scene tree rather than the order the nodes happened to be created in. A node's
-    /// children are ready before it is, so a parent that inspects what is under it
-    /// finds it already set up. Called by <see cref="SceneRouter"/> after the scene
-    /// file is fully loaded.
+    /// Calls <see cref="Node.OnReady"/> on every node walking the scene tree, a node's children
+    /// before the node.
     /// </summary>
     internal void TriggerReady()
     {

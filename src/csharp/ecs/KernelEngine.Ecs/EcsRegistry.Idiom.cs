@@ -3,13 +3,8 @@ using KernelEngine.Ecs.Native;
 namespace KernelEngine.Ecs;
 
 /// <summary>
-/// The parts of <see cref="EcsRegistry"/> that express the native surface in C# terms
-/// rather than mirroring it: the generic, span-returning component accessors
-/// <see cref="IEcsRegistry"/> exposes. The ABI trades in <c>void*</c> plus an
-/// element size — turning that into <c>Span&lt;T&gt;</c> with <c>T</c> supplying
-/// its own size is a C# generics trick with no ABI counterpart, so it cannot be
-/// derived from the description. Everything that is a direct image of the C ABI
-/// is generated in <c>Generated/EcsRegistry.g.cs</c>.
+/// The part of <see cref="EcsRegistry"/> that implements <see cref="IEcsRegistry"/>: the generic,
+/// span-returning component accessors over the native slots.
 /// </summary>
 public unsafe partial class EcsRegistry : IEcsRegistry
 {

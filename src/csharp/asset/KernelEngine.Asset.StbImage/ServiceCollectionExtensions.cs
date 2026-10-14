@@ -8,7 +8,8 @@ namespace KernelEngine.Asset.StbImage;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers an stb_image-backed <see cref="IImageLoader"/> singleton. Requires
+    /// Registers an stb_image-backed <see cref="IImageLoader"/> singleton, and the
+    /// same loader as <see cref="INativeImageLoader"/>.
     /// </summary>
     public static IServiceCollection AddStbImageLoader(this IServiceCollection services)
     {

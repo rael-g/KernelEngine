@@ -1,17 +1,6 @@
-//! This file implements the UI pass: entities carrying a UI quad component or a label component
-//! are drawn as alpha-blended textured triangles over the backbuffer. `ke_render_ui_create` builds
-//! the GPU objects and registers two runtime systems. Everything lives in one `UiState`, whose
-//! first field is the object handed out, so the handle's reference and the state share an address.
-//!
-//! Text takes two phases. `labelShapeSystem` runs in the update phase and `shapeLabel` lays out
-//! each label from a font registered through `uiLoadFont`, writing glyph quads into the label
-//! component. `system` runs in the render phase: `emitQuad` turns quads and glyphs into vertices,
-//! consecutive quads of one texture form a `UiBatch`, and each batch is one draw call with a bind
-//! group that `uiBindGroupFor` builds on first use and caches. The arrays of the state are fixed,
-//! and a quad beyond them is dropped without an error.
-//!
-//! Creation is all or nothing: a failing `setup` or a refused registration releases everything
-//! through `destroyState`, and `destroyHandle` does the same at the end of the lifetime.
+//! The UI pass: draws the entities carrying a UI quad component or a label component as
+//! alpha-blended textured triangles over the backbuffer, and shapes labels from registered fonts.
+//! It also owns the creation and teardown of that pass, behind the one factory it exports.
 
 const std = @import("std");
 
@@ -195,7 +184,8 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     l.glyph_count = slot;
 }
 
-/// Called by `system` for each batch. Creation passes no error output, so a result the cache
+/// Called by `system` for each batch, with the bind group of a texture built on first use and
+/// cached by the texture's index. Creation passes no error output, so a result the cache
 /// treats as invalid is not kept, and the next draw of that slot creates the group again.
 fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
     const tex_idx = handles.index(tex.bits);
@@ -522,9 +512,11 @@ fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
 }
 
 /// Returns the empty handle when a required argument is null or the state cannot be allocated, and
-/// sets no error in those cases. A failing `setup` or a refused system registration passes the
-/// error through the out error of the call that failed. On success the returned handle owns the
-/// state until its destroy slot runs.
+/// sets no error in those cases. On success it has registered the quad and label components with
+/// the ecs and two systems with the runtime: `labelShapeSystem` in the update phase and `system`
+/// in the render phase. A failing `setup` or a refused system registration passes the error
+/// through the out error of the call that failed, and a refused second registration takes the
+/// first back. On success the returned handle owns the state until its destroy slot runs.
 export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*c.ke_render_service,
                                device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
                                bb_cid: c.ke_component_id, cmd_slot: u32,

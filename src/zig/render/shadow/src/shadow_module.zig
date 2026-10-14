@@ -1,20 +1,6 @@
-//! The shadow pass is the render-phase system "render.shadow". Each frame it takes the direction
-//! of the directional light, builds an orthographic light view-projection around the origin, and
-//! draws every mesh with a world transform into a square depth map, the "shadow_map" target, with
-//! "shadow_depth" as its depth attachment. The light matrix is published to the render service as
-//! the buffer "shadow_lvp".
-//!
-//! `ShadowModule` carries the whole pass. `ke_render_shadow_create` allocates it and `setup` builds
-//! it in a fixed order, resolving the parameters first and creating the light uniform before the
-//! enabled flag decides the rest: a disabled pass keeps only that uniform and registers no system.
-//! An enabled pass declares its targets, loads shaders, builds the pipeline, bind groups and per
-//! object uniform, and last fills the access list and queries it declares to the runtime.
-//!
-//! `system` draws without a pinned thread. It returns early when there is no light or the pass
-//! cannot begin. Each mesh gets its own slot of the object uniform and is drawn at that slot's
-//! dynamic offset, until the draw cap is reached. A failed step, a refused registration or a null
-//! argument returns an empty handle, and a failed step releases what was created through
-//! `destroyModule`.
+//! The shadow pass: the render-phase system "render.shadow" that draws the meshes of the scene into
+//! a depth map seen from the directional light, and publishes the light matrix. It also owns the
+//! creation and teardown of that pass, behind the one factory it exports.
 
 const std = @import("std");
 
@@ -120,7 +106,11 @@ inline fn moduleOf(user: ?*anyopaque) *ShadowModule {
 
 /// The render-phase body that `setup` registers as "render.shadow". It returns true on every path,
 /// including the early exits for a missing light or a pass that cannot begin, and it ignores its
-/// error parameter.
+/// error parameter. It uploads an orthographic light view-projection built from the light's
+/// direction to the buffer published as "shadow_lvp", then draws every mesh with a world
+/// transform into the "shadow_map" target, "shadow_depth" being its depth attachment. Each mesh
+/// gets its own slot of the object uniform and is drawn at that slot's dynamic offset, until the
+/// draw cap is reached.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const sh = moduleOf(user);
     const core = sh.core;
@@ -170,7 +160,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
-/// Called once by `ke_render_shadow_create`. A step that fails returns false and leaves the handles
+/// Called once by `ke_render_shadow_create`. It resolves the parameters and creates the light
+/// uniform, then stops there when the pass is disabled. An enabled pass also declares its
+/// targets, loads the shaders, builds the pipeline, bind groups and per object uniform, and
+/// fills the access list and the queries. A step that fails returns false and leaves the handles
 /// created before it stored in the module, for `destroyModule` to release. Failures that the render
 /// service and the device report go into out_error through those calls; a pipeline that cannot be
 /// created is reported as `KE_ERROR_NOT_INITIALIZED`.

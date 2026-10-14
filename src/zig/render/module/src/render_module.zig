@@ -1,28 +1,5 @@
-//! Assembles the render pipeline on one runtime and one world and hands it back as a single module
-//! handle. `ke_render_module_create` creates the render service core and a `ModuleState` that
-//! holds the core, the camera, the handle of every pass, the view space and the queries and state
-//! that the module's own systems read. With default passes off the handle wraps the core alone.
-//! With them on, it builds the camera on the view space, which is the one supplied or a new one
-//! the module owns, registers the component types, and then registers the systems and passes in
-//! dependency order: the mesh and sprite resolve systems, the begin and clear systems, the shadow,
-//! cluster, gbuffer, deferred lighting, skybox, forward, tonemap and ui passes, the label resolve
-//! system and the end system. The cluster grid and light cap come from the cluster parameters, and
-//! the shadow and image-based lighting switches from the feature parameters.
-//!
-//! The create is all or nothing. Each failing step goes to `failCreate`, which unregisters the
-//! systems added since the create began and calls `destroyModule`; that releases only the handles
-//! whose destroy slot is set, so a state filled in part is safe. A failed create returns a handle
-//! whose `ref` is null, and the component types it registered stay registered.
-//!
-//! Each frame is bracketed by `beginFrameSys` and `endFrameSys`, which wrap the core's frame start
-//! and end, with `clearSys` clearing the backbuffer between them; the passes run between the two
-//! through their own systems.
-//!
-//! The sibling files carry the parts. "component_apply.zig" holds the callbacks
-//! `ke_render_register_scene_apply` gives the world. "mesh_resolve.zig", "sprite_resolve.zig" and
-//! "label_resolve.zig" hold the update-phase systems that give meshes, sprites and labels their
-//! GPU objects. "cache_key.zig" builds the keys those systems cache objects under, and
-//! "cimport.zig" is the one C translation they all share.
+//! Assembles the render service and, optionally, the default passes on one runtime and one world,
+//! and hands them back as a single module handle.
 
 const std = @import("std");
 const cimport = @import("cimport.zig");
@@ -83,6 +60,7 @@ const ModuleState = struct {
     camera: c.ke_render_camera_handle,
 };
 
+/// The user data of the module's own systems is the `ModuleState`.
 inline fn stateOf(user: ?*anyopaque) *ModuleState {
     return @alignCast(@ptrCast(user.?));
 }
@@ -233,6 +211,14 @@ fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_re
     return empty;
 }
 
+/// Creates the render service and a `ModuleState` that holds it. With `default_passes` zero the
+/// handle wraps the service alone. With it non-zero, the module builds the camera on the view
+/// space, which is the one supplied or a new one it owns, registers the component types, and
+/// registers the systems and passes in this order: the mesh and sprite resolve systems, the
+/// begin and clear systems, the shadow, cluster, gbuffer, deferred lighting, skybox, forward,
+/// tonemap and ui passes, the label resolve system and the end system. Zero fields of the
+/// cluster parameters select their defaults, and the feature parameters switch shadows and
+/// image-based lighting. The create is all or nothing: a failing step goes to `failCreate`.
 /// Reports a failure through the error out-parameter only where a step sets it: a missing
 /// runtime, ecs or device, and a failed state allocation return the empty handle with no error
 /// set. A failed create removes the systems added before the failing step, but the component

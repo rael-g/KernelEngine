@@ -10,7 +10,9 @@ using System.Text.RegularExpressions;
 /// </summary>
 public static class CTypes
 {
-    /// <summary>Whether the C type is a pointer, which holds when its last non-space character is a star.</summary>
+    /// <summary>
+    /// Whether the C type is a pointer, which holds when its last non-space character is a star.
+    /// </summary>
     /// <param name="cType">The C spelling of a type, such as <c>"const ke_log_event *"</c>.</param>
     /// <returns><see langword="true"/> when the type ends in a star.</returns>
     public static bool IsPointer(string cType) => cType.TrimEnd().EndsWith('*');
@@ -28,12 +30,11 @@ public static class CTypes
     }
 
     /// <summary>
-    /// The element type and extent of a fixed-size array declarator
-    /// (<c>"float[16]"</c> -&gt; <c>("float", 16)</c>, <c>"void *[8]"</c> -&gt; <c>("void *", 8)</c>), or
-    /// null when the type declares a single value. The extent is part of the type
-    /// in C and in every language that mirrors the layout, so a writer that does
-    /// not ask this question emits the C declarator verbatim and the element type
-    /// never reaches its primitive mapping.
+    /// The element type and extent of a fixed-size array declarator (<c>"float[16]"</c> -&gt;
+    /// <c>("float", 16)</c>, <c>"void *[8]"</c> -&gt; <c>("void *", 8)</c>), or null when the type
+    /// declares a single value. The extent is part of the type in C and in every language that
+    /// mirrors the layout, so a writer that does not ask this question emits the C declarator
+    /// verbatim and the element type never reaches its primitive mapping.
     /// </summary>
     public static (string Element, int Extent)? FixedArray(string cType)
     {

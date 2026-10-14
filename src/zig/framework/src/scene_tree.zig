@@ -1,26 +1,5 @@
-//! The scene tree is a view over the ecs, not a store of its own. A node is an entity with the
-//! hierarchy, name and world transform components, and every question about the tree is answered
-//! by reading those components at the moment it is asked. The hierarchy component is an intrusive
-//! doubly linked list: parent, first and last child, previous and next sibling. All walks follow
-//! those links, and a node's children are the chain from its first child.
-//!
-//! `ke_scene_tree_create` builds a `State`, looks up or registers the component ids through
-//! `ensureComponent`, creates the named root entity and fills the vtable, whose handle points
-//! back at the `State`. Passing a runtime additionally creates the hierarchy handle that the
-//! `State` owns and `vtDestroy` releases first. Any failure undoes what the call made, so a null
-//! handle never leaves an entity or an allocation behind.
-//!
-//! A node is made either at once by `vtCreateNode`, or by `vtCreateNodeDeferred`, which reserves
-//! the id through the command queue and records `cbCreateNode`. Both end in `populateNode`, which
-//! adds the components and appends the node as the last child of its parent; the invalid entity
-//! as parent stands for the root. Destruction unlinks before it frees: `destroySubtree` repairs
-//! the neighbours and the parent, then destroys the subtree children first. The deferred forms
-//! check their arguments when called and do the work when the commands apply, where a failure
-//! has no caller left to report to.
-//!
-//! `vtPropagateTransforms` composes each node's local matrix, from its 3D or else its 2D
-//! transform, with its parent's world matrix. A node without a world transform stores nothing and
-//! hands its parent's matrix down. Nothing here starts a thread or takes a lock.
+//! The scene tree: nodes as entities of the ecs, linked by the hierarchy component, with creation,
+//! destruction, lookup and walking behind the scene tree vtable.
 
 const std = @import("std");
 
@@ -36,8 +15,12 @@ const mat4 = @import("mat4.zig");
 const name_max = @typeInfo(@FieldType(c.ke_name_component, "name")).array.len;
 
 /// The state behind a tree handle, allocated by `ke_scene_tree_create` and freed by `vtDestroy`.
-/// It refers to the ecs without owning it. `hierarchy` stays null unless the tree was created with
-/// a runtime.
+/// The tree stores no nodes of its own: a node is an entity of `ecs` carrying the hierarchy, name
+/// and world transform components, and every question is answered from those components when it
+/// is asked. The hierarchy component is an intrusive doubly linked list (parent, first and last
+/// child, previous and next sibling), and a node's children are the chain from its first child.
+/// `root` is the entity the invalid entity stands for as a parent. The ecs is borrowed;
+/// `hierarchy` is owned and stays null unless the tree was created with a runtime.
 const State = struct {
     api: c.ke_scene_tree,
     ecs: *c.ke_ecs,
@@ -98,12 +81,15 @@ fn identityMatrix() c.ke_mat4 {
     return m;
 }
 
+/// Slot `root`. Returns the root entity, or the invalid entity for a null tree.
 fn vtRoot(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_entity {
     const self = self_in orelse return c.KE_ENTITY_INVALID;
     if (self.handle == null) return c.KE_ENTITY_INVALID;
     return stateOf(self).root;
 }
 
+/// Slot `parent`. Returns the parent of the entity, or the invalid entity for the root, for an
+/// entity without a hierarchy component and for a null tree.
 fn vtParent(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
     const self = self_in orelse return c.KE_ENTITY_INVALID;
     if (self.handle == null) return c.KE_ENTITY_INVALID;
@@ -111,6 +97,8 @@ fn vtParent(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_e
     return h.parent;
 }
 
+/// Slot `first_child`. Returns the first child of the entity, or the invalid entity when it has
+/// none, has no hierarchy component, or the tree is null.
 fn vtFirstChild(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
     const self = self_in orelse return c.KE_ENTITY_INVALID;
     if (self.handle == null) return c.KE_ENTITY_INVALID;
@@ -118,6 +106,8 @@ fn vtFirstChild(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.
     return h.first_child;
 }
 
+/// Slot `next_sibling`. Returns the sibling created right after the entity under the same parent,
+/// or the invalid entity when it is the last, has no hierarchy component, or the tree is null.
 fn vtNextSibling(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
     const self = self_in orelse return c.KE_ENTITY_INVALID;
     if (self.handle == null) return c.KE_ENTITY_INVALID;
@@ -126,8 +116,10 @@ fn vtNextSibling(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c
 }
 
 /// Called by both creation paths, so a node gets its components and links the same way whether it
-/// is created at once or when the commands apply. If one of the three components cannot be added,
-/// the entity is destroyed and false comes back before anything is linked.
+/// is created at once or when the commands apply. The node is appended as the last child of the
+/// parent, so children are visited in creation order; a parent without a hierarchy component
+/// leaves the node unlinked. If one of the three components cannot be added, the entity is
+/// destroyed and false comes back before anything is linked.
 fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) bool {
     if (s.ecs.component_add.?(s.ecs, entity, s.world_transform_cid) == null or
         s.ecs.component_add.?(s.ecs, entity, s.hierarchy_cid) == null or
@@ -186,8 +178,9 @@ fn cbCreateNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
     _ = populateNode(p.s, p.entity, @ptrCast(&p.name), p.parent);
 }
 
-/// Creates and links the node before returning. A failure returns the invalid entity and leaves
-/// the error out-parameter untouched.
+/// Slot `create_node`. Creates and links the node before returning; the invalid entity as parent
+/// stands for the root. A failure returns the invalid entity and leaves the error out-parameter
+/// untouched.
 fn vtCreateNode(
     self_in: ?*c.ke_scene_tree,
     name: [*c]const u8,
@@ -206,9 +199,10 @@ fn vtCreateNode(
     return entity;
 }
 
-/// The id is reserved before returning and is usable as a reference at once; the node gets its
-/// components when the commands apply, so a failure of that recorded call is not reported. A null
-/// command queue sets the invalid-argument error.
+/// Slot `create_node_deferred`. The id is reserved before returning and is usable as a reference
+/// at once; the node gets its components and its link when the commands apply, so a failure of
+/// that recorded call is not reported. A null command queue sets the invalid-argument error, and
+/// a failed reservation or recording reports the queue's error; each returns the invalid entity.
 fn vtCreateNodeDeferred(
     self_in: ?*c.ke_scene_tree,
     name: [*c]const u8,
@@ -270,9 +264,10 @@ fn childBySegment(s: *State, parent: c.ke_entity, seg: []const u8) c.ke_entity {
     return c.KE_ENTITY_INVALID;
 }
 
-/// The entry point for name and path lookup. A string without a slash goes to `findByName`; one
-/// with a slash is walked segment by segment from the root. An empty or null string finds nothing,
-/// and the error out-parameter is not written.
+/// Slot `find_node`. A string without a slash goes to `findByName`, which returns the first match
+/// in depth-first child order; one with a slash is walked segment by segment from the root,
+/// ignoring leading dots and slashes and empty segments. An empty or null string, or a name that
+/// matches nothing, returns the invalid entity, and the error out-parameter is not written.
 fn vtFindNode(
     self_in: ?*c.ke_scene_tree,
     name_or_path: [*c]const u8,
@@ -372,6 +367,9 @@ fn checkDestroyable(self_in: ?*c.ke_scene_tree, entity: c.ke_entity, out_error: 
     return s;
 }
 
+/// Slot `destroy_node`. Unlinks the entity and destroys it with its whole subtree, children
+/// first. Fails as an invalid argument for a null tree or the invalid entity and as not found for
+/// an entity without a hierarchy component; both return false.
 fn vtDestroyNode(
     self_in: ?*c.ke_scene_tree,
     entity: c.ke_entity,
@@ -382,8 +380,10 @@ fn vtDestroyNode(
     return true;
 }
 
-/// Checks the entity now and records the unlink and destroy, which happen only when the commands
-/// apply. A null command queue is reported before the entity is checked.
+/// Slot `destroy_node_deferred`. Checks the entity now and records the unlink and destroy, which
+/// happen only when the commands apply. A null command queue is reported before the entity is
+/// checked; the other failures are those of `vtDestroyNode`, plus the queue's error when
+/// recording fails; each returns false.
 fn vtDestroyNodeDeferred(
     self_in: ?*c.ke_scene_tree,
     entity: c.ke_entity,
@@ -399,8 +399,9 @@ fn vtDestroyNodeDeferred(
     return cmds.@"defer".?(cmds, cbDestroyNode, &pd, @sizeOf(PendingDestroy), out_error);
 }
 
-/// Destroys the root's children without unlinking each one from its neighbours; the root's first
-/// and last child fields are cleared once at the end. The root entity stays.
+/// Slot `destroy_all`. Destroys the root's children without unlinking each one from its
+/// neighbours; the root's first and last child fields are cleared once at the end. The root
+/// entity stays.
 fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -443,8 +444,8 @@ fn propagateRecursive(s: *State, entity: c.ke_entity, parent_world: *const c.ke_
     }
 }
 
-/// Refreshes every world matrix under the root. The root has no world transform, so the walk
-/// starts from the identity matrix at its children.
+/// Slot `propagate_transforms`. Refreshes every world matrix under the root now, recursively. The
+/// root has no world transform, so the walk starts from the identity matrix at its children.
 fn vtPropagateTransforms(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -459,8 +460,8 @@ fn vtPropagateTransforms(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     }
 }
 
-/// The handle's destroy. After it returns the State, the root and every node under it are gone;
-/// the ecs itself is not destroyed.
+/// The handle's destroy. Releases the scene hierarchy first. After it returns the State, the root
+/// and every node under it are gone; the ecs itself is not destroyed.
 fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -470,8 +471,12 @@ fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// On success the handle's ref is the vtable inside a new State. On failure it returns a null
-/// handle and releases whatever this call created, including the root entity.
+/// Factory. On success the handle's ref is the vtable inside a new State: the five components are
+/// registered on the ecs when it does not know them, and a root entity named "Root" carries
+/// hierarchy and name. A runtime additionally creates the scene hierarchy the tree owns. A null
+/// ecs fails as an invalid argument, a failed allocation as out of memory, a failed root entity
+/// or root component as general, and a failed hierarchy reports its own error. Each returns a
+/// null handle and releases whatever this call created, so no entity or allocation is left.
 export fn ke_scene_tree_create(
     ecs_in: ?*c.ke_ecs,
     runtime: ?*c.ke_runtime,

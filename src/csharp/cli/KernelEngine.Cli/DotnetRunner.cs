@@ -4,9 +4,8 @@ using System.Text;
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Thin wrapper around <c>dotnet</c> CLI invocations. We never want to swallow output silently —
-/// when a scaffolding step fails the user needs to see the SDK's own diagnostics, not a generic
-/// "command failed" wrapper. Output is captured and surfaced on non-zero exit.
+/// Runs the <c>dotnet</c> CLI. Output is captured, and a non-zero exit throws an
+/// <see cref="InvalidOperationException"/> carrying the command line, stdout and stderr.
 /// </summary>
 public static class DotnetRunner
 {

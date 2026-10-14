@@ -1,22 +1,5 @@
-//! Fakes of the engine contracts that the render and framework code is written against, for unit
-//! tests that must run with no GPU, window or ecs. `Stubs` takes the translated C namespace and
-//! returns one struct per contract: `Device`, `Target`, `Core` (the render service), `Runtime`,
-//! `Ecs` and `World`. Each struct embeds its vtable, points the handle of that vtable back at
-//! itself and fills every slot with a function of the same struct, so an instance must stay where
-//! `init` put it.
-//!
-//! The fakes count instead of doing. Handles and ids come from a counter of the struct that mints
-//! them, and the device also tracks how many handles are live and how many of those are compute
-//! pipelines, so a test can check that everything created was released. Refusal is set by the
-//! test: the device refuses buffers, bind groups and shader modules once its budget of fallible
-//! creations is spent, the render service refuses shader loads while told to, the runtime refuses
-//! a registration at its limit, and a target refuses a present that no acquire preceded. A refusal
-//! is an invalid handle, a null id or false, it never fills the error output and it leaves every
-//! counter as it was.
-//!
-//! Command recording keeps no history. The device hands back one record per kind of pass and keeps
-//! only the latest label and the depth of open debug groups; ending, submitting and polling do
-//! nothing. The ecs mints ids and the world accepts every registration without storing it.
+//! Fakes of the engine contracts that render and framework code is written against, for unit
+//! tests that run with no GPU, window or ecs.
 
 const std = @import("std");
 
@@ -28,7 +11,10 @@ pub fn Stubs(comptime c: type) type {
         /// Fake of the GPU device contract. `api` returns the vtable pointer and is valid only
         /// after `init`. `live` counts the handles minted and not released, `compute_live` counts
         /// the compute pipelines among them, and `fallible_created` against `fallible_budget` is
-        /// the only way a creation is refused.
+        /// the only way a creation is refused. A refused creation returns the invalid handle,
+        /// leaves the error output untouched and leaves every counter as it was. Command
+        /// recording keeps no history: one record per kind of pass is handed back, and only the
+        /// latest label and the depth of open debug groups are kept.
         pub const Device = struct {
             vtable: c.ke_gpu_device,
             next: u64,

@@ -1,25 +1,5 @@
-//! Turns a scene file into scene-tree nodes, their components and their signal connections. The
-//! loader keeps no scene data: nodes come from the world's `ke_scene_tree`, components from its
-//! `ke_ecs`, connections from its signal bus. What it owns is one `State`, with an `Arena` that
-//! holds every string and table read from a scene, and the `created` list of the nodes the current
-//! load has made. The arena lives as long as the loader, so what a load read stays valid until
-//! `vtDestroy`.
-//!
-//! A load is two passes over each file. `loadSceneRecursive` parses the file and runs
-//! `processEntity` over its entities in file order, recording names in a `NameMap` private to that
-//! file; only when the last entity exists does `applyConnections` run, so a connection may name an
-//! entity declared after it. An entity with a "scene" key creates no node of its own: the file it
-//! names is loaded by the same recursion and its first entity takes the name, the parent and the
-//! extra component tables of the referencing entity. The script factory is asked about the entity's
-//! "type" through `dispatchScript`.
-//!
-//! Component tables are applied by `applyComponentBlock` through the field mapping or apply
-//! callback the world holds for each component: fields are seeded with defaults only on a component
-//! the entity lacked, and an authored entry that nothing consumed fails the load.
-//!
-//! Every failure fills the out error and returns false; faults in what a scene says go through
-//! `structural`, which also logs them. A failed `vtLoad` calls `discardCreated`, so a load leaves
-//! either all of its nodes or none. Nothing here starts a thread, so a load runs on its caller's.
+//! The scene loader: reads a scene file and builds its nodes, components and signal connections
+//! on the world it was created with.
 
 const std = @import("std");
 
@@ -65,6 +45,13 @@ const Arena = struct {
 /// Private state of one loader, allocated by `ke_scene_loader_create` and freed by the handle's
 /// destroy. `api.handle` points back here. `created` is cleared when a load starts and emptied by
 /// `discardCreated` when one fails, so after a successful load it lists that load's nodes.
+///
+/// The loader keeps no scene data: nodes come from the `ke_scene_tree` of `world`, components
+/// from its `ke_ecs`, connections from its signal bus. What it owns is `arena`, which holds every
+/// string and table read from a scene and lives as long as the loader, so what a load read stays
+/// valid until `vtDestroy`, and `created`. `project_root` is a copy cut to the buffer. Every
+/// failure fills the out error and returns false; faults in what a scene says go through
+/// `structural`, which also logs them. A load runs on its caller's thread.
 const State = struct {
     api: c.ke_scene_loader,
     world: *c.ke_world,
@@ -350,11 +337,12 @@ fn structural(
     E.fail(out_error, .invalid_argument, msg, @src());
 }
 
-/// Applies one component table of an entity. The component must be registered, and the world must
-/// supply a field mapping or an apply callback for it. A component the entity lacks is added,
-/// zeroed and given its declared defaults; one it already has keeps its values. Generic fields are
-/// written first, then the domain callback gets the entries, and an entry that neither consumed
-/// fails the load.
+/// Applies one component table of an entity through the field mapping or apply callback the world
+/// holds for the component. The component must be registered, and the world must supply a field
+/// mapping or an apply callback for it. A component the entity lacks is added, zeroed and given
+/// its declared defaults; one it already has keeps its values. Generic fields are written first,
+/// then the domain callback gets the entries, and an authored entry that neither consumed fails
+/// the load. Every refusal is reported through `structural`.
 fn applyComponentBlock(
     s: *State,
     entity: c.ke_entity,
@@ -573,7 +561,7 @@ const NameMap = struct {
     }
 };
 
-/// The inputs to processEntity for one entity. The three override fields are set only for the
+/// The inputs to `processEntity` for one entity. The three override fields are set only for the
 /// first entity of a spliced subscene, which takes its name, its attach parent and the outer table
 /// from the entity that referenced the file. Every other entity has them cleared.
 const ProcessArgs = struct {
@@ -586,9 +574,15 @@ const ProcessArgs = struct {
 };
 
 /// Creates the node of one entity table, or for an entity that splices a subscene loads that file
-/// and reports the root of it through out_entity. A node is recorded in `created` as soon as it
-/// exists. The entity's name enters the file's name map only after its components and its script
-/// type have been applied.
+/// and reports the root of it through out_entity. An entity with a "scene" key creates no node of
+/// its own: the file it names is loaded by `loadSceneRecursive` and its first entity takes the
+/// name, the parent and the extra component tables of the referencing entity. Otherwise the
+/// component tables are applied by `applyComponentBlocks`, and then the script factory is asked
+/// about the entity's "type" through `dispatchScript`, the type of the referencing entity after
+/// the subscene's own. A node is recorded in `created` as soon as it exists. The entity's name
+/// enters the file's name map only after its components and its script type have been applied.
+/// An entity with no name and no override fails as an invalid argument, an unknown "parent" as
+/// not found, and a failed node creation or record as out of memory.
 fn processEntity(
     s: *State,
     args: ProcessArgs,
@@ -683,10 +677,12 @@ fn processEntity(
     return true;
 }
 
-/// Loads one scene file: parses it, creates its entities in file order, then makes their
-/// connections, and reports the first entity through out_root. out_root is optional, and is set to
-/// the invalid entity when the file declares none. Nodes created before a failure are left for the
-/// caller to discard.
+/// Loads one scene file in two passes: it parses the file and runs `processEntity` over its
+/// entities in file order, recording names in a `NameMap` private to that file; only when the
+/// last entity exists does `applyConnections` run, so a connection may name an entity declared
+/// after it. It reports the first entity through out_root, which is optional and is set to the
+/// invalid entity when the file declares none. A missing file is not found and an unparseable one
+/// is io. Nodes created before a failure are left for the caller to discard.
 fn loadSceneRecursive(
     s: *State,
     path: [*:0]const u8,
@@ -767,8 +763,10 @@ fn loadSceneRecursive(
     return true;
 }
 
-/// The `load` slot. Fails on a null loader or path, and with whatever `loadSceneRecursive`
-/// reports; a failed load removes the nodes it made before it returns false.
+/// Slot `load`. Fails as an invalid argument on a null loader or path, and with whatever
+/// `loadSceneRecursive` reports; a failed load removes the nodes it made through `discardCreated`
+/// before it returns false, so a load leaves either all of its nodes or none. The arena is not
+/// reset, so what a failed load read stays allocated until `vtDestroy`.
 fn vtLoad(
     self_in: ?*c.ke_scene_loader,
     path: [*c]const u8,
@@ -801,8 +799,8 @@ fn discardCreated(s: *State) void {
     s.created.clearRetainingCapacity();
 }
 
-/// The `register_script_factory` slot. Replaces the factory and its context for later loads. Fails
-/// on a null loader or factory.
+/// Slot `register_script_factory`. Replaces the factory and its context for later loads; without
+/// one, a "type" key is ignored. Fails as an invalid argument on a null loader or factory.
 fn vtRegisterScriptFactory(
     self_in: ?*c.ke_scene_loader,
     factory: c.ke_script_factory_func,
@@ -823,8 +821,8 @@ fn vtRegisterScriptFactory(
     return true;
 }
 
-/// The handle's destroy. `api` is embedded in `State`, so freeing the state releases the vtable
-/// too.
+/// The handle's destroy. Releases the arena, so every pointer a load read is invalid afterwards.
+/// `api` is embedded in `State`, so freeing the state releases the vtable too.
 fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -834,9 +832,9 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Builds a loader over the given world, copying the project root into its state. A root longer
-/// than the buffer is cut short, and nothing reports it. Returns a null handle when the world is
-/// null or the state cannot be allocated.
+/// Factory. Builds a loader over the given world, copying the project root into its state. A root
+/// longer than the buffer is cut short, and nothing reports it. A null world fails as an invalid
+/// argument and a failed state allocation as out of memory; each returns a null handle.
 export fn ke_scene_loader_create(
     world_in: ?*c.ke_world,
     project_root: [*c]const u8,

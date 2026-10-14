@@ -4,10 +4,8 @@ using KernelEngine.Text;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// A loaded font ready to render. Owns its GPU atlas <see cref="AtlasHandle"/>
-/// and an in-memory glyph table built from the CPU-side font data the loader
-/// produced. Create via <see cref="Load"/> from inside a scene setup callback
-/// (render worker thread — GPU resource creation has thread affinity).
+/// A font registered with the render backend: its atlas texture, the handle of its glyph table
+/// and an in-memory copy of that table for measuring text. Created through <see cref="Load"/>.
 /// </summary>
 public sealed class Font
 {
@@ -29,11 +27,9 @@ public sealed class Font
     }
 
     /// <summary>
-    /// Synchronously bakes <paramref name="path"/> at <paramref name="pixelSize"/>,
-    /// uploads the atlas, and registers the glyph table with the UI overlay pass
-    /// (see <see cref="IRenderResources.LoadFont"/>) — all through
-    /// <paramref name="resources"/>. MUST be called from the render worker because
-    /// the texture upload is pinned there.
+    /// Bakes <paramref name="path"/> at <paramref name="pixelSize"/> through <paramref name="loader"/>,
+    /// waiting for it to finish, uploads the atlas and registers the glyph table through
+    /// <paramref name="resources"/>. It must run on the thread that owns GPU resource creation.
     /// </summary>
     public static Font Load(IRenderResources resources, IFontLoader loader, string path, float pixelSize,
                             uint atlasSize = 512, uint firstCodepoint = 32, uint codepointCount = 95)
@@ -65,6 +61,6 @@ public sealed class Font
         return w;
     }
 
-    /// <summary>Looks up a glyph's metrics by codepoint, for per-glyph quad shaping.</summary>
+    /// <summary>Looks up a glyph's metrics by codepoint.</summary>
     public bool TryGetGlyph(uint codepoint, out GlyphMetrics glyph) => _glyphs.TryGetValue(codepoint, out glyph);
 }

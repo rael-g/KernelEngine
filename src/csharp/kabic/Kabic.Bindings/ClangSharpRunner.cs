@@ -9,17 +9,6 @@ namespace Kabic.Bindings;
 /// <summary>
 /// Runs the ClangSharp generator for one <c>BindingJob</c> and reports what it logged.
 /// </summary>
-/// <remarks>
-/// <c>Run</c> first writes the job's umbrella file, when it has an umbrella body, into the
-/// umbrellas folder under the build folder of the root directory; otherwise it takes the job's file
-/// in its native directory. The file is then given relative to that directory. Each remap is split
-/// at its first equals sign and stored in one dictionary, and the fixed remaps are added last so
-/// they override a job remap of the same name. The generator options start from the Unix-types
-/// setting on hosts other than Windows, then each config switch is applied in order, and an
-/// unknown switch throws. The clang arguments are the language, a warning suppression for pragma
-/// once outside a header, one include directory per job entry, the resource directory and the
-/// additional arguments.
-/// </remarks>
 public static class ClangSharpRunner
 {
     static readonly string[] FixedRemaps = ["uint64_t=ulong", "int64_t=long"];

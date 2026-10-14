@@ -4,13 +4,13 @@ using KernelEngine.Common.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// The one part of <see cref="NativeInputActions"/> that is not a direct image of the C
-/// ABI: the constructor's factory call. Everything that mirrors the vtable 1:1 is
-/// generated in <c>Generated/NativeInputActions.g.cs</c>.
+/// Managed handle to a native input actions map. This part declares the constructor that calls
+/// the native factory; the members that mirror the vtable are generated.
 /// </summary>
 public unsafe partial class NativeInputActions
 {
     /// <summary>Creates a native input-actions instance.</summary>
+    /// <exception cref="InvalidOperationException">The native factory fails.</exception>
     public NativeInputActions() : this(Create())
     {
     }

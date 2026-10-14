@@ -6,10 +6,10 @@ using Microsoft.CodeAnalysis.Text;
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Locates the single enum decorated with <c>[GameActions]</c> in the project and appends a new
-/// member without disturbing the rest of the file. Roslyn is used to *find* the insertion point;
-/// the edit itself is a text splice so the user's hand-formatted alignment, comments, and
-/// whitespace stay byte-identical outside of the inserted line.
+/// Appends a member to the single enum marked <c>[GameActions]</c> under a project directory. The
+/// edit is a text splice at the position Roslyn finds, so the rest of the file stays unchanged.
+/// <see cref="AddMember"/> throws when no such enum or more than one exists, or when the member
+/// is already declared.
 /// </summary>
 public static class GameActionsEnumEditor
 {

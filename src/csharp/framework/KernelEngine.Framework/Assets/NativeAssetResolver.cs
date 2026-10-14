@@ -12,8 +12,8 @@ using KernelEngine.Common;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Owns a <see cref="ke_texture_data"/> returned by <see cref="NativeAssetResolver.ResolveTexture"/>.
-/// Freed via the resolver's <c>free_texture</c> slot on dispose.
+/// Owns the <see cref="ke_texture_data"/> that <c>NativeAssetResolver.ResolveTexture</c>
+/// returned. Disposing hands it back to the resolver's <c>free_texture</c> slot.
 /// </summary>
 public sealed unsafe class ResolvedTextureData : IImageData
 {
@@ -56,8 +56,8 @@ public sealed unsafe class ResolvedTextureData : IImageData
 }
 
 /// <summary>
-/// Owns a <see cref="ke_mesh_shape_data"/> returned by <see cref="NativeAssetResolver.ResolveMesh"/>.
-/// Freed via the resolver's <c>free_mesh</c> slot on dispose.
+/// Owns the <see cref="ke_mesh_shape_data"/> that <c>NativeAssetResolver.ResolveMesh</c>
+/// returned. Disposing hands it back to the resolver's <c>free_mesh</c> slot.
 /// </summary>
 public sealed unsafe class ResolvedMeshData : IDisposable
 {
@@ -102,8 +102,8 @@ public sealed unsafe class ResolvedMeshData : IDisposable
 }
 
 /// <summary>
-/// Owns a <see cref="ke_font_data"/> returned by <see cref="NativeAssetResolver.ResolveFont"/>.
-/// Freed via the resolver's <c>free_font</c> slot on dispose.
+/// Owns the <see cref="ke_font_data"/> that <c>NativeAssetResolver.ResolveFont</c> returned.
+/// Disposing hands it back to the resolver's <c>free_font</c> slot.
 /// </summary>
 public sealed unsafe class ResolvedFontData : IDisposable
 {
@@ -139,7 +139,9 @@ public sealed unsafe class ResolvedFontData : IDisposable
     /// <summary>Pixels above baseline to the top of the tallest baked glyph.</summary>
     public float Ascent => _data != null ? _data->ascent : 0f;
 
-    /// <summary>Per-glyph layout + atlas-UV metrics. Valid only while this instance is not disposed.</summary>
+    /// <summary>
+    /// Per-glyph layout and atlas UV metrics. Valid only while this instance is not disposed.
+    /// </summary>
     public ReadOnlySpan<ke_glyph_metrics> Glyphs
     {
         get
@@ -160,8 +162,8 @@ public sealed unsafe class ResolvedFontData : IDisposable
 }
 
 /// <summary>
-/// Managed projection of <see cref="ke_material_spec"/>. Returned by
-/// <see cref="NativeAssetResolver.ResolveMaterial"/>; fully value-typed, no native lifetime.
+/// Managed projection of <see cref="ke_material_spec"/>, returned by
+/// <see cref="NativeAssetResolver.ResolveMaterialSpec"/>. It holds no native memory.
 /// </summary>
 public sealed record MaterialSpec
 {
@@ -174,10 +176,10 @@ public sealed record MaterialSpec
     /// <summary>Roughness factor, [0, 1].</summary>
     public required float Roughness { get; init; }
 
-    /// <summary>Optional albedo texture path (empty string if not set).</summary>
+    /// <summary>Albedo texture path; empty when the material has none.</summary>
     public required string AlbedoPath { get; init; }
 
-    /// <summary>Optional normal-map texture path (empty string if not set).</summary>
+    /// <summary>Normal-map texture path; empty when the material has none.</summary>
     public required string NormalPath { get; init; }
 
     internal static unsafe MaterialSpec FromNative(ke_material_spec spec)

@@ -1,6 +1,5 @@
-//! Applies the render-owned fields of a scene entity's authored table: one callback each for
-//! the camera, the mesh and the 2D sprite, each claiming only the key it owns through `keyIs`
-//! and rejecting an invalid value with an error.
+//! Applies the render-owned fields of a scene entity's authored table to the camera, mesh and 2D
+//! sprite components.
 
 const std = @import("std");
 
@@ -32,10 +31,9 @@ fn asFloat(v: *const c.ke_variant) ?f32 {
 }
 
 /// Claims "fov_degrees" and writes `fov` from each matching entry in order. A later entry with
-/// the same key overwrites an earlier one; entries before a failing one stay applied.
-/// On a value that is not a number, or lies
-/// outside the open range from zero to a half turn, it fills the error output and returns false
-/// at that entry.
+/// the same key overwrites an earlier one; entries before a failing one stay applied. On a
+/// value that is not a number, or lies outside the open range from zero to a half turn, it
+/// fills the error output and returns false at that entry.
 pub export fn ke_render_apply_camera(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
@@ -91,8 +89,9 @@ pub export fn ke_render_apply_mesh(
     return true;
 }
 
-/// Writes `alpha_mode` from each matching entry in order. On a value `alphaModeOf` does not map it
-/// fills the error output and returns false; that entry leaves `alpha_mode` unchanged.
+/// Claims "alpha_mode" and writes `alpha_mode` from each matching entry in order. On a value
+/// `alphaModeOf` does not map it fills the error output and returns false; that entry leaves
+/// `alpha_mode` unchanged.
 pub export fn ke_render_apply_sprite2d(
     _: ?*anyopaque,
     ptr: ?*anyopaque,

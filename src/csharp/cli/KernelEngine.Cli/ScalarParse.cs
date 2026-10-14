@@ -3,9 +3,9 @@ using System.Globalization;
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Coerces a raw CLI argv string to the most-specific TOML scalar it can be: bool > long > double >
-/// string. <c>--type</c> flag overrides the heuristic when the user wants to force "true" or "42"
-/// to land as a string (rare but real — file paths starting with a digit, version strings, etc.).
+/// Coerces a raw argument to a TOML scalar. With <see cref="ScalarType.Auto"/> it is the first of
+/// bool, long, double and string that the text parses as; any other type forces that reading and
+/// throws when the text does not parse.
 /// </summary>
 public static class ScalarParse
 {

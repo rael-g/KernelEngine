@@ -9,8 +9,9 @@ using Microsoft.CodeAnalysis.Text;
 namespace KernelEngine.SourceGenerators;
 
 /// <summary>
-/// Emits one type per <c>.scene.toml</c> file in the project, so a scene can be named
-/// to <c>ISceneRouter.LoadScene&lt;T&gt;()</c> by type instead of by string.
+/// Emits one type per <c>.scene.toml</c> file in the project, named after the file and
+/// implementing <c>IScene</c>, in the <c>Scenes</c> namespace under the project's root namespace.
+/// A file whose name is not a valid C# identifier gets no type and reports <c>KESG007</c>.
 /// </summary>
 [Generator]
 public sealed class SceneNameGenerator : IIncrementalGenerator
@@ -23,18 +24,8 @@ public sealed class SceneNameGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    /// <summary>
-    /// The double extension is deliberate: the file is TOML, so declaring it lets
-    /// any editor and any host validate and highlight the scene with no per-editor
-    /// setup, while <c>.scene</c> keeps saying what the file is.
-    /// </summary>
     private const string SceneSuffix = ".scene.toml";
 
-    /// <summary>
-    /// The scene's name: the file name with both extensions removed.
-    /// <c>GetFileNameWithoutExtension</c> alone would leave <c>Main.scene</c>,
-    /// which is not a type name.
-    /// </summary>
     private static string SceneNameOf(string path)
     {
         var file = Path.GetFileName(path);
@@ -43,6 +34,10 @@ public sealed class SceneNameGenerator : IIncrementalGenerator
             : Path.GetFileNameWithoutExtension(file);
     }
 
+    /// <summary>
+    /// Registers the scene files of the project as the input of one output, <c>Scenes.g.cs</c>.
+    /// Nothing is emitted when the project has no scene file or no root namespace.
+    /// </summary>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var scenes = context.AdditionalTextsProvider

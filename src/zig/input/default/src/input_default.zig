@@ -1,17 +1,5 @@
-//! The keyboard and mouse state of one window, behind `ke_input`. The window backend feeds raw
-//! key, button, move and scroll notifications into sink slots, and the game reads the result once
-//! per frame, as live queries, as a snapshot, or as a queue of discrete events.
-//!
-//! The state separates what is held from what happened this frame. Held keys, held buttons and
-//! the mouse position persist; the pressed and released edges and the mouse and scroll deltas
-//! accumulate from one `inputUpdate` to the next and are cleared by it. Events go into a queue
-//! that holds only so many, drops the rest and notes the overflow, and a run of mouse moves
-//! collapses into one event carrying the latest position.
-//!
-//! A snapshot is a packed copy of the state, and its queries read only that copy, so it stays
-//! fixed while the live state moves on. Out-of-range codes and null arguments are answered with
-//! false or ignored; the one reported error is a null input in `inputUpdate`. The file takes no
-//! lock, so nothing orders the sinks against the frame boundary.
+//! The keyboard and mouse state of one window, behind `ke_input`. It folds the window backend's
+//! raw notifications into held state, per-frame edges and deltas, an event queue and snapshots.
 
 const std = @import("std");
 

@@ -1,9 +1,7 @@
 namespace KernelEngine.Render;
 
 /// <summary>
-/// glTF 2.0-aligned material alpha mode. Mirrors the native <c>ke_alpha_mode</c>.
-/// <see cref="Opaque"/> and <see cref="Mask"/> both shade through the G-buffer;
-/// <see cref="Blend"/> is the only mode the transparent forward pass shades.
+/// How a material's alpha is used. Mirrors the native <c>ke_alpha_mode</c>.
 /// </summary>
 public enum AlphaMode
 {

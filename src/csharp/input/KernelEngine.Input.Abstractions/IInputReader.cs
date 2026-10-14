@@ -3,34 +3,29 @@
 namespace KernelEngine.Input;
 
 /// <summary>
-/// Read-only interface for per-frame input state. Used by the simulation thread.
-///
-/// <para>
-/// Only <b>level state</b> (currently held / current cursor position) is exposed here, because that
-/// is the only signal the single-slot snapshot exchange (<c>InputBuffer</c>) can deliver reliably.
-/// </para>
-///
-/// <para>
-/// For <b>edge events</b> (key just pressed / just released, button clicked, scroll wheel ticks),
-/// subscribe via <c>Node.OnInput(ref InputEvent)</c> — events flow through a kernel ring buffer
-/// drained per frame, so nothing is lost when snapshots are produced faster than they are consumed.
-/// The action layer (chapter 22) will eventually offer <c>WasActionPressed(action)</c> derived from
-/// the same event stream.
-/// </para>
+/// Read-only per-frame input state: held keys and buttons, the edges that occurred since the
+/// previous <see cref="IInput.Update"/>, the cursor position and the per-frame deltas.
 /// </summary>
 public interface IInputReader
 {
+    /// <summary>True while the key is held.</summary>
     bool IsKeyDown(Key key);
 
-    /// <summary>True for exactly the tick the key transitioned from up to down (rising edge).</summary>
+    /// <summary>True for exactly the tick the key transitioned from up to down (rising
+    /// edge).</summary>
     bool IsKeyPressed(Key key);
 
-    /// <summary>True for exactly the tick the key transitioned from down to up (falling edge).</summary>
+    /// <summary>True for exactly the tick the key transitioned from down to up (falling
+    /// edge).</summary>
     bool IsKeyReleased(Key key);
 
+    /// <summary>The cursor position.</summary>
     Vector2 MousePosition { get; }
+    /// <summary>The cursor movement accumulated this frame.</summary>
     Vector2 MouseDelta { get; }
+    /// <summary>The scroll amount accumulated this frame.</summary>
     Vector2 ScrollDelta { get; }
 
+    /// <summary>True while the mouse button is held.</summary>
     bool IsMouseButtonDown(MouseButton button);
 }

@@ -1,9 +1,7 @@
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Names the node a borrow parameter resolves to when the parameter's own name is
-/// not the node's name. Without it a borrow binds to the child, descendant, or
-/// ancestor whose name matches the parameter.
+/// Names the node a borrow parameter resolves to. Without it the borrow matches on type alone.
 /// </summary>
 [AttributeUsage(AttributeTargets.Parameter)]
 public sealed class NodeNameAttribute : Attribute
@@ -16,10 +14,8 @@ public sealed class NodeNameAttribute : Attribute
 }
 
 /// <summary>
-/// The right to raise signal <typeparamref name="T"/> from the node that declares
-/// it, obtained as a parameter like any other borrow. The node names the signal it
-/// raises and nothing else: who listens is a fact of the scene, wired through the
-/// signal bus, so a listener can be added or removed without the emitter changing.
+/// The right to raise signal <typeparamref name="T"/> from the node that declares it, obtained
+/// as a parameter of <c>Update</c> like any other borrow.
 /// </summary>
 public readonly ref struct Emit<T> where T : unmanaged
 {
@@ -38,9 +34,8 @@ public readonly ref struct Emit<T> where T : unmanaged
     public bool IsBound => _bus is not null;
 
     /// <summary>
-    /// Raises the signal with this payload. Delivery happens at the next phase
-    /// boundary, not inside this call, so an emitter never runs a listener's code
-    /// on its own stack.
+    /// Raises the signal with this payload. Delivery happens at the next phase boundary, not
+    /// inside this call. Does nothing when no signal bus is present.
     /// </summary>
     public unsafe void Send(in T payload)
     {

@@ -1,13 +1,5 @@
-//! The GLFW backend of the device seam. `GlfwDevice` holds the window, which exists between a
-//! successful initialize and shutdown, and a sink that exists only while a poll runs.
-//! Initialization starts the library, creates a window without a client API, on the primary
-//! monitor when fullscreen is requested, stores the device as the window's user pointer and
-//! installs callbacks for keys, cursor, buttons, scroll, size and close. Shutdown destroys the
-//! window and terminates the library, and also runs after a failed initialize.
-//!
-//! GLFW invokes those callbacks only inside its event polling, on the polling thread. Each builds
-//! an `Event` and gives it to `emit`, which recovers the device from the user pointer and forwards
-//! the event to the sink, dropping it when no poll is running.
+//! The GLFW backend of the window device seam: it owns the GLFW window and translates its
+//! callbacks into device events.
 
 const std = @import("std");
 const builtin = @import("builtin");

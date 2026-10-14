@@ -3,66 +3,44 @@ using System.Numerics;
 namespace KernelEngine.Render;
 
 /// <summary>
-/// Creates GPU resources owned by the active render backend — meshes, textures,
-/// and materials. Scene code (primitives, asset loaders, nodes) depends on this
-/// abstraction rather than a concrete backend. The v2 render module implements
-/// it over the render core. Call from the render worker — GPU resource creation
-/// has thread affinity.
+/// Creates and owns the GPU resources of the active render backend: meshes, textures, materials
+/// and fonts. Every method must be called from the thread that owns GPU resource creation.
 /// </summary>
 public interface IRenderResources
 {
     /// <summary>
-    /// Uploads interleaved position+normal+uv vertices and 16-bit indices.
-    /// Throws on failure — a bad upload is never swallowed. <paramref name="key"/>
-    /// is required — every upload is dedup-cached, there is no uncached path: a
-    /// key already resident returns the existing handle with its refcount
-    /// incremented, uploading nothing. The result always carries one reference;
-    /// balance it with <see cref="ReleaseMesh"/>. Content loaded from a file
-    /// should key by its path (see <c>NativeAssetResolver</c>'s cached-load
-    /// methods, which do this for you); procedural content keys by its own
-    /// generation parameters (e.g. <c>"primitive:cube"</c>) so identical calls
-    /// dedup the same way file-backed content does.
+    /// Uploads interleaved vertices and 16-bit indices. <paramref name="key"/> is required: a key
+    /// already resident returns the existing handle with its reference count incremented and
+    /// uploads nothing. The result always carries one reference, balanced with
+    /// <see cref="ReleaseMesh"/>. Throws when the upload fails.
     /// </summary>
     MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices);
 
     /// <summary>
-    /// Uploads an RGBA8 texture (<paramref name="rgba"/> is width*height*4 bytes,
-    /// row-major). Throws on failure. <paramref name="key"/> is required, same
-    /// rule as <see cref="UploadMesh"/>.
+    /// Uploads an RGBA8 texture, <paramref name="rgba"/> being width by height by four bytes in row
+    /// order. <paramref name="key"/> follows the rule of <see cref="UploadMesh"/>. Throws when the
+    /// upload fails.
     /// </summary>
     TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba);
 
     /// <summary>
-    /// Uploads an RGBA8 cubemap: 6 faces of <paramref name="faceSize"/>² in the
-    /// order +X,-X,+Y,-Y,+Z,-Z (concatenated). Used as a skybox background and the
-    /// image-based-lighting environment. Throws on failure. <paramref name="key"/>
-    /// is required, same rule as <see cref="UploadMesh"/> (cubemaps share the
-    /// texture cache).
+    /// Uploads an RGBA8 cubemap of six square faces of <paramref name="faceSize"/> pixels,
+    /// concatenated in the order +X, -X, +Y, -Y, +Z, -Z. <paramref name="key"/> follows the rule of
+    /// <see cref="UploadMesh"/> and shares the texture cache. Throws when the upload fails.
     /// </summary>
     TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces);
 
     /// <summary>
-    /// Creates a glTF metallic-roughness material: a base-color factor multiplied
-    /// by an albedo texture (<c>null</c> = the built-in white = flat color), plus
-    /// metallic (0 = dielectric, 1 = metal), roughness (0 = mirror, 1 = matte), and
-    /// an optional tangent-space normal map (<c>null</c> = flat / no perturbation).
-    /// <paramref name="alphaMode"/> selects which pass shades the material
-    /// (gbuffer for <see cref="AlphaMode.Opaque"/>/<see cref="AlphaMode.Mask"/>,
-    /// transparent forward for <see cref="AlphaMode.Blend"/>); <paramref name="alphaCutoff"/>
-    /// only applies to <see cref="AlphaMode.Mask"/>. <paramref name="ior"/> (index of
-    /// refraction) and <paramref name="distortionStrength"/> only apply to
-    /// <see cref="AlphaMode.Blend"/> (ior: 1.0 = no bend, 1.33 = water, 1.5 = glass;
-    /// distortionStrength: lateral shift of the sampled background, in normalized
-    /// screen space). <paramref name="shader"/> names the authored material that
-    /// shades this surface — the file stem of a <c>struct X : IMaterial</c>
-    /// <c>.slang</c> in the project's materials directory (<c>"standard"</c>,
-    /// <c>"stripes"</c>, …); <c>null</c> selects the engine default. It is not a
-    /// file path or a format — whichever pass draws the material resolves
-    /// <c>"&lt;shader&gt;.&lt;pass&gt;"</c> to the wrapper the build compiled, so two
-    /// materials naming different shaders get genuinely distinct PSOs.
-    /// <paramref name="key"/> is required, same rule as <see cref="UploadMesh"/> —
-    /// a caller with no file path (an inline scene-authored material, say) keys
-    /// by its own parameters so two nodes authored identically share one material.
+    /// Creates a metallic-roughness material: <paramref name="baseColor"/> multiplied by the
+    /// <paramref name="albedo"/> texture, where null means the white texture, with a tangent-space
+    /// <paramref name="normalMap"/>, where null means no perturbation.
+    /// <paramref name="alphaMode"/> selects the pass that shades the material, and
+    /// <paramref name="alphaCutoff"/> applies only to <see cref="AlphaMode.Mask"/>.
+    /// <paramref name="ior"/> and <paramref name="distortionStrength"/> apply only to
+    /// <see cref="AlphaMode.Blend"/>; the strength is a lateral shift of the sampled background in
+    /// normalized screen space. <paramref name="shader"/> is the file stem of an authored material
+    /// shader, and null selects the engine default. <paramref name="key"/> follows the rule of
+    /// <see cref="UploadMesh"/>.
     /// </summary>
     MaterialHandle CreateMaterial(string key, Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
                                   TextureHandle? albedo = null, TextureHandle? normalMap = null,
@@ -70,7 +48,7 @@ public interface IRenderResources
                                   float ior = 1.5f, float distortionStrength = 0.05f,
                                   string? shader = null);
 
-    /// <summary>The built-in 1×1 white texture (neutral albedo).</summary>
+    /// <summary>The built-in white texture, the neutral albedo.</summary>
     TextureHandle WhiteTexture { get; }
 
     /// <summary>Adds one reference to a resource; balance with the matching release.</summary>
@@ -98,12 +76,8 @@ public interface IRenderResources
     bool TryGetMaterial(string key, out MaterialHandle handle);
 
     /// <summary>
-    /// Registers a font's glyph table with the UI overlay pass, deduped by
-    /// <paramref name="key"/> (same convention as <see cref="UploadTexture"/>).
-    /// Queuing a UI quad no longer goes through this interface — attach a
-    /// <c>ke_ui_quad_component</c> ("ui_quad") to an entity via
-    /// <c>ScriptHost</c>/<c>SystemCtx.Attach</c> instead; the "render.ui"
-    /// pass reads it through a declared ECS query.
+    /// Registers a font's glyph table with the UI pass, deduplicated by <paramref name="key"/>
+    /// like <see cref="UploadTexture"/>. Throws when no font slot is free or the registration fails.
     /// </summary>
     FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,
                         float lineHeight, float ascent);

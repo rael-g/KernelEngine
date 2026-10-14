@@ -1,8 +1,5 @@
-//! This file is a render target whose frame is a view of a texture the caller owns, so drawing
-//! into the target draws into that texture. `TextureTarget` is its whole state: the view it owns,
-//! the borrowed device that releases it, the size and format copied at creation, and a flag that
-//! says whether a frame is open. `acquire` and `present` only toggle that flag, each refusing a
-//! call that contradicts it, and every frame is the same view.
+//! A render target whose frame is a view of a texture the caller owns, so drawing into the target
+//! draws into that texture.
 
 const std = @import("std");
 
@@ -62,12 +59,14 @@ fn present(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) call
     return true;
 }
 
+/// Reports the size copied at creation; a null output is skipped.
 fn size(self: [*c]c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
     const t = of(self);
     if (out_w != null) out_w.* = t.width;
     if (out_h != null) out_h.* = t.height;
 }
 
+/// Reports the format copied at creation.
 fn format(self: [*c]c.ke_gpu_render_target) callconv(.c) c.ke_gpu_texture_format {
     return of(self).format;
 }

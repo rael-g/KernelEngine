@@ -4,15 +4,6 @@ namespace Kabic;
 /// Builds the <see cref="Convention"/> of an ABI by declaring what it names, one call per fact.
 /// Every list is open: an ABI adds as many failure kinds, vector types or handle types as it has.
 /// </summary>
-/// <remarks>
-/// Each method records one fact in a private field, or adds one entry to a list, and returns the
-/// builder, so a convention is declared as a chain of calls. Most string facts start as the empty
-/// string, the out-parameter prefix, the failure lane name and the bindings methods class have
-/// non-empty field initializers, the field table starts as null, and the lists start empty. The builder does
-/// not check that a fact was declared. <c>Build</c> copies the handle types, the type-name overrides,
-/// the error kinds and the packs into new collections, so a convention built earlier is unaffected by
-/// later calls on the same builder.
-/// </remarks>
 public sealed class ConventionBuilder
 {
     string symbolPrefix = "", handleSuffix = "", factorySuffix = "", componentSuffix = "", paramsSuffix = "";
@@ -28,28 +19,37 @@ public sealed class ConventionBuilder
     readonly Dictionary<string, string> handleTypes = [], typeNames = [];
     readonly List<IShapePack> packs = [];
 
-    /// <summary>The spellings that mark what a symbol is: its prefix and the suffix of a handle, a factory, a component and a parameter bag.</summary>
+    /// <summary>
+    /// The spellings that mark what a symbol is: its prefix and the suffix of a handle, a factory,
+    /// a component and a parameter bag.
+    /// </summary>
     public ConventionBuilder Symbols(string prefix, string handle, string factory, string component, string parameters)
     {
         (symbolPrefix, handleSuffix, factorySuffix, componentSuffix, paramsSuffix) = (prefix, handle, factory, component, parameters);
         return this;
     }
 
-    /// <summary>The one-byte boolean typedef the ABI declares; <c>_Bool</c> and <c>bool</c> are C's own.</summary>
+    /// <summary>
+    /// The one-byte boolean typedef the ABI declares; <c>_Bool</c> and <c>bool</c> are C's own.
+    /// </summary>
     public ConventionBuilder Booleans(string byteBool)
     {
         byteBoolType = byteBool;
         return this;
     }
 
-    /// <summary>The prefix of a parameter written back, and the name of the trailing failure lane.</summary>
+    /// <summary>
+    /// The prefix of a parameter written back, and the name of the trailing failure lane.
+    /// </summary>
     public ConventionBuilder OutParams(string prefix, string failureLane)
     {
         (outParamPrefix, errorLaneName) = (prefix, failureLane);
         return this;
     }
 
-    /// <summary>Where a header is addressed from, and the names the raw bindings are generated into.</summary>
+    /// <summary>
+    /// Where a header is addressed from, and the names the raw bindings are generated into.
+    /// </summary>
     public ConventionBuilder Bindings(string includeDirectory, string commonNamespace, string methodsClass = "NativeMethods")
     {
         (includeDirectoryName, commonBindingsNamespace, bindingsMethodsClass) = (includeDirectory, commonNamespace, methodsClass);
@@ -64,9 +64,9 @@ public sealed class ConventionBuilder
     }
 
     /// <summary>
-    /// How a failure is reported: the struct and the kind type, the function that tests a kind, the general kind,
-    /// the header that declares all of it, and the class and file that
-    /// receive the generated mapping to exceptions.
+    /// How a failure is reported: the struct and the kind type, the function that tests a kind, the
+    /// general kind, the header that declares all of it, and the class and file that receive the
+    /// generated mapping to exceptions.
     /// </summary>
     public ConventionBuilder Failure(string type, string kindType, string isFunction, string generalSingleton,
         string header, IEnumerable<string> includeDirs, string helperClass, string helperNamespace, string kindsOut)
@@ -78,12 +78,13 @@ public sealed class ConventionBuilder
     }
 
     /// <summary>
-    /// Declares a kind of failure: the singleton it is reached by, the name its native type carries, the exception a
-    /// managed caller catches (built from a message and a cause), and the error a Zig caller switches on. The Zig name
-    /// defaults to the last segment of the native name in PascalCase. With <paramref name="extends"/>, kabic declares
-    /// <paramref name="managed"/> as a new exception type deriving from it; without, <paramref name="managed"/> names an
-    /// existing type. A kind never declared reads as the general one, which is a plain <see cref="Exception"/> until
-    /// it is declared too.
+    /// Declares a kind of failure: the singleton it is reached by, the name its native type
+    /// carries, the exception a managed caller catches (built from a message and a cause), and the
+    /// error a Zig caller switches on. The Zig name defaults to the last segment of the native name
+    /// in PascalCase. With <paramref name="extends"/>, kabic declares <paramref name="managed"/> as
+    /// a new exception type deriving from it; without, <paramref name="managed"/> names an existing
+    /// type. A kind never declared reads as the general one, which is a plain <see
+    /// cref="Exception"/> until it is declared too.
     /// </summary>
     public ConventionBuilder AddError(string singleton, string nativeName, string managed, string? zig = null, string? extends = null)
     {
@@ -98,7 +99,9 @@ public sealed class ConventionBuilder
         return this;
     }
 
-    /// <summary>A C owner-wrapper handle type and the managed type a caller holds instead.</summary>
+    /// <summary>
+    /// A C owner-wrapper handle type and the managed type a caller holds instead.
+    /// </summary>
     public ConventionBuilder AddHandleType(string cType, string managed)
     {
         handleTypes[cType] = managed;
@@ -119,8 +122,13 @@ public sealed class ConventionBuilder
         return this;
     }
 
-    /// <summary>Builds the <see cref="Convention"/> from the facts declared so far, without checking them.</summary>
-    /// <returns>A convention holding a copy of the handle types, the type-name overrides, the error kinds and the packs.</returns>
+    /// <summary>
+    /// Builds the <see cref="Convention"/> from the facts declared so far, without checking them.
+    /// </summary>
+    /// <returns>
+    /// A convention holding a copy of the handle types, the type-name overrides, the error kinds
+    /// and the packs.
+    /// </returns>
     public Convention Build() => new()
     {
         SymbolPrefix = symbolPrefix,

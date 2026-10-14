@@ -1,8 +1,5 @@
-//! The generic path from authored table entries to component memory. A component's field table
-//! lets an authored entry be matched to a field by its key, so the keys the fields name need no
-//! code of their own. A matched entry is marked consumed, which is how a caller later finds keys
-//! nothing understood, and the value is written by the component_fields module, which also
-//! decides what it refuses.
+//! The generic path from authored table entries to component memory, driven by a component's field
+//! table.
 
 const std = @import("std");
 
@@ -18,10 +15,10 @@ fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
     return std.mem.eql(u8, std.mem.span(key), std.mem.span(name));
 }
 
-/// Writes each entry whose key names a field and returns null, or returns the field whose value
-/// the writer refused. It stops at that value: the entries before it stay written, and the entries
-/// after it are not marked consumed. A key given twice is written twice, so the later value is
-/// what the field holds.
+/// Writes each entry whose key names a field, marks it consumed so that a caller can find the keys
+/// nothing understood, and returns null; or returns the field whose value the writer refused. It
+/// stops at that value: the entries before it stay written, and the entries after it are not marked
+/// consumed. A key given twice is written twice, so the later value is what the field holds.
 pub fn apply(
     component: ?*anyopaque,
     entries: [*c]c.ke_variant_table_entry,
@@ -43,8 +40,8 @@ pub fn apply(
     return null;
 }
 
-/// Seeds the declared defaults through the writer of the component_fields module. It reports no
-/// failure: a default the writer refuses is not returned to the caller.
+/// Seeds the declared default of each field. It reports no failure: a default the writer refuses
+/// is not returned to the caller.
 pub fn seedDefaults(
     component: ?*anyopaque,
     fields: [*]const c.ke_component_field,

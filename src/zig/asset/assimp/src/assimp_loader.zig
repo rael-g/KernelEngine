@@ -1,27 +1,5 @@
-//! The Assimp implementation of the `ke_asset_loader` contract: it imports a model file and hands
-//! the caller a `ke_model_data` of plain records that own their memory. The sibling files carry
-//! the pieces: c.zig the translated C headers, log.zig the logging and string-copy helpers,
-//! converter.zig the conversion of one mesh and one material, and texture_decoder.zig the
-//! decoding of one texture.
-//!
-//! `ke_asset_loader_assimp_create` builds a `State` that holds the vtable, the logger and the
-//! allocator every record of every later load comes from. Nothing else is kept between loads.
-//!
-//! `loadModel` does one whole load. The scene is imported with `import_flags`, and is released
-//! before the call returns, so the records are copied out of a scene that is still alive and
-//! never refer to it. Materials are converted first, and while they are, `registerTexture` collects
-//! the textures they name into a `TextureTable`, one entry per distinct name, so a texture shared
-//! by several materials is decoded once. The table is decoded, the resulting indices are written
-//! into the materials, and the meshes are converted last, each pointing at its material by index.
-//! A texture that cannot be decoded does not fail the load; an import that yields no usable scene,
-//! or a failed allocation of the model's arrays, does, and the arrays already made are released.
-//!
-//! The synchronous slot runs `loadModel` on the caller's thread and reports a failure through the
-//! out-parameter. The asynchronous slot copies the path into an `AsyncCtx` and has the scheduler
-//! run `asyncBody`, which runs the same `loadModel` and delivers exactly one completion callback,
-//! carrying the model or a fixed failure, before it frees the context. `vtFreeModel` releases a
-//! model's records, and `vtDestroy` releases the `State`; in a Debug build every allocation goes
-//! through a leak-tracking heap, and `vtDestroy` warns if models are still live.
+//! The Assimp implementation of the `ke_asset_loader` contract: it imports a model file into a
+//! `ke_model_data` of records that own their memory, synchronously or on the scheduler.
 
 const std = @import("std");
 
@@ -159,7 +137,14 @@ fn registerTexture(
     return @intCast(table.items.items.len - 1);
 }
 
-/// Performs one whole import and returns the new model, or null on any failure. The failure is
+/// Performs one whole import and returns the new model, or null on any failure. The scene is
+/// imported with `import_flags` and released before the call returns, so the records never refer
+/// to it. Materials are converted first, and `registerTexture` collects the textures they name
+/// into one `TextureTable` entry per distinct name, so a texture shared by several materials is
+/// decoded once; the table is decoded, the indices are written into the materials, and the meshes
+/// are converted last, each pointing at its material by index. A texture that cannot be decoded
+/// does not fail the load; an import with no usable scene or a failed allocation of the model's
+/// arrays does. The failure is
 /// written to the out-parameter when the caller gave one; the asynchronous body gives none and
 /// relies on the null alone. It runs on the caller's thread for the synchronous slot and on a
 /// worker for the asynchronous one. It reads only the logger and the allocator from the State and

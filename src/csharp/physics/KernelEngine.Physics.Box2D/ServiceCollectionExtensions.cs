@@ -11,7 +11,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers a Box2D-backed <see cref="IPhysics2D"/> singleton. Reads
     /// <c>[runtime.physics_2d] gravity_x/gravity_y</c> from the Project file when present;
-    /// otherwise defaults to Earth-like downward gravity (matches Box2D's expected MKS units).
+    /// otherwise defaults to a gravity of (0, -9.81).
     /// </summary>
     public static IServiceCollection AddBox2D(this IServiceCollection services)
     {
@@ -27,8 +27,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Backward-compatible overload that passes gravity inline, bypassing the Project file.
-    /// Lets examples that have not migrated to Project keep working.
+    /// Registers the physics singleton with the given gravity, bypassing the Project file.
     /// </summary>
     public static IServiceCollection AddBox2D(
         this IServiceCollection services, float gravityX, float gravityY)

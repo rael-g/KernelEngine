@@ -1,19 +1,6 @@
-//! The cluster pass is the render-phase system "render.cull". Each frame it copies the point and
-//! spot lights its queries find into two GPU storage buffers, then dispatches a compute shader
-//! that bins them into a view-space grid of clusters, writing per-cluster index lists and counts
-//! into further storage buffers. Those buffers and a grid uniform are published to the render
-//! service as the bind group "cluster_lights", and the pass declares that it writes the tag
-//! imported as "light_clusters".
-//!
-//! `ClusterModule` carries the whole pass. `ke_render_cluster_create` allocates it, `setup` creates
-//! the GPU objects in a fixed order and fills the access list and queries, and the system is then
-//! registered with them. A failed step leaves the earlier objects set, and `destroyModule`
-//! releases only handles that are not invalid, so a half-built module is released like a whole one.
-//!
-//! `system` stages light records in a chunk and uploads the chunk each time it fills and once more
-//! at the end. The records are capped while the totals keep counting, and an overflow is reported
-//! once per kind through `logLightOverflow`. A frame with no camera uploads the lights and stops;
-//! otherwise it also uploads the cull parameters and the grid, and dispatches the compute pipeline.
+//! The cluster pass: the render-phase system "render.cull" that gathers the point and spot lights
+//! of a frame into GPU buffers and bins them into a view-space grid of clusters. It publishes the
+//! result to the render service as the bind group "cluster_lights".
 
 const std = @import("std");
 
@@ -128,8 +115,11 @@ inline fn moduleOf(user: ?*anyopaque) *ClusterModule {
 }
 
 /// The per-frame body that `ke_render_cluster_create` registers. It ignores its error out-parameter
-/// and returns true on every path. A frame without a camera still uploads the light records it
-/// gathered.
+/// and returns true on every path. Light records are staged in a chunk that is uploaded each time
+/// it fills and once more at the end; the records are capped while the totals keep counting, and an
+/// overflow is reported once per kind through `logLightOverflow`. A frame without a camera uploads
+/// the lights and stops; otherwise it also uploads the cull parameters and the grid and dispatches
+/// the compute pipeline.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const cm = moduleOf(user);
     const core = cm.core;
@@ -264,9 +254,11 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, ou
     }, out_error);
 }
 
-/// Runs once, from `ke_render_cluster_create`, before the module is registered. A failed step
-/// returns false with the error placed in the out-error parameter, and the objects created before
-/// it stay set for `destroyModule` to release.
+/// Runs once, from `ke_render_cluster_create`, before the module is registered. It creates the GPU
+/// objects in a fixed order, imports the light bind group into the render service as
+/// "cluster_lights", and fills the access list, which writes the tag imported as "light_clusters",
+/// and the queries. A failed step returns false with the error placed in the out-error parameter,
+/// and the objects created before it stay set for `destroyModule` to release.
 fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
              logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
              point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,

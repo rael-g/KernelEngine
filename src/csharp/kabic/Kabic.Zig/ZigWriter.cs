@@ -7,71 +7,12 @@ using System.Text;
 /// kabic's Zig writer: renders a domain as a Zig module — the ABI declared in Zig
 /// rather than imported from the header, and a projection over it whose signatures
 /// are Zig's own (error unions, optionals, slices, sentinel-terminated strings).
+/// One instance renders one domain: it holds the model, its classification, the convention and
+/// the foreign types, and collects while rendering the imports reached, the opaque types, the
+/// parameter bags and the slots it could not project. Its constructor throws
+/// <see cref="InvalidOperationException"/> when the error header does not export the singleton
+/// of a failure kind the convention lists.
 /// </summary>
-/// <remarks>
-/// An instance renders one domain as one Zig module and keeps, for the length of that render,
-/// the state it discovers on the way: the imports reached, the opaque types, the bag types,
-/// the vtables projected, and the messages of the slots it could not project. The constructor
-/// checks that the error header exports the singleton of every kind the convention lists in
-/// <c>ErrorKinds</c>, and throws otherwise. It then keeps the convention's <c>NamedErrors</c>
-/// as the error kinds the module raises.
-///
-/// <c>Render</c> writes the module in a fixed order. The type aliases that resolve to a
-/// primitive become constants first, then each non-external enum goes through
-/// <c>RenderEnum</c>, then the error vocabulary from <c>Preamble</c>. The ABI follows:
-/// <c>Declare</c> writes the error header, then the model, as callbacks, non-external structs
-/// with their fields and slots, functions and variables. Every provider in the classified
-/// model is projected by <c>RenderProvider</c> as owned, and every vtable only lent to a call
-/// is projected as borrowed. The bag types and the opaque declarations are written after the
-/// projections, because projecting a slot is what registers them. The imports reached while
-/// rendering come out at the top, under the header comment that lists the unprojected slots.
-///
-/// <c>RenderSlot</c> turns one slot into a method. It throws for a slot that carries a blob, or
-/// a raw callback parameter that is neither a closure nor a consumer, and <c>RenderProvider</c>
-/// records that message instead of the method. Otherwise it spells each parameter from its
-/// tags, in ABI order: the error out-parameter becomes the address of a local, a closure
-/// becomes its trampoline with its state cast to a pointer, a consumer becomes a vtable value
-/// built from the caller's type, a lent object is passed by its reference, a count parameter
-/// passes the length of the span it counts, and a written-back parameter that is not a span
-/// passes the address of a local. The body declares those locals before the call, then reads
-/// the results. A slot that returns a count gives back the filled part of its buffer, a
-/// try-shaped slot gives an optional, a fallible slot that signals failure by its return value
-/// raises the error, and any other fallible slot raises it when the error local is set.
-///
-/// <c>Preamble</c> emits the error set: a general member and one per named kind. <c>raise</c>
-/// stores the reported error in <c>last_error</c> and returns the member whose kind the
-/// convention's error-is function confirms, or the general one. <c>errorType</c> and
-/// <c>errorFrom</c> run the other way: one turns a member into the singleton a handler reports,
-/// the other turns a reported singleton into a member, or into nothing when none is reported.
-///
-/// A closure parameter gets a trampoline struct, named for the parameter, whose <c>call</c>
-/// takes the callback's lanes, reads the caller's state back from the context lane, and hands
-/// the caller's handler the lanes that are neither the context nor the error lane. A failure
-/// the handler returns as an error is reported through the lane the callback names for it, as
-/// a kind or as a fact, as <c>ReportKind</c> says. A consumer parameter is the reverse:
-/// <c>ConsumerLines</c> emits a struct whose slots forward to the methods of the caller's own
-/// type, reached through the state field, and fills the vtable value with the state pointer
-/// and the plain fields. Neither retains anything: the state is the pointer the caller already
-/// holds.
-///
-/// A parameter bag is one struct a slot takes by pointer. <c>Bag</c> splits its fields: closures
-/// and their states, and the count beside each span, are filled by the writer, and the rest
-/// are the caller's. <c>RenderBag</c> writes the caller's struct at the top level with each
-/// field's stated default, and <c>BagLines</c> builds the ABI struct from the caller's value,
-/// filling the trampolines, the states, the counts, and the data pointers of the string and
-/// span fields.
-///
-/// <c>LentType</c> says whether a parameter crosses as a projected object. It must carry the
-/// engine-object tag, and its type is either a vtable this domain declares, named directly, or
-/// one another domain declares, reached through the import that <c>Bind</c> names. <c>Lent</c>
-/// lists the vtables that appear as engine-object parameters and are neither providers nor
-/// callbacks, so they are projected as borrowed.
-///
-/// An imported module is bound to its own name, or to a suffixed one when a top-level
-/// declaration of this module already takes that name, so that an import and a declaration
-/// never reach the same name. <c>LocalNames</c> is the set of names this module puts in scope
-/// around a call, computed once.
-/// </remarks>
 public sealed class ZigWriter
 {
     readonly ApiModel model;

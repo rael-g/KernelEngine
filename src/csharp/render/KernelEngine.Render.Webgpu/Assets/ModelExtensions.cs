@@ -5,19 +5,16 @@ using KernelEngine.Asset;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Helpers that upload a <see cref="ModelData"/> (read from a <see cref="Model"/> an
-/// <see cref="IAssetLoader"/> answered with) to the GPU and attach it to the scene as a
-/// flat collection of <see cref="MeshRenderer"/> nodes. Each sub-mesh becomes its own node
-/// named <c>{rootName}.{meshName}</c>.
+/// Uploads a <see cref="ModelData"/> to the GPU and attaches it to a scene as a flat collection of
+/// <see cref="MeshRenderer"/> nodes, one per sub-mesh, named <c>{rootName}.{meshName}</c>.
 /// </summary>
 public static class ModelExtensions
 {
     /// <summary>
-    /// Uploads <paramref name="model"/>'s textures, materials, and meshes via
-    /// <see cref="IRenderResources"/>, then adds one <see cref="MeshRenderer"/> node per
-    /// sub-mesh to <paramref name="scriptHost"/>. Converts the engine's <c>Vertex</c>
-    /// layout (12 floats, tangent.w handedness) to <c>MeshVertex</c> (11 floats).
-    /// Must be called from the render worker, because GPU uploads are pinned to it.
+    /// Uploads the textures, materials and meshes of <paramref name="model"/> through
+    /// <paramref name="resources"/>, converting each vertex to <see cref="MeshVertex"/>, then adds
+    /// one <see cref="MeshRenderer"/> node per sub-mesh to <paramref name="scriptHost"/> and
+    /// returns them. It must run on the thread that owns GPU resource creation.
     /// </summary>
     public static IReadOnlyList<MeshRenderer> AddModel(
         this ScriptHost scriptHost,

@@ -1,6 +1,4 @@
-//! The names of the generic error types in one place. `generic` holds them as NUL-terminated
-//! strings in an order that other files index by position, and each named constant reads one entry
-//! of it.
+//! The names of the generic error types, in one place.
 
 /// The position of each name is the position of its kind in the enum of kinds declared in the file
 /// kerror.zig, which indexes this array with `@intFromEnum`. Moving an entry changes which kind it

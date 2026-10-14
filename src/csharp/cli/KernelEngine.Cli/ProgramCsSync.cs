@@ -5,15 +5,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Surgically rewrites the bootstrap chain in a Program.cs given the desired module set
-/// (topologically ordered). Two responsibilities:
-///   1. The <c>using KernelEngine.…;</c> directives every active module needs.
-///   2. The <c>var services = new ServiceCollection().Add…()…;</c> chain on top of which the
-///      app is built.
-///
-/// Everything else in Program.cs (the user's <c>OnReady</c> lambdas, custom service
-/// registrations, helper classes) is preserved verbatim. If Program.cs doesn't exist yet,
-/// a minimal template is scaffolded.
+/// Rewrites two things in a Program.cs from an ordered module list: the <c>using KernelEngine.</c>
+/// directives, and the initializer of the <c>services</c> variable, which becomes a
+/// <c>ServiceCollection</c> chain of the modules' extension calls. A missing file is created from
+/// a template.
 /// </summary>
 public static class ProgramCsSync
 {

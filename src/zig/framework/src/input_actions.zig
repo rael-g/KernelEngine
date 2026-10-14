@@ -1,28 +1,5 @@
-//! The input actions map turns the keys and mouse buttons held in one frame into named actions
-//! that a game polls. Everything lives behind the handle that `ke_input_actions_create` returns:
-//! a `State` holding the vtable and a growable array of `Action` values, each owning its own
-//! growable array of `Binding` values. Both arrays grow through `growArray`, which keeps the old
-//! buffer when an allocation fails.
-//!
-//! A binding names no key by text. Names such as "Space" or "Left" are turned into codes by
-//! `lookupKey` and `lookupMouseButton` once, when a binding is created from a file, so evaluation
-//! deals only in codes. A binding is a key, a mouse button, a pair of keys on one axis, or a quad
-//! of keys on two axes. Actions come from two routes that end in the same representation: `vtLoad`
-//! replaces the whole set from a TOML file, reading each binding table with `parseBindingTable`
-//! and skipping one that does not parse, while `vtAddAction` and the bind slots append to the
-//! set, so ids already handed out stay valid.
-//!
-//! The map is driven by `vtEvaluate`, once per frame, on a snapshot of the input. Each action
-//! moves its current values to its previous ones, samples every binding with `sampleBinding`,
-//! and keeps the result: a button action is active when any binding is, and an axis action takes
-//! the largest magnitude per component. Transitions between the two frames are reported to the
-//! event callback before the call returns, as started, canceled, or performed for an axis that
-//! moved while held. The queries only read the stored values, never the snapshot, which is how
-//! they report both a held state and a press or release edge.
-//!
-//! Slots that take an error output report an invalid argument for a null handle or pointer; those
-//! that return a sentinel set no error. No thread is started and no lock is taken, so one handle
-//! is not safe to use from several threads at once.
+//! The input actions map: named actions bound to keys and mouse buttons, evaluated once per frame
+//! against an input snapshot and polled by a game.
 
 const std = @import("std");
 
@@ -199,6 +176,16 @@ const Action = struct {
 /// is the vtable the handle's ref points at, and its `handle` field points back at this `State`,
 /// which is how each vtable function reaches it through `stateOf`. `actions` stays null until the
 /// first action is added or loaded.
+///
+/// An action id is the index of the action in `actions`, so appending keeps ids valid and a load
+/// invalidates them. A binding names no key by text: names such as "Space" or "Left" are turned
+/// into codes by `lookupKey` and `lookupMouseButton` when a binding is created from a file, so
+/// evaluation deals only in codes. `vtEvaluate` moves each action's current values to its
+/// previous ones, samples every binding and keeps the result; the queries only read those stored
+/// values, never the snapshot, which is how they report both a held state and a press or release
+/// edge. Slots that take an error output report an invalid argument for a null handle or
+/// pointer; those that return a sentinel set no error. Nothing here locks, so one handle is not
+/// safe to use from several threads at once.
 const State = struct {
     api: c.ke_input_actions,
     actions: ?[*]Action,
@@ -376,11 +363,13 @@ fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding) bool {
     return false;
 }
 
-/// Clears all actions before reading, so a failure leaves the earlier set gone and keeps only the
-/// actions read before the failure. Ids handed out before a load are not valid after it. It reports
-/// not found when the file cannot be opened, an I/O error when the text does not parse, and out of
-/// memory when an action or a binding cannot be allocated. A file without an "action" table
-/// succeeds with no actions.
+/// Slot `load`. Replaces the whole set of actions from a TOML file, reading each binding table
+/// with `parseBindingTable` and skipping one that does not parse. It clears all actions before
+/// reading, so a failure leaves the earlier set gone and keeps only the actions read before the
+/// failure. Ids handed out before a load are not valid after it. It reports not found when the
+/// file cannot be opened, an I/O error when the text does not parse, and out of memory when an
+/// action or a binding cannot be allocated, and an invalid argument for a null handle or path.
+/// A file without an "action" table succeeds with no actions.
 fn vtLoad(
     self_in: ?*c.ke_input_actions,
     path: [*c]const u8,
@@ -453,13 +442,16 @@ fn vtLoad(
     return true;
 }
 
+/// Slot `get_action_id`. Returns the id of the action with that name, or -1 for a null handle or
+/// name and for a name no action has; it sets no error.
 fn vtGetActionId(self_in: ?*c.ke_input_actions, name: [*c]const u8) callconv(.c) i32 {
     const self = self_in orelse return -1;
     if (self.handle == null or name == null) return -1;
     return findActionByName(stateOf(self), std.mem.span(name));
 }
 
-/// Appends the action after those already present, so earlier ids keep their meaning. Returns -1
+/// Slot `add_action`. Appends the action after those already present, so earlier ids keep their
+/// meaning. Returns -1
 /// for a null or empty name, for a name already present, and when the array cannot grow. Each of
 /// those leaves the actions unchanged, and none of them sets an error.
 fn vtAddAction(
@@ -506,8 +498,10 @@ fn appendBinding(s: *State, id: i32, b: Binding, out_error: [*c][*c]c.ke_error) 
     return true;
 }
 
-/// Stores the key code as given. A code the snapshot cannot carry is not refused here, and it is
-/// never reported as held.
+/// Slot `bind_key`. Stores the key code as given. A code the snapshot cannot carry is not refused
+/// here, and it is never reported as held. A null handle is an invalid argument, an id that names
+/// no action is not found, and a binding array that cannot grow is out of memory; each returns
+/// false.
 fn vtBindKey(
     self_in: ?*c.ke_input_actions,
     action_id: i32,
@@ -525,6 +519,7 @@ fn vtBindKey(
     return appendBinding(stateOf(self), action_id, .{ .kind = .key, .k0 = @intCast(key) }, out_error);
 }
 
+/// Slot `bind_mouse_button`. Failures are those of `vtBindKey`.
 fn vtBindMouseButton(
     self_in: ?*c.ke_input_actions,
     action_id: i32,
@@ -542,6 +537,8 @@ fn vtBindMouseButton(
     return appendBinding(stateOf(self), action_id, .{ .kind = .mouse_button, .k0 = @intCast(button) }, out_error);
 }
 
+/// Slot `bind_key_pair`. The pair reads one axis, positive when `pos` is held and negative when
+/// `neg` is. Failures are those of `vtBindKey`.
 fn vtBindKeyPair(
     self_in: ?*c.ke_input_actions,
     action_id: i32,
@@ -565,6 +562,8 @@ fn vtBindKeyPair(
     );
 }
 
+/// Slot `bind_key_quad`. The quad reads two axes: x is right minus left and y is up minus down.
+/// Failures are those of `vtBindKey`.
 fn vtBindKeyQuad(
     self_in: ?*c.ke_input_actions,
     action_id: i32,
@@ -591,10 +590,13 @@ fn vtBindKeyQuad(
     }, out_error);
 }
 
-/// Runs one frame: it samples the snapshot into the action values and reports the transitions
-/// through the event callback, synchronously and on the calling thread. An action's callback sees
-/// its own new state, while actions later in the order still hold the previous frame's values.
-/// A null handle or a null snapshot reports invalid argument and changes nothing.
+/// Slot `evaluate`. Runs one frame: it samples the snapshot into the action values and reports the
+/// transitions through the event callback, synchronously and on the calling thread. A button
+/// action is active when any binding is, and an axis action takes the largest magnitude per
+/// component. The callback gets started and canceled on a change of activity, and performed for
+/// an axis that moved while held. An action's callback sees its own new state, while actions
+/// later in the order still hold the previous frame's values. A null handle or a null snapshot
+/// reports invalid argument and changes nothing.
 fn vtEvaluate(
     self_in: ?*c.ke_input_actions,
     snapshot_in: ?*const c.ke_input_snapshot,
@@ -684,34 +686,45 @@ fn getAction(self_in: ?*c.ke_input_actions, id: i32) ?*const Action {
     return &s.actions.?[@intCast(id)];
 }
 
+/// Slot `is_action_down`. True while the action is active as of the last evaluation; false for an
+/// unknown id.
 fn vtIsActionDown(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) bool {
     const a = getAction(self_in, id) orelse return false;
     return a.curr_active;
 }
 
+/// Slot `was_action_pressed`. True when the last evaluation made the action active; false for an
+/// unknown id.
 fn vtWasActionPressed(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) bool {
     const a = getAction(self_in, id) orelse return false;
     if (a.curr_active and !a.prev_active) return true;
     return false;
 }
 
+/// Slot `was_action_released`. True when the last evaluation made the action inactive; false for
+/// an unknown id.
 fn vtWasActionReleased(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) bool {
     const a = getAction(self_in, id) orelse return false;
     if (!a.curr_active and a.prev_active) return true;
     return false;
 }
 
+/// Slot `get_axis1d`. Returns the stored x value; zero for an unknown id.
 fn vtGetAxis1d(self_in: ?*c.ke_input_actions, id: i32) callconv(.c) f32 {
     const a = getAction(self_in, id) orelse return 0.0;
     return a.curr_x;
 }
 
+/// Slot `get_axis2d`. Writes the stored x and y values to the non-null outputs; zero for an
+/// unknown id.
 fn vtGetAxis2d(self_in: ?*c.ke_input_actions, id: i32, out_x: [*c]f32, out_y: [*c]f32) callconv(.c) void {
     const a = getAction(self_in, id);
     if (out_x != null) out_x.* = if (a) |act| act.curr_x else 0.0;
     if (out_y != null) out_y.* = if (a) |act| act.curr_y else 0.0;
 }
 
+/// Slot `get_axis3d`. Writes the stored x, y and z values to the non-null outputs; zero for an
+/// unknown id.
 fn vtGetAxis3d(
     self_in: ?*c.ke_input_actions,
     id: i32,
@@ -725,8 +738,8 @@ fn vtGetAxis3d(
     if (out_z != null) out_z.* = if (a) |act| act.curr_z else 0.0;
 }
 
-/// Frees the bindings, the action array and the `State`. The `api` that the handle's ref pointed at
-/// is invalid afterwards.
+/// The destroy of the handle. Frees the bindings, the action array and the `State`. The `api` that
+/// the handle's ref pointed at is invalid afterwards.
 fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -736,8 +749,8 @@ fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// On allocation failure it reports out of memory through the error output and returns a zeroed
-/// handle.
+/// Factory. Returns a handle to an empty map. On allocation failure it reports out of memory
+/// through the error output and returns a zeroed handle.
 export fn ke_input_actions_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_actions_handle {
     const null_handle = std.mem.zeroes(c.ke_input_actions_handle);
 

@@ -4,12 +4,11 @@ using KernelEngine.Common.Native;
 namespace KernelEngine;
 
 /// <summary>
-/// Crosses a native failure into the exception that stands for its category, and a managed exception
-/// back into a native error record. Which exception a native error name becomes is declared in the
-/// manifest and generated into <c>NativeErrors.Kinds.g.cs</c>; a failure whose type chain names none of
-/// them becomes the general one. The native cause chain becomes <see cref="Exception.InnerException"/>, the source location is part of the
-/// message, and the full native type name is kept in <see cref="Exception.Data"/> under
-/// <see cref="TypeKey"/>.
+/// Crosses a native failure into the exception that stands for its category, and a managed
+/// exception back into a native error record. A failure whose type chain names no known category
+/// becomes the general exception. The native cause chain becomes
+/// <see cref="Exception.InnerException"/>, the source location is part of the message, and the
+/// full native type name is kept in <see cref="Exception.Data"/> under <see cref="TypeKey"/>.
 /// </summary>
 public static unsafe partial class NativeErrors
 {

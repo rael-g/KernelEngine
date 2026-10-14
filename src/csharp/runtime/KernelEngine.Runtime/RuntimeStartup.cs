@@ -5,9 +5,7 @@ using KernelEngine.Scheduler;
 namespace KernelEngine.Runtime;
 
 /// <summary>
-/// Bootstrap helpers that drive the module lifecycle. Lives outside the
-/// <see cref="Runtime"/> class so the runtime stays unaware of DI — it only
-/// knows about its own <c>RegisterModule</c> API.
+/// Registers the <see cref="IRuntimeModule"/> instances of a service provider with a runtime.
 /// </summary>
 public static class RuntimeStartup
 {

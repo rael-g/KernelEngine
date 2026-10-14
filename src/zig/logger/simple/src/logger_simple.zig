@@ -1,15 +1,5 @@
-//! A logger that fans each event out to a set of sinks, and the console sink that writes to
-//! stderr. The logger is one `State` behind its `handle`: `ke_logger_create` zeroes it, wires the
-//! `log`, `flush` and `add_sink` slots, and returns a handle whose destroy function is
-//! `loggerDestroy`. `loggerAddSink` copies a sink into the next free place of `sinks`, up to a
-//! fixed capacity. `loggerLog`, `loggerFlush` and `loggerDestroy` walk the used places in the order
-//! the sinks were added, and `loggerLog` calls only the sinks whose minimum level the event
-//! reaches. Nothing is locked, so a sink runs on the thread that called the logger.
-//!
-//! The console sink, made by `ke_console_sink_create`, has no handle and the trace level as its
-//! minimum, so it admits every event. `consoleSinkLog` passes the event to `consoleSinkWrite`,
-//! which formats one line with `writeEvent` under the stderr lock and flushes it. Write failures
-//! are dropped, and the sink has nothing else to flush or release. `levelToString` gives the label.
+//! The logger that fans each event out to a set of sinks, and the console sink that writes to
+//! stderr.
 
 const std = @import("std");
 const testing = std.testing;
@@ -33,7 +23,8 @@ const MAX_SINKS = 8;
 
 /// Reached through the `handle` of the logger, allocated by `ke_logger_create` and freed by
 /// `loggerDestroy`. Only the first `sink_count` entries of `sinks` are in use; the rest are never
-/// read.
+/// read. The sinks are visited in the order they were added, nothing is locked, and a sink runs on
+/// the thread that called the logger.
 const State = struct {
     sinks: [MAX_SINKS]c.ke_logger_sink,
     sink_count: c_int,
@@ -78,8 +69,9 @@ fn loggerFlush(self: ?*c.ke_logger) callconv(.c) void {
 }
 
 /// The `add_sink` slot. On success the logger keeps its own copy of the sink, and `loggerDestroy`
-/// will call that copy's destroy function. On failure the set is unchanged, `out_error` receives
-/// the error and the result is false.
+/// will call that copy's destroy function. It reports an invalid-argument error for a null logger
+/// and a general error when `sinks` is full; either way the set is unchanged and the result is
+/// false.
 fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const logger = self orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -95,8 +87,6 @@ fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c
     return true;
 }
 
-/// Writes the event as one line of level label, tag and message. A null tag or message is written
-/// as empty text. Fails only with the writer's own error.
 fn writeEvent(writer: *std.Io.Writer, event: *const c.ke_log_event) std.Io.Writer.Error!void {
     const label = std.mem.span(levelToString(event.level));
     const tag: []const u8 = if (event.tag != null) std.mem.span(event.tag) else "";
@@ -104,8 +94,6 @@ fn writeEvent(writer: *std.Io.Writer, event: *const c.ke_log_event) std.Io.Write
     try writer.print("[{s}] {s}: {s}\n", .{ label, tag, message });
 }
 
-/// Writes one entry to stderr under the stderr lock and flushes it before returning. A failed write
-/// or flush is dropped, since the sink has nowhere to report it.
 fn consoleSinkWrite(event: *const c.ke_log_event) void {
     var buffer: [256]u8 = undefined;
     const locked = std.debug.lockStderr(&buffer);
@@ -115,7 +103,8 @@ fn consoleSinkWrite(event: *const c.ke_log_event) void {
     writer.flush() catch return;
 }
 
-/// The `log` function of the console sink. A null event does nothing.
+/// The `log` slot of the console sink. A null event does nothing; a failed write to stderr is
+/// dropped, since the sink has nowhere to report it.
 fn consoleSinkLog(self: ?*c.ke_logger_sink, event: [*c]const c.ke_log_event) callconv(.c) void {
     _ = self;
     if (event == null) return;
@@ -144,7 +133,6 @@ export fn ke_console_sink_create() callconv(.c) c.ke_logger_sink {
     };
 }
 
-/// The label of a level, or "UNKNOWN" for a value that is not one of the defined levels.
 fn levelToString(level: i32) [*c]const u8 {
     return switch (level) {
         c.KE_LOG_LEVEL_TRACE => "TRACE",

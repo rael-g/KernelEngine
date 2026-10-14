@@ -1,15 +1,5 @@
 //! The window render target of the webgpu plugin: a `ke_gpu_render_target` whose frames are the
-//! images of a window's surface. The factory refuses a missing window and a device this plugin did
-//! not create, makes the surface from the window's native handle with `createSurface`, picks a
-//! format with `chooseFormat`, and allocates a `WindowTarget`. Each failing step releases what the
-//! earlier ones made.
-//!
-//! A frame is held between `acquire` and `present`, as the texture and view of the target. The
-//! surface is configured lazily to the window's size: at creation when the window is not empty, and
-//! afterwards by `acquire` whenever the size changes or the surface reports a stale texture. An
-//! empty window or a stale texture yields the invalid handle without an error, so the caller skips
-//! the frame; anything else that goes wrong is an error and leaves no frame held. `destroy`
-//! releases the frame, the surface and, on Linux, the display the surface was made on.
+//! images of a window's surface.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -18,12 +8,12 @@ const wgpu = dev_impl.wgpu;
 const ke = dev_impl.ke;
 const gpa = dev_impl.gpa;
 
-/// The state of one window render target. `ke_gpu_render_target_webgpu_window_create` allocates
-/// it from `gpa` and hands out `vtable` as the target, with `handle` pointing back at it; the
-/// `destroy` slot frees it. `texture` and `view` are null except between `acquire` and `present`.
-/// `width` and `height` are zero until the surface is first configured, and afterwards hold the
-/// size it was last configured to. `display` is non-null only on Linux, where it is the display
-/// the surface was made on.
+/// The state of one window render target. `ke_gpu_render_target_webgpu_window_create` allocates it
+/// from `gpa` and hands out `vtable` as the target, with `handle` pointing back at it; the
+/// `destroy` slot frees the frame, the surface and, on Linux, the display. `texture` and `view` are
+/// null except between `acquire` and `present`. `width` and `height` are zero until the surface is
+/// first configured, and afterwards hold the size it was last configured to. `display` is non-null
+/// only on Linux, where it is the display the surface was made on.
 const WindowTarget = struct {
     vtable: ke.ke_gpu_render_target,
     device: *dev_impl.DeviceState,
@@ -143,10 +133,12 @@ fn releaseFrame(t: *WindowTarget) void {
     t.texture = null;
 }
 
-/// Begins a frame and returns its view, which stays valid until `present`. A timed-out, outdated or
-/// lost texture is not an error: the surface is configured again and the invalid handle is returned
-/// with no error set. A failure after the surface produced a texture releases that texture and
-/// leaves no frame held.
+/// Begins a frame and returns its view, which stays valid until `present`. The surface is
+/// configured lazily to the window's size, by this call whenever the size changes. An empty window
+/// yields the invalid handle without an error, so the caller skips the frame. A timed-out, outdated
+/// or lost texture is not an error: the surface is configured again and the invalid handle is
+/// returned with no error set. A failure after the surface produced a texture releases that texture
+/// and leaves no frame held.
 fn acquire(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) callconv(.c) ke.ke_gpu_texture_view {
     const t = of(self);
     if (t.view != null) {
@@ -208,6 +200,7 @@ fn size(self: [*c]ke.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callc
     if (out_h != null) out_h.* = t.height;
 }
 
+/// Reports the format `chooseFormat` picked at creation.
 fn format(self: [*c]ke.ke_gpu_render_target) callconv(.c) ke.ke_gpu_texture_format {
     return of(self).format;
 }

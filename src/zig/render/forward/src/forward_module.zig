@@ -1,23 +1,6 @@
-//! The transparent forward pass draws the meshes whose material is blended, on top of the lit
-//! opaque result. The plugin exports one function, `ke_render_forward_create`, which builds a
-//! `ForwardModule`, registers `system` with the runtime and returns a handle owning the module.
-//! The module keeps no scene data between frames, only the GPU objects it created, the cubemap
-//! its frame group was built for and the list of collected draws; the scene is read through the
-//! system context each frame, by the component ids the factory was given.
-//!
-//! Creation does everything that can fail before the first frame. `setup` builds the layouts and
-//! the pipeline template, resolves the default material shader and requests one pipeline from it,
-//! creates the uniform buffers and the "hdr_opaque" target, and fills the pass io, the access list
-//! and the queries. A failed setup or a refused registration releases what was made through
-//! `destroyModule` and yields the empty handle.
-//!
-//! Each frame `system` does nothing when the scene has no camera. Otherwise it copies "hdr" into
-//! "hdr_opaque", so the blended materials can sample what lies behind them, fills `PerFrame` from
-//! the camera and the lights, and keeps the frame group matching the sky through
-//! `rebuildFrameBindGroup`. `collectDraws` selects the blended meshes the camera's cull mask
-//! admits and orders them farthest first, so blending composites back to front. A draw whose
-//! geometry or shader is missing is skipped. A pass that was begun is always ended, and a frame
-//! never reports failure to the runtime.
+//! The transparent forward pass: the render-phase system that draws the blended meshes on top of
+//! the lit opaque result. It also owns the creation and teardown of that pass, behind the one
+//! factory it exports.
 
 const std = @import("std");
 
@@ -218,9 +201,12 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame bind group");
 }
 
-/// The render-phase system that `ke_render_forward_create` registers. The runtime calls it on the
-/// worker that `pinned_thread` names, as that factory set it. It returns true on every path. Once
-/// `begin_pass` has returned a pass context, every path reaches `end_pass`.
+/// The render-phase system that `ke_render_forward_create` registers, with no pinned worker. It
+/// returns true on every path. Once
+/// `begin_pass` has returned a pass context, every path reaches `end_pass`. A scene without a
+/// camera does nothing. Otherwise it copies "hdr" into "hdr_opaque", so the blended materials can
+/// sample what lies behind them, fills `PerFrame` from the camera and the lights, and keeps
+/// `frame_bind_group` matching the sky. A draw whose geometry or shader is missing is skipped.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const fwd = moduleOf(user);
     const core = fwd.core;
@@ -330,9 +316,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
-/// Called once by `ke_render_forward_create` on a module that still has its default fields. On
-/// failure it returns false with `out_error` set, and leaves the handles it had already made in
-/// the module, where `destroyModule` finds and releases them.
+/// Called once by `ke_render_forward_create` on a module that still has its default fields. It
+/// builds the layouts and the pipeline template, resolves the default material shader and requests
+/// one pipeline from it, creates the uniform buffers and the "hdr_opaque" target, and fills the
+/// pass io, the access list and the queries. On failure it returns false with `out_error` set,
+/// and leaves the handles it had already made in the module, where `destroyModule` finds and
+/// releases them.
 fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          render_camera: *c.ke_render_camera, logger: ?*c.ke_logger, ibl_enabled: bool,
          mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,

@@ -3,12 +3,9 @@
 namespace KernelEngine.Physics;
 
 /// <summary>
-/// The parts of <see cref="Physics2D"/> that express the native surface in C# terms
-/// rather than mirroring it: the <see cref="BodyHandle2D"/> value type over a bare
-/// uint id, the record-struct <see cref="BodyState2D"/> projection, and the
-/// "invalid handle is a silent no-op" policy the managed contract promises but the
-/// ABI does not. Everything that is a direct image of the C ABI is generated in
-/// <c>Generated/Physics2D.g.cs</c>.
+/// The 2D physics world over <c>ke_physics_2d</c>, exposed through <see cref="BodyHandle2D"/> and
+/// <see cref="BodyState2D"/>. A call given <see cref="BodyHandle2D.None"/> does nothing, and
+/// reading the state of one returns the default state.
 /// </summary>
 public unsafe partial class Physics2D : IPhysics2D
 {

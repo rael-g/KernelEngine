@@ -1,31 +1,5 @@
-//! A flecs-backed implementation of the `ke_ecs` contract. `ke_ecs_flecs_create` builds one world
-//! inside a `State` and returns the `api` of that state, whose handle points back at it; `destroy`
-//! releases the state with everything it owns.
-//!
-//! The world has two sources of entity ids that must never meet. The state splits the id space at
-//! `ke_ecs_flecs_params.world_id_base`: flecs's own allocator is moved to start at the split and
-//! serves `entityCreate`, while the ids below it, from `reserve_low` to `reserve_end`, form a pool
-//! that `entityReserve` hands out with an atomic counter, the only call safe from several threads.
-//! A reserved id is only a number until `materializeReserved` makes it alive, which an explicit
-//! `entityMaterialize` or the first `componentAdd` does once; the `materialized` bitmap makes sure
-//! a destroyed reserved entity is not revived.
-//!
-//! Components are flecs entities identified by name. `componentRegister` accepts a name again only
-//! with the same size and, when both sides carry a field table, the same table; the first table
-//! seen is kept in `layouts` and is what seeds defaults when `componentAdd` attaches the component
-//! to an entity that did not hold it. One cached query per component lives in `queries`, and
-//! `queryRegister` and `queryResolve` expose multi-component queries as segments of columns over
-//! matching tables.
-//!
-//! flecs reports internal failures through OS hooks installed by `installFlecsOsApi`: the log hook
-//! keeps a fatal message and the abort hook turns it into a fatal error, so a flecs assertion ends
-//! the process with its own text. Every other entry point reports failure by its sentinel value,
-//! except registration and lookup, which also fill out_error. No lock is taken and no thread is
-//! started.
-//!
-//! `c.zig` carries the C headers as one namespace, `abort_probe.zig` is an executable that trips a
-//! real flecs assertion, and `abort_integration_test.zig` runs that probe and checks the fatal
-//! error it leaves on standard error.
+//! The `ke_ecs` contract implemented on a flecs world: entities, components registered by name,
+//! and multi-component queries resolved into segments of columns.
 
 const std = @import("std");
 
@@ -111,10 +85,18 @@ const RegisteredQuery = struct {
 
 const default_world_id_base: u32 = 1 << 20;
 
-/// The state behind `api.handle`, made by `ke_ecs_flecs_create` and freed by `destroy`. The pool
-/// covers the ids from `reserve_low` up to `reserve_end`, and `reserve_next` counts the slots
-/// handed out from it. `materialized` and the three arrays stay null until something first needs
-/// them.
+/// The state behind `api.handle`, made by `ke_ecs_flecs_create` and freed by `destroy`. The world
+/// has two sources of entity ids that never meet: flecs's own allocator, moved to start at
+/// `ke_ecs_flecs_params.world_id_base` and serving `entityCreate`, and the pool of ids from
+/// `reserve_low` up to `reserve_end`, below that split, handed out by `entityReserve` with the
+/// atomic counter `reserve_next`. A reserved id is only a number until `materializeReserved`
+/// makes it alive, once; the `materialized` bitmap, one bit per pool slot, is what keeps a
+/// destroyed reserved entity from being revived. `layouts` holds the first field table seen for
+/// each component name, which later registrations are compared with and which seeds defaults on
+/// attach. `queries` holds one cached query per component and `rqueries` the queries made by
+/// `queryRegister`, whose id is the index plus one. `materialized` and the three arrays stay null
+/// until something first needs them. Nothing here is locked and no thread is started; only
+/// `reserve_next` is touched by several threads.
 const State = struct {
     api: c.ke_ecs,
     world: ?*c.ecs_world_t,
@@ -241,8 +223,9 @@ fn layoutMessage(comptime fmt: []const u8, args: anytype) [*c]const u8 {
     return @ptrCast(&layout_msg_buf);
 }
 
-/// Ids come from flecs's own allocator, which stays at or above `world_id_base`, so they never
-/// coincide with a reserved id.
+/// Slot `entity_create`. Ids come from flecs's own allocator, which stays at or above
+/// `world_id_base`, so they never coincide with a reserved id. A null handle returns
+/// the null entity.
 fn entityCreate(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     const self = self_in orelse return 0;
     if (self.handle == null) return 0;
@@ -250,9 +233,9 @@ fn entityCreate(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     return @intCast(c.ecs_new(s.world));
 }
 
-/// Hands out the next id of the reserve pool. The id is not alive in the world until
-/// `materializeReserved` runs for it. Returns the null entity when the pool is spent, and takes no
-/// lock, so threads may call it concurrently.
+/// Slot `entity_reserve`. Hands out the next id of the reserve pool. The id is not alive in the
+/// world until `materializeReserved` runs for it. Returns the null entity when the pool is spent,
+/// and takes no lock, so threads may call it concurrently.
 fn entityReserve(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     const self = self_in orelse return 0;
     if (self.handle == null) return 0;
@@ -262,8 +245,8 @@ fn entityReserve(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
     return @as(c.ke_entity, s.reserve_low) + offset;
 }
 
-/// Brings a reserved id alive in the world through `materializeReserved`. An id outside the pool is
-/// left alone.
+/// Slot `entity_materialize`. Brings a reserved id alive in the world through
+/// `materializeReserved`. An id outside the pool is left alone.
 fn entityMaterialize(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or entity == 0) return;
@@ -291,8 +274,8 @@ fn materializeReserved(s: *State, entity: c.ke_entity) void {
     c.ecs_make_alive(s.world, @intCast(entity));
 }
 
-/// Deletes a living entity. A reserved id that is destroyed stays dead, because its slot in
-/// `materialized` is already set.
+/// Slot `entity_destroy`. Deletes a living entity; a dead id is left alone. A reserved id that is
+/// destroyed stays dead, because its slot in `materialized` is already set.
 fn entityDestroy(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or entity == 0) return;
@@ -301,11 +284,11 @@ fn entityDestroy(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
     c.ecs_delete(s.world, @intCast(entity));
 }
 
-/// The field table is checked against `size` before the name is looked up, so a table that does not
-/// fit registers nothing. For a name that already exists, the size is compared before the layout,
-/// and a failure changes nothing. For a new name, a failed layout allocation leaves the component
-/// registered in the world, and a retry by name then finds it and remembers the table. A failure is
-/// reported through out_error and returns zero.
+/// Slot `component_register`. The field table is checked against `size` before the name is looked
+/// up, so a table that does not fit registers nothing. For a name that already exists, the size is
+/// compared before the layout, and a failure changes nothing. For a new name, a failed layout
+/// allocation leaves the component registered in the world, and a retry by name then finds it and
+/// remembers the table. A failure is reported through out_error and returns zero.
 fn componentRegister(
     self_in: ?*c.ke_ecs,
     name: [*c]const u8,
@@ -393,10 +376,10 @@ fn componentRegister(
     return cid;
 }
 
-/// Reports the id and size of the component called by name through out_meta, with the remembered
-/// field table when there is one and a null table otherwise. A null out_meta only checks that the
-/// name exists. An unknown name, or one with no type information, fails with "not found"; a null
-/// argument fails with "invalid argument".
+/// Slot `component_lookup`. Reports the id and size of the component called by name through
+/// out_meta, with the remembered field table when there is one and a null table otherwise. A null
+/// out_meta only checks that the name exists. An unknown name, or one with no type information,
+/// fails with "not found"; a null argument fails with "invalid argument".
 fn componentLookup(
     self_in: ?*c.ke_ecs,
     name: [*c]const u8,
@@ -440,10 +423,10 @@ fn componentLookup(
     return true;
 }
 
-/// The bytes are zeroed and seeded with the remembered defaults only on the attach that adds the
-/// component; attaching a component the entity already holds returns its bytes unchanged. A
-/// zero-size component is added but yields null, as does an entity still not alive after
-/// materialization.
+/// Slot `component_add`. The bytes are zeroed and seeded with the remembered defaults only on the
+/// attach that adds the component; attaching a component the entity already holds returns its bytes
+/// unchanged. A zero-size component is added but yields null, as does an entity still not alive
+/// after materialization.
 fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_component_id) callconv(.c) ?*anyopaque {
     const self = self_in orelse return null;
     if (self.handle == null or entity == 0 or component == 0) return null;
@@ -467,7 +450,8 @@ fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_compon
     return slot;
 }
 
-/// Removes a component from a living entity. An entity that is not alive is left alone.
+/// Slot `component_remove`. Removes a component from a living entity. An entity that is not alive
+/// is left alone.
 fn componentRemove(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_component_id) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or entity == 0 or component == 0) return;
@@ -476,7 +460,8 @@ fn componentRemove(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_com
     c.ecs_remove_id(s.world, @intCast(entity), @intCast(component));
 }
 
-/// The bytes of a component for a living entity that holds it, otherwise null.
+/// Slot `component_get`. The bytes of a component for a living entity that holds it, otherwise
+/// null.
 fn componentGet(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_component_id) callconv(.c) ?*anyopaque {
     const self = self_in orelse return null;
     if (self.handle == null or entity == 0 or component == 0) return null;
@@ -486,7 +471,8 @@ fn componentGet(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_compon
     return @constCast(c.ecs_get_id(s.world, @intCast(entity), @intCast(component)));
 }
 
-/// The byte size flecs holds for a component id, zero for an unknown id or a tag.
+/// Slot `component_size`. The byte size flecs holds for a component id, zero for an unknown id or
+/// a tag.
 fn componentSize(self_in: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usize {
     const self = self_in orelse return 0;
     if (self.handle == null or cid == 0) return 0;
@@ -496,11 +482,11 @@ fn componentSize(self_in: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usize
     return @intCast(ti.*.size);
 }
 
-/// Builds a flecs query with one term per component id and records the byte size of each term for
-/// `queryResolve`. The returned id counts from one, so it is never the invalid id. It returns the
-/// invalid id for a null argument, a zero count, more ids than a flecs query has terms, a query
-/// flecs refuses, or an allocation that fails; a flecs query created before a later step fails is
-/// finalized first.
+/// Slot `query_register`. Builds a flecs query with one term per component id and records the byte
+/// size of each term for `queryResolve`. The returned id counts from one, so it is never the
+/// invalid id. It returns the invalid id for a null argument, a zero count, more ids than a flecs
+/// query has terms, a query flecs refuses, or an allocation that fails; a flecs query created
+/// before a later step fails is finalized first.
 fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_count: usize) callconv(.c) c.ke_query_id {
     const self = self_in orelse return c.KE_QUERY_INVALID;
     var desc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
@@ -543,12 +529,12 @@ fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_cou
     return id;
 }
 
-/// Runs the query from its start and writes one segment per matching table: its entities, its
-/// count and one column per term, with the columns of segment n starting at n times the term count
-/// in the caller's array. Column pointers refer into the world's storage and stay valid until the
-/// next structural change, and a zero-size term's column is null. Segments beyond the caller's
-/// capacity are counted but not written, so the count written to out_count is the total. Any
-/// invalid argument or unknown query leaves that count at zero.
+/// Slot `query_resolve`. Runs the query from its start and writes one segment per matching table:
+/// its entities, its count and one column per term, with the columns of segment n starting at n
+/// times the term count in the caller's array. Column pointers refer into the world's storage and
+/// stay valid until the next structural change, and a zero-size term's column is null. Segments
+/// beyond the caller's capacity are counted but not written, so the count written to out_count is
+/// the total. Any invalid argument or unknown query leaves that count at zero.
 fn queryResolve(
     self_in: ?*c.ke_ecs,
     query: c.ke_query_id,
@@ -586,9 +572,9 @@ fn queryResolve(
     if (out_count != null) out_count.* = seg;
 }
 
-/// Finalizes every cached and registered query and frees their arrays, the layout registry and
-/// the bitmap, then finalizes the world and frees the state last. After it returns, the handle and
-/// every pointer reached through it are invalid.
+/// The handle's `destroy`. Finalizes every cached and registered query and frees their arrays, the
+/// layout registry and the bitmap, then finalizes the world and frees the state last. After it
+/// returns, the handle and every pointer reached through it are invalid.
 fn destroy(self_in: ?*c.ke_ecs) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;

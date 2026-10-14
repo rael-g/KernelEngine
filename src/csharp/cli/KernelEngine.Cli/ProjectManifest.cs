@@ -4,9 +4,9 @@ using Tomlyn.Model;
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Reads and writes the <c>[ke]</c> section of a Project file — the source of truth for which
-/// modules are active in the project. Preserves the rest of the Project file verbatim by editing
-/// the parsed <see cref="TomlTable"/> and re-serializing only that section.
+/// A Project file as a parsed <see cref="TomlTable"/>. The <c>modules</c> array of its <c>[ke]</c>
+/// table lists the active modules, and dotted paths address any scalar. Changes stay in memory
+/// until <see cref="Save"/>, which re-serializes the whole table.
 /// </summary>
 public sealed class ProjectManifest
 {

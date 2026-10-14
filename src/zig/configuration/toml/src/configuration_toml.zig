@@ -1,11 +1,4 @@
-//! Loads one TOML file into a configuration through the setter slots of its contract, keeping no
-//! state between calls. `ke_configuration_toml_load` parses the whole file before it writes
-//! anything, so a parse error leaves the configuration untouched, and a file that cannot be opened
-//! is no error. `walkTable` then flattens the tree: each table becomes a section named by its path
-//! joined with dots, arrays are skipped, and `setScalar` writes every other key as an integer, a
-//! double, a boolean or a string, tried in that order. The first failed write stops the walk, and
-//! the writes before it stay.
-//! calling thread, and no lock is taken.
+//! Loads a TOML file into a configuration through the setter slots of its contract.
 
 const std = @import("std");
 
@@ -26,8 +19,7 @@ fn setErr(out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]c
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
 
-/// Called by `walkTable` for each key that is neither a table nor an array. A value that matches
-/// none of the four readings is skipped without an error.
+/// A value that matches none of the four readings is skipped without an error.
 fn setScalar(cfg: [*c]ke.ke_configuration, section: [:0]const u8, key: [*c]const u8, tab: ?*toml.toml_table_t, out_error: ?*?*ke.ke_error) bool {
     const di = toml.toml_int_in(tab, key);
     if (di.ok != 0) return cfg.*.set_int.?(cfg, section.ptr, key, di.u.i, out_error);
@@ -79,7 +71,11 @@ fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:
 }
 
 /// The only export of this plugin. A file that cannot be opened returns true with nothing written.
-/// A parse error returns false before any write, so the configuration is left unchanged.
+/// A parse error returns false before any write, so the configuration is left unchanged. Each
+/// table becomes a section named by its path joined with dots, arrays are skipped, and every other
+/// key is written through the setter slots as an integer, a double, a boolean or a string, tried in
+/// that order. The first failed write stops the walk and the writes before it stay. A null
+/// configuration or path is an invalid-argument error. Nothing is kept between calls.
 export fn ke_configuration_toml_load(cfg: [*c]ke.ke_configuration, path: [*c]const u8, out_error: ?*?*ke.ke_error) bool {
     if (cfg == null or path == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());

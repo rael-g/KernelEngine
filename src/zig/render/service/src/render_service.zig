@@ -1,29 +1,5 @@
-//! This is the root file of the render service plugin. It holds the state every other file of the
-//! plugin works on, `CoreState`, and the one factory, `ke_render_service_create`, that builds it
-//! and fills the `ke_render_service` vtable with functions from those files. The vtable carries a
-//! pointer to the state as its handle, `coreOf` gets the state back from it, and `passOf` does the
-//! same for the `PassState` behind a pass context. The file starts no thread.
-//!
-//! The state is one device-side picture of the service: the named entries in `resources`, one
-//! command encoder and one compute record per command slot, the upload records with their arena,
-//! the stores of meshes, textures, materials and shaders with the resource caches that own them,
-//! the sampler and the material bind group layout, the default resources, and the pipeline cache.
-//!
-//! The factory builds in an order its steps depend on: the target's size and the device's queue
-//! and NDC convention first, then the resource caches, each given its destroy function and the
-//! state as context, then the "backbuffer" entry of `resources`, then the vtable, then the sampler
-//! and the material layout. The default resources come last because they are uploaded through the
-//! functions of the vtable just built. `destroyCore` undoes this in reverse and frees the vtable
-//! last.
-//!
-//! The other files each carry one part of the vtable. resource_table.zig declares and imports the
-//! named resources and answers lookups on them. pass_recording.zig opens and closes passes and
-//! records their render and compute work. frame_lifecycle.zig begins and ends a frame and queues
-//! buffer uploads. asset_upload.zig creates meshes, textures, cubemaps and materials and runs the
-//! caches' destroy callbacks. shader_loader.zig loads shader modules from the shader directory.
-//! pipeline_cache.zig answers pipeline requests with a fallback until the real pipeline is ready.
-//! slot_map.zig is the generational store behind the handles. cimport.zig is a separate import of
-//! C headers that none of the files here uses.
+//! The root of the render service plugin: the state every file of the plugin works on and the one
+//! factory that builds it and fills the `ke_render_service` vtable.
 
 const std = @import("std");
 
@@ -294,7 +270,12 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     gpa.destroy(@as(*c.ke_render_service, @ptrCast(self)));
 }
 
-/// The factory of the render service. A null device or ecs returns a null ref without setting the
+/// The factory of the render service. It builds in an order its steps depend on: the target's size
+/// and the device's queue and NDC convention, then the resource caches, each given its destroy
+/// function and the state as context, then the "backbuffer" entry of `resources`, then the vtable,
+/// then the sampler and the material layout. The default resources come last because they are
+/// uploaded through the functions of the vtable just built. `destroyCore` undoes this in reverse
+/// and frees the vtable last. A null device or ecs returns a null ref without setting the
 /// error. A null target or shader directory sets the invalid-argument error. Any other failure
 /// returns a null ref with no error set. On success the ref is the new vtable and `destroy` is
 /// `destroyCore`.

@@ -1,18 +1,6 @@
-//! The gbuffer pass is a render-phase system that rasterises the opaque meshes a camera sees into
-//! the albedo, normal and emissive targets and the depth target, which it declares on the render
-//! service. The plugin exports one function, `ke_render_gbuffer_create`, which builds a
-//! `GBufferModule`, registers `system` with the runtime and hands back a handle owning the module.
-//!
-//! Everything that can fail is done at creation. `setup` creates the layouts, the object uniform
-//! buffer and the targets, and it asks for the pipeline at once, so a missing shader or a refused
-//! pipeline fails creation instead of the first frame. A failure there, or a runtime that refuses
-//! the registration, releases what was made and yields the empty handle.
-//!
-//! Each frame `system` pairs the camera with the meshes `collectDraws` selects: those on a layer
-//! the camera's cull mask names, minus the blended ones, which are not drawn into the gbuffer. A
-//! draw writes its matrices into the next slot of one shared uniform buffer and binds that slot by
-//! dynamic offset; a draw whose geometry or shader is missing is skipped without consuming a slot.
-//! A pass that was begun is always ended, so the targets are recorded even when nothing is drawn.
+//! The gbuffer pass: the render-phase system that rasterises the opaque meshes a camera sees into
+//! the albedo, normal, emissive and depth targets it declares on the render service. It also owns
+//! the creation and teardown of that pass, behind the one factory it exports.
 
 const std = @import("std");
 
@@ -132,7 +120,10 @@ inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
 
 /// Runs as the body of the system `ke_render_gbuffer_create` registers, receiving the module as its
 /// user argument. Once it has begun a pass it always ends it, so a pass is recorded even when
-/// nothing is drawn.
+/// nothing is drawn. It draws the meshes `collectDraws` selects: those on a layer the camera's cull
+/// mask names, minus the blended ones. A draw writes its matrices into the next slot of the one
+/// shared uniform buffer and binds that slot by dynamic offset; a draw whose geometry or shader is
+/// missing is skipped without consuming a slot.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const gb = moduleOf(user);
     const core = gb.core;

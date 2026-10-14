@@ -1,5 +1,4 @@
-//! A probe DLL that re-exports the mingw entry point from the kerror module, and exports two
-//! accessors, whose results come from the C++ probe code.
+//! A probe DLL that re-exports the mingw entry point, for the entry point test.
 
 const std = @import("std");
 

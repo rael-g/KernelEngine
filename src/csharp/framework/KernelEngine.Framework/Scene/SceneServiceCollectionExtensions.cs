@@ -3,11 +3,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
 
+/// <summary>Service registration of node types.</summary>
 public static class SceneServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers <typeparamref name="T"/> with the scene <see cref="NodeTypeRegistry"/>
-    /// under <paramref name="name"/> (defaults to the type's <see cref="Type.FullName"/>).
+    /// Registers <typeparamref name="T"/> with the scene <see cref="NodeTypeRegistry"/> under
+    /// <paramref name="name"/> (defaults to the type's <see cref="Type.FullName"/>). The first
+    /// call also registers the registry and the <see cref="SceneLoader"/>; the registry is built
+    /// from all registrations the first time it is requested, not when this method runs.
     /// </summary>
     public static IServiceCollection AddNodeType<T>(this IServiceCollection services, string? name = null)
         where T : Node

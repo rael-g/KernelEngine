@@ -1,20 +1,5 @@
-//! A signal bus decouples the entity that emits a signal from the entities that react to it. Two
-//! lifetimes are kept apart: the wiring, which lasts as long as the bus, and the emissions, which
-//! last one frame. Signal names are registered into `signals`, and an id is the index of a name,
-//! so it never changes. `connections` wires a source entity and a signal to a target entity and a
-//! handler number. `events` records each emission of the frame, with its payload bytes copied into
-//! `payloads`, and `clearFrame` ends the frame by dropping both.
-//!
-//! An emission is not delivered when it is made. `emit` only checks the signal, the payload size
-//! and the room left, then records the event. `deliveries` performs the join lazily: the first
-//! call after an emit pairs each event, in emission order, with every matching connection, in
-//! table order, and later calls return that result until the next emit.
-//!
-//! Every array gets its capacity once, from the params of `ke_signal_bus_create` with a default
-//! for each field left at zero, and nothing grows. A call that needs more room than an array has
-//! fails, except the join, which stops filling its buffer and reports what fit. A signal's payload
-//! size is declared by the first registration that gives one, and `emit` refuses a signal whose
-//! size was never declared. Everything runs on the calling thread and takes no lock.
+//! The signal bus: signal names, the wires between emitters and reactors, and the emissions of
+//! the frame, behind the signal bus vtable.
 
 const std = @import("std");
 
@@ -58,8 +43,18 @@ const Event = struct {
 
 /// The storage behind a bus. `ke_signal_bus_create` allocates it and `api.handle` points back to
 /// it, so every slot reaches it from the vtable pointer. The state and its arrays are freed
-/// together by the destroy function of the handle. `joined` is true while `deliveries` holds the
-/// current join: `emit` clears it, and `deliveries` and `clearFrame` set it.
+/// together by the destroy function of the handle.
+///
+/// Two lifetimes are kept apart. The wiring lasts as long as the bus: `signals` holds the names,
+/// and an id is the index of a name so it never changes; `connections` wires a source entity and
+/// a signal to a target entity and a handler number. The emissions last one frame: `events`
+/// records each one with its payload bytes copied into `payloads`, and `clearFrame` drops both.
+/// An emission is not delivered when made: `deliveries` joins events with connections on the
+/// first call after an emit, in emission order and then table order, into `deliveries`, and
+/// `joined` is true while that array holds the current join. Every array gets its capacity once
+/// at creation and nothing grows; a call needing more room than an array has fails, except the
+/// join, which stops filling its buffer and reports what fit. Nothing here locks, so a bus
+/// belongs to one thread at a time.
 const State = struct {
     api: c.ke_signal_bus,
 
@@ -88,9 +83,12 @@ fn orDefault(v: u32, d: u32) u32 {
     return if (v == 0) d else v;
 }
 
-/// Reached through the `signal_id` slot. An id is the index of the name in `signals`, and nothing
-/// removes names, so an id stays valid for the life of the bus. A failed call leaves the table as
-/// it was.
+/// Slot `signal_id`. Registers the name on first use and returns its id; nothing removes names,
+/// so an id stays valid for the life of the bus. The payload size is part of the identity: the
+/// first registration that gives one declares it, and a later one with a different size fails as
+/// already exists. A null bus, name or `out_id`, or an empty or too long name, fails as an
+/// invalid argument; a full table fails as out of memory. A failed call leaves the table as it
+/// was.
 fn signalId(
     self_in: ?*c.ke_signal_bus,
     name_in: [*c]const u8,
@@ -139,7 +137,8 @@ fn signalId(
     return true;
 }
 
-/// Like `signalId` but read-only: nothing is registered, and a miss returns false without an error.
+/// Slot `signal_lookup`. Like `signalId` but read-only: nothing is registered, and a miss returns
+/// false without an error.
 fn signalLookup(
     self_in: ?*c.ke_signal_bus,
     name_in: [*c]const u8,
@@ -157,9 +156,10 @@ fn signalLookup(
     return false;
 }
 
-/// Adds a wire. Wires are unique by source, signal id, target and handler. Connecting a wire that
-/// exists changes nothing, so `deliveries` yields one delivery per wire however often it was
-/// connected.
+/// Slot `connect`. Adds a wire. Wires are unique by source, signal id, target and handler.
+/// Connecting a wire that exists changes nothing, so `deliveries` yields one delivery per wire
+/// however often it was connected. A null bus fails as an invalid argument, an id never
+/// registered as not found, and a full table as out of memory; each returns false.
 fn connect(
     self_in: ?*c.ke_signal_bus,
     source: c.ke_entity,
@@ -202,8 +202,8 @@ fn removeConnectionAt(s: *State, i: u32) void {
     s.connection_count -= 1;
 }
 
-/// Removes the wire with exactly this source, signal, target and handler, and returns whether one
-/// existed. Events and a join already taken are left alone.
+/// Slot `disconnect`. Removes the wire with exactly this source, signal, target and handler, and
+/// returns whether one existed. Events and a join already taken are left alone.
 fn disconnect(
     self_in: ?*c.ke_signal_bus,
     source: c.ke_entity,
@@ -226,9 +226,9 @@ fn disconnect(
     return false;
 }
 
-/// Removes every wire the entity is the source or the target of. Only `connections` changes.
-/// Events and a join already taken are left alone, so the removal shows in `deliveries` from the
-/// next join on.
+/// Slot `forget_entity`. Removes every wire the entity is the source or the target of. Only
+/// `connections` changes. Events and a join already taken are left alone, so the removal shows in
+/// `deliveries` from the next join on.
 fn forgetEntity(self_in: ?*c.ke_signal_bus, entity: c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
@@ -243,10 +243,14 @@ fn forgetEntity(self_in: ?*c.ke_signal_bus, entity: c.ke_entity) callconv(.c) vo
     }
 }
 
-/// Records one emission for the current frame. No delivery is made here: `deliveries` does the
-/// join. The payload bytes are copied into `payloads` and the event stores where they start. A
-/// zero-size payload stores an offset but copies nothing, which is why the join gives it a null
-/// pointer. Every check runs before anything is written, and a success clears `joined`.
+/// Slot `emit`. Records one emission for the current frame. No delivery is made here: the payload
+/// bytes are copied into `payloads` and the event stores where they start. A zero-size payload
+/// stores an offset but copies nothing, which is why the join gives it a null pointer. Every
+/// check runs before anything is written, and a success clears `joined`. Failures, each
+/// returning false: a null bus, a payload missing for a non-zero size, or a size differing from
+/// the registered one is an invalid argument; an id never registered is not found; a signal
+/// whose payload size was never declared is not initialized; a full event buffer or payload
+/// storage is out of memory.
 fn emit(
     self_in: ?*c.ke_signal_bus,
     source: c.ke_entity,
@@ -302,9 +306,10 @@ fn emit(
     return true;
 }
 
-/// The join. It walks only on the first call after an emit; later calls return the result already
-/// there. Filling the `deliveries` buffer stops the walk without an error, so the count is what
-/// fit.
+/// Slot `deliveries`. The join: it walks only on the first call after an emit, pairing each
+/// event with every connection of its source and signal; later calls return the result already
+/// there, valid until the next emit or `clearFrame`. Filling the `deliveries` buffer stops the
+/// walk without an error, so the count is what fit. A null bus reports a count of zero.
 fn deliveries(self_in: ?*c.ke_signal_bus, out_count: [*c]u32) callconv(.c) [*c]const c.ke_signal_delivery {
     const self = self_in orelse {
         if (out_count != null) out_count.* = 0;
@@ -334,8 +339,8 @@ fn deliveries(self_in: ?*c.ke_signal_bus, out_count: [*c]u32) callconv(.c) [*c]c
     return s.deliveries.ptr;
 }
 
-/// Ends the frame: its events and payload bytes are dropped, and `joined` is set so the next
-/// `deliveries` call reports nothing. Connections are not touched.
+/// Slot `clear_frame`. Ends the frame: its events and payload bytes are dropped, and `joined` is
+/// set so the next `deliveries` call reports nothing. Connections are not touched.
 fn clearFrame(self_in: ?*c.ke_signal_bus) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
@@ -345,8 +350,8 @@ fn clearFrame(self_in: ?*c.ke_signal_bus) callconv(.c) void {
     s.joined = true;
 }
 
-/// Reached only as the `destroy` of the handle that `ke_signal_bus_create` returns, not through a
-/// slot.
+/// The destroy of the handle that `ke_signal_bus_create` returns, not a slot. Frees the arrays
+/// and the state.
 fn destroy(self_in: ?*c.ke_signal_bus) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
@@ -358,9 +363,9 @@ fn destroy(self_in: ?*c.ke_signal_bus) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Returns a handle whose `ref` is the `api` field inside the new state. A null params pointer, or
-/// a zero field, selects the default for it. If an allocation fails, the arrays allocated before it
-/// are freed, the error is set and a null handle is returned.
+/// Factory. Returns a handle whose `ref` is the `api` field inside the new state. A null params
+/// pointer, or a zero field, selects the default for it. If an allocation fails, the arrays
+/// allocated before it are freed, an out of memory error is set and a null handle is returned.
 pub export fn ke_signal_bus_create(
     params: [*c]const c.ke_signal_bus_params,
     out_error: [*c][*c]c.ke_error,

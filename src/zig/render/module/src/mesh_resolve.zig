@@ -1,13 +1,4 @@
-//! Fills in the mesh and the material of every mesh component in the view, each only while its
-//! handle is still empty. `system` visits the first column of each segment and runs `resolveMesh`
-//! and then `resolveMaterial` on every component. `resolveMesh` maps the name in the component's
-//! primitive field to one of the built-in shapes, built by `quad`, `plane`, `cube` and `uvSphere`
-//! in the shared `Vertex` layout, and uploads it under a key that names the shape, so components
-//! of one shape share one upload; an unknown name leaves the handle empty. `resolveMaterial`
-//! spells a key from every value that shades the surface and creates the material with no
-//! textures. Neither call is given an error output and `system` always returns true, so a failed
-//! upload or creation is not reported, leaves the handle empty and is attempted again on the next
-//! pass.
+//! Gives each mesh component a built-in mesh and a material while its handles are still empty.
 
 const cimport = @import("cimport.zig");
 const c = cimport.c;
@@ -150,8 +141,10 @@ fn uvSphere(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh
     return core.upload_mesh.?(core, "primitive:sphere:0.5:24:32", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out_error);
 }
 
-/// Leaves the component alone when it has a mesh or names no primitive, and stores no handle for
-/// a name that is none of the built-in shapes.
+/// Maps the name in the component's primitive field to one of the built-in shapes, uploaded
+/// under a key that names the shape, so components of one shape share one upload. Leaves the
+/// component alone when it has a mesh or names no primitive, and stores no handle for a name
+/// that is none of the built-in shapes.
 fn resolveMesh(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void {
     const mc: *c.ke_mesh_component = @ptrCast(m);
     if (mc.mesh.bits != c.KE_HANDLE_NONE or mc.primitive[0] == 0) return;
@@ -199,8 +192,10 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
     );
 }
 
-/// Runs in the update phase over the mesh view. Afterwards each component has been offered a mesh
-/// and a material, and it always returns true.
+/// Runs in the update phase over the mesh view. For every component it runs `resolveMesh` and
+/// then `resolveMaterial`, each only while its handle is still empty. Neither is given an error
+/// output and this always returns true, so a failed upload or creation is not reported, leaves
+/// the handle empty and is attempted again on the next pass.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const core: *c.ke_render_service = @ptrCast(@alignCast(user.?));
 

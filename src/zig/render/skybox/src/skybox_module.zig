@@ -1,19 +1,6 @@
-//! The skybox pass is the render-phase system "render.skybox". Each frame it draws one full-screen
-//! triangle into the "hdr" target, keeping what is already there, with a fragment shader that
-//! looks up the environment cubemap of the skybox component along the direction of each pixel. It
-//! reads the "depth" target as well, and a frame whose skybox query has no row passes the "none"
-//! texture handle as the environment.
-//!
-//! `SkyboxModule` carries the whole pass. `ke_render_skybox_create` allocates it, `setup` creates
-//! the layout, pipeline and uniform buffer and fills the pass description, access list and
-//! queries, and only then is the system registered. `destroyModule` releases the handles that are
-//! valid, so a failed step, a refused registration and `destroyHandle` all release a module the
-//! same way.
-//!
-//! `system` rebuilds nothing but the uniform and the bind group. The uniform receives the inverse
-//! of the camera rotation and projection product, so a pixel can be turned back into a direction,
-//! and the bind group is recreated because the environment texture and the depth view can change
-//! between frames. A frame without a camera does nothing.
+//! The skybox pass: the render-phase system "render.skybox" that draws the environment cubemap of
+//! the skybox component into the "hdr" target. It also owns the creation and teardown of that
+//! pass, behind the one factory it exports.
 
 const std = @import("std");
 
@@ -25,6 +12,7 @@ const c = cimport.c;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
+/// The uniform that `system` uploads whole into `frame_uniform` every frame.
 const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
 /// The state of one skybox pass. `ke_render_skybox_create` allocates it, and `destroyHandle` frees
@@ -61,7 +49,11 @@ inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
 /// phase. Returns true with no pass when the first query has no camera, or when the render service
 /// gives no pass; no error is set in either case. A bind group that cannot be created ends the
 /// pass, puts the error into the error output, returns false, and leaves `bind_group` invalid
-/// until the next call.
+/// until the next call. Each frame it draws one full-screen triangle into "hdr", keeping what is
+/// there, after rewriting the uniform with the inverse of the camera rotation and projection
+/// product. It recreates the bind group every call, because the environment texture and the
+/// depth view can change between frames, and a frame whose skybox query has no row passes the
+/// "none" texture handle as the environment.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const sm = moduleOf(user);
     const core = sm.core;
@@ -131,7 +123,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     return true;
 }
 
-/// Called once by `ke_render_skybox_create`, before the system is registered. On false it has
+/// Called once by `ke_render_skybox_create`, before the system is registered. It creates the
+/// layout, pipeline and uniform buffer and fills the pass description, the access list and the
+/// queries. On false it has
 /// stopped at a failing step, and the objects made before that step stay in the module for
 /// `destroyModule` to release.
 fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,

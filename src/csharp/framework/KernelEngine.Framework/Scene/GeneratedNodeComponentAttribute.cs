@@ -1,17 +1,12 @@
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Marks a <c>kabic</c>-generated node type: its partial properties are backed by an
-/// existing native component struct, resolved by the registered name a domain header
-/// already gives it — never a synthesized struct or a newly registered name. Absence of
-/// this attribute is what tells <c>KernelEngine.SourceGenerators</c> a node type is
-/// game-authored and needs its own backing struct synthesized instead.
-/// <para>
-/// Applied more than once, the node type composes that many components: each gets its own
-/// backing state and component id, and every partial property routes to the one whose
-/// struct declares its field. A node type is a component SET, so composing two of them
-/// composes their sets — it is never a base class relationship.
-/// </para>
+/// Marks a node class whose partial properties are backed by an existing native component
+/// struct, registered under the given name. A class without it is game-authored and
+/// <c>KernelEngine.SourceGenerators</c> synthesizes a backing struct for it. Applied more than
+/// once, the class owns that many components, each with its own backing state and component id,
+/// and every partial property routes to the one whose struct declares its field. The attribute
+/// is read from the class's own declaration only, not from its base classes.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class GeneratedNodeComponentAttribute(Type backingType, string componentName) : Attribute
@@ -24,10 +19,8 @@ public sealed class GeneratedNodeComponentAttribute(Type backingType, string com
 }
 
 /// <summary>
-/// Names the backing struct field a <see cref="GeneratedNodeComponentAttribute"/> node's
-/// partial property reads and writes, when it differs from the property name — always,
-/// since the native struct spells fields in the ABI's own casing and, for a
-/// <c>System.Numerics.VectorN</c> property, as a fixed-size array rather than a single field.
+/// Names the backing struct field a node's partial property reads and writes, and optionally the
+/// component that declares it.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class NativeFieldAttribute(string name) : Attribute
@@ -36,9 +29,8 @@ public sealed class NativeFieldAttribute(string name) : Attribute
     public string Name { get; } = name;
 
     /// <summary>
-    /// Which of the node's components declares this field, when more than one of them
-    /// spells the same field name. Left null, the field name alone resolves the component;
-    /// a name declared by two of them is an error the generator refuses rather than guesses.
+    /// Which of the node's components declares this field. Left null, the field name alone
+    /// resolves the component, and a name declared by two of them is an error.
     /// </summary>
     public Type? Component { get; init; }
 }

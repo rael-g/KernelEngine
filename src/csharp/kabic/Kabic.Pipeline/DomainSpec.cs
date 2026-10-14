@@ -10,14 +10,6 @@ public sealed record CFieldTableSpec(string File, string Guard, IReadOnlyList<st
 /// <summary>
 /// One domain of the manifest, with its headers, its output locations and its providers.
 /// </summary>
-/// <remarks>
-/// <c>Load</c> parses the manifest and maps each entry of its domains through <c>FromJson</c>,
-/// in order. <c>FromJson</c> reads the name, the API file, the namespace, the native namespace
-/// and the output directory as required keys, and reads the abstractions directory and the
-/// library as optional strings. The headers, include directories, auxiliary and compose
-/// headers, providers and usings are read as string lists, and an absent list is empty. A cOut
-/// entry, when present, becomes a <c>CFieldTableSpec</c> with its file, guard and includes.
-/// </remarks>
 public sealed record DomainSpec(
     string Name,
     IReadOnlyList<string> Headers,

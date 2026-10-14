@@ -1,9 +1,8 @@
 namespace KernelEngine.Common;
 
 /// <summary>
-/// The convenience <see cref="Transform"/> affords a managed caller. The fields themselves
-/// are generated from <c>ke_transform</c>; this adds only what has no counterpart in C,
-/// where the same value is written out as an initialiser at the point of use.
+/// The managed convenience members of <see cref="Transform"/>; its fields are generated from
+/// <c>ke_transform</c>.
 /// </summary>
 public partial struct Transform
 {

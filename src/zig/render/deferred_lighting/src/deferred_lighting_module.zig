@@ -1,21 +1,6 @@
-//! The deferred lighting pass is a render-phase system that turns the gbuffer targets into lit
-//! colour: one full-screen draw reads albedo, normal, emissive and depth, the light clusters and,
-//! when the service has one, the shadow map, and writes the "hdr" target that `setup` declares.
-//! The plugin exports one function, `ke_render_deferred_lighting_create`, which builds a
-//! `DeferredLightingModule`, registers `system` with the runtime and returns a handle owning it.
-//!
-//! The pass has two kinds of input. The scene is read through four queries: the camera with its
-//! world transform, the sky, the directional light and the ambient light. `system` turns them
-//! into one `DeferredFrame` uploaded each tick, and each light is optional: a missing segment
-//! leaves its fields zero. The render service supplies the rest as bind groups: the gbuffer views
-//! are wrapped in a fresh group every tick, since the targets can be recreated, while the frame
-//! group, which also carries the shadow map, the shadow matrices and the environment cubemap,
-//! is rebuilt by `rebuildFrameBindGroup` only at setup and when the sky names another cubemap.
-//!
-//! Creation does everything that can fail before the first frame, shaders and pipeline included.
-//! A failed setup or a refused registration releases what was made through `destroyModule` and
-//! yields the empty handle. Once `system` has begun a pass it ends it on every path; a missing
-//! camera ends an empty pass, and only a failure to create the gbuffer group is reported.
+//! The deferred lighting pass: the render-phase system that turns the gbuffer targets into lit
+//! colour with one full-screen draw and writes the "hdr" target. It also owns the creation and
+//! teardown of that pass, behind the one factory it exports.
 
 const std = @import("std");
 
@@ -132,6 +117,9 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
 /// phase. It ends the pass on every path that began one. A missing pass returns true without
 /// work, and a missing camera returns true after ending an empty pass; neither is a failure. Only
 /// a failure to create the G-buffer bind group sets the error out-parameter and returns false.
+/// Each tick it turns the camera, the sky, the directional light and the ambient light into one
+/// `DeferredFrame`; each light is optional, and a missing one leaves its fields zero. The G-buffer
+/// views are wrapped in a fresh bind group every tick, because the targets can be recreated.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const dl = moduleOf(user);
     const core = dl.core;

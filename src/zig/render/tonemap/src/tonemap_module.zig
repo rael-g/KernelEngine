@@ -1,13 +1,6 @@
-//! The tonemap pass is the render-phase system "render.tonemap". Each frame it draws one
-//! full-screen triangle that samples the "hdr" target and writes the "backbuffer" target through
-//! the shader named "tonemap", with no vertex input and no depth test.
-//!
-//! `TonemapModule` carries the whole pass. `ke_render_tonemap_create` allocates it, `setup` loads
-//! the shader, creates the layout, fills the pipeline parameters and asks the service for the
-//! pipeline once so a failure surfaces at creation, and only then is `system` registered. The bind
-//! group is the one object created per frame, because the "hdr" view is read from the pass each
-//! time. A failed step or a refused registration returns an empty handle after `destroyModule`,
-//! which releases only the handles that are valid; `destroyHandle` releases the same way.
+//! The tonemap pass: the render-phase system "render.tonemap" that draws the "hdr" target into the
+//! "backbuffer" target. It also owns the creation and teardown of that pass, behind the one
+//! factory it exports.
 
 const std = @import("std");
 
@@ -57,6 +50,9 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
 /// module as its context. A frame in which the service begins no pass returns true without drawing.
 /// When the bind group cannot be created, the pass is ended, and the error output receives
 /// `KE_ERROR_NOT_INITIALIZED` with the bind group error as its cause; the body then returns false.
+/// Each frame it draws one full-screen triangle with no vertex input and no depth test, sampling
+/// "hdr" through the shader named "tonemap". It recreates the bind group every frame, because the
+/// "hdr" view is read from the pass each time.
 fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const tm = moduleOf(user);
     const core = tm.core;
@@ -98,7 +94,8 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
 
 /// Fills the module during `ke_render_tonemap_create`, before `system` is registered. A failed
 /// shader load returns false before the layout exists. A failed pipeline request destroys the
-/// layout here and then returns false. The caller releases the module after any false return.
+/// layout here and then returns false. The caller releases the module after any false return. A
+/// successful call has asked the service for the pipeline once, so a failure surfaces at creation.
 fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          logger: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) bool {
     tm.core = core;

@@ -2,8 +2,7 @@
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Provides per-action queries over a set of input bindings loaded from a
-/// TOML <c>.input</c> file. Backed by <see cref="InputActionMap{TEnum}"/>.
+/// Per-action queries over a set of input bindings loaded from a TOML <c>.input</c> file.
 /// </summary>
 public interface IInputActionMap<TEnum> where TEnum : struct, Enum
 {
