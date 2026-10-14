@@ -1,4 +1,4 @@
-# How does a key press reach a system body, and when is its edge visible?
+# Input
 
 This is a map: the parts between the OS and a node, what each receives and what it hands on. How a
 part works inside is on the generated page of its file. Contracts are under `src/c/input/` and

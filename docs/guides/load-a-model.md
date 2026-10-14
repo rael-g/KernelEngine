@@ -1,4 +1,4 @@
-# How do I load a model into the scene?
+# Load a model into the scene
 
 This guide adds one thing to the host of [the previous guide](scene-on-screen.md): a model read
 from a file. Every passage is quoted from `examples/csharp/12_asset_loading/Program.cs`.

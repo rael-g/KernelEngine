@@ -1,4 +1,4 @@
-# What does a scene file say, and what does the loader do with it?
+# Scene file
 
 A scene file is TOML, conventionally named `<name>.scene.toml` (`examples/csharp/games/pong/scenes/`),
 parsed with tomlc99 (`toml_parse_file`, `src/zig/framework/src/scene_loader.zig:611`) and loaded by

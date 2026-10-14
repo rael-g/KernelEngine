@@ -1,4 +1,4 @@
-# How do Body2D and Collider2D become a simulation, and what does each tick copy between them?
+# Physics
 
 This is a map: the parts of the 2D physics domain, what each receives and what it hands on. How a
 part works inside is on the generated page of its file. Contracts are under `src/c/physics/`,

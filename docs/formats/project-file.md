@@ -1,4 +1,4 @@
-# Which keys does a Project file have, and who reads each?
+# Project file
 
 The Project file is a TOML file named `Project`, with no extension, next to the executable
 (`src/csharp/configuration/KernelEngine.Configuration/ServiceCollectionExtensions.cs:36`; Pong ships

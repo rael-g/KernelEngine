@@ -1,4 +1,4 @@
-# How do lights, shadows and image-based light reach a shading pass?
+# Lighting
 
 This is a map: the parts that produce light data, what each hands on, and the two passes that
 consume it. How a part works inside is on the generated page of its file. Plugins are under

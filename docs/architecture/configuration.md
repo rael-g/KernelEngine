@@ -1,4 +1,4 @@
-# How does a Project file reach the value a plugin reads, and how does a change reach it?
+# Configuration
 
 This is a map: the parts of the configuration domain and what each hands on. How a part works
 inside is on the generated page of its file. The contract is under `src/c/configuration/`, the

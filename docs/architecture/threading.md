@@ -1,4 +1,4 @@
-# Which threads exist, what runs on them, and how does work reach them?
+# Threading
 
 This is a map: the pool, who submits to it and where work lands. Contract is `ke_scheduler` under
 `src/c/scheduler/`; the only implementation is `src/zig/scheduler/enki/src/enki_scheduler.zig`.

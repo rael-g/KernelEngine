@@ -1,4 +1,4 @@
-# How does a log event reach a sink?
+# Logging
 
 This is a map: the parts of the logger domain and what each hands on. How a part works inside is
 on the generated page of its file. The contract is under `src/c/logger/`, the plugin under

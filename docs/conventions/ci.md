@@ -1,4 +1,4 @@
-# What does CI run on a push, and what does it leave out?
+# Continuous integration
 
 One workflow, `.github/workflows/ci.yml`, with three jobs: `build-and-test` and `visual`, which run on a push to any
 branch and on every pull request, and `main-history`, which runs on a push to `main` only. A newer run for the same workflow and ref cancels the older one,

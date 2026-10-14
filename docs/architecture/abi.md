@@ -1,4 +1,4 @@
-# How does a call cross the C ABI, and how does a failure come back?
+# The C ABI
 
 This is a map of the boundary: what a caller holds, what a failure carries, and how a resource is
 named. Layers and file placement are in [layers.md](layers.md). The members of each contract are

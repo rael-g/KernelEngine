@@ -1,4 +1,4 @@
-# How does an asset path become a GPU resource, and what is shared between requests?
+# Assets
 
 This is a map: the parts between a path and a resource on the GPU, what each receives and what it
 hands on. How a part works inside is on the generated page of its file. Contracts are under

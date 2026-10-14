@@ -1,4 +1,4 @@
-# How this project's documentation is written
+# Documentation
 
 Documentation here lies by default. Not because anyone wrote a falsehood, but because a document
 that mixes *what the system is* with *what we were doing last Tuesday* stays half-true forever:
@@ -40,8 +40,9 @@ declaration, in backticks, and the file it is in, never by a line number: a name
 found missing, while a line number goes on pointing at something else. A claim nobody can check
 is a claim nobody should believe, including its author six months on.
 
-**5. One document answers one question.** If the title needs "and", there are two documents. The
-title should be the question, so the index can be read instead of the corpus.
+**5. One document has one subject.** If the title needs "and", there are two documents. The
+title names the subject in a few words, a domain for a map, a task for a guide, so that the index
+and the navigation of the site can be read at a glance.
 
 ## What this costs, deliberately
 

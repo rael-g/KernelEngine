@@ -1,4 +1,4 @@
-# How do I put something on screen?
+# Put something on screen
 
 This guide starts from the host of [the first guide](minimal-host.md) and adds a renderer, a
 scene and a node that moves. Every passage is quoted from

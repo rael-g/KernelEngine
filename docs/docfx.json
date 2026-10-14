@@ -5,6 +5,7 @@
         "files": [
           "index.md",
           "toc.yml",
+          "*/toc.yml",
           "guides/**.md",
           "architecture/**.md",
           "decisions/**.md",

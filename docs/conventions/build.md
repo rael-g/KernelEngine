@@ -1,4 +1,4 @@
-# How does the build turn the tree into libraries, and where does everything land?
+# Build
 
 `zig build`, run at the repository root (`build.zig:12` refuses any other directory), is the only
 native entry point. The root `build.zig` fetches toolchains, runs vcpkg, and takes every plugin and

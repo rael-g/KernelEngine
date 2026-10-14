@@ -1,0 +1,10 @@
+- name: "Documentation"
+  href: docs.md
+- name: "Git"
+  href: git.md
+- name: "Build"
+  href: build.md
+- name: "Managed build"
+  href: managed-build.md
+- name: "Continuous integration"
+  href: ci.md

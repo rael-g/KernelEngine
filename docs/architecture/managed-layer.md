@@ -1,4 +1,4 @@
-# How does the managed layer meet the native one?
+# Managed layer
 
 This is a map: the seams between the C# wrappers and the native plugins, and how a game is
 composed on top. Layers and placement are in layers.md; the failure record that crosses the C ABI

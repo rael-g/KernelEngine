@@ -1,4 +1,4 @@
-# How does the engine build view and projection matrices for the device's clip space?
+# View space
 
 This is a map: the parts that decide what a view or projection matrix looks like, and what each
 hands on. How a part works inside is on the generated page of its file. Contracts are under

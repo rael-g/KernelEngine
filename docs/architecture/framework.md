@@ -1,4 +1,4 @@
-# What is the framework made of, and what does each piece depend on?
+# Framework
 
 This is a map: the pieces of the framework plugin, what each receives and what it hands on. How a
 piece works inside is on the generated page of its file. Contracts are under `src/c/framework/`,

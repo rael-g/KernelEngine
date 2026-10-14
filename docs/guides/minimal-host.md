@@ -1,4 +1,4 @@
-# How do I start the engine from my own program?
+# Start the engine from your own program
 
 A host is a program that chooses the plugins, loads them and drives the loop. The smallest one
 is `examples/csharp/00_runtime_minimal/Program.cs`; every passage below is quoted from it.

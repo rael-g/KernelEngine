@@ -1,4 +1,4 @@
-# How does work reach main?
+# Git
 
 `main` is the trunk: every commit on it has a Conventional Commit subject, and `scripts/ci_local.cs` has
 passed on it before it is pushed.

@@ -1,4 +1,4 @@
-# What does the GPU device contract promise, and what does the WebGPU backend do with it?
+# GPU device
 
 This is a map: the parts of the GPU layer, what each receives and what it hands on. The
 contract is in the headers under `src/c/render/kernel_engine/render/gpu/`; how a part works

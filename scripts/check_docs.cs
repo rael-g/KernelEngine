@@ -51,18 +51,24 @@ foreach (var page in pages)
     }
 }
 
-var toc = File.ReadAllText(Path.Combine(docsDir, "toc.yml"));
 var readme = File.ReadAllText(Path.Combine(docsDir, "README.md"));
 var listed = pages.Where(p => p is not ("README.md" or "index.md")).ToList();
-var notInToc = listed.Where(p => !toc.Contains($"href: {p}", StringComparison.Ordinal)).ToList();
+var notInToc = listed.Where(p => !TocLists(p)).ToList();
 var notInReadme = listed.Where(p => !readme.Contains($"]({p})", StringComparison.Ordinal)).ToList();
 
 var failed = 0;
 failed += Report("a map or a guide names only what the sources declare", unknownNames, 0);
 failed += Report("a document names a declaration and its file, never a line", lineCitations, LineCitationCeiling);
-failed += Report("every document is in docs/toc.yml", notInToc, 0);
+failed += Report("every document is in the toc.yml of its directory", notInToc, 0);
 failed += Report("every document is in docs/README.md", notInReadme, 0);
 return failed == 0 ? 0 : 1;
+
+bool TocLists(string page)
+{
+    var dir = Path.GetDirectoryName(page)!.Replace('\\', '/');
+    var tocPath = Path.Combine(docsDir, dir, "toc.yml");
+    return File.Exists(tocPath) && File.ReadAllText(tocPath).Contains($"href: {Path.GetFileName(page)}", StringComparison.Ordinal);
+}
 
 static int Report(string rule, List<string> found, int ceiling)
 {

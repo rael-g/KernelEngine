@@ -1,4 +1,4 @@
-# What does the engine derive from a node type's declaration?
+# Node types
 
 This is a map: the parts that turn a node class into components, systems and scene names, and what
 each hands on. How a part works inside is on the generated page of its file. The generator is

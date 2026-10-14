@@ -1,4 +1,4 @@
-# How does a managed project get the native libraries it calls?
+# Managed build
 
 A C# project never builds native code. The native build puts every plugin library in
 `<--prefix>/lib` (`docs/conventions/build.md`), and each managed project that P/Invokes a library

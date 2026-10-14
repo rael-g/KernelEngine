@@ -1,4 +1,4 @@
-# What does an input file say, and what does the loader do with it?
+# Input file
 
 An input file is TOML, conventionally named `actions.input` (`examples/csharp/games/pong/actions.input`),
 parsed with tomlc99 by `ke_input_actions.load` (`vtLoad`, `src/zig/framework/src/input_actions.zig:321`).

@@ -1,4 +1,4 @@
-# How does one runtime tick run, and what may run at the same time?
+# Runtime
 
 This is a map: the parts the tick touches, what each receives and what it hands on. How a part
 works inside is on the generated page of its file. Contracts are under `src/c/runtime/`,

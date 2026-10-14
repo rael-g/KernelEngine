@@ -1,4 +1,4 @@
-# How is the engine divided into layers, and where does each kind of file live?
+# Layers
 
 This is a map of the four layers and of the files that cross them. How the boundary behaves is in
 [abi.md](abi.md).

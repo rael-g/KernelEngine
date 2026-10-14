@@ -1,4 +1,4 @@
-# How does an authored material become something a pass can draw?
+# Materials
 
 This is a map: the parts between a material file and a draw, and what each hands on. How a part
 works inside is on the generated page of its file. Shared shader modules are under

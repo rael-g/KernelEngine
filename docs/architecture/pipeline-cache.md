@@ -1,4 +1,4 @@
-# What happens when a pass asks for a pipeline that has not been compiled yet?
+# Pipeline cache
 
 This is a map: the parts that take part in a pipeline request and what each hands on. How the
 cache works inside is on the generated page of its file.

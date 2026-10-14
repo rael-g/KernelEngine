@@ -1,4 +1,4 @@
-# What does the ECS contract promise about threads and structural change, and how does the flecs plugin keep it?
+# ECS
 
 This is a map: the parts around the ecs, what each receives and what it hands on. How a part works
 inside is on the generated page of its file. The contract is `ke_ecs` in
