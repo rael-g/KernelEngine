@@ -19,15 +19,18 @@ var services = new ServiceCollection()
     .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
+#region modules
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Window/Tree"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.15f, 0.15f, 0.15f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
+#endregion
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
         var resources = sp.GetRequiredService<IRenderResources>();
         Console.WriteLine("[KernelEngine] Example: 01_window_scene");
         Console.WriteLine("[KernelEngine] Features: window, renderer, single_quad, spinner_behavior");
 
+#region scene
         tree.AddNode(new DirectionalLight
         {
             Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
@@ -41,6 +44,7 @@ var services = new ServiceCollection()
         var quad   = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var orange = resources.CreateMaterial("orange", new Vector4(1f, 0.5f, 0f, 1f));
         tree.AddNode(new SpinningQuad { MeshHandle = quad, MaterialHandle = orange }, "Spinner");
+#endregion
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -77,6 +81,7 @@ runtime.Dispose();
 
 Console.WriteLine("[01_window_scene] Exited cleanly.");
 
+#region behavior
 sealed class SpinningQuad : MeshRenderer
 {
     private float _angle;
@@ -91,3 +96,4 @@ sealed class SpinningQuad : MeshRenderer
         Rotation = Quaternion.CreateFromYawPitchRoll(_angle * MathF.PI / 180f, 0f, 0f);
     }
 }
+#endregion

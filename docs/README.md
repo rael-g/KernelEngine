@@ -3,6 +3,12 @@
 Each entry is the question that document answers. If your question is not one of these, the answer
 is in the code, and `CLAUDE.md`'s closing table says where to start looking.
 
+## Guides
+
+- [How do I start the engine from my own program?](guides/minimal-host.md)
+- [How do I put something on screen?](guides/scene-on-screen.md)
+- [How do I load a model into the scene?](guides/load-a-model.md)
+
 ## Architecture
 
 - [How does a call cross the C ABI, and how does a failure come back?](architecture/abi.md)

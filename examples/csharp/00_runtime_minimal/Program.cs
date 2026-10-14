@@ -9,6 +9,7 @@ using KernelEngine.Scheduler;
 using KernelEngine.Window;
 using KernelEngine.Logger;
 
+#region compose
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -16,16 +17,20 @@ var services = new ServiceCollection()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "KernelEngine — 00 Runtime Minimal"));
+#endregion
 
+#region load
 using var sp = services.BuildServiceProvider();
 var window   = sp.GetRequiredService<IWindow>();
 var runtime  = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
+#endregion
 
 var sw           = Stopwatch.StartNew();
 double lastPrint = 0;
 long   ticks     = 0;
+#region system
 runtime.RegisterSystem("FpsCounter", RuntimePhase.Update, (_, _) =>
 {
     ticks++;
@@ -37,9 +42,11 @@ runtime.RegisterSystem("FpsCounter", RuntimePhase.Update, (_, _) =>
         lastPrint = now;
     }
 });
+#endregion
 
 Console.WriteLine("[00_runtime_minimal] Loop running. Close the window to exit.");
 
+#region loop
 double prev = sw.Elapsed.TotalSeconds;
 while (!window.ShouldClose())
 {
@@ -48,5 +55,6 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+#endregion
 
 Console.WriteLine("[00_runtime_minimal] Exited cleanly.");
