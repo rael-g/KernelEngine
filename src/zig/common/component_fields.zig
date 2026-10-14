@@ -1,19 +1,11 @@
-//! Writing a variant into the memory of a component, at the place one of its fields describes.
-//! `Fields` takes the translated C namespace and returns the functions; nothing is allocated and
-//! no state is kept.
-//!
-//! `write` dispatches on the declared type of the field, not on the type of the value. It converts
-//! the value to the declared type where a conversion exists and stores it at the field's offset.
-//! Conversions are permissive between related variants: integer, float and boolean convert among
-//! themselves, vectors convert between widths, and a quaternion reads as a four-component vector.
-//! Anything else is refused. Every fixed-width store ends in one check that the converted value
-//! has the size of the field, so a width mismatch is refused before any byte moves. A string is
-//! the exception: it is cut to leave room for a terminating zero, so its length never refuses it.
-//! `seedDefaults` applies `write` to the default of each field of a table and ignores what is
-//! refused.
+//! Writes a variant into the memory of a component at the place one of its fields describes.
+//! It holds no state and allocates nothing.
 
 const std = @import("std");
 
+/// Returns the component-writing functions for the contract types of `c`, the cimport it is
+/// given. `write` converts between related variants and refuses anything else; a string is cut to
+/// leave room for its terminating zero instead of being refused for its length.
 pub fn Fields(comptime c: type) type {
     return struct {
         /// Accepts a float or an integer; any other variant has no float reading.

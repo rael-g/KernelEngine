@@ -7,13 +7,17 @@ using KernelEngine.Scheduler;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Scene infrastructure independent of any other domain: registers the
-/// <see cref="ScriptHost"/>, installs the BehaviorSystem that propagates transforms
-/// and drives per-node <see cref="Node.OnUpdate"/>, and runs a one-shot scene
-/// setup callback on a dedicated worker thread. Framework has no concept of any
-/// other domain's components or node types (the same rule <c>ke_world</c> follows
-/// natively) — render's [entity.components.X] applies and node-type registrations
-/// live in <c>WebgpuRenderModule</c>, physics's in its own module, and so on.
+/// Runtime module "SceneNodes", depending on <see cref="FrameworkModule"/>. It registers the
+/// <see cref="ScriptHost"/> and the spatial node types, and registers these systems: "Scene.Input"
+/// (pre-update, on the pinned worker: releases retired handles, updates and snapshots input and
+/// evaluates actions), "Scene.Signals.Clear" (pre-update) and "Scene.Signals.Deliver"
+/// (post-update) when a <see cref="SignalBus"/> is registered, and one system
+/// "Scene.Behaviors.&lt;type&gt;" in the update phase for each node type with behavior,
+/// registered when the first node of that type binds. That system declares the component access
+/// of the type's <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
+/// query and the reached ones its access list, with hierarchy and name always read, and it is
+/// sliced per entity when the type reaches only itself. <c>OnLoad</c> declares the signals of
+/// every registered node type and then runs the setup callback on the pinned worker.
 /// </summary>
 public sealed class SceneNodesModule : IRuntimeModule
 {
@@ -23,8 +27,10 @@ public sealed class SceneNodesModule : IRuntimeModule
 
     private KernelEngine.Input.IInputReader? _inputSnapshot;
 
+    /// <summary>The module name, "SceneNodes".</summary>
     public string Name => "SceneNodes";
 
+    /// <summary>The module that creates the world.</summary>
     public IEnumerable<Type> Dependencies => new[] { typeof(FrameworkModule) };
 
     /// <summary>Setup callback that only needs the node world.</summary>
@@ -34,9 +40,8 @@ public sealed class SceneNodesModule : IRuntimeModule
     public SceneNodesModule(Action<ScriptHost, IServiceProvider> setup) => _setup = setup;
 
     /// <summary>
-    /// The half-open range of <paramref name="count"/> items this body call owns. A
-    /// system the runtime chose not to slice reports one slice, so the range is the
-    /// whole set and the caller needs no second code path.
+    /// The half-open range of <paramref name="count"/> items this body call owns; the whole range
+    /// for a system that is not sliced.
     /// </summary>
     private static (int First, int Last) SliceOf(nint ctx, int count)
     {
@@ -48,6 +53,10 @@ public sealed class SceneNodesModule : IRuntimeModule
         return (first, index == slices - 1 ? count : first + per);
     }
 
+    /// <summary>Registers the spatial node types and the <see cref="ScriptHost"/>.</summary>
+    /// <exception cref="InvalidOperationException">
+    /// The native script host cannot be created when the service is first requested.
+    /// </exception>
     public void Configure(IServiceCollection services)
     {
         services.AddSpatialNodeTypes();
@@ -67,6 +76,11 @@ public sealed class SceneNodesModule : IRuntimeModule
         });
     }
 
+    /// <summary>
+    /// Registers the systems, declares the signals, and runs the setup callback on the pinned
+    /// worker.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The setup callback throws.</exception>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var scriptHost = services.GetRequiredService<ScriptHost>();
@@ -186,9 +200,8 @@ public sealed class SceneNodesModule : IRuntimeModule
         new() { Cid = cid, Access = writes ? RuntimeAccess.Write : RuntimeAccess.Read };
 
     /// <summary>
-    /// Registers every signal any known node type emits or handles, before the first
-    /// scene is read. That ordering is the whole point: the loader can only reject a
-    /// misspelled signal name if the real names are already there to compare against.
+    /// Registers every signal any registered node type emits or handles, by constructing one
+    /// unbound instance of each type. It runs before the first scene is read.
     /// </summary>
     private static void DeclareSignals(ScriptHost scriptHost, IServiceProvider services)
     {

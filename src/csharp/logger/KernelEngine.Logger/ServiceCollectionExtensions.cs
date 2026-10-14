@@ -6,7 +6,11 @@ namespace KernelEngine.Logger;
 
 public static class LoggerServiceCollectionExtensions
 {
-    /// <summary>Registers a <see cref="Logger"/> singleton backed by the kernel allocator.</summary>
+    /// <summary>
+    /// Registers the <see cref="Logger"/> singleton and exposes it as <see cref="ILogger"/> and
+    /// <see cref="INativeLogger"/>. When the logger is first resolved it adds every
+    /// <see cref="ILoggerSink"/> registered by then, each with the default minimum level.
+    /// </summary>
     public static IServiceCollection AddLogger(this IServiceCollection services)
     {
         services.AddSingleton(sp =>
@@ -22,9 +26,9 @@ public static class LoggerServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the built-in console sink (native <c>ke_console_sink_create</c>, which owns the
-    /// <c>[LEVEL] tag: message</c> format and the level names). Reads <c>[logging] console_level</c> from the Project file
-    /// when present; otherwise passes through every level.
+    /// Registers the native console sink. Its minimum level is the <c>console_level</c> key of the
+    /// <c>logging</c> section of the Project file, and every level when the key is missing.
+    /// Throws when the key is not a <see cref="LogLevel"/> name.
     /// </summary>
     public static IServiceCollection AddConsoleSink(this IServiceCollection services)
     {
@@ -39,8 +43,7 @@ public static class LoggerServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Backward-compatible overload that passes the level inline, bypassing the Project file.
-    /// Lets examples that have not migrated to Project keep working.
+    /// Registers the native console sink with this minimum level, without reading the Project file.
     /// </summary>
     public static IServiceCollection AddConsoleSink(this IServiceCollection services, LogLevel minLevel)
     {
@@ -50,9 +53,7 @@ public static class LoggerServiceCollectionExtensions
 }
 
 /// <summary>
-/// An <see cref="ILoggerSink"/> that delegates formatting to the native console sink
-/// (<c>ke_console_sink_create</c>) instead of re-implementing the `[LEVEL] tag: message`
-/// format and level-name mapping in C#.
+/// An <see cref="ILoggerSink"/> that forwards each event to the native console sink.
 /// </summary>
 internal sealed unsafe class NativeConsoleLoggerSink : ILoggerSink
 {

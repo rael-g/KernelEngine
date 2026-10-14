@@ -6,10 +6,8 @@ using KernelEngine.Logger;
 namespace KernelEngine.Input;
 
 /// <summary>
-/// The parts of <see cref="Input"/> that express the native surface in C# terms
-/// rather than mirroring it: managed-object construction, the snapshot reader
-/// adapter, and the flat-to-discriminated event translation. Everything that is
-/// a direct image of the C ABI is generated in <c>Generated/Input.g.cs</c>.
+/// The input service over <c>ke_input</c>, with a constructor taking a managed logger, a
+/// snapshot reader, and the translation of native events into <see cref="InputEvent"/> values.
 /// </summary>
 public sealed unsafe partial class Input : IInput
 {
@@ -55,7 +53,8 @@ public sealed unsafe partial class Input : IInput
         return count;
     }
 
-    /// <summary>Adapts a captured snapshot to the reader interface the sim tick consumes.</summary>
+    /// <summary>An <see cref="IInputReader"/> over one captured native snapshot; it never changes
+    /// after capture.</summary>
     private sealed class SnapshotReader : IInputReader, INativeInputReader
     {
         private readonly Input _owner;

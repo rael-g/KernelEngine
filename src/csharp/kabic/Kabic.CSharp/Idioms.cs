@@ -9,21 +9,6 @@ using System.Text.RegularExpressions;
 /// camelCase, reserved words escaped, enum members and type names stripped of their prefixes, and C
 /// scalar types to their C# types.
 /// </summary>
-/// <remarks>
-/// <c>Pascal</c> splits a name on underscores, drops the empty pieces, and gives each piece an
-/// upper-case first letter over a lower-case rest. <c>Camel</c> applies <c>Pascal</c> and then
-/// lower-cases the first letter. <c>Ident</c> camel-cases a name and prefixes it with <c>@</c> when
-/// the result is listed in <c>CsKeywords</c>. <c>EnumMember</c> tries the enum's name, upper-cased
-/// and followed by an underscore, as a prefix of the raw member name. It starts with the whole name
-/// and drops one trailing word at a time, and returns the first remainder that is not empty and
-/// does not begin with a digit; when none qualifies, it returns <c>Pascal</c> of the raw name.
-/// <c>TypeName</c> returns the convention's override for the symbol when there is one, and
-/// otherwise <c>Pascal</c> of the symbol with its prefix stripped. <c>CsPrimitive</c> maps the
-/// byte-boolean type to <c>bool</c> and the void pointer to <c>nint</c>, and otherwise looks the
-/// trimmed name up in the primitive table. <c>CsForeignType</c> maps the byte-boolean type to
-/// <c>bool</c> and a primitive without a pointer through the same table, and otherwise keeps the
-/// name with a single trailing <c>*</c> when the type is a pointer.
-/// </remarks>
 public static class Idioms
 {
     static readonly Dictionary<string, string> Prim = new()

@@ -1,22 +1,5 @@
-//! The Box2D backend of the 2D physics contract: one factory, and a vtable of slots that all
-//! work on a single world.
-//!
-//! The factory allocates a `State`, creates the Box2D world inside it and wires the vtable that
-//! the state holds; the handle it returns points at that vtable and carries `destroy`, which
-//! releases the world and everything else the state owns. Each slot recovers the state from the
-//! vtable's handle, so one process can hold several independent worlds.
-//!
-//! Contract-side bodies are small integer ids. The state keeps a growing table of `Entry` values
-//! and an id is a position in it, shifted by one so zero stays the invalid sentinel. A destroyed
-//! body leaves its entry in place, marked dead, which keeps positions from being reused and makes
-//! a stale id fail `lookup` instead of reaching another body. Fixtures are not tracked: they
-//! belong to the Box2D body and go with it.
-//!
-//! Slots that name a body treat a missing, invalid or destroyed id as nothing to do, and only the
-//! factory and the slots that create a body or a fixture report errors, through the out-error
-//! argument. Angles cross the contract as radians and live in Box2D as rotations, converted by
-//! `makeRot` and `rotAngle`. Nothing here locks or starts threads, so a world must be driven from
-//! one thread at a time.
+//! The Box2D backend of the 2D physics contract: the exported factory `ke_physics_2d_box2d_create`
+//! and the slots of the `ke_physics_2d` it returns, all working on one world.
 
 const std = @import("std");
 
@@ -44,7 +27,11 @@ const Entry = struct {
 
 /// Allocated by the factory and freed by `destroy`. `bodies` is null until the first body is
 /// created, and then holds `body_capacity` entries, of which the first `body_count` are used.
-/// `world` is assigned before the factory returns the state's vtable.
+/// `world` is assigned before the factory returns the state's vtable. A body id handed through
+/// the contract is its position in `bodies` plus one, so zero stays `KE_BODY_2D_INVALID`; a
+/// destroyed body keeps its position, marked dead, so an id is never reused and a stale id fails
+/// `lookup`. Fixtures are not tracked here: they belong to the Box2D body. Nothing locks, so a
+/// world must be driven from one thread at a time.
 const State = struct {
     api: c.ke_physics_2d,
     logger: ?*c.ke_logger,
@@ -271,6 +258,7 @@ fn setBodyPosition(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, x: f32, y: f32,
     c.b2Body_SetTransform(body, .{ .x = x, .y = y }, makeRot(angle));
 }
 
+/// Overwrites the body's linear velocity; an id that does not resolve does nothing.
 fn setBodyVelocity(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, vx: f32, vy: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -278,6 +266,8 @@ fn setBodyVelocity(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, vx: f32, vy: f3
     c.b2Body_SetLinearVelocity(body, .{ .x = vx, .y = vy });
 }
 
+/// Applies the impulse to the body's centre and wakes it; an id that does not resolve does
+/// nothing.
 fn applyImpulse(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, ix: f32, iy: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -285,6 +275,7 @@ fn applyImpulse(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, ix: f32, iy: f32) 
     c.b2Body_ApplyLinearImpulseToCenter(body, .{ .x = ix, .y = iy }, true);
 }
 
+/// Locks or unlocks the body's rotation; an id that does not resolve does nothing.
 fn setBodyFixedRotation(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, fixed: bool) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -292,6 +283,7 @@ fn setBodyFixedRotation(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, fixed: boo
     c.b2Body_SetFixedRotation(body, fixed);
 }
 
+/// Scales the gravity that acts on the body; an id that does not resolve does nothing.
 fn setBodyGravityScale(self_in: ?*c.ke_physics_2d, id: c.ke_body_2d, scale: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;

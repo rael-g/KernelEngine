@@ -1,9 +1,10 @@
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Discovers the current project (walking up from the CWD looking for a <c>Project</c> file —
-/// same pattern as git) and the engine repo root (next ancestor with a <c>CMakeLists.txt</c> and
-/// a <c>src/csharp/</c> directory). Resolves the paths every subcommand needs.
+/// The paths a subcommand works on. <see cref="Discover"/> walks up from the given directory to
+/// the nearest one holding a <c>Project</c> file, and from there to the nearest ancestor holding
+/// both a <c>CMakeLists.txt</c> and a <c>src/csharp</c> directory, which is the engine root.
+/// <see cref="Discover"/> throws when the Project file, the csproj or the engine root is missing.
 /// </summary>
 public sealed class ProjectContext
 {
@@ -61,7 +62,7 @@ public sealed class ProjectContext
         return null;
     }
 
-    /// <summary>Computes a csproj-friendly relative path from this project to the module's csproj.</summary>
+    /// <summary>The path of the module's csproj relative to the project directory.</summary>
     public string ResolveCsprojReference(ModuleSpec module)
     {
         var absoluteRef = Path.GetFullPath(Path.Combine(EngineRoot, module.CsprojRef));

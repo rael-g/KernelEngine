@@ -1,17 +1,5 @@
-//! The window backend's state and its vtable slots. `Core` owns a device and borrows an optional
-//! input; `create` fills a `ke_window` table whose handle points back at the Core, so each slot
-//! recovers its state from the table it is given. The device is started by `initialize`, and the
-//! Core remembers that, so a repeated start does not reach the device again.
-//!
-//! Teardown has two forms. The shutdown slot stops the device and keeps everything, so the window
-//! can be started again. `destroyApi` stops the device, destroys it and frees the Core, and is the
-//! only place that memory is released.
-//!
-//! Polling hands the device `handleEvent` as its sink. During the poll it translates key, mouse
-//! button, cursor and scroll events into the input's callbacks, and drops every other event and
-//! any event whose callback is absent. A slot given a null table reports invalid argument, except
-//! the should-close slot, which says the window should close, and the native-handle slot, which
-//! returns null.
+//! The window backend's state and its `ke_window` slots, written over any device of the platform
+//! seam.
 
 const std = @import("std");
 
@@ -88,6 +76,8 @@ pub const Core = struct {
         heap.gpa.destroy(self);
     }
 
+    /// The `on_initialize` slot. The factory already started the device, so this only checks the
+    /// table; a null table reports invalid argument.
     fn onInitialize(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
         if (from(self_in) == null) {
             E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -96,6 +86,8 @@ pub const Core = struct {
         return true;
     }
 
+    /// The `on_shutdown` slot. Stops the device through `shutdownInternal` and keeps the Core; a
+    /// null table reports invalid argument.
     fn onShutdown(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
         const self = from(self_in) orelse {
             E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -112,6 +104,9 @@ pub const Core = struct {
         return if (dev.shouldClose()) 1 else 0;
     }
 
+    /// The `poll_events` slot. Drains the device's pending events through `handleEvent` before it
+    /// returns. A null table reports invalid argument; a Core without a device succeeds and does
+    /// nothing.
     fn pollEvents(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
         const self = from(self_in) orelse {
             E.fail(out_error, .invalid_argument, "invalid argument", @src());
@@ -122,6 +117,8 @@ pub const Core = struct {
         return true;
     }
 
+    /// The `get_size` slot. Writes the width and height into each non-null out pointer. A null
+    /// table reports invalid argument; a Core without a device returns false with no error set.
     fn getSize(
         self_in: ?*c.ke_window,
         width: [*c]i32,
@@ -141,6 +138,7 @@ pub const Core = struct {
         return true;
     }
 
+    /// The `get_native_handle` slot. Null when the table or the device is missing.
     fn getNativeHandle(self_in: ?*c.ke_window) callconv(.c) ?*anyopaque {
         const self = from(self_in) orelse return null;
         const dev = self.dev orelse return null;

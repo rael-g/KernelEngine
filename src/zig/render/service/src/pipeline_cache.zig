@@ -1,19 +1,5 @@
-//! Pipeline requests are answered at once and upgraded later: a new pipeline starts as a fallback
-//! that draws magenta, and becomes the real pipeline when the device finishes compiling it.
-//!
-//! A request is reduced to a `PsoKey`, the fields of its params that decide a pipeline. One `Entry`
-//! exists per key, holding the fallback, built synchronously from the caller's params with a
-//! magenta fragment module, and the real pipeline, requested asynchronously with those params. The
-//! device's callback publishes the real pipeline with a release store, and `Entry.current` returns
-//! it from then on, the fallback before that and after a pipeline reported as invalid.
-//!
-//! Lookups take no lock. The entries live in a copy-on-write `Snapshot`, an open-addressed table
-//! that is never changed once published. `PipelineCache.insert` builds a grown copy holding the new
-//! entry and swaps it in with a compare-and-swap, repeating the search when another insert wins.
-//! Replaced snapshots are retired rather than freed so a reader still searching one stays valid,
-//! and `PipelineCache.destroyAll` releases the entries, every snapshot and the shared fallback
-//! modules. `getOrCreatePipeline` drives all of it, and falls back to a synchronous, uncached
-//! pipeline when an allocation fails.
+//! Answers the render service's pipeline requests at once with a placeholder, and upgrades each to
+//! the real pipeline once the device has compiled it.
 
 const std = @import("std");
 const heap = @import("heap");
@@ -91,8 +77,8 @@ const Entry = struct {
     }
 };
 
-/// Called by the device from its event pump once the asynchronous request made by
-/// `getOrCreatePipeline` finishes. An invalid pipeline is dropped, leaving the entry on its
+/// Called by the device, on whichever thread finished the compile, once the asynchronous request
+/// made by `getOrCreatePipeline` finishes. An invalid pipeline is dropped, leaving the entry on its
 /// fallback.
 fn onRealPipelineReady(pso: c.ke_gpu_pipeline, user: ?*anyopaque) callconv(.c) void {
     const entry: *Entry = @ptrCast(@alignCast(user.?));
@@ -298,6 +284,11 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_p
 /// pipeline. A new key returns its fallback while the real pipeline compiles, and the same key
 /// returns the real pipeline once the device has delivered it. Only when the entry or the grown
 /// table cannot be allocated is the pipeline created synchronously, and then it is not cached.
+/// Callable from several workers at once without a lock: a request that loses the publication of
+/// its entry destroys the fallback it built, never starts its compile, and answers with the
+/// entry that won. A pipeline the device fails to compile leaves the entry on its fallback for
+/// good. The vertex layout array of `params` is part of the key by address, so it has to live as
+/// long as the requests that must share an entry.
 pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
     const st = rc.coreOf(self);
     const key = PsoKey.fromParams(params);

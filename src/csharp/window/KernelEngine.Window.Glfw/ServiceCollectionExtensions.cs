@@ -31,8 +31,8 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Backward-compatible overload that passes window settings inline, bypassing the
-    /// Project file. Lets examples that have not migrated to Project keep working.
+    /// Registers the window singleton with the given settings, windowed, bypassing the Project
+    /// file.
     /// </summary>
     public static IServiceCollection AddGlfwWindow(
         this IServiceCollection services, int width, int height, string title)

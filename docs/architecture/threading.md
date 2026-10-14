@@ -1,73 +1,44 @@
 # Which threads exist, what runs on them, and how does work reach them?
 
-One pool, reached through one contract. Nothing in the contract or in any plugin names a thread by
-role.
+This is a map: the pool, who submits to it and where work lands. Contract is `ke_scheduler` under
+`src/c/scheduler/`; the only implementation is `src/zig/scheduler/enki/src/enki_scheduler.zig`.
 
-## The pool
+## The parts
 
-`ke_scheduler` (`src/c/scheduler/kernel_engine/scheduler/scheduler.h:39`) is a struct of six
-function pointers over an opaque handle. Its one implementation is enkiTS
-(`src/zig/scheduler/enki/src/enki_scheduler.zig`), created by `ke_scheduler_enki_create`
-(`enki_scheduler.zig:195`). The factory takes no worker-count parameter; the pool is whatever
-`enkiInitTaskScheduler` makes of the machine (`enki_scheduler.zig:209`).
+| part | declared as | receives | hands on |
+|---|---|---|---|
+| pool | `ke_scheduler`, made by `ke_scheduler_enki_create` | task functions | their execution on workers |
+| runtime | `ke_runtime_create` | the pool | system bodies and the render phase, as tasks |
+| ecs | `ke_ecs_flecs_create` | nothing from the pool | single-threaded storage |
+| managed layer | `IScheduler` | actions | tasks on the pool, pinned or free |
 
-`get_num_workers` reports enki's thread count minus one (`enki_scheduler.zig:174-180`).
+**There is one pool and no named thread.** Workers are addressed by index. No contract or plugin
+in the engine's native side defines a "sim" or a "render" thread.
 
-Every subsystem that runs work in parallel goes through this one object. The runtime's wave
-dispatcher is a client like any other ([runtime.md](runtime.md#dispatch)); flecs is given no
-threads and no pipeline — the plugin only calls `ecs_init()` (`src/zig/ecs/flecs/src/ecs_flecs.zig:540`),
-never `ecs_set_threads` or `ecs_progress`.
+**The runtime is a client of the pool.** A system body runs as a task on whichever worker takes
+it, or on the worker named by its `pinned_thread` when that is non-zero. The render phase is one
+task submitted with `dispatch`, and its systems are submitted into the same pool by the same
+wave code. See runtime.md.
 
-## A task
+**The ecs asks for no threads.** `ke_ecs_flecs_create` initializes flecs with `ecs_init` and
+never sets a thread count. Structural calls of `ke_ecs` are single-threaded; `entity_reserve` is
+the one that may be called from any wave thread.
 
-`dispatch` schedules a function to run on any worker; `dispatch_on_complete` adds a callback that
-runs on the same worker right after the body; `dispatch_pinned` runs it on one named worker
-(`scheduler.h:48`, `57`, `82`). Each returns a `ke_task *`.
+**A task is waited on once.** `dispatch`, `dispatch_on_complete` and `dispatch_pinned` return a
+`ke_task`; `wait` blocks, releases it and raises the body's failure on the waiting thread.
 
-- **`wait` consumes the task.** It blocks, then frees the task's storage before returning
-  (`enki_scheduler.zig:142-162`; the free is line 168). A task is waited on exactly once, and a
-  task that is never waited on is never freed.
-- `is_completed` only reads a flag (`enki_scheduler.zig:168-171`); it does not release anything.
-- `ke_task *` is a tagged pointer: the low bit records whether the task is pinned, so `wait` picks
-  the matching enkiTS call (`enki_scheduler.zig:12-51`). Callers must not interpret it.
+**Pinning is by index.** Index `0` is "any" for the runtime. The managed layer pins to index 1:
+`RenderWorker` in `SceneRouterModule` and `SetupWorker` in `SceneNodesModule`
+(`src/csharp/framework`). No native plugin sets a non-zero `pinned_thread`.
 
-### What a failing body returns
+**The window is not on the pool.** The host calls `IWindow.PollEvents` on the thread that created
+the window, before each `Tick`.
 
-A body reports failure by writing an error **type** to `out_failure` (`scheduler.h:28`). The type is
-a program-lifetime node; a `ke_error` lives in the failing thread's own storage and would be
-recycled before anyone read it ([abi.md](abi.md#what-the-error-record-holds)). `wait` builds a fresh
-error from the type on the waiting thread, with a message naming the slot, not the failure
-(`enki_scheduler.zig:161-164`; `scheduler.h:67-69`).
+**There is no lock to take.** Plugins use no mutex, condition variable or thread of their own;
+ordering between producers and consumers is phases and waves, and waiting on one piece of work is
+`wait`.
 
-## Pinning
+## What the parts agree on without a contract
 
-`dispatch_pinned` takes a worker index (`scheduler.h:78`). The index is enki's; the contract
-gives it no name and no meaning. The runtime reads `0` in a system's `pinned_thread` as "any
-worker" (`runtime.zig:607`), so a system can only be pinned to index 1 or above.
-
-Who pins, today:
-
-- **No native plugin.** Every render plugin sets `pinned_thread = 0`
-  (`grep -rn 'pinned_thread' src/zig/render`).
-- **Two managed modules**, each with its own private constant holding the same number:
-  `RenderWorker = 1` (`src/csharp/framework/KernelEngine.Framework/Modules/SceneRouterModule.cs:14`)
-  and `SetupWorker = 1` (`.../Modules/SceneNodesModule.cs:25`).
-
-There is no `ke.sim` or `ke.render` thread. The strings appear in a few doc comments in contract
-headers (`grep -rn 'ke\.sim' src/c src/zig`) and nowhere in a function that dispatches.
-
-## Where an ordinary system body runs
-
-On whichever worker takes its task, unless `pinned_thread` is non-zero
-([runtime.md](runtime.md#dispatch)). The window's event poll is not one of them: GLFW delivers events to the thread that
-created the window, so the host calls `window.PollEvents()` on that thread before each `Tick`.
-
-The render phase is one task dispatched with `dispatch`, not `dispatch_pinned`
-(`runtime.zig:903`), and each render system inside it is dispatched into the same pool by the same
-wave code.
-
-## Synchronization
-
-There is no mutex, condition variable or raw thread for plugins to use. Ordering between
-producers and consumers is expressed as phases and waves ([runtime.md](runtime.md)); waiting on a
-single piece of work is `wait`.
+- Worker indexes are the enkiTS ones, and `get_num_workers` excludes the calling thread.
+- The managed layer's two pinned modules use the same index.

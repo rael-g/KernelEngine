@@ -4,20 +4,16 @@
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// The funnel through which a <see cref="Node"/>'s per-frame logic observes
-/// and mutates the world. Passed by ref to <see cref="Node.OnUpdate"/>.
+/// What a <see cref="Node"/>'s per-frame logic is given for one tick: the time step, the input
+/// state and the command queue of the running system. Passed by reference to
+/// <see cref="Node.OnUpdate"/> and valid only during that call.
 /// </summary>
 public readonly ref struct View
 {
     /// <summary>Time since the previous tick, in seconds.</summary>
     public float DeltaTime { get; }
 
-    /// <summary>The node world this node belongs to.</summary>
-    /// <summary>
-    /// The world driving this tick. Internal for the same reason
-    /// <see cref="Node"/> keeps its own private: a behavior reaching the whole
-    /// world through its view is the same unrestricted access by another door.
-    /// </summary>
+    /// <summary>The script host driving this tick.</summary>
     internal ScriptHost ScriptHost { get; }
 
     private readonly IInputReader? _input;
@@ -26,7 +22,9 @@ public readonly ref struct View
     /// The queue this tick's structural changes are recorded into, applied at the
     /// wave barrier.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The view was not made inside a running system.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The view was not made inside a running system.
+    /// </exception>
     internal KernelEngine.Ecs.EcsCommands Commands =>
         _commands ?? throw new InvalidOperationException("This view does not belong to a running system.");
 

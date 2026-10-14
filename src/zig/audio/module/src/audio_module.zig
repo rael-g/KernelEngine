@@ -1,6 +1,5 @@
-//! Exports the call that makes the audio player component known to a world. The component is
-//! declared to the ECS first, and the id that returns is what the world needs to register the
-//! field table, so the order is fixed.
+//! Exports `ke_audio_register_scene_apply`, which makes the audio player component known to an ECS
+//! and to a world.
 
 const c = @import("cimport.zig").c;
 

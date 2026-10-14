@@ -4,8 +4,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Scheduler.Enki;
 
+/// <summary>Registers the enki-backed scheduler with a service collection.</summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers a singleton <see cref="KernelEngine.Scheduler.Scheduler"/> created on first resolution.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown at resolution when the native factory fails.</exception>
     public static IServiceCollection AddEnkiScheduler(this IServiceCollection services)
     {
         services.AddSingleton<KernelEngine.Scheduler.Scheduler>(sp =>

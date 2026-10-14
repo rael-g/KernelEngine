@@ -15,11 +15,17 @@ var stages = new Dictionary<string, Func<List<Step>>>
     ["test-windows"] = () => [new Step("zig build test windows", "zig", ["build", "test", "-Dtarget=x86_64-windows-gnu", "-fwine", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win", "--global-cache-dir", "build/zig-global"])],
     ["test-managed-windows"] = ManagedWindowsTests,
     ["gates"] = Gates,
+    ["docs"] = () =>
+    [
+        new Step("zig build docs", "zig", ["build", "docs", .. nativeArgs]),
+        new Step("dotnet tool restore", "dotnet", ["tool", "restore"]),
+        new Step("docfx build", "dotnet", ["tool", "run", "docfx", "build", "docs/docfx.json", "--warningsAsErrors"]),
+    ],
     ["visual"] = () => [new Step("visual", "dotnet", ["run", "scripts/visual.cs", .. args.Where(a => a == "--update")])],
     ["capture"] = () => [new Step("capture", "dotnet", ["run", "scripts/capture.cs", .. args.Where(a => a == "--update")])],
     ["cross-windows"] = () => [new Step("zig build windows", "zig", ["build", "-Dtarget=x86_64-windows-gnu", "--prefix", "build/cross-windows", "--cache-dir", "build/zig-cache-win", "--global-cache-dir", "build/zig-global"])],
 };
-string[] order = ["build", "test-native", "test-managed", "gates", "visual", "capture", "cross-windows", "test-windows", "test-managed-windows"];
+string[] order = ["build", "test-native", "test-managed", "gates", "docs", "visual", "capture", "cross-windows", "test-windows", "test-managed-windows"];
 
 var selected = args.Where(a => !a.StartsWith("--")).ToList();
 if (selected.Count == 0 || selected.Contains("all")) selected = [.. order.Where(s => s is not ("capture" or "cross-windows" or "test-windows" or "test-managed-windows"))];

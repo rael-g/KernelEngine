@@ -1,9 +1,8 @@
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// DAG sort for module ordering. Output preserves declaration order among independent modules
-/// (Kahn's algorithm) — so a user adding A then B (with A and B not depending on each other)
-/// sees them appear in the generated Program.cs in the order they added them.
+/// Orders modules so each comes after those it depends on, keeping the input order among modules
+/// that do not depend on each other. A dependency outside the input is ignored; a cycle throws.
 /// </summary>
 internal static class TopologicalSort
 {

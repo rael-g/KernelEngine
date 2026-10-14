@@ -1,28 +1,5 @@
-//! The script host ties an entity to the opaque instance a script binds to it, and answers the
-//! lookups a script makes from that entity into the scene around it. Its records live in two
-//! places that point at each other. The `State` holds a fixed table of `ScriptType` records, one
-//! per registered name, each with the list of entities bound to that type. The ecs holds the
-//! `Binding` component of every bound entity, which names the type, carries the instance pointer
-//! untouched, and records the entity's index in its type's list.
-//!
-//! A type is introduced by `registerType`, which gives a name one id for good: registering the same
-//! description again returns that id, a different description under the same name is refused, and
-//! a full table is an out-of-memory failure. Binding goes through `bindNow` and unbinding through
-//! `unbindNow`, whether the call is immediate or recorded: `bindDeferred` and `unbindDeferred`
-//! validate when called and leave the change to `cbBind` and `cbUnbind` when the command queue is
-//! applied, where a failure has nobody to report to. `unbindNow` removes by swap, and rewrites the
-//! index of the entity that moved so every index keeps naming its entity.
-//!
-//! `resolve` answers a script's borrow from an owner. An ancestor borrow follows parent links
-//! upward and takes the first match; descendant and anywhere borrows search the owner's subtree
-//! or the type's own list, and a second match is reported as ambiguous with no entity rather than
-//! picked from. A node matches when its binding has the wanted type and, if a name was given, its
-//! name equals it. `instances` exposes a type's list without copying it, so it is valid only until
-//! the next bind or unbind of that type.
-//!
-//! `ke_script_host_create` needs the hierarchy and name components to exist already, sizes the type
-//! table from its params, and registers the binding component. `destroy` frees the host's own
-//! storage and leaves the components in the ecs. Nothing here starts a thread or takes a lock.
+//! The script host: the record of which entity a script instance is bound to, and the lookups a
+//! script makes from an entity into the scene around it.
 
 const std = @import("std");
 
@@ -64,6 +41,14 @@ const binding_component = "script_instance";
 
 /// Allocated by `ke_script_host_create` and freed by `destroy`. Only the first `type_count`
 /// elements of `types` hold records; the rest of the table is uninitialised.
+///
+/// The records of a host live in two places that point at each other. `types` holds one
+/// `ScriptType` per registered name, each with the list of entities bound to that type, and a
+/// type id is the index of its record plus one. The ecs holds the `Binding` component of every
+/// bound entity, which names the type, carries the instance pointer untouched and records the
+/// entity's index in its type's list. Binding goes through `bindNow` and unbinding through
+/// `unbindNow`, whether the call is immediate or recorded. Nothing here locks, so a host belongs
+/// to one thread at a time except for the recorded forms.
 const State = struct {
     api: c.ke_script_host,
     ecs: *c.ke_ecs,
@@ -112,10 +97,12 @@ fn matches(s: *State, entity: c.ke_entity, type_id: c.ke_script_type_id, wanted:
     return std.mem.eql(u8, getName(s, entity), wanted);
 }
 
-/// Backs the `register_type` slot. Registering a name again with the same reach and components
-/// returns the id the first registration got. The same name with any other description fails with
+/// Slot `register_type`. Registering a name again with the same reach and components returns the
+/// id the first registration got. The same name with any other description fails with
 /// already-exists and leaves the table unchanged. A new name fails with out-of-memory when the
-/// table is full.
+/// table is full. A null host, name or `out_id`, an empty or too long name, more components than
+/// a type may carry, or a component count without components fails as an invalid argument. Each
+/// failure returns false.
 fn registerType(
     self_in: ?*c.ke_script_host,
     name_in: [*c]const u8,
@@ -185,6 +172,8 @@ fn registerType(
     return true;
 }
 
+/// Slot `type_lookup`. Writes the id registered under the name and returns true; an unknown name
+/// returns false without an error.
 fn typeLookup(
     self_in: ?*c.ke_script_host,
     name_in: [*c]const u8,
@@ -202,8 +191,8 @@ fn typeLookup(
     return false;
 }
 
-/// The returned pointer aims into the record itself, so it stays valid until `destroy`. An id that
-/// is not registered returns null with the count written as zero.
+/// Slot `type_components`. The returned pointer aims into the record itself, so it stays valid
+/// until `destroy`. An id that is not registered returns null with the count written as zero.
 fn typeComponents(
     self_in: ?*c.ke_script_host,
     type_id: c.ke_script_type_id,
@@ -219,8 +208,8 @@ fn typeComponents(
     return &t.components;
 }
 
-/// An id that is not registered answers the widest reach, so a type the host cannot place is
-/// treated as able to touch anything.
+/// Slot `type_reach`. An id that is not registered answers the widest reach, so a type the host
+/// cannot place is treated as able to touch anything.
 fn typeReach(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) callconv(.c) c.ke_script_reach {
     const self = self_in orelse return c.KE_SCRIPT_REACH_ANY;
     const s = stateOf(self);
@@ -228,6 +217,10 @@ fn typeReach(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) callconv
     return t.reach;
 }
 
+/// Slot `bind`. Attaches the instance to the entity at once, so it belongs to code that no system
+/// body runs beside. Fails as invalid argument for a null host or the invalid entity, as not
+/// found for an unregistered type id, as already exists for an entity that carries an instance,
+/// and as out of memory when the component or the type's list cannot grow; each returns false.
 fn bind(
     self_in: ?*c.ke_script_host,
     entity: c.ke_entity,
@@ -310,8 +303,11 @@ fn cbUnbind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
     unbindNow(p.s, p.entity);
 }
 
-/// Checks the type, the entity and the command queue when it is called, but attaches nothing: the
-/// bind is recorded to run `cbBind` when the queue is applied.
+/// Slot `bind_deferred`. Checks the type, the entity and the command queue when it is called, but
+/// attaches nothing: the bind is recorded to run `cbBind` when the queue is applied, so the host
+/// does not change under a system body that is reading `instances`. A null host or queue or the
+/// invalid entity fails as an invalid argument, an unregistered type as not found, and a failed
+/// recording reports the queue's error; each returns false.
 fn bindDeferred(
     self_in: ?*c.ke_script_host,
     entity: c.ke_entity,
@@ -341,8 +337,10 @@ fn bindDeferred(
     return cmds.@"defer".?(cmds, cbBind, &pending, @sizeOf(PendingBind), out_error);
 }
 
-/// Only the command queue is checked when it is called. The entity's binding is looked up when the
-/// recorded unbind is applied by `cbUnbind`, not now.
+/// Slot `unbind_deferred`. Only the host and the command queue are checked when it is called, and
+/// a null one fails as an invalid argument; a failed recording reports the queue's error. Each
+/// returns false. The entity's binding is looked up when the recorded unbind is applied by
+/// `cbUnbind`, not now.
 fn unbindDeferred(
     self_in: ?*c.ke_script_host,
     entity: c.ke_entity,
@@ -361,12 +359,15 @@ fn unbindDeferred(
     return cmds.@"defer".?(cmds, cbUnbind, &pending, @sizeOf(PendingUnbind), out_error);
 }
 
+/// Slot `unbind`. Removes the entity's binding at once; an entity with none is left alone.
 fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
     unbindNow(stateOf(self), entity);
 }
 
-/// Reached from `unbind` and from `cbUnbind`. An entity with no binding is left untouched.
+/// Removes by swap, taking the last entity of the type into the vacated slot and rewriting its
+/// binding's index, so every index keeps naming its entity and `instances` is no longer in
+/// binding order. An entity with no binding is left untouched.
 fn unbindNow(s: *State, entity: c.ke_entity) void {
     const b = bindingOf(s, entity) orelse return;
     if (typeAt(s, b.type_id)) |t| {
@@ -384,6 +385,8 @@ fn unbindNow(s: *State, entity: c.ke_entity) void {
     _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
 }
 
+/// Slot `instance_of`. Writes the type and instance bound to the entity and returns true; an
+/// entity without a binding returns false.
 fn instanceOf(
     self_in: ?*c.ke_script_host,
     entity: c.ke_entity,
@@ -398,6 +401,8 @@ fn instanceOf(
     return true;
 }
 
+/// Slot `instance_count`. Returns how many entities are bound to the type, zero for an unknown
+/// id.
 fn instanceCount(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) callconv(.c) u32 {
     const self = self_in orelse return 0;
     const s = stateOf(self);
@@ -405,8 +410,9 @@ fn instanceCount(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) call
     return @intCast(t.entities.items.len);
 }
 
-/// The storage is the type's own list, handed out without a copy. The next bind or unbind of that
-/// type may move or reallocate it, so the pointer is valid only until then.
+/// Slot `instances`. The storage is the type's own list, handed out without a copy. The next bind
+/// or unbind of that type may move or reallocate it, so the pointer is valid only until then. An
+/// unknown id returns null with the count written as zero.
 fn instances(
     self_in: ?*c.ke_script_host,
     type_id: c.ke_script_type_id,
@@ -454,8 +460,13 @@ fn anywhere(s: *State, type_id: c.ke_script_type_id, wanted: []const u8, found: 
     return false;
 }
 
-/// Returns the entity found, or `KE_ENTITY_INVALID` when nothing matched or when more than one node
-/// did. The verdict is written to the out-parameter when the caller passes one.
+/// Slot `resolve`. Answers a script's borrow from an owner. An ancestor borrow follows parent
+/// links upward and takes the first match, so it is never ambiguous; descendant and anywhere
+/// borrows search the owner's subtree depth-first or the type's own list, and a second match is
+/// reported as ambiguous rather than picked from. A node matches when its binding has the wanted
+/// type and, if a name was given, its name equals it. Returns the entity found, or
+/// `KE_ENTITY_INVALID` when nothing matched or when more than one node did. The verdict is
+/// written to the out-parameter when the caller passes one.
 fn resolve(
     self_in: ?*c.ke_script_host,
     owner: c.ke_entity,
@@ -497,8 +508,8 @@ fn resolve(
     return found;
 }
 
-/// The binding components stay registered in the ecs and no bound instance is released. The host
-/// frees only its own lists, table and state.
+/// The destroy of the handle. The binding components stay registered in the ecs and no bound
+/// instance is released. The host frees only its own lists, table and state.
 fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
@@ -507,11 +518,13 @@ fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Fails with invalid-argument for a null ecs, an ecs without component lookup and get, or a
-/// binding component that cannot be registered; with not-found when the hierarchy and name
-/// components are not registered yet; and with out-of-memory when the state or the type table
-/// cannot be allocated.
-/// Each failure releases what the call had allocated and returns a zeroed handle.
+/// Factory. Needs the hierarchy and name components to exist already, so a scene tree is created
+/// first; registers the binding component "script_instance" on the ecs and sizes the type table
+/// from the params, a zero field or a null pointer selecting the default. Fails with
+/// invalid-argument for a null ecs, an ecs without component lookup and get, or a binding
+/// component that cannot be registered; with not-found when the hierarchy and name components
+/// are not registered yet; and with out-of-memory when the state or the type table cannot be
+/// allocated. Each failure releases what the call had allocated and returns a zeroed handle.
 pub export fn ke_script_host_create(
     ecs_in: ?*c.ke_ecs,
     params: [*c]const c.ke_script_host_params,

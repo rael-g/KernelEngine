@@ -4,126 +4,104 @@ using KernelEngine.Ecs;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Base class for game-facing scene objects. A Node is the managed wrapper
-/// around an ECS entity. Game code instantiates subclasses with init properties
-/// (object-initializer syntax) and hands them to <see cref="ScriptHost.AddNode"/>;
-/// AddNode creates the native entity and asks the node to materialize its components.
+/// Base class for scene objects: the managed wrapper around one ECS entity, bound to it by
+/// <see cref="ScriptHost.AddNode"/> or by the native scene loader, and unbound again when the
+/// node is destroyed. Its properties read and write the entity's components in place.
 /// </summary>
 public abstract class Node
 {
-    /// <summary>ECS entity this node wraps. 0 before AddNode.</summary>
+    /// <summary>ECS entity this node wraps. 0 while the node is not bound.</summary>
     public ulong Entity { get; private set; }
 
-    /// <summary>
-    /// The world that owns this node. Null before AddNode.
-    /// </summary>
     private ScriptHost? ScriptHost { get; set; }
 
     /// <summary>
-    /// Display name (debug / lookups). Read live from <c>ke_name_component</c> —
-    /// not a managed copy, so it can never drift from the entity's actual name.
-    /// "" before AddNode binds this node.
+    /// Name of the entity, read from <c>ke_name_component</c> each time. Empty while the node is
+    /// not bound.
     /// </summary>
     public string Name => ScriptHost?.GetName(Entity) ?? "";
 
-    /// <summary>True after AddNode binds this node to an entity.</summary>
+    /// <summary>True while the node is bound to an entity.</summary>
     public bool IsBound => ScriptHost != null;
 
     /// <summary>
-    /// Parent node, resolved live from <c>ke_hierarchy_component</c>. Null before
-    /// binding, when this node has no parent, or when the parent entity has no
-    /// managed <see cref="Framework.Node"/> bound to it.
+    /// Parent node, resolved from <c>ke_hierarchy_component</c> each time. Null while unbound,
+    /// when this node has no parent, or when the parent entity has no managed
+    /// <see cref="Framework.Node"/> bound to it.
     /// </summary>
     public Node? Parent => ScriptHost?.GetParent(Entity);
 
     /// <summary>
-    /// Child nodes, walked live from <c>ke_hierarchy_component</c> in insertion
-    /// order. Empty before binding.
+    /// Child nodes, walked from <c>ke_hierarchy_component</c> each time in creation order.
+    /// Empty while unbound.
     /// </summary>
     public IReadOnlyList<Node> Children => ScriptHost?.GetChildren(Entity) ?? Array.Empty<Node>();
 
     /// <summary>
-    /// Called once by <see cref="ScriptHost.AddNode"/> after the entity has been
-    /// created and after <see cref="GeneratedBind"/> has materialized this node's
-    /// generated components. Override to materialize components the generator does
-    /// not know about. Base implementation is a no-op.
+    /// Called once when the node is bound, after <see cref="GeneratedBind"/> has resolved this
+    /// node's generated components. Base implementation is a no-op.
     /// </summary>
     protected internal virtual void OnBind(ScriptHost scriptHost) { }
 
     /// <summary>
-    /// Materializes the components this node's generated properties are backed by:
-    /// resolves each component id and seeds the values authored before binding.
-    /// Overridden by <c>NodePropertyGenerator</c>; base is a no-op.
+    /// Called once when the node is bound, before <see cref="OnBind"/>: resolves the component id
+    /// of each slot behind the node's generated properties and seeds the values authored before
+    /// binding. Overridden by <c>NodePropertyGenerator</c>; base is a no-op.
     /// </summary>
     protected internal virtual void GeneratedBind(ScriptHost scriptHost) { }
 
     /// <summary>
-    /// Called once after every entity in the scene is loaded and every component
-    /// block applied. Override to look up sibling nodes, or to act on a component
-    /// the scene authored — both are guaranteed to exist at this point.
-    /// Base implementation is a no-op.
+    /// Called once after every entity of the loaded scene file exists and every component block
+    /// is applied, so the sibling nodes and authored components can be looked up. Base
+    /// implementation is a no-op.
     /// </summary>
     protected internal virtual void OnReady() { }
 
     /// <summary>
-    /// Called every simulation tick on bound nodes. Default is a no-op so
-    /// only nodes that override this pay the virtual-call cost each frame.
+    /// Called every simulation tick on a bound node of a type that has behavior. Base
+    /// implementation is a no-op.
     /// </summary>
     protected internal virtual void OnUpdate(in View view) { }
 
     /// <summary>
-    /// Called once when the node is removed from the world. Scripts that own
-    /// external resources release them here. Base implementation is a no-op.
+    /// Called once when the node is removed from the world, children first. Base implementation
+    /// is a no-op.
     /// </summary>
     protected internal virtual void OnUnbind() { }
 
     /// <summary>
-    /// True when the subclass has per-frame logic — <see cref="OnUpdate"/> is
-    /// overridden. Decided at compile time, not by reflecting on the instance:
-    /// a hand-written subclass overrides this the same way it overrides
-    /// <see cref="OnUpdate"/> itself; a generated subclass gets the override
-    /// emitted by <c>NodePropertyGenerator</c> when it detects the user's own
-    /// partial declares <c>OnUpdate</c>. Base is false so a node type with no
-    /// override is never announced as a behavior and gets no per-frame system.
+    /// True when the node type has per-frame logic and so gets a per-frame system. Overridden by
+    /// <c>NodePropertyGenerator</c> for a type that declares <c>Update</c> or overrides
+    /// <see cref="OnUpdate"/>; base is false.
     /// </summary>
     protected internal virtual bool HasBehavior => false;
 
     /// <summary>
-    /// Whether this node type's behavior touches nothing beyond its own entity, which is
-    /// what lets the host run its instances concurrently: two instances are two entities,
-    /// so their work cannot overlap. False for a node that borrows another node, and for
-    /// a hand-written <see cref="OnUpdate"/>, whose reach the generator cannot see.
-    /// Base is false so anything unproven runs serially.
+    /// Whether this node type's behavior touches nothing beyond its own entity, so that its
+    /// instances may run concurrently. False for a node that borrows another node, and for a
+    /// hand-written <see cref="OnUpdate"/>. Base is false.
     /// </summary>
     protected internal virtual bool ReachesOnlyItself => false;
 
     /// <summary>
-    /// Appends the ECS components this node type reaches and how it reaches them, so
-    /// the scheduler can order its behavior against the other writers of those
-    /// components instead of trusting phase placement. An override calls the base
-    /// first and then adds its own, which is what makes an inherited component set
-    /// accumulate down the chain.
+    /// Appends the ECS components this node type reaches and how it reaches them. An override
+    /// calls the base first and then adds its own, so an inherited set accumulates down the
+    /// chain.
     /// </summary>
     protected internal virtual void CollectBehaviorComponents(List<NodeComponentUse> into) { }
 
     /// <summary>
-    /// Declares every payload type this node type emits or handles, so a signal a
-    /// scene may legitimately name exists before any scene is read. Without it a
-    /// signal comes into being only when something first emits it, which makes a
-    /// scene naming a real signal indistinguishable from one naming a typo.
-    /// Accumulates down the chain the same way <see cref="CollectBehaviorComponents"/>
-    /// does.
+    /// Declares every payload type this node type emits or handles. An override calls the base
+    /// first, as <see cref="CollectBehaviorComponents"/> does.
     /// </summary>
     protected internal virtual void CollectSignalTypes(ISignalDeclarer into) { }
 
     /// <summary>
     /// Creates <paramref name="child"/> as this node's child, under
-    /// <paramref name="name"/>. The name is what a <see cref="Borrow{T}"/> call
-    /// resolves against, so two children of the same type are told apart by it.
+    /// <paramref name="name"/>, which a <see cref="Borrow{T}"/> call can resolve against.
     /// </summary>
     /// <returns>
-    /// The same instance, now bound — so it can be kept in a field without a
-    /// second lookup.
+    /// The same instance, now bound.
     /// </returns>
     /// <exception cref="InvalidOperationException">This node is not bound yet.</exception>
     protected T AddChild<T>(T child, string name = "") where T : Node
@@ -135,25 +113,23 @@ public abstract class Node
     }
 
     /// <summary>
-    /// Attaches a component to this entity from inside a behavior, routed through
-    /// the running system so the structural change defers to the wave barrier.
-    /// For a component this node's own type does not declare — one the node
-    /// produces each tick for another domain's pass to read.
+    /// Attaches a component to this entity from inside a behavior, recorded in the running
+    /// system's command queue so the change applies at the wave barrier. For a component this
+    /// node's own type does not declare.
     /// </summary>
     protected void Attach<T>(in View view, uint cid, in T value) where T : unmanaged =>
         view.Commands.Attach(Entity, cid, in value);
 
     /// <summary>
-    /// Removes this node and everything under it from the world. Destroying a
-    /// node other than <c>this</c> means holding a reference to it and asking it
-    /// — the same way adding a child does.
+    /// Removes this node and everything under it from the world. Does nothing when the node is
+    /// not bound.
     /// </summary>
     public void Destroy() => ScriptHost?.DestroyNode(this);
 
     /// <summary>
-    /// Reads one of this entity's components by its ECS registration name, for a
-    /// component this node's own type does not declare (one a scene block or
-    /// another domain put there).
+    /// Reads one of this entity's components by its ECS registration name, for a component this
+    /// node's own type does not declare. Returns false when the node is not bound or the entity
+    /// does not carry the component.
     /// </summary>
     protected bool TryGetComponent<T>(string componentName, out T value) where T : unmanaged
     {
@@ -163,9 +139,9 @@ public abstract class Node
     }
 
     /// <summary>
-    /// Resolves a borrow within <paramref name="reach"/>. Called by generated dispatch
-    /// each tick rather than cached, so a borrow can never outlive the node it points
-    /// at. An empty <paramref name="name"/> resolves by type alone.
+    /// Resolves a borrow within <paramref name="reach"/>, anew on every call. Returns null when
+    /// nothing matches or when more than one node does. An empty <paramref name="name"/>
+    /// resolves by type alone.
     /// </summary>
     protected internal T? Borrow<T>(string name, ScriptBorrow reach) where T : Node =>
         ScriptHost?.Borrow(this, typeof(T), name, reach) as T;
@@ -183,7 +159,7 @@ public abstract class Node
         Entity    = 0;
     }
 
-    /// <summary>Whether this node is bound to <paramref name="world"/> specifically.</summary>
+    /// <summary>Whether this node is bound to <paramref name="world"/>.</summary>
     internal bool BelongsTo(ScriptHost world) => ReferenceEquals(ScriptHost, world);
 
     internal void BindToScene(ScriptHost scriptHost, ulong entity)
@@ -200,10 +176,8 @@ public abstract class Node
 
     /// <summary>
     /// Seeds one of this node's components at bind time: writes the value authored before
-    /// binding, unless the entity already carries that component, in which case the
-    /// existing value wins. That is what lets a node bind to an entity the native scene
-    /// loader already populated without the managed defaults erasing what the scene
-    /// authored — for every component alike, with no node type singled out.
+    /// binding, unless the entity already carries that component, in which case the existing
+    /// value is kept.
     /// </summary>
     protected internal void GeneratedSeed<T>(uint cid, in T state) where T : unmanaged
     {
@@ -212,26 +186,23 @@ public abstract class Node
     }
 
     /// <summary>
-    /// Writes one of this node's component values. The generated property setters
-    /// go through here rather than through the world itself, which is what lets
-    /// the world stay private to <see cref="Node"/>: reaching a component is the
-    /// only thing a node's own storage needs it for.
+    /// Writes one of this node's component values.
     /// </summary>
     protected internal void GeneratedSet<T>(uint cid, in T state) where T : unmanaged =>
         ScriptHost!.SetByCid(Entity, cid, in state);
 
-    /// <summary>Reads one of this node's component values. Counterpart to <see cref="GeneratedSet{T}"/>.</summary>
+    /// <summary>
+    /// Reads one of this node's component values. Counterpart to <see cref="GeneratedSet{T}"/>.
+    /// </summary>
     protected internal bool GeneratedTryGet<T>(uint cid, out T state) where T : unmanaged =>
         ScriptHost!.TryGetByCid(Entity, cid, out state);
 
     /// <summary>
-    /// Reaches one of this node's components in place, so a generated property touches
-    /// the one field it names instead of copying the whole struct in and back out.
-    /// <paramref name="live"/> reports whether the returned reference is the component's
-    /// own storage; when false it is <paramref name="authored"/>, the node's pre-bind
-    /// value, and a writer must still publish through <see cref="GeneratedSet{T}"/> —
-    /// which is the case both before binding and while an attach is queued behind a
-    /// wave barrier.
+    /// Returns a reference to one of this node's components in place.
+    /// <paramref name="live"/> reports whether the reference is the component's own storage;
+    /// when false it is <paramref name="authored"/>, the node's pre-bind value, which is the
+    /// case before binding and while an attach is queued behind a wave barrier, and a writer
+    /// must then publish through <see cref="GeneratedSet{T}"/>.
     /// </summary>
     protected internal ref T GeneratedStorage<T>(uint cid, ref T authored, out bool live) where T : unmanaged
     {
@@ -249,10 +220,9 @@ public abstract class Node
     }
 
     /// <summary>
-    /// Hands this node one signal delivered to it, dispatching to the <c>On</c>
-    /// method whose parameter type is <paramref name="payloadType"/>. Overridden by
-    /// <c>NodePropertyGenerator</c> for node types that declare handlers; base is a
-    /// no-op.
+    /// Hands this node one delivered signal, calling the <c>On</c> method whose parameter type is
+    /// <paramref name="payloadType"/>. Overridden by <c>NodePropertyGenerator</c> for node types
+    /// that declare handlers; base is a no-op.
     /// </summary>
     protected internal virtual void GeneratedDeliverSignal(Type payloadType, ReadOnlySpan<byte> payload) { }
 

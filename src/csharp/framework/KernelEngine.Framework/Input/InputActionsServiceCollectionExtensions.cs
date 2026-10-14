@@ -3,12 +3,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
 
+/// <summary>Service registration of the input action map.</summary>
 public static class InputActionsServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers an <see cref="IInputActionMap{TEnum}"/> singleton built from the TOML
-    /// file at <paramref name="path"/> (defaults to <c>actions.input</c> next to the
-    /// executable). Loaded eagerly so missing-file or parse errors surface at startup.
+    /// Registers the <see cref="InputActionMap{TEnum}"/> built from the TOML file at
+    /// <paramref name="path"/> (default <c>actions.input</c>, a relative path resolved against
+    /// the application base directory) as itself, as <see cref="IInputActionMap{TEnum}"/> and as
+    /// <see cref="IActionEvaluator"/>. The file is loaded when the map is first requested.
     /// </summary>
     public static IServiceCollection AddInputActions<TEnum>(
         this IServiceCollection services, string? path = null)

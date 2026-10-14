@@ -1,13 +1,11 @@
-//! Row-major 4x4 matrix arithmetic for the framework's transforms, with no state. Vectors are row
-//! vectors and the translation sits in the last row, so in a product the first factor applies
-//! first. The two constructors write a whole matrix from a pose and read none, while `mul` is the
-//! only function that reads existing matrices: it composes a local matrix with a parent's. No
-//! function takes an error argument, so none can fail.
+//! Row-major 4x4 matrix arithmetic for the framework's transforms: composing two matrices and
+//! building one from a 3D or 2D pose.
 
 const c = @import("c.zig").c;
 
-/// Writes `a` times `b` to `out`. The product is finished in a temporary before the output is
-/// written, so the output may be the same matrix as either input.
+/// Writes `a` times `b` to `out`. Vectors are row vectors, so the first factor applies first. The
+/// product is finished in a temporary before the output is written, so the output may be the same
+/// matrix as either input. Cannot fail.
 pub fn mul(out: *c.ke_mat4, a: *const c.ke_mat4, b: *const c.ke_mat4) void {
     var res: [16]f32 = undefined;
     for (0..4) |i| {
@@ -22,9 +20,9 @@ pub fn mul(out: *c.ke_mat4, a: *const c.ke_mat4, b: *const c.ke_mat4) void {
     out.m = res;
 }
 
-/// Writes the matrix of a scale, then a rotation, then a translation. The quaternion is used as
-/// given and never normalized, so one that is not of unit length makes the rotation block
-/// non-orthogonal.
+/// Writes the matrix of a scale, then a rotation, then a translation, with the translation in the
+/// last row. The quaternion is used as given and never normalized, so one that is not of unit
+/// length makes the rotation block non-orthogonal.
 pub fn fromTransform(
     out: *c.ke_mat4,
     pos: *const c.ke_vec3,

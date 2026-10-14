@@ -4,11 +4,10 @@ using KernelEngine.Input.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Enum-typed adapter over the native <see cref="NativeInputActions"/> — resolves
-/// each <typeparamref name="TEnum"/> value to its native action id once at load time,
-/// then reads per-tick state through the native evaluator. The action-file TOML
-/// grammar (<c>[action.Name]</c>, <c>bindings = [{kind=..., ...}]</c>) is parsed
-/// natively; this type owns no binding data of its own.
+/// Enum-typed adapter over <see cref="NativeInputActions"/>. Each <typeparamref name="TEnum"/>
+/// value is resolved once, at load, to the native action named like the value; a value with
+/// no such action reads as unbound. The file is parsed natively and this type owns no binding
+/// data. Disposing it destroys the native actions.
 /// </summary>
 public sealed unsafe class InputActionMap<TEnum> : IInputActionMap<TEnum>, IActionEvaluator, IDisposable
     where TEnum : struct, Enum
@@ -19,11 +18,10 @@ public sealed unsafe class InputActionMap<TEnum> : IInputActionMap<TEnum>, IActi
     private InputActionMap(NativeInputActions native) => _native = native;
 
     /// <summary>
-    /// Loads bindings from the <c>.input</c> TOML file at <paramref name="path"/> and
-    /// resolves every <typeparamref name="TEnum"/> value to its native action id
-    /// (an enum value with no matching <c>[action.Name]</c> section reads as
-    /// permanently unbound, never an error).
+    /// Loads bindings from the <c>.input</c> TOML file at <paramref name="path"/> and resolves
+    /// every <typeparamref name="TEnum"/> value to its native action id.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The native load fails.</exception>
     public static InputActionMap<TEnum> LoadFromFile(string path)
     {
         var native = new NativeInputActions();

@@ -6,15 +6,6 @@ namespace Kabic.Cli;
 /// <summary>
 /// Implements the command that projects one API description into C# files.
 /// </summary>
-/// <remarks>
-/// Run reads the flags into the paths and names of one projection. A flag consumes the argument
-/// that follows it, and an unrecognised argument is ignored. The API file, the namespace, the
-/// native namespace and the output directory are required; without them the usage is written to
-/// the error stream and the command returns one. The contract directory defaults to the output
-/// directory, and the manifest defaults to the default manifest path. <c>Generation.CSharp</c>
-/// writes the projection, and an <c>InvalidOperationException</c> it throws is written to the
-/// error stream with the command returning one.
-/// </remarks>
 internal static class WriteCSharpCommand
 {
     /// <summary>

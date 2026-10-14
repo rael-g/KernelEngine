@@ -1,12 +1,8 @@
 namespace KernelEngine.Asset.StbImage;
 
 /// <summary>
-/// The parts of <see cref="ImageLoader"/> that express the native surface in C# terms
-/// rather than mirroring it: the <see cref="IImageData"/> view (deferred-copy, reading
-/// straight through the native <c>ke_texture_data*</c> until disposed) and the
-/// worker-thread wrapping <see cref="Task.Run(Func{IImageData})"/> gives a synchronous
-/// native decode. Everything that is a direct image of the C ABI is generated in
-/// <c>Generated/ImageLoader.g.cs</c>.
+/// The stb_image loader over <c>ke_image_loader</c>. The <see cref="IImageData"/> it returns reads
+/// the native pixels in place until it is disposed.
 /// </summary>
 public unsafe partial class ImageLoader : IImageLoader
 {

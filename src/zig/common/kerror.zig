@@ -1,17 +1,5 @@
-//! Per-thread error recording for one translated C namespace. `Errors` takes the namespace that
-//! declares the error record and its type, and returns the functions that fill an error and the
-//! one that ends the process on it. The result owns one error record and one text buffer per
-//! thread, so the error a failing call hands out points at storage of the calling thread, and the
-//! next failure on that thread overwrites it.
-//!
-//! `fail` takes the type of the error from `Kind`, which selects among the singleton types
-//! `typeOf` returns, and `failWithType` takes a type from its caller. Both copy the message, cut
-//! to the buffer, record the file and line of the failing call, set no cause, and point the
-//! caller's error output at the record when it is not null. `fatal` writes the chain of an error
-//! to standard error, following its causes, and exits with a failure status.
-//!
-//! The file also declares `_DllMainCRTStartup`, the mingw DLL entry point, so that a plugin root
-//! can re-export it and have the static initializers of its linked C and C++ code run.
+//! Per-thread error recording for plugins that cannot link ke_common, and the mingw DLL entry
+//! point a plugin root re-exports.
 
 const std = @import("std");
 
@@ -42,6 +30,9 @@ fn stderrFile() [*c]io.FILE {
     return io.stderr;
 }
 
+/// Returns the error functions for the contract types of `c`, the cimport it is given. The
+/// record and the message buffer are per thread and shared by `fail` and `failWithType`, so the
+/// next failure on a thread overwrites the error the previous one handed out.
 pub fn Errors(comptime c: type) type {
     return struct {
         /// The kinds of singleton error type that `typeOf` returns. Each value indexes `types`,

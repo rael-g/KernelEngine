@@ -8,9 +8,19 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace KernelEngine.SourceGenerators;
 
+/// <summary>
+/// Source generator that completes a node class deriving from <c>Node</c>: the component slots
+/// behind its <c>partial</c> properties, the dispatch of its <c>Update</c> and <c>On</c>
+/// methods, and the registration of its component for scene files.
+/// </summary>
 [Generator]
 public sealed class NodePropertyGenerator : IIncrementalGenerator
 {
+    /// <summary>
+    /// Registers the classes that have a <c>partial</c> auto-property or a method named
+    /// <c>Update</c> or <c>On</c> with at least one parameter, and generates one part for each
+    /// that derives from <c>Node</c>.
+    /// </summary>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var propertyOwners = context.SyntaxProvider.CreateSyntaxProvider(
@@ -41,6 +51,19 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    /// Emits <c>&lt;Class&gt;.NodeProperties.g.cs</c>, one <c>partial</c> part with a slot per
+    /// component the class owns: a state field, a component id and a ref accessor. The slots come
+    /// from every <c>GeneratedNodeComponent</c> attribute on the class's own declaration, or, with
+    /// none, from one slot backed by a struct written from the <c>partial</c> properties and
+    /// named after the class in snake case. A property goes to the slot whose struct declares its
+    /// field. Behavior members are emitted only when the class has <c>Update</c> or overrides
+    /// <c>OnUpdate</c>. A class that is not <c>partial</c> emits nothing, and reports
+    /// <c>KESG005</c> if it declares <c>Update</c>. Property and field types must match, or
+    /// differ only by <c>bool</c> over <c>byte</c>, or <c>string</c> over a character array;
+    /// otherwise <c>KESG001</c>. A property that no slot, or more than one slot, declares is
+    /// <c>KESG002</c>, and <c>KESG003</c> is a pin naming a struct the class does not carry.
+    /// </summary>
     static void Generate(SourceProductionContext spc, ClassDeclarationSyntax classDecl, Compilation compilation)
     {
         var model = compilation.GetSemanticModel(classDecl.SyntaxTree);
@@ -356,10 +379,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         spc.AddSource($"{className}.NodeProperties.g.cs", sb.ToString());
     }
 
-    /// <summary>
-    /// Bytes of UTF-8 a string property stores, from its <c>[NodeText]</c> or the
-    /// default when it declares none.
-    /// </summary>
     const int DefaultTextCapacity = 128;
 
     static int TextCapacityOf(IPropertySymbol p)
@@ -369,7 +388,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         return attr.ConstructorArguments[0].Value is int n && n > 1 ? n : DefaultTextCapacity;
     }
 
-    /// <summary>The name a scene file addresses this node's own component by.</summary>
+    /// <summary>
+    /// Returns the name in snake case: a word starts at an uppercase letter unless the previous
+    /// character is a digit, or is uppercase while the next character is not lowercase. The result
+    /// is the registered component name of a game node and the key a scene file uses for it.
+    /// </summary>
     static string SnakeCase(string name)
     {
         var sb = new StringBuilder(name.Length + 4);
@@ -390,9 +413,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Emits the registration that gives a game node's component a scene-file surface:
-    /// the cid under the node's own name, plus the apply that fills each declared
-    /// property from the block's keys.
+    /// Emits the static <c>RegisterSceneApply</c> of a game node: it registers the component under
+    /// the slot's name and an apply callback that reads each property of a supported type from
+    /// the block by its snake case key. A property of any other type has no scene key.
     /// </summary>
     static void EmitSceneApply(StringBuilder sb, Slot slot, ImmutableArray<IPropertySymbol> properties)
     {
@@ -448,16 +471,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// The <c>VariantReader</c> accessor that can express <paramref name="type"/>, plus the
-    /// conversion from what it yields to the property's own type. Null when the scene-file
-    /// variant vocabulary has no representation for the type, which leaves that property
-    /// code-only rather than inventing an encoding for it.
-    /// </summary>
-
-    /// <summary>
-    /// One component of a node type's set: the native struct backing it, the name it is
-    /// registered under, and the members generated for it. The index suffix is what keeps
-    /// two components on the same node from colliding on a single state/cid pair.
+    /// One component of a node type's set: the native struct backing it (null for a game slot),
+    /// the name it is registered under, and its index, which suffixes the names of the state
+    /// field, the component id field and the accessor generated for it.
     /// </summary>
     sealed class Slot(INamedTypeSymbol? symbol, string typeName, string componentName, int index)
     {
@@ -505,13 +521,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// How a property's type is read out of and written into the field backing it, or null
-    /// when the two are the same type and no conversion is involved. What is left here is
-    /// only a difference in how a value is <em>spelled</em> -- a truth the ABI carries as a
-    /// byte, an enum a binding widened. A difference in <em>layout</em> has no answer at this
-    /// level: a reinterpreting cast checks size and not order, so it would pass a struct
-    /// whose fields moved. The backing state is the component's own projection, generated
-    /// from the same declaration as the property, so there is no layout left to bridge.
+    /// Returns the read and write conversions between a property type and the type of its backing
+    /// field, or null when no conversion applies. Only <c>bool</c> over <c>byte</c> converts; any
+    /// other difference of type is left for the caller to report.
     /// </summary>
     static (Func<string, string> read, Func<string, string> write)? CoercionFor(ITypeSymbol propertyType, ITypeSymbol fieldType)
     {
@@ -561,9 +573,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Emits the list of payload types this node type takes part in, both the ones it
-    /// handles and the ones it emits. Registering these at startup is what lets a scene
-    /// file's signal name be checked rather than taken on faith.
+    /// Emits <c>CollectSignalTypes</c>, declaring every payload type the class handles through
+    /// <c>On</c> and emits through an <c>Emit</c> parameter. Emits nothing when there is none.
     /// </summary>
     static void EmitSignalTypeCollection(
         StringBuilder sb,
@@ -599,9 +610,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             .ToArray();
 
     /// <summary>
-    /// Emits the dispatch that turns a delivered signal into a call on this node's
-    /// matching <c>On</c> handler. A node with no handler emits nothing, so listening
-    /// costs a virtual call only for types that actually listen.
+    /// Emits <c>GeneratedDeliverSignal</c>, which calls the <c>On</c> handler whose parameter
+    /// type is the payload type delivered. A class with no handler emits nothing.
     /// </summary>
     static void EmitSignalDispatch(StringBuilder sb, INamedTypeSymbol classSymbol, string overrideModifier)
     {
@@ -625,9 +635,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Which borrow a parameter type is, or null when it is not one. A wrapper says so
-    /// by carrying the reach it resolves with, which is what keeps the set of borrows
-    /// the vocabulary the engine declares rather than a list of names repeated here.
+    /// Returns the name of the borrow a parameter type is: <c>Emit</c>, or a generic wrapper
+    /// carrying a <c>NodeBorrow</c> attribute. Null when it is neither.
     /// </summary>
     static string? BorrowKindOf(ITypeSymbol type)
     {
@@ -636,7 +645,10 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         return ReachOf(named) is not null ? named.Name : null;
     }
 
-    /// <summary>The <c>ScriptBorrow</c> member a borrow wrapper resolves with, or null when the type is not one.</summary>
+    /// <summary>
+    /// The <c>ScriptBorrow</c> member a borrow wrapper resolves with, or null when the type is
+    /// not a borrow wrapper.
+    /// </summary>
     static string? ReachOf(INamedTypeSymbol named)
     {
         var marker = named.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeBorrowAttribute");
@@ -647,9 +659,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// The ECS component names a node type reaches, read from the markers on it and
-    /// its bases. A hand-written type carrying no markers contributes nothing, which
-    /// under-declares rather than over-declares its reach.
+    /// The component names a node type declares through <c>GeneratedNodeComponent</c> on itself
+    /// and its bases. A type carrying no such attribute contributes nothing.
     /// </summary>
     static IEnumerable<string> ComponentNamesOf(INamedTypeSymbol type)
     {

@@ -1,0 +1,138 @@
+- name: Guides
+  items:
+  - name: How do I start the engine from my own program?
+    href: guides/minimal-host.md
+  - name: How do I put something on screen?
+    href: guides/scene-on-screen.md
+  - name: How do I load a model into the scene?
+    href: guides/load-a-model.md
+- name: Architecture
+  items:
+  - name: "How does a call cross the C ABI, and how does a failure come back?"
+    href: architecture/abi.md
+  - name: "How does an asset path become a GPU resource, and what is shared between requests?"
+    href: architecture/assets.md
+  - name: "How does a Project file reach the value a plugin reads, and how does a change reach it?"
+    href: architecture/configuration.md
+  - name: "What does the ECS contract promise about threads and structural change, and how does the flecs plugin keep it?"
+    href: architecture/ecs.md
+  - name: "What is the framework made of, and what does each piece depend on?"
+    href: architecture/framework.md
+  - name: "What does the GPU device contract promise, and what does the WebGPU backend do with it?"
+    href: architecture/gpu-device.md
+  - name: "How does a key press reach a system body, and when is its edge visible?"
+    href: architecture/input.md
+  - name: "How is the engine divided into layers, and where does each kind of file live?"
+    href: architecture/layers.md
+  - name: "How do lights, shadows and image-based light reach a shading pass?"
+    href: architecture/lighting.md
+  - name: "How does a log event reach a sink?"
+    href: architecture/logging.md
+  - name: "How does the managed layer meet the native one?"
+    href: architecture/managed-layer.md
+  - name: "How does an authored material become something a pass can draw?"
+    href: architecture/materials.md
+  - name: "What does the engine derive from a node type's declaration?"
+    href: architecture/node-types.md
+  - name: "How do Body2D and Collider2D become a simulation, and what does each tick copy between them?"
+    href: architecture/physics.md
+  - name: "What happens when a pass asks for a pipeline that has not been compiled yet?"
+    href: architecture/pipeline-cache.md
+  - name: "How does a frame get from the ECS to the GPU?"
+    href: architecture/render.md
+  - name: "How does one runtime tick run, and what may run at the same time?"
+    href: architecture/runtime.md
+  - name: "Which threads exist, what runs on them, and how does work reach them?"
+    href: architecture/threading.md
+  - name: "How does the engine build view and projection matrices for the device's clip space?"
+    href: architecture/view-space.md
+- name: Decisions
+  items:
+  - name: "0001. Each kind of documentation lives where something keeps it true"
+    href: decisions/0001-each-kind-of-documentation-lives-where-something-keeps-it-true.md
+  - name: "0002. An error record lives in per-thread storage and its message is copied, never allocated"
+    href: decisions/0002-error-records-are-per-thread-and-never-allocate.md
+  - name: "0003. A plugin sees only the domains it asked for"
+    href: decisions/0003-one-include-path-per-domain.md
+  - name: "0004. Behavior two plugins share is Zig source passed by the build, not a contract header"
+    href: decisions/0004-shared-behavior-is-source-not-header.md
+  - name: "0005. A system body records structural changes and the runtime applies them after the wave"
+    href: decisions/0005-structural-change-recorded-then-applied.md
+  - name: "0006. A failure crosses threads as an error type, and the waiter raises a fresh error"
+    href: decisions/0006-failure-crosses-threads-as-a-type.md
+  - name: "0007. Reserved entity ids come from a band the world never issues from"
+    href: decisions/0007-entity-ids-reserved-from-a-band.md
+  - name: "0008. The runtime orders render passes; there is no render graph object"
+    href: decisions/0008-runtime-is-the-render-graph.md
+  - name: "0009. Commands reach the GPU in command-slot order, chosen by each pass"
+    href: decisions/0009-submission-order-by-command-slot.md
+  - name: "0010. A pass is never made to wait for a pipeline compile"
+    href: decisions/0010-pipeline-requests-never-wait.md
+  - name: "0011. A lighting feature that is off binds a neutral resource instead of compiling another shader"
+    href: decisions/0011-neutral-resources-not-shader-variants.md
+  - name: "0012. Refraction is a term only the forward pass has"
+    href: decisions/0012-refraction-is-forward-only.md
+  - name: "0013. An authored material names no pass; the build binds it to each consuming pass"
+    href: decisions/0013-material-bound-to-pass-by-the-build.md
+  - name: "0014. View space and the device clip convention are two contracts"
+    href: decisions/0014-view-space-independent-of-clip-convention.md
+  - name: "0015. A native handle crosses assemblies through an explicitly implemented INative interface"
+    href: decisions/0015-native-pointer-through-interface.md
+  - name: "0016. A managed handler's exception is caught at the trampoline and rethrown by the next managed call"
+    href: decisions/0016-handler-exceptions-do-not-cross-native-frames.md
+  - name: "0017. A configuration read returns the caller's fallback and never fails"
+    href: decisions/0017-configuration-read-never-fails.md
+  - name: "0018. A cached asset is identified by the key alone, and the key is the path as authored"
+    href: decisions/0018-asset-key-is-the-authored-path.md
+  - name: "0019. A plugin exposes vtables behind one factory per header"
+    href: decisions/0019-a-plugin-is-vtables-behind-one-factory.md
+  - name: "0020. A plugin takes no mutex, condition variable or thread of its own"
+    href: decisions/0020-the-scheduler-is-the-only-synchronisation.md
+  - name: "0021. A failure is a ke_error, never an assert or an abort"
+    href: decisions/0021-a-failure-is-a-ke-error-never-an-abort.md
+  - name: "0022. The framework is a plugin reached through contracts"
+    href: decisions/0022-the-framework-is-a-plugin-like-any-other.md
+  - name: "0023. A tuning value is a parameter with a default, not a constant"
+    href: decisions/0023-a-tuning-value-is-a-parameter.md
+  - name: "0024. The correct shape is chosen over the one that is easy today"
+    href: decisions/0024-the-narrow-path-is-chosen-over-the-easy-one.md
+  - name: "0025. Each language is written to its own convention"
+    href: decisions/0025-each-language-follows-its-own-convention.md
+  - name: "0026. A native owner is a pointer with Dispose, not a SafeHandle"
+    href: decisions/0026-no-safehandle-around-a-native-owner.md
+  - name: "0027. A boolean crosses the ABI as bool"
+    href: decisions/0027-a-boolean-crosses-the-abi-as-bool.md
+  - name: "0028. The Zig cache and package directories stay at the repository root"
+    href: decisions/0028-zig-cache-and-zig-pkg-stay-at-the-root.md
+  - name: "0029. The render phase reads copies of query results, not live storage"
+    href: decisions/0029-render-phase-reads-extracted-copies.md
+  - name: "0030. The shape of a plugin where no language convention applies"
+    href: decisions/0030-plugin-shape-where-no-language-convention-applies.md
+- name: Formats
+  items:
+  - name: "What does an input file say, and what does the loader do with it?"
+    href: formats/input-file.md
+  - name: "Which keys does a Project file have, and who reads each?"
+    href: formats/project-file.md
+  - name: "What does a scene file say, and what does the loader do with it?"
+    href: formats/scene-file.md
+- name: Conventions
+  items:
+  - name: "How does the build turn the tree into libraries, and where does everything land?"
+    href: conventions/build.md
+  - name: "What does CI run on a push, and what does it leave out?"
+    href: conventions/ci.md
+  - name: "How does work reach main?"
+    href: conventions/git.md
+  - name: "How is this project's documentation written?"
+    href: conventions/docs.md
+  - name: "How does a managed project get the native libraries it calls?"
+    href: conventions/managed-build.md
+- name: Reference
+  items:
+  - name: Engine
+    href: ../build/native/docs/engine/
+    homepage: ../build/native/docs/engine/index.md
+  - name: Kabic
+    href: ../build/native/docs/kabic/
+    homepage: ../build/native/docs/kabic/index.md

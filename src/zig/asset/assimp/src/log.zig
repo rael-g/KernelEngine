@@ -1,8 +1,4 @@
-//! Reports the loader's events to the logger it was given and fills fixed-size name fields.
-//! Every event carries one tag and goes to the logger's log function; with no logger, or a logger
-//! that has no such function, the event is dropped. Text is formatted only for error context, and
-//! formatting cannot fail outward: a missing detail and a text that does not fit each get a
-//! replacement message.
+//! Reports the assimp loader's events to its logger and copies text into fixed-size name fields.
 
 const std = @import("std");
 

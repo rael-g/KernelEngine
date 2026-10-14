@@ -1,16 +1,5 @@
-//! Implements the audio contract over a miniaudio engine, with the resource cache deciding how
-//! long each sound lives. Loaded sounds are slots in a map from sound id to `LoadedSound`; the
-//! ids are what the contract hands out, and the cache reference-counts them by id and by path.
-//!
-//! Loading a path the cache already knows returns its id with one more reference; a new path is
-//! opened, stored under a fresh id, and registered with the cache. Unloading only gives a
-//! reference back. When the last one goes the cache calls back, and that callback is the one place
-//! a slot is uninitialised and freed, so an id that was released stops resolving. Playing and
-//! stopping reach a sound only through its id, so an unknown id fails or does nothing.
-//!
-//! The backend is built in dependency order: engine, then cache, then the contract struct, each
-//! failure undoing the steps before it. Teardown reverses it with the cache first, because the
-//! cache's callback still needs the map and the engine. Everything runs on the calling thread.
+//! Implements the audio contract over a miniaudio engine, with a resource cache deciding how long
+//! each loaded sound lives.
 
 const std = @import("std");
 
@@ -46,7 +35,8 @@ const LoadedSound = struct {
 /// and passed to the cache as the context of `destroySoundResource`. `engine` is uninitialised only
 /// when `engine_ready` is set. `cache` and `cache_destroy` are undefined until the cache is
 /// created, and the destroy callback reads `sounds`, so the map must still exist while the cache is
-/// alive.
+/// alive. A sound id is a key of `sounds` and a handle of the cache, which reference-counts it by
+/// id and by path. Everything runs on the calling thread.
 const State = struct {
     logger: ?*c.ke_logger,
     engine: ma.ma_engine,
@@ -96,7 +86,8 @@ fn audioDestroy(self: ?*c.ke_audio) callconv(.c) void {
 }
 
 /// Returns the id the cache already holds for the path, with one more reference, or a new id that
-/// starts with one reference. The caller gives that reference back through `audioUnloadSound`.
+/// starts with one reference: a new path is opened, stored under a fresh id and registered with
+/// the cache by id and by path. The caller gives that reference back through `audioUnloadSound`.
 /// Returns the invalid sound id on failure, leaving no slot in the map: an invalid-argument error
 /// for a null backend or path, an out-of-memory error for the slot or the map entry, and a
 /// not-found error when miniaudio cannot open the file, which is also logged as a warning.
@@ -141,7 +132,8 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
     return id;
 }
 
-/// Gives back one reference on the id to the cache, which frees the sound when none remain. A null
+/// Gives back one reference on the id to the cache, which frees the sound when none remain; an id
+/// whose last reference went stops resolving. A null
 /// backend or the invalid id is ignored.
 fn audioUnloadSound(self: ?*c.ke_audio, id: c.ke_audio_sound) callconv(.c) void {
     if (self == null or id == c.KE_AUDIO_SOUND_INVALID) return;

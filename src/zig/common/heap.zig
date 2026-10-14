@@ -1,8 +1,4 @@
-//! The allocator of the engine's native code, chosen at compile time. A Debug build gets `gpa`
-//! backed by a thread-safe debug allocator held at file scope, which records every allocation so
-//! that `leaks` can count those never freed and `expectNoLeaks` can fail a test on them. Every
-//! other build gets the smp allocator itself, tracking nothing, with a leak count that is always
-//! zero.
+//! The allocator of the engine's native code, with the leak count of its Debug build.
 
 const std = @import("std");
 

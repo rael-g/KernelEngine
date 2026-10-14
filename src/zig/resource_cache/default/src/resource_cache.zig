@@ -1,19 +1,5 @@
-//! A resource is a handle kept alive by a reference count, and a path is a name that may lead to
-//! one. A `State` holds both as open-addressed `Table`s: `resources`, keyed by the handle, and
-//! `paths`, keyed by a hash of the text, where each `Slot` also keeps its own copy of the text so
-//! that two paths with the same hash remain two entries.
-//!
-//! Only the count keeps a resource alive; a path entry points at a resource and holds no
-//! reference. The release that takes the count to zero removes the resource and every path naming
-//! it, and only then calls the destroy callback given at creation, so the callback never finds
-//! the handle still cached. Destroying the cache calls it for whatever is still registered.
-//!
-//! A removed slot becomes a tombstone that a later insertion may reuse. A `Table` grows before an
-//! insertion would pass its load limit, tombstones included, and growing drops them; if it cannot
-//! grow, the insertion stops with nothing changed.
-//!
-//! Failing calls set the out-error and return false, except the two path lookups, which report a
-//! miss. The file starts no thread and takes no lock.
+//! The default `ke_resource_cache`: reference counts for resource handles and a table from path
+//! text to handle, with a destroy callback when a count reaches zero.
 
 const std = @import("std");
 
@@ -176,7 +162,10 @@ fn keyFromPath(path: ?[*:0]const u8) u64 {
 
 /// Created by `ke_resource_cache_create` and freed by `vtDestroy`. `api` is the vtable the caller
 /// holds, and its handle field points back to this state. `resources` holds the refcounts and
-/// `paths` the cached path texts; they relate only through the handle a path slot names.
+/// `paths` the cached path texts; they relate only through the handle a path slot names. Only the
+/// count keeps a resource alive: a path entry points at a resource and holds no reference. A
+/// path entry keeps its own copy of the text, so two paths with the same hash stay two entries.
+/// Nothing here starts a thread or takes a lock.
 const State = struct {
     api: c.ke_resource_cache,
     destroy_fn: c.ke_resource_destroy_func,

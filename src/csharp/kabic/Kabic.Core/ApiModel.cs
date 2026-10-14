@@ -1,17 +1,25 @@
 
 namespace Kabic;
 
-/// <summary>A parameter of a function, a slot or a callback lane, with the tags its declaration carries.</summary>
+/// <summary>
+/// A parameter of a function, a slot or a callback lane, with the tags its declaration carries.
+/// </summary>
 public record ApiParam(string? Name, string Type, IReadOnlyList<string> Tags, string? Doc)
 {
-    /// <summary>Whether the parameter carries <paramref name="tag"/>, with or without a value.</summary>
+    /// <summary>
+    /// Whether the parameter carries <paramref name="tag"/>, with or without a value.
+    /// </summary>
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
 
-    /// <summary>The text after the colon of the first tag named <paramref name="tag"/>, or null.</summary>
+    /// <summary>
+    /// The text after the colon of the first tag named <paramref name="tag"/>, or null.
+    /// </summary>
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
-/// <summary>A function-pointer slot of a vtable, with its return, parameters and tags as declared.</summary>
+/// <summary>
+/// A function-pointer slot of a vtable, with its return, parameters and tags as declared.
+/// </summary>
 public record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params)
 {
     /// <summary>
@@ -33,7 +41,9 @@ public record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, s
     /// <summary>Whether the slot carries <paramref name="tag"/>, with or without a value.</summary>
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
 
-    /// <summary>The text after the colon of the first tag named <paramref name="tag"/>, or null.</summary>
+    /// <summary>
+    /// The text after the colon of the first tag named <paramref name="tag"/>, or null.
+    /// </summary>
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 
     /// <summary>The value of <paramref name="tag"/> on the slot's return, or null.</summary>
@@ -41,10 +51,14 @@ public record ApiSlot(string Name, string Returns, IReadOnlyList<string> Tags, s
         ReturnTags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
-/// <summary>One named value of an enum, with its value as text and whether that value is an integer.</summary>
+/// <summary>
+/// One named value of an enum, with its value as text and whether that value is an integer.
+/// </summary>
 public record ApiEnumValue(string Name, string RawValue, bool IsInt, string? Doc);
 
-/// <summary>An enum the header declares, with its values in the order the description lists them.</summary>
+/// <summary>
+/// An enum the header declares, with its values in the order the description lists them.
+/// </summary>
 public record ApiEnum(string Name, string? Doc, IReadOnlyList<ApiEnumValue> Values)
 {
     /// <summary>The tags the enum's own doc block declared.</summary>
@@ -64,14 +78,20 @@ public record ApiEnum(string Name, string? Doc, IReadOnlyList<ApiEnumValue> Valu
 /// <summary>A field of a struct, with its type, tags and doc as declared.</summary>
 public record ApiField(string Name, string Type, IReadOnlyList<string> Tags, string? Doc)
 {
-    /// <summary>Whether the field carries <paramref name="tag"/>, with or without a value.</summary>
+    /// <summary>
+    /// Whether the field carries <paramref name="tag"/>, with or without a value.
+    /// </summary>
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
 
-    /// <summary>The text after the colon of the first tag named <paramref name="tag"/>, or null.</summary>
+    /// <summary>
+    /// The text after the colon of the first tag named <paramref name="tag"/>, or null.
+    /// </summary>
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
-/// <summary>A struct or vtable the header declares: its fields, and the slots of a vtable.</summary>
+/// <summary>
+/// A struct or vtable the header declares: its fields, and the slots of a vtable.
+/// </summary>
 public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IReadOnlyList<ApiField> Fields, IReadOnlyList<ApiSlot> Slots)
 {
     /// <summary>
@@ -90,10 +110,14 @@ public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IR
     /// </summary>
     public bool External { get; init; }
 
-    /// <summary>Whether the struct carries <paramref name="tag"/>, with or without a value.</summary>
+    /// <summary>
+    /// Whether the struct carries <paramref name="tag"/>, with or without a value.
+    /// </summary>
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
 
-    /// <summary>The text after the colon of the first tag named <paramref name="tag"/>, or null.</summary>
+    /// <summary>
+    /// The text after the colon of the first tag named <paramref name="tag"/>, or null.
+    /// </summary>
     public string? TagValue(string tag) => Tags.FirstOrDefault(t => t.StartsWith(tag + ":"))?[(tag.Length + 1)..];
 }
 
@@ -125,7 +149,10 @@ public class ApiModel
     /// <summary>Every enum read, in the order the description lists them.</summary>
     public List<ApiEnum> Enums { get; } = [];
 
-    /// <summary>Every struct and every vtable read, in the order the description lists them. A vtable's slots are on its <see cref="ApiStruct"/>.</summary>
+    /// <summary>
+    /// Every struct and every vtable read, in the order the description lists them. A vtable's
+    /// slots are on its <see cref="ApiStruct"/>.
+    /// </summary>
     public List<ApiStruct> Structs { get; } = [];
 
     /// <summary>Every function read, in the order the description lists them.</summary>
@@ -141,7 +168,9 @@ public class ApiModel
     /// </summary>
     public List<ApiCallback> Callbacks { get; } = [];
 
-    /// <summary>The callback a parameter's type names, or <see langword="null"/> if it names none.</summary>
+    /// <summary>
+    /// The callback a parameter's type names, or <see langword="null"/> if it names none.
+    /// </summary>
     public ApiCallback? CallbackOf(string type) => Callbacks.FirstOrDefault(c => c.Name == type.Trim());
 
     /// <summary>
@@ -152,7 +181,9 @@ public class ApiModel
     /// </summary>
     public Dictionary<string, string> TypeAliases { get; } = [];
 
-    /// <summary>Resolves a type through <see cref="TypeAliases"/> until it is no longer an alias.</summary>
+    /// <summary>
+    /// Resolves a type through <see cref="TypeAliases"/> until it is no longer an alias.
+    /// </summary>
     public string ResolveAlias(string type)
     {
         var t = type.Trim();
@@ -162,21 +193,17 @@ public class ApiModel
 }
 
 /// <summary>Reads the JSON description of one header into an <see cref="ApiModel"/>.</summary>
-/// <remarks>
-/// <see cref="Read"/> fills one model in a fixed order: the enums, then the structs, then the
-/// vtables, which go through the same reader with their slots read as well, then the
-/// <c>type_aliases</c>, the <c>callbacks</c>, the functions and the variables. The keys
-/// <c>enums</c>, <c>structs</c>, <c>vtables</c> and <c>functions</c> are required, and a missing
-/// one throws. The keys <c>callbacks</c>, <c>variables</c> and <c>type_aliases</c> are optional,
-/// and an absent one leaves nothing to read. A value of the wrong JSON kind throws from the
-/// conversion that asks for it. An enum and a struct read <c>external</c>, <c>tags</c> and
-/// <c>doc</c> when present, and a slot also reads its <c>return_tags</c> and its <c>receiver</c>.
-/// A parameter requires its <c>tags</c> key.
-/// </remarks>
 public static class ApiReader
 {
-    /// <summary>Reads the root object of a header description into a new model.</summary>
-    /// <param name="root">The root object of the description, with the keys described in the type remarks.</param>
+    /// <summary>
+    /// Reads the root object of a header description into a new model. Throws when a required key
+    /// is missing, when a value has the wrong JSON kind, or when a parameter has no <c>tags</c>
+    /// key.
+    /// </summary>
+    /// <param name="root">
+    /// The root object of the description, whose keys <c>enums</c>, <c>structs</c>, <c>vtables</c>
+    /// and <c>functions</c> are required.
+    /// </param>
     /// <returns>The model holding every declaration the description lists.</returns>
     public static ApiModel Read(System.Text.Json.Nodes.JsonObject root)
     {

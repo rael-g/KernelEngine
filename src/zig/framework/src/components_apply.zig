@@ -1,12 +1,5 @@
-//! The table appliers of the two transform components, for the keys whose authored form is not the
-//! stored one. Each applier walks the authored entries, claims the ones it understands by marking
-//! them consumed, and leaves every other entry unmarked for the generic field writer. A claimed
-//! entry of the wrong type stops the walk with an invalid-argument error.
-//!
-//! The 2D applier turns the rotation the component already holds from degrees into radians; the
-//! generic writer must have stored the authored number there first. The 3D applier builds the
-//! stored quaternion from the three degree angles of "rotation_euler", and, for a two-component
-//! "scale", sets the depth scale to one, because the generic writer leaves it at zero.
+//! The table appliers of the two transform components, for the authored keys whose stored form
+//! differs from the authored one.
 
 const std = @import("std");
 
@@ -54,9 +47,10 @@ fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
     };
 }
 
-/// Registered by world.zig as the table applier of the 2D transform component. Once it returns
-/// true, a "rotation" entry has been converted from degrees to radians in place. A "rotation"
-/// entry that is not a number reports an invalid argument and returns false.
+/// Table applier of the 2D transform component. It runs after the generic field writer has stored
+/// the authored number in the rotation, and converts that stored value from degrees to radians in
+/// place. A "rotation" entry that is not a number reports an invalid argument and returns false;
+/// every entry whose key it does not claim stays unconsumed.
 pub export fn ke_framework_apply_transform2d(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
@@ -76,10 +70,11 @@ pub export fn ke_framework_apply_transform2d(
     return true;
 }
 
-/// Registered by world.zig as the table applier of the 3D transform component. Once it returns
-/// true, "rotation_euler" has replaced the stored rotation and a two-component "scale" has a depth
-/// scale of one. A "rotation_euler" entry that is not a three-component vector reports an invalid
-/// argument and returns false.
+/// Table applier of the 3D transform component. Once it returns true, "rotation_euler" has
+/// replaced the stored rotation and a two-component "scale" has a depth scale of one, which the
+/// generic writer would leave at zero. A "rotation_euler" entry that is not a three-component
+/// vector reports an invalid argument and returns false; every entry whose key it does not claim
+/// stays unconsumed.
 pub export fn ke_framework_apply_transform(
     _: ?*anyopaque,
     ptr: ?*anyopaque,

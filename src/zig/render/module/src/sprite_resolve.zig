@@ -1,16 +1,4 @@
 //! Gives each 2D sprite a mesh component carrying a quad and a material that match its fields.
-//! `system` makes two passes per tick. The first visits the sprites that already own a mesh
-//! component: it marks each as attached, builds its quad with `quadFor` and its material with
-//! `materialFor`, and stores both into the mesh component through `swapMesh` and `swapMaterial`.
-//! The second visits the sprites still unmarked after that, the ones without a mesh component: it
-//! marks each and queues an attach of the mesh component on the commands of the context, so the
-//! first pass reaches the sprite on a later tick. The quad and the material are asked for again on
-//! every tick under keys spelled from the fields they depend on, so an edit to a sprite yields
-//! another object, while the swaps release the handle they replace and keep one reference per
-//! component. `materialFor` resolves the texture first, through `resolveTexture`, so the texture
-//! is part of the material's key. Only a refused attach is reported, and it makes `system` return
-//! false. The upload, the material creation and the texture resolve get no error output, so their
-//! failures are not reported. The services come from the borrowed pointers held by `State`.
 
 const cimport = @import("cimport.zig");
 const c = cimport.c;
@@ -134,8 +122,16 @@ fn swapMaterial(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c
     if (held.bits != c.KE_HANDLE_NONE) core.release_material.?(core, held);
 }
 
-/// The update-phase body the module registers. A refused attach returns false with the error
-/// the commands set, and the sprite stays marked, so a later tick does not queue it again.
+/// The update-phase body the module registers, in two passes per tick. The first visits the
+/// sprites that already own a mesh component: it marks each as attached and stores a quad and
+/// a material built from its fields through `swapMesh` and `swapMaterial`. Both are asked for
+/// again every tick under keys spelled from the fields they depend on, so an edit to a sprite
+/// yields another object. The second visits the sprites still unmarked, the ones without a mesh
+/// component: it marks each and queues an attach of the mesh component on the commands of the
+/// context, so the first pass reaches the sprite on a later tick. A refused attach returns
+/// false with the error the commands set, and the sprite stays marked, so a later tick does not
+/// queue it again. The upload, the material creation and the texture resolve get no error
+/// output, so their failures are not reported.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 

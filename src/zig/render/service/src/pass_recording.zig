@@ -1,20 +1,11 @@
-//! How a pass records its work: `beginPass` hands out a pass context, `endPass` takes it back, and
-//! between them the pass either draws or records compute.
-//!
-//! A context carries a `PassState` for one command slot and function slots that resolve resource
-//! names through the table of `CoreState`, open a render pass on the slot's encoder, or open a
-//! compute pass. The encoder is the slot's precreated one, or a fresh one for a higher slot. Render
-//! work goes straight to the encoder. Compute work is only recorded: the compute pass
-//! `ctxBeginCompute` returns appends a `ComputeCmd` per call to the slot's `ComputeRecord`, and
-//! the end of the frame replays it. `endPass` hands the encoder back to the slot and flags it for
-//! submission unless the pass was compute, so a slot is either finished as a render encoder or
-//! replayed from its record.
+//! Hands out and takes back the pass contexts through which a pass draws or records compute work.
 
 const rc = @import("render_service.zig");
 const c = rc.c;
 const gpa = rc.gpa;
 
-/// Opens a pass in the command slot of the io. The pass and its context stay allocated until
+/// Opens a pass in the command slot of the io. The encoder is the slot's precreated one, or a
+/// fresh one for a slot past the precreated ones. The pass and its context stay allocated until
 /// `endPass` frees them. Returns null, filling no error, when no frame is live or an allocation
 /// fails.
 pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
@@ -46,9 +37,10 @@ pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_i
     return ctx;
 }
 
-/// Hands the encoder back to its slot and frees the pass and its context, so the context pointer
-/// is invalid afterwards. A slot past the command-buffer limit has no entry in the slot arrays, so
-/// its encoder is destroyed here instead.
+/// Hands the encoder back to its slot and frees the pass and its context, so the context pointer is
+/// invalid afterwards. The slot is flagged for submission unless the pass was compute, so a slot is
+/// either finished as a render encoder or replayed from its compute record. A slot past the
+/// command-buffer limit has no entry in the slot arrays, so its encoder is destroyed here instead.
 pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) callconv(.c) void {
     const st = rc.coreOf(self);
     const ps = rc.passOf(ctx);
@@ -132,8 +124,8 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
 }
 
 /// Replaces the slot's record with an empty one and returns a compute pass that records into it;
-/// nothing runs until the frame replays the record. A slot past the command-buffer limit gets
-/// null.
+/// nothing runs until `endFrame` replays the record on the slot's encoder. Each call of the
+/// returned pass appends a `ComputeCmd`. A slot past the command-buffer limit gets null.
 fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_compute_pass {
     const ps = rc.passOf(self);
     ps.is_compute = true;
@@ -158,15 +150,16 @@ fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_com
     return &rec.pass;
 }
 
+/// The record behind a compute pass handed out by `ctxBeginCompute`.
 inline fn recOf(self: [*c]c.ke_gpu_compute_pass) *rc.ComputeRecord {
     return @alignCast(@ptrCast(self.*.handle));
 }
-/// Drops the command without a report when the record is full.
 fn cpAppend(rec: *rc.ComputeRecord, cmd: rc.ComputeCmd) void {
     if (rec.count >= rc.MAX_COMPUTE_CMDS) return;
     rec.cmds[rec.count] = cmd;
     rec.count += 1;
 }
+/// Records the command; dropped when the record is full.
 fn cpSetPipeline(self: [*c]c.ke_gpu_compute_pass, pipe: c.ke_gpu_pipeline) callconv(.c) void {
     cpAppend(recOf(self), .{ .set_pipeline = pipe });
 }
@@ -180,9 +173,11 @@ fn cpSetBindGroup(self: [*c]c.ke_gpu_compute_pass, group_index: u32, bg: c.ke_gp
     while (i < n) : (i += 1) off[i] = dynamic_offsets[i];
     cpAppend(recOf(self), .{ .set_bind_group = .{ .index = group_index, .bg = bg, .offsets = off, .count = dyn_count } });
 }
+/// Records the command; dropped when the record is full.
 fn cpDispatch(self: [*c]c.ke_gpu_compute_pass, x: u32, y: u32, z: u32) callconv(.c) void {
     cpAppend(recOf(self), .{ .dispatch = .{ .x = x, .y = y, .z = z } });
 }
+/// Records the command; dropped when the record is full.
 fn cpDispatchIndirect(self: [*c]c.ke_gpu_compute_pass, indirect_buf: c.ke_gpu_buffer, offset: usize) callconv(.c) void {
     cpAppend(recOf(self), .{ .dispatch_indirect = .{ .buf = indirect_buf, .offset = offset } });
 }
@@ -190,27 +185,33 @@ fn cpDispatchIndirect(self: [*c]c.ke_gpu_compute_pass, indirect_buf: c.ke_gpu_bu
 fn cpEnd(self: [*c]c.ke_gpu_compute_pass) callconv(.c) void {
     _ = self;
 }
+/// Records the group with a copy of the label; dropped when the record is full.
 fn cpPushDebugGroup(self: [*c]c.ke_gpu_compute_pass, label: [*c]const u8) callconv(.c) void {
     const rec = recOf(self);
     cpAppend(rec, .{ .push_debug_group = rec.storeLabel(label) });
 }
+/// Records the command; dropped when the record is full.
 fn cpPopDebugGroup(self: [*c]c.ke_gpu_compute_pass) callconv(.c) void {
     cpAppend(recOf(self), .pop_debug_group);
 }
+/// Records the marker with a copy of the label; dropped when the record is full.
 fn cpInsertDebugMarker(self: [*c]c.ke_gpu_compute_pass, label: [*c]const u8) callconv(.c) void {
     const rec = recOf(self);
     cpAppend(rec, .{ .insert_debug_marker = rec.storeLabel(label) });
 }
 
+/// Returns the slot's raw command encoder; the pass keeps recording into the same one.
 fn ctxEncoder(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_command_encoder {
     return rc.passOf(self).encoder;
 }
 
+/// Forwards to the device's `query_extension`; null when the device has no such extension.
 fn ctxQueryExt(self: [*c]c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) ?*const anyopaque {
     const ps = rc.passOf(self);
     return ps.core.device.query_extension.?(ps.core.device, name);
 }
 
+/// Reports the backbuffer size read at the last `beginFrame`.
 fn ctxBackbufferSize(self: [*c]c.ke_render_pass_ctx, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
     const ps = rc.passOf(self);
     if (out_w != null) out_w.* = ps.core.backbuffer_w;

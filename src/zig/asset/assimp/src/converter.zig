@@ -1,18 +1,5 @@
-//! Converts an Assimp mesh and an Assimp material into the loader's records, `ke_mesh_data` and
-//! `ke_material_data`. Nothing is kept between calls; each conversion fills the record it is
-//! given.
-//!
-//! A mesh record owns a vertex array and an index array, allocated together in `convertMesh` and
-//! released by `freeMesh`. If either allocation fails nothing is left allocated. Every attribute
-//! a mesh may lack has a fixed substitute: a normal along the z axis, zero texture coordinates,
-//! and a tangent that `fallbackTangent` derives from the normal. When the mesh carries tangents,
-//! the sign of each tangent records the side its bitangent lies on. Faces are cut to at most three
-//! indices, and the record's index count is the number copied.
-//!
-//! A material record is plain data, so `convertMaterial` cannot fail. It starts from opaque white,
-//! and from default metallic and roughness values, and replaces each only for the property slots
-//! the material has: the base colour slot first, then the diffuse one. `directoryOf` serves the
-//! caller that resolves texture paths against the model file.
+//! Converts an Assimp mesh and an Assimp material into the loader's `ke_mesh_data` and
+//! `ke_material_data` records.
 
 const std = @import("std");
 
@@ -79,7 +66,11 @@ pub fn freeMesh(gpa: std.mem.Allocator, md: *const c.ke_mesh_data) void {
 
 /// Fills a mesh record from an Assimp mesh. Returns false when either array cannot be allocated;
 /// the record then has null arrays, but its vertex count is already set. On true the record owns
-/// both arrays until `freeMesh`. The material index is left zero for the caller to set.
+/// both arrays until `freeMesh`. The material index is left zero for the caller to set. An
+/// attribute the mesh lacks is substituted: a normal along the z axis, zero texture coordinates,
+/// and a tangent derived by `fallbackTangent`; when the mesh has tangents, each tangent's sign
+/// records the side its bitangent lies on. Faces are cut to at most three indices, and the index
+/// count is the number copied.
 pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *c.ke_mesh_data) bool {
     md.* = std.mem.zeroes(c.ke_mesh_data);
     log.copyString(&md.name, &am.mName.data);
@@ -173,8 +164,9 @@ fn getFloat(am: *const c.aiMaterial, k: MatKey, out: *f32) bool {
 }
 
 /// Fills a material record from an Assimp material, taking the name, base colour, metallic and
-/// roughness from the slots the material has. The two texture index fields are left zero for the
-/// caller to set.
+/// roughness from the slots the material has, with the base colour slot read before the diffuse
+/// one. A slot the material lacks keeps opaque white, zero metallic and a mid roughness. The two
+/// texture index fields are left zero for the caller to set.
 pub fn convertMaterial(am: *const c.aiMaterial, md: *c.ke_material_data) void {
     md.* = std.mem.zeroes(c.ke_material_data);
 

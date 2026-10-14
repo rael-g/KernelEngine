@@ -1,16 +1,11 @@
-//! The named resources a pass can refer to: a table in `CoreState`, filled in call order.
-//!
-//! Every adder registers the name as a component with the service's ecs and appends one entry, or
-//! returns the invalid component id and changes nothing when the table is full. `declare` creates
-//! the texture and view itself and marks the entry transient; the import adders record handles the
-//! caller owns, with the view left invalid. No adder fills its error out-parameter. The lookups
-//! scan the table by name through `find` and answer an unknown name with the invalid id or handle
-//! of the field asked for, and `resourceBufferSize` with zero.
+//! The table of named resources a pass can refer to, and the lookups on it.
 
 const rc = @import("render_service.zig");
 const c = rc.c;
 
-/// Declares a texture resource: registers the name, creates a texture and its view on the device,
+/// Every adder registers the name as a component with the service's ecs and appends one entry
+/// to the table in call order. None fills its error out-parameter. Declares a texture resource:
+/// registers the name, creates a texture and its view on the device,
 /// and appends a transient entry that records the format and the clear value. A depth format gets
 /// a depth attachment, any other a color attachment. A size relative to the backbuffer is scaled
 /// from the size the service last read from the target. Entries made here are the only
@@ -167,22 +162,26 @@ pub fn importBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8, bg: c.
     return cid;
 }
 
+/// Returns the component id of the named entry; the invalid id for an unknown name.
 pub fn cidOf(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_component_id {
     const st = rc.coreOf(self);
     if (st.find(name)) |r| return r.cid;
     return c.KE_COMPONENT_INVALID;
 }
 
+/// Returns the view of the named entry; the invalid handle for an unknown name.
 pub fn resourceView(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.view;
 }
 
+/// Returns the texture of the named entry; the invalid handle for an unknown name.
 pub fn resourceTexture(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_texture {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.texture;
 }
 
+/// Returns the buffer of the named entry; the invalid handle for an unknown name.
 pub fn resourceBuffer(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_buffer {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.buffer;
@@ -202,11 +201,13 @@ pub fn backbufferSize(self: [*c]c.ke_render_service, out_w: [*c]u32, out_h: [*c]
     if (out_h != null) out_h.* = st.backbuffer_h;
 }
 
+/// Returns the bind group of the named entry; the invalid handle for an unknown name.
 pub fn resourceBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.bind_group;
 }
 
+/// Returns the bind group layout of the named entry; the invalid handle for an unknown name.
 pub fn resourceBindGroupLayout(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group_layout {
     const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
     return r.bind_group_layout;

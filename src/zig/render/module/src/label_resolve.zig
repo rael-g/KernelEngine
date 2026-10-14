@@ -1,6 +1,4 @@
-//! Gives each label the font it names, making one attempt per label. `system` stores the result
-//! of `bake` in each label that names a font and has no font handle. A failure is logged by
-//! `reportUnresolved` and yields the failed-font handle, which `system` does not retry.
+//! Gives each label component the font it names, making one attempt per label.
 
 const cimport = @import("cimport.zig");
 const c = cimport.c;
@@ -77,9 +75,10 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     return font;
 }
 
-/// Runs in the update phase over the label view. Afterwards every label that named a font and had
-/// no handle holds either the registered font or the failed-font handle. It always returns true
-/// and sets no error, since each failure is logged by `bake` instead.
+/// Runs in the update phase over the label view. A failure is logged by `reportUnresolved` and
+/// yields the failed-font handle, which is not retried. Afterwards every label that named a font
+/// and had no handle holds either the registered font or the failed-font handle. It always returns
+/// true and sets no error, since each failure is logged by `bake` instead.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @ptrCast(@alignCast(user.?));
 

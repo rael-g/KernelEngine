@@ -1,23 +1,6 @@
-//! Binds the 2D physics world to the entity component store: the component that describes a body
-//! is the authority over it until the world steps, and the world is the authority after.
-//!
-//! Creating the module registers the component ids it needs and two update-phase systems, both
-//! pinned to the same worker, with a `Module` that holds their query declarations and borrows the
-//! physics handle. The world owns the bodies; the module only holds their ids in components.
-//!
-//! `bodySystem` is the loop. Components that have no body get one, components whose stored state
-//! differs from the world's push it in, the world steps, and every body's state is written back
-//! into its component and its transform. A body is therefore simulated in the update that created
-//! it. `colliderSystem` is the second system: it does nothing until `anyUnattached` finds a
-//! collider without a fixture, then resolves each such collider to a body, its own ancestors
-//! being searched through `findBody`, and adds the fixture. A collider that fails to resolve or
-//! attach stays unattached and is tried again on later updates.
-//!
-//! Failure is soft inside the systems and strict at creation: a failed body or fixture is
-//! retried, not reported, while the create function returns a null handle when an argument is
-//! missing, memory runs out or the runtime refuses a system, leaving no system registered.
-//! `ke_physics_register_scene_apply` is the separate export that makes scene blocks for the body
-//! and collider components applicable.
+//! Keeps the entity components of 2D bodies and colliders in agreement with a `ke_physics_2d`
+//! world, through two update-phase systems. It also exports the registration of the scene field
+//! tables of those components.
 
 const std = @import("std");
 
@@ -53,9 +36,13 @@ fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anyt
     if (lg.log) |f| f(lg, &ev);
 }
 
-/// The update-phase system that reconciles every body with its component. It runs before the world
-/// step, so a body created here is simulated in the same update. A component whose stored position
-/// is exactly zero first takes the transform's position and rotation. A failed creation leaves the
+/// The update-phase system that reconciles every body with its component, in this order: a
+/// component with no body gets one; a component whose position, angle or velocity differs from
+/// the world's pushes it in; the world steps by `dt`; every body's state is then written back
+/// into its component and its transform, which takes the body's position and angle directly. A
+/// body created here is therefore simulated in the same update. A component whose stored position
+/// is exactly zero first takes the transform's position and rotation. The body type, gravity scale
+/// and fixed rotation are read only when the body is created. A failed creation leaves the
 /// component without a body, to be retried on the next update; nothing is written to the error
 /// output and the system still returns true.
 fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -137,7 +124,10 @@ fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
     return false;
 }
 
-/// The update-phase system that attaches fixtures to colliders. Its entity indexes are complete
+/// The update-phase system that attaches fixtures to colliders. It returns at once while
+/// `anyUnattached` is false; otherwise each unattached collider is resolved to a body through
+/// `findBody` and gets a fixture whose offset is its own transform's position. Its entity indexes
+/// are complete
 /// before the first fixture is added, so an out-of-memory failure, reported through the error
 /// output, leaves every collider unattached. A shape that resolves to no body, or whose fixture the
 /// world refuses, is logged and stays unattached; neither is reported through the error output.

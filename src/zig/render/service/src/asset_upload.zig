@@ -1,21 +1,13 @@
-//! Meshes, textures, cubemaps and materials, each kept in a store of `CoreState` addressed by a
-//! handle and in a resource cache addressed by a caller-chosen key.
-//!
-//! `uploadMesh`, `uploadTexture`, `uploadCubemap` and `createMaterial` share one order: validate
-//! the key, return the cached handle on a hit, create the GPU objects, insert the slot into the
-//! store, and only then register the handle and the key in the cache. A failure part-way destroys
-//! what was already made, so a cached key always names a stored slot with live objects. When the
-//! last reference goes, the cache runs the matching destroy function, `destroyMeshResource`,
-//! `destroyTextureResource` or `destroyMaterialResource`, which removes the slot and its objects.
-//!
-//! A material keeps its two textures alive: `createMaterial` retains them and
-//! `destroyMaterialResource` releases them. The rest of the file is lookups and accessors over the
-//! stores, `tryGetMesh` among them.
+//! Creates and looks up the meshes, textures, cubemaps and materials of the render service, and
+//! destroys them when their last reference goes.
 
 const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
 
+/// Creation functions in this file share one order: validate the key, return the cached handle
+/// on a hit, create the GPU objects, insert the slot into the store, and only then register the
+/// handle and the key in the cache. A failure part-way destroys what was already made.
 fn keyValid(key: [*c]const u8) bool {
     return key != null and key[0] != 0;
 }
@@ -26,8 +18,8 @@ fn tryCached(cache: *c.ke_resource_cache, key: [*c]const u8) u32 {
     return c.KE_HANDLE_NONE;
 }
 
-/// Called last in a creation, once the slot is in its store. The cache learns the handle and then
-/// the key, so a key the cache finds always names a stored slot.
+/// Called last in a creation, once the slot is in its store, so a key the cache finds always
+/// names a stored slot.
 fn registerCached(cache: *c.ke_resource_cache, key: [*c]const u8, bits: u32) void {
     _ = cache.register_resource.?(cache, bits, null);
     _ = cache.cache_insert.?(cache, key, bits, null);
@@ -90,6 +82,8 @@ pub fn meshBuffers(self: [*c]c.ke_render_service, h: c.ke_mesh_handle, out_vbo: 
     return 1;
 }
 
+/// Sets the color a color attachment is cleared to when its resource carries no clear value of
+/// its own.
 pub fn setClearColor(self: [*c]c.ke_render_service, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
     rc.coreOf(self).clear_color = .{ r, g, b, a };
 }
@@ -203,10 +197,12 @@ pub fn textureView(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callco
     return (st.textureAt(fallback) orelse return c.KE_GPU_INVALID_HANDLE).view;
 }
 
+/// Returns the sampler the material bind groups use.
 pub fn samplerOf(self: [*c]c.ke_render_service) callconv(.c) c.ke_gpu_sampler {
     return rc.coreOf(self).sampler;
 }
 
+/// Returns the handle of the 1x1 white texture the service created at start.
 pub fn whiteTexture(self: [*c]c.ke_render_service) callconv(.c) c.ke_texture_handle {
     return rc.coreOf(self).white_texture_h;
 }
@@ -300,10 +296,14 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
     return .{ .bits = bits };
 }
 
+/// Returns the alpha mode of the material; a handle that names no material answers with the
+/// default white material's.
 pub fn materialAlphaMode(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) c.ke_alpha_mode {
     return rc.coreOf(self).materialAt(h).alpha_mode;
 }
 
+/// Returns the alpha cutoff as given at creation; a handle that names no material answers with
+/// the default white material's.
 pub fn materialAlphaCutoff(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) f32 {
     return rc.coreOf(self).materialAt(h).alpha_cutoff;
 }
@@ -314,34 +314,43 @@ pub fn materialShader(self: [*c]c.ke_render_service, h: c.ke_material_handle) ca
     return @ptrCast(&rc.coreOf(self).materialAt(h).shader);
 }
 
+/// Returns the layout every material bind group is built against.
 pub fn materialLayout(self: [*c]c.ke_render_service) callconv(.c) c.ke_gpu_bind_group_layout {
     return rc.coreOf(self).material_bgl;
 }
 
+/// Returns the bind group of the material; a handle that names no material answers with the
+/// default white material's.
 pub fn materialBindGroup(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) c.ke_gpu_bind_group {
     return rc.coreOf(self).materialAt(h).bind_group;
 }
 
+/// Adds a reference to the mesh in the mesh cache.
 pub fn retainMesh(self: [*c]c.ke_render_service, h: c.ke_mesh_handle) callconv(.c) void {
     const st = rc.coreOf(self);
     _ = st.mesh_cache.retain.?(st.mesh_cache, h.bits, null);
 }
+/// Drops a reference; the last one runs `destroyMeshResource`.
 pub fn releaseMesh(self: [*c]c.ke_render_service, h: c.ke_mesh_handle) callconv(.c) void {
     const st = rc.coreOf(self);
     _ = st.mesh_cache.release.?(st.mesh_cache, h.bits, null);
 }
+/// Adds a reference to the texture in the texture cache.
 pub fn retainTexture(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callconv(.c) void {
     const st = rc.coreOf(self);
     _ = st.texture_cache.retain.?(st.texture_cache, h.bits, null);
 }
+/// Drops a reference; the last one runs `destroyTextureResource`.
 pub fn releaseTexture(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callconv(.c) void {
     const st = rc.coreOf(self);
     _ = st.texture_cache.release.?(st.texture_cache, h.bits, null);
 }
+/// Adds a reference to the material in the material cache.
 pub fn retainMaterial(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) void {
     const st = rc.coreOf(self);
     _ = st.material_cache.retain.?(st.material_cache, h.bits, null);
 }
+/// Drops a reference; the last one runs `destroyMaterialResource`.
 pub fn releaseMaterial(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) void {
     const st = rc.coreOf(self);
     _ = st.material_cache.release.?(st.material_cache, h.bits, null);
@@ -356,6 +365,8 @@ pub fn tryGetMesh(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.k
     out.* = .{ .bits = bits };
     return 1;
 }
+/// Looks the key up in the texture cache without creating anything. Returns zero and leaves the
+/// out-parameter alone on a miss.
 pub fn tryGetTexture(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_texture_handle) callconv(.c) c.ke_bool {
     const st = rc.coreOf(self);
     var bits: c.ke_resource_handle = c.KE_HANDLE_NONE;
@@ -363,6 +374,8 @@ pub fn tryGetTexture(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]
     out.* = .{ .bits = bits };
     return 1;
 }
+/// Looks the key up in the material cache without creating anything. Returns zero and leaves
+/// the out-parameter alone on a miss.
 pub fn tryGetMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_material_handle) callconv(.c) c.ke_bool {
     const st = rc.coreOf(self);
     var bits: c.ke_resource_handle = c.KE_HANDLE_NONE;

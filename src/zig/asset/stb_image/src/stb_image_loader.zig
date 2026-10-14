@@ -1,13 +1,5 @@
-//! Implements the `ke_image_loader` contract on stb_image: `loadImage` decodes an image file to
-//! RGBA pixels and returns a `ke_texture_data` that owns a copy of them, and `freeImage` releases
-//! it. The copy is what makes the result independent of stb_image's allocator; the decoder's own
-//! buffer is released before `loadImage` returns, on every path.
-//!
-//! The loader's only state is a `State` holding the logger, reached through the vtable's handle.
-//! `ke_image_loader_stb_create` allocates the state and then the vtable, wires the two slots, and
-//! gives back a handle whose `destroy` releases both. Every function releases what it has taken
-//! before it reports a failure, so a failed call leaves nothing allocated. A load runs on the
-//! calling thread and takes no lock.
+//! Implements the `ke_image_loader` contract on stb_image: it decodes an image file to RGBA
+//! pixels and frees the result.
 
 const std = @import("std");
 
@@ -53,8 +45,9 @@ fn destroy(self: ?*c.ke_image_loader) callconv(.c) void {
 
 /// Called through the `load_image` slot. A decode failure logs stb's failure reason as a warning
 /// and reports a not-found error; an allocation failure reports an out-of-memory error. Either way
-/// the call returns null with nothing left allocated. On success the result is released through
-/// `freeImage`.
+/// the call returns null with nothing left allocated. On success the result owns a copy of the
+/// pixels, independent of stb_image's allocator, and its path field holds the path truncated to
+/// fit; it is released through `freeImage`. The call runs on the calling thread.
 fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) [*c]c.ke_texture_data {
     if (self == null or path == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());

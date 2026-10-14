@@ -1,12 +1,5 @@
-//! This file implements the camera vtable by delegating matrix construction to the view space the
-//! camera is created over: the view, the rotation-only view and both projections come from its
-//! functions, in the clip convention copied at creation. Only the perspective frustum is computed
-//! here, from the field of view, the aspect and the planes.
-//!
-//! One allocation, `State`, holds the vtable, the borrowed view space and the clip copy.
-//! `ke_render_camera_create` validates its arguments before allocating and `destroy` frees only the
-//! `State`. Every slot is total: a null self, input or output, or a view space function that is
-//! missing, makes it return without a report.
+//! The render camera: view and projection matrices for a camera component, delegated to the view
+//! space the camera is created over.
 
 const std = @import("std");
 
@@ -135,6 +128,9 @@ fn destroy(self_in: ?*c.ke_render_camera) callconv(.c) void {
 }
 
 /// Returns the handle whose `ref` is the camera's vtable and whose `destroy` ends its lifetime.
+/// Every slot of the vtable is total: a null self, input or output, or a view space function
+/// that is missing, makes it return without a report. The clip convention is copied; the view
+/// space is borrowed and must outlive the camera.
 /// When the view space or the clip convention is missing, or the allocation fails, the error output
 /// is set and the returned handle is zeroed, with nothing left allocated.
 export fn ke_render_camera_create(

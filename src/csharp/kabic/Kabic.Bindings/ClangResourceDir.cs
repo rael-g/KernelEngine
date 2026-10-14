@@ -6,14 +6,6 @@ namespace Kabic.Bindings;
 /// Provides the clang resource-directory headers that ClangSharp is run with, fetching them once
 /// into the cache folder under the root directory.
 /// </summary>
-/// <remarks>
-/// <see cref="EnsureAsync"/> returns the resource directory at once when its include folder
-/// already holds a file. Otherwise it writes a progress line to standard output, lists the header
-/// folder of the LLVM source at the tag of <see cref="ClangVersion"/> through the GitHub contents
-/// API, and downloads each listed file whose name ends with the header extension into the include
-/// folder. The first failed request or write stops it with the exception, and the files already
-/// written stay where they are, so the next call treats them as a complete set.
-/// </remarks>
 public static class ClangResourceDir
 {
     /// <summary>

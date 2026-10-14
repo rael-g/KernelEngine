@@ -1,11 +1,8 @@
 namespace KernelEngine.Audio;
 
 /// <summary>
-/// The parts of <see cref="Audio"/> that express the native surface in C# terms
-/// rather than mirroring it: the <see cref="SoundHandle"/> value type wrapping a
-/// bare <c>uint</c> id, and the "invalid handle is a silent no-op" policy the
-/// managed contract promises but the ABI does not. Everything that is a direct
-/// image of the C ABI is generated in <c>Generated/Audio.g.cs</c>.
+/// The audio backend over <c>ke_audio</c>, exposed through <see cref="SoundHandle"/>. A call given
+/// <see cref="SoundHandle.None"/> does nothing.
 /// </summary>
 public unsafe partial class Audio : IAudio
 {

@@ -6,14 +6,6 @@ namespace Kabic.Cli.Checks;
 /// <summary>
 /// Checks that every parameter the API writes back carries the out tag.
 /// </summary>
-/// <remarks>
-/// Execute loads the convention and the manifest, then reads the API description of every
-/// domain whose file exists under the root. Each vtable, struct and callback is walked for the
-/// parameters of its slots and for its own parameters, and each free function for its
-/// parameters. A parameter is examined when it is named out or starts with the out prefix, and
-/// the error lane is skipped. It passes when one of its tags has the name out before any colon.
-/// Failing parameters are listed with their location, sorted, on the error stream.
-/// </remarks>
 internal static class OutParamsCheck
 {
     /// <summary>

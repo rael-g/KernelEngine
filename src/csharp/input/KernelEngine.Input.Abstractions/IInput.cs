@@ -1,21 +1,23 @@
 ﻿namespace KernelEngine.Input;
 
 /// <summary>
-/// The input service that processes OS messages and produces frame snapshots
-/// consumable by systems via <see cref="IInputReader"/>.
+/// The input state of one window: held keys and buttons, per-frame edges and deltas, and a queue
+/// of discrete events. Frame snapshots are read through <see cref="IInputReader"/>.
 /// </summary>
 public interface IInput : IDisposable
 {
-    /// <summary>Processes pending messages and updates internal state.</summary>
+    /// <summary>Closes the frame: clears the pressed and released edges, the mouse and scroll
+    /// deltas and the event queue. Held keys, held buttons and the cursor position carry
+    /// over.</summary>
     void Update();
 
-    /// <summary>Captures an immutable input snapshot for the current frame, marshalled to a
-    /// managed <see cref="IInputReader"/>.</summary>
+    /// <summary>Captures a copy of the current state as an <see cref="IInputReader"/>; the copy
+    /// does not change as the live state moves on.</summary>
     IInputReader CaptureSnapshot();
 
     /// <summary>
-    /// Drains all events captured since the last call into <paramref name="buffer"/>.
-    /// Returns the number of events written (<= <c>buffer.Length</c>).
+    /// Moves the queued events into <paramref name="buffer"/> and empties the queue; events beyond
+    /// the buffer's length are discarded. Returns the number of events written.
     /// </summary>
     int DrainEvents(Span<InputEvent> buffer);
 }

@@ -4,14 +4,16 @@ using KernelEngine.Common.Native;
 namespace KernelEngine.Ecs.Flecs;
 
 /// <summary>
-/// flecs-backed <see cref="ke_ecs"/> storage. Owns an internal flecs world; satisfies
-/// the C ABI ECS contract via the ke_ecs vtable.
+/// flecs-backed <see cref="ke_ecs"/> storage. Owns the native world it creates and destroys it on
+/// dispose.
 /// </summary>
 public sealed unsafe class FlecsEcs : IDisposable, INativeEcs
 {
     private ke_ecs* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;
 
+    /// <summary>Creates the native world with the default parameters.</summary>
+    /// <exception cref="InvalidOperationException">The native factory returned no world.</exception>
     public FlecsEcs()
     {
         ke_ecs_flecs_params @params = default;
@@ -24,6 +26,7 @@ public sealed unsafe class FlecsEcs : IDisposable, INativeEcs
 
     ke_ecs* INativeEcs.Native => _native;
 
+    /// <summary>Destroys the native world. Safe to call more than once.</summary>
     public void Dispose()
     {
         if (_native == null) return;

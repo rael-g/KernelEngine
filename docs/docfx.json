@@ -1,0 +1,30 @@
+{
+  "build": {
+    "content": [
+      {
+        "files": [
+          "index.md",
+          "toc.yml",
+          "guides/**.md",
+          "architecture/**.md",
+          "decisions/**.md",
+          "conventions/**.md",
+          "formats/**.md"
+        ]
+      },
+      {
+        "src": "../build/native/docs",
+        "files": ["engine/**", "kabic/**"],
+        "dest": "reference"
+      }
+    ],
+    "output": "../build/docs-site",
+    "template": ["default", "modern"],
+    "globalMetadata": {
+      "_appTitle": "KernelEngine",
+      "_appName": "KernelEngine",
+      "_enableSearch": true,
+      "_disableContribution": true
+    }
+  }
+}

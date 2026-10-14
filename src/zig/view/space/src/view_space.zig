@@ -1,16 +1,6 @@
-//! Implements the view-space contract once, for both handednesses. Each factory hands `create` the
-//! handedness it fixes; the `State` that `create` allocates stores it beside the vtable, and every
-//! slot recovers it from the handle and picks the matching zmath function. The factories differ
-//! in nothing else.
-//!
-//! Points and directions reach the matrix builders as vectors told apart by their homogeneous
-//! component. A camera transform is turned into a view by reading its axes and translation
-//! directly, with a look at the origin as the fallback for a transform that has no rotation.
-//! Projections follow the clip convention given on each call, so the same vtable serves any
-//! framebuffer and depth range.
-//!
-//! Slots report no errors: a null input makes a slot return without writing. The only failure the
-//! file reports is the allocation in `create`, through the out_error parameter.
+//! Implements the view-space contract once, for both handednesses, behind a right-handed and a
+//! left-handed factory. Its slots build view and projection matrices and report no errors beyond
+//! the allocation in `create`.
 
 const std = @import("std");
 const zm = @import("zmath");

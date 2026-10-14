@@ -12,16 +12,6 @@ public sealed record DomainOutput(
 /// <summary>
 /// Plans, extracts and generates the artifacts of each domain in the manifest.
 /// </summary>
-/// <remarks>
-/// <c>Plan</c> maps each committed path of a domain through a placement function, and the
-/// contract directory falls back to the output directory when the domain has no abstractions
-/// directory. <c>ExtractOne</c> turns the domain's headers, resolved under the root, into API
-/// JSON through <c>RequestFor</c>. <c>ExtractAll</c> does this for every domain in parallel,
-/// keeps the results by name, and throws one <c>InvalidOperationException</c> that lists each
-/// failed domain. <c>GenerateOne</c> hands the API JSON to <c>Generation.CSharp</c> with the
-/// domain's settings and no callbacks, then writes the C field table when the domain declares
-/// one. <c>ExtractErrorAbi</c> extracts the error ABI header of the convention on its own.
-/// </remarks>
 public static class Regeneration
 {
     /// <summary>

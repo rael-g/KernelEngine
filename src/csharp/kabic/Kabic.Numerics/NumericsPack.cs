@@ -4,20 +4,11 @@ namespace Kabic.Numerics;
 
 /// <summary>
 /// Vectors, quaternions and matrices. A header declares them: a struct of two to four floats tagged
-/// <c>[vector]</c> or <c>[quaternion]</c>, a struct of sixteen floats tagged <c>[matrix]</c>, a bare
-/// <c>float[2..4]</c>, and a run of parameters tagged <c>[vector2:name]</c> or <c>[vector3:name]</c>. C# spells
-/// them with <c>System.Numerics</c>, which the .NET base library already provides.
+/// <c>[vector]</c> or <c>[quaternion]</c>, a struct of sixteen floats tagged <c>[matrix]</c>, a
+/// bare <c>float[2..4]</c>, and a run of parameters tagged <c>[vector2:name]</c> or
+/// <c>[vector3:name]</c>. C# spells them with <c>System.Numerics</c>, which the .NET base library
+/// already provides.
 /// </summary>
-/// <remarks>
-/// <c>Recognize</c> tries three shapes in order. A bare float array of at least two and at most
-/// the length of <c>LaneNames</c> is a vector, with its lanes named by <c>LaneNames</c>. Otherwise
-/// the non-vtable struct the type names is a matrix when it is tagged matrix and its only field is
-/// a float array of sixteen elements, and it is a quaternion or a vector when it is tagged so, has
-/// between two and four fields, and every field is a float. <c>GroupOf</c> opens a group on a
-/// parameter tagged vector2 or vector3, the first of the two tags it carries, and names the group
-/// after the value of that tag. <c>Project</c> spells vectors, quaternions and matrices for C# and
-/// for the field table, and returns null for any other pairing of language and shape.
-/// </remarks>
 public sealed class NumericsPack : IShapePack
 {
     /// <summary>The kinds this pack recognises.</summary>

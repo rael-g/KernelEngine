@@ -23,15 +23,22 @@ If a document needs one of these to be understood, it is a plan and it does not 
 narrative, no `Supersedes:` chain. A document that has been superseded is deleted — `git` already
 keeps every word of it, and a reader who finds it in `docs/` cannot know it was retired.
 
+The record of a decision is the one exception. It describes a moment on purpose: what was known,
+what was chosen and what follows from it, with its date. It is never edited afterwards and never
+cited as a description of the system as it is. A decision that replaces another is a new record,
+and the replaced one gains a single line naming it.
+
 **3. No checkboxes and no "delivered" tables.** A list of what shipped is a log. It belongs in the
 kanban or in `git log`, both of which are better at it and neither of which pretends to be a
 contract.
 
-**4. Every load-bearing claim cites its source as `file:line`.** A statement about how the system
-behaves is an invitation to read the code that makes it behave that way. Where a document and the
-code disagree, the code wins and the document is the bug — and a citation is what makes that
-resolvable in seconds instead of an afternoon. A claim nobody can check is a claim nobody should
-believe, including its author six months on.
+**4. Every load-bearing claim names its source: the declaration and its file.** A statement
+about how the system behaves is an invitation to read the code that makes it behave that way.
+Where a document and the code disagree, the code wins and the document is the bug, and a name
+is what makes that resolvable in seconds instead of an afternoon. The source is named by the
+declaration, in backticks, and the file it is in, never by a line number: a name that is gone is
+found missing, while a line number goes on pointing at something else. A claim nobody can check
+is a claim nobody should believe, including its author six months on.
 
 **5. One document answers one question.** If the title needs "and", there are two documents. The
 title should be the question, so the index can be read instead of the corpus.
@@ -46,38 +53,50 @@ A document that cannot be written under these rules is usually a document whose 
 settled yet. That is useful information: it belongs in the kanban as a question, not in `docs/` as
 an answer.
 
+## What is written where
+
+Each kind of content is written in the place where something keeps it true.
+
+- **What a declaration or a file is** is written in the sources, as doc comments, and the build
+  generates the reference pages from them. No document repeats it.
+- **A rule a machine can check** is a gate: a `scripts/check_*.cs` or a `kabic check`, run by
+  `scripts/verify.cs`. A document names the gate and does not restate what it checks. A rule of
+  judgment stays as prose.
+- **How to use something** is an example under `examples/`, which the build compiles. A guide
+  under `docs/guides/` quotes passages of an example and holds no code of its own. The passage is
+  delimited in the example by a marker, `#region` in C# and a marker comment in Zig and C, which
+  is the one comment an example may carry besides its doc comments.
+- **Why something was decided** is a record under `docs/decisions/`, one numbered file per
+  decision: context, decision, consequences. A change that makes a structural decision carries its
+  record in the same branch.
+- **How the parts of a domain fit together** is a map under `docs/architecture/`: the parts by
+  name, what each hands to which, and only what rarely changes. A map does not describe how a
+  part works inside, and it names a part in backticks instead of linking to a line.
+
 ## The same reasoning, applied elsewhere
 
 Source comments are banned, and the ban covers every place rationale can be written: `//`,
-`/* */`, `<remarks>` on a member, `<para>`, `@note`, a `TODO`, a line of context. A doc comment (`///`,
+`/* */`, `<remarks>`, `<para>`, `@note`, a `TODO`, a line of context. A doc comment (`///`,
 `<summary>`, Doxygen) carries the API contract and nothing else: what a caller must pass, what it
 gets back, what fails. Rationale, history and the name of a consumer do not belong in one.
 
-## The mechanism, written where it runs
-
-How an implementation works is written in the file that implements it, and the build generates
-the page of the file from it. Two forms carry it: the doc comment of each declaration, and the
-doc comment of the file.
+## The doc comments of an implementation
 
 A doc comment on a declaration (`///` in Zig, `<summary>` in C#) says the part that declaration
 plays in the mechanism. On a function: when it runs, what is true once it has returned, and each
 failure it reports. On a type: what it holds, who owns it, and how its fields relate to each
-other, explained together where they relate. Private declarations are documented like public ones.
-A declaration about which there is nothing to say beyond what its body shows has no doc comment,
-and neither has a field, an enum value, a test or a helper of a test.
+other, explained together where they relate.
 
-A file doc comment (`//!` in Zig, `@file` in C) is the synthesis of the file. Its writer
-understands the whole file first, and then writes a new text from that understanding: what the
-file solves, how it goes about it, and what it guarantees. A reader who finishes it knows how the
-file works without having read a function. It is organised by that explanation and not by the
-order of the declarations, it is written after their doc comments, and it is a fraction of what it
-covers: several paragraphs for a file of many parts that act on each other, two or three sentences
-for a file of one function. The root file of a plugin also says what each of the other files of
-the plugin carries. C# has no file doc comment: there the synthesis is the `<remarks>` of the type
-the file declares, in implementation code only, while its `<summary>` keeps saying what the type
-is.
+It is required on a function that implements a slot of a contract and on a type that holds
+state. Any other function has one only when there is a precondition or an invariant its body does
+not show. A mechanism that crosses several functions is told once, on the type or the function
+that owns it. A field, an enum value, a test and a helper of a test have none.
 
-Both are written to these rules:
+A file doc comment (`//!` in Zig, `@file` in C) is a summary: one to three sentences saying what
+the file answers for. It does not tell how the file works; the declarations do. C# has no file
+doc comment: the `<summary>` of the type the file declares says it.
+
+They are written to these rules:
 
 **1. It explains, it does not caption.** A doc comment that retells the body of its function, or
 restates a name or a signature, is a caption: the reader learns nothing the code below does not
@@ -87,8 +106,7 @@ it gives, the reason a caller can rely on it.
 **2. Every part it names is a declaration that exists.** A type, function or field is written in
 backticks under its real name, and the build warns about a name in backticks that nothing
 declares. A parameter, a literal or a key of a file format is not a declaration: it is written in
-words, or between quotes. A declaration the synthesis names has a doc comment of its own, so that
-the page has a section for the name to lead to.
+words, or between quotes.
 
 **3. Every statement closes in the code of the same plugin.** It says nothing about who calls the
 plugin, and nothing about another plugin beyond the contract it is used through.
@@ -100,10 +118,4 @@ quotes.
 
 **5. It carries no moment.** No history, no rejected alternative, no plan, no `TODO`.
 
-**6. The synthesis is smaller than what it covers.** It may say again what a declaration says of
-itself, in fewer words and without the detail: the how, the parameters and the failures stay on
-the declaration. A file doc comment longer than the doc comments below it is wrong in one of two
-ways: it says what belongs to them, or they say too little.
-
-A `<remarks>` on a method, property or field is still a comment. A comment inside a function body
-stays banned.
+A comment inside a function body stays banned.

@@ -1,9 +1,5 @@
-//! Entry of the GLFW window plugin: the one exported factory, `ke_window_glfw_create`, builds a
-//! `GlfwDevice`, wraps it in a `Core` and starts it. If the core cannot be allocated the factory
-//! frees the device itself; from then on the core owns it. The rest of the plugin splits by role:
-//! c.zig imports every C declaration, device.zig defines the platform seam, glfw_device.zig
-//! implements that seam on GLFW, core.zig implements the window vtable over any device of the
-//! seam, and tests.zig runs the core against a fake device.
+//! The entry of the GLFW window plugin: the exported factory `ke_window_glfw_create`, which builds
+//! a window from a GLFW device and starts it.
 
 const std = @import("std");
 

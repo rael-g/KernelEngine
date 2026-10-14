@@ -1,6 +1,4 @@
-//! `loadShader` resolves a name, a stage and the device's shader language to one file in the
-//! service's shader directory, and answers from the cache keyed by that path before touching the
-//! disk. A module it creates is owned by the cache, which gives it back to `destroyShaderResource`.
+//! Loads shader modules by name from the service's shader directory and caches them by path.
 
 const std = @import("std");
 const rc = @import("render_service.zig");

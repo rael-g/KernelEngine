@@ -1,11 +1,5 @@
-//! Turns a texture into the pixels of a `ke_texture_data`, which owns them afterwards. A texture
-//! comes either from an image file (`decodeExternal`) or from the model itself (`decodeEmbedded`).
-//! Compressed images are decoded by the image decoder and then copied into the record's own
-//! allocation, so the decoder's buffer is never kept; uncompressed embedded texels are converted
-//! directly. Every pixel buffer is allocated with `pixel_align` and released by `freePixels`.
-//!
-//! A decode that fails is absorbed: `fallbackWhite` gives the record a one-texel white image, so
-//! a bad texture does not fail the model. Only a failed allocation is reported, as a false return.
+//! Turns a texture of a model, from an image file or embedded in the model, into the pixels of a
+//! `ke_texture_data` that owns them.
 
 const std = @import("std");
 
@@ -50,7 +44,9 @@ fn copyToOwnStorage(gpa: std.mem.Allocator, raw: [*]const u8, w: c_int, h: c_int
 }
 
 /// Called by `loadModel` for each texture that names a file, and for an embedded name whose index
-/// did not resolve: that call passes an empty path, and the decode falls back. The record's path is
+/// did not resolve: that call passes an empty path, and the decode falls back. A decode that
+/// fails is absorbed by `fallbackWhite`, so a bad texture does not fail the model. The record's
+/// path is
 /// set before the pixels are allocated, so an allocation failure leaves a path with no pixels.
 /// Returns false only when that allocation fails.
 pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {

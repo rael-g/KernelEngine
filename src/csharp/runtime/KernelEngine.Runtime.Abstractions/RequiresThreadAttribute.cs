@@ -6,5 +6,6 @@ namespace KernelEngine.Runtime;
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property, AllowMultiple = false)]
 public sealed class RequiresThreadAttribute(string threadName) : Attribute
 {
+    /// <summary>The name of the thread the member must be called from.</summary>
     public string ThreadName { get; } = threadName;
 }

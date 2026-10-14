@@ -1,16 +1,5 @@
-//! Keeps every entity's world matrix equal to its local matrix composed with its parent's world
-//! matrix. The file stores no scene data: parent links, local transforms and world matrices are
-//! components of the ecs it was created with, and its one runtime system, `propagateSystem`, reads
-//! the first two and writes the third once per tick in the post-update phase.
-//!
-//! The system lists the entities with `flatten` so that a parent always precedes its children,
-//! then makes one pass over the list, composing each local matrix with the parent's world matrix,
-//! which needs no recursion. An entity without a world transform is passed over, and one without
-//! a parent composes with the identity.
-//!
-//! `ke_scene_hierarchy_create` resolves the component ids, builds the `State` and registers the
-//! system; the handle it returns owns the `State`. An allocation failure while the list fills is
-//! not reported: the entities left out keep the world matrices they had.
+//! Keeps the world matrix of every entity equal to its local matrix composed with its parent's
+//! world matrix, through one runtime system registered by the scene hierarchy factory.
 
 const std = @import("std");
 
@@ -96,9 +85,12 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
     }
 }
 
-/// The system registered by `ke_scene_hierarchy_create`: rebuilds `order` and writes the world
-/// matrix of each listed entity that has one, parents first. Always returns true and reports
-/// nothing. Without a `State` it does nothing.
+/// The system registered by `ke_scene_hierarchy_create`, run once per tick in the post-update
+/// phase. It rebuilds `order` with `flatten`, then makes a single pass over it, so that a parent's
+/// world matrix is final before any child reads it and no recursion is needed. An entity without
+/// a world transform is passed over; one without a parent, or whose parent has no world
+/// transform, composes with the identity. Always returns true and reports nothing. Without a
+/// `State` it does nothing.
 fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const s: *State = @ptrCast(@alignCast(user orelse return true));
     flatten(s, ctx);
@@ -127,8 +119,9 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c
     return true;
 }
 
-/// This file has no unregister call: the registration keeps the `State` as user data, and nothing
-/// here clears that reference.
+/// The destroy of the handle. Frees the `State`. The runtime keeps the `State` as the user data of
+/// the system and nothing here unregisters it, so the handle must be destroyed only after the
+/// runtime has finished ticking.
 fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {
     const self = self_in orelse return;
     const s: *State = @ptrCast(@alignCast(self));
@@ -137,8 +130,11 @@ fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Fails with a not-found error when any of the four components is not registered on the ecs.
-/// When the registration with the runtime fails, the `State` is freed and a zeroed handle returns.
+/// Factory. Registers the system `scene.propagate_transforms` on the runtime, in the post-update
+/// phase, and returns a handle that owns the `State`. A null runtime or ecs fails as an invalid
+/// argument; a transform, 2D transform, world transform or hierarchy component not registered on
+/// the ecs fails as not found; a failed allocation fails as out of memory; a failed system
+/// registration reports the runtime's error. Each returns a zeroed handle.
 export fn ke_scene_hierarchy_create(
     runtime_in: ?*c.ke_runtime,
     ecs_in: ?*c.ke_ecs,

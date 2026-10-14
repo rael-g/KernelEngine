@@ -20,7 +20,9 @@ string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../.
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
+#region loader
     .AddAssimpAssetLoader()
+#endregion
     .Add<INativeEcs, FlecsEcs>()
     .Add<IScheduler, EnkiScheduler>()
     .Add<IRuntime, Runtime>()
@@ -47,10 +49,12 @@ var services = new ServiceCollection()
         }, "Sun");
 
         Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
+#region load
         var loader = sp.GetRequiredService<IAssetLoader>();
         using var model = loader.LoadModel(modelPath);
         Console.WriteLine($"[KernelEngine] Model loaded: {model.Data.Meshes.Length} sub-meshes, {model.Data.Materials.Length} mats, {model.Data.Textures.Length} textures");
         var nodes = tree.AddModel(model.Data, resources, rootName: "Box");
+#endregion
         Console.WriteLine($"[KernelEngine] Added {nodes.Count} mesh nodes to the scene.");
     }));
 

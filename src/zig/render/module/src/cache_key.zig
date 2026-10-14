@@ -1,6 +1,4 @@
-//! Builds the cache keys of the resolve systems with no allocation and no failure path: a `Key`
-//! is sized at compile time for its prefix and field count, `init` writes the text, and `bits`
-//! turns a float into a field.
+//! Builds the text keys under which the resolve systems cache the GPU objects they create.
 
 const std = @import("std");
 

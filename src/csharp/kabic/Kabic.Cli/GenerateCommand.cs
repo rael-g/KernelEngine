@@ -7,15 +7,6 @@ namespace Kabic.Cli;
 /// Implements the command that regenerates the committed outputs of the domains from their
 /// headers.
 /// </summary>
-/// <remarks>
-/// Run keeps the domains named on the command line, or every domain when none was named, and
-/// loads the convention. <c>Regeneration.ExtractAll</c> extracts all of them first, and a
-/// failure there stops the command with one. Each domain then has its output paths planned, its
-/// API description written, and its outputs generated. Paths are placed under the into
-/// directory when one is given, and under the root otherwise. A generation failure names the
-/// domain and stops the command with one. When no domain was named, the error-kinds file is
-/// written last.
-/// </remarks>
 internal static class GenerateCommand
 {
     /// <summary>

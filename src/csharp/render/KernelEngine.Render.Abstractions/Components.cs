@@ -5,8 +5,8 @@ using System.Runtime.InteropServices;
 namespace KernelEngine.Render;
 
 /// <summary>
-/// One interleaved mesh vertex: object-space position plus normal. Matches the
-/// vertex layout the render core's forward pass expects (two float3 attributes).
+/// One interleaved mesh vertex: object-space position, normal, texture coordinates and tangent,
+/// laid out sequentially as <see cref="IRenderResources.UploadMesh"/> uploads them.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct MeshVertex

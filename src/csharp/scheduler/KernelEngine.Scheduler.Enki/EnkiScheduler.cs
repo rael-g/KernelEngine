@@ -11,6 +11,8 @@ namespace KernelEngine.Scheduler.Enki;
 /// </summary>
 public sealed unsafe class EnkiScheduler : KernelEngine.Scheduler.Scheduler
 {
+    /// <summary>Creates the native scheduler.</summary>
+    /// <exception cref="InvalidOperationException">The native factory returned no scheduler.</exception>
     public EnkiScheduler() : base(CreateNative())
     {
     }

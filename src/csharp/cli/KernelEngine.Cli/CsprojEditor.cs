@@ -3,9 +3,8 @@ using System.Xml.Linq;
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Minimal XML mutator for the project's csproj file. Adds / removes
-/// <c>&lt;ProjectReference Include="..." /&gt;</c> entries while preserving everything else
-/// (other ItemGroups, PropertyGroups, formatting where possible).
+/// Adds and removes <c>&lt;ProjectReference Include="..." /&gt;</c> entries of a csproj file,
+/// leaving the rest of the document as it was. Nothing is written until <see cref="Save"/>.
 /// </summary>
 public sealed class CsprojEditor
 {

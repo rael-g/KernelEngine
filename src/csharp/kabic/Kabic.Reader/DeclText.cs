@@ -6,13 +6,6 @@ namespace Kabic.Reader;
 /// <summary>
 /// Reads the parameter names of a function-pointer field from the bytes of its header.
 /// </summary>
-/// <remarks>
-/// The first match in the text of a parenthesized pointer declarator naming the field, followed
-/// by an opening parenthesis, locates the parameter list. The list is split at its top-level
-/// commas. Each parameter yields its trailing identifier, with any array suffix after it left
-/// out, and a parameter with no trailing identifier yields null. An unmatched declarator or an
-/// unbalanced list yields an empty list.
-/// </remarks>
 public static class DeclText
 {
     /// <summary>

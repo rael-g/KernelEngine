@@ -60,7 +60,7 @@ block name is not normalized and has no short form: `[entity.Transform2D]` is no
 `[entity.ball]` names a component called exactly `ball`. A game-authored node's own component is
 named after its class in snake_case with the namespace dropped, and its property keys are the
 properties in snake_case (`NodePropertyGenerator.cs:86`, `:426`;
-[node-types.md](../architecture/node-types.md#names-a-scene-can-use-for-one-node-type)).
+[node-types.md](../architecture/node-types.md)).
 
 **A node type is normalized.** `+` becomes `.`, and an uppercase letter starts a new `_`-separated word
 unless it follows `.`, `_`, a digit or another uppercase letter that is not the start of a lowercase run.
@@ -69,7 +69,7 @@ So `Pong.Ball`, `Pong+Ball` and `pong.ball` are one name, `Sprite2D` is `sprite2
 before it calls the script factory, so the factory receives the one spelling
 (`normalizeTypeName`, `scene_loader.zig:194-229`; tests `:1898-1932`); the managed registry normalizes
 the names it registers with the same rule. What the normalized name is looked up in, and what a short
-name may collide with, is in [node-types.md](../architecture/node-types.md#resolving-a-node-type).
+name may collide with, is in [node-types.md](../architecture/node-types.md).
 A scene that names a type nobody registered, or a short name two types answer to, fails the load with
 the registry's message (the managed factory's exception reaches the loader as its failure,
 `Generated/SceneLoader.g.cs:135-152`).
@@ -86,7 +86,7 @@ runs after it, so a node binds onto the values the scene authored
 A table named `[entity.<name>]` is a component block, `<name>` being the name a module registered
 the component under. The loader looks it up in the ECS and fails if no module registered it
 (`:332`). The component must also have a field table, an apply callback, or both registered in the
-world (`:341`; [framework.md](../architecture/framework.md#the-world)).
+world (`:341`; [framework.md](../architecture/framework.md)).
 
 For a component the entity does not yet have, the loader zeroes it and seeds the defaults the field
 table declares (`:350-354`). It then applies the block's keys through the field table, then through
@@ -122,7 +122,7 @@ A block key is applied in up to three ways, and they do not fail alike.
 
 A callback may be written in managed code: a game node's apply reads each supported property by
 its key and **ignores** a value of the wrong type or an enum name that does not parse
-([node-types.md](../architecture/node-types.md#what-binding-a-typed-entity-does)).
+([node-types.md](../architecture/node-types.md)).
 
 The callbacks the engine ships:
 
@@ -147,7 +147,7 @@ both required; `handler` is an optional integer, `0` when absent (`:440-485`).
   in a second pass after every entity exists (`:700-708`).
 - `signal` must be one a node type declared to the signal bus (`signal_lookup`); an unknown name
   fails the load, and the name is matched as written, which for a managed node is the payload
-  struct's own name ([framework.md](../architecture/framework.md#signals-are-declared-before-a-scene-loads)).
+  struct's own name ([framework.md](../architecture/framework.md)).
 - **A connection reaches only inside its own file.** The name table is per file: each call of
   `loadSceneRecursive` makes its own and frees it on return (`scene_loader.zig:627`). An included scene
   publishes one name to the file that includes it, the including entity's `name`, bound to the included

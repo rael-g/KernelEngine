@@ -35,34 +35,29 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private readonly ke_render_feature_params _featureParams;
 
     /// <param name="shaderDir">
-    /// Absolute (or process-CWD-relative) path to the directory every render pass's
-    /// build-time-compiled shaders were installed into by CMake's
-    /// ke_compile_slang_shader (<c>&lt;cmake build dir&gt;/bin/shaders</c>). No
-    /// default — a game must know where its own build placed this.
+    /// Directory the compiled shaders of every render pass were installed into. Absolute, or
+    /// relative to the process working directory. Required.
     /// </param>
     /// <param name="clearColor">
-    /// Explicit background color override (RGBA), bypassing the Project file. Default
-    /// (all-zero) reads <c>[render] clear_color_r/g/b/a</c> from <see cref="IConfiguration"/>
-    /// at <see cref="OnLoad"/> instead, falling back to a dark blue if that's absent too.
+    /// Background color (RGBA). The default value reads <c>[render] clear_color_r/g/b/a</c> from
+    /// <see cref="IConfiguration"/> at <see cref="OnLoad"/> instead.
     /// </param>
     /// <param name="clusterGridX">
-    /// Clustered-forward screen-tile columns, bypassing the Project file. 0 (default) reads
-    /// <c>[render] cluster_grid_x</c> from <see cref="IConfiguration"/> at <see cref="OnLoad"/>
-    /// instead; if that's also absent, the native module applies its own default (32).
+    /// Screen-tile columns of the light grid. Zero reads <c>[render] cluster_grid_x</c> from
+    /// <see cref="IConfiguration"/> at <see cref="OnLoad"/>, and a value still zero is left to the
+    /// native module.
     /// </param>
-    /// <param name="clusterGridY">Same as <paramref name="clusterGridX"/>, key <c>cluster_grid_y</c>, native default 18.</param>
-    /// <param name="clusterGridZ">Same as <paramref name="clusterGridX"/>, key <c>cluster_grid_z</c>, native default 24.</param>
+    /// <param name="clusterGridY">Rows of the light grid, resolved as <paramref name="clusterGridX"/> with key <c>cluster_grid_y</c>.</param>
+    /// <param name="clusterGridZ">Depth slices of the light grid, resolved as <paramref name="clusterGridX"/> with key <c>cluster_grid_z</c>.</param>
     /// <param name="maxLightsPerCluster">
-    /// Per-froxel light-index-list cap, bypassing the Project file. 0 (default) reads
-    /// <c>[render] max_lights_per_cluster</c> from config; native default 256 if absent there
-    /// too. Raise this for scenes denser than the default sweet spot.
+    /// Capacity of the light list of one cluster, resolved as <paramref name="clusterGridX"/> with
+    /// key <c>max_lights_per_cluster</c>.
     /// </param>
-    /// <param name="enableShadows">When false, no shadow pass and no shadow map render target exist — a game without shadows carries zero shadow-pass footprint. Default true (matches prior behavior).</param>
-    /// <param name="enableIbl">When false, materials sample a forced-black environment regardless of any skybox (no ambient/reflection contribution). Skybox rendering itself is unaffected. Default true (matches prior behavior).</param>
+    /// <param name="enableShadows">When false, no shadow pass and no shadow map render target exist.</param>
+    /// <param name="enableIbl">When false, materials sample a black environment whatever skybox exists; the skybox itself still draws.</param>
     /// <param name="debugLabels">
-    /// When true, the names of GPU objects, passes and debug groups reach the graphics API, where a
-    /// frame capture tool reads them. Default false reads <c>[render] debug_labels</c> from
-    /// <see cref="IConfiguration"/> at <see cref="OnLoad"/> instead.
+    /// When true, the names of GPU objects, passes and debug groups reach the graphics API. False
+    /// reads <c>[render] debug_labels</c> from <see cref="IConfiguration"/> at <see cref="OnLoad"/>.
     /// </param>
     public WebgpuRenderModule(string shaderDir, System.Numerics.Vector4 clearColor = default,
         uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
@@ -86,8 +81,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     public string Name => "Webgpu.Render";
 
     /// <summary>
-    /// Exposes this module as the scene's <see cref="IRenderResources"/> and
-    /// registers render's own node types (this domain's, not the framework's).
+    /// Exposes this module as <see cref="IRenderResources"/> and registers the node types of the
+    /// render domain.
     /// </summary>
     public void Configure(IServiceCollection services)
     {
@@ -153,9 +148,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <summary>
-    /// Reads <c>[render] clear_color_r/g/b/a</c> from config. Split into four scalar keys
-    /// rather than one array key — the native TOML loader (ke_configuration_toml) skips
-    /// arrays, so a game wanting a config-driven clear color authors this shape.
+    /// Reads the clear color from the four scalar keys <c>[render] clear_color_r/g/b/a</c>, with a
+    /// dark blue for a key or a configuration that is absent.
     /// </summary>
     private static System.Numerics.Vector4 ResolveClearColor(IConfiguration? config)
     {
@@ -169,10 +163,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <summary>
-    /// Uploads an interleaved mesh (position + normal vertices, 16-bit indices)
-    /// to GPU buffers owned by the render core, returning a handle a
-    /// <see cref="MeshComponent"/> references. Valid only after the module is
-    /// loaded. Throws on failure — a bad upload is never swallowed.
+    /// Uploads an interleaved mesh (position and normal vertices, 16-bit indices) to GPU buffers
+    /// owned by the render service and returns the handle a <see cref="MeshComponent"/> refers to.
+    /// Throws <see cref="InvalidOperationException"/> before the module is loaded.
     /// </summary>
     public MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices)
     {
@@ -235,9 +228,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <summary>
-    /// The render-core pointer, untyped. Used only by native calls that cross
-    /// into another plugin (e.g. the framework's asset-resolver cached-load);
-    /// never exposed to game code.
+    /// The render service pointer, untyped, for native calls that cross into another plugin.
     /// </summary>
     void* INativeRenderResources.Native => _core;
 
@@ -323,6 +314,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         return new FontHandle(h.bits);
     }
 
+    /// <summary>Builds the exception for a failed native call, with the native error's type and message when there is one.</summary>
     private static InvalidOperationException Fail(string what, ke_error* err)
     {
         if (err != null)
@@ -334,6 +326,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         return new InvalidOperationException(what);
     }
 
+    /// <summary>Destroys the render module, then the render target, then the device, skipping any that was never created.</summary>
     public void OnUnload(IRuntime runtime, IServiceProvider services)
     {
         if (_module.@ref != null && _module.destroy != null)

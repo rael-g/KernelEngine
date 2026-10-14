@@ -1,5 +1,13 @@
 namespace KernelEngine.Framework;
 
+/// <summary>
+/// Holds the scene requested by <see cref="LoadScene(string)"/> until <c>Flush</c> loads it: the
+/// flush destroys every node, loads <c>scenes/&lt;name&gt;.scene.toml</c> from the application
+/// base directory with the <see cref="SceneLoader"/>, calls <c>OnReady</c> on the nodes and
+/// records the name as <see cref="CurrentScene"/>. Only the latest request before a flush is
+/// kept. A failing load propagates its exception from <c>Flush</c> and leaves
+/// <see cref="CurrentScene"/> unchanged.
+/// </summary>
 internal sealed class SceneRouter : ISceneRouter
 {
     private readonly ScriptHost          _scriptHost;

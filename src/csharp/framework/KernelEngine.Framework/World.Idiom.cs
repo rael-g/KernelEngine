@@ -7,12 +7,11 @@ using KernelEngine.Runtime;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// The parts of <see cref="World"/> that are not a direct image of the C ABI: the typed
-/// overload of <c>RegisterComponentApply</c>, which reinterprets the component's memory
-/// as the struct the caller declared, and the <c>Ecs</c>/<c>Runtime</c>/<c>SceneTree</c>
-/// properties, which expose the already-owned managed wrappers this world was constructed
-/// with rather than re-deriving them from the native accessors. Everything that mirrors
-/// the vtable 1:1 is generated in <c>Generated/World.g.cs</c>.
+/// Managed handle to a native world: the ECS, the runtime and the scene tree a scene is built
+/// on, and the per-component registry of how a scene block fills a component. Disposing it
+/// destroys the world and then the scene tree it was created with. This part declares the
+/// typed <c>RegisterComponentApply</c> and the managed <c>Ecs</c>, <c>Runtime</c> and
+/// <c>SceneTree</c> properties; the members that mirror the vtable are generated.
 /// </summary>
 public unsafe partial class World : IDisposable
 {
@@ -20,15 +19,16 @@ public unsafe partial class World : IDisposable
     private readonly delegate* unmanaged[Cdecl]<ke_scene_tree*, void> _destroyTree;
     private SceneTree? _sceneTree;
 
-    /// <summary>ECS registry borrowed by this world. Same instance as the DI-registered <see cref="IEcsRegistry"/>.</summary>
+    /// <summary>ECS registry the world was constructed with.</summary>
     public IEcsRegistry Ecs { get; }
 
-    /// <summary>Runtime borrowed by this world. Same instance as the DI-registered <see cref="IRuntime"/>.</summary>
+    /// <summary>Runtime the world was constructed with.</summary>
     public IRuntime Runtime { get; }
 
     /// <summary>
-    /// Creates a <see cref="World"/> wrapper that also owns <paramref name="ownedTree"/>,
-    /// destroying it on <see cref="Dispose"/> after the world is destroyed.
+    /// Creates a <see cref="World"/> wrapper that also owns the scene tree of
+    /// <paramref name="treeHandle"/>, destroying it on <see cref="Dispose"/> after the world is
+    /// destroyed.
     /// </summary>
     public World(ke_world_handle worldHandle, ke_scene_tree_handle treeHandle, IEcsRegistry ecs, IRuntime runtime)
         : this(worldHandle)
@@ -40,22 +40,19 @@ public unsafe partial class World : IDisposable
     }
 
     /// <summary>
-    /// Managed wrapper over the scene tree embedded in this world. Created on
-    /// first access and cached for the lifetime of the world.
+    /// Managed wrapper over the scene tree of this world, created on first access.
     /// </summary>
     public SceneTree SceneTree => _sceneTree ??= SceneTree.Borrow(((INativeWorld)this).Native->scene_tree(((INativeWorld)this).Native));
 
     /// <summary>
-    /// Registers an apply callback that reads the component as
-    /// <typeparamref name="T"/>. The scene loader hands the component's memory over
-    /// untyped, since the ABI has no way to name a struct the caller declared.
+    /// Registers an apply callback that receives the component as <typeparamref name="T"/> and
+    /// the authored block as a <see cref="VariantReader"/>.
     /// </summary>
     /// <typeparam name="T">The unmanaged component struct the callback populates.</typeparam>
     /// <param name="cid">Component id returned by <c>IEcsRegistry.RegisterComponent</c>.</param>
     /// <param name="callback">
-    /// Managed callback; must not be stored across frames. Throwing from it rejects
-    /// the value and fails the load with the exception's own message, which is how a
-    /// callback reports a key it owns carrying something it cannot map.
+    /// Managed callback, valid only during the load. Throwing from it rejects the value and fails
+    /// the load with the exception's own message.
     /// </param>
     public void RegisterComponentApply<T>(uint cid, ComponentApplyCallback<T> callback) where T : unmanaged
     {

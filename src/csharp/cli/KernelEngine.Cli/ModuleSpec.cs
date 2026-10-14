@@ -4,9 +4,7 @@ using Tomlyn.Model;
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Parsed <c>.ke-module</c> file — one entry in the module catalog. Plugin authors ship one of
-/// these per module their package exposes (see <c>src/csharp/KernelEngine.Kernel/Modules/*.ke-module</c>
-/// for examples). <see cref="ModuleCatalog"/> discovers all of them at command time.
+/// A parsed <c>.ke-module</c> file, one entry of the <see cref="ModuleCatalog"/>.
 /// </summary>
 /// <param name="Id">Globally unique module id ("KernelEngine.Render.Webgpu", "KernelEngine.Logger.Logger", …).</param>
 /// <param name="Using">Namespace inserted at top of Program.cs.</param>

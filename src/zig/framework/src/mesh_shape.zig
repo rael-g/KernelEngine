@@ -1,14 +1,5 @@
-//! Generates the geometry of the primitive meshes, so that a primitive needs no file. A bake
-//! chooses the vertex and index counts of the primitive, allocates both buffers from the heap
-//! module, and has a baker fill them with positions, normals, texture coordinates and tangents.
-//! The quad and the plane are one four-corner shape facing different ways, the cube gives each
-//! face its own four vertices so its normals stay sharp, and the sphere is a grid of rings and
-//! segments whose seam column is duplicated.
-//!
-//! The file keeps no state. On success the caller's data record owns both buffers until
-//! `ke_mesh_shape_free_internal` releases them, and that release leaves the record empty so a
-//! repeat does nothing. Failure is only the false return, and it leaves the record empty and
-//! nothing allocated.
+//! The geometry of the primitive meshes (quad, plane, cube, sphere), baked in memory so that a
+//! primitive needs no file.
 
 const std = @import("std");
 
@@ -194,11 +185,15 @@ fn bakeSphere(vtx: [*]c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void 
     }
 }
 
-/// Chooses the counts, allocates both buffers and bakes the primitive into them. A sphere
-/// takes its grid from the segment count, and a count that is zero or too small is raised to
-/// a usable one. A null output, an unknown primitive and a failed allocation return false.
-/// On success the caller owns both buffers and releases them with `ke_mesh_shape_free_internal`;
-/// on false nothing is owned.
+/// Chooses the vertex and index counts of the primitive, allocates both buffers from the heap
+/// module and bakes positions, normals, texture coordinates and tangents into them. The quad and
+/// the plane are one four-corner shape facing different ways, the cube gives each face its own
+/// four vertices so its normals stay sharp, and the sphere is a grid of rings and segments whose
+/// seam column is duplicated. A sphere takes its grid from the segment count, and a count that
+/// is zero or too small is raised to a usable one; the baker does not check that the grid fits
+/// the 16-bit indices. A null output, an unknown primitive and a failed allocation return false
+/// and report no error. On success the caller owns both buffers and releases them with
+/// `ke_mesh_shape_free_internal`; on false the record is empty and nothing is owned.
 pub export fn ke_mesh_shape_bake_internal(
     prim: c.ke_mesh_primitive,
     segments_in: u32,
@@ -275,8 +270,9 @@ pub export fn ke_mesh_shape_bake_internal(
     return true;
 }
 
-/// The counts in the data are the lengths the buffers were allocated with, so they must not be
-/// altered between the bake and the free.
+/// Releases both buffers and leaves the record empty, so a repeat does nothing. The counts in the
+/// data are the lengths the buffers were allocated with, so they must not be altered between the
+/// bake and the free.
 pub export fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callconv(.c) void {
     const data = data_in orelse return;
     if (data.vertices) |v| heap.gpa.free(@as([*]c.ke_vertex, @ptrCast(v))[0..data.vertex_count]);

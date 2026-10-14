@@ -1,17 +1,5 @@
-//! An in-memory store of typed values addressed by section and key, with change notification per
-//! section. It keeps no file and no defaults: a getter returns the fallback its caller passes when
-//! the key is missing or holds a value of another type, the one conversion being an integer read
-//! as a double.
-//!
-//! Everything lives in one `State`, allocated by `ke_configuration_create` and reached through the
-//! `api` table of the handle. `entries` holds at most one `Entry` per section and key, since
-//! `upsert` looks before it appends. A setter rejects null arguments, stores the value, and only
-//! then calls `notify`, so a subscriber sees the new value. A failure before the store is written
-//! leaves the store as it was.
-//!
-//! Subscriptions are slots of `subs`. `subscribe` reuses the first inactive `Sub` or appends one
-//! and takes its id from `next_sub_id`, which only grows, so an id names at most one active slot.
-//! There is no locking: every call runs on the thread that makes it.
+//! The in-memory store of typed configuration values addressed by section and key, with change
+//! notification per section.
 
 const std = @import("std");
 
@@ -59,8 +47,10 @@ const Sub = struct {
 };
 
 /// The store behind a handle. The handle's `ref` is the address of `api`, and `api.handle` points
-/// back at this `State`, which is how every function in the table reaches the store. `next_sub_id`
-/// only grows, so subscription ids are never repeated.
+/// back at this `State`, which is how every function in the table reaches the store. `entries`
+/// holds at most one `Entry` per section and key. `next_sub_id` only grows, so subscription ids
+/// are never repeated. Nothing is locked: every call, and every subscriber, runs on the thread
+/// that makes the call.
 const State = struct {
     api: ke.ke_configuration,
     entries: std.ArrayListUnmanaged(Entry),
@@ -134,6 +124,8 @@ fn notify(st: *State, section_c: [*c]const u8) void {
     }
 }
 
+/// Returns the integer stored at this section and key, or the fallback when an argument is null,
+/// the key is missing, or it holds another type.
 fn getInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
@@ -145,7 +137,8 @@ fn getInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u
     return fallback;
 }
 
-/// The one getter that converts: an integer entry is returned as a double.
+/// Returns the double stored at this section and key, or the fallback. The one getter that
+/// converts: an integer entry is returned as a double.
 fn getDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: f64) callconv(.c) f64 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
@@ -158,6 +151,8 @@ fn getDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
     return fallback;
 }
 
+/// Returns the boolean stored at this section and key, or the fallback when an argument is null,
+/// the key is missing, or it holds another type.
 fn getBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: bool) callconv(.c) bool {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
@@ -169,8 +164,8 @@ fn getBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const 
     return fallback;
 }
 
-/// Returns the entry's own string, not a copy, so the pointer stops being valid at the next write
-/// to its key or at `destroy`.
+/// Returns the string stored at this key, or the fallback. It is the entry's own string, not a
+/// copy, so the pointer stops being valid at the next write to its key or at `destroy`.
 fn getString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: [*c]const u8) callconv(.c) [*c]const u8 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
@@ -183,8 +178,8 @@ fn getString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
 }
 
 /// Reports an invalid-argument error and returns false when an argument is null, and an
-/// out-of-memory error when the entry cannot be created. Otherwise the new value is stored and
-/// the subscribers of the section run before it returns. `setDouble` and `setBool` do the same.
+/// out-of-memory error when the entry cannot be created; the store is then as it was. Otherwise
+/// the new value is stored and the subscribers of the section run, seeing it, before it returns.
 fn setInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: i64, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (self == null or section == null or key == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
@@ -197,6 +192,7 @@ fn setInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u
     return true;
 }
 
+/// As `setInt`, for a double.
 fn setDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: f64, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (self == null or section == null or key == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
@@ -209,6 +205,7 @@ fn setDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
     return true;
 }
 
+/// As `setInt`, for a boolean.
 fn setBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: bool, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (self == null or section == null or key == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
@@ -221,9 +218,10 @@ fn setBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const 
     return true;
 }
 
-/// Copies the value before the entry is looked up, so a failed copy or entry creation leaves the
-/// store unchanged. A successful write frees the previous string, which makes the pointer an
-/// earlier `getString` returned for this key invalid.
+/// As `setInt`, for a string, and a null value is also an invalid argument. Copies the value
+/// before the entry is looked up, so a failed copy or entry creation leaves the store unchanged. A
+/// successful write frees the previous string, which makes the pointer an earlier `getString`
+/// returned for this key invalid.
 fn setString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: [*c]const u8, out_error: ?*?*ke.ke_error) callconv(.c) bool {
     if (self == null or section == null or key == null or value == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());

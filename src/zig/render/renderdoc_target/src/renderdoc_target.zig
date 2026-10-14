@@ -1,12 +1,5 @@
-//! This file wraps another render target and brackets the chosen frames with a RenderDoc capture,
-//! forwarding everything else. `RenderdocTarget` holds the borrowed inner target, the RenderDoc
-//! function table, the window of frames to capture, a frame counter and whether a capture is open.
-//!
-//! RenderDoc is used only if it is already in the process: `loadedApi` finds its entry point
-//! through `loadedGetApi` and `ke_gpu_render_target_renderdoc_create` passes the table to `create`,
-//! which validates its arguments before allocating. Each frame, `acquire` opens a capture before
-//! the inner acquire when `chosen` accepts the counter, and `present` closes it. `destroy` discards
-//! a capture still open.
+//! A render target that wraps another one and brackets the chosen frames with a RenderDoc capture,
+//! forwarding everything else to the inner target.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -48,8 +41,9 @@ fn chosen(t: *const RenderdocTarget) bool {
     return t.frame >= t.first_frame and t.frame - t.first_frame < t.frame_count;
 }
 
-/// Runs at the start of each frame. A capture it starts stays open until `present` ends it or
-/// `destroy` discards it, and is discarded here when the inner target yields no view.
+/// Runs at the start of each frame. RenderDoc is told to start a capture before the inner `acquire`
+/// when `chosen` accepts the frame counter. A capture it starts stays open until `present` ends it
+/// or `destroy` discards it, and is discarded here when the inner target yields no view.
 fn acquire(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
     const t = of(self);
     const capture = chosen(t) and !t.capturing;
@@ -76,11 +70,13 @@ fn present(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) call
     return presented;
 }
 
+/// Forwards to the inner target.
 fn size(self: [*c]c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
     const t = of(self);
     t.inner.size.?(t.inner, out_w, out_h);
 }
 
+/// Forwards to the inner target.
 fn format(self: [*c]c.ke_gpu_render_target) callconv(.c) c.ke_gpu_texture_format {
     const t = of(self);
     return t.inner.format.?(t.inner);

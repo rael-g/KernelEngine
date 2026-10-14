@@ -1,13 +1,5 @@
-//! Loads a font file into one RGBA atlas plus a metrics record per glyph of a codepoint range,
-//! behind the font-loader contract. A loader owns only a `State`; every load works on buffers that
-//! live for that call, so loads share nothing and keep nothing.
-//!
-//! A load reads the whole file, packs the range into an alpha-only buffer with the stb packer,
-//! and only then widens that buffer into white pixels carrying the alpha. Glyph rectangles come
-//! back from the packer as pixels and are stored as texture coordinates. The result is allocated
-//! last, so a caller gets either a complete `ke_font_data` or null with the cause in the error
-//! output, never a partial one, and every earlier allocation is released on each failure path.
-//! The result is released only through the loader's `free_font` slot.
+//! Implements the font-loader contract on stb_truetype: it bakes a codepoint range of a font file
+//! into an RGBA atlas with a metrics record per glyph.
 
 const std = @import("std");
 
@@ -67,7 +59,11 @@ fn readFile(path: [*c]const u8) ?[]u8 {
     return buf;
 }
 
-/// Runs in the `load_font` slot, on the calling thread. On success the caller owns the result and
+/// Runs in the `load_font` slot, on the calling thread. It reads the whole file, packs the range
+/// into an alpha-only buffer with the stb packer, and only then widens that buffer into white
+/// pixels carrying the alpha; glyph rectangles come back from the packer as pixels and are stored
+/// as texture coordinates. The result is allocated last, so the caller gets a complete
+/// `ke_font_data` or null, never a partial one. On success the caller owns the result and
 /// releases it through `free_font`; its metrics place each glyph's box in the atlas as fractions
 /// of the atlas size. On failure nothing it allocated survives the call, the pack context is
 /// ended whenever it was begun, and null comes back with the cause in the error output: an

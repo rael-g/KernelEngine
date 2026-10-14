@@ -15,6 +15,7 @@ public ref struct VariantReader
     private readonly nint _entries;
     private readonly uint _count;
 
+    /// <summary>Wraps a native table. The table must outlive the reader.</summary>
     public unsafe VariantReader(ke_variant_table_entry* entries, uint count)
     {
         _entries = (nint)entries;

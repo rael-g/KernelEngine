@@ -19,8 +19,13 @@ public record SequencePair(ApiParam Seq, ApiParam Count);
 /// </summary>
 public record BlobPair(ApiParam Blob, ApiParam Size);
 
-/// <summary>The classified form of one slot: its shape, the parameters a caller supplies, and what the call hands back.</summary>
-/// <param name="OutParams">All <c>[out]</c> params other than a sequence, in declaration order.</param>
+/// <summary>
+/// The classified form of one slot: its shape, the parameters a caller supplies, and what the call
+/// hands back.
+/// </summary>
+/// <param name="OutParams">
+/// All <c>[out]</c> params other than a sequence, in declaration order.
+/// </param>
 /// <param name="PublicParams">
 /// Every parameter a caller still supplies: the trailing error out-param, and the
 /// count paired with a sequence, are already removed. A parameter marked
@@ -30,10 +35,14 @@ public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiPa
     IReadOnlyList<SequencePair> Sequences,
     IReadOnlyList<ApiParam> OutParams, IReadOnlyList<ApiParam> PublicParams)
 {
-    /// <summary>The <c>[expand]</c> parameter, whose fields stand in for it in <see cref="PublicParams"/>.</summary>
+    /// <summary>
+    /// The <c>[expand]</c> parameter, whose fields stand in for it in <see cref="PublicParams"/>.
+    /// </summary>
     public ApiParam? ExpandedParam { get; init; }
 
-    /// <summary>The struct <see cref="ExpandedParam"/> points at, whose fields the call has to rebuild.</summary>
+    /// <summary>
+    /// The struct <see cref="ExpandedParam"/> points at, whose fields the call has to rebuild.
+    /// </summary>
     public ApiStruct? ExpandedStruct { get; init; }
 
     /// <summary>
@@ -60,13 +69,20 @@ public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiPa
     public IReadOnlyList<BlobPair> Blobs { get; init; } = [];
 }
 
-/// <summary>How a provider is constructed: from a factory function, from a handle struct, or not at all.</summary>
+/// <summary>
+/// How a provider is constructed: from a factory function, from a handle struct, or not at all.
+/// </summary>
 public enum ConstructorKind { FromFactory, FromHandle, None }
 
-/// <summary>The construction plan of one provider: the factory or handle struct it uses, and whether the factory needs a wrapper.</summary>
+/// <summary>
+/// The construction plan of one provider: the factory or handle struct it uses, and whether the
+/// factory needs a wrapper.
+/// </summary>
 public record ConstructorPlan(ConstructorKind Kind, ApiFunction? Factory, string? HandleTypeName, bool NeedsWrapper);
 
-/// <summary>A free function, grouped under its owner, with the slot classification it is projected through.</summary>
+/// <summary>
+/// A free function, grouped under its owner, with the slot classification it is projected through.
+/// </summary>
 /// <param name="Classified">
 /// What the function's own parameters and return declare, read with the same rules a
 /// vtable slot's are. A free function is the same contract reached by a symbol instead of
@@ -75,13 +91,21 @@ public record ConstructorPlan(ConstructorKind Kind, ApiFunction? Factory, string
 /// </param>
 public record GroupedFunction(ApiFunction Fn, ApiParam? SelfParam, ClassifiedSlot Classified);
 
-/// <summary>The roles <see cref="Classifier"/> assigns to the declarations of one model, each keyed by name.</summary>
+/// <summary>
+/// The roles <see cref="Classifier"/> assigns to the declarations of one model, each keyed by name.
+/// </summary>
 public class ClassifiedModel
 {
-    /// <summary>The vtables a caller constructs and holds: those with a factory or a handle struct, or listed as providers.</summary>
+    /// <summary>
+    /// The vtables a caller constructs and holds: those with a factory or a handle struct, or
+    /// listed as providers.
+    /// </summary>
     public List<ApiStruct> Providers { get; } = [];
 
-    /// <summary>The vtables a caller implements: those named by a callback parameter or listed as callbacks, and not listed as providers.</summary>
+    /// <summary>
+    /// The vtables a caller implements: those named by a callback parameter or listed as callbacks,
+    /// and not listed as providers.
+    /// </summary>
     public List<ApiStruct> Callbacks { get; } = [];
 
     /// <summary>The classified slots of each vtable, keyed by the vtable's name.</summary>
@@ -93,62 +117,42 @@ public class ClassifiedModel
     /// <summary>The construction plan of each provider, keyed by the provider's name.</summary>
     public Dictionary<string, ConstructorPlan> Constructors { get; } = [];
 
-    /// <summary>Whether each vtable declares a field named <c>min_level</c>, keyed by the vtable's name.</summary>
+    /// <summary>
+    /// Whether each vtable declares a field named <c>min_level</c>, keyed by the vtable's name.
+    /// </summary>
     public Dictionary<string, bool> CallbackHasLevel { get; } = [];
 
-    /// <summary>The name of the slot tagged as the init lifecycle, keyed by the vtable's name.</summary>
+    /// <summary>
+    /// The name of the slot tagged as the init lifecycle, keyed by the vtable's name.
+    /// </summary>
     public Dictionary<string, string> LifecycleInit { get; } = [];
 
-    /// <summary>The name of the slot tagged as the shutdown lifecycle, keyed by the vtable's name.</summary>
+    /// <summary>
+    /// The name of the slot tagged as the shutdown lifecycle, keyed by the vtable's name.
+    /// </summary>
     public Dictionary<string, string> LifecycleShutdown { get; } = [];
 }
 
-/// <summary>Sorts the declarations of an <see cref="ApiModel"/> into the roles the projections need.</summary>
-/// <remarks>
-/// <see cref="Classify"/> makes three passes over the model. The first takes each vtable that is
-/// not external, is not a handle struct and is not a parameter bag. A vtable is a callback when
-/// its name is the type of a parameter tagged <c>"callback"</c>, or is one of the explicit
-/// callbacks, and it is not one of the explicit providers. Otherwise it is a provider when a
-/// struct named by the handle convention or a function named by the factory convention exists
-/// for it, or when it is one of the explicit providers. Every vtable gets its slots classified
-/// by <c>ClassifySlot</c>, its slots tagged <c>"lifecycle"</c> recorded as init or shutdown, and
-/// a flag set when one of its fields is named <c>min_level</c>.
-///
-/// The second pass gives each provider a construction plan. When a factory function exists the
-/// plan names it, and the plan needs a wrapper when one of the factory's parameters other than
-/// the error out-parameter is a pointer. Otherwise the plan names the handle struct when one
-/// exists, and it is none when neither does.
-///
-/// The third pass groups every function under an owner: the struct its first parameter names,
-/// or else the vtable its return type names. A factory that takes the error out-parameter and
-/// returns a handle type is skipped, and so is a function with no owner. When the first
-/// parameter is the owner, <c>AsSlot</c> drops it before the function is classified.
-///
-/// <c>ClassifySlot</c> reads a slot's parameters in a fixed order. It drops the trailing error
-/// out-parameter when the slot is fallible, replaces an <c>"expand"</c> parameter with the fields
-/// of the struct it points at, pairs each <c>"array_of"</c> parameter with its count and each
-/// <c>"bytes_of"</c> parameter with its size, and removes the count named by the return's
-/// <c>"array_of"</c>. The parameters that remain are the caller's; the ones tagged <c>"out"</c>
-/// and not <c>"array_of"</c> are written back. The shape is <c>Try</c> for a slot tagged
-/// <c>"try"</c>; otherwise <c>ReturnsOutParam</c> when exactly one parameter is written back and
-/// the return is void or a boolean; otherwise <c>TupleOutParams</c> when two or more are written
-/// back; otherwise <c>Fallible</c> for a fallible slot; otherwise <c>Plain</c>.
-///
-/// <c>ClassifySlot</c> throws <see cref="InvalidOperationException"/> when a slot's tags
-/// contradict its declaration: an <c>"expand"</c> parameter that is not a pointer or names no
-/// struct, an <c>"array_of"</c>, <c>"bytes_of"</c> or return count naming no parameter, a
-/// <c>"bytes_of"</c> parameter that is not a pointer to void, a return tagged <c>"array_of"</c>
-/// that is not a pointer, a written-back <c>"rooted"</c> parameter that is not a pointer to void
-/// pointer, two written-back parameters that reach the caller under one name once the out prefix
-/// is dropped, a fallible slot that also writes a parameter, and an opaque payload on a slot
-/// whose shape is neither <c>Plain</c> nor <c>Fallible</c>.
-/// </remarks>
+/// <summary>
+/// Sorts the declarations of an <see cref="ApiModel"/> into the roles the projections need.
+/// </summary>
 public static class Classifier
 {
-    /// <summary>Classifies every vtable, function and constructor of <paramref name="model"/> under <paramref name="convention"/>.</summary>
+    /// <summary>
+    /// Classifies every vtable, function and constructor of <paramref name="model"/> under
+    /// <paramref name="convention"/>. Throws <see cref="InvalidOperationException"/> when the tags
+    /// of a slot contradict its declaration: an <c>expand</c>, <c>array_of</c> or <c>bytes_of</c>
+    /// tag that names no usable parameter or struct, a written-back parameter of the wrong pointer
+    /// type, two written-back parameters that reach the caller under one name, or a fallible slot
+    /// that also writes a parameter.
+    /// </summary>
     /// <param name="model">The model read from the header description.</param>
-    /// <param name="explicitProviders">Vtable names to treat as providers, whatever the naming rules say.</param>
-    /// <param name="explicitCallbacks">Vtable names to treat as callbacks, whatever the parameters say.</param>
+    /// <param name="explicitProviders">
+    /// Vtable names to treat as providers, whatever the naming rules say.
+    /// </param>
+    /// <param name="explicitCallbacks">
+    /// Vtable names to treat as callbacks, whatever the parameters say.
+    /// </param>
     /// <param name="convention">The spellings the names are read with.</param>
     /// <returns>The roles of every declaration, keyed by name.</returns>
     public static ClassifiedModel Classify(ApiModel model, HashSet<string> explicitProviders,

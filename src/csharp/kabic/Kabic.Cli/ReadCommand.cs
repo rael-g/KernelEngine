@@ -6,15 +6,6 @@ namespace Kabic.Cli;
 /// <summary>
 /// Implements the read command, which reads an API description from C headers.
 /// </summary>
-/// <remarks>
-/// Run separates the arguments into the output path, the zig override, the manifest, include
-/// directories, auxiliary headers, compose headers and primary headers. Any other argument,
-/// including an unrecognised flag, is a primary header. Without an output path or a primary
-/// header the usage is written to the error stream and the command returns one. Otherwise
-/// <c>Extraction.Run</c> produces the JSON, and its <c>InvalidOperationException</c> is written
-/// to the error stream. On success the output directory is created, the JSON is written there,
-/// and the path is printed.
-/// </remarks>
 internal static class ReadCommand
 {
     /// <summary>

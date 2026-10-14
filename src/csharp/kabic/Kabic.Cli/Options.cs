@@ -4,12 +4,6 @@ namespace Kabic.Cli;
 /// The command-line options shared by the commands that work on a manifest and a root
 /// directory.
 /// </summary>
-/// <remarks>
-/// <c>Parse</c> starts from the current directory as the root and the manifest under that root,
-/// then reads the root, manifest, zig, domain and into flags. A domain flag may repeat and
-/// collects each name. Unrecognised arguments are skipped. <c>Raw</c> keeps the whole argument
-/// list as given, including the switches that <c>Parse</c> does not interpret.
-/// </remarks>
 internal sealed record Options(string Root, string Manifest, string? Zig, IReadOnlyList<string> Domains, string? Into, string[] Raw)
 {
     /// <summary>

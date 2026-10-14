@@ -6,17 +6,6 @@ namespace Kabic.C;
 /// somebody wrote by hand for that one component. The table's entry type and the spelling of each
 /// kind of field come from the convention.
 /// </summary>
-/// <remarks>
-/// <see cref="RenderFieldTables"/> writes one C header. It opens the include guard, includes the
-/// header that the convention's field table names, then the headers it was passed and
-/// <c>stddef.h</c>. For each struct of <see cref="Named"/> it emits a macro, spelled by
-/// <see cref="NameMacro"/>, whose value is the component name that <c>ComponentNameFor</c> gives.
-/// For each struct of <see cref="Describable"/> it emits a static array named after the struct
-/// with a <c>_fields</c> suffix, holding one entry per field that <c>Describes</c> accepts: the
-/// field's name, its kind constant, its offset and its size, and the initializer that
-/// <c>DefaultOf</c> renders. It then closes the guard and normalizes the line endings to LF.
-/// It throws an <c>InvalidOperationException</c> when the convention declares no field table.
-/// </remarks>
 public static class CWriter
 {
     /// <summary>

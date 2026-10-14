@@ -7,19 +7,11 @@ namespace Kabic.Reader;
 /// Writes the declarations of an <c>ApiModel</c> and of its parts as JSON objects under fixed key
 /// names.
 /// </summary>
-/// <remarks>
-/// The model is written as one object holding the enum, struct, vtable, function and callback
-/// arrays, and the type aliases as an object from alias name to target. The variables array is
-/// added only when the model has variables. A struct is written under vtables when it is a
-/// vtable and under structs otherwise, and it gets slots only when it has any. An enum gets
-/// external only when it is external, and tags only when it has any. An enum value is written as
-/// a number when it is an integer and as text otherwise. A slot gets return tags only when it has
-/// any, and a receiver only when it has one. A function gets return tags only when it has any.
-/// </remarks>
 public static class Serialization
 {
     /// <summary>
-    /// Writes the model as one JSON object, as described in the remarks.
+    /// Writes the model as one JSON object, with the enum, struct, vtable, function and callback
+    /// arrays and the type aliases.
     /// </summary>
     public static JsonObject ToJson(this ApiModel m)
     {

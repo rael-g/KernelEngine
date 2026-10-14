@@ -6,8 +6,13 @@ using KernelEngine.Scheduler;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Wires <see cref="ISceneRouter"/> into the runtime and kicks off the
-/// initial scene load.
+/// Runtime module "Scene.Router". It registers <see cref="ISceneRouter"/>, registers the script
+/// factory of the native scene loader (it resolves the type name through
+/// <see cref="NodeTypeRegistry"/>, constructs the node with the service provider and binds it to
+/// the entity), loads the initial scene on the pinned worker during <c>OnLoad</c>, and registers
+/// the system "Scene.Router.Flush" in the pre-update phase on that worker. The initial scene is the
+/// constructor override, else the "default_scene" key of the "project" configuration section
+/// with its <c>res://</c>, <c>scenes/</c> and scene extension removed, else "Main".
 /// </summary>
 public sealed class SceneRouterModule : IRuntimeModule
 {
@@ -16,14 +21,15 @@ public sealed class SceneRouterModule : IRuntimeModule
     private readonly string? _initialSceneOverride;
     private readonly Type    _sceneModuleDependency;
 
+    /// <summary>The module name, "Scene.Router".</summary>
     public string Name => "Scene.Router";
 
+    /// <summary>The module that registers <see cref="ScriptHost"/>.</summary>
     public IEnumerable<Type> Dependencies => new[] { _sceneModuleDependency };
 
     /// <param name="initialScene">Overrides the project's default scene, if set.</param>
     /// <param name="sceneModuleDependency">
-    /// The module that must load first because it registers <see cref="ScriptHost"/> and
-    /// drives the behavior system. Defaults to <see cref="SceneNodesModule"/>.
+    /// The module that must load first. Defaults to <see cref="SceneNodesModule"/>.
     /// </param>
     public SceneRouterModule(string? initialScene = null, Type? sceneModuleDependency = null)
     {
@@ -31,12 +37,17 @@ public sealed class SceneRouterModule : IRuntimeModule
         _sceneModuleDependency = sceneModuleDependency ?? typeof(SceneNodesModule);
     }
 
+    /// <summary>Registers the router as itself and as <see cref="ISceneRouter"/>.</summary>
     public void Configure(IServiceCollection services)
     {
         services.AddSingleton<SceneRouter>();
         services.AddSingleton<ISceneRouter>(sp => sp.GetRequiredService<SceneRouter>());
     }
 
+    /// <summary>
+    /// Registers the script factory, loads the initial scene and registers the flush system.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The initial scene fails to load.</exception>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var scheduler = services.GetRequiredService<IScheduler>();

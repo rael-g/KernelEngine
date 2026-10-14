@@ -1,12 +1,9 @@
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Action bodies for each CLI subcommand. Kept thin — every command:
-///   1. Resolves the <see cref="ProjectContext"/>.
-///   2. Discovers the catalog.
-///   3. Mutates manifest + csproj + Program.cs in that order.
-///   4. Saves all three.
-/// Each step is small enough to read top-to-bottom; this file is the script that wires them.
+/// The action bodies of the CLI subcommands. A command that changes the module set resolves the
+/// <see cref="ProjectContext"/>, mutates the manifest, the csproj and Program.cs in that order,
+/// and saves all three only after every mutation has succeeded.
 /// </summary>
 public static class Commands
 {
@@ -137,11 +134,10 @@ public static class Commands
     }
 
     /// <summary>
-    /// Scaffolds a new game project: shells out to <c>dotnet new sln</c> + <c>dotnet new console</c>
-    /// then overwrites <c>Program.cs</c> with the empty-services ke template and writes a minimal
-    /// <c>Project</c> file. Module wiring is left to <c>ke add module</c> so this command stays
-    /// focused on directory + sln + csproj layout — the same way <c>dotnet new</c> stays focused on
-    /// "give me files I can build".
+    /// Scaffolds a new game project: runs <c>dotnet new sln</c> and <c>dotnet new console</c>,
+    /// overwrites <c>Program.cs</c> with the empty-services template and writes a minimal
+    /// <c>Project</c> file with no modules. Throws when the name is not a valid identifier or the
+    /// target directory exists and is not empty.
     /// </summary>
     public static void NewGame(string name, string? targetParentDir)
     {

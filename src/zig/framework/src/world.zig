@@ -1,20 +1,5 @@
-//! A world is the handle through which the framework reaches the ecs, the runtime and the scene
-//! tree it was created with, and through which a component is given the two things a scene needs
-//! to fill it: a field table that maps authored keys to memory, and an apply callback for keys
-//! that need more than that. Those pointers are borrowed from the creation params and never
-//! freed, and the world owns no component data.
-//!
-//! The registry that holds the tables is an array of `ApplyEntry`, one per component id, grown by
-//! doubling and searched linearly. `entryFor` is the only place an entry is created, and the two
-//! registration slots each write their own half of it, so registering fields never replaces a
-//! callback or the reverse. The lookup slots read the halves back, and the logger and signal bus
-//! given at creation are exposed to the rest of the plugin through `loggerOf` and `signalBusOf`.
-//!
-//! `ke_world_create` makes one allocation, a `Block` that holds the `State` and the vtable, so the
-//! destroy function of the returned handle frees both with the registry buffer. Creation also
-//! registers the transform, 2D transform and world transform components on the ecs through
-//! `registerBuiltin`, with the appliers of components_apply.zig, and fails whole if one of them
-//! fails.
+//! The world: the handle that carries the ecs, runtime and scene tree the framework works on, and
+//! the registry of how a scene fills each component.
 
 const std = @import("std");
 
@@ -76,16 +61,20 @@ pub fn signalBusOf(self: *c.ke_world) ?*c.ke_signal_bus {
     return stateOf(self).signal_bus;
 }
 
+/// Slot `ecs`. Returns the ecs given at creation, or null for a null world.
 fn worldEcs(self_in: ?*c.ke_world) callconv(.c) ?*c.ke_ecs {
     const self = self_in orelse return null;
     return stateOf(self).ecs;
 }
 
+/// Slot `runtime`. Returns the runtime given at creation, or null for a null world.
 fn worldRuntime(self_in: ?*c.ke_world) callconv(.c) ?*c.ke_runtime {
     const self = self_in orelse return null;
     return stateOf(self).runtime;
 }
 
+/// Slot `scene_tree`. Returns the scene tree given at creation, null when none was given or for a
+/// null world.
 fn worldSceneTree(self_in: ?*c.ke_world) callconv(.c) ?*c.ke_scene_tree {
     const self = self_in orelse return null;
     return stateOf(self).scene_tree;
@@ -122,8 +111,10 @@ fn entryFor(s: *State, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) ?*
     return entry;
 }
 
-/// Reached through the `register_component_apply` slot, and from `registerBuiltin` during
-/// `ke_world_create` for each builtin component that has a callback.
+/// Slot `register_component_apply`. Sets the callback and context of a component id, leaving its
+/// field table alone, and replaces a callback registered before. Fails as an invalid argument for
+/// a null world or callback, and as out of memory when the registry cannot grow; both return
+/// false.
 fn worldRegisterComponentApply(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
@@ -145,8 +136,9 @@ fn worldRegisterComponentApply(
     return true;
 }
 
-/// Reached through the `register_component_fields` slot, and from `registerBuiltin` during
-/// `ke_world_create` for each builtin component that has a field table.
+/// Slot `register_component_fields`. Sets the field table of a component id, leaving its callback
+/// alone; the table is borrowed, not copied. Fails as an invalid argument for a null world or
+/// table or a zero count, and as out of memory when the registry cannot grow; both return false.
 fn worldRegisterComponentFields(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
@@ -168,7 +160,8 @@ fn worldRegisterComponentFields(
     return true;
 }
 
-/// Lookup slot for the fields half of an entry. An id whose entry has no fields returns null, not
+/// Slot `get_component_fields`. Returns the table registered for the id and writes its length to
+/// `out_count` when that is non-null. An id whose entry has no fields returns null, not
 /// an empty table.
 fn worldGetComponentFields(
     self_in: ?*c.ke_world,
@@ -188,8 +181,9 @@ fn worldGetComponentFields(
     return null;
 }
 
-/// Lookup slot for the apply half of an entry. The context is written whenever the id has an entry,
-/// so a null callback can still come back together with a context.
+/// Slot `get_component_apply`. Returns the callback registered for the id and writes its context.
+/// The context is written whenever the id has an entry, so a null callback can still come back
+/// together with a context.
 fn worldGetComponentApply(
     self_in: ?*c.ke_world,
     cid: c.ke_component_id,
@@ -207,8 +201,8 @@ fn worldGetComponentApply(
     return null;
 }
 
-/// Reached through the destroy function of the handle, and from `ke_world_create` when a builtin
-/// registration fails. Frees the registry buffer, then the block.
+/// The destroy function of the handle. After it returns the registry buffer and the block are
+/// freed; the ecs, runtime and other borrowed objects are untouched.
 fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -236,9 +230,11 @@ fn registerBuiltin(
     return true;
 }
 
-/// Returns a handle whose `ref` is the world and whose destroy is `worldDestroy`. A null params
-/// pointer, or a missing ecs or runtime, fails as an invalid argument. A failed builtin
-/// registration, or a failed block allocation, returns a null handle.
+/// Factory. Returns a handle whose `ref` is the world and whose destroy is `worldDestroy`, after
+/// registering the transform, 2D transform and world transform components on the ecs. A null
+/// params pointer, or a missing ecs or runtime, fails as an invalid argument; a failed block
+/// allocation fails as out of memory; a failed builtin registration reports the ecs error. Each
+/// returns a null handle.
 export fn ke_world_create(
     params_in: ?*const c.ke_world_params,
     out_error: [*c][*c]c.ke_error,

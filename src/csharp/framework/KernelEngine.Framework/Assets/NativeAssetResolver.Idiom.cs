@@ -9,29 +9,25 @@ using KernelEngine.Text.Native;
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// The part of <see cref="NativeAssetResolver"/> that is not a direct image of the C
-/// ABI: the convenience constructor that calls <c>ke_asset_resolver_create</c> itself
-/// (no factory function lives in this domain's own headers — it belongs to the
-/// framework plugin that creates this alongside the scene/world it composes), taking
-/// the loader plugins and project root the factory needs. Everything that mirrors the
-/// vtable 1:1 is generated in <c>Generated/NativeAssetResolver.g.cs</c>.
+/// Managed handle to a native asset resolver, which turns texture, mesh, material and font
+/// paths into engine data. This part declares the constructor that calls the native factory
+/// and the typed resolve methods; the members that mirror the vtable are generated.
 /// </summary>
 public unsafe partial class NativeAssetResolver
 {
     /// <summary>
     /// Creates a native asset resolver.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The native factory fails.</exception>
     /// <param name="imageLoader">
-    /// Optional image-loader plugin. Pass <see langword="null"/> to disable
-    /// <c>ResolveTexture</c>; it will throw an exception when called.
+    /// Image loader, borrowed. Without one <c>ResolveTexture</c> throws.
     /// </param>
     /// <param name="fontLoader">
-    /// Optional font-loader plugin. Pass <see langword="null"/> to disable
-    /// <c>ResolveFont</c>; it will throw an exception when called.
+    /// Font loader, borrowed. Without one <c>ResolveFont</c> throws.
     /// </param>
     /// <param name="projectRoot">
-    /// Optional project root for <c>res://</c> resolution. Pass <see langword="null"/>
-    /// to restrict to absolute and CWD-relative paths.
+    /// Project root that <c>res://</c> paths resolve against; with <see langword="null"/> such a
+    /// path resolves to the bare remainder.
     /// </param>
     public NativeAssetResolver(INativeImageLoader? imageLoader = null,
                                INativeFontLoader? fontLoader = null, string? projectRoot = null)
@@ -56,11 +52,11 @@ public unsafe partial class NativeAssetResolver
     }
 
     /// <summary>
-    /// Resolves an image path into freshly-decoded RGBA8 pixel data. Caller owns the
-    /// result; release with <see cref="IDisposable.Dispose"/>.
+    /// Resolves an image path into decoded RGBA8 pixel data. The caller owns the result and
+    /// releases it with <see cref="IDisposable.Dispose"/>.
     /// </summary>
     /// <exception cref="Exception">
-    /// File not found, unsupported extension, or no image loader was injected.
+    /// File not found, unsupported extension, or no image loader was given.
     /// </exception>
     public IImageData ResolveTextureData(string path)
     {
@@ -69,11 +65,11 @@ public unsafe partial class NativeAssetResolver
     }
 
     /// <summary>
-    /// Resolves a mesh path to CPU-side vertex + index data. Caller owns the result;
-    /// release with <see cref="IDisposable.Dispose"/>.
-    /// Primitives: <c>res://primitives/{quad|plane|cube|sphere}</c>.
+    /// Resolves a mesh path to vertex and index data. The caller owns the result and releases it
+    /// with <see cref="IDisposable.Dispose"/>. Only the paths
+    /// <c>res://primitives/{quad|plane|cube|sphere}</c> resolve.
     /// </summary>
-    /// <exception cref="Exception">Path unresolvable or unsupported extension.</exception>
+    /// <exception cref="Exception">The path is not a primitive.</exception>
     public ResolvedMeshData ResolveMeshData(string path)
     {
         var data = ResolveMesh(path);
@@ -81,16 +77,18 @@ public unsafe partial class NativeAssetResolver
     }
 
     /// <summary>
-    /// Resolves a font file path to a freshly-baked <see cref="ResolvedFontData"/> (atlas RGBA8
-    /// + glyph metrics). Caller owns the result and must dispose it.
+    /// Resolves a font file path to a baked <see cref="ResolvedFontData"/> (atlas RGBA8 and glyph
+    /// metrics). The caller owns the result and must dispose it.
     /// </summary>
-    /// <param name="path">File path; <c>res://</c> prefix is expanded against the project root.</param>
+    /// <param name="path">
+    /// File path; a <c>res://</c> prefix is expanded against the project root.
+    /// </param>
     /// <param name="pixelSize">Desired bake size in pixels.</param>
-    /// <param name="firstCodepoint">First Unicode codepoint to include (default 32 = space).</param>
-    /// <param name="codepointCount">Number of contiguous codepoints to bake (default 95).</param>
-    /// <param name="atlasSize">Square atlas dimension in pixels (default 512).</param>
+    /// <param name="firstCodepoint">First Unicode codepoint to include.</param>
+    /// <param name="codepointCount">Number of contiguous codepoints to bake.</param>
+    /// <param name="atlasSize">Square atlas dimension in pixels.</param>
     /// <exception cref="Exception">
-    /// File not found, unsupported format, or no font loader was injected.
+    /// File not found, unsupported format, or no font loader was given.
     /// </exception>
     public ResolvedFontData ResolveFontData(string path, float pixelSize,
                                         uint firstCodepoint = 32, uint codepointCount = 95,
@@ -101,9 +99,8 @@ public unsafe partial class NativeAssetResolver
     }
 
     /// <summary>
-    /// Parses a <c>.material</c> TOML file and returns the material spec as a value type.
-    /// Texture fields inside the spec stay as path strings; feed them back through
-    /// <see cref="ResolveTextureData"/> to obtain pixel data.
+    /// Parses a <c>.material</c> TOML file and returns the spec. The texture fields stay as path
+    /// strings.
     /// </summary>
     /// <exception cref="Exception">File not found or parse failure.</exception>
     public MaterialSpec ResolveMaterialSpec(string path) => MaterialSpec.FromNative(ResolveMaterial(path));

@@ -4,9 +4,8 @@ using Tomlyn.Model;
 namespace KernelEngine.Cli;
 
 /// <summary>
-/// Edits the project's <c>actions.input</c> file in place. Tomlyn round-trips destroy hand-formatted
-/// inline-table bindings and reflow comments, so we use it only to *validate* duplicates — the actual
-/// add is a literal text append so the existing content stays byte-identical.
+/// The project's <c>actions.input</c> file. The parsed model is used only to detect a duplicate
+/// action; <see cref="AppendAction"/> appends text and leaves every earlier byte unchanged.
 /// </summary>
 public sealed class InputActionsFile
 {

@@ -8,69 +8,6 @@ using Kabic;
 /// Renders the C# source kabic generates from one parsed ABI model: vtable projections,
 /// structs, enums, node types, borrow wrappers and free-function classes.
 /// </summary>
-/// <remarks>
-/// The class holds no state: its only fields are constants. Each entry point is a function of one
-/// declaration, the model and the <see cref="Convention"/> that names its managed types, and it
-/// returns the text of one generated file. That text opens with the header, then the usings, the
-/// namespace and the declarations; nothing is written to disk here.
-///
-/// A struct tagged <c>[value]</c> becomes a managed mirror over the same bytes. Each fixed array
-/// is wrapped in an <c>[InlineArray]</c> struct, the fields that declare a default are set in a
-/// static <c>Default</c>, and a pointer field is refused, because a value cannot state the
-/// lifetime of what it reaches. A <c>[view]</c> struct keeps private fields laid out as the ABI
-/// lays them out: a counted pointer is read as a span of its count, and a fixed char array as
-/// text. A <c>[borrowed]</c> struct holds each counted pointer as read-only memory whose length
-/// is taken from the call, so the count is not a field of the mirror.
-///
-/// A node component becomes a partial class named by its <c>[node:]</c> tag, deriving from the
-/// node its <c>[base:]</c> tag names, or from <c>Node</c>. Its constructor seeds the component's
-/// <c>Default</c> when a field declares one, and every field not tagged idiom becomes a property
-/// that names its component, so the source generator completing the class can route it. An enum
-/// the model does not mark external becomes a C# enum: a numeric value stays a number, and any
-/// other value is spelled as an enum member name.
-///
-/// <see cref="RenderProvider"/> projects a vtable in a fixed order. It emits the interface that
-/// exposes the raw pointer, then the delegate of each closure the slots take, then the owned
-/// projection of a <c>[releases]</c> slot. The class follows: a constructor from a factory or
-/// from an owner handle, which runs the lifecycle init slot when there is one; a static
-/// <c>Borrow</c> that never destroys; one method per projected slot; the interning caches; and a
-/// <c>Dispose</c> that calls <c>OnDispose</c>, frees every retained handle, runs the shutdown slot
-/// when there is one, and calls the destroy function unless the instance is borrowed. A vtable
-/// tagged as an interface also yields a contract text, which is refused when it names any ABI
-/// struct or an external enum.
-///
-/// <see cref="RenderSlotMethod"/> chooses a body from each slot's classified shape. A property
-/// slot becomes a getter. A slot with a <c>[completion]</c> parameter returns a <c>Task</c>.
-/// Otherwise the shape decides: a return written through an out parameter, a tuple of written
-/// outputs, a bool-returning <c>Try</c> method, a fallible call whose failure is raised through
-/// the convention's error helper, or a plain call. A fallible call with closures frees its scoped
-/// handles in a <c>finally</c>, and stores its retained handles in their fields only once the
-/// call has succeeded; on failure it frees them and throws.
-///
-/// A closure is a function-pointer parameter with its context. <see cref="CallbackPairs"/> pairs
-/// them and <see cref="ClosureGroups"/> groups the pairs that share one context, so one
-/// <c>GCHandle</c> target answers for all of them. Each trampoline is an unmanaged entry point
-/// that recovers the managed handler from the context and calls it. An exception from the handler
-/// is written to the callback's error lane when it has one. Otherwise it is parked in a
-/// thread-static field and rethrown by the call that observes it. A retained handler with an
-/// error lane reports to the provider's failure queue when the vtable has a <c>[drains]</c> slot,
-/// and that slot throws what the queue holds.
-///
-/// A slot with a <c>[completion]</c> parameter creates a <c>TaskCompletionSource</c> that
-/// continues asynchronously, pins a state object with a <c>GCHandle</c>, and passes the handle as
-/// the context of the completion. The completion trampoline frees the handle and answers the
-/// source with the result or the failure. If the native call itself throws, the handle is freed
-/// before the exception leaves.
-///
-/// <see cref="RenderFreeFunctions"/> writes the free functions of one owner as static methods of
-/// a partial class. Each calls a <c>DllImport</c> declared in a nested <c>Native</c> class under
-/// the exact entry-point name. A <c>[ctx]</c> receiver is passed through as the opaque token it
-/// is; any other receiver is pinned with <c>fixed</c> so its address reaches the call.
-///
-/// A declaration the projection cannot spell is rejected while its text is rendered. The
-/// rejection is an <see cref="InvalidOperationException"/> that names the declaration and the
-/// rule it breaks, and no text is returned for that declaration.
-/// </remarks>
 public static class CSharpWriter
 {
     const string Header = "// <auto-generated/>\n// Derived from ke_api.json. Do not edit; edit the C header instead.\n";
@@ -1957,15 +1894,6 @@ public static class CSharpWriter
     /// call happened to write last. A group of one needs no such object and keeps the
     /// delegate as the handle's target directly.
     /// </summary>
-    /// <remarks>
-    /// A group holds the closures reached through one context parameter, with the name of the
-    /// state object that context points at and the owner that receives failures. It is shared
-    /// when it has more than one closure, and it uses the state object when it is shared or needs
-    /// an owner. An owner is needed when a handler takes the provider as a lane, or when one of its
-    /// handlers reports to the provider's queue. Its lifetime is the longest of its members, so
-    /// the root is not freed before the last of them can need it. A group keyed by a parameter or
-    /// by the return keeps one root per key in a dictionary, rather than one root in total.
-    /// </remarks>
     internal sealed record ClosureGroup(ApiParam Ctx, IReadOnlyList<CallbackPair> Pairs, string StateType,
         string ReturnType, string Owner, bool OwnerDrains)
     {
@@ -1999,7 +1927,9 @@ public static class CSharpWriter
         /// </summary>
         public bool HandsBackProvider => Pairs.Any(p => p.Callback.Lanes.Any(l => l.Has("self")));
 
-        /// <summary>Whether the context points at a generated state object rather than the delegate itself.</summary>
+        /// <summary>
+        /// Whether the context points at a generated state object rather than the delegate itself.
+        /// </summary>
         public bool UsesState => Shared || NeedsOwner;
 
         string Basis => (Shared ? Ctx.Name : Pairs[0].Fn.Name)!;
@@ -2007,7 +1937,9 @@ public static class CSharpWriter
         /// <summary>The local holding the one GC root this group's context points at.</summary>
         public string Handle => $"{Idioms.Ident(Basis)}Handle";
 
-        /// <summary>The field keeping that root reachable for as long as the engine may call back.</summary>
+        /// <summary>
+        /// The field keeping that root reachable for as long as the engine may call back.
+        /// </summary>
         public string Retained => $"_retained{Idioms.Pascal(Basis)}";
 
         /// <summary>
@@ -2031,13 +1963,19 @@ public static class CSharpWriter
         /// </summary>
         public bool RetainByReturn => Pairs.Any(p => p.RetainByReturn);
 
-        /// <summary>Whether this group keeps a root per registration rather than one in total.</summary>
+        /// <summary>
+        /// Whether this group keeps a root per registration rather than one in total.
+        /// </summary>
         public bool Keyed => RetainKey is not null || RetainByReturn;
 
-        /// <summary>How the dictionary of roots is keyed, when the group keeps one per registration.</summary>
+        /// <summary>
+        /// How the dictionary of roots is keyed, when the group keeps one per registration.
+        /// </summary>
         public string? KeyType => RetainByReturn ? ReturnType : null;
 
-        /// <summary>How the state object names the slot holding one of the grouped delegates.</summary>
+        /// <summary>
+        /// How the state object names the slot holding one of the grouped delegates.
+        /// </summary>
         public static string Field(CallbackPair pair) => Idioms.Pascal(pair.Fn.Name!);
     }
 
@@ -2101,7 +2039,9 @@ public static class CSharpWriter
     static IReadOnlyList<CallbackPair> VtableClosures(ApiModel model, IEnumerable<ClassifiedSlot> slots, Convention convention) =>
         slots.Where(Projected).SelectMany(s => CallbackPairs(model, s, convention)).ToList();
 
-    /// <summary>Lanes the delegate carries: everything but the context and the error channel.</summary>
+    /// <summary>
+    /// Lanes the delegate carries: everything but the context and the error channel.
+    /// </summary>
     static IEnumerable<int> CarriedLanes(CallbackPair pair) =>
         Enumerable.Range(0, pair.Callback.Lanes.Count)
             .Where(i => i != pair.CtxLane && i != pair.ErrorLane);
@@ -2298,7 +2238,10 @@ public static class CSharpWriter
     /// </summary>
     sealed record MemberDecl(string Doc, string Decl, bool Property)
     {
-        /// <summary>How the interface spells this member: a method ends the declaration, a property opens a getter.</summary>
+        /// <summary>
+        /// How the interface spells this member: a method ends the declaration, a property opens a
+        /// getter.
+        /// </summary>
         public string InterfaceLine => Property ? $"{Decl} {{ get; }}" : $"{Decl};";
     }
 

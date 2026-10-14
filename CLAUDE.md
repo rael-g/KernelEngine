@@ -46,6 +46,7 @@ dotnet run scripts/compile_slang.cs   # compile a render-v2 .slang shader to WGS
 dotnet run --project src/csharp/kabic/Kabic.Cli -- bindings  # regenerate all C# P/Invoke bindings via ClangSharp, configured from the manifest "bindings" array and the headers
 dotnet run --project src/csharp/kabic/Kabic.Cli -- generate  # regenerate every kabic domain (ke_api.json + C# + C field tables) from scripts/api_domains.json
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
+dotnet run scripts/verify.cs -- docs  # generate the reference pages and build the documentation site into build/docs-site (DocFX, pinned in .config/dotnet-tools.json)
 ```
 
 Slang sources live with the pass that owns them (`src/zig/render/<pass>/shaders/`) plus the shared modules and authored materials under `src/shaders/`; they compile to WGSL into the build's shader-gen directory, and a pass loads them at runtime by logical name. `src/zig/render/service/shaders/` is the one exception — its single shader is embedded via `@embedFile`, because that has to exist before the module's own `zig build` starts. Binding regen runs `dotnet tool restore` from `src/csharp/` first, then processes every `.rsp` under a project's `Native/`.
@@ -105,7 +106,7 @@ Vendoring rule: when no package manager carries a pure-C library and it cannot b
 
 Generated P/Invoke, one `Native/` directory per managed project (28 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
-Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Nine gates, five `kabic check` commands and four `scripts/check_*.cs`, keep both honest against the headers.
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Nine gates, five `kabic check` commands and four of the `scripts/check_*.cs`, keep both honest against the headers.
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 
@@ -148,36 +149,39 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ### Comments
 - No comments in any file: source, scripts, workflows, shaders, build files. The code and its names carry the meaning.
-- The exception is documentation the build generates pages from, and it has two forms. A doc comment on a declaration (`///` in Zig, `///` and `<summary>` in C#, Doxygen in C headers) states what a caller relies on: what it passes, what it gets back, what fails. In a contract it is required on every public declaration. In an implementation file it goes on a function or a type, private ones included, and states the part that declaration plays in the mechanism, never a retelling of its body; a declaration with nothing to say beyond what its body shows carries none, and neither does a field, an enum value or a test helper. A file doc comment at the top of an implementation file (`//!` in Zig, `@file` in C) is the synthesis of the file: a new text, written from an understanding of the whole file and after the doc comments of its declarations, from which a reader learns how the file works; it is a fraction of what it covers, and never longer than the doc comments below it. C# has no file doc comment, so there the synthesis is the `<remarks>` of a type declaration in implementation code, and nowhere else.
-- Rationale, history, a consumer's or example's name, `<remarks>` on a member, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. Rationale belongs in the commit message. The rules a file doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
+- The exception is documentation the build generates pages from. A doc comment on a declaration (`///` in Zig, `///` and `<summary>` in C#, Doxygen in C headers) states what a caller relies on: what it passes, what it gets back, what fails. In a contract it is required on every public declaration. In an implementation file it is required on a function that implements a slot of a contract and on a type that holds state, where it states the part the declaration plays in the mechanism, never a retelling of its body; any other function carries one only for a precondition or an invariant its body does not show, and a field, an enum value or a test helper carries none. A file doc comment at the top of an implementation file (`//!` in Zig, `@file` in C) is a summary of one to three sentences saying what the file answers for. C# has no file doc comment: the `<summary>` of the type says it.
+- An example under `examples/` may also carry the marker that delimits a passage a guide quotes: `#region` in C#, a marker comment in Zig and C. The marker names the passage and says nothing else.
+- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. The reason for a change belongs in the body of its commit message, and the reason for a structural decision in a record under `docs/decisions/`. The rules a doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
 
 ### C (contracts) and Zig (implementations)
 - **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
 - **Naming**: `snake_case` with a `ke_` prefix on everything crossing the ABI.
-- **Headers**: `#pragma once` always. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
+- **Headers**: an `#ifndef` include guard named after the path, `KERNEL_ENGINE_<DOMAIN>_<NAME>_H_`. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
 - **Error handling**: a call that can fail takes `ke_error **out_error` and, on failure, fills it with `KE_ERROR_SET` and returns its failure sentinel (`false`, a null handle, an invalid id). All callers check the return.
 - **Memory**: each plugin owns its allocation, and the factory functions do **not** take an allocator parameter. Raw pointers are non-owning unless documented otherwise.
 - **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
-- **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
+- **Shape of a plugin**: the state is a struct named `State` embedding the vtable as `api`; a slot function is a camelCase verb named after its slot; no `impl_`, `Impl` or `_impl` in a name. The full list is in [`0030`](docs/decisions/0030-plugin-shape-where-no-language-convention-applies.md).
 
 ### C#
-- XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments). A type that does work may add a `<remarks>` stating how it works.
+- XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments).
 - Generated bindings in `Generated/` — never edit manually.
 - `InternalsVisibleTo` is **banned**. A native handle crosses assemblies through the public `Native` pointer of a generated `INative<Domain>` interface, implemented explicitly so the object itself exposes only managed methods — never through `internal` plus a friend list.
 
 ### Git / commits
 - Conventional Commits: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
 - One commit per logical task. Stage files selectively — never `git add .`.
-- Commit messages are a single line. No multi-line body. No `Co-Authored-By` footer.
-- `main` takes one-line commits after `scripts/ci_local.cs` passes on it; work of several commits goes through a branch and a `--no-ff` merge. See [`docs/conventions/git.md`](docs/conventions/git.md).
+- A commit message is a Conventional Commit subject line and, when the change needs it, a body saying why. No `Co-Authored-By` footer.
+- `main` takes commits after `scripts/ci_local.cs` passes on it; work of several commits goes through a branch and a `--no-ff` merge. See [`docs/conventions/git.md`](docs/conventions/git.md).
 
 ---
 
 ## Project rules
 
-1. **Plugins implement vtables; contract headers declare them, factory headers create them, period.** No plain exported functions in plugin contract headers. The plugin's symbol surface to the rest of the engine is the factory function and the vtable methods it returns. Kernel built-ins are the only header path allowed to export plain symbols.
+The rules below and the conventions above that a machine can check are checked by `scripts/check_engine_rules.cs`, which `scripts/verify.cs` runs with the other gates. Where a rule is already broken it holds a ceiling that can only go down.
 
-2. **No `InternalsVisibleTo`.** See above. Use public `Native` pointers.
+1. **A plugin exposes vtables behind one factory per header.** A contract header declares vtable shapes only; a plugin exports one create function per factory header; only the shared kernel library exports plain functions. Why: [`0019`](docs/decisions/0019-a-plugin-is-vtables-behind-one-factory.md).
+
+2. **No `InternalsVisibleTo`.** A native handle crosses assemblies through the `Native` pointer of a generated `INative<Domain>` interface. Why: [`0015`](docs/decisions/0015-native-pointer-through-interface.md).
 
 3. **Search precedents before inventing — but judge the precedent first.** The project is mature enough that almost every structural decision has an existing example. Before designing a new plugin layout, a new binding `.rsp`, a new plugin `build.zig`, a new vtable split — find the closest existing case in the repo. Match the established pattern; if it's genuinely wrong, propose changing the pattern explicitly rather than diverging in parallel.
    - **Frequency is not endorsement.** A shape repeated across a hundred files is a precedent only if it was *decided*. Most of what exists here was written before the convention that now governs it, and the plan is deliberate: settle a convention, write all new code to it, and refactor the old separately — so that "old" shrinks instead of reproducing. Citing the old code as license to keep writing it defeats the entire plan.
@@ -186,24 +190,21 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
-5. **No mutex / condvar / raw thread in plugins.** The scheduler is the synchronization layer. Async completion uses `ke_scheduler`'s submit-to-thread plus its wait. Producer-consumer ordering uses phase boundaries (register producer in phase N, consumer in phase N+1; the runtime guarantees the barrier). The legacy `ke_resource_queue` that reinvented a Future on `std::mutex` + `condition_variable` was deleted in C-phase 4.5 of the runtime arc.
+5. **No mutex, condition variable or raw thread in a plugin.** The scheduler is the synchronisation layer: work is dispatched to `ke_scheduler` and waited on through it, and a producer and a consumer are ordered by phases. Why: [`0020`](docs/decisions/0020-the-scheduler-is-the-only-synchronisation.md).
 
-6. **`assert()` and `abort()` are banned everywhere in engine code.** The engine has `ke_error` — a robust, typed, thread-local error propagation system. Any condition that would be expressed as `assert(x)` must instead be expressed as a `KE_ERROR_SET` plus the call's failure sentinel. Any path that would call `abort()` must translate to a `ke_error` and return to the caller. This includes internal defensive guards and plugin boundaries. Delegating failure to the OS abort dialog when a proper error system exists is a hard violation.
+6. **No `assert` and no `abort` in engine code.** Every failure, an internal guard included, fills a `ke_error` and returns the failure sentinel of the call. Why: [`0021`](docs/decisions/0021-a-failure-is-a-ke-error-never-an-abort.md).
 
-7. **The framework is a plugin like any other**, at `src/zig/framework/`, with its vtable contracts in `src/c/framework/` and reached only through them and its factory headers (`world_create.h`, `scene_tree_create.h`, `scene_loader_create.h`, `script_host_create.h`, `signal_bus_create.h`, `asset_resolver_create.h`, `input_actions_create.h`). Being opinionated about vocabulary does not buy it a privileged path past the ABI: a dynamic-language binding must be able to reach the framework the same way it reaches the renderer.
+7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its contracts in `src/c/framework/` and its factory headers. Why: [`0022`](docs/decisions/0022-the-framework-is-a-plugin-like-any-other.md).
 
-8. **No magic numbers — we are engine developers, not game developers.** A numeric constant is only allowed to stay a bare `const` when it is truly non-dynamic — implied by the algorithm itself, with no other value that would ever make sense (a 4x4 matrix, a quaternion's 4 components). Every other constant is a **game-tuning or workload-shape value**, and imposing it on the caller as a hardcoded ceiling is not our call to make. It must be a constructor parameter or params-struct field, with the current value kept only as the default for convenience. This applies especially to anything found to be a real limiting factor — a buffer size, a per-bucket cap, a grid resolution — where exceeding it produces a hard failure or visible artifact instead of graceful degradation. Stress tests exist to discover a *sane default*, not to justify a hardcoded ceiling; once a constant is shown to be limiting, promote it to a field rather than tuning the number in place. Don't flood constructors with parameters nobody sets — only promote what's actually been shown to matter.
+8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a field of a params struct or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted. Why: [`0023`](docs/decisions/0023-a-tuning-value-is-a-parameter.md).
 
-9. **The narrow, clean path always beats the wide, dirty one — and it pays back later, not immediately.** This project does not choose an architecture because it is easy today; it chooses the one that is *correct* even when the harder path costs more up front. The Zig migration (rewriting the native build orchestration end to end, unifying every plugin under one build system and one target-triplet model) and the vtable-shaped C ABI headers were both expensive to do — and both are exactly why `kabic` could generate a real multi-language compiler pipeline on top of them without a second redesign, and why a future console port's cross-compilation story collapses to "one toolchain description, reused by every C/C++ codebase this project depends on" instead of N bespoke ones. Optimizing for what is easy to ship this week is what produces the workarounds this doctrine exists to prevent.
-   - A one-off workaround to unblock a local, narrow problem is fine and expected — not everything is a referendum on the architecture.
-   - But **never stay attached to the existing architecture out of sunk cost.** If a design is shown to be wrong, refactor it — all the way, including a full rewrite, if that is what correctness requires. This project has already done that once — the entire native side was rewritten from CMake and C++ to Zig — and treats it as a normal, available tool, not a last resort.
-   - When evaluating a new idea, the question is never "do we need this yet" (see rule 8's YAGNI note, which this generalizes) — it is "is this the right shape," independent of how much existing code would need to change to get there.
+9. **The correct shape beats the easy one.** An idea is judged by whether it is the right shape, never by how much existing code would change; a design shown to be wrong is refactored all the way. A local workaround for a narrow problem is allowed and named as one. Why: [`0024`](docs/decisions/0024-the-narrow-path-is-chosen-over-the-easy-one.md).
 
 ---
 
 ## Key documents
 
-`docs/` holds contracts and mechanisms and nothing else; what it holds is listed in
+`docs/` holds contracts, mechanisms and the record of decisions, and nothing else; what it holds is listed in
 [`docs/README.md`](docs/README.md), and the rules every one of its documents is written to are in
 [`docs/conventions/docs.md`](docs/conventions/docs.md). Anything that describes a moment lives in the
 unversioned kanban.
