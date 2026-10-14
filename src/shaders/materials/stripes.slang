@@ -1,14 +1,8 @@
-// stripes — a UV-derived emissive stripe pattern no uniform buffer could
-// express, so a material selecting it resolves to a genuinely distinct PSO
-// rather than only distinct bind-group contents. Like every authored material,
-// it declares no entry point and imports no pass.
-
-import ke;              // VertexInfo, SurfaceState, IMaterial
-import forward_common;  // the fixed engine material set (set 1): mat, albedo, normal_map, tex_sampler
+import ke;
+import forward_common;
 
 struct Stripes : IMaterial {
     void vertex(inout VertexInfo v) {
-        // No vertex deformation — the difference is fragment-only.
     }
 
     void fragment(inout SurfaceState s) {

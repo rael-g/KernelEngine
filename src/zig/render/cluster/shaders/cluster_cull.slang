@@ -1,18 +1,8 @@
-// Cluster light culling — one thread per cluster builds the cluster's froxel AABB
-// (inline, from the froxel index + projection) and tests each light's bounding
-// sphere against it, writing the per-cluster light index list the forward pass
-// reads. Froxel grid: numX×numY screen tiles × numZ exponential depth slices
-// (Olsson 2012).
-//
-// The froxel is built in depth: a visible point sits at [near, far], positive.
-// A view-space z becomes that depth through params.counts.z, which the engine's
-// view space supplies, so this shader never assumes which way the camera faces.
-
 struct ClusterParams {
-    float4   grid;   // x=numX, y=numY, z=numZ, w=maxLightsPerCluster
-    float4   counts; // x=pointCount, y=spotCount, z=depthFromViewZ
-    float4   proj;   // x=tan(fovY/2), y=aspect, z=near, w=far
-    float4x4 view;   // world → view
+    float4   grid;
+    float4   counts;
+    float4   proj;
+    float4x4 view;
 };
 [[vk::binding(0, 0)]] ConstantBuffer<ClusterParams> params;
 
@@ -45,7 +35,6 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
 
     uint max_lights = (uint)params.grid.w;
 
-    // Froxel coords from the flat cluster index.
     uint iz = ci / (numX * numY);
     uint iy = (ci % (numX * numY)) / numX;
     uint ix = ci % numX;
@@ -55,8 +44,6 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
     float near     = params.proj.z;
     float far      = params.proj.w;
 
-    // Exponential depth slice + screen tile → NDC. NDC y: +1 = top (framebuffer
-    // row 0), matching the forward's tile from SV_Position.y.
     float z_near = near * pow(far / near, (float)iz / (float)numZ);
     float z_far  = near * pow(far / near, (float)(iz + 1u) / (float)numZ);
     float nx0 = (float)ix / (float)numX * 2.0 - 1.0;
@@ -96,7 +83,7 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
     uint spot_total = (uint)params.counts.y;
     uint sc = 0u;
     for (uint si = 0u; si < spot_total && sc < max_lights; si++) {
-        float4 pr = spot_lights[si].pos_range; // xyz = pos, w = range
+        float4 pr = spot_lights[si].pos_range;
         float3 vp = mul(params.view, float4(pr.xyz, 1.0)).xyz;
         vp.z *= depth_from_view_z;
         if (sphere_hits_aabb(vp, pr.w, amin, amax)) {

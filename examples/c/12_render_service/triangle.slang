@@ -1,6 +1,3 @@
-// Minimal hardcoded triangle — no vertex buffer, no material template.
-// Direct entry points; SV_VertexID drives the position/color lookup.
-
 static const float2 positions[3] = {
     float2( 0.0, -0.5),
     float2( 0.5,  0.5),

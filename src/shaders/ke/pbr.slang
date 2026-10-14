@@ -1,9 +1,3 @@
-// ke.pbr.slang — engine PBR BRDF (Cook-Torrance, metallic-roughness). This is
-// the single shading library both the forward pass and the deferred-lighting
-// pass call: the math does not know which topology invokes it (§8.12). Moved
-// here verbatim from forward_lit.slang's former inline copy so forward and
-// deferred produce identical results.
-
 static const float KE_PI = 3.14159265359;
 
 float3 fresnel_schlick(float cos_theta, float3 f0) {
@@ -29,9 +23,6 @@ float geometry_smith(float3 n, float3 v, float3 l, float rough) {
            geometry_schlick_ggx(max(dot(n, l), 0.0), rough);
 }
 
-// One direct light's Cook-Torrance contribution. `l` is the direction toward
-// the light (already normalized), `radiance` its color×intensity. Returns 0
-// for back-facing fragments.
 float3 pbr_direct(float3 n, float3 v, float3 l, float3 albedo_c, float3 f0,
                   float metallic, float rough, float3 radiance) {
     float ndotl = max(dot(n, l), 0.0);

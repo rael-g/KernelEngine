@@ -1,24 +1,3 @@
-// Clustered dynamic-light hook — a plain function reading neutral-default
-// resources. deferred_lighting.slang and transparent_forward.slang both always
-// call accumulate_clustered_lights(); when no cull module populates real light
-// lists, the point/spot count buffers are bound to a tiny zeroed default, so
-// every cluster iterates zero lights and the function returns 0 — the neutral
-// element for an additive lighting term. There is no generic conformance to
-// select; the hook is realized by which resource is bound, not by which type
-// is linked.
-//
-// Resources stay at set 3 (bindings 0-5, unchanged from before this file
-// existed) — a genuinely separate bind-group set, not appended into set 0
-// like shadow_feature.slang/ibl_feature.slang. There was room: the C ABI caps
-// bind_group_layouts at 4 entries (sets 0-3) and set 3 was already reserved
-// solely for this data, so no append-vs-new-set tradeoff applied here.
-//
-// Self-contained: its own copy of the direct-lighting BRDF (matches
-// ke.pbr's pbr_direct exactly — see forward_common.slang / deferred_lighting.slang
-// for the shared version). Duplicated rather than shared via import to keep
-// this feature decoupled from the pass file, at the small cost of ~20
-// duplicated lines.
-
 import ke;
 
 struct PointLight {
@@ -76,9 +55,9 @@ float3 cluster_pbr_direct(float3 n, float3 v, float3 l, float3 albedo_c, float3 
 }
 
 struct ClusterGrid {
-    float4 cluster_grid;     // numX, numY, numZ, maxLightsPerCluster
-    float4 cluster_viewport; // screen W, screen H, near, far
-    float4 view_space;       // x = depthFromViewZ
+    float4 cluster_grid;
+    float4 cluster_viewport;
+    float4 view_space;
 };
 [[vk::binding(6, 3)]] ConstantBuffer<ClusterGrid> cluster;
 

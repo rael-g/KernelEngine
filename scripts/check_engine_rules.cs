@@ -86,7 +86,7 @@ var rules = new List<Rule>
         Lines(native, l => slashComment.IsMatch(l) || blockComment.IsMatch(l))),
     new("no comment in C# besides a doc comment", 6,
         Lines(managed, l => slashComment.IsMatch(l))),
-    new("no comment in a shader", 272,
+    new("no comment in a shader", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".slang", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),
     new("no comment in a build manifest or a workflow", 2,
         Lines(sources.Where(s => s.Key.EndsWith(".zon", StringComparison.Ordinal)), l => slashComment.IsMatch(l))

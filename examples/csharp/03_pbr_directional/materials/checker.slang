@@ -1,16 +1,8 @@
-// checker — an example-owned material (NOT shipped by the engine). Lives in
-// this example's own materials/ directory to prove a downstream project can
-// author its own IMaterial shader alongside the engine defaults ("standard")
-// without touching src/shaders/materials/ at all. A UV checkerboard toggling
-// between the material's base color and its complement — a fragment-only
-// difference, same proof shape as the engine's "stripes".
-
-import ke;              // VertexInfo, SurfaceState, IMaterial
-import forward_common;  // the fixed engine material set (set 1): mat, albedo, normal_map, tex_sampler
+import ke;
+import forward_common;
 
 struct Checker : IMaterial {
     void vertex(inout VertexInfo v) {
-        // No vertex deformation — the difference is fragment-only.
     }
 
     void fragment(inout SurfaceState s) {

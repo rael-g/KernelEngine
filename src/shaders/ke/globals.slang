@@ -1,6 +1,3 @@
-// ke.globals.slang — engine globals available in all shaders.
-// Populated per-frame by the engine before each draw/dispatch.
-
 float     ke_time;
 float     ke_dt;
 float4x4  ke_view;

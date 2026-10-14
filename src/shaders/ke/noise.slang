@@ -1,11 +1,8 @@
-// ke.noise.slang — noise functions. v1: hash + simplex stubs.
-
 float hash1(float2 p) {
     return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
 }
 
 float simplex2(float2 p) {
-    // v1 — simple value noise
     float2 i = floor(p);
     float2 f = frac(p);
     f = f * f * (3.0 - 2.0 * f);
