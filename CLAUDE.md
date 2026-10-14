@@ -151,7 +151,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - No comments in any file: source, scripts, workflows, shaders, build files. The code and its names carry the meaning.
 - The exception is documentation the build generates pages from. A doc comment on a declaration (`///` in Zig, `///` and `<summary>` in C#, Doxygen in C headers) states what a caller relies on: what it passes, what it gets back, what fails. In a contract it is required on every public declaration. In an implementation file it is required on a function that implements a slot of a contract and on a type that holds state, where it states the part the declaration plays in the mechanism, never a retelling of its body; any other function carries one only for a precondition or an invariant its body does not show, and a field, an enum value or a test helper carries none. A file doc comment at the top of an implementation file (`//!` in Zig, `@file` in C) is a summary of one to three sentences saying what the file answers for. C# has no file doc comment: the `<summary>` of the type says it.
 - An example under `examples/` may also carry the marker that delimits a passage a guide quotes: `#region` in C#, a marker comment in Zig and C. The marker names the passage and says nothing else.
-- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. The reason for a change belongs in the body of its commit message. The rules a doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
+- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. The rules a doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
 
 ### C (contracts) and Zig (implementations)
 - **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
@@ -178,7 +178,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 ### Git / commits
 - Conventional Commits: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
 - One commit per logical task. Stage files selectively — never `git add .`.
-- A commit message is a Conventional Commit subject line and, when the change needs it, a body saying why. No `Co-Authored-By` footer.
+- A commit message follows the Conventional Commits 1.0.0 specification; a breaking change carries `!` and a `BREAKING CHANGE:` footer. No `Co-Authored-By` footer.
 - `main` takes commits after `scripts/ci_local.cs` passes on it; work of several commits goes through a branch and a `--no-ff` merge. See [`docs/conventions/git.md`](docs/conventions/git.md).
 
 ---

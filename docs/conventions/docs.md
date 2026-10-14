@@ -62,7 +62,6 @@ Each kind of content is written in the place where something keeps it true.
   under `docs/guides/` quotes passages of an example and holds no code of its own. The passage is
   delimited in the example by a marker, `#region` in C# and a marker comment in Zig and C, which
   is the one comment an example may carry besides its doc comments.
-- **Why something was changed** is the body of the commit that changed it.
 - **How the parts of a domain fit together** is a map under `docs/architecture/`: the parts by
   name, what each hands to which, and only what rarely changes. A map does not describe how a
   part works inside, and it names a part in backticks instead of linking to a line.

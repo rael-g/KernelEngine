@@ -197,6 +197,6 @@ jobs:
         env:
           RANGE: ${{ github.event.before }}..${{ github.sha }}
         run: |
-          untyped=$(git log --first-parent --format='%h %s' "$RANGE" | grep -vE '^[0-9a-f]+ (feat|fix|refactor|docs|test|chore)(\([a-z0-9-]+\))?: [^ ]' || true)
+          untyped=$(git log --first-parent --format='%h %s' "$RANGE" | grep -vE '^[0-9a-f]+ (feat|fix|refactor|docs|test|chore)(\([a-z0-9-]+\))?!?: [^ ]' || true)
           [ -z "$untyped" ] || { echo "subjects that are not conventional commits:"; echo "$untyped"; }
           [ -z "$untyped" ]

@@ -11,10 +11,11 @@ passed on it before it is pushed.
 - A branch is one subject. A commit about something unrelated is moved out by rewriting the branch before
   the merge: a merge whose subject line cannot say what it did is a merge of more than one subject.
   Squashing fixups and dropping experiments before the merge is encouraged.
-- A message starts with a subject line: `feat`, `fix`, `refactor`, `docs`, `test` or `chore`, a colon and
-  the summary. The changelog is read from the subject lines on `main`.
-- A message may have a body, a merge commit included. The body says why the change was made, which the
-  diff does not show; it does not retell the diff.
+- A message follows the Conventional Commits 1.0.0 specification
+  (https://www.conventionalcommits.org/en/v1.0.0/), a merge commit included. The type is one of
+  `feat`, `fix`, `refactor`, `docs`, `test` or `chore`, optionally followed by a scope in parentheses.
+- A change that breaks the public API, a C contract or a file format is marked with `!` before the
+  colon and a `BREAKING CHANGE:` footer saying what a caller has to change.
 - No `Co-Authored-By` footer.
 - Run `scripts/ci_local.cs` on `main`, cold on Linux and with `--windows` (`docs/conventions/ci.md`). If it
   passes, `main` is ready to push. If it fails, undo the commit or the merge, fix, and run it again.
@@ -28,5 +29,5 @@ and not sufficient, because Wine tolerates what the real Windows runtime does no
 ## What checks it
 
 The `main-history` job in `.github/workflows/ci.yml` runs on a push to `main` and fails when a commit the
-push adds to the first-parent line has a subject that is not a Conventional Commit.
+push adds to the first-parent line has a subject that is not a Conventional Commit of one of those types.
 It reports after the push and does not prevent it; the local run is what prevents it.
