@@ -19,6 +19,7 @@ var stages = new Dictionary<string, Func<List<Step>>>
     [
         new Step("zig build docs", "zig", ["build", "docs", .. nativeArgs]),
         new Step("dotnet tool restore", "dotnet", ["tool", "restore"]),
+        new Step("site home from README.md", "dotnet", ["run", "scripts/site_home.cs"]),
         new Step("docfx build", "dotnet", ["tool", "run", "docfx", "build", "docs/docfx.json", "--warningsAsErrors"]),
     ],
     ["visual"] = () => [new Step("visual", "dotnet", ["run", "scripts/visual.cs", .. args.Where(a => a == "--update")])],

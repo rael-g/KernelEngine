@@ -3,6 +3,7 @@
 # build/tools/    fetched toolchains: vcpkg, slangc, wgpu-native
 # build/vcpkg-installed/  vcpkg's own install root, per triplet
 /build/
+/docs/index.md
 
 # The local cache of Zig and the directory where it unpacks the packages a build.zig.zon
 # declares by URL stay at the root, where Zig puts them.
