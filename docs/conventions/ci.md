@@ -47,8 +47,10 @@ Three more stages exist for the Windows target and are run only when named: `cro
 compiled, and runs the four projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`, and `Kabic`, whose cases pin the shape each backend emits for a synthetic header).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The nine gates are the `kabic check` commands `drift`, `bindings`, `api-coverage`, `reconstruction` and `out-params`,
-and the engine's scripts `check_abi_layout`, `check_component_fields`, `check_generator_contract` and `check_managed_handwritten`. The scripts are found by `verify.cs` rather than
+The ten gates are the `kabic check` commands `drift`, `bindings`, `api-coverage`, `reconstruction` and `out-params`,
+and the engine's scripts `check_abi_layout`, `check_component_fields`, `check_engine_rules`, `check_generator_contract` and
+`check_managed_handwritten`. `check_engine_rules` checks the rules of `CLAUDE.md` that can be read off the tracked files, each
+against a ceiling that can only go down. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
 What each one fails on is stated by the check itself, in `src/csharp/kabic/Kabic.Cli/` and in the
 scripts. They are Linux-only: they compare generated text against headers and
@@ -78,10 +80,10 @@ the list.
 
 ## What `main-history` checks
 
-Every commit on `main` is a one-line Conventional Commit (`docs/conventions/git.md`), so the changelog is
-read from the messages. For the commits a push adds to the first-parent line, the job fails when a subject
-is not `feat`, `fix`, `refactor`, `docs`, `test` or `chore` followed by a summary, or when a commit has a
-body. It runs after the push, so it reports a violation and does not prevent one.
+Every commit on `main` has a Conventional Commit subject (`docs/conventions/git.md`), so the changelog is
+read from the subjects. For the commits a push adds to the first-parent line, the job fails when a subject
+is not `feat`, `fix`, `refactor`, `docs`, `test` or `chore` followed by a summary. It runs after the push, so it reports a violation
+and does not prevent one.
 
 ## What it leaves out
 

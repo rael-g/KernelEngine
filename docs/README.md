@@ -25,6 +25,10 @@ is in the code, and `CLAUDE.md`'s closing table says where to start looking.
 - [Which threads exist, what runs on them, and how does work reach them?](architecture/threading.md)
 - [How does the engine build view and projection matrices for the device's clip space?](architecture/view-space.md)
 
+## Decisions
+
+- [0001. Each kind of documentation lives where something keeps it true](decisions/0001-each-kind-of-documentation-lives-where-something-keeps-it-true.md)
+
 ## Formats
 
 - [What does an input file say, and what does the loader do with it?](formats/input-file.md)

@@ -105,7 +105,7 @@ Vendoring rule: when no package manager carries a pure-C library and it cannot b
 
 Generated P/Invoke, one `Native/` directory per managed project (28 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
-Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Nine gates, five `kabic check` commands and four `scripts/check_*.cs`, keep both honest against the headers.
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Nine gates, five `kabic check` commands and four of the `scripts/check_*.cs`, keep both honest against the headers.
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 
@@ -148,8 +148,9 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ### Comments
 - No comments in any file: source, scripts, workflows, shaders, build files. The code and its names carry the meaning.
-- The exception is documentation the build generates pages from, and it has two forms. A doc comment on a declaration (`///` in Zig, `///` and `<summary>` in C#, Doxygen in C headers) states what a caller relies on: what it passes, what it gets back, what fails. In a contract it is required on every public declaration. In an implementation file it goes on a function or a type, private ones included, and states the part that declaration plays in the mechanism, never a retelling of its body; a declaration with nothing to say beyond what its body shows carries none, and neither does a field, an enum value or a test helper. A file doc comment at the top of an implementation file (`//!` in Zig, `@file` in C) is the synthesis of the file: a new text, written from an understanding of the whole file and after the doc comments of its declarations, from which a reader learns how the file works; it is a fraction of what it covers, and never longer than the doc comments below it. C# has no file doc comment, so there the synthesis is the `<remarks>` of a type declaration in implementation code, and nowhere else.
-- Rationale, history, a consumer's or example's name, `<remarks>` on a member, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. Rationale belongs in the commit message. The rules a file doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
+- The exception is documentation the build generates pages from. A doc comment on a declaration (`///` in Zig, `///` and `<summary>` in C#, Doxygen in C headers) states what a caller relies on: what it passes, what it gets back, what fails. In a contract it is required on every public declaration. In an implementation file it is required on a function that implements a slot of a contract and on a type that holds state, where it states the part the declaration plays in the mechanism, never a retelling of its body; any other function carries one only for a precondition or an invariant its body does not show, and a field, an enum value or a test helper carries none. A file doc comment at the top of an implementation file (`//!` in Zig, `@file` in C) is a summary of one to three sentences saying what the file answers for. C# has no file doc comment: the `<summary>` of the type says it.
+- An example under `examples/` may also carry the marker that delimits a passage a guide quotes: `#region` in C#, a marker comment in Zig and C. The marker names the passage and says nothing else.
+- Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. The reason for a change belongs in the body of its commit message, and the reason for a structural decision in a record under `docs/decisions/`. The rules a doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
 
 ### C (contracts) and Zig (implementations)
 - **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
@@ -161,19 +162,21 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - **No `impl_` / `Impl` / `_impl` naming**: vtable function-pointer slots use `<plugin>_<verb>`; state structs use `XxxState`; filenames are plain. Pattern grew by inertia and is rejected in new code.
 
 ### C#
-- XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments). A type that does work may add a `<remarks>` stating how it works.
+- XML doc comments (`///`) on all `public` and `protected` members, carrying the API contract only (see Comments).
 - Generated bindings in `Generated/` — never edit manually.
 - `InternalsVisibleTo` is **banned**. A native handle crosses assemblies through the public `Native` pointer of a generated `INative<Domain>` interface, implemented explicitly so the object itself exposes only managed methods — never through `internal` plus a friend list.
 
 ### Git / commits
 - Conventional Commits: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`.
 - One commit per logical task. Stage files selectively — never `git add .`.
-- Commit messages are a single line. No multi-line body. No `Co-Authored-By` footer.
-- `main` takes one-line commits after `scripts/ci_local.cs` passes on it; work of several commits goes through a branch and a `--no-ff` merge. See [`docs/conventions/git.md`](docs/conventions/git.md).
+- A commit message is a Conventional Commit subject line and, when the change needs it, a body saying why. No `Co-Authored-By` footer.
+- `main` takes commits after `scripts/ci_local.cs` passes on it; work of several commits goes through a branch and a `--no-ff` merge. See [`docs/conventions/git.md`](docs/conventions/git.md).
 
 ---
 
 ## Project rules
+
+The rules below and the conventions above that a machine can check are checked by `scripts/check_engine_rules.cs`, which `scripts/verify.cs` runs with the other gates. Where a rule is already broken it holds a ceiling that can only go down.
 
 1. **Plugins implement vtables; contract headers declare them, factory headers create them, period.** No plain exported functions in plugin contract headers. The plugin's symbol surface to the rest of the engine is the factory function and the vtable methods it returns. Kernel built-ins are the only header path allowed to export plain symbols.
 
@@ -203,7 +206,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ## Key documents
 
-`docs/` holds contracts and mechanisms and nothing else; what it holds is listed in
+`docs/` holds contracts, mechanisms and the record of decisions, and nothing else; what it holds is listed in
 [`docs/README.md`](docs/README.md), and the rules every one of its documents is written to are in
 [`docs/conventions/docs.md`](docs/conventions/docs.md). Anything that describes a moment lives in the
 unversioned kanban.
