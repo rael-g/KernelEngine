@@ -1,3 +1,5 @@
+- name: "Guides"
+  href: index.md
 - name: "Start the engine from your own program"
   href: minimal-host.md
 - name: "Put something on screen"

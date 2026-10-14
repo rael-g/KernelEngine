@@ -1,3 +1,5 @@
+- name: "Formats"
+  href: index.md
 - name: "Project file"
   href: project-file.md
 - name: "Scene file"

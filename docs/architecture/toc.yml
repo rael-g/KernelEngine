@@ -1,3 +1,5 @@
+- name: "Architecture"
+  href: index.md
 - name: "Layers"
   href: layers.md
 - name: "The C ABI"

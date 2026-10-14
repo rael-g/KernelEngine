@@ -1,3 +1,5 @@
+- name: "Decisions"
+  href: index.md
 - name: "0001 Each kind of documentation lives where something keeps it true"
   href: 0001-each-kind-of-documentation-lives-where-something-keeps-it-true.md
 - name: "0002 Error records are per thread and never allocate"

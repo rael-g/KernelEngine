@@ -1,18 +1,18 @@
 - name: Guides
   href: guides/
-  homepage: guides/minimal-host.md
+  homepage: guides/index.md
 - name: Architecture
   href: architecture/
-  homepage: architecture/layers.md
+  homepage: architecture/index.md
 - name: Decisions
   href: decisions/
-  homepage: decisions/0001-each-kind-of-documentation-lives-where-something-keeps-it-true.md
+  homepage: decisions/index.md
 - name: Conventions
   href: conventions/
-  homepage: conventions/docs.md
+  homepage: conventions/index.md
 - name: Formats
   href: formats/
-  homepage: formats/project-file.md
+  homepage: formats/index.md
 - name: Reference
   items:
   - name: Engine

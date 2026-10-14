@@ -1,3 +1,5 @@
+- name: "Conventions"
+  href: index.md
 - name: "Documentation"
   href: docs.md
 - name: "Git"

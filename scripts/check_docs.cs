@@ -51,17 +51,22 @@ foreach (var page in pages)
     }
 }
 
-var readme = File.ReadAllText(Path.Combine(docsDir, "README.md"));
-var listed = pages.Where(p => p is not ("README.md" or "index.md")).ToList();
+var listed = pages.Where(p => p.Contains('/') && Path.GetFileName(p) != "index.md").ToList();
 var notInToc = listed.Where(p => !TocLists(p)).ToList();
-var notInReadme = listed.Where(p => !readme.Contains($"]({p})", StringComparison.Ordinal)).ToList();
+var notInIndex = listed.Where(p => !IndexLists(p)).ToList();
 
 var failed = 0;
 failed += Report("a map or a guide names only what the sources declare", unknownNames, 0);
 failed += Report("a document names a declaration and its file, never a line", lineCitations, LineCitationCeiling);
 failed += Report("every document is in the toc.yml of its directory", notInToc, 0);
-failed += Report("every document is in docs/README.md", notInReadme, 0);
+failed += Report("every document is in the index.md of its directory", notInIndex, 0);
 return failed == 0 ? 0 : 1;
+
+bool IndexLists(string page)
+{
+    var indexPath = Path.Combine(docsDir, Path.GetDirectoryName(page)!, "index.md");
+    return File.Exists(indexPath) && File.ReadAllText(indexPath).Contains($"]({Path.GetFileName(page)})", StringComparison.Ordinal);
+}
 
 bool TocLists(string page)
 {
