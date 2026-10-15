@@ -1,6 +1,14 @@
-float     ke_time;
-float     ke_dt;
-float4x4  ke_view;
-float4x4  ke_proj;
-float3    ke_cameraPos;
-float2    ke_viewportSize;
+struct KeFrame {
+    float4x4 view;
+    float4x4 proj;
+    float4x4 view_proj;
+    float4x4 inv_view_proj;
+    float4x4 inv_proj;
+    float4   camera_pos;
+    float4   viewport;
+    float    time;
+    float    dt;
+    float    near_plane;
+    float    far_plane;
+};
+ConstantBuffer<KeFrame> ke_frame;

@@ -112,6 +112,104 @@
       ]
     },
     {
+      "name": "ke_render_frame_globals",
+      "doc": "What every shader reads about the frame being drawn, under the parameter \u0060ke_frame\u0060. Matrices are stored the way the math library stores them.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "view",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "view_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "inv_view_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "inv_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "camera_pos",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "World position of the camera in xyz; w is 1."
+        },
+        {
+          "name": "viewport",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Backbuffer width and height in pixels in xy; zw are 0."
+        },
+        {
+          "name": "time",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the first frame."
+        },
+        {
+          "name": "dt",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the previous frame."
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_lighting",
+      "doc": "The scene\u0027s light that every lit shader reads, under the parameter \u0060ke_lighting\u0060.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Direction the directional light travels in xyz; w is 1 when the scene has one, else 0."
+        },
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Color of the directional light in rgb; a is its intensity."
+        },
+        {
+          "name": "ambient",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Ambient color in rgb; a is 0."
+        }
+      ]
+    },
+    {
       "name": "ke_render_binding_hint",
       "doc": "A hint for the binding a shader declares under \u0060name\u0060.",
       "tags": [],
@@ -1290,6 +1388,56 @@
           "receiver": "struct ke_render_service *"
         },
         {
+          "name": "set_frame_globals",
+          "returns": "void",
+          "tags": [],
+          "doc": "Replaces the frame globals and records their upload; a shader reads them as \u0060ke_frame\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "globals",
+              "type": "const ke_render_frame_globals *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "frame_globals",
+          "returns": "const ke_render_frame_globals *",
+          "tags": [],
+          "doc": "The frame globals last set, zero before the first.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "set_lighting",
+          "returns": "void",
+          "tags": [],
+          "doc": "Replaces the scene\u0027s light and records its upload; a shader reads it as \u0060ke_lighting\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "lighting",
+              "type": "const ke_render_lighting *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "lighting",
+          "returns": "const ke_render_lighting *",
+          "tags": [],
+          "doc": "The scene\u0027s light last set, zero before the first.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
           "name": "shader_group_layout",
           "returns": "_Bool",
           "tags": [],
@@ -1323,7 +1471,7 @@
           "name": "create_shader_bind_group",
           "returns": "ke_gpu_bind_group",
           "tags": [],
-          "doc": "Creates a bind group for one group of a compiled shader, matching each binding to the shader\u0027s parameter of the same name. The caller owns the bind group and destroys it on the device.",
+          "doc": "Creates a bind group for one group of a compiled shader, matching each binding to the shader\u0027s parameter of the same name. A parameter the service provides itself, \u0060ke_frame\u0060, \u0060ke_lighting\u0060 and the \u0060ke_samp_*\u0060 samplers, is bound by the service when \u0060bindings\u0060 leaves it out. The caller owns the bind group and destroys it on the device.",
           "return_doc": "The bind group, or KE_GPU_INVALID_HANDLE with the error filled: invalid argument when a binding names no parameter of the group, or a parameter of the group has no binding.",
           "params": [
             {

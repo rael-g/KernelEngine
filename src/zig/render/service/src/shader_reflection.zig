@@ -5,6 +5,7 @@ const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
 const shader_loader = @import("shader_loader.zig");
+const frame_globals = @import("frame_globals.zig");
 
 const JBinding = struct {
     kind: []const u8,
@@ -266,8 +267,9 @@ pub fn shaderGroupLayout(self: [*c]c.ke_render_service, params: [*c]const c.ke_r
 }
 
 /// The service's `create_shader_bind_group` slot: each binding is placed at the number its name
-/// has in the group. A binding naming no parameter, a parameter left unbound, or a parameter bound
-/// twice fails with an invalid argument.
+/// has in the group, and a parameter the service provides is bound by it when left out. A binding
+/// naming no parameter, a parameter left unbound, or a parameter bound twice fails with an invalid
+/// argument.
 pub fn createShaderBindGroup(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_shader_group_params, layout: c.ke_gpu_bind_group_layout, label: [*c]const u8, bindings: [*c]const c.ke_render_shader_binding, binding_count: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group {
     if (self == null or params == null or (binding_count != 0 and bindings == null)) {
         fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_bind_group: null argument", @src());
@@ -276,7 +278,7 @@ pub fn createShaderBindGroup(self: [*c]c.ke_render_service, params: [*c]const c.
     const st = rc.coreOf(self);
     var group = readGroup(st, params, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
     defer group.deinit();
-    const entries = matchBindings(&group, bindings[0..binding_count], out_error) orelse return c.KE_GPU_INVALID_HANDLE;
+    const entries = matchBindings(&group, bindings[0..binding_count], &st.globals, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
     defer rc.gpa.free(entries);
     const bind_group = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
         .label = label,
@@ -287,42 +289,65 @@ pub fn createShaderBindGroup(self: [*c]c.ke_render_service, params: [*c]const c.
     return bind_group;
 }
 
-/// The bind group entries for `bindings` in the group's numbering, owned by the caller; null with
-/// the error filled when the names and the group's parameters are not one to one.
-fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding, out_error: [*c][*c]c.ke_error) ?[]c.ke_gpu_bind_group_entry {
-    if (bindings.len != group.bindings.items.len) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_bind_group: every parameter of the group must be bound exactly once", @src());
-        return null;
-    }
-    const entries = rc.gpa.alloc(c.ke_gpu_bind_group_entry, bindings.len) catch {
+/// The bind group entries for `bindings` in the group's numbering, plus one for each parameter of
+/// the group they leave out that `globals` provides, owned by the caller. Null with the error
+/// filled when a binding names no parameter, a parameter is bound twice, or one is left unbound.
+fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding, globals: *const frame_globals.Globals, out_error: [*c][*c]c.ke_error) ?[]c.ke_gpu_bind_group_entry {
+    const entries = rc.gpa.alloc(c.ke_gpu_bind_group_entry, group.bindings.items.len) catch {
         fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_shader_bind_group: entry allocation failed", @src());
         return null;
     };
-    for (bindings, entries, 0..) |src, *e, i| {
-        const b = if (src.name != null) group.find(std.mem.span(src.name)) else null;
-        const found = b orelse {
+    const bound = rc.gpa.alloc(bool, group.bindings.items.len) catch {
+        rc.gpa.free(entries);
+        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_shader_bind_group: entry allocation failed", @src());
+        return null;
+    };
+    defer rc.gpa.free(bound);
+    @memset(bound, false);
+    for (bindings) |src| {
+        const slot = if (src.name != null) indexOf(group, std.mem.span(src.name)) else null;
+        const i = slot orelse {
             fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_bind_group: a binding names no parameter of the group", @src());
             rc.gpa.free(entries);
             return null;
         };
-        for (bindings[0..i]) |prev| {
-            if (std.mem.eql(u8, std.mem.span(prev.name), found.name)) {
-                fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_bind_group: a parameter is bound twice", @src());
-                rc.gpa.free(entries);
-                return null;
-            }
+        if (bound[i]) {
+            fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_bind_group: a parameter is bound twice", @src());
+            rc.gpa.free(entries);
+            return null;
         }
-        e.* = .{
-            .binding = found.binding,
-            .type = found.type,
-            .buffer = src.buffer,
-            .buffer_offset = src.buffer_offset,
-            .buffer_size = src.buffer_size,
-            .texture_view = src.texture_view,
-            .sampler = src.sampler,
+        bound[i] = true;
+        entries[i] = entryOf(group.bindings.items[i], src);
+    }
+    for (group.bindings.items, bound, entries) |b, was_bound, *e| {
+        if (was_bound) continue;
+        const provided = globals.binding(b.name) orelse {
+            fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_bind_group: a parameter of the group has no binding", @src());
+            rc.gpa.free(entries);
+            return null;
         };
+        e.* = entryOf(b, provided);
     }
     return entries;
+}
+
+fn indexOf(group: *Group, name: []const u8) ?usize {
+    for (group.bindings.items, 0..) |b, i| {
+        if (std.mem.eql(u8, b.name, name)) return i;
+    }
+    return null;
+}
+
+fn entryOf(b: Binding, src: c.ke_render_shader_binding) c.ke_gpu_bind_group_entry {
+    return .{
+        .binding = b.binding,
+        .type = b.type,
+        .buffer = src.buffer,
+        .buffer_offset = src.buffer_offset,
+        .buffer_size = src.buffer_size,
+        .texture_view = src.texture_view,
+        .sampler = src.sampler,
+    };
 }
 
 const forward_like_json =
@@ -402,6 +427,28 @@ test "a loose uniform outside any buffer or block is refused" {
     try std.testing.expectError(error.LooseUniform, group.collect(json, null, c.KE_GPU_SHADER_STAGE_FRAGMENT));
 }
 
+test "a parameter the service provides is bound by it when the pass leaves it out" {
+    var group = Group.init(std.testing.allocator);
+    defer group.deinit();
+    const json =
+        \\{"parameters":[
+        \\ {"name":"ke_frame","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
+        \\ {"name":"ke_samp_linear","binding":{"kind":"descriptorTableSlot","index":1},"type":{"kind":"samplerState"}},
+        \\ {"name":"own","binding":{"kind":"descriptorTableSlot","index":2},"type":{"kind":"constantBuffer"}}]}
+    ;
+    _ = try group.collect(json, null, c.KE_GPU_SHADER_STAGE_FRAGMENT);
+    var globals = frame_globals.Globals{};
+    globals.frame_buffer = 11;
+    globals.samplers[0] = 12;
+    var err: [*c]c.ke_error = null;
+    const own = [_]c.ke_render_shader_binding{.{ .name = "own", .buffer = 13, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 }};
+    const entries = matchBindings(&group, &own, &globals, &err).?;
+    defer rc.gpa.free(entries);
+    try std.testing.expectEqual(@as(c.ke_gpu_buffer, 11), entries[0].buffer);
+    try std.testing.expectEqual(@as(c.ke_gpu_sampler, 12), entries[1].sampler);
+    try std.testing.expectEqual(@as(c.ke_gpu_buffer, 13), entries[2].buffer);
+}
+
 test "bindings are placed at their parameters' numbers, and a name the group lacks is refused" {
     var group = Group.init(std.testing.allocator);
     defer group.deinit();
@@ -412,14 +459,16 @@ test "bindings are placed at their parameters' numbers, and a name the group lac
         .{ .name = "mat", .buffer = 3, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 },
         .{ .name = "albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 5, .sampler = 0 },
     };
-    const entries = matchBindings(&group, &ok, &err).?;
+    const globals = frame_globals.Globals{};
+    const entries = matchBindings(&group, &ok, &globals, &err).?;
     defer rc.gpa.free(entries);
-    try std.testing.expectEqual(@as(u32, 2), entries[0].binding);
-    try std.testing.expectEqual(@as(u32, 0), entries[1].binding);
-    try std.testing.expectEqual(@as(c.ke_gpu_binding_type, c.KE_GPU_BINDING_TYPE_TEXTURE), entries[2].type);
+    try std.testing.expectEqual(@as(c.ke_gpu_buffer, 3), entries[0].buffer);
+    try std.testing.expectEqual(@as(c.ke_gpu_binding_type, c.KE_GPU_BINDING_TYPE_TEXTURE), entries[1].type);
+    try std.testing.expectEqual(@as(u32, 2), entries[2].binding);
+    try std.testing.expectEqual(@as(c.ke_gpu_sampler, 7), entries[2].sampler);
 
     var wrong = ok;
     wrong[2].name = "albedo_map";
-    try std.testing.expect(matchBindings(&group, &wrong, &err) == null);
+    try std.testing.expect(matchBindings(&group, &wrong, &globals, &err) == null);
     try std.testing.expect(err != null);
 }

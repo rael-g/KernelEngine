@@ -39,6 +39,8 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    const zmath = b.dependency("zmath", .{});
+    mod.addImport("zmath", zmath.module("root"));
     inline for (.{
         ke_common,  ke_math,  ke_ecs,  ke_runtime, ke_spatial, ke_render, ke_framework, ke_text,   ke_logger,  ke_asset,
         ke_service, ke_self, ke_view, ke_view_space, ke_tonemap, ke_skybox,  ke_ui,     ke_gbuffer,   ke_shadow, ke_cluster, ke_deferred_lighting,
@@ -85,6 +87,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    test_mod.addImport("zmath", zmath.module("root"));
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
     inline for (.{
         ke_common,  ke_math,  ke_ecs,  ke_runtime, ke_spatial, ke_render, ke_framework, ke_text,   ke_logger,  ke_asset,

@@ -27,6 +27,7 @@ const pipeline_cache = @import("pipeline_cache.zig");
 const slot_map = @import("slot_map.zig");
 const shader_loader = @import("shader_loader.zig");
 const shader_reflection = @import("shader_reflection.zig");
+const frame_globals = @import("frame_globals.zig");
 
 pub const MAX_CMD_BUFFERS = 64;
 pub const NUM_PRECREATED_ENCODERS = 9;
@@ -192,6 +193,7 @@ pub const CoreState = struct {
     shader_dir: []const u8,
 
     sampler: c.ke_gpu_sampler,
+    globals: frame_globals.Globals,
     material_bgl: c.ke_gpu_bind_group_layout,
     default_normal: c.ke_texture_handle,
     default_cubemap: c.ke_texture_handle,
@@ -275,6 +277,7 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     st.mesh_store.deinit();
     st.shader_store.deinit();
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
+    st.globals.release(st.device);
     if (st.material_bgl != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_bgl);
     st.pipeline_cache.destroyAll(st.device);
     for (&st.compute_records) |*r| {
@@ -378,6 +381,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .shader_cache_destroy = undefined,
         .shader_dir = shader_dir_owned,
         .sampler = c.KE_GPU_INVALID_HANDLE,
+        .globals = .{},
         .material_bgl = c.KE_GPU_INVALID_HANDLE,
         .default_normal = .{ .bits = c.KE_HANDLE_NONE },
         .default_cubemap = .{ .bits = c.KE_HANDLE_NONE },
@@ -486,12 +490,20 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .try_get_material = asset_upload.tryGetMaterial,
         .white_texture = asset_upload.whiteTexture,
         .load_shader = shader_loader.loadShader,
+        .set_frame_globals = frame_globals.setFrameGlobals,
+        .frame_globals = frame_globals.frameGlobals,
+        .set_lighting = frame_globals.setLighting,
+        .lighting = frame_globals.lightingOf,
         .shader_group_layout = shader_reflection.shaderGroupLayout,
         .create_shader_bind_group = shader_reflection.createShaderBindGroup,
         .backbuffer_format = resource_table.backbufferFormat,
         .resource_generation = resource_table.resourceGeneration,
     };
 
+    if (!st.globals.create(dev, out_error)) {
+        destroyCore(core);
+        return .{ .ref = null, .destroy = null };
+    }
     st.sampler = dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
         .label = "service.sampler",
         .min_filter = c.KE_GPU_FILTER_LINEAR,
@@ -540,6 +552,7 @@ fn deadFrame(state: *CoreState) c.ke_render_service {
 test {
     _ = slot_map;
     _ = shader_reflection;
+    _ = frame_globals;
 }
 
 test "a pass cannot be opened once the frame has no target view to draw into" {

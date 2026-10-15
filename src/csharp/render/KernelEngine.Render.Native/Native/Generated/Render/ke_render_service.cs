@@ -135,6 +135,18 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_gpu_shader_module (*)(struct ke_render_service *, const char *, ke_gpu_shader_stage, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, KernelEngine.Common.Native.ke_error**, ulong> load_shader;
 
+    [NativeTypeName("void (*)(struct ke_render_service *, const ke_render_frame_globals *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_frame_globals*, void> set_frame_globals;
+
+    [NativeTypeName("const ke_render_frame_globals *(*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_frame_globals*> frame_globals;
+
+    [NativeTypeName("void (*)(struct ke_render_service *, const ke_render_lighting *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_lighting*, void> set_lighting;
+
+    [NativeTypeName("const ke_render_lighting *(*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_lighting*> lighting;
+
     [NativeTypeName("bool (*)(struct ke_render_service *, const ke_render_shader_group_params *, ke_render_shader_group *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_shader_group_params*, ke_render_shader_group*, KernelEngine.Common.Native.ke_error**, bool> shader_group_layout;
 

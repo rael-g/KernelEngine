@@ -43,6 +43,38 @@ typedef struct ke_render_resource_desc
     float                   clear_value[4];
 } ke_render_resource_desc;
 
+/// What every shader reads about the frame being drawn, under the parameter `ke_frame`. Matrices are
+/// stored the way the math library stores them.
+typedef struct ke_render_frame_globals
+{
+    float view[16];
+    float proj[16];
+    float view_proj[16];
+    float inv_view_proj[16];
+    float inv_proj[16];
+    /// World position of the camera in xyz; w is 1.
+    float camera_pos[4];
+    /// Backbuffer width and height in pixels in xy; zw are 0.
+    float viewport[4];
+    /// Seconds since the first frame.
+    float time;
+    /// Seconds since the previous frame.
+    float dt;
+    float near_plane;
+    float far_plane;
+} ke_render_frame_globals;
+
+/// The scene's light that every lit shader reads, under the parameter `ke_lighting`.
+typedef struct ke_render_lighting
+{
+    /// Direction the directional light travels in xyz; w is 1 when the scene has one, else 0.
+    float direction[4];
+    /// Color of the directional light in rgb; a is its intensity.
+    float color[4];
+    /// Ambient color in rgb; a is 0.
+    float ambient[4];
+} ke_render_lighting;
+
 /// What a pass states about a shader binding that the shader's reflection does not carry.
 typedef enum ke_render_binding_hint_flags
 {
@@ -290,6 +322,15 @@ struct ke_render_service
     ke_gpu_shader_module (*load_shader)(struct ke_render_service *self, const char *name,
                                         ke_gpu_shader_stage stage, ke_error **out_error);
 
+    /// Replaces the frame globals and records their upload; a shader reads them as `ke_frame`.
+    void (*set_frame_globals)(struct ke_render_service *self, const ke_render_frame_globals *globals);
+    /// The frame globals last set, zero before the first.
+    const ke_render_frame_globals *(*frame_globals)(struct ke_render_service *self);
+    /// Replaces the scene's light and records its upload; a shader reads it as `ke_lighting`.
+    void (*set_lighting)(struct ke_render_service *self, const ke_render_lighting *lighting);
+    /// The scene's light last set, zero before the first.
+    const ke_render_lighting *(*lighting)(struct ke_render_service *self);
+
     /**
      * Builds the layout of one bind group of a compiled shader from the reflection the build wrote
      * beside it. The caller owns the layout and destroys it on the device.
@@ -304,8 +345,9 @@ struct ke_render_service
 
     /**
      * Creates a bind group for one group of a compiled shader, matching each binding to the
-     * shader's parameter of the same name. The caller owns the bind group and destroys it on the
-     * device.
+     * shader's parameter of the same name. A parameter the service provides itself, `ke_frame`,
+     * `ke_lighting` and the `ke_samp_*` samplers, is bound by the service when `bindings` leaves it
+     * out. The caller owns the bind group and destroys it on the device.
      * @param layout The layout shader_group_layout returned for the same params.
      * @param label [utf8] Optional name shown by capture and validation tools.
      * @return The bind group, or KE_GPU_INVALID_HANDLE with the error filled: invalid argument when

@@ -280,6 +280,22 @@ ke_render_resource_desc size=56 align=8
   scale_x 28
   scale_y 32
   clear_value 36
+ke_render_frame_globals size=368 align=4
+  view 0
+  proj 64
+  view_proj 128
+  inv_view_proj 192
+  inv_proj 256
+  camera_pos 320
+  viewport 336
+  time 352
+  dt 356
+  near_plane 360
+  far_plane 364
+ke_render_lighting size=48 align=4
+  direction 0
+  color 16
+  ambient 32
 ke_render_binding_hint size=16 align=8
   name 0
   flags 8
@@ -307,7 +323,7 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   cmd_slot 36
   load 40
-ke_render_service size=384 align=8
+ke_render_service size=416 align=8
   handle 0
   declare 8
   import_texture 16
@@ -352,10 +368,14 @@ ke_render_service size=384 align=8
   try_get_material 328
   white_texture 336
   load_shader 344
-  shader_group_layout 352
-  create_shader_bind_group 360
-  backbuffer_format 368
-  resource_generation 376
+  set_frame_globals 352
+  frame_globals 360
+  set_lighting 368
+  lighting 376
+  shader_group_layout 384
+  create_shader_bind_group 392
+  backbuffer_format 400
+  resource_generation 408
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8

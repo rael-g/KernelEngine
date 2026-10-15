@@ -9,6 +9,7 @@ const component_apply = @import("component_apply.zig");
 const mesh_resolve = @import("mesh_resolve.zig");
 const sprite_resolve = @import("sprite_resolve.zig");
 const label_resolve = @import("label_resolve.zig");
+const frame_producer = @import("frame_producer.zig");
 
 pub const c = cimport.c;
 
@@ -37,6 +38,9 @@ const ModuleState = struct {
     io: c.ke_render_pass_io,
     frame_cid: c.ke_component_id,
     begin_access: [2]c.ke_component_access,
+    frame_state: frame_producer.State,
+    frame_queries_terms: [4]c.ke_component_access,
+    frame_queries: [3]c.ke_query_decl,
     clear_access: [2]c.ke_component_access,
     end_access: [2]c.ke_component_access,
     mesh_resolve_queries_terms: [1]c.ke_component_access,
@@ -77,13 +81,6 @@ fn registerComponent(
 ) c.ke_component_id {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     return e.component_register.?(e, name, @sizeOf(T), table, @intCast(fields.len), null);
-}
-
-/// Render-phase system that starts the frame on the core and returns false with the core's own
-/// error when it cannot.
-fn beginFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const st = stateOf(user);
-    return st.core.ref.*.begin_frame.?(st.core.ref, out_error) != 0;
 }
 
 /// Render-phase system that opens and closes a pass over the state's `io` so the backbuffer is
@@ -361,7 +358,25 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return failCreate(rt, mark, st);
         }
 
-        if (!registerSys(rt, "render.begin_frame", &st.begin_access, st.begin_access.len, st, beginFrameSys, out_error)) {
+        st.frame_state = .{ .core = st.core.ref, .camera = st.camera.ref.? };
+        const rd = c.KE_ACCESS_READ;
+        st.frame_queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = light_cid, .access = rd }, .{ .cid = ambient_cid, .access = rd } };
+        st.frame_queries = .{
+            .{ .terms = &st.frame_queries_terms[0], .term_count = 2 },
+            .{ .terms = &st.frame_queries_terms[2], .term_count = 1 },
+            .{ .terms = &st.frame_queries_terms[3], .term_count = 1 },
+        };
+        var begin_params = std.mem.zeroes(c.ke_runtime_system_params);
+        begin_params.name = "render.begin_frame";
+        begin_params.phase = c.KE_PHASE_RENDER;
+        begin_params.access_list = &st.begin_access;
+        begin_params.access_count = st.begin_access.len;
+        begin_params.queries = &st.frame_queries;
+        begin_params.query_count = st.frame_queries.len;
+        begin_params.pinned_thread = 0;
+        begin_params.user_data = &st.frame_state;
+        begin_params.execute = frame_producer.system;
+        if (rt.register_system.?(rt, &begin_params, out_error) == 0) {
             return failCreate(rt, mark, st);
         }
         if (!registerSys(rt, "render.clear", &st.clear_access, st.clear_access.len, st, clearSys, out_error)) {
@@ -607,9 +622,10 @@ test "a frame the service cannot begin or end fails the render phase with the se
     svc.end_frame = failingFrame;
     var st: ModuleState = undefined;
     st.core = .{ .ref = &svc, .destroy = null };
+    var frame = frame_producer.State{ .core = &svc, .camera = undefined };
 
     var err: [*c]c.ke_error = null;
-    try testing.expect(!beginFrameSys(null, &st, 0.0, &err));
+    try testing.expect(!frame_producer.system(null, &frame, 0.0, &err));
     try testing.expect(err != null);
     try testing.expectEqualStrings("no backbuffer", std.mem.span(err.*.message));
 
