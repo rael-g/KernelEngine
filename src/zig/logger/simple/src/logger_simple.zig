@@ -19,15 +19,11 @@ const c = @cImport({
 
 const E = @import("kerror").Errors(c);
 
-const MAX_SINKS = 8;
-
 /// Reached through the `handle` of the logger, allocated by `ke_logger_create` and freed by
-/// `loggerDestroy`. Only the first `sink_count` entries of `sinks` are in use; the rest are never
-/// read. The sinks are visited in the order they were added, nothing is locked, and a sink runs on
-/// the thread that called the logger.
+/// `loggerDestroy`. The sinks are visited in the order they were added, nothing is locked, and a
+/// sink runs on the thread that called the logger, so a sink is added before the logger is shared.
 const State = struct {
-    sinks: [MAX_SINKS]c.ke_logger_sink,
-    sink_count: c_int,
+    sinks: std.ArrayList(c.ke_logger_sink),
 };
 
 /// The destroy function of the handle `ke_logger_create` returns. Sinks are destroyed while the
@@ -36,10 +32,10 @@ const State = struct {
 fn loggerDestroy(self: ?*c.ke_logger) callconv(.c) void {
     const logger = self orelse return;
     const s: *State = @ptrCast(@alignCast(logger.handle));
-    var i: usize = 0;
-    while (i < @as(usize, @intCast(s.sink_count))) : (i += 1) {
-        if (s.sinks[i].destroy) |d| d(&s.sinks[i]);
+    for (s.sinks.items) |*sink| {
+        if (sink.destroy) |d| d(sink);
     }
+    s.sinks.deinit(gpa);
     gpa.destroy(s);
     gpa.destroy(logger);
 }
@@ -49,9 +45,7 @@ fn loggerDestroy(self: ?*c.ke_logger) callconv(.c) void {
 fn loggerLog(self: ?*c.ke_logger, event: [*c]const c.ke_log_event) callconv(.c) void {
     if (self == null or event == null) return;
     const s: *State = @ptrCast(@alignCast(self.?.handle));
-    var i: usize = 0;
-    while (i < @as(usize, @intCast(s.sink_count))) : (i += 1) {
-        const sink = &s.sinks[i];
+    for (s.sinks.items) |*sink| {
         if (event.*.level >= sink.min_level) {
             if (sink.log) |log| log(sink, event);
         }
@@ -62,28 +56,25 @@ fn loggerLog(self: ?*c.ke_logger, event: [*c]const c.ke_log_event) callconv(.c) 
 fn loggerFlush(self: ?*c.ke_logger) callconv(.c) void {
     const logger = self orelse return;
     const s: *State = @ptrCast(@alignCast(logger.handle));
-    var i: usize = 0;
-    while (i < @as(usize, @intCast(s.sink_count))) : (i += 1) {
-        if (s.sinks[i].flush) |f| f(&s.sinks[i]);
+    for (s.sinks.items) |*sink| {
+        if (sink.flush) |f| f(sink);
     }
 }
 
 /// The `add_sink` slot. On success the logger keeps its own copy of the sink, and `loggerDestroy`
 /// will call that copy's destroy function. It reports an invalid-argument error for a null logger
-/// and a general error when `sinks` is full; either way the set is unchanged and the result is
-/// false.
+/// and an out-of-memory error when the set cannot grow; either way the set is unchanged and the
+/// result is false.
 fn loggerAddSink(self: ?*c.ke_logger, sink: c.ke_logger_sink, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const logger = self orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     };
     const s: *State = @ptrCast(@alignCast(logger.handle));
-    if (s.sink_count >= MAX_SINKS) {
-        E.fail(out_error, .general, "sink capacity exceeded", @src());
+    s.sinks.append(gpa, sink) catch {
+        E.fail(out_error, .out_of_memory, "sink allocation failed", @src());
         return false;
-    }
-    s.sinks[@intCast(s.sink_count)] = sink;
-    s.sink_count += 1;
+    };
     return true;
 }
 
@@ -160,7 +151,7 @@ export fn ke_logger_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_logg
         E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return empty;
     };
-    state.* = std.mem.zeroes(State);
+    state.* = .{ .sinks = .empty };
 
     logger.handle = state;
     logger.log = &loggerLog;
@@ -333,6 +324,27 @@ test "the console sink tolerates a null tag and message" {
 test "the console sink ignores an event it has no pointer to" {
     const sink = ke_console_sink_create();
     sink.log.?(null, null);
+}
+
+test "any number of sinks can be added and each receives the event" {
+    const h = ke_logger_create(null);
+    defer h.destroy.?(h.ref);
+    var seen: u32 = 0;
+    const counting = struct {
+        fn log(sink: [*c]c.ke_logger_sink, _: [*c]const c.ke_log_event) callconv(.c) void {
+            const n: *u32 = @ptrCast(@alignCast(sink.*.handle));
+            n.* += 1;
+        }
+    };
+    for (0..20) |_| {
+        var sink = std.mem.zeroes(c.ke_logger_sink);
+        sink.handle = &seen;
+        sink.log = &counting.log;
+        try testing.expect(h.ref.*.add_sink.?(h.ref, sink, null));
+    }
+    const event = c.ke_log_event{ .level = c.KE_LOG_LEVEL_INFO, .tag = "t", .message = "m" };
+    h.ref.*.log.?(h.ref, &event);
+    try testing.expectEqual(@as(u32, 20), seen);
 }
 
 test "destroy calls each sink destroy fn" {
