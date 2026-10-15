@@ -594,12 +594,12 @@ test "a short name that is also a registered component name is refused" {
     var runtime: c.ke_runtime = undefined;
     const h = aliasWorld(&ecs, &runtime);
     const w: *c.ke_world = h.ref;
-    _ = ecs.vtable.component_register.?(&ecs.vtable, "sprite2d", 4, null, 0, null);
-    _ = ecs.vtable.component_register.?(&ecs.vtable, "game.sprite2d", 4, null, 0, null);
-    try testing.expect(w.register_component_alias.?(w, "sprite2d", "game.sprite2d", null));
+    _ = ecs.vtable.component_register.?(&ecs.vtable, "marker", 4, null, 0, null);
+    _ = ecs.vtable.component_register.?(&ecs.vtable, "game.marker", 4, null, 0, null);
+    try testing.expect(w.register_component_alias.?(w, "marker", "game.marker", null));
 
     var meta: c.ke_component_meta = undefined;
-    try testing.expect(!w.resolve_component.?(w, "sprite2d", &meta, null));
+    try testing.expect(!w.resolve_component.?(w, "marker", &meta, null));
     try testing.expect(!w.resolve_component.?(w, "absent", &meta, null));
 
     h.destroy.?(h.ref);
