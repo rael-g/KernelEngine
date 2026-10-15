@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) void {
     const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
     const magenta_vs_wgsl = b.option([]const u8, "magenta-vs-wgsl", "generated magenta placeholder vertex WGSL path")   orelse @panic("-Dmagenta-vs-wgsl required");
     const magenta_fs_wgsl = b.option([]const u8, "magenta-fs-wgsl", "generated magenta placeholder fragment WGSL path") orelse @panic("-Dmagenta-fs-wgsl required");
+    const material_params_json = b.option([]const u8, "material-params-json", "generated reflection of the material parameter block") orelse @panic("-Dmaterial-params-json required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/render_service.zig"),
@@ -42,6 +43,7 @@ pub fn build(b: *std.Build) void {
 
     mod.addAnonymousImport("magenta.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_vs_wgsl } });
     mod.addAnonymousImport("magenta.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_fs_wgsl } });
+    mod.addAnonymousImport("material_params.json", .{ .root_source_file = .{ .cwd_relative = material_params_json } });
 
     const lib = b.addLibrary(.{
         .name = "ke_render_service",
@@ -72,6 +74,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
     test_mod.addAnonymousImport("magenta.vs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_vs_wgsl } });
     test_mod.addAnonymousImport("magenta.fs.wgsl", .{ .root_source_file = .{ .cwd_relative = magenta_fs_wgsl } });
+    test_mod.addAnonymousImport("material_params.json", .{ .root_source_file = .{ .cwd_relative = material_params_json } });
 
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);

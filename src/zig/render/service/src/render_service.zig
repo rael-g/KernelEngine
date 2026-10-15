@@ -19,6 +19,9 @@ pub const c = @cImport({
 const heap = @import("heap");
 pub const gpa = heap.gpa;
 
+/// The name of the parameter block every material shader declares for its material's data.
+pub const material_block = "mat";
+
 const resource_table = @import("resource_table.zig");
 const pass_recording = @import("pass_recording.zig");
 const frame_lifecycle = @import("frame_lifecycle.zig");
@@ -194,6 +197,7 @@ pub const CoreState = struct {
 
     sampler: c.ke_gpu_sampler,
     globals: frame_globals.Globals,
+    material_group: shader_reflection.Group,
     material_bgl: c.ke_gpu_bind_group_layout,
     default_normal: c.ke_texture_handle,
     default_cubemap: c.ke_texture_handle,
@@ -279,6 +283,7 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
     st.globals.release(st.device);
     if (st.material_bgl != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_bgl);
+    st.material_group.deinit();
     st.pipeline_cache.destroyAll(st.device);
     for (&st.compute_records) |*r| {
         r.labels.deinit(gpa);
@@ -382,6 +387,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .shader_dir = shader_dir_owned,
         .sampler = c.KE_GPU_INVALID_HANDLE,
         .globals = .{},
+        .material_group = shader_reflection.Group.init(gpa),
         .material_bgl = c.KE_GPU_INVALID_HANDLE,
         .default_normal = .{ .bits = c.KE_HANDLE_NONE },
         .default_cubemap = .{ .bits = c.KE_HANDLE_NONE },
@@ -517,17 +523,19 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .compare = c.KE_GPU_COMPARE_UNDEFINED,
         .max_anisotropy = 1,
     });
-    const mat_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 2, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    st.material_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "service.material_bgl",
-        .entry_count = 4,
-        .entries = &mat_bgl_entries,
-    });
+    const material_json = @embedFile("material_params.json");
+    const read_vs = st.material_group.collect(material_json, material_block, c.KE_GPU_SHADER_STAGE_VERTEX) catch false;
+    const read_fs = st.material_group.collect(material_json, material_block, c.KE_GPU_SHADER_STAGE_FRAGMENT) catch false;
+    if (!read_vs or !read_fs) {
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "ke_render_service_create: the material parameter block could not be read", @src().file, @intCast(@src().line), null);
+        destroyCore(core);
+        return .{ .ref = null, .destroy = null };
+    }
+    st.material_bgl = shader_reflection.createLayout(dev, &st.material_group, "service.material_bgl", out_error);
+    if (st.material_bgl == c.KE_GPU_INVALID_HANDLE) {
+        destroyCore(core);
+        return .{ .ref = null, .destroy = null };
+    }
     const white_px = [_]u8{ 255, 255, 255, 255 };
     st.white_texture_h = asset_upload.uploadTexture(core, "__ke_white_texture", 1, 1, &white_px, null);
     const flat_normal_px = [_]u8{ 128, 128, 255, 255 };

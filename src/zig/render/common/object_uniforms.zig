@@ -2,7 +2,8 @@
 //! offset, grown to the number of draws a frame asks for.
 
 /// The buffer, its bind group and the number of slots they hold, for the C namespace `c` and one
-/// draw record `Record`. `ensure` makes room before a frame uploads; the handles change only there.
+/// draw record `Record`. The bind group binds the buffer to the shader's `object` block of the
+/// group `group` names. `ensure` makes room before a frame uploads; the handles change only there.
 pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
     return struct {
         const Self = @This();
@@ -11,6 +12,8 @@ pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
         pub const stride: u32 = 256;
 
         device: *c.ke_gpu_device,
+        core: *c.ke_render_service,
+        group: *const c.ke_render_shader_group_params,
         layout: c.ke_gpu_bind_group_layout,
         buffer_label: [*c]const u8,
         bind_group_label: [*c]const u8,
@@ -33,21 +36,15 @@ pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
                 .mapped_at_creation = 0,
             }, out_error);
             if (buffer == c.KE_GPU_INVALID_HANDLE) return false;
-            const entry = c.ke_gpu_bind_group_entry{
-                .binding = 0,
-                .type = c.KE_GPU_BINDING_TYPE_BUFFER,
+            const binding = [_]c.ke_render_shader_binding{.{
+                .name = "object",
                 .buffer = buffer,
                 .buffer_offset = 0,
                 .buffer_size = @sizeOf(Record),
                 .texture_view = 0,
                 .sampler = 0,
-            };
-            const bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-                .label = self.bind_group_label,
-                .layout = self.layout,
-                .entry_count = 1,
-                .entries = &entry,
-            }, out_error);
+            }};
+            const bind_group = self.core.*.create_shader_bind_group.?(self.core, self.group, self.layout, self.bind_group_label, &binding, binding.len, out_error);
             if (bind_group == c.KE_GPU_INVALID_HANDLE) {
                 dev.destroy_buffer.?(dev, buffer);
                 return false;

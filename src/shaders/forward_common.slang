@@ -1,4 +1,5 @@
 import ke;
+__exported import material_params;
 
 struct VsIn {
     float3 position : POSITION;
@@ -15,24 +16,11 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-struct Material {
-    float4 base_color;
-    float  metallic;
-    float  roughness;
-    float  alpha_cutoff;
-    float  ior;
-    float  distortion_strength;
-};
-[[vk::binding(0, 1)]] ConstantBuffer<Material> mat;
-[[vk::binding(1, 1)]] Texture2D    albedo;
-[[vk::binding(2, 1)]] SamplerState tex_sampler;
-[[vk::binding(3, 1)]] Texture2D    normal_map;
-
 struct PerObject {
     float4x4 mvp;
     float4x4 model;
 };
-[[vk::binding(0, 2)]] ConstantBuffer<PerObject> obj;
+ParameterBlock<PerObject> object;
 
 VsOut ke_forward_vs<T : IMaterial>(T material, VsIn input) {
     VertexInfo v;
@@ -44,10 +32,10 @@ VsOut ke_forward_vs<T : IMaterial>(T material, VsIn input) {
     material.vertex(v);
 
     VsOut o;
-    o.clip          = mul(obj.mvp, float4(v.position, 1.0));
-    o.world_normal  = mul((float3x3)obj.model, v.normal);
-    o.world_tangent = mul((float3x3)obj.model, v.tangent.xyz);
-    o.world_pos     = mul(obj.model, float4(v.position, 1.0)).xyz;
+    o.clip          = mul(object.mvp, float4(v.position, 1.0));
+    o.world_normal  = mul((float3x3)object.model, v.normal);
+    o.world_tangent = mul((float3x3)object.model, v.tangent.xyz);
+    o.world_pos     = mul(object.model, float4(v.position, 1.0)).xyz;
     o.uv            = v.uv;
     return o;
 }

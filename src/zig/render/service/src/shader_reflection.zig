@@ -242,9 +242,19 @@ pub fn shaderGroupLayout(self: [*c]c.ke_render_service, params: [*c]const c.ke_r
     const st = rc.coreOf(self);
     var group = readGroup(st, params, out_error) orelse return false;
     defer group.deinit();
+    const layout = createLayout(st.device, &group, params.*.shader, out_error);
+    if (layout == c.KE_GPU_INVALID_HANDLE) return false;
+    out_group.* = .{ .layout = layout, .index = group.index orelse 0 };
+    return true;
+}
+
+/// A layout with one entry per binding of `group`, each visible to the stages that declare it.
+/// The invalid handle with the error filled when the entries cannot be allocated or the device
+/// refuses the layout.
+pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const u8, out_error: [*c][*c]c.ke_error) c.ke_gpu_bind_group_layout {
     const entries = rc.gpa.alloc(c.ke_gpu_bind_group_layout_entry, group.bindings.items.len) catch {
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "shader_group_layout: entry allocation failed", @src());
-        return false;
+        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "shader group: entry allocation failed", @src());
+        return c.KE_GPU_INVALID_HANDLE;
     };
     defer rc.gpa.free(entries);
     for (group.bindings.items, entries) |b, *e| {
@@ -256,17 +266,13 @@ pub fn shaderGroupLayout(self: [*c]c.ke_render_service, params: [*c]const c.ke_r
             .view_dimension = b.view_dimension,
         };
     }
-    const layout = st.device.create_bind_group_layout.?(st.device, &c.ke_gpu_bind_group_layout_params{
-        .label = params.*.shader,
+    const layout = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+        .label = label,
         .entry_count = @intCast(entries.len),
         .entries = entries.ptr,
     });
-    if (layout == c.KE_GPU_INVALID_HANDLE) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "shader_group_layout: the device refused the layout", @src());
-        return false;
-    }
-    out_group.* = .{ .layout = layout, .index = group.index orelse 0 };
-    return true;
+    if (layout == c.KE_GPU_INVALID_HANDLE) fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "shader group: the device refused the layout", @src());
+    return layout;
 }
 
 /// The service's `create_shader_bind_group` slot: each binding is placed at the number its name
@@ -281,7 +287,8 @@ pub fn createShaderBindGroup(self: [*c]c.ke_render_service, params: [*c]const c.
     const st = rc.coreOf(self);
     var group = readGroup(st, params, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
     defer group.deinit();
-    const entries = matchBindings(&group, bindings[0..binding_count], &st.globals, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
+    const given: []const c.ke_render_shader_binding = if (binding_count == 0) &.{} else bindings[0..binding_count];
+    const entries = matchBindings(&group, given, &st.globals, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
     defer rc.gpa.free(entries);
     const bind_group = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
         .label = label,
@@ -295,7 +302,7 @@ pub fn createShaderBindGroup(self: [*c]c.ke_render_service, params: [*c]const c.
 /// The bind group entries for `bindings` in the group's numbering, plus one for each parameter of
 /// the group they leave out that `globals` provides, owned by the caller. Null with the error
 /// filled when a binding names no parameter, a parameter is bound twice, or one is left unbound.
-fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding, globals: *const frame_globals.Globals, out_error: [*c][*c]c.ke_error) ?[]c.ke_gpu_bind_group_entry {
+pub fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding, globals: *const frame_globals.Globals, out_error: [*c][*c]c.ke_error) ?[]c.ke_gpu_bind_group_entry {
     const entries = rc.gpa.alloc(c.ke_gpu_bind_group_entry, group.bindings.items.len) catch {
         fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_shader_bind_group: entry allocation failed", @src());
         return null;

@@ -86,6 +86,7 @@ pub fn build(b: *std.Build) void {
     const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
     const object_uniforms_src = b.pathJoin(&.{ src_zig, "render/common/object_uniforms.zig" });
     const feature_bindings_src = b.pathJoin(&.{ src_zig, "render/common/feature_bindings.zig" });
+    const material_pass_groups_src = b.pathJoin(&.{ src_zig, "render/common/material_pass_groups.zig" });
     const stubs_src = b.pathJoin(&.{ src_zig, "common/stubs.zig" });
     const tomlc99_dir = b.dependency("tomlc99", .{}).path("").getPath(b);
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
@@ -633,6 +634,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"material-pass-groups-src" = material_pass_groups_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -659,6 +661,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"material-pass-groups-src" = material_pass_groups_src,
         .@"feature-bindings-src" = feature_bindings_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
@@ -680,6 +683,8 @@ pub fn build(b: *std.Build) void {
     const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, service_gen_dir, &.{}, null);
     const magenta_vs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.vs.wgsl" });
     const magenta_fs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.fs.wgsl" });
+    const material_params = ctx.reflection("material_params", b.pathJoin(&.{ shader_lib_dir, "material_params.slang" }), service_gen_dir, &.{shader_lib_dir});
+    const material_params_json = b.pathJoin(&.{ service_gen_dir, "material_params.json" });
 
     const render_service = ctx.member("ke_render_service", .{
         .target = target,
@@ -702,9 +707,11 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
         .@"magenta-vs-wgsl" = magenta_vs_wgsl,
         .@"magenta-fs-wgsl" = magenta_fs_wgsl,
+        .@"material-params-json" = material_params_json,
     }, &.{
         &common.step,     &resource_cache_default.step,
         &magenta_vs.step, &magenta_fs.step,
+        &material_params.step,
     }, .has_tests);
 
     const render_module = ctx.member("ke_render_module", .{
@@ -1181,17 +1188,37 @@ const Ctx = struct {
         const compiled = run.addOutputFileArg(file_name);
         const reflection_name = b.fmt("{s}.{s}.json", .{ name, suffix });
         run.addArg("-reflection-json");
-        const reflection = run.addOutputFileArg(reflection_name);
+        const reflected = run.addOutputFileArg(reflection_name);
         ctx.addSlangInputs(run, std.fs.path.dirname(input) orelse ".");
         for (includes) |inc| ctx.addSlangInputs(run, inc);
         run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));
 
         if (!std.mem.startsWith(u8, out_dir, ctx.prefix)) @panic("shader output directory is outside the install prefix");
         const relative = std.mem.trimStart(u8, out_dir[ctx.prefix.len..], "/\\");
-        const install_reflection = b.addInstallFileWithDir(reflection, .{ .custom = relative }, reflection_name);
+        const install_reflection = b.addInstallFileWithDir(reflected, .{ .custom = relative }, reflection_name);
         const install = b.addInstallFileWithDir(compiled, .{ .custom = relative }, file_name);
         install.step.dependOn(&install_reflection.step);
         return install;
+    }
+
+    /// Writes the reflection of a Slang module that declares parameters and no entry point, as
+    /// `<name>.json` in `out_dir`.
+    fn reflection(ctx: *Ctx, name: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8) *std.Build.Step.InstallFile {
+        const b = ctx.b;
+        const file_name = b.fmt("{s}.json", .{name});
+        const run = b.addSystemCommand(&.{ ctx.slangc_exe, "-target", "wgsl" });
+        run.step.dependOn(ctx.slang_step);
+        for (includes) |inc| run.addArgs(&.{ "-I", inc });
+        run.addFileArg(.{ .cwd_relative = input });
+        run.addArg("-reflection-json");
+        const reflected = run.addOutputFileArg(file_name);
+        ctx.addSlangInputs(run, std.fs.path.dirname(input) orelse ".");
+        for (includes) |inc| ctx.addSlangInputs(run, inc);
+        run.setName(b.fmt("reflect {s}", .{name}));
+
+        if (!std.mem.startsWith(u8, out_dir, ctx.prefix)) @panic("reflection output directory is outside the install prefix");
+        const relative = std.mem.trimStart(u8, out_dir[ctx.prefix.len..], "/\\");
+        return b.addInstallFileWithDir(reflected, .{ .custom = relative }, file_name);
     }
 
     /// Compiles every authored material × `pass`: glob every materials

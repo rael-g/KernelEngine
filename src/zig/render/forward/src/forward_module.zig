@@ -12,6 +12,7 @@ const c = cimport.c;
 const heap = @import("heap");
 const gpa = heap.gpa;
 const Features = @import("feature_bindings").FeatureBindings(c);
+const Groups = @import("material_pass_groups").MaterialPassGroups(c);
 
 /// One draw's transform record, uploaded into that draw's slot of `objects`.
 const PerObject = extern struct {
@@ -85,9 +86,8 @@ const ForwardModule = struct {
     pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
-    frame_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
+    groups: Groups = .{},
     frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
-    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     objects: ?Objects = null,
     env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
     resource_generation: u32 = 0,
@@ -124,13 +124,6 @@ const PASS_NAME = "forward";
 const DEFAULT_MATERIAL_SHADER = "standard";
 const MAX_SHADER_QUALIFIED = 128;
 
-const frame_group_params = c.ke_render_shader_group_params{
-    .shader = DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME,
-    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
-    .block = null,
-    .hints = null,
-    .hint_count = 0,
-};
 
 /// Writes one error-level line tagged "render_forward" when both a logger and an error are given,
 /// and does nothing otherwise. The error is read, not freed or cleared. The line is dropped, not
@@ -168,7 +161,7 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
     fwd.resource_generation = core.*.resource_generation.?(core);
     var err: ?*c.ke_error = null;
-    fwd.frame_bind_group = core.*.create_shader_bind_group.?(core, &frame_group_params, fwd.frame_group.layout, "forward.frame_bind_group", &bindings, bindings.len, &err);
+    fwd.frame_bind_group = core.*.create_shader_bind_group.?(core, &fwd.groups.frame_params, fwd.groups.frame.layout, "forward.frame_bind_group", &bindings, bindings.len, &err);
     if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame bind group");
 }
 
@@ -231,7 +224,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     }
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_bind_group.?(rp, fwd.frame_group.index, fwd.frame_bind_group, null, 0);
+    rp.*.set_bind_group.?(rp, fwd.groups.frame.index, fwd.frame_bind_group, null, 0);
 
     for (fwd.draws.items, 0..) |draw, i| {
         const d: u32 = @intCast(i);
@@ -252,8 +245,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         core.*.upload.?(core, objects.buffer, offset, &u, @sizeOf(PerObject));
 
         const mat_bg = core.*.material_bind_group.?(core, draw.mesh.material);
-        rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
-        rp.*.set_bind_group.?(rp, 2, objects.bind_group, &offset, 1);
+        rp.*.set_bind_group.?(rp, fwd.groups.material_index, mat_bg, null, 0);
+        rp.*.set_bind_group.?(rp, fwd.groups.object.index, objects.bind_group, &offset, 1);
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -284,20 +277,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.skybox_cid = skybox_cid;
     fwd.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
 
-    if (!core.*.shader_group_layout.?(core, &frame_group_params, &fwd.frame_group, out_error)) return false;
-
-    const obj_bgl_entry = c.ke_gpu_bind_group_layout_entry{
-        .binding = 0,
-        .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
-        .type = c.KE_GPU_BINDING_TYPE_BUFFER,
-        .has_dynamic_offset = 1,
-        .view_dimension = 0,
-    };
-    fwd.obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "forward.obj_bgl",
-        .entry_count = 1,
-        .entries = &obj_bgl_entry,
-    });
+    if (!fwd.groups.init(core, dev, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
 
     fwd.attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -332,10 +312,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
-    pp.bind_group_layouts[fwd.frame_group.index] = fwd.frame_group.layout;
-    pp.bind_group_layouts[1] = core.*.material_layout.?(core);
-    pp.bind_group_layouts[2] = fwd.obj_bgl;
-    pp.bind_group_layout_count = 3;
+    fwd.groups.place(core, &pp);
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     pp.color_target_count = 1;
     fwd.pipeline_template = pp;
@@ -349,7 +326,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         return false;
     }
 
-    fwd.objects = .{ .device = dev, .layout = fwd.obj_bgl, .buffer_label = "forward.obj_uniform", .bind_group_label = "forward.obj_bind_group" };
+    fwd.objects = .{ .device = dev, .core = core, .group = &fwd.groups.object_params, .layout = fwd.groups.object.layout, .buffer_label = "forward.obj_uniform", .bind_group_label = "forward.obj_bind_group" };
     if (!fwd.objects.?.ensure(1, out_error)) return false;
 
     const hdr_opaque_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
@@ -418,8 +395,7 @@ fn destroyModule(fwd: *ForwardModule) void {
     if (fwd.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
     if (fwd.objects) |*objects| objects.release();
     fwd.draws.deinit(gpa);
-    if (fwd.frame_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, fwd.frame_group.layout);
-    if (fwd.obj_bgl != invalid) dev.destroy_bind_group_layout.?(dev, fwd.obj_bgl);
+    fwd.groups.release(dev);
 }
 
 /// The `destroy` slot of the handle that `ke_render_forward_create` returns. It is the only place

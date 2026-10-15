@@ -279,7 +279,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sh.lvp_bg = core.*.create_shader_bind_group.?(core, &light_group_params, sh.light_group.layout, "shadow.lvp_bg", &light_binding, light_binding.len, out_error);
     if (sh.lvp_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
-    sh.objects = .{ .device = dev, .layout = sh.object_group.layout, .buffer_label = "shadow.obj_uniform", .bind_group_label = "shadow.obj_bg" };
+    sh.objects = .{ .device = dev, .core = core, .group = &object_group_params, .layout = sh.object_group.layout, .buffer_label = "shadow.obj_uniform", .bind_group_label = "shadow.obj_bg" };
     if (!sh.objects.?.ensure(1, out_error)) return false;
 
     sh.writes = .{ "shadow_map", "shadow_depth" };

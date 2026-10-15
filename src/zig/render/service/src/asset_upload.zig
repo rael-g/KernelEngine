@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const rc = @import("render_service.zig");
+const shader_reflection = @import("shader_reflection.zig");
 const c = rc.c;
 
 /// Creation functions in this file share one order: validate the key, return the cached handle
@@ -259,17 +260,22 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
     const alb_view = st.textureAt(alb).?.view;
     const nrm_view = st.textureAt(nrm).?.view;
 
-    const entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = ubo, .buffer_offset = 0, .buffer_size = 48, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = alb_view, .sampler = 0 },
-        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
-        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = nrm_view, .sampler = 0 },
+    const bindings = [_]c.ke_render_shader_binding{
+        .{ .name = rc.material_block, .buffer = ubo, .buffer_offset = 0, .buffer_size = 48, .texture_view = 0, .sampler = 0 },
+        .{ .name = "albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = alb_view, .sampler = 0 },
+        .{ .name = "tex_sampler", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
+        .{ .name = "normal_map", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = nrm_view, .sampler = 0 },
     };
+    const entries = shader_reflection.matchBindings(&st.material_group, &bindings, &st.globals, out_error) orelse {
+        st.device.destroy_buffer.?(st.device, ubo);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    };
+    defer rc.gpa.free(entries);
     const bg = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
         .label = "material.bind_group",
         .layout = st.material_bgl,
-        .entry_count = 4,
-        .entries = &entries,
+        .entry_count = @intCast(entries.len),
+        .entries = entries.ptr,
     }, out_error);
     if (bg == c.KE_GPU_INVALID_HANDLE) {
         st.device.destroy_buffer.?(st.device, ubo);

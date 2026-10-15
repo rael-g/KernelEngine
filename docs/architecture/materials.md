@@ -17,9 +17,11 @@ works inside is on the generated page of its file. Shared shader modules are und
 
 ## What ties the parts together
 
-**A material names no pass.** It implements `IMaterial` and reads one fixed set, the `mat`
-block, `albedo`, `tex_sampler` and `normal_map` of `forward_common.slang`, at set 1. It cannot
-declare uniforms or textures of its own. Exactly one `IMaterial` struct per file is required by
+**A material names no pass.** It implements `IMaterial` and reads one fixed parameter block,
+`mat` of `material_params.slang`, whose fields hold the factors and the textures `albedo`,
+`tex_sampler` and `normal_map`. The build embeds the reflection of that block in the service,
+which builds every material's bind group from it. A material cannot declare uniforms or
+textures of its own. Exactly one `IMaterial` struct per file is required by
 `scripts/generate_material_wrapper.cs`.
 
 **The build binds a material to each consuming pass.** For every material file and every pass

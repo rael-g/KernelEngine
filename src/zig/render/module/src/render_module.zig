@@ -547,7 +547,21 @@ const forward_reflection =
     \\ {"name":"spot_counts","binding":{"kind":"descriptorTableSlot","index":12},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
     \\ {"name":"cluster","binding":{"kind":"descriptorTableSlot","index":13},"type":{"kind":"constantBuffer"}},
     \\ {"name":"hdr_opaque","binding":{"kind":"descriptorTableSlot","index":14},"type":{"kind":"resource","baseShape":"texture2D"}},
-    \\ {"name":"hdr_opaque_sampler","binding":{"kind":"descriptorTableSlot","index":15},"type":{"kind":"samplerState"}}
+    \\ {"name":"hdr_opaque_sampler","binding":{"kind":"descriptorTableSlot","index":15},"type":{"kind":"samplerState"}},
+    \\ {"name":"mat","binding":{"kind":"subElementRegisterSpace","index":1},"type":{"kind":"parameterBlock",
+    \\  "elementType":{"kind":"struct","fields":[]},"containerVarLayout":{"binding":{"kind":"descriptorTableSlot","index":0}}}},
+    \\ {"name":"object","binding":{"kind":"subElementRegisterSpace","index":2},"type":{"kind":"parameterBlock",
+    \\  "elementType":{"kind":"struct","fields":[]},"containerVarLayout":{"binding":{"kind":"descriptorTableSlot","index":0}}}}
+    \\]}
+;
+
+const gbuffer_reflection =
+    \\{"parameters":[
+    \\ {"name":"ke_frame","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"mat","binding":{"kind":"subElementRegisterSpace","index":1},"type":{"kind":"parameterBlock",
+    \\  "elementType":{"kind":"struct","fields":[]},"containerVarLayout":{"binding":{"kind":"descriptorTableSlot","index":0}}}},
+    \\ {"name":"object","binding":{"kind":"subElementRegisterSpace","index":2},"type":{"kind":"parameterBlock",
+    \\  "elementType":{"kind":"struct","fields":[]},"containerVarLayout":{"binding":{"kind":"descriptorTableSlot","index":0}}}}
     \\]}
 ;
 
@@ -559,6 +573,7 @@ fn standInReflection(shader_file: []const u8) []const u8 {
     if (std.mem.startsWith(u8, shader_file, "cluster_cull.")) return cluster_cull_reflection;
     if (std.mem.startsWith(u8, shader_file, "deferred_lighting.")) return deferred_lighting_reflection;
     if (std.mem.startsWith(u8, shader_file, "standard.forward.")) return forward_reflection;
+    if (std.mem.startsWith(u8, shader_file, "standard.gbuffer.")) return gbuffer_reflection;
     return empty_reflection;
 }
 
