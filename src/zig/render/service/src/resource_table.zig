@@ -22,11 +22,34 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
     var w = desc.*.width;
     var h = desc.*.height;
     if (desc.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER) {
-        w = @intFromFloat(@as(f32, @floatFromInt(st.backbuffer_w)) * desc.*.scale_x);
-        h = @intFromFloat(@as(f32, @floatFromInt(st.backbuffer_h)) * desc.*.scale_y);
+        w = scaled(st.backbuffer_w, desc.*.scale_x);
+        h = scaled(st.backbuffer_h, desc.*.scale_y);
     }
 
-    const depth = rc.isDepthFormat(desc.*.format);
+    const made = createTarget(st, desc.*.name, desc.*.format, w, h);
+    st.resources[st.resource_count] = .{
+        .name = desc.*.name,
+        .cid = cid,
+        .format = desc.*.format,
+        .texture = made.texture,
+        .view = made.view,
+        .is_backbuffer = false,
+        .is_transient = true,
+        .clear_value = desc.*.clear_value,
+        .relative = desc.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
+        .scale_x = desc.*.scale_x,
+        .scale_y = desc.*.scale_y,
+    };
+    st.resource_count += 1;
+    return cid;
+}
+
+const Target = struct { texture: c.ke_gpu_texture, view: c.ke_gpu_texture_view };
+
+/// Creates a declared target's texture and its view. A depth format gets a depth attachment, any
+/// other a color attachment.
+fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_format, w: u32, h: u32) Target {
+    const depth = rc.isDepthFormat(format);
     const usage: c.ke_gpu_texture_usage = if (depth)
         c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED |
             c.KE_GPU_TEXTURE_USAGE_COPY_SRC | c.KE_GPU_TEXTURE_USAGE_COPY_DST
@@ -35,11 +58,11 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
             c.KE_GPU_TEXTURE_USAGE_COPY_SRC | c.KE_GPU_TEXTURE_USAGE_COPY_DST;
 
     const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
-        .label = desc.*.name,
+        .label = name,
         .width = w,
         .height = h,
         .depth_or_array_layers = 1,
-        .format = desc.*.format,
+        .format = format,
         .dimension = c.KE_GPU_TEXTURE_DIM_2D,
         .usage = usage,
         .mip_level_count = 1,
@@ -49,8 +72,8 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
     });
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
-        .label = desc.*.name,
-        .format = desc.*.format,
+        .label = name,
+        .format = format,
         .dimension = c.KE_GPU_TEXTURE_DIM_2D,
         .aspect = if (depth) c.KE_GPU_TEXTURE_ASPECT_DEPTH else c.KE_GPU_TEXTURE_ASPECT_COLOR,
         .base_mip_level = 0,
@@ -58,19 +81,36 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
         .base_array_layer = 0,
         .array_layer_count = 1,
     });
+    return .{ .texture = tex, .view = view };
+}
 
-    st.resources[st.resource_count] = .{
-        .name = desc.*.name,
-        .cid = cid,
-        .format = desc.*.format,
-        .texture = tex,
-        .view = view,
-        .is_backbuffer = false,
-        .is_transient = true,
-        .clear_value = desc.*.clear_value,
-    };
-    st.resource_count += 1;
-    return cid;
+fn scaled(size: u32, scale: f32) u32 {
+    return @intFromFloat(@as(f32, @floatFromInt(size)) * scale);
+}
+
+/// Recreates the texture and view of every target declared relative to the backbuffer when the
+/// backbuffer is no longer the size they were made for, and counts the change in
+/// `resource_generation`. The component ids stay; the old views are destroyed, so a pass that kept
+/// one rebuilds what it made from it.
+pub fn resizeRelative(st: *rc.CoreState) void {
+    if (st.backbuffer_w == st.sized_w and st.backbuffer_h == st.sized_h) return;
+    if (st.backbuffer_w == 0 or st.backbuffer_h == 0) return;
+    for (st.resources[0..st.resource_count]) |*r| {
+        if (!r.relative) continue;
+        if (r.view != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture_view.?(st.device, r.view);
+        if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
+        const made = createTarget(st, r.name, r.format, scaled(st.backbuffer_w, r.scale_x), scaled(st.backbuffer_h, r.scale_y));
+        r.texture = made.texture;
+        r.view = made.view;
+    }
+    st.sized_w = st.backbuffer_w;
+    st.sized_h = st.backbuffer_h;
+    st.resource_generation +%= 1;
+}
+
+/// Slot `resource_generation`. Counts the times the declared targets were recreated.
+pub fn resourceGeneration(self: [*c]c.ke_render_service) callconv(.c) u32 {
+    return rc.coreOf(self).resource_generation;
 }
 
 /// Appends an entry for a texture owned by the caller, with no view. Returns the invalid component

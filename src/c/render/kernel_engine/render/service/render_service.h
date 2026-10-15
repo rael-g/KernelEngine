@@ -243,6 +243,11 @@ struct ke_render_service
 
     /// Texel format of the backbuffer, the format a pipeline drawing into it declares.
     ke_gpu_texture_format (*backbuffer_format)(struct ke_render_service *self);
+
+    /// Counts the times the targets declared relative to the backbuffer were recreated, which
+    /// `begin_frame` does when the backbuffer changes size. A pass that keeps something made from
+    /// a declared target's view, a bind group for instance, rebuilds it when the count changes.
+    uint32_t (*resource_generation)(struct ke_render_service *self);
 };
 
 typedef struct ke_render_service_handle

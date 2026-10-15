@@ -84,7 +84,8 @@ fn collectDraws(
 /// The state of one pass. `ke_render_forward_create` allocates it on the heap and `destroyHandle`
 /// frees it, and nothing else takes ownership. `core`, `device` and `camera` are borrowed for its
 /// whole life and never released here. The GPU objects are made by `setup` and released by
-/// `destroyModule`, and `frame_bind_group` is replaced whenever the environment cubemap changes.
+/// `destroyModule`, and `frame_bind_group` is replaced whenever the environment cubemap changes or
+/// the declared targets are recreated.
 /// Several fields point into the struct itself, so it must not be moved after `setup`.
 const ForwardModule = struct {
     core: *c.ke_render_service = undefined,
@@ -111,6 +112,7 @@ const ForwardModule = struct {
     obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
+    resource_generation: u32 = 0,
 
     draws: [MAX_DRAWS]Draw = undefined,
 
@@ -163,7 +165,8 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
 /// Replaces `frame_bind_group` with a group over `frame_uniform`, the "hdr_opaque" view, the
 /// shadow map view (or the white texture when no "shadow_map" view exists), the "shadow_lvp"
 /// buffer, and the environment cubemap, which is the black cube when `ibl_enabled` is false.
-/// `setup` calls it once, and `system` calls it when the skybox's cubemap changes. A creation
+/// `setup` calls it once, and `system` calls it when the skybox's cubemap changes or the service
+/// recreated its declared targets. The group it replaces is destroyed. A creation
 /// failure goes to `logGpuError`, and `frame_bind_group` then holds whatever creation returned.
 fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const dev = fwd.device;
@@ -191,6 +194,8 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
         .{ .binding = 8, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
     };
 
+    if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
+    fwd.resource_generation = core.*.resource_generation.?(core);
     var err: ?*c.ke_error = null;
     fwd.frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
         .label = "forward.frame_bind_group",
@@ -244,7 +249,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
         .{ .bits = c.KE_HANDLE_NONE };
-    if (want_env.bits != fwd.env_cubemap.bits or fwd.frame_bind_group == c.KE_GPU_INVALID_HANDLE) {
+    if (want_env.bits != fwd.env_cubemap.bits or fwd.frame_bind_group == c.KE_GPU_INVALID_HANDLE or
+        fwd.resource_generation != core.*.resource_generation.?(core))
+    {
         fwd.env_cubemap = want_env;
         rebuildFrameBindGroup(fwd);
     }

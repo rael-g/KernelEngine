@@ -137,4 +137,7 @@ public unsafe partial struct ke_render_service
 
     [NativeTypeName("ke_gpu_texture_format (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_gpu_texture_format> backbuffer_format;
+
+    [NativeTypeName("uint32_t (*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, uint> resource_generation;
 }

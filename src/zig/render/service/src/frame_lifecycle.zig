@@ -1,6 +1,7 @@
 //! Opens and closes a frame of the render service, and carries the buffer uploads queued during it.
 
 const rc = @import("render_service.zig");
+const resource_table = @import("resource_table.zig");
 const c = rc.c;
 
 /// Opens a frame. The previous frame's slot flags, compute records and upload counters are
@@ -26,6 +27,7 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
         st.cmd_encoders[pe] = st.device.create_command_encoder.?(st.device, null);
     }
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
+    resource_table.resizeRelative(st);
     if (st.find("backbuffer")) |bb| bb.view = view;
     st.frame_live = true;
     return 1;

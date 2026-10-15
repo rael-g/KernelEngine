@@ -251,9 +251,11 @@ pub fn Stubs(comptime c: type) type {
             vtable: c.ke_gpu_render_target,
             acquired: bool,
             presented: u32,
+            width: u32,
+            height: u32,
 
             pub fn init(self: *Target) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_render_target), .acquired = false, .presented = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_render_target), .acquired = false, .presented = 0, .width = 1, .height = 1 };
                 self.vtable.handle = self;
                 self.vtable.acquire = &acquire;
                 self.vtable.present = &present;
@@ -284,9 +286,9 @@ pub fn Stubs(comptime c: type) type {
                 return true;
             }
 
-            fn size(_: ?*c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
-                if (out_w != null) out_w.* = 1;
-                if (out_h != null) out_h.* = 1;
+            fn size(self: ?*c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+                if (out_w != null) out_w.* = of(self).width;
+                if (out_h != null) out_h.* = of(self).height;
             }
 
             fn format(_: ?*c.ke_gpu_render_target) callconv(.c) c.ke_gpu_texture_format {
@@ -306,6 +308,7 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.handle = self;
                 self.vtable.load_shader = &loadShader;
                 self.vtable.backbuffer_format = &backbufferFormat;
+                self.vtable.resource_generation = &resourceGeneration;
                 self.vtable.get_or_create_pipeline = &getOrCreatePipeline;
                 self.vtable.cid = &cid;
                 self.vtable.declare = &declare;
@@ -325,6 +328,10 @@ pub fn Stubs(comptime c: type) type {
 
             fn backbufferFormat(_: ?*c.ke_render_service) callconv(.c) c.ke_gpu_texture_format {
                 return c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+            }
+
+            fn resourceGeneration(_: [*c]c.ke_render_service) callconv(.c) u32 {
+                return 0;
             }
 
             pub fn api(self: *Core) *c.ke_render_service {

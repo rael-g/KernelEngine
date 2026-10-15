@@ -1163,6 +1163,15 @@
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_generation",
+          "returns": "uint32_t",
+          "tags": [],
+          "doc": "Counts the times the targets declared relative to the backbuffer were recreated, which \u0060begin_frame\u0060 does when the backbuffer changes size. A pass that keeps something made from a declared target\u0027s view, a bind group for instance, rebuilds it when the count changes.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
         }
       ]
     },

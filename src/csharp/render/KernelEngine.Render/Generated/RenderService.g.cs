@@ -415,6 +415,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return Handle->backbuffer_format(Handle);
     }
 
+    /// <summary>Counts the times the targets declared relative to the backbuffer were recreated, which `begin_frame` does when the backbuffer changes size. A pass that keeps something made from a declared target's view, a bind group for instance, rebuilds it when the count changes.</summary>
+    public uint ResourceGeneration()
+    {
+        return Handle->resource_generation(Handle);
+    }
+
     /// <summary>Releases the native renderservice.</summary>
     public void Dispose()
     {

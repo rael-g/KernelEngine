@@ -82,6 +82,9 @@ pub const Resource = struct {
     is_backbuffer: bool,
     is_transient: bool,
     clear_value: [4]f32,
+    relative: bool = false,
+    scale_x: f32 = 1.0,
+    scale_y: f32 = 1.0,
     buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     buffer_size: u64 = 0,
     bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
@@ -145,6 +148,9 @@ pub const CoreState = struct {
 
     backbuffer_w: u32,
     backbuffer_h: u32,
+    sized_w: u32,
+    sized_h: u32,
+    resource_generation: u32,
 
     frame_live: bool,
 
@@ -313,6 +319,9 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .resource_count = 0,
         .backbuffer_w = bb_w,
         .backbuffer_h = bb_h,
+        .sized_w = bb_w,
+        .sized_h = bb_h,
+        .resource_generation = 0,
         .frame_live = false,
         .cmd_encoders = undefined,
         .cmd_valid = std.mem.zeroes([MAX_CMD_BUFFERS]bool),
@@ -440,6 +449,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .white_texture = asset_upload.whiteTexture,
         .load_shader = shader_loader.loadShader,
         .backbuffer_format = resource_table.backbufferFormat,
+        .resource_generation = resource_table.resourceGeneration,
     };
 
     st.sampler = dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
@@ -552,6 +562,42 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     try testing.expectEqual(@as(u32, 1), target.presented);
     try testing.expectEqual(@as(c.ke_bool, 0), svc.*.end_frame.?(svc, null));
     try testing.expectEqual(@as(u32, 1), target.presented);
+}
+
+test "a target declared relative to the backbuffer is recreated when the backbuffer changes size" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
+    const svc = h.ref orelse return error.TestUnexpectedResult;
+
+    var desc = std.mem.zeroes(c.ke_render_resource_desc);
+    desc.name = "hdr";
+    desc.format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    desc.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+    desc.scale_x = 1.0;
+    desc.scale_y = 1.0;
+    _ = svc.*.declare.?(svc, &desc, null);
+    const first = svc.*.resource_view.?(svc, "hdr");
+
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    _ = svc.*.end_frame.?(svc, null);
+    try testing.expectEqual(first, svc.*.resource_view.?(svc, "hdr"));
+    try testing.expectEqual(@as(u32, 0), svc.*.resource_generation.?(svc));
+
+    target.width = 640;
+    target.height = 360;
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    _ = svc.*.end_frame.?(svc, null);
+    try testing.expect(svc.*.resource_view.?(svc, "hdr") != first);
+    try testing.expectEqual(@as(u32, 1), svc.*.resource_generation.?(svc));
+
+    h.destroy.?(svc);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
 }
 
 test "a declared resource's texture and view carry the name it was declared under" {
