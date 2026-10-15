@@ -5,18 +5,18 @@ struct ClusterParams {
     float4x4 view;
     float4x4 inv_proj;
 };
-[[vk::binding(0, 0)]] ConstantBuffer<ClusterParams> params;
+ConstantBuffer<ClusterParams> params;
 
 struct PointLight { float4 pos_radius; float4 color_intensity; };
-[[vk::binding(1, 0)]] StructuredBuffer<PointLight> point_lights;
+StructuredBuffer<PointLight> point_lights;
 
 struct SpotLight { float4 pos_range; float4 dir_cos_inner; float4 color_intensity; float4 cone; };
-[[vk::binding(2, 0)]] StructuredBuffer<SpotLight> spot_lights;
+StructuredBuffer<SpotLight> spot_lights;
 
-[[vk::binding(3, 0)]] RWStructuredBuffer<uint> point_indices;
-[[vk::binding(4, 0)]] RWStructuredBuffer<uint> point_counts;
-[[vk::binding(5, 0)]] RWStructuredBuffer<uint> spot_indices;
-[[vk::binding(6, 0)]] RWStructuredBuffer<uint> spot_counts;
+RWStructuredBuffer<uint> point_indices;
+RWStructuredBuffer<uint> point_counts;
+RWStructuredBuffer<uint> spot_indices;
+RWStructuredBuffer<uint> spot_counts;
 
 float3 unproject(float2 ndc, float ndc_z) {
     float4 v = mul(params.inv_proj, float4(ndc, ndc_z, 1.0));

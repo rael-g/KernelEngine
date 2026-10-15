@@ -478,11 +478,24 @@ const skybox_reflection =
     \\]}
 ;
 
+const cluster_cull_reflection =
+    \\{"parameters":[
+    \\ {"name":"params","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"point_lights","binding":{"kind":"descriptorTableSlot","index":1},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"spot_lights","binding":{"kind":"descriptorTableSlot","index":2},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"point_indices","binding":{"kind":"descriptorTableSlot","index":3},"type":{"kind":"resource","baseShape":"structuredBuffer","access":"readWrite"}},
+    \\ {"name":"point_counts","binding":{"kind":"descriptorTableSlot","index":4},"type":{"kind":"resource","baseShape":"structuredBuffer","access":"readWrite"}},
+    \\ {"name":"spot_indices","binding":{"kind":"descriptorTableSlot","index":5},"type":{"kind":"resource","baseShape":"structuredBuffer","access":"readWrite"}},
+    \\ {"name":"spot_counts","binding":{"kind":"descriptorTableSlot","index":6},"type":{"kind":"resource","baseShape":"structuredBuffer","access":"readWrite"}}
+    \\]}
+;
+
 /// The stand-in reflection of a shader file: the parameters its pass binds while it is created.
 fn standInReflection(shader_file: []const u8) []const u8 {
     if (std.mem.startsWith(u8, shader_file, "ui.")) return ui_reflection;
     if (std.mem.startsWith(u8, shader_file, "shadow.")) return shadow_reflection;
     if (std.mem.startsWith(u8, shader_file, "skybox.")) return skybox_reflection;
+    if (std.mem.startsWith(u8, shader_file, "cluster_cull.")) return cluster_cull_reflection;
     return empty_reflection;
 }
 
