@@ -12,8 +12,6 @@ const c = cimport.c;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-const MAX_DRAWS = 512;
-const UNIFORM_STRIDE = 256;
 
 const default_params = c.ke_render_shadow_params{
     .resolution = 1024,
@@ -42,6 +40,8 @@ const ShadowObj = extern struct { model: [16]f32 };
 /// `destroyHandle`. The registered system keeps a pointer to it as user data from registration on.
 /// Fields that `setup` has not reached keep their initial values, so `destroyModule` releases only
 /// what exists. `view` is set only when the pass is enabled.
+const Objects = @import("object_uniforms").ObjectUniforms(c, ShadowObj);
+
 const ShadowModule = struct {
     enabled: bool = false,
 
@@ -59,8 +59,7 @@ const ShadowModule = struct {
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     lvp_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     lvp_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
-    obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    obj_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    objects: ?Objects = null,
     lvp_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 
@@ -111,7 +110,7 @@ inline fn moduleOf(user: ?*anyopaque) *ShadowModule {
 /// transform into the "shadow_map" target, "shadow_depth" being its depth attachment. Each mesh
 /// gets its own slot of the object uniform and is drawn at that slot's dynamic offset, until the
 /// draw cap is reached.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const sh = moduleOf(user);
     const core = sh.core;
 
@@ -125,19 +124,27 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const pc = core.*.begin_pass.?(core, &sh.io);
     if (pc == null) return true;
 
+    var segc: usize = 0;
+    const segs = ctx.?.view.?(ctx, 1, &segc);
+    var mesh_total: usize = 0;
+    for (segs[0..segc]) |seg| mesh_total += seg.count;
+    const objects = &sh.objects.?;
+    if (!objects.ensure(@intCast(mesh_total), out_error)) {
+        core.*.end_pass.?(core, pc);
+        return false;
+    }
+
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sh.pipeline_params));
     rp.*.set_bind_group.?(rp, 0, sh.lvp_bg, null, 0);
 
     var draw_idx: u32 = 0;
-    var segc: usize = 0;
-    const segs = ctx.?.view.?(ctx, 1, &segc);
     var s: usize = 0;
-    while (s < segc and draw_idx < MAX_DRAWS) : (s += 1) {
+    while (s < segc) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
         const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
-        while (i < segs[s].count and draw_idx < MAX_DRAWS) : (i += 1) {
+        while (i < segs[s].count) : (i += 1) {
             var vbo: c.ke_gpu_buffer = 0;
             var ibo: c.ke_gpu_buffer = 0;
             var idx_count: u32 = 0;
@@ -145,10 +152,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 
             var u: ShadowObj = undefined;
             @memcpy(u.model[0..], wts[i].matrix.m[0..16]);
-            const offset: u32 = draw_idx * UNIFORM_STRIDE;
-            core.*.upload.?(core, sh.obj_uniform, offset, &u, @sizeOf(ShadowObj));
+            const offset: u32 = Objects.offset(draw_idx);
+            core.*.upload.?(core, objects.buffer, offset, &u, @sizeOf(ShadowObj));
 
-            rp.*.set_bind_group.?(rp, 1, sh.obj_bg, &offset, 1);
+            rp.*.set_bind_group.?(rp, 1, objects.bind_group, &offset, 1);
             rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
             rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
             rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -256,11 +263,8 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sh.lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .label = "shadow.lvp_bg", .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry }, out_error);
     if (sh.lvp_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
-    sh.obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .label = "shadow.obj_uniform", .initial_data = null, .size = UNIFORM_STRIDE * MAX_DRAWS, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
-    if (sh.obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const sh_obj_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = sh.obj_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ShadowObj), .texture_view = 0, .sampler = 0 };
-    sh.obj_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .label = "shadow.obj_bg", .layout = sh_obj_bgl, .entry_count = 1, .entries = &sh_obj_bg_entry }, out_error);
-    if (sh.obj_bg == c.KE_GPU_INVALID_HANDLE) return false;
+    sh.objects = .{ .device = dev, .layout = sh_obj_bgl, .buffer_label = "shadow.obj_uniform", .bind_group_label = "shadow.obj_bg" };
+    if (!sh.objects.?.ensure(1, out_error)) return false;
 
     sh.writes = .{ "shadow_map", "shadow_depth" };
     sh.io = std.mem.zeroes(c.ke_render_pass_io);
@@ -285,11 +289,10 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
 /// Called after a failed `setup` and by `destroyHandle`. It releases only the GPU objects that were
 /// created, and leaves freeing the module to its caller.
-fn destroyModule(sh: *const ShadowModule) void {
+fn destroyModule(sh: *ShadowModule) void {
     const dev = sh.device;
-    if (sh.obj_bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, sh.obj_bg);
+    if (sh.objects) |*objects| objects.release();
     if (sh.lvp_bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, sh.lvp_bg);
-    if (sh.obj_uniform != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, sh.obj_uniform);
     if (sh.lvp_uniform != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, sh.lvp_uniform);
     if (sh.obj_bgl != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.obj_bgl);
     if (sh.lvp_bgl != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.lvp_bgl);

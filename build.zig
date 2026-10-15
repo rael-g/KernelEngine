@@ -84,6 +84,7 @@ pub fn build(b: *std.Build) void {
     const heap_src = b.pathJoin(&.{ src_zig, "common/heap.zig" });
     const component_fields_src = b.pathJoin(&.{ src_zig, "common/component_fields.zig" });
     const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
+    const object_uniforms_src = b.pathJoin(&.{ src_zig, "render/common/object_uniforms.zig" });
     const stubs_src = b.pathJoin(&.{ src_zig, "common/stubs.zig" });
     const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
@@ -550,6 +551,7 @@ pub fn build(b: *std.Build) void {
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
     const shadow = ctx.member("ke_render_shadow", .{
+        .@"object-uniforms-src" = object_uniforms_src,
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -617,6 +619,7 @@ pub fn build(b: *std.Build) void {
         &materials_dirs,
     );
     const gbuffer = ctx.member("ke_render_gbuffer", .{
+        .@"object-uniforms-src" = object_uniforms_src,
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -642,6 +645,7 @@ pub fn build(b: *std.Build) void {
         &materials_dirs,
     );
     const forward = ctx.member("ke_render_forward", .{
+        .@"object-uniforms-src" = object_uniforms_src,
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,

@@ -17,14 +17,8 @@ const PASS_NAME = "gbuffer";
 /// The material shader `setup` loads for the pipeline template; each draw loads its own material's.
 const DEFAULT_MATERIAL_SHADER = "standard";
 
-/// The number of draws the pass can select in one body call, and the number of object slots
-/// `obj_uniform` is sized for.
-const MAX_DRAWS = 512;
-/// The byte distance between consecutive draw slots of `obj_uniform`. Each draw's dynamic offset is
-/// its slot index times this.
-const UNIFORM_STRIDE = 256;
 
-/// One draw's transform record, uploaded into that draw's slot of `obj_uniform`. The upload and the
+/// One draw's transform record, uploaded into that draw's slot of `objects`. The upload and the
 /// object binding both take their size from this type.
 const PerObject = extern struct {
     mvp: [16]f32,
@@ -38,29 +32,30 @@ const Draw = struct {
     world: *const c.ke_world_transform_component,
 };
 
-/// Called by `system` once the camera is known and before any draw is issued. The selection it
-/// returns is the whole list of draws for the body, never longer than the length the caller passed.
+const Objects = @import("object_uniforms").ObjectUniforms(c, PerObject);
+
+/// Called by `system` once the camera is known and before any draw is issued. It replaces the
+/// contents of `out` with every draw of the body, and returns false when the list cannot grow.
 fn collectDraws(
     core: *c.ke_render_service,
     cam: *const c.ke_camera_component,
     segs: [*]const c.ke_ecs_segment,
     seg_count: usize,
-    out: []Draw,
-) u32 {
-    var count: u32 = 0;
+    out: *std.ArrayList(Draw),
+) bool {
+    out.clearRetainingCapacity();
     var s: usize = 0;
-    while (s < seg_count and count < out.len) : (s += 1) {
+    while (s < seg_count) : (s += 1) {
         const meshes: [*c]const c.ke_mesh_component = @ptrCast(@alignCast(segs[s].columns[0]));
         const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
         var i: usize = 0;
-        while (i < segs[s].count and count < out.len) : (i += 1) {
+        while (i < segs[s].count) : (i += 1) {
             if (meshes[i].layers & cam.cull_mask == 0) continue;
             if (core.material_alpha_mode.?(core, meshes[i].material) == c.KE_ALPHA_MODE_BLEND) continue;
-            out[count] = .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]) };
-            count += 1;
+            out.append(gpa, .{ .mesh = @ptrCast(&meshes[i]), .world = @ptrCast(&wts[i]) }) catch return false;
         }
     }
-    return count;
+    return true;
 }
 
 /// The state of one gbuffer pass, allocated by `ke_render_gbuffer_create` and freed by
@@ -82,8 +77,8 @@ const GBufferModule = struct {
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
     empty_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
     empty_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
-    obj_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    obj_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    objects: ?Objects = null,
+    draws: std.ArrayList(Draw) = .empty,
     obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 
     writes: [4][*c]const u8 = undefined,
@@ -124,7 +119,7 @@ inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
 /// mask names, minus the blended ones. A draw writes its matrices into the next slot of the one
 /// shared uniform buffer and binds that slot by dynamic offset; a draw whose geometry or shader is
 /// missing is skipped without consuming a slot.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const gb = moduleOf(user);
     const core = gb.core;
 
@@ -160,13 +155,21 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 1, &segc);
-    var selected: [MAX_DRAWS]Draw = undefined;
-    const selected_count = collectDraws(core, cam, segs, segc, selected[0..]);
+    const objects = &gb.objects.?;
+    if (!collectDraws(core, cam, segs, segc, &gb.draws)) {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "gbuffer pass: draw list allocation failed", @src().file, @intCast(@src().line), null);
+        rp.*.end.?(rp);
+        core.*.end_pass.?(core, pc);
+        return false;
+    }
+    if (!objects.ensure(@intCast(gb.draws.items.len), out_error)) {
+        rp.*.end.?(rp);
+        core.*.end_pass.?(core, pc);
+        return false;
+    }
 
     var draw_idx: u32 = 0;
-    var d: u32 = 0;
-    while (d < selected_count) : (d += 1) {
-        const draw = selected[d];
+    for (gb.draws.items) |draw| {
 
         var vbo: c.ke_gpu_buffer = 0;
         var ibo: c.ke_gpu_buffer = 0;
@@ -178,15 +181,15 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         var u: PerObject = undefined;
         zm.storeMat(u.mvp[0..], mvp);
         zm.storeMat(u.model[0..], model);
-        const offset: u32 = draw_idx * UNIFORM_STRIDE;
-        core.*.upload.?(core, gb.obj_uniform, offset, &u, @sizeOf(PerObject));
+        const offset: u32 = Objects.offset(draw_idx);
+        core.*.upload.?(core, objects.buffer, offset, &u, @sizeOf(PerObject));
 
         if (!gb.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
         rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_template));
 
         const mat_bg = core.*.material_bind_group.?(core, draw.mesh.material);
         rp.*.set_bind_group.?(rp, 1, mat_bg, null, 0);
-        rp.*.set_bind_group.?(rp, 2, gb.obj_bind_group, &offset, 1);
+        rp.*.set_bind_group.?(rp, 2, objects.bind_group, &offset, 1);
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -283,30 +286,8 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         return false;
     }
 
-    gb.obj_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
-        .label = "gbuffer.obj_uniform",
-        .initial_data = null,
-        .size = UNIFORM_STRIDE * MAX_DRAWS,
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
-    }, out_error);
-    if (gb.obj_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const obj_bg_entry = c.ke_gpu_bind_group_entry{
-        .binding = 0,
-        .type = c.KE_GPU_BINDING_TYPE_BUFFER,
-        .buffer = gb.obj_uniform,
-        .buffer_offset = 0,
-        .buffer_size = @sizeOf(PerObject),
-        .texture_view = 0,
-        .sampler = 0,
-    };
-    gb.obj_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .label = "gbuffer.obj_bind_group",
-        .layout = obj_bgl,
-        .entry_count = 1,
-        .entries = &obj_bg_entry,
-    }, out_error);
-    if (gb.obj_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
+    gb.objects = .{ .device = dev, .layout = obj_bgl, .buffer_label = "gbuffer.obj_uniform", .bind_group_label = "gbuffer.obj_bind_group" };
+    if (!gb.objects.?.ensure(1, out_error)) return false;
 
     const albedo_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "gbuffer_albedo",
@@ -365,11 +346,11 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 /// Releases the GPU objects `setup` created, skipping any still at KE_GPU_INVALID_HANDLE, so it
 /// also serves a module whose setup stopped partway. Used on creation failure and by
 /// `destroyHandle`.
-fn destroyModule(gb: *const GBufferModule) void {
+fn destroyModule(gb: *GBufferModule) void {
     const dev = gb.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
-    if (gb.obj_bind_group != invalid) dev.destroy_bind_group.?(dev, gb.obj_bind_group);
-    if (gb.obj_uniform != invalid) dev.destroy_buffer.?(dev, gb.obj_uniform);
+    if (gb.objects) |*objects| objects.release();
+    gb.draws.deinit(gpa);
     if (gb.obj_bgl != invalid) dev.destroy_bind_group_layout.?(dev, gb.obj_bgl);
     if (gb.empty_bg != invalid) dev.destroy_bind_group.?(dev, gb.empty_bg);
     if (gb.empty_bgl != invalid) dev.destroy_bind_group_layout.?(dev, gb.empty_bgl);
@@ -473,11 +454,12 @@ test "a mesh on a layer the camera's cull_mask omits is not drawn" {
     const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 3;
     const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
 
-    var out: [8]Draw = undefined;
-    const n = collectDraws(&svc, &cam, &segs, segs.len, out[0..]);
+    var out: std.ArrayList(Draw) = .empty;
+    defer out.deinit(gpa);
+    try testing.expect(collectDraws(&svc, &cam, &segs, segs.len, &out));
 
-    try testing.expectEqual(@as(u32, 1), n);
-    try testing.expectEqual(@as(u32, 0b010), out[0].mesh.layers);
+    try testing.expectEqual(@as(usize, 1), out.items.len);
+    try testing.expectEqual(@as(u32, 0b010), out.items[0].mesh.layers);
 }
 
 test "a camera that names no layer draws nothing into the gbuffer" {
@@ -487,8 +469,10 @@ test "a camera that names no layer draws nothing into the gbuffer" {
     const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 2;
     const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
 
-    var out: [8]Draw = undefined;
-    try testing.expectEqual(@as(u32, 0), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
+    var out: std.ArrayList(Draw) = .empty;
+    defer out.deinit(gpa);
+    try testing.expect(collectDraws(&svc, &cam, &segs, segs.len, &out));
+    try testing.expectEqual(@as(usize, 0), out.items.len);
 }
 
 test "a blending mesh the camera can see is left to the forward pass" {
@@ -500,22 +484,25 @@ test "a blending mesh the camera can see is left to the forward pass" {
     const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 2;
     const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
 
-    var out: [8]Draw = undefined;
-    const n = collectDraws(&svc, &cam, &segs, segs.len, out[0..]);
+    var out: std.ArrayList(Draw) = .empty;
+    defer out.deinit(gpa);
+    try testing.expect(collectDraws(&svc, &cam, &segs, segs.len, &out));
 
-    try testing.expectEqual(@as(u32, 1), n);
-    try testing.expectEqual(@as(u32, 7), out[0].mesh.material.bits);
+    try testing.expectEqual(@as(usize, 1), out.items.len);
+    try testing.expectEqual(@as(u32, 7), out.items[0].mesh.material.bits);
 }
 
-test "collection stops at the caller's capacity instead of writing past it" {
+test "every visible mesh is collected, however many there are" {
     var svc = opaqueService();
     const cam = cameraSeeing(0b001);
-    const meshes = [_]c.ke_mesh_component{meshOn(0b001)} ** 3;
-    const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 3;
+    const meshes = [_]c.ke_mesh_component{meshOn(0b001)} ** 600;
+    const wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 600;
     const segs = [_]c.ke_ecs_segment{oneSegment(&meshes, &wts)};
 
-    var out: [2]Draw = undefined;
-    try testing.expectEqual(@as(u32, 2), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
+    var out: std.ArrayList(Draw) = .empty;
+    defer out.deinit(gpa);
+    try testing.expect(collectDraws(&svc, &cam, &segs, segs.len, &out));
+    try testing.expectEqual(@as(usize, 600), out.items.len);
 }
 
 test "meshes are gathered across every segment the query returned" {
@@ -527,8 +514,10 @@ test "meshes are gathered across every segment the query returned" {
     const b_wts = [_]c.ke_world_transform_component{std.mem.zeroes(c.ke_world_transform_component)} ** 2;
     const segs = [_]c.ke_ecs_segment{ oneSegment(&a_meshes, &a_wts), oneSegment(&b_meshes, &b_wts) };
 
-    var out: [8]Draw = undefined;
-    try testing.expectEqual(@as(u32, 2), collectDraws(&svc, &cam, &segs, segs.len, out[0..]));
+    var out: std.ArrayList(Draw) = .empty;
+    defer out.deinit(gpa);
+    try testing.expect(collectDraws(&svc, &cam, &segs, segs.len, &out));
+    try testing.expectEqual(@as(usize, 2), out.items.len);
 }
 
 const Stubs = @import("stubs").Stubs(c);
