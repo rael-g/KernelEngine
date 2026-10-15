@@ -14,8 +14,9 @@ const core_mod = @import("core.zig");
 const glfw = @import("glfw_device.zig");
 const heap = @import("heap");
 
-comptime {
+test {
     _ = @import("device.zig");
+    _ = @import("core.zig");
 }
 
 /// Creates the window and starts it. Reports invalid argument when the params are null, out of
