@@ -365,19 +365,17 @@ fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) void {
     unbindNow(stateOf(self), entity);
 }
 
-/// Removes by swap, taking the last entity of the type into the vacated slot and rewriting its
-/// binding's index, so every index keeps naming its entity and `instances` is no longer in
-/// binding order. An entity with no binding is left untouched.
+/// Removes the entity from its type's list keeping the others in binding order, and rewrites the
+/// index of every binding that moved down, so each index keeps naming its entity. An entity with
+/// no binding is left untouched.
 fn unbindNow(s: *State, entity: c.ke_entity) void {
     const b = bindingOf(s, entity) orelse return;
     if (typeAt(s, b.type_id)) |t| {
         if (b.slot < t.entities.items.len) {
-            const moved = t.entities.swapRemove(b.slot);
-            _ = moved;
-            if (b.slot < t.entities.items.len)
-                if (bindingOf(s, t.entities.items[b.slot])) |other| {
-                    other.slot = b.slot;
-                };
+            _ = t.entities.orderedRemove(b.slot);
+            for (t.entities.items[b.slot..], b.slot..) |moved, i| {
+                if (bindingOf(s, moved)) |other| other.slot = @intCast(i);
+            }
         }
     }
     b.type_id = c.KE_SCRIPT_TYPE_NONE;
@@ -743,6 +741,29 @@ test "instance count follows bind and unbind" {
     h.host().unbind.?(h.host(), a);
     try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
     try testing.expect(!h.host().instance_of.?(h.host(), a, null, null));
+}
+
+test "unbinding an entity keeps the others in binding order" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    var marks = [_]u32{ 1, 2, 3, 4 };
+    var entities: [4]c.ke_entity = undefined;
+    for (&entities, &marks, 0..) |*e, *m, i| {
+        e.* = h.tree.create(if (i == 0) "A" else if (i == 1) "B" else if (i == 2) "C" else "D", 0);
+        try testing.expect(h.host().bind.?(h.host(), e.*, id, m, null));
+    }
+
+    h.host().unbind.?(h.host(), entities[1]);
+    var count: u32 = 0;
+    const listed = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqualSlices(c.ke_entity, &.{ entities[0], entities[2], entities[3] }, listed[0..count]);
+
+    h.host().unbind.?(h.host(), entities[2]);
+    const after = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqualSlices(c.ke_entity, &.{ entities[0], entities[3] }, after[0..count]);
 }
 
 test "a deferred bind and unbind take effect only once the recorded commands are applied" {
