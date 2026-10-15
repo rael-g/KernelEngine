@@ -31,10 +31,10 @@ pub const MAX_RESOURCES = 64;
 pub const MAX_CMD_BUFFERS = 64;
 pub const NUM_PRECREATED_ENCODERS = 9;
 pub const MAX_COLOR_ATTACH = 8;
-pub const MAX_UPLOADS = 4096;
+pub const first_upload_records = 4096;
 pub const MAX_SHADER_NAME = 64;
 pub const DEFAULT_MATERIAL_SHADER = "standard";
-const UPLOAD_ARENA_SIZE = 8 * 1024 * 1024;
+const first_upload_arena = 8 * 1024 * 1024;
 
 /// One buffer write queued during a frame: where it goes on the GPU and the bytes it copies out
 /// of the upload arena.
@@ -43,6 +43,15 @@ pub const UploadRecord = struct {
     gpu_offset: u64,
     arena_offset: usize,
     size: usize,
+};
+
+/// An upload that found the arena or the records full, in a block of its own, linked onto
+/// `upload_spill` by the thread that made it.
+pub const SpilledUpload = struct {
+    next: ?*SpilledUpload,
+    buffer: c.ke_gpu_buffer,
+    gpu_offset: u64,
+    data: []u8,
 };
 
 /// A mesh in `mesh_store`: the vertex and index buffers it owns and the number of indices.
@@ -159,7 +168,8 @@ pub const CoreState = struct {
 
     compute_records: [MAX_CMD_BUFFERS]ComputeRecord,
 
-    upload_records: [MAX_UPLOADS]UploadRecord,
+    upload_records: []UploadRecord,
+    upload_spill: std.atomic.Value(?*SpilledUpload),
     upload_count: std.atomic.Value(u32),
     upload_arena: []u8,
     upload_arena_offset: std.atomic.Value(usize),
@@ -270,7 +280,14 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     if (st.material_bgl != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_bgl);
     st.pipeline_cache.destroyAll(st.device);
     for (&st.compute_records) |*r| r.labels.deinit(gpa);
+    var spilled = st.upload_spill.swap(null, .acquire);
+    while (spilled) |n| {
+        spilled = n.next;
+        gpa.free(n.data);
+        gpa.destroy(n);
+    }
     gpa.free(st.upload_arena);
+    gpa.free(st.upload_records);
     gpa.free(@constCast(st.shader_dir));
     gpa.destroy(st);
     gpa.destroy(@as(*c.ke_render_service, @ptrCast(self)));
@@ -298,11 +315,17 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
     };
 
     const st = gpa.create(CoreState) catch return .{ .ref = null, .destroy = null };
-    const upload_arena = gpa.alloc(u8, UPLOAD_ARENA_SIZE) catch {
+    const upload_arena = gpa.alloc(u8, first_upload_arena) catch {
+        gpa.destroy(st);
+        return .{ .ref = null, .destroy = null };
+    };
+    const upload_records = gpa.alloc(UploadRecord, first_upload_records) catch {
+        gpa.free(upload_arena);
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
     };
     const shader_dir_owned = gpa.dupe(u8, shader_dir_span) catch {
+        gpa.free(upload_records);
         gpa.free(upload_arena);
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
@@ -326,7 +349,8 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .cmd_encoders = undefined,
         .cmd_valid = std.mem.zeroes([MAX_CMD_BUFFERS]bool),
         .compute_records = undefined,
-        .upload_records = undefined,
+        .upload_records = upload_records,
+        .upload_spill = std.atomic.Value(?*SpilledUpload).init(null),
         .upload_count = std.atomic.Value(u32).init(0),
         .upload_arena = upload_arena,
         .upload_arena_offset = std.atomic.Value(usize).init(0),
@@ -373,6 +397,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
     }, null);
     if (mesh_ch.ref == null or tex_ch.ref == null or mat_ch.ref == null or shader_ch.ref == null) {
         gpa.free(shader_dir_owned);
+        gpa.free(upload_records);
         gpa.free(upload_arena);
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
@@ -594,6 +619,37 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     _ = svc.*.end_frame.?(svc, null);
     try testing.expect(svc.*.resource_view.?(svc, "hdr") != first);
     try testing.expectEqual(@as(u32, 1), svc.*.resource_generation.?(svc));
+
+    h.destroy.?(svc);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "uploads beyond the first frame's records and arena are all written, and the next frame needs no spill" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", null);
+    const svc = h.ref orelse return error.TestUnexpectedResult;
+
+    const upload_count = first_upload_records + 100;
+    var word: u32 = 7;
+    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    for (0..upload_count) |_| svc.*.upload.?(svc, 1, 0, &word, @sizeOf(u32));
+    const big = try heap.gpa.alloc(u8, first_upload_arena);
+    svc.*.upload.?(svc, 1, 0, big.ptr, big.len);
+    const big_len = big.len;
+    heap.gpa.free(big);
+    _ = svc.*.end_frame.?(svc, null);
+    try testing.expectEqual(@as(u32, upload_count + 1), dev.buffer_writes);
+    try testing.expectEqual(upload_count * @sizeOf(u32) + big_len, dev.bytes_written);
+
+    const core = coreOf(svc);
+    try testing.expect(core.upload_records.len >= upload_count + 1);
+    try testing.expect(core.upload_arena.len >= upload_count * @sizeOf(u32) + big_len);
 
     h.destroy.?(svc);
     try testing.expectEqual(@as(i64, 0), dev.live);

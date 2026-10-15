@@ -1,5 +1,7 @@
 //! Opens and closes a frame of the render service, and carries the buffer uploads queued during it.
 
+const std = @import("std");
+const heap = @import("heap");
 const rc = @import("render_service.zig");
 const resource_table = @import("resource_table.zig");
 const c = rc.c;
@@ -43,12 +45,7 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
     const st = rc.coreOf(self);
     if (!st.frame_live) return 0;
 
-    const ucount = @min(st.upload_count.load(.monotonic), rc.MAX_UPLOADS);
-    var u: u32 = 0;
-    while (u < ucount) : (u += 1) {
-        const r = st.upload_records[u];
-        st.device.write_buffer.?(st.device, r.buffer, r.gpu_offset, &st.upload_arena[r.arena_offset], r.size);
-    }
+    flushUploads(st);
 
     var submit: [rc.MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer = undefined;
     var n: u32 = 0;
@@ -102,19 +99,72 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
     return @intFromBool(presented);
 }
 
+/// Writes the frame's uploads in the order they were reserved, the arena's first and then the
+/// spilled ones, and frees the spilled blocks. When the frame needed more records or arena bytes
+/// than there were, both grow to what it asked for, so the next frame of that size does not spill.
+/// Runs single-threaded, at the end of the frame.
+fn flushUploads(st: *rc.CoreState) void {
+    const requested = st.upload_count.load(.monotonic);
+    const bytes = st.upload_arena_offset.load(.monotonic);
+    for (st.upload_records[0..@min(requested, st.upload_records.len)]) |r| {
+        if (r.size == 0) continue;
+        st.device.write_buffer.?(st.device, r.buffer, r.gpu_offset, &st.upload_arena[r.arena_offset], r.size);
+    }
+
+    var reversed: ?*rc.SpilledUpload = null;
+    var node = st.upload_spill.swap(null, .acquire);
+    while (node) |n| {
+        node = n.next;
+        n.next = reversed;
+        reversed = n;
+    }
+    while (reversed) |n| {
+        reversed = n.next;
+        st.device.write_buffer.?(st.device, n.buffer, n.gpu_offset, n.data.ptr, n.data.len);
+        heap.gpa.free(n.data);
+        heap.gpa.destroy(n);
+    }
+
+    if (requested > st.upload_records.len) {
+        if (heap.gpa.realloc(st.upload_records, std.math.ceilPowerOfTwoAssert(usize, requested))) |grown| st.upload_records = grown else |_| {}
+    }
+    if (bytes > st.upload_arena.len) {
+        if (heap.gpa.realloc(st.upload_arena, std.math.ceilPowerOfTwoAssert(usize, bytes))) |grown| st.upload_arena = grown else |_| {}
+    }
+}
+
 /// Copies the bytes into the upload arena and queues a record for `endFrame` to write them to
 /// the buffer. May be called from any worker between `beginFrame` and `endFrame`: the record and
-/// the arena range are reserved with atomic counters before the copy. Nothing is returned, so an
-/// upload dropped for the record limit or the arena end, or with a zero size or null data, is
-/// silent.
+/// the arena range are reserved with atomic counters before the copy. An upload that finds either
+/// full is copied into a block of its own and pushed onto the spill list instead; it is lost only
+/// when that block cannot be allocated. A zero size or null data does nothing.
 pub fn uploadBuffer(self: [*c]c.ke_render_service, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
     if (size == 0 or data == null) return;
     const st = rc.coreOf(self);
-    const idx = st.upload_count.fetchAdd(1, .monotonic);
-    if (idx >= rc.MAX_UPLOADS) return;
-    const aoff = st.upload_arena_offset.fetchAdd(size, .monotonic);
-    if (aoff + size > st.upload_arena.len) return;
     const src: [*]const u8 = @ptrCast(data);
-    @memcpy(st.upload_arena[aoff .. aoff + size], src[0..size]);
-    st.upload_records[idx] = .{ .buffer = buffer, .gpu_offset = offset, .arena_offset = aoff, .size = size };
+    const idx = st.upload_count.fetchAdd(1, .monotonic);
+    const aoff = st.upload_arena_offset.fetchAdd(size, .monotonic);
+    if (idx < st.upload_records.len) {
+        if (aoff + size <= st.upload_arena.len) {
+            @memcpy(st.upload_arena[aoff .. aoff + size], src[0..size]);
+            st.upload_records[idx] = .{ .buffer = buffer, .gpu_offset = offset, .arena_offset = aoff, .size = size };
+            return;
+        }
+        st.upload_records[idx] = .{ .buffer = buffer, .gpu_offset = offset, .arena_offset = 0, .size = 0 };
+    }
+    spill(st, buffer, offset, src[0..size]);
+}
+
+fn spill(st: *rc.CoreState, buffer: c.ke_gpu_buffer, offset: u64, bytes: []const u8) void {
+    const data = heap.gpa.dupe(u8, bytes) catch return;
+    const node = heap.gpa.create(rc.SpilledUpload) catch {
+        heap.gpa.free(data);
+        return;
+    };
+    node.* = .{ .next = null, .buffer = buffer, .gpu_offset = offset, .data = data };
+    var head = st.upload_spill.load(.monotonic);
+    while (true) {
+        node.next = head;
+        head = st.upload_spill.cmpxchgWeak(head, node, .release, .monotonic) orelse return;
+    }
 }

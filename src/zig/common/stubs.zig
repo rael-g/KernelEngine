@@ -32,9 +32,11 @@ pub fn Stubs(comptime c: type) type {
             compute_pass_label: [*c]const u8,
             debug_group_label: [*c]const u8,
             debug_groups_open: i32,
+            buffer_writes: u32,
+            bytes_written: usize,
 
             pub fn init(self: *Device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0, .buffer_writes = 0, .bytes_written = 0 };
                 self.vtable.handle = self;
                 self.vtable.create_buffer = &createBuffer;
                 self.vtable.create_bind_group_layout = &createBindGroupLayout;
@@ -224,7 +226,11 @@ pub fn Stubs(comptime c: type) type {
                 return mint(self);
             }
 
-            fn writeBuffer(_: ?*c.ke_gpu_device, _: c.ke_gpu_buffer, _: u64, _: ?*const anyopaque, _: usize) callconv(.c) void {}
+            fn writeBuffer(self: ?*c.ke_gpu_device, _: c.ke_gpu_buffer, _: u64, _: ?*const anyopaque, size: usize) callconv(.c) void {
+                const d = of(self);
+                d.buffer_writes += 1;
+                d.bytes_written += size;
+            }
 
             fn defaultQueue(_: ?*c.ke_gpu_device) callconv(.c) c.ke_gpu_queue {
                 return 1;
