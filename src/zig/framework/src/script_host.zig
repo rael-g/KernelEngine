@@ -8,19 +8,13 @@ const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
-const name_max = 96;
-
-const components_max = 16;
-
 const default_max_types = 64;
 
 /// One record per registered name, kept in `State.types` for the life of the host. `entities` lists
 /// the bound entities of this type, and a binding's `slot` is an index into that list.
 const ScriptType = struct {
-    name: [name_max]u8,
-    name_len: usize,
-    components: [components_max]c.ke_component_id,
-    component_count: u32,
+    name: []u8,
+    components: []c.ke_component_id,
     reach: c.ke_script_reach,
 
     entities: std.ArrayList(c.ke_entity),
@@ -100,8 +94,8 @@ fn matches(s: *State, entity: c.ke_entity, type_id: c.ke_script_type_id, wanted:
 /// Slot `register_type`. Registering a name again with the same reach and components returns the
 /// id the first registration got. The same name with any other description fails with
 /// already-exists and leaves the table unchanged. A new name fails with out-of-memory when the
-/// table is full. A null host, name or `out_id`, an empty or too long name, more components than
-/// a type may carry, or a component count without components fails as an invalid argument. Each
+/// table is full. A null host, name or `out_id`, an empty name, or a component count without
+/// components fails as an invalid argument. Each
 /// failure returns false.
 fn registerType(
     self_in: ?*c.ke_script_host,
@@ -122,12 +116,8 @@ fn registerType(
     }
     const s = stateOf(self);
     const name = std.mem.span(name_in);
-    if (name.len == 0 or name.len >= name_max) {
-        E.fail(out_error, .invalid_argument, "script type name is empty or too long", @src());
-        return false;
-    }
-    if (component_count > components_max) {
-        E.fail(out_error, .invalid_argument, "script type declares more components than a type may carry", @src());
+    if (name.len == 0) {
+        E.fail(out_error, .invalid_argument, "script type name is empty", @src());
         return false;
     }
     if (component_count > 0 and components_in == null) {
@@ -136,8 +126,8 @@ fn registerType(
     }
 
     for (s.types[0..s.type_count], 0..) |*t, i| {
-        if (!std.mem.eql(u8, t.name[0..t.name_len], name)) continue;
-        if (t.component_count != component_count or t.reach != reach) {
+        if (!std.mem.eql(u8, t.name, name)) continue;
+        if (t.components.len != component_count or t.reach != reach) {
             E.fail(out_error, .already_exists, "script type already registered with a different description", @src());
             return false;
         }
@@ -155,16 +145,21 @@ fn registerType(
         return false;
     }
 
-    var t = ScriptType{
-        .name = undefined,
-        .name_len = name.len,
-        .components = undefined,
-        .component_count = component_count,
+    const owned_name = heap.gpa.dupe(u8, name) catch {
+        E.fail(out_error, .out_of_memory, "script type name allocation failed", @src());
+        return false;
+    };
+    const owned_components = heap.gpa.dupe(c.ke_component_id, if (component_count > 0) components_in[0..component_count] else &.{}) catch {
+        heap.gpa.free(owned_name);
+        E.fail(out_error, .out_of_memory, "script type component list allocation failed", @src());
+        return false;
+    };
+    const t = ScriptType{
+        .name = owned_name,
+        .components = owned_components,
         .reach = reach,
         .entities = .empty,
     };
-    @memcpy(t.name[0..name.len], name);
-    for (0..component_count) |k| t.components[k] = components_in[k];
 
     s.types[s.type_count] = t;
     s.type_count += 1;
@@ -184,7 +179,7 @@ fn typeLookup(
     const s = stateOf(self);
     const name = std.mem.span(name_in);
     for (s.types[0..s.type_count], 0..) |*t, i| {
-        if (!std.mem.eql(u8, t.name[0..t.name_len], name)) continue;
+        if (!std.mem.eql(u8, t.name, name)) continue;
         out_id.* = @intCast(i + 1);
         return true;
     }
@@ -204,8 +199,8 @@ fn typeComponents(
         if (out_count != null) out_count.* = 0;
         return null;
     };
-    if (out_count != null) out_count.* = t.component_count;
-    return &t.components;
+    if (out_count != null) out_count.* = @intCast(t.components.len);
+    return t.components.ptr;
 }
 
 /// Slot `type_reach`. An id that is not registered answers the widest reach, so a type the host
@@ -511,7 +506,11 @@ fn resolve(
 fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
-    for (s.types[0..s.type_count]) |*t| t.entities.deinit(heap.gpa);
+    for (s.types[0..s.type_count]) |*t| {
+        t.entities.deinit(heap.gpa);
+        heap.gpa.free(t.name);
+        heap.gpa.free(t.components);
+    }
     heap.gpa.free(s.types);
     heap.gpa.destroy(s);
 }
