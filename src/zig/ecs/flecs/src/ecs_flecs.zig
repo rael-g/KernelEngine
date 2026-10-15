@@ -80,6 +80,7 @@ const LayoutEntry = struct {
 const RegisteredQuery = struct {
     query: ?*c.ecs_query_t,
     elem_sizes: []usize,
+    cids: []c.ke_component_id,
     term_count: usize,
 };
 
@@ -483,8 +484,9 @@ fn componentSize(self_in: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usize
 }
 
 /// Slot `query_register`. Builds a flecs query with one term per component id and records the byte
-/// size of each term for `queryResolve`. The returned id counts from one, so it is never the
-/// invalid id. It returns the invalid id for a null argument, a zero count, more ids than a flecs
+/// size of each term for `queryResolve`; a tuple registered before, in the same order, returns the
+/// id it got then and builds nothing. The returned id counts from one, so it is never the invalid
+/// id. It returns the invalid id for a null argument, a zero count, more ids than a flecs
 /// query has terms, a query flecs refuses, or an allocation that fails; a flecs query created
 /// before a later step fails is finalized first.
 fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_count: usize) callconv(.c) c.ke_query_id {
@@ -494,9 +496,20 @@ fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_cou
         return c.KE_QUERY_INVALID;
     const s = stateOf(self);
 
+    if (s.rqueries) |existing| {
+        for (existing[0..s.rquery_count], 1..) |*rq, id| {
+            if (std.mem.eql(c.ke_component_id, rq.cids, cids[0..cid_count])) return @intCast(id);
+        }
+    }
+
     for (0..cid_count) |i| desc.terms[i].id = @intCast(cids[i]);
     const q = c.ecs_query_init(s.world, &desc) orelse return c.KE_QUERY_INVALID;
     const elem_sizes = heap.gpa.alloc(usize, cid_count) catch {
+        c.ecs_query_fini(q);
+        return c.KE_QUERY_INVALID;
+    };
+    const owned_cids = heap.gpa.dupe(c.ke_component_id, cids[0..cid_count]) catch {
+        heap.gpa.free(elem_sizes);
         c.ecs_query_fini(q);
         return c.KE_QUERY_INVALID;
     };
@@ -504,6 +517,7 @@ fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_cou
     if (s.rquery_count == s.rquery_capacity) {
         const new_cap: usize = if (s.rquery_capacity != 0) s.rquery_capacity * 2 else 8;
         const new_buf = heap.gpa.alloc(RegisteredQuery, new_cap) catch {
+            heap.gpa.free(owned_cids);
             heap.gpa.free(elem_sizes);
             c.ecs_query_fini(q);
             return c.KE_QUERY_INVALID;
@@ -520,6 +534,7 @@ fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_cou
     rq.query = q;
     rq.term_count = cid_count;
     rq.elem_sizes = elem_sizes;
+    rq.cids = owned_cids;
     for (0..cid_count) |i| {
         const ti = c.ecs_get_type_info(s.world, @intCast(cids[i]));
         rq.elem_sizes[i] = if (ti != null) @intCast(ti.*.size) else 0;
@@ -590,6 +605,7 @@ fn destroy(self_in: ?*c.ke_ecs) callconv(.c) void {
         for (0..s.rquery_count) |i| {
             if (rqs[i].query) |q| c.ecs_query_fini(q);
             heap.gpa.free(rqs[i].elem_sizes);
+            heap.gpa.free(rqs[i].cids);
         }
         heap.gpa.free(rqs[0..s.rquery_capacity]);
     }
@@ -1092,6 +1108,22 @@ test "a component attached over memory a destroyed entity dirtied still arrives 
     const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, second, cid).?));
 
     try testing.expectEqual(@as(u32, 0), v.layers);
+}
+
+test "registering the same component tuple twice returns one query, and another order another" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+    const e = handle.ref.*;
+
+    const a = e.component_register.?(handle.ref, "dedup_a", 4, null, 0, null);
+    const b = e.component_register.?(handle.ref, "dedup_b", 4, null, 0, null);
+    const ab = [_]c.ke_component_id{ a, b };
+    const ba = [_]c.ke_component_id{ b, a };
+
+    const first = e.query_register.?(handle.ref, &ab, ab.len);
+    try testing.expect(first != c.KE_QUERY_INVALID);
+    try testing.expectEqual(first, e.query_register.?(handle.ref, &ab, ab.len));
+    try testing.expect(e.query_register.?(handle.ref, &ba, ba.len) != first);
 }
 
 test "resolving a query into too small an array reports every segment it matches" {
