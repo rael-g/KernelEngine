@@ -1,10 +1,10 @@
 struct SkyFrame {
     float4x4 inv_sky_view_proj;
 };
-[[vk::binding(0, 0)]] ConstantBuffer<SkyFrame> sky;
-[[vk::binding(1, 0)]] TextureCube  env;
-[[vk::binding(2, 0)]] SamplerState env_sampler;
-[[vk::binding(3, 0)]] Texture2D<float> g_depth;
+ConstantBuffer<SkyFrame> sky;
+TextureCube  env;
+SamplerState env_sampler;
+Texture2D<float> g_depth;
 
 struct VsOut {
     float4 clip : SV_Position;

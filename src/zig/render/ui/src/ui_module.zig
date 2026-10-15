@@ -54,8 +54,8 @@ const UiState = struct {
     ndc: c.ke_ndc_convention = undefined,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    bgl_frame: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
-    bgl_tex: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    frame_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
+    tex_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     vbo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -184,6 +184,22 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     l.glyph_count = slot;
 }
 
+const frame_group_params = c.ke_render_shader_group_params{
+    .shader = "ui",
+    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .block = null,
+    .hints = null,
+    .hint_count = 0,
+};
+
+const tex_group_params = c.ke_render_shader_group_params{
+    .shader = "ui",
+    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .block = "tex",
+    .hints = null,
+    .hint_count = 0,
+};
+
 /// Called by `system` for each batch, with the bind group of a texture built on first use and
 /// cached by the texture's index. Creation passes no error output, so a result the cache
 /// treats as invalid is not kept, and the next draw of that slot creates the group again.
@@ -191,16 +207,11 @@ fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
     if (ui.bind_group_cache.get(tex.bits)) |cached| return cached;
 
     const view = ui.core.*.texture_view.?(ui.core, tex);
-    const entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.*.sampler.?(ui.core) },
+    const bindings = [_]c.ke_render_shader_binding{
+        .{ .name = "t_tex", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
+        .{ .name = "s_tex", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.*.sampler.?(ui.core) },
     };
-    const bg = ui.device.create_bind_group.?(ui.device, &c.ke_gpu_bind_group_params{
-        .label = "ui.bg",
-        .layout = ui.bgl_tex,
-        .entry_count = 2,
-        .entries = &entries,
-    }, null);
+    const bg = ui.core.*.create_shader_bind_group.?(ui.core, &tex_group_params, ui.tex_group.layout, "ui.bg", &bindings, bindings.len, null);
     if (bg != c.KE_GPU_INVALID_HANDLE) ui.bind_group_cache.put(gpa, tex.bits, bg) catch {};
     return bg;
 }
@@ -364,11 +375,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &ui.pipeline_params));
-    rp.*.set_bind_group.?(rp, 0, ui.frame_bind_group, null, 0);
+    rp.*.set_bind_group.?(rp, ui.frame_group.index, ui.frame_bind_group, null, 0);
     rp.*.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
 
     for (ui.batches.items) |batch| {
-        rp.*.set_bind_group.?(rp, 1, uiBindGroupFor(ui, batch.texture), null, 0);
+        rp.*.set_bind_group.?(rp, ui.tex_group.index, uiBindGroupFor(ui, batch.texture), null, 0);
         rp.*.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
     }
     rp.*.end.?(rp);
@@ -392,25 +403,8 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const fs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const frame_bgl_entry = c.ke_gpu_bind_group_layout_entry{
-        .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX,
-        .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0,
-    };
-    ui.bgl_frame = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "ui.bgl_frame",
-        .entry_count = 1,
-        .entries = &frame_bgl_entry,
-    });
-
-    const tex_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_2D },
-        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    ui.bgl_tex = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "ui.bgl_tex",
-        .entry_count = 2,
-        .entries = &tex_bgl_entries,
-    });
+    if (!core.*.shader_group_layout.?(core, &frame_group_params, &ui.frame_group, out_error)) return false;
+    if (!core.*.shader_group_layout.?(core, &tex_group_params, &ui.tex_group, out_error)) return false;
 
     const attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = @offsetOf(UiVertex, "position") },
@@ -435,9 +429,9 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &vbl;
-    pp.bind_group_layouts[0] = ui.bgl_frame;
-    pp.bind_group_layouts[1] = ui.bgl_tex;
-    pp.bind_group_layout_count = 2;
+    pp.bind_group_layouts[ui.frame_group.index] = ui.frame_group.layout;
+    pp.bind_group_layouts[ui.tex_group.index] = ui.tex_group.layout;
+    pp.bind_group_layout_count = @max(ui.frame_group.index, ui.tex_group.index) + 1;
     pp.blend_state.blend_enabled = 1;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_ONE;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -467,17 +461,10 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, out_error);
     if (ui.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const frame_entry = c.ke_gpu_bind_group_entry{
-        .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER,
-        .buffer = ui.frame_uniform, .buffer_offset = 0, .buffer_size = 64,
-        .texture_view = 0, .sampler = 0,
+    const frame_binding = [_]c.ke_render_shader_binding{
+        .{ .name = "frame", .buffer = ui.frame_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
     };
-    ui.frame_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .label = "ui.frame_bind_group",
-        .layout = ui.bgl_frame,
-        .entry_count = 1,
-        .entries = &frame_entry,
-    }, out_error);
+    ui.frame_bind_group = core.*.create_shader_bind_group.?(core, &frame_group_params, ui.frame_group.layout, "ui.frame_bind_group", &frame_binding, frame_binding.len, out_error);
     if (ui.frame_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
     if (!ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex), out_error)) return false;
@@ -503,8 +490,8 @@ fn destroyState(ui: *UiState) void {
     if (ui.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, ui.frame_bind_group);
     if (ui.frame_uniform != invalid) dev.destroy_buffer.?(dev, ui.frame_uniform);
     if (ui.vbo != invalid) dev.destroy_buffer.?(dev, ui.vbo);
-    if (ui.bgl_frame != invalid) dev.destroy_bind_group_layout.?(dev, ui.bgl_frame);
-    if (ui.bgl_tex != invalid) dev.destroy_bind_group_layout.?(dev, ui.bgl_tex);
+    if (ui.frame_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, ui.frame_group.layout);
+    if (ui.tex_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, ui.tex_group.layout);
     var cached = ui.bind_group_cache.valueIterator();
     while (cached.next()) |bg| dev.destroy_bind_group.?(dev, bg.*);
     ui.bind_group_cache.deinit(gpa);

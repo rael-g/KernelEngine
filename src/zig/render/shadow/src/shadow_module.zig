@@ -42,6 +42,24 @@ const ShadowObj = extern struct { model: [16]f32 };
 /// what exists. `view` is set only when the pass is enabled.
 const Objects = @import("object_uniforms").ObjectUniforms(c, ShadowObj);
 
+const light_group_params = c.ke_render_shader_group_params{
+    .shader = "shadow",
+    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .block = null,
+    .hints = null,
+    .hint_count = 0,
+};
+
+const object_hint = [_]c.ke_render_binding_hint{.{ .name = "object", .flags = c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET }};
+
+const object_group_params = c.ke_render_shader_group_params{
+    .shader = "shadow",
+    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .block = "object",
+    .hints = &object_hint,
+    .hint_count = object_hint.len,
+};
+
 const ShadowModule = struct {
     enabled: bool = false,
 
@@ -60,8 +78,8 @@ const ShadowModule = struct {
     lvp_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     lvp_bg: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     objects: ?Objects = null,
-    lvp_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
-    obj_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    light_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
+    object_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
 
     writes: [2][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
@@ -136,7 +154,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sh.pipeline_params));
-    rp.*.set_bind_group.?(rp, 0, sh.lvp_bg, null, 0);
+    rp.*.set_bind_group.?(rp, sh.light_group.index, sh.lvp_bg, null, 0);
 
     var draw_idx: u32 = 0;
     var s: usize = 0;
@@ -155,7 +173,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
             const offset: u32 = Objects.offset(draw_idx);
             core.*.upload.?(core, objects.buffer, offset, &u, @sizeOf(ShadowObj));
 
-            rp.*.set_bind_group.?(rp, 1, objects.bind_group, &offset, 1);
+            rp.*.set_bind_group.?(rp, sh.object_group.index, objects.bind_group, &offset, 1);
             rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
             rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
             rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -224,12 +242,8 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const sh_fs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (sh_fs == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const sh_lvp_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 };
-    const sh_lvp_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .label = "shadow.sh_lvp_bgl", .entry_count = 1, .entries = &sh_lvp_entry });
-    sh.lvp_bgl = sh_lvp_bgl;
-    const sh_obj_entry = c.ke_gpu_bind_group_layout_entry{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 1, .view_dimension = 0 };
-    const sh_obj_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{ .label = "shadow.sh_obj_bgl", .entry_count = 1, .entries = &sh_obj_entry });
-    sh.obj_bgl = sh_obj_bgl;
+    if (!core.*.shader_group_layout.?(core, &light_group_params, &sh.light_group, out_error)) return false;
+    if (!core.*.shader_group_layout.?(core, &object_group_params, &sh.object_group, out_error)) return false;
 
     const sh_attr = c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
     const sh_vbl = c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = &sh_attr };
@@ -248,9 +262,9 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     shp.depth_stencil.depth_test_enabled = 1;
     shp.depth_stencil.depth_write_enabled = 1;
     shp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    shp.bind_group_layouts[0] = sh_lvp_bgl;
-    shp.bind_group_layouts[1] = sh_obj_bgl;
-    shp.bind_group_layout_count = 2;
+    shp.bind_group_layouts[sh.light_group.index] = sh.light_group.layout;
+    shp.bind_group_layouts[sh.object_group.index] = sh.object_group.layout;
+    shp.bind_group_layout_count = @max(sh.light_group.index, sh.object_group.index) + 1;
     shp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     shp.color_target_count = 1;
     sh.pipeline_params = shp;
@@ -259,11 +273,13 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         return false;
     }
 
-    const sh_lvp_bg_entry = c.ke_gpu_bind_group_entry{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = sh.lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 };
-    sh.lvp_bg = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{ .label = "shadow.lvp_bg", .layout = sh_lvp_bgl, .entry_count = 1, .entries = &sh_lvp_bg_entry }, out_error);
+    const light_binding = [_]c.ke_render_shader_binding{
+        .{ .name = "light", .buffer = sh.lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
+    };
+    sh.lvp_bg = core.*.create_shader_bind_group.?(core, &light_group_params, sh.light_group.layout, "shadow.lvp_bg", &light_binding, light_binding.len, out_error);
     if (sh.lvp_bg == c.KE_GPU_INVALID_HANDLE) return false;
 
-    sh.objects = .{ .device = dev, .layout = sh_obj_bgl, .buffer_label = "shadow.obj_uniform", .bind_group_label = "shadow.obj_bg" };
+    sh.objects = .{ .device = dev, .layout = sh.object_group.layout, .buffer_label = "shadow.obj_uniform", .bind_group_label = "shadow.obj_bg" };
     if (!sh.objects.?.ensure(1, out_error)) return false;
 
     sh.writes = .{ "shadow_map", "shadow_depth" };
@@ -294,8 +310,8 @@ fn destroyModule(sh: *ShadowModule) void {
     if (sh.objects) |*objects| objects.release();
     if (sh.lvp_bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, sh.lvp_bg);
     if (sh.lvp_uniform != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, sh.lvp_uniform);
-    if (sh.obj_bgl != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.obj_bgl);
-    if (sh.lvp_bgl != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.lvp_bgl);
+    if (sh.object_group.layout != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.object_group.layout);
+    if (sh.light_group.layout != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, sh.light_group.layout);
 }
 
 /// The `destroy` slot of the handle `ke_render_shadow_create` returns. It is the only path that

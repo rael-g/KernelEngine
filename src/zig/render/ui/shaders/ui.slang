@@ -14,9 +14,13 @@ struct UiFrame {
     float4x4 proj;
 };
 
-[[vk::binding(0, 0)]] ConstantBuffer<UiFrame> frame;
-[[vk::binding(0, 1)]] Texture2D    t_tex;
-[[vk::binding(1, 1)]] SamplerState s_tex;
+struct UiTexture {
+    Texture2D    t_tex;
+    SamplerState s_tex;
+};
+
+ConstantBuffer<UiFrame>      frame;
+ParameterBlock<UiTexture>    tex;
 
 [shader("vertex")]
 VsOut vs_main(VsIn input)
@@ -31,6 +35,6 @@ VsOut vs_main(VsIn input)
 [shader("fragment")]
 float4 fs_main(VsOut i) : SV_Target0
 {
-    float a = t_tex.Sample(s_tex, i.uv).a;
+    float a = tex.t_tex.Sample(tex.s_tex, i.uv).a;
     return i.color * a;
 }

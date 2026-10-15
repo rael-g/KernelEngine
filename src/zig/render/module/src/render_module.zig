@@ -454,6 +454,38 @@ const authored_shaders = [_][]const u8{
     "ui.fs.wgsl",
 };
 
+const empty_reflection = "{\"parameters\":[]}";
+
+const ui_reflection =
+    \\{"parameters":[
+    \\ {"name":"frame","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"tex","binding":{"kind":"subElementRegisterSpace","index":1},"type":{"kind":"parameterBlock",
+    \\  "elementType":{"kind":"struct","fields":[]}}}
+    \\]}
+;
+
+const shadow_reflection =
+    \\{"parameters":[
+    \\ {"name":"light","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"object","binding":{"kind":"subElementRegisterSpace","index":1},"type":{"kind":"parameterBlock",
+    \\  "elementType":{"kind":"struct","fields":[]},"containerVarLayout":{"binding":{"kind":"descriptorTableSlot","index":0}}}}
+    \\]}
+;
+
+const skybox_reflection =
+    \\{"parameters":[
+    \\ {"name":"g_depth","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"resource","baseShape":"texture2D"}}
+    \\]}
+;
+
+/// The stand-in reflection of a shader file: the parameters its pass binds while it is created.
+fn standInReflection(shader_file: []const u8) []const u8 {
+    if (std.mem.startsWith(u8, shader_file, "ui.")) return ui_reflection;
+    if (std.mem.startsWith(u8, shader_file, "shadow.")) return shadow_reflection;
+    if (std.mem.startsWith(u8, shader_file, "skybox.")) return skybox_reflection;
+    return empty_reflection;
+}
+
 const Rig = struct {
     dev: Stubs.Device,
     ecs: Stubs.Ecs,
@@ -476,7 +508,7 @@ const Rig = struct {
             var reflection_name: [64]u8 = undefined;
             const stem = name[0 .. name.len - ".wgsl".len];
             const reflection = try std.fmt.bufPrint(&reflection_name, "{s}.json", .{stem});
-            try self.shaders.dir.writeFile(testing.io, .{ .sub_path = reflection, .data = "{\"parameters\":[]}" });
+            try self.shaders.dir.writeFile(testing.io, .{ .sub_path = reflection, .data = standInReflection(name) });
         }
         const dir = try std.fmt.bufPrint(&self.shader_dir, ".zig-cache/tmp/{s}", .{self.shaders.sub_path});
         self.shader_dir[dir.len] = 0;

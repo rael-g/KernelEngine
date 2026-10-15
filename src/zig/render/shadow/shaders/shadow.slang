@@ -5,15 +5,15 @@ struct VsOut {
 };
 
 struct LightVP { float4x4 light_vp; };
-[[vk::binding(0, 0)]] ConstantBuffer<LightVP> light;
+ConstantBuffer<LightVP> light;
 
 struct PerObject { float4x4 model; };
-[[vk::binding(0, 1)]] ConstantBuffer<PerObject> obj;
+ParameterBlock<PerObject> object;
 
 [shader("vertex")]
 VsOut vs_main(VsIn input) {
     VsOut o;
-    float4 world = mul(obj.model, float4(input.position, 1.0));
+    float4 world = mul(object.model, float4(input.position, 1.0));
     o.clip  = mul(light.light_vp, world);
     o.depth = o.clip.z / o.clip.w;
     return o;

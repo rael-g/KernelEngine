@@ -19,6 +19,16 @@ const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 /// it, or `ke_render_skybox_create` does when creation fails. The runtime keeps its address as the
 /// user data of the system, so it must not be moved. `io` and the query terms point into its own
 /// arrays. After `setup`, only `bind_group` changes.
+const depth_hint = [_]c.ke_render_binding_hint{.{ .name = "g_depth", .flags = c.KE_RENDER_BINDING_HINT_DEPTH }};
+
+const shader_group = c.ke_render_shader_group_params{
+    .shader = "skybox",
+    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .block = null,
+    .hints = &depth_hint,
+    .hint_count = depth_hint.len,
+};
+
 const SkyboxModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -29,7 +39,7 @@ const SkyboxModule = struct {
     skybox_cid: c.ke_component_id = undefined,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
     bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
@@ -93,21 +103,16 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const depth_view = pc.*.read.?(pc, "depth");
     const smp = core.*.sampler.?(core);
 
-    const entries = [4]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = sm.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(SkyFrame), .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
-        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
-        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = depth_view, .sampler = 0 },
+    const bindings = [4]c.ke_render_shader_binding{
+        .{ .name = "sky", .buffer = sm.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(SkyFrame), .texture_view = 0, .sampler = 0 },
+        .{ .name = "env", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
+        .{ .name = "env_sampler", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
+        .{ .name = "g_depth", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = depth_view, .sampler = 0 },
     };
     if (sm.bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, sm.bind_group);
     var err: ?*c.ke_error = null;
-    sm.bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .label = "skybox.bind_group",
-        .layout = sm.bgl,
-        .entry_count = 4,
-        .entries = &entries,
-    }, &err);
+    sm.bind_group = core.*.create_shader_bind_group.?(core, &shader_group, sm.group.layout, "skybox.bind_group", &bindings, bindings.len, &err);
     if (sm.bind_group == c.KE_GPU_INVALID_HANDLE) {
         core.*.end_pass.?(core, pc);
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox pass: bind group creation failed", @src().file, @intCast(@src().line), err);
@@ -116,7 +121,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sm.pipeline_params));
-    rp.*.set_bind_group.?(rp, 0, sm.bind_group, null, 0);
+    rp.*.set_bind_group.?(rp, sm.group.index, sm.bind_group, null, 0);
     rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
@@ -138,18 +143,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sm.world_transform_cid = world_transform_cid;
     sm.skybox_cid = skybox_cid;
 
-    const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
-    const bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
-        .{ .binding = 2, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    sm.bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "skybox.bgl",
-        .entry_count = 4,
-        .entries = &bgl_entries,
-    });
+    if (!core.*.shader_group_layout.?(core, &shader_group, &sm.group, out_error)) return false;
 
     const sky_vs = core.*.load_shader.?(core, "skybox", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (sky_vs == c.KE_GPU_INVALID_HANDLE) return false;
@@ -169,8 +163,8 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     skp.depth_stencil.depth_test_enabled = 0;
     skp.depth_stencil.depth_write_enabled = 0;
     skp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    skp.bind_group_layouts[0] = sm.bgl;
-    skp.bind_group_layout_count = 1;
+    skp.bind_group_layouts[sm.group.index] = sm.group.layout;
+    skp.bind_group_layout_count = sm.group.index + 1;
     skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     skp.color_target_count = 1;
     sm.pipeline_params = skp;
@@ -221,8 +215,8 @@ fn destroyModule(sm: *const SkyboxModule) void {
         dev.destroy_bind_group.?(dev, sm.bind_group);
     if (sm.frame_uniform != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_buffer.?(dev, sm.frame_uniform);
-    if (sm.bgl != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group_layout.?(dev, sm.bgl);
+    if (sm.group.layout != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group_layout.?(dev, sm.group.layout);
 }
 
 /// The `destroy` slot of the handle `ke_render_skybox_create` returns. Releases the GPU objects,
