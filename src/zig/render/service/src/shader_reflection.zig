@@ -52,6 +52,9 @@ pub const Binding = struct {
     has_dynamic_offset: bool = false,
 };
 
+/// The space the compiler places every parameter declared outside a block in.
+const loose_space: u32 = 0;
+
 pub const ReadError = error{ OutOfMemory, Malformed, LooseUniform, MismatchedGroup };
 
 /// One group of a shader, gathered from the reflection of one or more stages. The names of its
@@ -76,8 +79,8 @@ pub const Group = struct {
         return null;
     }
 
-    /// Adds what the reflection `json` of `stage` declares for `block`, or for the loose parameters
-    /// when `block` is null, merging the stages of a binding seen before. Returns whether the
+    /// Adds what the reflection `json` of `stage` declares for `block`, or for the parameters
+    /// declared outside any block when `block` is null, merging the stages of a binding seen before. Returns whether the
     /// reflection declares the block; the loose parameters are always declared.
     pub fn collect(self: *Group, json: []const u8, block: ?[]const u8, stage: u32) ReadError!bool {
         const a = self.arena.allocator();
@@ -109,13 +112,13 @@ pub const Group = struct {
             }
             return false;
         }
+        try self.setIndex(loose_space);
         for (parsed.parameters) |p| {
             if (std.mem.eql(u8, p.binding.kind, "uniform")) return error.LooseUniform;
             if (!std.mem.eql(u8, p.binding.kind, "descriptorTableSlot")) continue;
-            try self.setIndex(p.binding.space);
+            if (p.binding.space != loose_space) continue;
             try self.add(try bindingOf(p.name, p.binding.index, p.type, stage));
         }
-        if (self.index == null) self.index = 0;
         return true;
     }
 
@@ -416,6 +419,19 @@ test "a binding declared by two stages is one entry visible to both" {
     _ = try group.collect(forward_like_json, "mat", c.KE_GPU_SHADER_STAGE_FRAGMENT);
     try std.testing.expectEqual(@as(usize, 3), group.bindings.items.len);
     try std.testing.expectEqual(@as(u32, c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT), group.find("albedo").?.stages);
+}
+
+test "a parameter bound explicitly to another space is not part of the loose group" {
+    var group = Group.init(std.testing.allocator);
+    defer group.deinit();
+    const json =
+        \\{"parameters":[
+        \\ {"name":"frame","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
+        \\ {"name":"obj","binding":{"kind":"descriptorTableSlot","index":0,"space":2},"type":{"kind":"constantBuffer"}}]}
+    ;
+    try std.testing.expect(try group.collect(json, null, c.KE_GPU_SHADER_STAGE_VERTEX));
+    try std.testing.expectEqual(@as(usize, 1), group.bindings.items.len);
+    try std.testing.expect(group.find("obj") == null);
 }
 
 test "a loose uniform outside any buffer or block is refused" {
