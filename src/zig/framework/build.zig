@@ -41,6 +41,8 @@ pub fn build(b: *std.Build) void {
     }
     mod.addIncludePath(b.path("include"));
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     addTomlc99(b, mod, tomlc99_dir);
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);

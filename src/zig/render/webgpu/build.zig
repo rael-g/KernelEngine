@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.linkSystemLibrary("wgpu_native", .{});
     if (target.result.os.tag == .linux) {
         mod.linkSystemLibrary("X11", .{});

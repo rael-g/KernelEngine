@@ -36,6 +36,7 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.linkSystemLibrary("ke_resource_cache_default", .{});
     mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
 

@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
 
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_ecs_flecs and ke_scheduler_enki libraries, required by the test step");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common, ke_ecs_flecs and ke_scheduler_enki libraries") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/runtime.zig"),
@@ -25,6 +25,9 @@ pub fn build(b: *std.Build) void {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
+    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", kerror_mod);
     mod.addIncludePath(b.path("include"));
     mod.addCMacro("KE_RUNTIME_CREATE_EXPORT", "");
@@ -41,7 +44,8 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install.step);
 
     const test_step = b.step("test", "Run unit tests");
-    if (ke_lib_dir) |lib_dir| {
+    {
+        const lib_dir = ke_lib_dir;
         const test_mod = b.createModule(.{
             .root_source_file = b.path("src/runtime.zig"),
             .target = target,
@@ -61,12 +65,11 @@ pub fn build(b: *std.Build) void {
         test_mod.addCMacro("KE_RUNTIME_CREATE_EXPORT", "");
         test_mod.addLibraryPath(.{ .cwd_relative = lib_dir });
         test_mod.addRPath(.{ .cwd_relative = lib_dir });
+        test_mod.linkSystemLibrary("ke_common", .{});
         test_mod.linkSystemLibrary("ke_ecs_flecs", .{});
         test_mod.linkSystemLibrary("ke_scheduler_enki", .{});
 
         const unit_tests = b.addTest(.{ .root_module = test_mod });
         test_step.dependOn(&b.addRunArtifact(unit_tests).step);
-    } else {
-        test_step.dependOn(&b.addFail("-Dke-lib-dir required to run the runtime tests").step);
     }
 }

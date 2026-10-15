@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
     const enki_include = b.option([]const u8, "enki-include", "enkiTS headers dir") orelse @panic("-Denki-include required");
     const enki_lib = b.option([]const u8, "enki-lib", "dir holding the enkiTS library") orelse @panic("-Denki-lib required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/enki_scheduler.zig"),
@@ -32,6 +33,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_SCHEDULER_EXPORT", "");
 
@@ -61,6 +65,10 @@ pub fn build(b: *std.Build) void {
 
     test_mod.addLibraryPath(.{ .cwd_relative = enki_lib });
     test_mod.linkSystemLibrary("enkiTS", .{});
+
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+
+    test_mod.linkSystemLibrary("ke_common", .{});
 
     test_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },

@@ -30,6 +30,7 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_RENDER_UI_EXPORT", "");
 
     const zmath = b.dependency("zmath", .{});

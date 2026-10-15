@@ -37,5 +37,5 @@ one tick, giving it the time since the last one.
 
 ```bash
 zig build --prefix build/native --global-cache-dir build/zig-global
-LD_LIBRARY_PATH=build/native/lib dotnet run --project examples/csharp/00_runtime_minimal
+dotnet run --project examples/csharp/00_runtime_minimal
 ```

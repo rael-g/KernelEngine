@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addImport("zmath", zmath.module("root"));
     mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },

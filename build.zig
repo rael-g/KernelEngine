@@ -146,7 +146,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const ecs_flecs = ctx.member("ke_ecs_flecs", .{
         .target = target,
@@ -159,7 +160,8 @@ pub fn build(b: *std.Build) void {
         .@"flecs-include" = vcpkg_include,
         .@"flecs-lib" = b.pathJoin(&.{ vcpkg_lib, "libflecs_static.a" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const input_default = ctx.member("ke_input_default", .{
         .target = target,
@@ -168,7 +170,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-input-include" = b.pathJoin(&.{ src_c, "input" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const resource_cache_default = ctx.member("ke_resource_cache_default", .{
         .target = target,
@@ -177,7 +180,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-resource-cache-include" = b.pathJoin(&.{ src_c, "resource_cache" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const scheduler_enki = ctx.member("ke_scheduler_enki", .{
         .target = target,
@@ -188,7 +192,8 @@ pub fn build(b: *std.Build) void {
         .@"enki-include" = b.pathJoin(&.{ vcpkg_include, "enkiTS" }),
         .@"enki-lib" = vcpkg_lib,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const runtime = ctx.member("ke_runtime", .{
         .target = target,
@@ -239,7 +244,8 @@ pub fn build(b: *std.Build) void {
         .@"glfw-include" = vcpkg_include,
         .@"glfw-lib" = vcpkg_lib,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const asset_stb_image = ctx.member("ke_asset_stb_image", .{
         .target = target,
@@ -252,7 +258,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "asset/stb_image/include" }),
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const audio_miniaudio = ctx.member("ke_audio_miniaudio", .{
         .target = target,
@@ -267,7 +274,8 @@ pub fn build(b: *std.Build) void {
         .@"miniaudio-include" = vcpkg_include,
         .@"ke-resource-cache-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
         .@"kerror-src" = kerror_src,
-    }, &.{&resource_cache_default.step}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&resource_cache_default.step, &common.step}, .has_tests);
 
     const text_stb_truetype = ctx.member("ke_text_stb_truetype", .{
         .target = target,
@@ -279,7 +287,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "text/stb_truetype/include" }),
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const physics_box2d = ctx.member("ke_physics_2d_box2d", .{
         .target = target,
@@ -291,7 +300,8 @@ pub fn build(b: *std.Build) void {
         .@"box2d-include" = vcpkg_include,
         .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, if (debug) "libbox2dd.a" else "libbox2d.a" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const is_windows = target.result.os.tag == .windows;
     const assimp_libs = b.fmt("{s}|{s}|{s}|{s}|{s}|{s}", .{
@@ -317,7 +327,8 @@ pub fn build(b: *std.Build) void {
         .@"assimp-libs" = assimp_libs,
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const configuration = ctx.member("ke_configuration", .{
         .target = target,
@@ -404,6 +415,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-spatial-include" = b.pathJoin(&.{ src_c, "spatial" }),
         .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
         .@"kerror-src" = kerror_src,
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
     const gpu_render_target_texture = ctx.member("ke_gpu_render_target_texture", .{
@@ -414,6 +426,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
         .@"kerror-src" = kerror_src,
         .@"stubs-src" = stubs_src,
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
     const renderdoc_version = "1.46";
@@ -443,7 +456,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
         .@"kerror-src" = kerror_src,
         .@"renderdoc-include" = renderdoc_include,
-    }, &.{ &common.step, &renderdoc_fetch.step }, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step, &renderdoc_fetch.step}, .has_tests);
 
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });

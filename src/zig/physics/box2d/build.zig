@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
     const box2d_include = b.option([]const u8, "box2d-include", "Box2D headers dir") orelse @panic("-Dbox2d-include required");
     const box2d_lib = b.option([]const u8, "box2d-lib", "absolute path to the Box2D library") orelse @panic("-Dbox2d-lib required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/box2d_physics.zig"),
@@ -31,6 +32,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_PHYSICS_BOX2D_EXPORT", "");
 
@@ -57,6 +61,8 @@ pub fn build(b: *std.Build) void {
     }
     test_mod.addIncludePath(b.path("include"));
     test_mod.addObjectFile(.{ .cwd_relative = box2d_lib });
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,

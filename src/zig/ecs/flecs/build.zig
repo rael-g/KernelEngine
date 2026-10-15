@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) void {
     const flecs_include = b.option([]const u8, "flecs-include", "flecs headers dir") orelse @panic("-Dflecs-include required");
     const flecs_lib = b.option([]const u8, "flecs-lib", "absolute path to the flecs static library") orelse @panic("-Dflecs-lib required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/ecs_flecs.zig"),
@@ -38,6 +39,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
     mod.addCMacro("flecs_STATIC", "");
@@ -70,6 +74,8 @@ pub fn build(b: *std.Build) void {
         test_mod.linkSystemLibrary("ws2_32", .{});
         test_mod.linkSystemLibrary("dbghelp", .{});
     }
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,
@@ -98,6 +104,8 @@ pub fn build(b: *std.Build) void {
         probe_mod.linkSystemLibrary("ws2_32", .{});
         probe_mod.linkSystemLibrary("dbghelp", .{});
     }
+    probe_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    probe_mod.linkSystemLibrary("ke_common", .{});
     probe_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,

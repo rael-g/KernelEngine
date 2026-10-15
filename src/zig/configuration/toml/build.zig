@@ -24,6 +24,7 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(.{ .cwd_relative = ke_config });
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_CONFIGURATION_TOML_EXPORT", "");
 
     const lib = b.addLibrary(.{
