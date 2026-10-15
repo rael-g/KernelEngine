@@ -13,10 +13,6 @@ const handles = @import("handle").Handles(c);
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-const MAX_UI_QUADS = 8192;
-const MAX_UI_BATCHES = 512;
-const MAX_UI_TEXTURES = 256;
-const MAX_UI_FONTS = 64;
 
 /// One vertex as `system` writes it into the vertex buffer. Declared extern so the offsets
 /// that `setup` gives the pipeline are the offsets of these bytes.
@@ -63,12 +59,13 @@ const UiState = struct {
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     vbo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
+    vbo_bytes: usize = 0,
 
-    vertices: [MAX_UI_QUADS * 6]UiVertex = undefined,
-    batches: [MAX_UI_BATCHES]UiBatch = undefined,
-    bind_group_cache: [MAX_UI_TEXTURES]c.ke_gpu_bind_group = [_]c.ke_gpu_bind_group{c.KE_GPU_INVALID_HANDLE} ** MAX_UI_TEXTURES,
+    vertices: std.ArrayList(UiVertex) = .empty,
+    batches: std.ArrayList(UiBatch) = .empty,
+    bind_group_cache: std.AutoHashMapUnmanaged(u32, c.ke_gpu_bind_group) = .empty,
 
-    fonts: [MAX_UI_FONTS]UiFont = [_]UiFont{.{}} ** MAX_UI_FONTS,
+    fonts: std.ArrayList(UiFont) = .empty,
 
     writes: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
@@ -95,18 +92,21 @@ fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_h
     const ui = stateOf(self);
     const key_slice = std.mem.span(key);
 
-    for (ui.fonts, 0..) |f, i| {
+    for (ui.fonts.items, 0..) |f, i| {
         if (f.in_use and std.mem.eql(u8, f.key, key_slice))
             return .{ .bits = handles.make(@intCast(i), c.KE_HANDLE_GENERATION_FIRST) };
     }
 
     var slot: ?usize = null;
-    for (ui.fonts, 0..) |f, i| {
+    for (ui.fonts.items, 0..) |f, i| {
         if (!f.in_use) { slot = i; break; }
     }
-    const idx = slot orelse {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui text: no free font slots", @src().file, @intCast(@src().line), null);
-        return c.KE_UI_FONT_NONE;
+    const idx = slot orelse blk: {
+        ui.fonts.append(gpa, .{}) catch {
+            c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui text: font table allocation failed", @src().file, @intCast(@src().line), null);
+            return c.KE_UI_FONT_NONE;
+        };
+        break :blk ui.fonts.items.len - 1;
     };
 
     const owned_key = gpa.dupe(u8, key_slice) catch {
@@ -119,7 +119,7 @@ fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_h
         return c.KE_UI_FONT_NONE;
     };
 
-    ui.fonts[idx] = .{
+    ui.fonts.items[idx] = .{
         .key = owned_key,
         .atlas = atlas,
         .glyphs = owned_glyphs,
@@ -144,9 +144,9 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     l.glyph_count = 0;
 
     const font_idx = handles.index(l.font_handle.bits);
-    if (l.font_handle.bits == c.KE_HANDLE_NONE or font_idx >= MAX_UI_FONTS or !ui.fonts[font_idx].in_use)
+    if (l.font_handle.bits == c.KE_HANDLE_NONE or font_idx >= ui.fonts.items.len or !ui.fonts.items[font_idx].in_use)
         return;
-    const font = &ui.fonts[font_idx];
+    const font = &ui.fonts.items[font_idx];
 
     const text = std.mem.sliceTo(&l.text, 0);
     if (text.len == 0) return;
@@ -188,9 +188,7 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
 /// cached by the texture's index. Creation passes no error output, so a result the cache
 /// treats as invalid is not kept, and the next draw of that slot creates the group again.
 fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
-    const tex_idx = handles.index(tex.bits);
-    if (ui.bind_group_cache[tex_idx] != c.KE_GPU_INVALID_HANDLE)
-        return ui.bind_group_cache[tex_idx];
+    if (ui.bind_group_cache.get(tex.bits)) |cached| return cached;
 
     const view = ui.core.*.texture_view.?(ui.core, tex);
     const entries = [_]c.ke_gpu_bind_group_entry{
@@ -203,7 +201,7 @@ fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
         .entry_count = 2,
         .entries = &entries,
     }, null);
-    ui.bind_group_cache[tex_idx] = bg;
+    if (bg != c.KE_GPU_INVALID_HANDLE) ui.bind_group_cache.put(gpa, tex.bits, bg) catch {};
     return bg;
 }
 
@@ -213,32 +211,45 @@ inline fn moduleOf(user: ?*anyopaque) *UiState {
 }
 
 /// Called by `system` for each quad and each glyph. A null texture is drawn with the white texture.
-/// The quad is dropped without an error when `vertices` has no room left for it, when `batches` is
-/// full, or when the texture's slot does not fit `bind_group_cache`.
-fn emitQuad(ui: *UiState, vertex_count: *u32, batch_count: *u32, tex_in: c.ke_texture_handle,
-            x0: f32, y0: f32, x1: f32, y1: f32, tu0: f32, tv0: f32, tu1: f32, tv1: f32, color: [4]f32) void {
-    if (vertex_count.* + 6 > ui.vertices.len) return;
+/// Returns false when the vertex or batch list cannot grow.
+fn emitQuad(ui: *UiState, tex_in: c.ke_texture_handle,
+            x0: f32, y0: f32, x1: f32, y1: f32, tu0: f32, tv0: f32, tu1: f32, tv1: f32, color: [4]f32) bool {
     const tex = if (tex_in.bits == c.KE_HANDLE_NONE) ui.core.*.white_texture.?(ui.core) else tex_in;
-    if (handles.index(tex.bits) >= MAX_UI_TEXTURES) return;
-
-    const need_new_batch = batch_count.* == 0 or ui.batches[batch_count.* - 1].texture.bits != tex.bits;
+    const first: u32 = @intCast(ui.vertices.items.len);
+    const need_new_batch = ui.batches.items.len == 0 or ui.batches.items[ui.batches.items.len - 1].texture.bits != tex.bits;
     if (need_new_batch) {
-        if (batch_count.* >= ui.batches.len) return;
-        ui.batches[batch_count.*] = .{ .texture = tex, .first_vertex = vertex_count.*, .vertex_count = 0 };
-        batch_count.* += 1;
+        ui.batches.append(gpa, .{ .texture = tex, .first_vertex = first, .vertex_count = 0 }) catch return false;
     }
-
-    const verts = [6]UiVertex{
+    ui.vertices.appendSlice(gpa, &[6]UiVertex{
         .{ .position = .{ x0, y0 }, .uv = .{ tu0, tv0 }, .color = color },
         .{ .position = .{ x1, y0 }, .uv = .{ tu1, tv0 }, .color = color },
         .{ .position = .{ x1, y1 }, .uv = .{ tu1, tv1 }, .color = color },
         .{ .position = .{ x0, y0 }, .uv = .{ tu0, tv0 }, .color = color },
         .{ .position = .{ x1, y1 }, .uv = .{ tu1, tv1 }, .color = color },
         .{ .position = .{ x0, y1 }, .uv = .{ tu0, tv1 }, .color = color },
-    };
-    @memcpy(ui.vertices[vertex_count.* .. vertex_count.* + 6], &verts);
-    vertex_count.* += 6;
-    ui.batches[batch_count.* - 1].vertex_count += 6;
+    }) catch return false;
+    ui.batches.items[ui.batches.items.len - 1].vertex_count += 6;
+    return true;
+}
+
+/// Makes the vertex buffer hold `bytes`, replacing it with one of the next power of two size when
+/// it is smaller.
+fn ensureVertexBuffer(ui: *UiState, bytes: usize, out_error: [*c][*c]c.ke_error) bool {
+    if (bytes <= ui.vbo_bytes) return true;
+    const size = std.math.ceilPowerOfTwoAssert(usize, bytes);
+    const dev = ui.device;
+    const vbo = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+        .label = "ui.vbo",
+        .initial_data = null,
+        .size = size,
+        .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .mapped_at_creation = 0,
+    }, out_error);
+    if (vbo == c.KE_GPU_INVALID_HANDLE) return false;
+    if (ui.vbo != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, ui.vbo);
+    ui.vbo = vbo;
+    ui.vbo_bytes = size;
+    return true;
 }
 
 /// Registered by `ke_render_ui_create` for the update phase, with write access to the label
@@ -271,7 +282,7 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*
 /// the pass ends without drawing; otherwise the projection (flipped on Y when the ndc convention
 /// asks) and the vertices are uploaded and each batch is drawn with its texture's bind group. It
 /// returns true on every path, including when the render service yields no pass to draw into.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const ui = moduleOf(user);
     const core = ui.core;
 
@@ -284,25 +295,26 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const pc = core.*.begin_pass.?(core, &ui.io);
     if (pc == null) return true;
 
-    var vertex_count: u32 = 0;
-    var batch_count: u32 = 0;
+    ui.vertices.clearRetainingCapacity();
+    ui.batches.clearRetainingCapacity();
+    var emitted = true;
 
     var s: usize = 0;
-    quad_loop: while (s < quad_segc) : (s += 1) {
+    while (emitted and s < quad_segc) : (s += 1) {
         const quads: [*c]const UiQuadComponent = @ptrCast(@alignCast(quad_segs[s].columns[0]));
         var i: usize = 0;
         while (i < quad_segs[s].count) : (i += 1) {
             const q = quads[i];
             if (q.dst_w <= 0 or q.dst_h <= 0) continue;
-            if (vertex_count + 6 > ui.vertices.len) break :quad_loop;
-            emitQuad(ui, &vertex_count, &batch_count, .{ .bits = q.texture_bits },
+            emitted = emitQuad(ui, .{ .bits = q.texture_bits },
                 q.dst_x, q.dst_y, q.dst_x + q.dst_w, q.dst_y + q.dst_h,
                 q.u0, q.v0, q.u1, q.v1, q.color);
+            if (!emitted) break;
         }
     }
 
     s = 0;
-    label_loop: while (s < label_segc) : (s += 1) {
+    while (emitted and s < label_segc) : (s += 1) {
         const labels: [*c]const c.ke_label_component = @ptrCast(@alignCast(label_segs[s].columns[0]));
         var i: usize = 0;
         while (i < label_segs[s].count) : (i += 1) {
@@ -310,23 +322,33 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
             if (l.glyph_count == 0) continue;
 
             const font_idx = handles.index(l.font_handle.bits);
-            const tex = ui.fonts[font_idx].atlas;
+            const tex = ui.fonts.items[font_idx].atlas;
             const premul = [4]f32{ l.color[0] * l.color[3], l.color[1] * l.color[3], l.color[2] * l.color[3], l.color[3] };
 
             var gi: u32 = 0;
             while (gi < l.glyph_count) : (gi += 1) {
-                if (vertex_count + 6 > ui.vertices.len) break :label_loop;
                 const g = l.glyphs[gi];
-                emitQuad(ui, &vertex_count, &batch_count, tex,
+                emitted = emitQuad(ui, tex,
                     g.dst_x, g.dst_y, g.dst_x + g.dst_w, g.dst_y + g.dst_h,
                     g.u0, g.v0, g.u1, g.v1, premul);
+                if (!emitted) break;
             }
         }
     }
 
-    if (vertex_count == 0) {
+    if (!emitted) {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui pass: vertex list allocation failed", @src().file, @intCast(@src().line), null);
+        core.*.end_pass.?(core, pc);
+        return false;
+    }
+    if (ui.vertices.items.len == 0) {
         core.*.end_pass.?(core, pc);
         return true;
+    }
+    const bytes = std.mem.sliceAsBytes(ui.vertices.items);
+    if (!ensureVertexBuffer(ui, bytes.len, out_error)) {
+        core.*.end_pass.?(core, pc);
+        return false;
     }
 
     var bw: u32 = 0;
@@ -338,7 +360,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     zm.storeMat(proj_arr[0..], proj);
     core.*.upload.?(core, ui.frame_uniform, 0, &proj_arr, 64);
 
-    const bytes = std.mem.sliceAsBytes(ui.vertices[0..vertex_count]);
     core.*.upload.?(core, ui.vbo, 0, bytes.ptr, bytes.len);
 
     const rp = pc.*.begin_render.?(pc);
@@ -346,9 +367,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     rp.*.set_bind_group.?(rp, 0, ui.frame_bind_group, null, 0);
     rp.*.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
 
-    var i: u32 = 0;
-    while (i < batch_count) : (i += 1) {
-        const batch = ui.batches[i];
+    for (ui.batches.items) |batch| {
         rp.*.set_bind_group.?(rp, 1, uiBindGroupFor(ui, batch.texture), null, 0);
         rp.*.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
     }
@@ -461,14 +480,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     }, out_error);
     if (ui.frame_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
 
-    ui.vbo = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
-        .label = "ui.vbo",
-        .initial_data = null,
-        .size = ui.vertices.len * @sizeOf(UiVertex),
-        .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
-    }, out_error);
-    if (ui.vbo == c.KE_GPU_INVALID_HANDLE) return false;
+    if (!ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex), out_error)) return false;
 
 
     ui.writes = .{"backbuffer"};
@@ -485,7 +497,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 }
 
 /// Safe on a partly built state: each GPU object is released only if `setup` had created it.
-fn destroyState(ui: *const UiState) void {
+fn destroyState(ui: *UiState) void {
     const dev = ui.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
     if (ui.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, ui.frame_bind_group);
@@ -493,10 +505,13 @@ fn destroyState(ui: *const UiState) void {
     if (ui.vbo != invalid) dev.destroy_buffer.?(dev, ui.vbo);
     if (ui.bgl_frame != invalid) dev.destroy_bind_group_layout.?(dev, ui.bgl_frame);
     if (ui.bgl_tex != invalid) dev.destroy_bind_group_layout.?(dev, ui.bgl_tex);
-    for (ui.bind_group_cache) |bg| {
-        if (bg != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, bg);
-    }
-    for (ui.fonts) |f| {
+    var cached = ui.bind_group_cache.valueIterator();
+    while (cached.next()) |bg| dev.destroy_bind_group.?(dev, bg.*);
+    ui.bind_group_cache.deinit(gpa);
+    ui.vertices.deinit(gpa);
+    ui.batches.deinit(gpa);
+    defer ui.fonts.deinit(gpa);
+    for (ui.fonts.items) |f| {
         if (f.in_use) {
             gpa.free(f.key);
             gpa.free(f.glyphs);
