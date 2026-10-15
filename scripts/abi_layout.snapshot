@@ -288,7 +288,7 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   cmd_slot 36
   load 40
-ke_render_service size=360 align=8
+ke_render_service size=368 align=8
   handle 0
   declare 8
   import_texture 16
@@ -334,6 +334,7 @@ ke_render_service size=360 align=8
   white_texture 336
   load_shader 344
   backbuffer_format 352
+  resource_generation 360
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8
@@ -428,7 +429,7 @@ ke_world_params size=56 align=8
   project_root 32
   logger 40
   signal_bus 48
-ke_world size=64 align=8
+ke_world size=80 align=8
   handle 0
   ecs 8
   runtime 16
@@ -437,6 +438,8 @@ ke_world size=64 align=8
   get_component_fields 40
   register_component_apply 48
   get_component_apply 56
+  register_component_alias 64
+  resolve_component 72
 ke_world_handle size=16 align=8
   ref 0
   destroy 8
