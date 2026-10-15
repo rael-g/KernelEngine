@@ -44,7 +44,11 @@ extern "C"
     {
         void *handle;
 
-        /** @param path [utf8] */
+        /** Replaces every action with those of a TOML input file. An action type other than
+         * Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a
+         * field, and a key or mouse button name the engine does not know each fail the load,
+         * with a message naming the action and the binding; a load that fails leaves no actions.
+         * @param path [utf8] */
         bool (*load)(struct ke_input_actions *self, const char *path, ke_error **out_error);
 
         /** @param name [utf8] */

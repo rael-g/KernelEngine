@@ -60,6 +60,7 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
         _borrowed = borrowed;
     }
 
+    /// <summary>Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, with a message naming the action and the binding; a load that fails leaves no actions.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Load(string path)
     {
