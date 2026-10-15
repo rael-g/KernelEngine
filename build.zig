@@ -509,7 +509,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-framework-include" = b.pathJoin(&.{ src_c, "framework" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "audio/module/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step }, .no_tests);
+        .@"stubs-src" = stubs_src,
+    }, &.{ &common.step }, .has_tests);
 
     const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
