@@ -494,14 +494,26 @@ fn applyConnections(
             return false;
         }
 
-        const target = names.get(std.mem.span(target_d.u.s)) orelse {
-            structural(world, out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
-            return false;
+        const target = switch (names.find(std.mem.span(target_d.u.s))) {
+            .one => |e| e,
+            .none => {
+                structural(world, out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
+                return false;
+            },
+            .ambiguous => {
+                structural(world, out_error, "connect targets '{s}', which more than one entity of this scene is named", .{target_d.u.s});
+                return false;
+            },
         };
 
         var handler: u32 = 0;
         const handler_d = c.toml_int_in(t, "handler");
-        if (handler_d.ok != 0) handler = @intCast(handler_d.u.i);
+        if (handler_d.ok != 0) {
+            handler = std.math.cast(u32, handler_d.u.i) orelse {
+                structural(world, out_error, "connect handler {d} is not between 0 and {d}", .{ handler_d.u.i, std.math.maxInt(u32) });
+                return false;
+            };
+        }
 
         var signal_id: u32 = 0;
         if (!bus.signal_lookup.?(bus, signal_d.u.s, &signal_id)) {
@@ -530,13 +542,19 @@ const NameMap = struct {
 
     const initial_capacity: u32 = 16;
 
-    /// Records a name and its entity, growing the item array when it is full. When the array cannot
-    /// grow or the name cannot be copied, the name is dropped without an error, and a later
-    /// reference to it fails.
-    fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity) void {
+    /// What a name refers to: nothing, one entity, or more than one, which a reference cannot use.
+    const Found = union(enum) { none, one: c.ke_entity, ambiguous };
+
+    /// Records a name and its entity, growing the item array when it is full. A name may be
+    /// recorded more than once; only a reference to it is refused. Fails as out of memory when the
+    /// array cannot grow or the name cannot be copied.
+    fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity, out_error: [*c][*c]c.ke_error) bool {
         if (self.count == self.capacity) {
             const cap = if (self.capacity != 0) self.capacity * 2 else initial_capacity;
-            const buf = heap.gpa.alloc(Entry, cap) catch return;
+            const buf = heap.gpa.alloc(Entry, cap) catch {
+                E.fail(out_error, .out_of_memory, "entity name table allocation failed", @src());
+                return false;
+            };
             if (self.items) |old| {
                 @memcpy(buf[0..self.count], old[0..self.count]);
                 heap.gpa.free(old[0..self.capacity]);
@@ -544,17 +562,24 @@ const NameMap = struct {
             self.items = buf.ptr;
             self.capacity = cap;
         }
-        const owned = self.arena.dupeZ(name) orelse return;
+        const owned = self.arena.dupeZ(name) orelse {
+            E.fail(out_error, .out_of_memory, "entity name copy failed", @src());
+            return false;
+        };
         self.items.?[self.count] = .{ .name = owned, .entity = entity };
         self.count += 1;
+        return true;
     }
 
-    fn get(self: *const NameMap, name: []const u8) ?c.ke_entity {
-        const items = self.items orelse return null;
+    fn find(self: *const NameMap, name: []const u8) Found {
+        const items = self.items orelse return .none;
+        var found: Found = .none;
         for (items[0..self.count]) |entry| {
-            if (std.mem.eql(u8, std.mem.span(entry.name), name)) return entry.entity;
+            if (!std.mem.eql(u8, std.mem.span(entry.name), name)) continue;
+            if (found != .none) return .ambiguous;
+            found = .{ .one = entry.entity };
         }
-        return null;
+        return found;
     }
 
     fn deinit(self: *NameMap) void {
@@ -612,11 +637,17 @@ fn processEntity(
 
     const pn = c.toml_string_in(args.entity_tbl, "parent");
     if (pn.ok != 0) {
-        const found = args.names.get(std.mem.span(pn.u.s));
-        std.c.free(pn.u.s);
-        parent = found orelse {
-            E.fail(out_error, .not_found, "parent entity not found", @src());
-            return false;
+        defer std.c.free(pn.u.s);
+        parent = switch (args.names.find(std.mem.span(pn.u.s))) {
+            .one => |e| e,
+            .none => {
+                structural(s.world, out_error, "parent '{s}' is not an entity declared before it in this scene", .{pn.u.s});
+                return false;
+            },
+            .ambiguous => {
+                structural(s.world, out_error, "parent '{s}' names more than one entity of this scene", .{pn.u.s});
+                return false;
+            },
         };
     }
 
@@ -637,7 +668,7 @@ fn processEntity(
             out_error,
         )) return false;
 
-        if (name_d.ok != 0) args.names.put(name_d.u.s, nested_root);
+        if (name_d.ok != 0 and !args.names.put(name_d.u.s, nested_root, out_error)) return false;
         out_entity.* = nested_root;
         return true;
     }
@@ -674,7 +705,7 @@ fn processEntity(
         }
     }
 
-    if (name_d.ok != 0) args.names.put(name_d.u.s, entity);
+    if (name_d.ok != 0 and !args.names.put(name_d.u.s, entity, out_error)) return false;
     out_entity.* = entity;
     return true;
 }
@@ -2315,6 +2346,80 @@ test "a connection between two entities in the same scene reaches the bus" {
     try testing.expectEqual(listener, list[0].target);
     try testing.expectEqual(emitter, list[0].source);
     try testing.expectEqual(@as(u32, 7), list[0].handler_id);
+}
+
+fn expectSceneRefused(text: [:0]const u8, expected: []const u8) !void {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml", text);
+    _ = try f.declaredSignal("Poke");
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), expected) != null);
+}
+
+test "two entities may share a name that nothing refers to" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Shape"
+        \\
+        \\[[entity]]
+        \\name = "Shape"
+        \\
+    );
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a parent or a connect target that names two entities is refused" {
+    try expectSceneRefused(
+        \\[[entity]]
+        \\name = "Twin"
+        \\
+        \\[[entity]]
+        \\name = "Twin"
+        \\
+        \\[[entity]]
+        \\name = "Child"
+        \\parent = "Twin"
+        \\
+    , "parent 'Twin' names more than one entity");
+    try expectSceneRefused(
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Twin"
+        \\
+        \\[[entity]]
+        \\name = "Twin"
+        \\
+        \\[[entity]]
+        \\name = "Twin"
+        \\
+    , "connect targets 'Twin', which more than one entity");
+}
+
+test "a connect handler outside the range of a u32 is refused" {
+    try expectSceneRefused(
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Listener"
+        \\handler = -1
+        \\
+        \\[[entity]]
+        \\name = "Listener"
+        \\
+    , "connect handler -1 is not between 0 and");
 }
 
 test "a connect block that names no handler wires handler zero" {

@@ -6,11 +6,12 @@ It binds named actions to keys and mouse buttons. How the bindings are evaluated
 `architecture/input.md`.
 
 What the loader **fails** on: a missing or unopenable file (`KE_ERROR_NOT_FOUND`), a file tomlc99
-cannot parse (`KE_ERROR_IO`), and an allocation failure (`input_actions.zig:337-347`, `366-368`,
-`387-390`).
+cannot parse (`KE_ERROR_IO`), an allocation failure, and, as `KE_ERROR_INVALID_ARGUMENT` naming the
+action, the binding and the value, an unknown action type, a binding of an unknown kind, a binding
+missing a key it needs, and a key or mouse button name not in its table (`vtLoad`,
+`parseBindingTable`). A load that fails leaves no actions.
 
-What it **ignores without a word**: everything listed under "What is skipped" below. In particular a
-misspelt key name does not fail; it binds a key that can never be down.
+What it **ignores without a word**: everything listed under "What is skipped" below.
 
 ## Shape
 
@@ -40,17 +41,16 @@ value's name with `value.ToString()` and keeps the ids it finds
 (`src/csharp/framework/KernelEngine.Framework/Input/InputActionMap.cs:27-39`).
 
 `load` discards every action already in the instance before it opens the file, including ones added
-by `add_action`, so a load that fails on a missing file leaves the instance empty (`:344-346`).
+by `add_action`, so a load that fails leaves the instance empty.
 
 ## `type`
 
-`"Button"`, `"Axis1D"`, `"Axis2D"` or `"Axis3D"`. Any other string, and an absent `type`, is a Button
-(`parseActionType`, `:112-119`; `:374-378`).
+`"Button"`, `"Axis1D"`, `"Axis2D"` or `"Axis3D"`. An absent `type` is a Button; any other string
+fails the load (`parseActionType`).
 
 ## `bindings`
 
-An array of inline tables, each with a `kind`. A binding table that does not parse is skipped and the
-rest of the array still loads (`:380-394`).
+An array of inline tables, each with a `kind`. A binding table that cannot be read fails the load.
 
 | `kind` | other keys | what it contributes |
 |---|---|---|
@@ -68,11 +68,6 @@ are `Left`, `Right` and `Middle` (`:86-90`); buttons 4 to 8 of `ke_mouse_button`
 
 ## What is skipped
 
-- A **key name or mouse button name that is not in its table** does not fail the binding. The lookup
-  returns `KE_KEY_UNKNOWN` (-1) or `-1`, the binding is stored, and it reads as never down because
-  every down-test rejects negative codes (`lookupKey`, `lookupMouseButton`, `:92-108`; `isKeyDown`,
-  `isMouseDown`, `:237-246`).
-- A binding table with an unknown `kind`, or missing a key it needs, is dropped (`:285-327`, `386`).
 - An entry under `[action]` that is not a table is skipped (`:364`).
 - An action with no `bindings` array loads and is never active.
 
