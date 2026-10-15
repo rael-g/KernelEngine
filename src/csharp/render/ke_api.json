@@ -498,40 +498,6 @@
           "receiver": "struct ke_render_service *"
         },
         {
-          "name": "import_bind_group",
-          "returns": "ke_component_id",
-          "tags": [],
-          "doc": "Publishes an externally-owned GPU bind group and its layout under \u0060name\u0060. The layout is available at setup; the instance is fetched at draw time via resource_bind_group.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "bg",
-              "type": "ke_gpu_bind_group",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "layout",
-              "type": "ke_gpu_bind_group_layout",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
           "name": "cid",
           "returns": "ke_component_id",
           "tags": [],
@@ -974,15 +940,6 @@
           "receiver": "struct ke_render_service *"
         },
         {
-          "name": "sampler",
-          "returns": "ke_gpu_sampler",
-          "tags": [],
-          "doc": "The shared filtering sampler the core creates (linear, repeat).",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_render_service *"
-        },
-        {
           "name": "resource_view",
           "returns": "ke_gpu_texture_view",
           "tags": [],
@@ -1035,38 +992,6 @@
           "returns": "uint64_t",
           "tags": [],
           "doc": "The size (bytes) of the buffer published under \u0060name\u0060.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_bind_group",
-          "returns": "ke_gpu_bind_group",
-          "tags": [],
-          "doc": "The GPU bind group published under \u0060name\u0060 via import_bind_group.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_bind_group_layout",
-          "returns": "ke_gpu_bind_group_layout",
-          "tags": [],
-          "doc": "The layout the named bind group was built from (for a consumer\u0027s own pipeline creation).",
           "return_doc": null,
           "params": [
             {

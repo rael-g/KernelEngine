@@ -85,8 +85,7 @@ pub const Material = struct {
 };
 
 /// One named entry of `resources`. The fields from `buffer` on keep their defaults unless an import
-/// sets them: `importBuffer` sets the buffer and its size, and `importBindGroup` the bind group and
-/// its layout.
+/// sets them: `importBuffer` sets the buffer and its size.
 pub const Resource = struct {
     name: [*c]const u8,
     cid: c.ke_component_id,
@@ -101,8 +100,6 @@ pub const Resource = struct {
     scale_y: f32 = 1.0,
     buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     buffer_size: u64 = 0,
-    bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
-    bind_group_layout: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 };
 
 /// The `?u32` labels are offsets into the `labels` of the record that holds the command, not
@@ -195,7 +192,6 @@ pub const CoreState = struct {
     shader_cache_destroy: *const fn (*c.ke_resource_cache) callconv(.c) void,
     shader_dir: []const u8,
 
-    sampler: c.ke_gpu_sampler,
     globals: frame_globals.Globals,
     material_group: shader_reflection.Group,
     material_bgl: c.ke_gpu_bind_group_layout,
@@ -260,8 +256,8 @@ pub fn isDepthFormat(fmt: c.ke_gpu_texture_format) bool {
 
 /// The `destroy` of the handle `ke_render_service_create` returns. It flushes the device's pending
 /// pipeline compiles first, so no compile still runs against what follows. It then releases the
-/// GPU objects of transient resources, the caches and stores, the sampler, the material layout and
-/// the pipeline cache, and frees the memory the state owns. After it, neither the state nor the
+/// GPU objects of transient resources, the caches and stores, the shared globals, the material
+/// layout and the pipeline cache, and frees the memory the state owns. After it, neither the state nor the
 /// vtable is valid.
 fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     const st = coreOf(self);
@@ -280,7 +276,6 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     st.texture_store.deinit();
     st.mesh_store.deinit();
     st.shader_store.deinit();
-    if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
     st.globals.release(st.device);
     if (st.material_bgl != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_bgl);
     st.material_group.deinit();
@@ -307,8 +302,8 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
 /// The factory of the render service. It builds in an order its steps depend on: the target's size
 /// and the device's queue and NDC convention, then the resource caches, each given its destroy
 /// function and the state as context, then the "backbuffer" entry of `resources`, then the vtable,
-/// then the sampler and the material layout. The default resources come last because they are
-/// uploaded through the functions of the vtable just built. `destroyCore` undoes this in reverse
+/// then the shared globals and the material layout. The default resources come last because they
+/// are uploaded through the functions of the vtable just built. `destroyCore` undoes this in reverse
 /// and frees the vtable last. A null device or ecs returns a null ref without setting the
 /// error. A null target or shader directory sets the invalid-argument error. Any other failure
 /// returns a null ref with no error set. On success the ref is the new vtable and `destroy` is
@@ -385,7 +380,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .shader_cache = undefined,
         .shader_cache_destroy = undefined,
         .shader_dir = shader_dir_owned,
-        .sampler = c.KE_GPU_INVALID_HANDLE,
         .globals = .{},
         .material_group = shader_reflection.Group.init(gpa),
         .material_bgl = c.KE_GPU_INVALID_HANDLE,
@@ -457,7 +451,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .import_texture = resource_table.importTexture,
         .import_tag = resource_table.importTag,
         .import_buffer = resource_table.importBuffer,
-        .import_bind_group = resource_table.importBindGroup,
         .cid = resource_table.cidOf,
         .begin_pass = pass_recording.beginPass,
         .end_pass = pass_recording.endPass,
@@ -475,13 +468,10 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .material_alpha_cutoff = asset_upload.materialAlphaCutoff,
         .upload_cubemap = asset_upload.uploadCubemap,
         .texture_view = asset_upload.textureView,
-        .sampler = asset_upload.samplerOf,
         .resource_view = resource_table.resourceView,
         .resource_texture = resource_table.resourceTexture,
         .resource_buffer = resource_table.resourceBuffer,
         .resource_buffer_size = resource_table.resourceBufferSize,
-        .resource_bind_group = resource_table.resourceBindGroup,
-        .resource_bind_group_layout = resource_table.resourceBindGroupLayout,
         .backbuffer_size = resource_table.backbufferSize,
         .get_or_create_pipeline = pipeline_cache.getOrCreatePipeline,
         .material_shader = asset_upload.materialShader,
@@ -510,19 +500,6 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         destroyCore(core);
         return .{ .ref = null, .destroy = null };
     }
-    st.sampler = dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
-        .label = "service.sampler",
-        .min_filter = c.KE_GPU_FILTER_LINEAR,
-        .mag_filter = c.KE_GPU_FILTER_LINEAR,
-        .mipmap_filter = c.KE_GPU_SAMPLER_MIPMAP_NEAREST,
-        .address_mode_u = c.KE_GPU_ADDRESS_MODE_REPEAT,
-        .address_mode_v = c.KE_GPU_ADDRESS_MODE_REPEAT,
-        .address_mode_w = c.KE_GPU_ADDRESS_MODE_REPEAT,
-        .lod_min_clamp = 0.0,
-        .lod_max_clamp = 1.0,
-        .compare = c.KE_GPU_COMPARE_UNDEFINED,
-        .max_anisotropy = 1,
-    });
     const material_json = @embedFile("material_params.json");
     const read_vs = st.material_group.collect(material_json, material_block, c.KE_GPU_SHADER_STAGE_VERTEX) catch false;
     const read_fs = st.material_group.collect(material_json, material_block, c.KE_GPU_SHADER_STAGE_FRAGMENT) catch false;

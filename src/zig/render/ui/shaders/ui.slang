@@ -1,3 +1,5 @@
+import ke;
+
 struct VsIn {
     float2 position : POSITION;
     float2 uv       : TEXCOORD0;
@@ -16,7 +18,6 @@ struct UiFrame {
 
 struct UiTexture {
     Texture2D    t_tex;
-    SamplerState s_tex;
 };
 
 ConstantBuffer<UiFrame>      frame;
@@ -35,6 +36,6 @@ VsOut vs_main(VsIn input)
 [shader("fragment")]
 float4 fs_main(VsOut i) : SV_Target0
 {
-    float a = tex.t_tex.Sample(tex.s_tex, i.uv).a;
+    float a = tex.t_tex.Sample(ke_samp_linear, i.uv).a;
     return i.color * a;
 }

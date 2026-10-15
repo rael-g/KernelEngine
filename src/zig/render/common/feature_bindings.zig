@@ -16,7 +16,7 @@ pub const cluster_buffers = [_]struct { resource: [*:0]const u8, parameter: [*:0
 /// The feature bindings for the C namespace `c`.
 pub fn FeatureBindings(comptime c: type) type {
     return struct {
-        pub const count = 5 + cluster_buffers.len;
+        pub const count = 3 + cluster_buffers.len;
 
         /// Fills `out` with every feature binding. The shadow map is the white texture when the
         /// service has none, and `environment` is the view the environment is sampled from.
@@ -24,19 +24,14 @@ pub fn FeatureBindings(comptime c: type) type {
             const white_view = core.*.texture_view.?(core, core.*.white_texture.?(core));
             const shadow_raw = core.*.resource_view.?(core, "shadow_map");
             const shadow_view = if (shadow_raw != c.KE_GPU_INVALID_HANDLE) shadow_raw else white_view;
-            const smp = core.*.sampler.?(core);
             out[0] = binding("shadowParams");
             out[0].buffer = core.*.resource_buffer.?(core, "shadow_lvp");
             out[0].buffer_size = core.*.resource_buffer_size.?(core, "shadow_lvp");
             out[1] = binding("shadowMap");
             out[1].texture_view = shadow_view;
-            out[2] = binding("shadowSampler");
-            out[2].sampler = smp;
-            out[3] = binding("ibl_env");
-            out[3].texture_view = environment;
-            out[4] = binding("ibl_env_sampler");
-            out[4].sampler = smp;
-            for (cluster_buffers, out[5..]) |cb, *o| {
+            out[2] = binding("ibl_env");
+            out[2].texture_view = environment;
+            for (cluster_buffers, out[3..]) |cb, *o| {
                 o.* = binding(cb.parameter);
                 o.buffer = core.*.resource_buffer.?(core, cb.resource);
                 o.buffer_size = core.*.resource_buffer_size.?(core, cb.resource);

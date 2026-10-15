@@ -153,10 +153,9 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     const black_cube_view = core.*.texture_view.?(core, .{ .bits = c.KE_HANDLE_NONE });
     const ibl_view = if (fwd.ibl_enabled) env_view else black_cube_view;
 
-    var bindings: [2 + Features.count]c.ke_render_shader_binding = undefined;
+    var bindings: [1 + Features.count]c.ke_render_shader_binding = undefined;
     bindings[0] = .{ .name = "hdr_opaque", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = core.*.resource_view.?(core, "hdr_opaque"), .sampler = 0 };
-    bindings[1] = .{ .name = "hdr_opaque_sampler", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = core.*.sampler.?(core) };
-    Features.fill(core, ibl_view, bindings[2..]);
+    Features.fill(core, ibl_view, bindings[1..]);
 
     if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
     fwd.resource_generation = core.*.resource_generation.?(core);

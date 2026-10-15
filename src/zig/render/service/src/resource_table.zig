@@ -182,31 +182,6 @@ pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c
     return cid;
 }
 
-/// Appends an entry for a bind group and its layout, both owned by the caller. Returns the invalid
-/// component id when the table cannot grow, with an out-of-memory error.
-pub fn importBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8, bg: c.ke_gpu_bind_group,
-                       layout: c.ke_gpu_bind_group_layout, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-    const st = rc.coreOf(self);
-    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
-    const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, null);
-    st.resources.appendAssumeCapacity(.{
-        .name = name,
-        .cid = cid,
-        .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
-        .texture = c.KE_GPU_INVALID_HANDLE,
-        .view = c.KE_GPU_INVALID_HANDLE,
-        .is_backbuffer = false,
-        .is_transient = false,
-        .clear_value = .{ 0, 0, 0, 0 },
-        .bind_group = bg,
-        .bind_group_layout = layout,
-    });
-    return cid;
-}
-
 /// Returns the component id of the named entry; the invalid id for an unknown name.
 pub fn cidOf(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_component_id {
     const st = rc.coreOf(self);
@@ -244,18 +219,6 @@ pub fn backbufferSize(self: [*c]c.ke_render_service, out_w: [*c]u32, out_h: [*c]
     const st = rc.coreOf(self);
     if (out_w != null) out_w.* = st.backbuffer_w;
     if (out_h != null) out_h.* = st.backbuffer_h;
-}
-
-/// Returns the bind group of the named entry; the invalid handle for an unknown name.
-pub fn resourceBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group {
-    const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
-    return r.bind_group;
-}
-
-/// Returns the bind group layout of the named entry; the invalid handle for an unknown name.
-pub fn resourceBindGroupLayout(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_bind_group_layout {
-    const r = rc.coreOf(self).find(name) orelse return c.KE_GPU_INVALID_HANDLE;
-    return r.bind_group_layout;
 }
 
 /// Asks the render target for its format on every call, not the format recorded for the

@@ -209,7 +209,6 @@ fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
     const view = ui.core.*.texture_view.?(ui.core, tex);
     const bindings = [_]c.ke_render_shader_binding{
         .{ .name = "t_tex", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
-        .{ .name = "s_tex", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = ui.core.*.sampler.?(ui.core) },
     };
     const bg = ui.core.*.create_shader_bind_group.?(ui.core, &tex_group_params, ui.tex_group.layout, "ui.bg", &bindings, bindings.len, null);
     if (bg != c.KE_GPU_INVALID_HANDLE) ui.bind_group_cache.put(gpa, tex.bits, bg) catch {};

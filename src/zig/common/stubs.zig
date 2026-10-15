@@ -323,13 +323,9 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.cid = &cid;
                 self.vtable.declare = &declare;
                 self.vtable.import_buffer = &importBuffer;
-                self.vtable.import_bind_group = &importBindGroup;
                 self.vtable.import_tag = &importTag;
                 self.vtable.resource_view = &resourceView;
                 self.vtable.material_layout = &materialLayout;
-                self.vtable.resource_bind_group_layout = &resourceBindGroupLayout;
-                self.vtable.resource_bind_group = &resourceBindGroup;
-                self.vtable.sampler = &sampler;
                 self.vtable.texture_view = &textureView;
                 self.vtable.white_texture = &whiteTexture;
                 self.vtable.resource_buffer = &resourceBuffer;
@@ -400,10 +396,6 @@ pub fn Stubs(comptime c: type) type {
                 return @intCast(mint(self));
             }
 
-            fn importBindGroup(self: ?*c.ke_render_service, _: [*c]const u8, _: c.ke_gpu_bind_group, _: c.ke_gpu_bind_group_layout, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-                return @intCast(mint(self));
-            }
-
             fn importTag(self: ?*c.ke_render_service, _: [*c]const u8, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
                 return @intCast(mint(self));
             }
@@ -413,18 +405,6 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn materialLayout(self: ?*c.ke_render_service) callconv(.c) c.ke_gpu_bind_group_layout {
-                return mint(self);
-            }
-
-            fn resourceBindGroupLayout(self: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_bind_group_layout {
-                return mint(self);
-            }
-
-            fn resourceBindGroup(self: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_bind_group {
-                return mint(self);
-            }
-
-            fn sampler(self: ?*c.ke_render_service) callconv(.c) c.ke_gpu_sampler {
                 return mint(self);
             }
 

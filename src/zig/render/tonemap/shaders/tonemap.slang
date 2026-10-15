@@ -1,5 +1,6 @@
+import ke;
+
 Texture2D<float4> t_hdr;
-SamplerState      s_hdr;
 
 struct VsOut {
     float4 clip : SV_Position;
@@ -30,7 +31,7 @@ float3 aces(float3 x)
 [shader("fragment")]
 float4 fs_main(VsOut i) : SV_Target0
 {
-    float3 hdr = t_hdr.Sample(s_hdr, i.uv).rgb;
+    float3 hdr = t_hdr.Sample(ke_samp_linear, i.uv).rgb;
     float3 ldr = aces(hdr);
     ldr = pow(ldr, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
     return float4(ldr, 1.0);

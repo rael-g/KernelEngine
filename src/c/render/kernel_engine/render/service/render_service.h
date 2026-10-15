@@ -160,12 +160,6 @@ struct ke_render_service
     /// bind by name.
     ke_component_id (*import_buffer)(struct ke_render_service *self, const char *name,
                                      ke_gpu_buffer buffer, uint64_t size, ke_error **out_error);
-    /// Publishes an externally-owned GPU bind group and its layout under `name`.
-    /// The layout is available at setup; the instance is fetched at draw time
-    /// via resource_bind_group.
-    ke_component_id (*import_bind_group)(struct ke_render_service *self, const char *name,
-                                         ke_gpu_bind_group bg, ke_gpu_bind_group_layout layout,
-                                         ke_error **out_error);
     /// @return The tag cid minted for `name`, or KE_COMPONENT_INVALID.
     ke_component_id (*cid)(struct ke_render_service *self, const char *name);
 
@@ -241,8 +235,6 @@ struct ke_render_service
                                         ke_error **out_error);
     /// The GPU view for a texture/cubemap handle.
     ke_gpu_texture_view (*texture_view)(struct ke_render_service *self, ke_texture_handle h);
-    /// The shared filtering sampler the core creates (linear, repeat).
-    ke_gpu_sampler (*sampler)(struct ke_render_service *self);
 
     /// The GPU view of a declared transient resource, by name.
     ke_gpu_texture_view (*resource_view)(struct ke_render_service *self, const char *name);
@@ -253,11 +245,6 @@ struct ke_render_service
     ke_gpu_buffer (*resource_buffer)(struct ke_render_service *self, const char *name);
     /// The size (bytes) of the buffer published under `name`.
     uint64_t (*resource_buffer_size)(struct ke_render_service *self, const char *name);
-    /// The GPU bind group published under `name` via import_bind_group.
-    ke_gpu_bind_group (*resource_bind_group)(struct ke_render_service *self, const char *name);
-    /// The layout the named bind group was built from (for a consumer's own
-    /// pipeline creation).
-    ke_gpu_bind_group_layout (*resource_bind_group_layout)(struct ke_render_service *self, const char *name);
 
     /// The backbuffer's pixel size, callable from any phase. Refreshed once per
     /// frame at begin_frame, so a caller earlier in the tick reads the previous

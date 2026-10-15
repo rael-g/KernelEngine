@@ -1,9 +1,10 @@
+import ke;
+
 struct SkyFrame {
     float4x4 inv_sky_view_proj;
 };
 ConstantBuffer<SkyFrame> sky;
 TextureCube  env;
-SamplerState env_sampler;
 Texture2D<float> g_depth;
 
 struct VsOut {
@@ -29,5 +30,5 @@ float4 fs_main(VsOut input) : SV_Target0 {
     float2 ndc = float2(input.uv.x * 2.0 - 1.0, 1.0 - input.uv.y * 2.0);
     float4 d = mul(sky.inv_sky_view_proj, float4(ndc, 1.0, 1.0));
     float3 dir = normalize(d.xyz / d.w);
-    return float4(env.Sample(env_sampler, dir).rgb, 1.0);
+    return float4(env.Sample(ke_samp_linear, dir).rgb, 1.0);
 }

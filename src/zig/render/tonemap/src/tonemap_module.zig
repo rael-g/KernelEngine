@@ -70,10 +70,8 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
     if (pc == null) return true;
 
     const hdr_view = pc.*.read.?(pc, "hdr");
-    const samp = core.*.sampler.?(core);
-    const bindings = [2]c.ke_render_shader_binding{
+    const bindings = [1]c.ke_render_shader_binding{
         .{ .name = "t_hdr", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = hdr_view, .sampler = 0 },
-        .{ .name = "s_hdr", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = samp },
     };
     if (tm.bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, tm.bind_group);

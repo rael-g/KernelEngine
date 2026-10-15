@@ -87,16 +87,6 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return result;
     }
 
-    /// <summary>Publishes an externally-owned GPU bind group and its layout under `name`. The layout is available at setup; the instance is fetched at draw time via resource_bind_group.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public uint ImportBindGroup(sbyte* name, ulong bg, ulong layout)
-    {
-        ke_error* err = null;
-        var result = Handle->import_bind_group(Handle, name, bg, layout, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "import_bind_group");
-        return result;
-    }
-
     /// <returns>The tag cid minted for `name`, or KE_COMPONENT_INVALID.</returns>
     public uint Cid(sbyte* name)
     {
@@ -243,12 +233,6 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return Handle->texture_view(Handle, h);
     }
 
-    /// <summary>The shared filtering sampler the core creates (linear, repeat).</summary>
-    public ulong Sampler()
-    {
-        return Handle->sampler(Handle);
-    }
-
     /// <summary>The GPU view of a declared transient resource, by name.</summary>
     public ulong ResourceView(sbyte* name)
     {
@@ -271,18 +255,6 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     public ulong ResourceBufferSize(sbyte* name)
     {
         return Handle->resource_buffer_size(Handle, name);
-    }
-
-    /// <summary>The GPU bind group published under `name` via import_bind_group.</summary>
-    public ulong ResourceBindGroup(sbyte* name)
-    {
-        return Handle->resource_bind_group(Handle, name);
-    }
-
-    /// <summary>The layout the named bind group was built from (for a consumer's own pipeline creation).</summary>
-    public ulong ResourceBindGroupLayout(sbyte* name)
-    {
-        return Handle->resource_bind_group_layout(Handle, name);
     }
 
     /// <summary>The backbuffer's pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame's size.</summary>

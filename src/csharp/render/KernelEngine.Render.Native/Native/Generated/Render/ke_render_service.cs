@@ -18,9 +18,6 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *, ke_gpu_buffer, uint64_t, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong, ulong, KernelEngine.Common.Native.ke_error**, uint> import_buffer;
 
-    [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *, ke_gpu_bind_group, ke_gpu_bind_group_layout, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong, ulong, KernelEngine.Common.Native.ke_error**, uint> import_bind_group;
-
     [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint> cid;
 
@@ -69,9 +66,6 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_gpu_texture_view (*)(struct ke_render_service *, ke_texture_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_texture_handle, ulong> texture_view;
 
-    [NativeTypeName("ke_gpu_sampler (*)(struct ke_render_service *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ulong> sampler;
-
     [NativeTypeName("ke_gpu_texture_view (*)(struct ke_render_service *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_view;
 
@@ -83,12 +77,6 @@ public unsafe partial struct ke_render_service
 
     [NativeTypeName("uint64_t (*)(struct ke_render_service *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_buffer_size;
-
-    [NativeTypeName("ke_gpu_bind_group (*)(struct ke_render_service *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_bind_group;
-
-    [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_render_service *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_bind_group_layout;
 
     [NativeTypeName("void (*)(struct ke_render_service *, uint32_t *, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, uint*, uint*, void> backbuffer_size;

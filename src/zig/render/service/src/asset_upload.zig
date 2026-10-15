@@ -198,11 +198,6 @@ pub fn textureView(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callco
     return (st.textureAt(fallback) orelse return c.KE_GPU_INVALID_HANDLE).view;
 }
 
-/// Returns the sampler the material bind groups use.
-pub fn samplerOf(self: [*c]c.ke_render_service) callconv(.c) c.ke_gpu_sampler {
-    return rc.coreOf(self).sampler;
-}
-
 /// Returns the handle of the 1x1 white texture the service created at start.
 pub fn whiteTexture(self: [*c]c.ke_render_service) callconv(.c) c.ke_texture_handle {
     return rc.coreOf(self).white_texture_h;
@@ -263,7 +258,7 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
     const bindings = [_]c.ke_render_shader_binding{
         .{ .name = rc.material_block, .buffer = ubo, .buffer_offset = 0, .buffer_size = 48, .texture_view = 0, .sampler = 0 },
         .{ .name = "albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = alb_view, .sampler = 0 },
-        .{ .name = "tex_sampler", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
+        .{ .name = "tex_sampler", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.globals.binding("ke_samp_linear").?.sampler },
         .{ .name = "normal_map", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = nrm_view, .sampler = 0 },
     };
     const entries = shader_reflection.matchBindings(&st.material_group, &bindings, &st.globals, out_error) orelse {

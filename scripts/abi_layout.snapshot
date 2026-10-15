@@ -323,59 +323,55 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   cmd_slot 36
   load 40
-ke_render_service size=416 align=8
+ke_render_service size=384 align=8
   handle 0
   declare 8
   import_texture 16
   import_tag 24
   import_buffer 32
-  import_bind_group 40
-  cid 48
-  begin_pass 56
-  end_pass 64
-  begin_frame 72
-  end_frame 80
-  upload_mesh 88
-  mesh_buffers 96
-  set_clear_color 104
-  upload_texture 112
-  create_material 120
-  material_layout 128
-  material_bind_group 136
-  material_alpha_mode 144
-  material_alpha_cutoff 152
-  upload_cubemap 160
-  texture_view 168
-  sampler 176
-  resource_view 184
-  resource_texture 192
-  resource_buffer 200
-  resource_buffer_size 208
-  resource_bind_group 216
-  resource_bind_group_layout 224
-  backbuffer_size 232
-  upload 240
-  get_or_create_pipeline 248
-  material_shader 256
-  retain_mesh 264
-  release_mesh 272
-  retain_texture 280
-  release_texture 288
-  retain_material 296
-  release_material 304
-  try_get_mesh 312
-  try_get_texture 320
-  try_get_material 328
-  white_texture 336
-  load_shader 344
-  set_frame_globals 352
-  frame_globals 360
-  set_lighting 368
-  lighting 376
-  shader_group_layout 384
-  create_shader_bind_group 392
-  backbuffer_format 400
-  resource_generation 408
+  cid 40
+  begin_pass 48
+  end_pass 56
+  begin_frame 64
+  end_frame 72
+  upload_mesh 80
+  mesh_buffers 88
+  set_clear_color 96
+  upload_texture 104
+  create_material 112
+  material_layout 120
+  material_bind_group 128
+  material_alpha_mode 136
+  material_alpha_cutoff 144
+  upload_cubemap 152
+  texture_view 160
+  resource_view 168
+  resource_texture 176
+  resource_buffer 184
+  resource_buffer_size 192
+  backbuffer_size 200
+  upload 208
+  get_or_create_pipeline 216
+  material_shader 224
+  retain_mesh 232
+  release_mesh 240
+  retain_texture 248
+  release_texture 256
+  retain_material 264
+  release_material 272
+  try_get_mesh 280
+  try_get_texture 288
+  try_get_material 296
+  white_texture 304
+  load_shader 312
+  set_frame_globals 320
+  frame_globals 328
+  set_lighting 336
+  lighting 344
+  shader_group_layout 352
+  create_shader_bind_group 360
+  backbuffer_format 368
+  resource_generation 376
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8

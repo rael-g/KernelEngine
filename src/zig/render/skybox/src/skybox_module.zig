@@ -101,12 +101,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         .{ .bits = c.KE_HANDLE_NONE };
     const env_view = core.*.texture_view.?(core, env);
     const depth_view = pc.*.read.?(pc, "depth");
-    const smp = core.*.sampler.?(core);
 
-    const bindings = [4]c.ke_render_shader_binding{
+    const bindings = [3]c.ke_render_shader_binding{
         .{ .name = "sky", .buffer = sm.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(SkyFrame), .texture_view = 0, .sampler = 0 },
         .{ .name = "env", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
-        .{ .name = "env_sampler", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
         .{ .name = "g_depth", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = depth_view, .sampler = 0 },
     };
     if (sm.bind_group != c.KE_GPU_INVALID_HANDLE)
