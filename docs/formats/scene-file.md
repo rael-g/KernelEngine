@@ -8,10 +8,10 @@ What the loader **fails** on: a component block naming a component no module reg
 name two components answer to, a block key no field or callback consumed, a retired or mis-written
 block, and a bad `parent`, `target`, `signal` or `handler`.
 
-What it **ignores without a word**: any top-level table other than the `[[entity]]` array (Pong's
-`[scene] name = …, version = 2` header is read by nothing), and any scalar key on an entity other than
-`name`, `parent`, `scene` and `type`: only tables are treated as component blocks
-(`scene_loader.zig:379-398`), so a misspelt `nmae = "x"` does not fail.
+It also fails on a top-level key other than `entity` and `scene`, a key of the `[scene]` table other
+than `version`, a `version` other than 2, the one the loader reads, and a key on an entity that is
+neither `name`, `parent`, `scene`, `type`, `connect` nor a component block, so a misspelt
+`nmae = "x"` fails (`checkHeader`, `applyComponentBlocks`). The `[scene]` table is optional.
 
 ## Shape
 

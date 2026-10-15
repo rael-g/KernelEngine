@@ -434,6 +434,42 @@ fn internalComponent(key: [*c]const u8) bool {
 
 /// Walks the component tables of one entity table in file order and stops at the first one refused,
 /// so the tables after it are never read.
+fn entityKey(key: [*c]const u8) bool {
+    const k = std.mem.span(key);
+    for ([_][]const u8{ "name", "parent", "scene", "type", "connect" }) |known| {
+        if (std.mem.eql(u8, k, known)) return true;
+    }
+    return false;
+}
+
+/// The format version this loader reads. A file may state it in its `[scene]` table.
+const format_version: i64 = 2;
+
+/// Accepts a file whose top level holds only the `[[entity]]` array and an optional `[scene]`
+/// table, and whose `[scene]` table holds only `version`, equal to `format_version`.
+fn checkHeader(s: *State, root: *c.toml_table_t, out_error: [*c][*c]c.ke_error) bool {
+    var i: c_int = 0;
+    while (c.toml_key_in(root, i)) |key| : (i += 1) {
+        const k = std.mem.span(key);
+        if (std.mem.eql(u8, k, "entity") or std.mem.eql(u8, k, "scene")) continue;
+        structural(s.world, out_error, "top-level key '{s}' is not entity or scene", .{k});
+        return false;
+    }
+    const header = c.toml_table_in(root, "scene") orelse return true;
+    var j: c_int = 0;
+    while (c.toml_key_in(header, j)) |key| : (j += 1) {
+        if (std.mem.eql(u8, std.mem.span(key), "version")) continue;
+        structural(s.world, out_error, "[scene] key '{s}' is not version", .{key});
+        return false;
+    }
+    const version = c.toml_int_in(header, "version");
+    if (version.ok != 0 and version.u.i != format_version) {
+        structural(s.world, out_error, "scene format version {d} is not {d}, the one this loader reads", .{ version.u.i, format_version });
+        return false;
+    }
+    return true;
+}
+
 fn applyComponentBlocks(
     s: *State,
     entity: c.ke_entity,
@@ -443,7 +479,11 @@ fn applyComponentBlocks(
     var i: c_int = 0;
     while (true) : (i += 1) {
         const key = c.toml_key_in(tbl, i) orelse break;
-        const block = c.toml_table_in(tbl, key) orelse continue;
+        const block = c.toml_table_in(tbl, key) orelse {
+            if (entityKey(key)) continue;
+            structural(s.world, out_error, "entity key '{s}' is not name, parent, scene, type, connect or a component block", .{key});
+            return false;
+        };
         if (retiredBlock(key)) |advice| {
             structural(s.world, out_error, "[entity.{s}] is no longer read; {s}", .{ key, advice });
             return false;
@@ -737,6 +777,8 @@ fn loadSceneRecursive(
         return false;
     }
     defer c.toml_free(root);
+
+    if (!checkHeader(s, root.?, out_error)) return false;
 
     var base_buf: [path_max]u8 = undefined;
     const base_dir = pathDirname(std.mem.span(path), &base_buf);
@@ -1274,9 +1316,24 @@ test "a scene that declares no entity still loads" {
 
     var scene = TempScene.init();
     defer scene.deinit();
-    try scene.put("main.scene.toml", "[scene]\nname = \"empty\"\n");
+    try scene.put("main.scene.toml", "[scene]\nversion = 2\n");
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a misspelt key on an entity fails the load" {
+    try expectSceneRefused(
+        \\[[entity]]
+        \\name = "Player"
+        \\tpye = "camera"
+        \\
+    , "entity key 'tpye' is not name, parent, scene, type, connect or a component block");
+}
+
+test "a scene header with another version, another key, or a stray top-level key fails the load" {
+    try expectSceneRefused("[scene]\nversion = 3\n", "scene format version 3 is not 2");
+    try expectSceneRefused("[scene]\nname = \"Main\"\n", "[scene] key 'name' is not version");
+    try expectSceneRefused("[level]\nversion = 2\n", "top-level key 'level' is not entity or scene");
 }
 
 test "a scene file that is not there fails the load" {
