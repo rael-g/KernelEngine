@@ -1,11 +1,12 @@
 //! The cluster pass: the render-phase system "render.cull" that gathers the point and spot lights
-//! of a frame into GPU buffers and bins them into a view-space grid of clusters. It publishes the
-//! result to the render service as the bind group "cluster_lights".
+//! of a frame into GPU buffers and bins them into a view-space grid of clusters. It publishes each
+//! buffer of the result to the render service under its own name.
 
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
+const feature_bindings = @import("feature_bindings");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
 
@@ -83,8 +84,6 @@ const ClusterModule = struct {
     num_clusters: u32 = undefined,
     max_lights_per_cluster: u32 = undefined,
 
-    light_set_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
-    fwd_light_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     cluster_grid_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
     point_lights_sb: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -246,7 +245,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     return true;
 }
 
-/// Writes the grid uniform that the shading passes read through "cluster_lights": the grid
+/// Writes the grid uniform that the shading passes read as "cluster_grid": the grid
 /// dimensions, the viewport and depth range, and the view space depth conversion.
 fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) void {
     const core = cm.core;
@@ -269,8 +268,8 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, ou
 }
 
 /// Runs once, from `ke_render_cluster_create`, before the module is registered. It creates the GPU
-/// objects in a fixed order, imports the light bind group into the render service as
-/// "cluster_lights", and fills the access list, which writes the tag imported as "light_clusters",
+/// objects in a fixed order, publishes the light lists and the grid to the render service under the
+/// names `feature_bindings` gives them, and fills the access list, which writes the tag imported as "light_clusters",
 /// and the queries. A failed step returns false with the error placed in the out-error parameter,
 /// and the objects created before it stay set for `destroyModule` to release.
 fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
@@ -313,22 +312,6 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     cm.spot_counts_sb = makeStorageBuffer(dev, "cluster.spot_counts_sb", counts_bytes, out_error);
     if (cm.spot_counts_sb == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const ro = c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
-    const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
-    const light_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 2, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 4, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 5, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 6, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    cm.light_set_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "cluster.light_set_bgl",
-        .entry_count = 7,
-        .entries = &light_bgl_entries,
-    });
     cm.cluster_grid_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .label = "cluster.cluster_grid_uniform",
         .initial_data = null,
@@ -337,23 +320,18 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .mapped_at_creation = 0,
     }, out_error);
     if (cm.cluster_grid_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const light_bg_entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = ro, .buffer = cm.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = ro, .buffer = cm.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 2, .type = ro, .buffer = cm.point_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 3, .type = ro, .buffer = cm.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 4, .type = ro, .buffer = cm.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 5, .type = ro, .buffer = cm.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = cm.cluster_grid_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterGridUniform), .texture_view = 0, .sampler = 0 },
+    const published = [_]struct { buffer: c.ke_gpu_buffer, size: usize }{
+        .{ .buffer = cm.point_lights_sb, .size = point_lights_bytes },
+        .{ .buffer = cm.spot_lights_sb, .size = spot_lights_bytes },
+        .{ .buffer = cm.point_indices_sb, .size = indices_bytes },
+        .{ .buffer = cm.point_counts_sb, .size = counts_bytes },
+        .{ .buffer = cm.spot_indices_sb, .size = indices_bytes },
+        .{ .buffer = cm.spot_counts_sb, .size = counts_bytes },
+        .{ .buffer = cm.cluster_grid_uniform, .size = @sizeOf(ClusterGridUniform) },
     };
-    cm.fwd_light_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .label = "cluster.fwd_light_bind_group",
-        .layout = cm.light_set_bgl,
-        .entry_count = 7,
-        .entries = &light_bg_entries,
-    }, out_error);
-    if (cm.fwd_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
-    _ = core.*.import_bind_group.?(core, "cluster_lights", cm.fwd_light_bind_group, cm.light_set_bgl, null);
+    for (feature_bindings.cluster_buffers, published) |name, buffer| {
+        if (core.*.import_buffer.?(core, name.resource, buffer.buffer, buffer.size, out_error) == c.KE_COMPONENT_INVALID) return false;
+    }
 
     if (!core.*.shader_group_layout.?(core, &cull_group_params, &cm.cull_group, out_error)) return false;
 
@@ -422,8 +400,6 @@ fn destroyModule(cm: *const ClusterModule) void {
     if (cm.cull_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.cull_bind_group);
     if (cm.cull_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, cm.cull_group.layout);
     if (cm.cull_uniform != invalid) dev.destroy_buffer.?(dev, cm.cull_uniform);
-    if (cm.fwd_light_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.fwd_light_bind_group);
-    if (cm.light_set_bgl != invalid) dev.destroy_bind_group_layout.?(dev, cm.light_set_bgl);
     if (cm.cluster_grid_uniform != invalid) dev.destroy_buffer.?(dev, cm.cluster_grid_uniform);
     const storage = [_]c.ke_gpu_buffer{
         cm.point_lights_sb,  cm.spot_lights_sb,

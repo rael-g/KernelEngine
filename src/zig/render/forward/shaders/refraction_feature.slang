@@ -1,7 +1,7 @@
 import ke;
 
-[[vk::binding(1, 0)]] Texture2D    hdr_opaque;
-[[vk::binding(2, 0)]] SamplerState hdr_opaque_sampler;
+Texture2D    hdr_opaque;
+SamplerState hdr_opaque_sampler;
 
 float3 refraction_contribution(float3 n, float3 v, float2 screen_uv, float ior, float distortion_strength) {
     float3 refracted = refract(-v, n, 1.0 / max(ior, 1.0));

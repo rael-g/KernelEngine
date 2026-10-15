@@ -3,9 +3,9 @@ import ke;
 struct ShadowFeatureParams {
     float4x4 lightVP;
 };
-[[vk::binding(4, 0)]] ConstantBuffer<ShadowFeatureParams> shadowParams;
-[[vk::binding(5, 0)]] Texture2D    shadowMap;
-[[vk::binding(6, 0)]] SamplerState shadowSampler;
+ConstantBuffer<ShadowFeatureParams> shadowParams;
+Texture2D    shadowMap;
+SamplerState shadowSampler;
 
 float sample_shadow_visibility(float3 worldPos) {
     float4 sc = mul(shadowParams.lightVP, float4(worldPos, 1.0));

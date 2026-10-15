@@ -400,8 +400,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return failCreate(rt, mark, st);
         }
 
-        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
-                                                            camera_cid, world_transform_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
+        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, logger, @intFromBool(ibl_enabled),
+                                                            camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
             return failCreate(rt, mark, st);
         }
@@ -409,8 +409,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         if (st.skybox.ref == null) {
             return failCreate(rt, mark, st);
         }
-        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, st.camera.ref, logger, @intFromBool(ibl_enabled),
-                                                mesh_cid, world_transform_cid, camera_cid, light_cid, ambient_cid, skybox_cid, st.frame_cid, out_error);
+        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, logger, @intFromBool(ibl_enabled),
+                                                mesh_cid, world_transform_cid, camera_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
             return failCreate(rt, mark, st);
         }
@@ -505,12 +505,60 @@ const cluster_cull_reflection =
     \\]}
 ;
 
+const deferred_lighting_reflection =
+    \\{"parameters":[
+    \\ {"name":"ke_frame","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"ke_lighting","binding":{"kind":"descriptorTableSlot","index":1},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"shadowParams","binding":{"kind":"descriptorTableSlot","index":2},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"shadowMap","binding":{"kind":"descriptorTableSlot","index":3},"type":{"kind":"resource","baseShape":"texture2D"}},
+    \\ {"name":"shadowSampler","binding":{"kind":"descriptorTableSlot","index":4},"type":{"kind":"samplerState"}},
+    \\ {"name":"ibl_env","binding":{"kind":"descriptorTableSlot","index":5},"type":{"kind":"resource","baseShape":"textureCube"}},
+    \\ {"name":"ibl_env_sampler","binding":{"kind":"descriptorTableSlot","index":6},"type":{"kind":"samplerState"}},
+    \\ {"name":"point_lights","binding":{"kind":"descriptorTableSlot","index":7},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"spot_lights","binding":{"kind":"descriptorTableSlot","index":8},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"point_indices","binding":{"kind":"descriptorTableSlot","index":9},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"point_counts","binding":{"kind":"descriptorTableSlot","index":10},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"spot_indices","binding":{"kind":"descriptorTableSlot","index":11},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"spot_counts","binding":{"kind":"descriptorTableSlot","index":12},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"cluster","binding":{"kind":"descriptorTableSlot","index":13},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"gbuffer","binding":{"kind":"subElementRegisterSpace","index":1},"type":{"kind":"parameterBlock",
+    \\  "elementType":{"kind":"struct","fields":[
+    \\   {"name":"g_albedo","type":{"kind":"resource","baseShape":"texture2D"},"binding":{"kind":"descriptorTableSlot","index":0}},
+    \\   {"name":"g_normal","type":{"kind":"resource","baseShape":"texture2D"},"binding":{"kind":"descriptorTableSlot","index":1}},
+    \\   {"name":"g_emissive","type":{"kind":"resource","baseShape":"texture2D"},"binding":{"kind":"descriptorTableSlot","index":2}},
+    \\   {"name":"g_depth","type":{"kind":"resource","baseShape":"texture2D"},"binding":{"kind":"descriptorTableSlot","index":3}}]}}}
+    \\]}
+;
+
+const forward_reflection =
+    \\{"parameters":[
+    \\ {"name":"ke_frame","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"ke_lighting","binding":{"kind":"descriptorTableSlot","index":1},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"shadowParams","binding":{"kind":"descriptorTableSlot","index":2},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"shadowMap","binding":{"kind":"descriptorTableSlot","index":3},"type":{"kind":"resource","baseShape":"texture2D"}},
+    \\ {"name":"shadowSampler","binding":{"kind":"descriptorTableSlot","index":4},"type":{"kind":"samplerState"}},
+    \\ {"name":"ibl_env","binding":{"kind":"descriptorTableSlot","index":5},"type":{"kind":"resource","baseShape":"textureCube"}},
+    \\ {"name":"ibl_env_sampler","binding":{"kind":"descriptorTableSlot","index":6},"type":{"kind":"samplerState"}},
+    \\ {"name":"point_lights","binding":{"kind":"descriptorTableSlot","index":7},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"spot_lights","binding":{"kind":"descriptorTableSlot","index":8},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"point_indices","binding":{"kind":"descriptorTableSlot","index":9},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"point_counts","binding":{"kind":"descriptorTableSlot","index":10},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"spot_indices","binding":{"kind":"descriptorTableSlot","index":11},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"spot_counts","binding":{"kind":"descriptorTableSlot","index":12},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"cluster","binding":{"kind":"descriptorTableSlot","index":13},"type":{"kind":"constantBuffer"}},
+    \\ {"name":"hdr_opaque","binding":{"kind":"descriptorTableSlot","index":14},"type":{"kind":"resource","baseShape":"texture2D"}},
+    \\ {"name":"hdr_opaque_sampler","binding":{"kind":"descriptorTableSlot","index":15},"type":{"kind":"samplerState"}}
+    \\]}
+;
+
 /// The stand-in reflection of a shader file: the parameters its pass binds while it is created.
 fn standInReflection(shader_file: []const u8) []const u8 {
     if (std.mem.startsWith(u8, shader_file, "ui.")) return ui_reflection;
     if (std.mem.startsWith(u8, shader_file, "shadow.")) return shadow_reflection;
     if (std.mem.startsWith(u8, shader_file, "skybox.")) return skybox_reflection;
     if (std.mem.startsWith(u8, shader_file, "cluster_cull.")) return cluster_cull_reflection;
+    if (std.mem.startsWith(u8, shader_file, "deferred_lighting.")) return deferred_lighting_reflection;
+    if (std.mem.startsWith(u8, shader_file, "standard.forward.")) return forward_reflection;
     return empty_reflection;
 }
 

@@ -12,12 +12,12 @@ struct SpotLight {
     float4 cone;
 };
 
-[[vk::binding(0, 3)]] StructuredBuffer<PointLight> point_lights;
-[[vk::binding(1, 3)]] StructuredBuffer<SpotLight>  spot_lights;
-[[vk::binding(2, 3)]] StructuredBuffer<uint>       point_indices;
-[[vk::binding(3, 3)]] StructuredBuffer<uint>       point_counts;
-[[vk::binding(4, 3)]] StructuredBuffer<uint>       spot_indices;
-[[vk::binding(5, 3)]] StructuredBuffer<uint>       spot_counts;
+StructuredBuffer<PointLight> point_lights;
+StructuredBuffer<SpotLight>  spot_lights;
+StructuredBuffer<uint>       point_indices;
+StructuredBuffer<uint>       point_counts;
+StructuredBuffer<uint>       spot_indices;
+StructuredBuffer<uint>       spot_counts;
 
 static const float CLUSTER_PI = 3.14159265359;
 
@@ -59,7 +59,7 @@ struct ClusterGrid {
     float4 cluster_viewport;
     float4 view_space;
 };
-[[vk::binding(6, 3)]] ConstantBuffer<ClusterGrid> cluster;
+ConstantBuffer<ClusterGrid> cluster;
 
 uint cluster_index(float2 frag_xy, float view_z) {
     uint numX = (uint)cluster.cluster_grid.x;

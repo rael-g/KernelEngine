@@ -1,7 +1,7 @@
 import ke;
 
-[[vk::binding(7, 0)]] TextureCube  ibl_env;
-[[vk::binding(8, 0)]] SamplerState ibl_env_sampler;
+TextureCube  ibl_env;
+SamplerState ibl_env_sampler;
 
 float3 ibl_contribution(float3 n, float3 v, float3 albedo, float metallic) {
     float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);

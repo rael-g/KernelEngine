@@ -85,6 +85,7 @@ pub fn build(b: *std.Build) void {
     const component_fields_src = b.pathJoin(&.{ src_zig, "common/component_fields.zig" });
     const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
     const object_uniforms_src = b.pathJoin(&.{ src_zig, "render/common/object_uniforms.zig" });
+    const feature_bindings_src = b.pathJoin(&.{ src_zig, "render/common/feature_bindings.zig" });
     const stubs_src = b.pathJoin(&.{ src_zig, "common/stubs.zig" });
     const tomlc99_dir = b.dependency("tomlc99", .{}).path("").getPath(b);
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
@@ -573,6 +574,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"feature-bindings-src" = feature_bindings_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -593,6 +595,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"feature-bindings-src" = feature_bindings_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -656,6 +659,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"feature-bindings-src" = feature_bindings_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
