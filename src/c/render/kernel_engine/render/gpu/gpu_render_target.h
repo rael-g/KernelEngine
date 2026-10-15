@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_GPU_GPU_RENDER_TARGET_H_
+#define KERNEL_ENGINE_RENDER_GPU_GPU_RENDER_TARGET_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -38,4 +39,6 @@ typedef struct ke_gpu_render_target_handle
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

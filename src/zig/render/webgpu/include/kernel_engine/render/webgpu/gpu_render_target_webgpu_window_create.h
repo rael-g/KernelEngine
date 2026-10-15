@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
+#define KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -60,4 +61,6 @@ ke_gpu_render_target_webgpu_window_create(const ke_gpu_render_target_webgpu_wind
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

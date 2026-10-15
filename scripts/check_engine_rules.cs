@@ -68,6 +68,8 @@ var rules = new List<Rule>
         Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(zig|cs)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)
             && !s.Key.Contains("/scheduler/", StringComparison.Ordinal) && s.Key != "src/zig/runtime/src/runtime.zig"),
             l => pinning.IsMatch(l), outsideTests: true)),
+    new("a header has an #ifndef guard, never #pragma once", 0,
+        Lines(headers, l => l.TrimStart().StartsWith("#pragma once", StringComparison.Ordinal))),
     new("a contract header declares no export macro", 0,
         Lines(contracts, l => exportMacro.IsMatch(l))),
     new("a contract header declares no plain function", 0,

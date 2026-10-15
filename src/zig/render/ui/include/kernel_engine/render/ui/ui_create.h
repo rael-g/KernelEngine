@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_UI_UI_CREATE_H_
+#define KERNEL_ENGINE_RENDER_UI_UI_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
@@ -57,4 +58,6 @@ extern "C"
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

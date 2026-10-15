@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_TEXT_STB_TRUETYPE_STB_FONT_H_
+#define KERNEL_ENGINE_TEXT_STB_TRUETYPE_STB_FONT_H_
 
 #include <kernel_engine/text/font.h>
 
@@ -32,4 +33,6 @@ KE_TEXT_STB_TRUETYPE_API ke_font_loader_handle ke_font_loader_stb_create(
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

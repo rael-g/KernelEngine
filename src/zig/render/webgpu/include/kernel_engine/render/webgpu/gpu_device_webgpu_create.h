@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
+#define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -60,4 +61,6 @@ ke_gpu_device_webgpu_create(const ke_gpu_device_webgpu_params *params,
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

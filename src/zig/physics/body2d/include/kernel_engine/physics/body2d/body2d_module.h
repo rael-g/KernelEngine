@@ -1,5 +1,6 @@
 
-#pragma once
+#ifndef KERNEL_ENGINE_PHYSICS_BODY2D_BODY2D_MODULE_H_
+#define KERNEL_ENGINE_PHYSICS_BODY2D_BODY2D_MODULE_H_
 
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/logger/logger.h>
@@ -55,4 +56,6 @@ KE_PHYSICS_BODY2D_API bool ke_physics_register_scene_apply(ke_ecs *ecs, ke_world
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

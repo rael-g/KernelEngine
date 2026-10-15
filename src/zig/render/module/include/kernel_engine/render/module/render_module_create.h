@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_MODULE_RENDER_MODULE_CREATE_H_
+#define KERNEL_ENGINE_RENDER_MODULE_RENDER_MODULE_CREATE_H_
 
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/render/service/render_service_create.h>
@@ -73,4 +74,6 @@ ke_render_module_load_font(ke_render_module *module, const char *key,
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

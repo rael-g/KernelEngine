@@ -1,5 +1,6 @@
 
-#pragma once
+#ifndef KERNEL_ENGINE_AUDIO_MODULE_AUDIO_MODULE_H_
+#define KERNEL_ENGINE_AUDIO_MODULE_AUDIO_MODULE_H_
 
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
@@ -30,4 +31,6 @@ KE_AUDIO_MODULE_API bool ke_audio_register_scene_apply(ke_ecs *ecs, ke_world *wo
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

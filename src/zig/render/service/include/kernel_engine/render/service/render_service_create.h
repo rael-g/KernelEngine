@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_CREATE_H_
+#define KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ke_ecs.h>
@@ -36,4 +37,6 @@ ke_render_service_create(ke_gpu_device *device, ke_gpu_render_target *target, ke
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

@@ -1,5 +1,6 @@
 
-#pragma once
+#ifndef KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
+#define KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 
 #include <kernel_engine/window/window.h>
 
@@ -35,4 +36,6 @@ KE_WINDOW_API ke_window_handle ke_window_glfw_create(const ke_window_glfw_params
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

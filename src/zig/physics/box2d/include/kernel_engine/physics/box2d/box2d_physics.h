@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿#ifndef KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
+#define KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
 
 #include <kernel_engine/physics/physics_2d.h>
 
@@ -36,4 +37,6 @@ KE_PHYSICS_BOX2D_API ke_physics_2d_handle ke_physics_2d_box2d_create(
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

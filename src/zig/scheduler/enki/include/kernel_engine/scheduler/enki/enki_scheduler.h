@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_SCHEDULER_ENKI_ENKI_SCHEDULER_H_
+#define KERNEL_ENGINE_SCHEDULER_ENKI_ENKI_SCHEDULER_H_
 
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/scheduler/scheduler.h>
@@ -27,4 +28,6 @@ KE_SCHEDULER_API ke_scheduler_handle ke_scheduler_enki_create(struct ke_error **
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

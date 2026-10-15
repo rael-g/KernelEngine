@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
+#define KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/common/types.h>
@@ -63,4 +64,6 @@ extern "C"
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

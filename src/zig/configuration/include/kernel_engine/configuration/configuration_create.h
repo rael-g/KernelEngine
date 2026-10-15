@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_CREATE_H_
+#define KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/configuration/configuration.h>
@@ -24,4 +25,6 @@ extern "C"
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif
