@@ -72,7 +72,7 @@ var rules = new List<Rule>
         Lines(contracts, l => exportMacro.IsMatch(l))),
     new("a contract header declares no plain function", 0,
         Lines(contracts, l => plainFunction.IsMatch(l))),
-    new("a plugin exports only what a factory header declares", 7,
+    new("a plugin exports only what a factory header declares", 0,
         zig.Where(s => !s.Key.StartsWith("src/zig/common/", StringComparison.Ordinal))
             .SelectMany(s => s.Value.Select((l, i) => (s.Key, Line: i + 1, Match: exportFn.Match(l))))
             .Where(x => x.Match.Success && !declaredNames.Contains(x.Match.Groups[1].Value))

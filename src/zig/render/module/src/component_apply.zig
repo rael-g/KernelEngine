@@ -34,7 +34,7 @@ fn asFloat(v: *const c.ke_variant) ?f32 {
 /// the same key overwrites an earlier one; entries before a failing one stay applied. On a
 /// value that is not a number, or lies outside the open range from zero to a half turn, it
 /// fills the error output and returns false at that entry.
-pub export fn ke_render_apply_camera(
+pub fn ke_render_apply_camera(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
@@ -71,7 +71,7 @@ fn alphaModeOf(v: *const c.ke_variant) ?u32 {
 /// Claims "alpha_mode" and writes `alpha_mode` from each matching entry in order. On a value
 /// `alphaModeOf` does not map it fills the error output and returns false; that entry leaves
 /// `alpha_mode` unchanged.
-pub export fn ke_render_apply_mesh(
+pub fn ke_render_apply_mesh(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
@@ -92,7 +92,7 @@ pub export fn ke_render_apply_mesh(
 /// Claims "alpha_mode" and writes `alpha_mode` from each matching entry in order. On a value
 /// `alphaModeOf` does not map it fills the error output and returns false; that entry leaves
 /// `alpha_mode` unchanged.
-pub export fn ke_render_apply_sprite2d(
+pub fn ke_render_apply_sprite2d(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
