@@ -13,6 +13,7 @@ const JBinding = struct {
 };
 
 const JContainer = struct {
+    binding: ?JBinding = null,
     bindings: []const JBinding = &.{},
 };
 
@@ -90,9 +91,12 @@ pub const Group = struct {
                 try self.setIndex(p.binding.index);
                 const element = p.type.elementType orelse return error.Malformed;
                 const container = p.type.containerVarLayout orelse JContainer{};
-                for (container.bindings) |cb| {
-                    if (std.mem.eql(u8, cb.kind, "descriptorTableSlot")) {
-                        try self.add(.{ .name = name, .binding = cb.index, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage });
+                const single: [1]JBinding = .{container.binding orelse JBinding{ .kind = "" }};
+                for ([_][]const JBinding{ container.bindings, &single }) |list| {
+                    for (list) |cb| {
+                        if (std.mem.eql(u8, cb.kind, "descriptorTableSlot")) {
+                            try self.add(.{ .name = name, .binding = cb.index, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage });
+                        }
                     }
                 }
                 for (element.fields orelse &.{}) |f| {
@@ -357,6 +361,21 @@ test "a parameter block is its own group, its uniform data bound under the block
     try std.testing.expectEqual(@as(u32, 1), group.find("albedo").?.binding);
     try std.testing.expectEqual(@as(c.ke_gpu_binding_type, c.KE_GPU_BINDING_TYPE_SAMPLER), group.find("smp").?.type);
     try std.testing.expect(group.find("shadow_map") == null);
+}
+
+test "a block holding only uniform data is one buffer named after the block" {
+    var group = Group.init(std.testing.allocator);
+    defer group.deinit();
+    const json =
+        \\{"parameters":[{"name":"object","binding":{"kind":"subElementRegisterSpace","index":2},
+        \\ "type":{"kind":"parameterBlock","elementType":{"kind":"struct","fields":[
+        \\  {"name":"mvp","type":{"kind":"matrix"},"binding":{"kind":"uniform","offset":0,"size":64}}]},
+        \\  "containerVarLayout":{"binding":{"kind":"descriptorTableSlot","index":0}}}}]}
+    ;
+    try std.testing.expect(try group.collect(json, "object", c.KE_GPU_SHADER_STAGE_VERTEX));
+    try std.testing.expectEqual(@as(?u32, 2), group.index);
+    try std.testing.expectEqual(@as(usize, 1), group.bindings.items.len);
+    try std.testing.expectEqual(@as(u32, 0), group.find("object").?.binding);
 }
 
 test "a block no stage declares is reported as absent" {
