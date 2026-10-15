@@ -9,8 +9,7 @@ pub fn build(b: *std.Build) void {
     const ke_config = b.option([]const u8, "ke-config-include", "Path to kernel_engine/configuration include dir") orelse @panic("-Dke-config-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "Dir containing ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
-    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "path to the shared vendored tomlc99 dir") orelse
-        b.pathJoin(&.{ b.build_root.path.?, "..", "..", "common", "third_party", "tomlc99" });
+    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "dir holding toml.c and toml.h, fetched by the root build.zig.zon") orelse @panic("-Dtomlc99-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/configuration_toml.zig"),

@@ -89,7 +89,7 @@ Contracts worth knowing by name:
 
 Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty-three plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
-No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile (stb, miniaudio) come from vcpkg; tomlc99 is the one vendored library.
+No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile come from vcpkg (stb, miniaudio) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
 
 Dependencies enter through dependency management: vcpkg for native libraries, NuGet for .NET, `build.zig.zon` for Zig packages and C sources built by the graph. A pinned fetch step in the root `build.zig` is the exception for what none of them carries, a vendored copy the exception after that, and the machine's environment or the operating system's package manager is never a source — see [`docs/conventions/build.md`](docs/conventions/build.md).
 

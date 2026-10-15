@@ -86,7 +86,7 @@ pub fn build(b: *std.Build) void {
     const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
     const object_uniforms_src = b.pathJoin(&.{ src_zig, "render/common/object_uniforms.zig" });
     const stubs_src = b.pathJoin(&.{ src_zig, "common/stubs.zig" });
-    const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
+    const tomlc99_dir = b.dependency("tomlc99", .{}).path("").getPath(b);
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
     else
