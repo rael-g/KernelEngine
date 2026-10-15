@@ -31,6 +31,8 @@ var bagName = new Regex(@"\bke_[a-z0-9_]*_(desc|descriptor|info|config)\b");
 var implName = new Regex(@"(?<![A-Za-z0-9])impl_[a-z]|[a-z0-9]Impl\b|[a-z0-9]_impl\b");
 var slashComment = new Regex(@"^\s*//(?![/!])");
 var hashComment = new Regex(@"^\s*#(?!!)");
+var shaderBindingNumber = new Regex(@"vk::binding\s*\(|:\s*register\s*\(");
+var bindingNumber = new Regex(@"\.binding\s*=\s*[0-9]");
 var blockComment = new Regex(@"/\*(?![*!])");
 var exportFn = new Regex(@"^\s*(?:pub )?export fn (\w+)");
 var declared = new Regex(@"^\s*KE_\w*API\s[^;{#]*?\b(\w+)\s*\(", RegexOptions.Multiline);
@@ -99,6 +101,10 @@ var rules = new List<Rule>
         Lines(native, l => slashComment.IsMatch(l) || blockComment.IsMatch(l))),
     new("no comment in C# besides a doc comment", 6,
         Lines(managed, l => slashComment.IsMatch(l))),
+    new("a shader in the engine leaves its binding numbers to the compiler", 0,
+        Lines(sources.Where(s => s.Key.StartsWith("src/", StringComparison.Ordinal) && s.Key.EndsWith(".slang", StringComparison.Ordinal)), l => shaderBindingNumber.IsMatch(l))),
+    new("a plugin binds a shader's parameters by name, never by number", 0,
+        Lines(sources.Where(s => s.Key.StartsWith("src/zig/", StringComparison.Ordinal) && s.Key.EndsWith(".zig", StringComparison.Ordinal)), l => bindingNumber.IsMatch(l))),
     new("no comment in a shader", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".slang", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),
     new("no comment in a build manifest or a workflow", 2,
