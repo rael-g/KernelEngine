@@ -26,7 +26,8 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_render, ke_asset, ke_self, stb_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    mod.addCSourceFile(.{ .file = b.path("src/stb_image_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    const implementation = b.addWriteFiles().add("stb_image_impl.c", "#define STB_IMAGE_IMPLEMENTATION\n#include <stb_image.h>\n");
+    mod.addCSourceFile(.{ .file = implementation, .flags = &.{"-fno-sanitize=undefined"} });
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
@@ -55,7 +56,7 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_render, ke_asset, ke_self, stb_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    test_mod.addCSourceFile(.{ .file = b.path("src/stb_image_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    test_mod.addCSourceFile(.{ .file = implementation, .flags = &.{"-fno-sanitize=undefined"} });
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addImport("kerror", b.createModule(.{

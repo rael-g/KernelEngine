@@ -28,7 +28,8 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_resource_cache_default, ke_self, miniaudio_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    mod.addCSourceFile(.{ .file = b.path("src/miniaudio_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    const implementation = b.addWriteFiles().add("miniaudio_impl.c", "#define MINIAUDIO_IMPLEMENTATION\n#include <miniaudio.h>\n");
+    mod.addCSourceFile(.{ .file = implementation, .flags = &.{"-fno-sanitize=undefined"} });
     mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
     mod.linkSystemLibrary("ke_resource_cache_default", .{});
     if (target.result.os.tag == .windows) {
@@ -62,7 +63,7 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_audio, ke_resource_cache, ke_resource_cache_default, ke_self, miniaudio_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    test_mod.addCSourceFile(.{ .file = b.path("src/miniaudio_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    test_mod.addCSourceFile(.{ .file = implementation, .flags = &.{"-fno-sanitize=undefined"} });
     test_mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
     test_mod.addRPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
     test_mod.linkSystemLibrary("ke_resource_cache_default", .{});
