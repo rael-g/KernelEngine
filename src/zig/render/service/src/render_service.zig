@@ -27,11 +27,11 @@ const pipeline_cache = @import("pipeline_cache.zig");
 const slot_map = @import("slot_map.zig");
 const shader_loader = @import("shader_loader.zig");
 
-pub const MAX_RESOURCES = 64;
 pub const MAX_CMD_BUFFERS = 64;
 pub const NUM_PRECREATED_ENCODERS = 9;
 pub const MAX_COLOR_ATTACH = 8;
 pub const first_upload_records = 4096;
+const first_resources = 16;
 pub const MAX_SHADER_NAME = 64;
 pub const DEFAULT_MATERIAL_SHADER = "standard";
 const first_upload_arena = 8 * 1024 * 1024;
@@ -100,24 +100,24 @@ pub const Resource = struct {
     bind_group_layout: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
 };
 
-pub const MAX_COMPUTE_CMDS = 32;
 /// The `?u32` labels are offsets into the `labels` of the record that holds the command, not
 /// pointers. They are null when no text was stored.
 pub const ComputeCmd = union(enum) {
     set_pipeline: c.ke_gpu_pipeline,
-    set_bind_group: struct { index: u32, bg: c.ke_gpu_bind_group, offsets: [4]u32, count: u32 },
+    set_bind_group: struct { index: u32, bg: c.ke_gpu_bind_group, first_offset: u32, count: u32 },
     dispatch: struct { x: u32, y: u32, z: u32 },
     dispatch_indirect: struct { buf: c.ke_gpu_buffer, offset: usize },
     push_debug_group: ?u32,
     pop_debug_group,
     insert_debug_marker: ?u32,
 };
-/// The commands of one compute pass, recorded into `cmds` up to `count`. Labels are copied into
-/// `labels` by `storeLabel`, so a command never keeps a pointer the caller owns.
+/// The commands of one compute pass, in the order they were recorded. Labels are copied into
+/// `labels` by `storeLabel` and dynamic offsets into `offsets`, so a command never keeps a pointer
+/// the caller owns.
 pub const ComputeRecord = struct {
     pass: c.ke_gpu_compute_pass,
-    cmds: [MAX_COMPUTE_CMDS]ComputeCmd,
-    count: u32,
+    cmds: std.ArrayList(ComputeCmd),
+    offsets: std.ArrayList(u32),
     valid: bool,
     pass_label: ?u32,
     labels: std.ArrayList(u8),
@@ -144,7 +144,7 @@ pub const ComputeRecord = struct {
 };
 
 /// The state a render service is built on. `ke_render_service_create` makes it and `destroyCore`
-/// frees it. Only the first `resource_count` entries of `resources` are set, and `materialAt` falls
+/// frees it. `materialAt` falls
 /// back to `white_material` for a handle it does not know. The two upload counters are atomic.
 pub const CoreState = struct {
     device: *c.ke_gpu_device,
@@ -152,8 +152,7 @@ pub const CoreState = struct {
     target: *c.ke_gpu_render_target,
     queue: c.ke_gpu_queue,
 
-    resources: [MAX_RESOURCES]Resource,
-    resource_count: u32,
+    resources: std.ArrayList(Resource),
 
     backbuffer_w: u32,
     backbuffer_h: u32,
@@ -217,12 +216,12 @@ pub const CoreState = struct {
             self.material_store.get(self.white_material.bits).?;
     }
 
-    /// Scans the first `resource_count` entries by name; null when none carries it.
+    /// Scans the entries by name; null when none carries it.
     pub fn find(self: *CoreState, name: [*c]const u8) ?*Resource {
         var i: u32 = 0;
-        while (i < self.resource_count) : (i += 1) {
-            if (std.mem.eql(u8, std.mem.span(self.resources[i].name), std.mem.span(name))) {
-                return &self.resources[i];
+        while (i < self.resources.items.len) : (i += 1) {
+            if (std.mem.eql(u8, std.mem.span(self.resources.items[i].name), std.mem.span(name))) {
+                return &self.resources.items[i];
             }
         }
         return null;
@@ -260,9 +259,7 @@ pub fn isDepthFormat(fmt: c.ke_gpu_texture_format) bool {
 fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     const st = coreOf(self);
     if (st.device.flush_pipeline_compiles) |flush| flush(st.device);
-    var i: u32 = 0;
-    while (i < st.resource_count) : (i += 1) {
-        const r = &st.resources[i];
+    for (st.resources.items) |*r| {
         if (r.is_transient) {
             if (r.view != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture_view.?(st.device, r.view);
             if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
@@ -279,7 +276,11 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     if (st.sampler != c.KE_GPU_INVALID_HANDLE) st.device.destroy_sampler.?(st.device, st.sampler);
     if (st.material_bgl != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_bgl);
     st.pipeline_cache.destroyAll(st.device);
-    for (&st.compute_records) |*r| r.labels.deinit(gpa);
+    for (&st.compute_records) |*r| {
+        r.labels.deinit(gpa);
+        r.cmds.deinit(gpa);
+        r.offsets.deinit(gpa);
+    }
     var spilled = st.upload_spill.swap(null, .acquire);
     while (spilled) |n| {
         spilled = n.next;
@@ -288,6 +289,7 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     }
     gpa.free(st.upload_arena);
     gpa.free(st.upload_records);
+    st.resources.deinit(gpa);
     gpa.free(@constCast(st.shader_dir));
     gpa.destroy(st);
     gpa.destroy(@as(*c.ke_render_service, @ptrCast(self)));
@@ -324,7 +326,14 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
     };
+    var resources = std.ArrayList(Resource).initCapacity(gpa, first_resources) catch {
+        gpa.free(upload_records);
+        gpa.free(upload_arena);
+        gpa.destroy(st);
+        return .{ .ref = null, .destroy = null };
+    };
     const shader_dir_owned = gpa.dupe(u8, shader_dir_span) catch {
+        resources.deinit(gpa);
         gpa.free(upload_records);
         gpa.free(upload_arena);
         gpa.destroy(st);
@@ -338,8 +347,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .ecs = e,
         .target = tgt,
         .queue = dev.get_default_queue.?(dev),
-        .resources = undefined,
-        .resource_count = 0,
+        .resources = resources,
         .backbuffer_w = bb_w,
         .backbuffer_h = bb_h,
         .sized_w = bb_w,
@@ -377,7 +385,11 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .ndc = dev.get_ndc_convention.?(dev),
         .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
-    for (&st.compute_records) |*r| r.labels = .empty;
+    for (&st.compute_records) |*r| {
+        r.labels = .empty;
+        r.cmds = .empty;
+        r.offsets = .empty;
+    }
 
     const mesh_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
         .destroy_fn = asset_upload.destroyMeshResource,
@@ -397,6 +409,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
     }, null);
     if (mesh_ch.ref == null or tex_ch.ref == null or mat_ch.ref == null or shader_ch.ref == null) {
         gpa.free(shader_dir_owned);
+        resources.deinit(gpa);
         gpa.free(upload_records);
         gpa.free(upload_arena);
         gpa.destroy(st);
@@ -412,7 +425,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
     st.shader_cache_destroy = shader_ch.destroy.?;
 
     const bb_cid = e.component_register.?(e, "backbuffer", 0, null, 0, null);
-    st.resources[0] = .{
+    st.resources.appendAssumeCapacity(.{
         .name = "backbuffer",
         .cid = bb_cid,
         .format = tgt.format.?(tgt),
@@ -421,8 +434,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .is_backbuffer = true,
         .is_transient = false,
         .clear_value = .{ 0, 0, 0, 0 },
-    };
-    st.resource_count = 1;
+    });
 
     const core = gpa.create(c.ke_render_service) catch {
         gpa.destroy(st);

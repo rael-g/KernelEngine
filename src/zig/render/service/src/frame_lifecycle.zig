@@ -17,7 +17,8 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     @memset(st.cmd_valid[0..], false);
     for (&st.compute_records) |*r| {
         r.valid = false;
-        r.count = 0;
+        r.cmds.clearRetainingCapacity();
+        r.offsets.clearRetainingCapacity();
         r.labels.clearRetainingCapacity();
     }
     st.upload_count.store(0, .monotonic);
@@ -59,13 +60,12 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
             const enc = st.cmd_encoders[s];
             const rec = &st.compute_records[s];
             const cp = enc.*.begin_compute_pass.?(enc, &c.ke_gpu_compute_pass_params{ .label = rec.label(rec.pass_label) });
-            var ci: u32 = 0;
-            while (ci < rec.count) : (ci += 1) {
-                switch (rec.cmds[ci]) {
+            for (rec.cmds.items) |cmd| {
+                switch (cmd) {
                     .set_pipeline => |p| cp.*.set_pipeline.?(cp, p),
                     .set_bind_group => |b| {
                         if (b.count > 0)
-                            cp.*.set_bind_group.?(cp, b.index, b.bg, &b.offsets, b.count)
+                            cp.*.set_bind_group.?(cp, b.index, b.bg, rec.offsets.items[b.first_offset..].ptr, b.count)
                         else
                             cp.*.set_bind_group.?(cp, b.index, b.bg, null, 0);
                     },

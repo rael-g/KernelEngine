@@ -10,12 +10,14 @@ const c = rc.c;
 /// a depth attachment, any other a color attachment. A size relative to the backbuffer is scaled
 /// from the size the service last read from the target. Entries made here are the only
 /// transient ones: `destroyCore` destroys the texture and view of transient entries and of no
-/// other entry. Returns the invalid component id when the table is full; a texture the device
-/// fails to create is not detected.
+/// other entry. Returns the invalid component id, with an out-of-memory error, when the table
+/// cannot grow; a texture the device fails to create is not detected.
 pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resource_desc, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-    _ = out_error;
     const st = rc.coreOf(self);
-    if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
+    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
 
     const cid = st.ecs.component_register.?(st.ecs, desc.*.name, 0, null, 0, null);
 
@@ -27,7 +29,7 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
     }
 
     const made = createTarget(st, desc.*.name, desc.*.format, w, h);
-    st.resources[st.resource_count] = .{
+    st.resources.appendAssumeCapacity(.{
         .name = desc.*.name,
         .cid = cid,
         .format = desc.*.format,
@@ -39,8 +41,7 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
         .relative = desc.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .scale_x = desc.*.scale_x,
         .scale_y = desc.*.scale_y,
-    };
-    st.resource_count += 1;
+    });
     return cid;
 }
 
@@ -95,7 +96,7 @@ fn scaled(size: u32, scale: f32) u32 {
 pub fn resizeRelative(st: *rc.CoreState) void {
     if (st.backbuffer_w == st.sized_w and st.backbuffer_h == st.sized_h) return;
     if (st.backbuffer_w == 0 or st.backbuffer_h == 0) return;
-    for (st.resources[0..st.resource_count]) |*r| {
+    for (st.resources.items) |*r| {
         if (!r.relative) continue;
         if (r.view != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture_view.?(st.device, r.view);
         if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
@@ -114,13 +115,15 @@ pub fn resourceGeneration(self: [*c]c.ke_render_service) callconv(.c) u32 {
 }
 
 /// Appends an entry for a texture owned by the caller, with no view. Returns the invalid component
-/// id when the table is full.
+/// id when the table cannot grow, with an out-of-memory error.
 pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.ke_gpu_texture, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-    _ = out_error;
     const st = rc.coreOf(self);
-    if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
+    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
     const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, null);
-    st.resources[st.resource_count] = .{
+    st.resources.appendAssumeCapacity(.{
         .name = name,
         .cid = cid,
         .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
@@ -129,19 +132,20 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
         .is_backbuffer = false,
         .is_transient = false,
         .clear_value = .{ 0, 0, 0, 0 },
-    };
-    st.resource_count += 1;
+    });
     return cid;
 }
 
 /// Appends an entry that names a resource with no handle, so passes can order on it. Returns the
-/// invalid component id when the table is full.
+/// invalid component id when the table cannot grow, with an out-of-memory error.
 pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-    _ = out_error;
     const st = rc.coreOf(self);
-    if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
+    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
     const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, null);
-    st.resources[st.resource_count] = .{
+    st.resources.appendAssumeCapacity(.{
         .name = name,
         .cid = cid,
         .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
@@ -150,19 +154,20 @@ pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [
         .is_backbuffer = false,
         .is_transient = false,
         .clear_value = .{ 0, 0, 0, 0 },
-    };
-    st.resource_count += 1;
+    });
     return cid;
 }
 
 /// Appends an entry for a buffer owned by the caller, recording its size. Returns the invalid
-/// component id when the table is full.
+/// component id when the table cannot grow, with an out-of-memory error.
 pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c.ke_gpu_buffer, size: u64, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-    _ = out_error;
     const st = rc.coreOf(self);
-    if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
+    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
     const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, null);
-    st.resources[st.resource_count] = .{
+    st.resources.appendAssumeCapacity(.{
         .name = name,
         .cid = cid,
         .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
@@ -173,20 +178,21 @@ pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c
         .clear_value = .{ 0, 0, 0, 0 },
         .buffer = buffer,
         .buffer_size = size,
-    };
-    st.resource_count += 1;
+    });
     return cid;
 }
 
 /// Appends an entry for a bind group and its layout, both owned by the caller. Returns the invalid
-/// component id when the table is full.
+/// component id when the table cannot grow, with an out-of-memory error.
 pub fn importBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8, bg: c.ke_gpu_bind_group,
                        layout: c.ke_gpu_bind_group_layout, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-    _ = out_error;
     const st = rc.coreOf(self);
-    if (st.resource_count >= rc.MAX_RESOURCES) return c.KE_COMPONENT_INVALID;
+    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
     const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, null);
-    st.resources[st.resource_count] = .{
+    st.resources.appendAssumeCapacity(.{
         .name = name,
         .cid = cid,
         .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
@@ -197,8 +203,7 @@ pub fn importBindGroup(self: [*c]c.ke_render_service, name: [*c]const u8, bg: c.
         .clear_value = .{ 0, 0, 0, 0 },
         .bind_group = bg,
         .bind_group_layout = layout,
-    };
-    st.resource_count += 1;
+    });
     return cid;
 }
 

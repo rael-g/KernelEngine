@@ -132,7 +132,8 @@ fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_com
     const slot = ps.io.cmd_slot;
     if (slot >= rc.MAX_CMD_BUFFERS) return null;
     const rec = &ps.core.compute_records[slot];
-    rec.count = 0;
+    rec.cmds.clearRetainingCapacity();
+    rec.offsets.clearRetainingCapacity();
     rec.valid = true;
     rec.pass_label = rec.storeLabel(ps.io.name);
     rec.pass = .{
@@ -154,12 +155,11 @@ fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_com
 inline fn recOf(self: [*c]c.ke_gpu_compute_pass) *rc.ComputeRecord {
     return @alignCast(@ptrCast(self.*.handle));
 }
+/// Lost only when the record cannot grow, which the compute pass slots have no way to report.
 fn cpAppend(rec: *rc.ComputeRecord, cmd: rc.ComputeCmd) void {
-    if (rec.count >= rc.MAX_COMPUTE_CMDS) return;
-    rec.cmds[rec.count] = cmd;
-    rec.count += 1;
+    rec.cmds.append(rc.gpa, cmd) catch {};
 }
-/// Records the command; dropped when the record is full.
+/// Records the command.
 fn cpSetPipeline(self: [*c]c.ke_gpu_compute_pass, pipe: c.ke_gpu_pipeline) callconv(.c) void {
     cpAppend(recOf(self), .{ .set_pipeline = pipe });
 }
@@ -167,11 +167,10 @@ fn cpSetPipeline(self: [*c]c.ke_gpu_compute_pass, pipe: c.ke_gpu_pipeline) callc
 /// outlive the call.
 fn cpSetBindGroup(self: [*c]c.ke_gpu_compute_pass, group_index: u32, bg: c.ke_gpu_bind_group,
                   dynamic_offsets: [*c]const u32, dyn_count: u32) callconv(.c) void {
-    var off: [4]u32 = .{ 0, 0, 0, 0 };
-    const n = @min(dyn_count, 4);
-    var i: u32 = 0;
-    while (i < n) : (i += 1) off[i] = dynamic_offsets[i];
-    cpAppend(recOf(self), .{ .set_bind_group = .{ .index = group_index, .bg = bg, .offsets = off, .count = dyn_count } });
+    const rec = recOf(self);
+    const first: u32 = @intCast(rec.offsets.items.len);
+    if (dyn_count > 0) rec.offsets.appendSlice(rc.gpa, dynamic_offsets[0..dyn_count]) catch return;
+    cpAppend(rec, .{ .set_bind_group = .{ .index = group_index, .bg = bg, .first_offset = first, .count = dyn_count } });
 }
 /// Records the command; dropped when the record is full.
 fn cpDispatch(self: [*c]c.ke_gpu_compute_pass, x: u32, y: u32, z: u32) callconv(.c) void {
