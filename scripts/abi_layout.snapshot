@@ -280,6 +280,25 @@ ke_render_resource_desc size=56 align=8
   scale_x 28
   scale_y 32
   clear_value 36
+ke_render_binding_hint size=16 align=8
+  name 0
+  flags 8
+ke_render_shader_group_params size=40 align=8
+  shader 0
+  stages 8
+  block 16
+  hints 24
+  hint_count 32
+ke_render_shader_group size=16 align=8
+  layout 0
+  index 8
+ke_render_shader_binding size=48 align=8
+  name 0
+  buffer 8
+  buffer_offset 16
+  buffer_size 24
+  texture_view 32
+  sampler 40
 ke_render_pass_io size=48 align=8
   name 0
   reads 8
@@ -288,7 +307,7 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   cmd_slot 36
   load 40
-ke_render_service size=368 align=8
+ke_render_service size=384 align=8
   handle 0
   declare 8
   import_texture 16
@@ -333,8 +352,10 @@ ke_render_service size=368 align=8
   try_get_material 328
   white_texture 336
   load_shader 344
-  backbuffer_format 352
-  resource_generation 360
+  shader_group_layout 352
+  create_shader_bind_group 360
+  backbuffer_format 368
+  resource_generation 376
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8

@@ -43,6 +43,55 @@ typedef struct ke_render_resource_desc
     float                   clear_value[4];
 } ke_render_resource_desc;
 
+/// What a pass states about a shader binding that the shader's reflection does not carry.
+typedef enum ke_render_binding_hint_flags
+{
+    /// The texture is bound to a depth-format view.
+    KE_RENDER_BINDING_HINT_DEPTH          = 0x1u,
+    /// The buffer is bound with a dynamic offset given at set_bind_group.
+    KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET = 0x2u,
+} ke_render_binding_hint_flags;
+
+/// A hint for the binding a shader declares under `name`.
+typedef struct ke_render_binding_hint
+{
+    const char *name;
+    uint32_t    flags;
+} ke_render_binding_hint;
+
+/// One bind group of a compiled shader, named rather than numbered: the bindings of `block`, or the
+/// shader's loose parameters when `block` is NULL, across the reflection of every stage in `stages`.
+typedef struct ke_render_shader_group_params
+{
+    /// Logical name the shader was compiled under, as load_shader takes it.
+    const char                   *shader;
+    /// Bitwise OR of the KE_GPU_SHADER_STAGE_* stages whose reflection is read.
+    uint32_t                      stages;
+    /// Name of a ParameterBlock the shader declares; NULL selects its loose parameters.
+    const char                   *block;
+    const ke_render_binding_hint *hints;
+    uint32_t                      hint_count;
+} ke_render_shader_group_params;
+
+/// A bind group layout built from a shader's reflection, and the group index the shader expects it at.
+typedef struct ke_render_shader_group
+{
+    ke_gpu_bind_group_layout layout;
+    uint32_t                 index;
+} ke_render_shader_group;
+
+/// What one named binding of a shader group is bound to; only the field its type reads is used.
+typedef struct ke_render_shader_binding
+{
+    /// The parameter's name; the uniform data of a block is named after the block.
+    const char         *name;
+    ke_gpu_buffer       buffer;
+    uint64_t            buffer_offset;
+    uint64_t            buffer_size;
+    ke_gpu_texture_view texture_view;
+    ke_gpu_sampler      sampler;
+} ke_render_shader_binding;
+
 /// A pass's declared resource I/O by name.
 typedef struct ke_render_pass_io
 {
@@ -240,6 +289,33 @@ struct ke_render_service
     /// Resolves a shader by logical NAME + STAGE to a device-ready module.
     ke_gpu_shader_module (*load_shader)(struct ke_render_service *self, const char *name,
                                         ke_gpu_shader_stage stage, ke_error **out_error);
+
+    /**
+     * Builds the layout of one bind group of a compiled shader from the reflection the build wrote
+     * beside it. The caller owns the layout and destroys it on the device.
+     * @param out_group [out] Receives the layout and the group index the shader expects it at.
+     * @return False with the error filled: not found when a stage's reflection is missing or no
+     * stage declares the block, invalid argument when the reflection cannot be read or a hint
+     * names no parameter of the group.
+     */
+    bool (*shader_group_layout)(struct ke_render_service *self,
+                                const ke_render_shader_group_params *params,
+                                ke_render_shader_group *out_group, ke_error **out_error);
+
+    /**
+     * Creates a bind group for one group of a compiled shader, matching each binding to the
+     * shader's parameter of the same name. The caller owns the bind group and destroys it on the
+     * device.
+     * @param layout The layout shader_group_layout returned for the same params.
+     * @param label [utf8] Optional name shown by capture and validation tools.
+     * @return The bind group, or KE_GPU_INVALID_HANDLE with the error filled: invalid argument when
+     * a binding names no parameter of the group, or a parameter of the group has no binding.
+     */
+    ke_gpu_bind_group (*create_shader_bind_group)(struct ke_render_service *self,
+                                                  const ke_render_shader_group_params *params,
+                                                  ke_gpu_bind_group_layout layout, const char *label,
+                                                  const ke_render_shader_binding *bindings,
+                                                  uint32_t binding_count, ke_error **out_error);
 
     /// Texel format of the backbuffer, the format a pipeline drawing into it declares.
     ke_gpu_texture_format (*backbuffer_format)(struct ke_render_service *self);

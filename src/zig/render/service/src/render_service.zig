@@ -26,6 +26,7 @@ const asset_upload = @import("asset_upload.zig");
 const pipeline_cache = @import("pipeline_cache.zig");
 const slot_map = @import("slot_map.zig");
 const shader_loader = @import("shader_loader.zig");
+const shader_reflection = @import("shader_reflection.zig");
 
 pub const MAX_CMD_BUFFERS = 64;
 pub const NUM_PRECREATED_ENCODERS = 9;
@@ -485,6 +486,8 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .try_get_material = asset_upload.tryGetMaterial,
         .white_texture = asset_upload.whiteTexture,
         .load_shader = shader_loader.loadShader,
+        .shader_group_layout = shader_reflection.shaderGroupLayout,
+        .create_shader_bind_group = shader_reflection.createShaderBindGroup,
         .backbuffer_format = resource_table.backbufferFormat,
         .resource_generation = resource_table.resourceGeneration,
     };
@@ -536,6 +539,7 @@ fn deadFrame(state: *CoreState) c.ke_render_service {
 
 test {
     _ = slot_map;
+    _ = shader_reflection;
 }
 
 test "a pass cannot be opened once the frame has no target view to draw into" {

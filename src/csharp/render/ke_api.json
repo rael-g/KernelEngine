@@ -31,6 +31,22 @@
           "doc": null
         }
       ]
+    },
+    {
+      "name": "ke_render_binding_hint_flags",
+      "doc": "What a pass states about a shader binding that the shader\u0027s reflection does not carry.",
+      "values": [
+        {
+          "name": "KE_RENDER_BINDING_HINT_DEPTH",
+          "value": 0,
+          "doc": "The texture is bound to a depth-format view."
+        },
+        {
+          "name": "KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET",
+          "value": 1,
+          "doc": "The buffer is bound with a dynamic offset given at set_bind_group."
+        }
+      ]
     }
   ],
   "structs": [
@@ -92,6 +108,124 @@
           "type": "float[4]",
           "tags": [],
           "doc": "Per-resource clear color."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_binding_hint",
+      "doc": "A hint for the binding a shader declares under \u0060name\u0060.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "flags",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_shader_group_params",
+      "doc": "One bind group of a compiled shader, named rather than numbered: the bindings of \u0060block\u0060, or the shader\u0027s loose parameters when \u0060block\u0060 is NULL, across the reflection of every stage in \u0060stages\u0060.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "shader",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Logical name the shader was compiled under, as load_shader takes it."
+        },
+        {
+          "name": "stages",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Bitwise OR of the KE_GPU_SHADER_STAGE_* stages whose reflection is read."
+        },
+        {
+          "name": "block",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Name of a ParameterBlock the shader declares; NULL selects its loose parameters."
+        },
+        {
+          "name": "hints",
+          "type": "const ke_render_binding_hint *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "hint_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_shader_group",
+      "doc": "A bind group layout built from a shader\u0027s reflection, and the group index the shader expects it at.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "layout",
+          "type": "ke_gpu_bind_group_layout",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "index",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_shader_binding",
+      "doc": "What one named binding of a shader group is bound to; only the field its type reads is used.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": "The parameter\u0027s name; the uniform data of a block is named after the block."
+        },
+        {
+          "name": "buffer",
+          "type": "ke_gpu_buffer",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer_offset",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer_size",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "texture_view",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sampler",
+          "type": "ke_gpu_sampler",
+          "tags": [],
+          "doc": null
         }
       ]
     },
@@ -1143,6 +1277,84 @@
             {
               "name": "stage",
               "type": "ke_gpu_shader_stage",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "shader_group_layout",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Builds the layout of one bind group of a compiled shader from the reflection the build wrote beside it. The caller owns the layout and destroys it on the device.",
+          "return_doc": "False with the error filled: not found when a stage\u0027s reflection is missing or no stage declares the block, invalid argument when the reflection cannot be read or a hint names no parameter of the group.",
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_render_shader_group_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_group",
+              "type": "ke_render_shader_group *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the layout and the group index the shader expects it at."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "create_shader_bind_group",
+          "returns": "ke_gpu_bind_group",
+          "tags": [],
+          "doc": "Creates a bind group for one group of a compiled shader, matching each binding to the shader\u0027s parameter of the same name. The caller owns the bind group and destroys it on the device.",
+          "return_doc": "The bind group, or KE_GPU_INVALID_HANDLE with the error filled: invalid argument when a binding names no parameter of the group, or a parameter of the group has no binding.",
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_render_shader_group_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "layout",
+              "type": "ke_gpu_bind_group_layout",
+              "tags": [],
+              "doc": "The layout shader_group_layout returned for the same params."
+            },
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Optional name shown by capture and validation tools."
+            },
+            {
+              "name": "bindings",
+              "type": "const ke_render_shader_binding *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "binding_count",
+              "type": "uint32_t",
               "tags": [],
               "doc": null
             },

@@ -1175,13 +1175,19 @@ const Ctx = struct {
         run.addFileArg(.{ .cwd_relative = input });
         run.addArg("-o");
         const compiled = run.addOutputFileArg(file_name);
+        const reflection_name = b.fmt("{s}.{s}.json", .{ name, suffix });
+        run.addArg("-reflection-json");
+        const reflection = run.addOutputFileArg(reflection_name);
         ctx.addSlangInputs(run, std.fs.path.dirname(input) orelse ".");
         for (includes) |inc| ctx.addSlangInputs(run, inc);
         run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));
 
         if (!std.mem.startsWith(u8, out_dir, ctx.prefix)) @panic("shader output directory is outside the install prefix");
         const relative = std.mem.trimStart(u8, out_dir[ctx.prefix.len..], "/\\");
-        return b.addInstallFileWithDir(compiled, .{ .custom = relative }, file_name);
+        const install_reflection = b.addInstallFileWithDir(reflection, .{ .custom = relative }, reflection_name);
+        const install = b.addInstallFileWithDir(compiled, .{ .custom = relative }, file_name);
+        install.step.dependOn(&install_reflection.step);
+        return install;
     }
 
     /// Compiles every authored material × `pass`: glob every materials
