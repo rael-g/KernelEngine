@@ -8,6 +8,7 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/service/pass_context.h>
 #include <kernel_engine/render/service/render_service_create.h>
+#include <kernel_engine/render/binder_grouped/resource_binder_grouped_create.h>
 #include <kernel_engine/render/gpu/gpu_commands.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
@@ -48,7 +49,11 @@ int main(void)
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
 
-    ke_render_service_handle core = ke_render_service_create(gpu.ref, target.ref, ecs.ref, "shaders", &err);
+    ke_render_resource_binder_handle binder = ke_render_resource_binder_grouped_create(
+        &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &err);
+    if (!binder.ref) die("resource binder", err);
+
+    ke_render_service_handle core = ke_render_service_create(gpu.ref, target.ref, ecs.ref, "shaders", binder.ref, &err);
     if (!core.ref) die("render core", err);
 
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
@@ -96,6 +101,7 @@ int main(void)
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
     core.destroy(core.ref);
+    binder.destroy(binder.ref);
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);

@@ -296,25 +296,6 @@ ke_render_lighting size=48 align=4
   direction 0
   color 16
   ambient 32
-ke_render_binding_hint size=16 align=8
-  name 0
-  flags 8
-ke_render_shader_group_params size=40 align=8
-  shader 0
-  stages 8
-  block 16
-  hints 24
-  hint_count 32
-ke_render_shader_group size=16 align=8
-  layout 0
-  index 8
-ke_render_shader_binding size=48 align=8
-  name 0
-  buffer 8
-  buffer_offset 16
-  buffer_size 24
-  texture_view 32
-  sampler 40
 ke_render_pass_io size=48 align=8
   name 0
   reads 8
@@ -323,7 +304,7 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   cmd_slot 36
   load 40
-ke_render_service size=384 align=8
+ke_render_service size=368 align=8
   handle 0
   declare 8
   import_texture 16
@@ -339,39 +320,37 @@ ke_render_service size=384 align=8
   set_clear_color 96
   upload_texture 104
   create_material 112
-  material_layout 120
-  material_bind_group 128
-  material_alpha_mode 136
-  material_alpha_cutoff 144
-  upload_cubemap 152
-  texture_view 160
-  resource_view 168
-  resource_texture 176
-  resource_buffer 184
-  resource_buffer_size 192
-  backbuffer_size 200
-  upload 208
-  get_or_create_pipeline 216
-  material_shader 224
-  retain_mesh 232
-  release_mesh 240
-  retain_texture 248
-  release_texture 256
-  retain_material 264
-  release_material 272
-  try_get_mesh 280
-  try_get_texture 288
-  try_get_material 296
-  white_texture 304
-  load_shader 312
-  set_frame_globals 320
-  frame_globals 328
-  set_lighting 336
-  lighting 344
-  shader_group_layout 352
-  create_shader_bind_group 360
-  backbuffer_format 368
-  resource_generation 376
+  material_binding 120
+  material_alpha_mode 128
+  material_alpha_cutoff 136
+  upload_cubemap 144
+  texture_view 152
+  resource_view 160
+  resource_texture 168
+  resource_buffer 176
+  resource_buffer_size 184
+  backbuffer_size 192
+  upload 200
+  get_or_create_pipeline 208
+  material_shader 216
+  retain_mesh 224
+  release_mesh 232
+  retain_texture 240
+  release_texture 248
+  retain_material 256
+  release_material 264
+  try_get_mesh 272
+  try_get_texture 280
+  try_get_material 288
+  white_texture 296
+  load_shader 304
+  set_frame_globals 312
+  frame_globals 320
+  set_lighting 328
+  lighting 336
+  resource_binder 344
+  backbuffer_format 352
+  resource_generation 360
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8

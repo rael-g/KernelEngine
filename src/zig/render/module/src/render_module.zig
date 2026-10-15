@@ -27,8 +27,9 @@ const DEFAULT_MAX_LIGHTS_PER_CLUSTER: u32 = 256;
 /// end systems receive its address, and the queries and the pass `io` point into its own
 /// fields, so it must not be copied after creation. Its pass handles and camera are null until
 /// the create reaches their step, and `view_space` is destroyed only when `owns_view_space` is
-/// set.
+/// set. `binder` has no destroy when the host supplied it.
 const ModuleState = struct {
+    binder: c.ke_render_resource_binder_handle,
     core: c.ke_render_service_handle,
     device: *c.ke_gpu_device,
     ndc: c.ke_ndc_convention,
@@ -138,8 +139,8 @@ export fn ke_render_module_load_font(module: ?*c.ke_render_module, key: [*c]cons
 /// The destroy slot of the handle `ke_render_module_create` returns, and the cleanup of a
 /// failed create. Each pass handle and the core are released only when their destroy slot is
 /// set, so a partly built state is safe to pass. The passes are released in a fixed order that
-/// is not the creation order, then the camera, the core, the view space when owned, and finally
-/// the state.
+/// is not the creation order, then the camera, the core, the binder when owned, the view space
+/// when owned, and finally the state.
 fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     const st: *ModuleState = @alignCast(@ptrCast(self orelse return));
     if (st.tonemap.destroy) |d| d(st.tonemap.ref);
@@ -152,6 +153,7 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
     if (st.cluster.destroy) |d| d(st.cluster.ref);
     if (st.camera.destroy) |d| d(st.camera.ref);
     if (st.core.destroy) |d| d(st.core.ref);
+    if (st.binder.destroy) |d| d(st.binder.ref);
     if (st.owns_view_space) {
         if (st.view_space.destroy) |d| d(st.view_space.ref);
     }
@@ -210,8 +212,8 @@ fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_re
     return empty;
 }
 
-/// Creates the render service and a `ModuleState` that holds it. With `default_passes` zero the
-/// handle wraps the service alone. With it non-zero, the module builds the camera on the view
+/// Creates the resource binder when none is given, the render service on it, and a `ModuleState`
+/// that holds them. With `default_passes` zero the handle wraps the service alone. With it non-zero, the module builds the camera on the view
 /// space, which is the one supplied or a new one it owns, registers the component types, and
 /// registers the systems and passes in this order: the mesh and sprite resolve systems, the
 /// begin and clear systems, the shadow, cluster, gbuffer, deferred lighting, skybox, forward,
@@ -230,19 +232,27 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
                                   feature_params: ?*const c.ke_render_feature_params,
                                   shadow_params: ?*const c.ke_render_shadow_params,
                                   view_space: ?*c.ke_view_space,
+                                  binder: ?*c.ke_render_resource_binder,
                                   shader_dir: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_module_handle {
     const rt = runtime orelse return empty;
     const e = ecs orelse return empty;
     const dev = device orelse return empty;
     const mark = rt.last_system.?(rt);
 
-    const core_h = c.ke_render_service_create(dev, target, e, shader_dir, out_error);
-    if (core_h.ref == null) return empty;
+    const binder_h: c.ke_render_resource_binder_handle = if (binder) |b| .{ .ref = b, .destroy = null } else c.ke_render_resource_binder_grouped_create(&.{ .device = dev, .shader_dir = shader_dir }, out_error);
+    const binder_ref = binder_h.ref orelse return empty;
+    const core_h = c.ke_render_service_create(dev, target, e, shader_dir, binder_ref, out_error);
+    if (core_h.ref == null) {
+        if (binder_h.destroy) |d| d(binder_ref);
+        return empty;
+    }
 
     const st = gpa.create(ModuleState) catch {
         if (core_h.destroy) |d| d(core_h.ref);
+        if (binder_h.destroy) |d| d(binder_ref);
         return empty;
     };
+    st.binder = binder_h;
     st.core = core_h;
     st.device = dev;
     var grid_x: u32 = undefined;
@@ -611,7 +621,7 @@ const Rig = struct {
 
     fn create(self: *Rig) c.ke_render_module_handle {
         const dir: [*:0]const u8 = @ptrCast(&self.shader_dir);
-        return ke_render_module_create(self.rt.api(), self.ecs.api(), self.dev.api(), self.target.api(), self.world.api(), 1, null, null, null, null, null, null, dir, null);
+        return ke_render_module_create(self.rt.api(), self.ecs.api(), self.dev.api(), self.target.api(), self.world.api(), 1, null, null, null, null, null, null, null, dir, null);
     }
 };
 
@@ -701,8 +711,8 @@ test "a render module without a runtime, an ecs or a device is refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    try testing.expect(ke_render_module_create(null, rig.ecs.api(), rig.dev.api(), rig.target.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
-    try testing.expect(ke_render_module_create(rig.rt.api(), null, rig.dev.api(), rig.target.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
-    try testing.expect(ke_render_module_create(rig.rt.api(), rig.ecs.api(), null, rig.target.api(), null, 1, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(null, rig.ecs.api(), rig.dev.api(), rig.target.api(), null, 1, null, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(rig.rt.api(), null, rig.dev.api(), rig.target.api(), null, 1, null, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(rig.rt.api(), rig.ecs.api(), null, rig.target.api(), null, 1, null, null, null, null, null, null, null, "shaders", null).ref == null);
     try heap.expectNoLeaks();
 }

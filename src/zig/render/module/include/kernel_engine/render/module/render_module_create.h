@@ -43,7 +43,8 @@ typedef struct ke_render_feature_params
 
 /// The asset_resolver argument is borrowed and may be NULL. It turns an authored
 /// path into an uploaded texture; where the host wires none, a sprite that names a
-/// file draws untextured instead of failing the load.
+/// file draws untextured instead of failing the load. The binder argument is borrowed
+/// and must outlive the module; NULL selects a grouped resource binder the module owns.
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_gpu_render_target *target,
@@ -53,6 +54,7 @@ ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         const ke_render_feature_params *feature_params,
                         const ke_render_shadow_params *shadow_params,
                         ke_view_space *view_space,
+                        ke_render_resource_binder *binder,
                         const char *shader_dir, ke_error **out_error);
 
 KE_RENDER_CORE_API bool

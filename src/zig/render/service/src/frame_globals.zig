@@ -72,6 +72,21 @@ pub const Globals = struct {
         if (self.frame_buffer != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, self.frame_buffer);
     }
 
+    /// Gives `binder` every shared parameter by its name. On failure it returns false with the
+    /// binder's error.
+    pub fn provideTo(self: *const Globals, binder: *c.ke_render_resource_binder, out_error: [*c][*c]c.ke_error) bool {
+        const names = [_][:0]const u8{ "ke_frame", "ke_lighting" };
+        for (names) |name| {
+            const b = self.binding(name).?;
+            if (!binder.provide.?(binder, &b, out_error)) return false;
+        }
+        for (samplers) |s| {
+            const b = self.binding(s.name).?;
+            if (!binder.provide.?(binder, &b, out_error)) return false;
+        }
+        return true;
+    }
+
     /// The binding of the shared parameter named `name`, or null when the service provides none
     /// by that name.
     pub fn binding(self: *const Globals, name: []const u8) ?c.ke_render_shader_binding {

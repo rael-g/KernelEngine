@@ -54,16 +54,16 @@ const UiState = struct {
     ndc: c.ke_ndc_convention = undefined,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    frame_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
-    tex_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
+    binder: *c.ke_render_resource_binder = undefined,
+    layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    frame_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
     vbo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     vbo_bytes: usize = 0,
 
     vertices: std.ArrayList(UiVertex) = .empty,
     batches: std.ArrayList(UiBatch) = .empty,
-    bind_group_cache: std.AutoHashMapUnmanaged(u32, c.ke_gpu_bind_group) = .empty,
+    set_cache: std.AutoHashMapUnmanaged(u32, c.ke_render_resource_set) = .empty,
 
     fonts: std.ArrayList(UiFont) = .empty,
 
@@ -184,35 +184,30 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     l.glyph_count = slot;
 }
 
-const frame_group_params = c.ke_render_shader_group_params{
+const shader_layout = c.ke_render_shader_layout_params{
     .shader = "ui",
     .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
-    .block = null,
     .hints = null,
     .hint_count = 0,
 };
 
-const tex_group_params = c.ke_render_shader_group_params{
-    .shader = "ui",
-    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
-    .block = "tex",
-    .hints = null,
-    .hint_count = 0,
-};
-
-/// Called by `system` for each batch, with the bind group of a texture built on first use and
-/// cached by the texture's index. Creation passes no error output, so a result the cache
-/// treats as invalid is not kept, and the next draw of that slot creates the group again.
-fn uiBindGroupFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_gpu_bind_group {
-    if (ui.bind_group_cache.get(tex.bits)) |cached| return cached;
+/// Called by `system` for each batch, with the set of a texture built on first use and cached by
+/// the texture's index. Creation passes no error output, so an invalid set is not kept, and the
+/// next draw of that slot creates it again.
+fn uiSetFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_render_resource_set {
+    if (ui.set_cache.get(tex.bits)) |cached| return cached;
 
     const view = ui.core.*.texture_view.?(ui.core, tex);
     const bindings = [_]c.ke_render_shader_binding{
         .{ .name = "t_tex", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
     };
-    const bg = ui.core.*.create_shader_bind_group.?(ui.core, &tex_group_params, ui.tex_group.layout, "ui.bg", &bindings, bindings.len, null);
-    if (bg != c.KE_GPU_INVALID_HANDLE) ui.bind_group_cache.put(gpa, tex.bits, bg) catch {};
-    return bg;
+    const set = ui.binder.create_set.?(ui.binder, ui.layout, "tex", "ui.tex_set", &bindings, bindings.len, null);
+    if (set == c.KE_RENDER_BINDING_INVALID) return set;
+    ui.set_cache.put(gpa, tex.bits, set) catch {
+        ui.binder.destroy_set.?(ui.binder, set);
+        return c.KE_RENDER_BINDING_INVALID;
+    };
+    return set;
 }
 
 /// The user pointer both systems receive is the `UiState` itself, set by `ke_render_ui_create`.
@@ -290,7 +285,7 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*
 /// Registered by `ke_render_ui_create` for the render phase, reading quads and labels. Quads with
 /// no area are skipped and glyphs are drawn in the premultiplied label color. With nothing emitted
 /// the pass ends without drawing; otherwise the projection (flipped on Y when the ndc convention
-/// asks) and the vertices are uploaded and each batch is drawn with its texture's bind group. It
+/// asks) and the vertices are uploaded and each batch is drawn with its texture's set. It
 /// returns true on every path, including when the render service yields no pass to draw into.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const ui = moduleOf(user);
@@ -374,11 +369,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &ui.pipeline_params));
-    rp.*.set_bind_group.?(rp, ui.frame_group.index, ui.frame_bind_group, null, 0);
+    ui.binder.bind_render_set.?(ui.binder, rp, ui.frame_set, null, 0);
     rp.*.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
 
     for (ui.batches.items) |batch| {
-        rp.*.set_bind_group.?(rp, ui.tex_group.index, uiBindGroupFor(ui, batch.texture), null, 0);
+        ui.binder.bind_render_set.?(ui.binder, rp, uiSetFor(ui, batch.texture), null, 0);
         rp.*.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
     }
     rp.*.end.?(rp);
@@ -402,8 +397,9 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const fs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
 
-    if (!core.*.shader_group_layout.?(core, &frame_group_params, &ui.frame_group, out_error)) return false;
-    if (!core.*.shader_group_layout.?(core, &tex_group_params, &ui.tex_group, out_error)) return false;
+    ui.binder = core.*.resource_binder.?(core);
+    ui.layout = ui.binder.create_shader_layout.?(ui.binder, &shader_layout, out_error);
+    if (ui.layout == c.KE_RENDER_BINDING_INVALID) return false;
 
     const attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = @offsetOf(UiVertex, "position") },
@@ -428,9 +424,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &vbl;
-    pp.bind_group_layouts[ui.frame_group.index] = ui.frame_group.layout;
-    pp.bind_group_layouts[ui.tex_group.index] = ui.tex_group.layout;
-    pp.bind_group_layout_count = @max(ui.frame_group.index, ui.tex_group.index) + 1;
+    if (!ui.binder.pipeline_layouts.?(ui.binder, ui.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) return false;
     pp.blend_state.blend_enabled = 1;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_ONE;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -463,8 +457,8 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const frame_binding = [_]c.ke_render_shader_binding{
         .{ .name = "frame", .buffer = ui.frame_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
     };
-    ui.frame_bind_group = core.*.create_shader_bind_group.?(core, &frame_group_params, ui.frame_group.layout, "ui.frame_bind_group", &frame_binding, frame_binding.len, out_error);
-    if (ui.frame_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
+    ui.frame_set = ui.binder.create_set.?(ui.binder, ui.layout, null, "ui.frame_set", &frame_binding, frame_binding.len, out_error);
+    if (ui.frame_set == c.KE_RENDER_BINDING_INVALID) return false;
 
     if (!ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex), out_error)) return false;
 
@@ -482,18 +476,20 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
-/// Safe on a partly built state: each GPU object is released only if `setup` had created it.
+/// Safe on a partly built state: each GPU object, set and layout is released only if `setup` had
+/// created it.
 fn destroyState(ui: *UiState) void {
     const dev = ui.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
-    if (ui.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, ui.frame_bind_group);
     if (ui.frame_uniform != invalid) dev.destroy_buffer.?(dev, ui.frame_uniform);
     if (ui.vbo != invalid) dev.destroy_buffer.?(dev, ui.vbo);
-    if (ui.frame_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, ui.frame_group.layout);
-    if (ui.tex_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, ui.tex_group.layout);
-    var cached = ui.bind_group_cache.valueIterator();
-    while (cached.next()) |bg| dev.destroy_bind_group.?(dev, bg.*);
-    ui.bind_group_cache.deinit(gpa);
+    if (ui.layout != c.KE_RENDER_BINDING_INVALID) {
+        ui.binder.destroy_set.?(ui.binder, ui.frame_set);
+        var cached = ui.set_cache.valueIterator();
+        while (cached.next()) |set| ui.binder.destroy_set.?(ui.binder, set.*);
+        ui.binder.destroy_shader_layout.?(ui.binder, ui.layout);
+    }
+    ui.set_cache.deinit(gpa);
     ui.vertices.deinit(gpa);
     ui.batches.deinit(gpa);
     defer ui.fonts.deinit(gpa);

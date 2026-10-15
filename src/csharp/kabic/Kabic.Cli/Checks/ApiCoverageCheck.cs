@@ -31,6 +31,7 @@ internal static class ApiCoverageCheck
             ["render/forward/forward_create.h"] = "render pass factory, called only by render_module",
             ["render/gbuffer/gbuffer_create.h"] = "render pass factory, called only by render_module",
             ["render/service/render_service_create.h"] = "created by render_module, which hands back the borrowed service",
+            ["render/binder_grouped/resource_binder_grouped_create.h"] = "created by render_module when the host passes no binder, no managed caller",
             ["render/shadow/shadow_create.h"] = "render pass factory, called only by render_module",
             ["render/skybox/skybox_create.h"] = "render pass factory, called only by render_module",
             ["render/tonemap/tonemap_create.h"] = "render pass factory, called only by render_module",

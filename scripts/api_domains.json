@@ -322,6 +322,7 @@
       "auxHeaders": [
         "src/c/render/kernel_engine/render/gpu/gpu_device.h",
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/render/kernel_engine/render/binding/resource_binder.h",
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
@@ -928,6 +929,7 @@
         "src/c/render/kernel_engine/render/components.h",
         "src/c/render/kernel_engine/render/ui/components.h",
         "src/c/render/kernel_engine/render/service/render_service.h",
+        "src/c/render/kernel_engine/render/binding/resource_binder.h",
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
         "src/c/render/kernel_engine/render/gpu/gpu_device.h",
         "src/c/render/kernel_engine/render/gpu/gpu_render_target.h"

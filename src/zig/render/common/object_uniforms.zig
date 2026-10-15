@@ -1,9 +1,10 @@
 //! The per-draw uniform buffer of a pass, one slot of `stride` bytes per draw reached by a dynamic
 //! offset, grown to the number of draws a frame asks for.
 
-/// The buffer, its bind group and the number of slots they hold, for the C namespace `c` and one
-/// draw record `Record`. The bind group binds the buffer to the shader's `object` block of the
-/// group `group` names. `ensure` makes room before a frame uploads; the handles change only there.
+/// The buffer, its resource set and the number of slots they hold, for the C namespace `c` and one
+/// draw record `Record`. The set binds the buffer to the `object` block of the shader `layout`
+/// was built for, which hints that block to take a dynamic offset. `ensure` makes room before a
+/// frame uploads; the handles change only there.
 pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
     return struct {
         const Self = @This();
@@ -12,18 +13,17 @@ pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
         pub const stride: u32 = 256;
 
         device: *c.ke_gpu_device,
-        core: *c.ke_render_service,
-        group: *const c.ke_render_shader_group_params,
-        layout: c.ke_gpu_bind_group_layout,
+        binder: *c.ke_render_resource_binder,
+        layout: c.ke_render_shader_layout,
         buffer_label: [*c]const u8,
-        bind_group_label: [*c]const u8,
+        set_label: [*c]const u8,
         buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-        bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+        set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
         capacity: u32 = 0,
 
-        /// Makes room for `count` draws, replacing the buffer and the bind group with ones of the
-        /// next power of two slots when the current ones are smaller. On failure it returns false
-        /// with the device's error and keeps what it had.
+        /// Makes room for `count` draws, replacing the buffer and the set with ones of the next
+        /// power of two slots when the current ones are smaller. On failure it returns false with
+        /// the device's or the binder's error and keeps what it had.
         pub fn ensure(self: *Self, count: u32, out_error: [*c][*c]c.ke_error) bool {
             if (count <= self.capacity) return true;
             const slots = @import("std").math.ceilPowerOfTwoAssert(u32, @max(count, 1));
@@ -44,14 +44,14 @@ pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
                 .texture_view = 0,
                 .sampler = 0,
             }};
-            const bind_group = self.core.*.create_shader_bind_group.?(self.core, self.group, self.layout, self.bind_group_label, &binding, binding.len, out_error);
-            if (bind_group == c.KE_GPU_INVALID_HANDLE) {
+            const set = self.binder.create_set.?(self.binder, self.layout, "object", self.set_label, &binding, binding.len, out_error);
+            if (set == c.KE_RENDER_BINDING_INVALID) {
                 dev.destroy_buffer.?(dev, buffer);
                 return false;
             }
             self.release();
             self.buffer = buffer;
-            self.bind_group = bind_group;
+            self.set = set;
             self.capacity = slots;
             return true;
         }
@@ -61,12 +61,18 @@ pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
             return index * stride;
         }
 
-        /// Destroys the buffer and the bind group it holds, if any.
+        /// Makes the slot of draw `index` the object the next draws of `pass` read.
+        pub fn bind(self: *const Self, pass: [*c]c.ke_gpu_render_pass, index: u32) void {
+            const at = [_]u32{offset(index)};
+            self.binder.bind_render_set.?(self.binder, pass, self.set, &at, at.len);
+        }
+
+        /// Destroys the buffer and the set it holds, if any.
         pub fn release(self: *Self) void {
             const dev = self.device;
-            if (self.bind_group != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, self.bind_group);
+            if (self.set != c.KE_RENDER_BINDING_INVALID) self.binder.destroy_set.?(self.binder, self.set);
             if (self.buffer != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, self.buffer);
-            self.bind_group = c.KE_GPU_INVALID_HANDLE;
+            self.set = c.KE_RENDER_BINDING_INVALID;
             self.buffer = c.KE_GPU_INVALID_HANDLE;
             self.capacity = 0;
         }

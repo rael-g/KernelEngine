@@ -1,0 +1,8 @@
+.{
+    .name = .ke_render_binder_grouped,
+    .version = "0.1.0",
+    .fingerprint = 0xe5888eb2b813613c,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{"."},
+}

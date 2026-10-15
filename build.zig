@@ -88,6 +88,7 @@ pub fn build(b: *std.Build) void {
     const feature_bindings_src = b.pathJoin(&.{ src_zig, "render/common/feature_bindings.zig" });
     const material_pass_groups_src = b.pathJoin(&.{ src_zig, "render/common/material_pass_groups.zig" });
     const stubs_src = b.pathJoin(&.{ src_zig, "common/stubs.zig" });
+    const shader_files_src = b.pathJoin(&.{ src_zig, "render/common/shader_files.zig" });
     const tomlc99_dir = b.dependency("tomlc99", .{}).path("").getPath(b);
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
@@ -464,6 +465,7 @@ pub fn build(b: *std.Build) void {
 
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
+    const binder_shader_dir = b.pathJoin(&.{ src_zig, "render/binder_grouped/shaders" });
 
     const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{shader_lib_dir}, null);
@@ -621,7 +623,7 @@ pub fn build(b: *std.Build) void {
     }
     const materials_dirs = materials_dir_list.items;
 
-    const gbuffer_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/gbuffer/shaders" }) };
+    const gbuffer_includes = [_][]const u8{ shader_lib_dir, binder_shader_dir, b.pathJoin(&.{ src_zig, "render/gbuffer/shaders" }) };
     const gbuffer_material_shaders = ctx.materialShaders(
         "gbuffer",
         b.pathJoin(&.{ src_zig, "render/gbuffer/shaders/gbuffer_material.slang.in" }),
@@ -648,7 +650,7 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step }, .has_tests);
     for (gbuffer_material_shaders) |s| gbuffer.step.dependOn(&s.step);
 
-    const forward_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };
+    const forward_includes = [_][]const u8{ shader_lib_dir, binder_shader_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };
     const forward_material_shaders = ctx.materialShaders(
         "forward",
         b.pathJoin(&.{ src_zig, "render/forward/shaders/forward_material.slang.in" }),
@@ -677,9 +679,21 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step }, .has_tests);
     for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
 
-    const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
-    const material_params = ctx.reflection("material_params", b.pathJoin(&.{ shader_lib_dir, "material_params.slang" }), service_gen_dir, &.{shader_lib_dir});
-    const material_params_json = b.pathJoin(&.{ service_gen_dir, "material_params.json" });
+    const binder_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_binder_grouped" });
+    const material_params = ctx.reflection("material_params", b.pathJoin(&.{ binder_shader_dir, "material_params.slang" }), binder_gen_dir, &.{shader_lib_dir});
+    const material_params_json = b.pathJoin(&.{ binder_gen_dir, "material_params.json" });
+
+    const binder_grouped = ctx.member("ke_render_binder_grouped", .{
+        .target = target,
+        .optimize = optimize,
+        .@"heap-src" = heap_src,
+        .@"stubs-src" = stubs_src,
+        .@"shader-files-src" = shader_files_src,
+        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
+        .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
+        .@"ke-lib-dir" = lib_dir,
+        .@"material-params-json" = material_params_json,
+    }, &.{ &common.step, &material_params.step }, .has_tests);
 
     const render_service = ctx.member("ke_render_service", .{
         .target = target,
@@ -700,11 +714,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/service/include" }),
         .@"ke-lib-dir" = lib_dir,
-        .@"material-params-json" = material_params_json,
-    }, &.{
-        &common.step,          &resource_cache_default.step,
-        &material_params.step,
-    }, .has_tests);
+        .@"shader-files-src" = shader_files_src,
+    }, &.{ &common.step, &resource_cache_default.step }, .has_tests);
 
     const render_module = ctx.member("ke_render_module", .{
         .target = target,
@@ -723,6 +734,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-asset-include" = b.pathJoin(&.{ src_c, "asset" }),
         .@"ke-service-include" = b.pathJoin(&.{ src_zig, "render/service/include" }),
+        .@"ke-binder-grouped-include" = b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/module/include" }),
         .@"ke-view-space-include" = b.pathJoin(&.{ src_zig, "view/space/include" }),
         .@"ke-camera-include" = b.pathJoin(&.{ src_zig, "render/camera/include" }),
@@ -737,7 +749,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
         .@"kerror-src" = kerror_src,
     }, &.{
-        &common.step,            &render_service.step, &view_space.step,
+        &common.step,            &render_service.step, &view_space.step, &binder_grouped.step,
         &tonemap.step,           &skybox.step,  &ui.step,
         &gbuffer.step,           &shadow.step,  &cluster.step,
         &deferred_lighting.step, &forward.step, &render_camera.step,
@@ -751,7 +763,7 @@ pub fn build(b: *std.Build) void {
         configuration,     audio_module,           configuration_toml, tonemap,
         skybox,            ui,                     shadow,             cluster,
         deferred_lighting, gpu_device_webgpu,      gbuffer,            forward,
-        render_service,    render_camera,
+        render_service,    render_camera,          binder_grouped,
     };
     for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
@@ -971,6 +983,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
         }),
         .@"libs" = joinPaths(b, &.{
@@ -978,10 +991,11 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &render_module.step, &ecs_flecs.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &render_module.step, &ecs_flecs.step, ctx.slang_step, &compile_slang_build.step });
 
     const demo13 = ctx.example("c_demo_13", .{
         .target = target,

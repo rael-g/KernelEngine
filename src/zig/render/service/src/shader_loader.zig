@@ -4,9 +4,7 @@ const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
 
-const libc = @cImport({
-    @cInclude("stdio.h");
-});
+const shader_files = @import("shader_files").ShaderFiles(c);
 
 /// Any language the file does not list falls back to the WGSL extension.
 fn extForLanguage(lang: c.ke_gpu_shader_language) []const u8 {
@@ -27,35 +25,6 @@ fn stageSuffix(stage: c.ke_gpu_shader_stage) ?[]const u8 {
         c.KE_GPU_SHADER_STAGE_COMPUTE => "cs",
         else => null,
     };
-}
-
-/// The whole contents of the file at `path`, owned by the caller and freed with the service's
-/// allocator. Null with the error filled: not found when the file does not open, I/O when it
-/// cannot be sized or fully read, out of memory when the buffer cannot be allocated.
-pub fn readFile(path: [:0]const u8, out_error: [*c][*c]c.ke_error) ?[]u8 {
-    const fp = libc.fopen(path.ptr, "rb") orelse {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_FOUND, "read shader file: shader file not found", @src().file, @intCast(@src().line), null);
-        return null;
-    };
-    defer _ = libc.fclose(fp);
-    _ = libc.fseek(fp, 0, libc.SEEK_END);
-    const size_signed = libc.ftell(fp);
-    _ = libc.fseek(fp, 0, libc.SEEK_SET);
-    if (size_signed < 0) {
-        c.ke_error_set(out_error, &c.KE_ERROR_IO, "read shader file: failed to size shader file", @src().file, @intCast(@src().line), null);
-        return null;
-    }
-    const size: usize = @intCast(size_signed);
-    const bytes = rc.gpa.alloc(u8, size) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "read shader file: shader buffer allocation failed", @src().file, @intCast(@src().line), null);
-        return null;
-    };
-    if (libc.fread(bytes.ptr, 1, size, fp) != size) {
-        c.ke_error_set(out_error, &c.KE_ERROR_IO, "read shader file: failed to read shader file", @src().file, @intCast(@src().line), null);
-        rc.gpa.free(bytes);
-        return null;
-    }
-    return bytes;
 }
 
 /// The service's shader-loading slot. The file read is "<shader dir>/<name>.<vs|fs|cs>.<ext>", and
@@ -88,7 +57,7 @@ pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke
         return st.shader_store.get(cached).?.*;
     }
 
-    const bytes = readFile(path, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
+    const bytes = shader_files.read(rc.gpa, path, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
     defer rc.gpa.free(bytes);
 
     const module = st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{

@@ -2,7 +2,8 @@
 
 This is a map: the parts between a material file and a draw, and what each hands on. How a part
 works inside is on the generated page of its file. Shared shader modules are under
-`src/shaders/`, the service under `src/zig/render/service/`.
+`src/shaders/`, the service under `src/zig/render/service/`, the grouped resource binder under
+`src/zig/render/binder_grouped/`.
 
 ## The parts
 
@@ -11,16 +12,18 @@ works inside is on the generated page of its file. Shared shader modules are und
 | material file | a `.slang` file with one `IMaterial` struct | the fixed engine material set | a `vertex` and a `fragment` method |
 | wrapper templates | `gbuffer_material.slang.in`, `forward_material.slang.in` | a material's module and struct name | the entry points `vs_main` and `fs_main` of one material for one pass |
 | build | `Ctx.materialShaders` in the root `build.zig` | every material file, one template per consuming pass | compiled `<material>.<pass>` vertex and fragment shaders |
-| service | `ke_render_service`, `create_material` | a key, colour, factors, textures, an alpha mode, a shader name | a material handle, its uniform and its bind group |
+| service | `ke_render_service`, `create_material` | a key, colour, factors, textures, an alpha mode, a shader name | a material handle, and the material's data to the binder |
+| resource binder | `ke_render_resource_binder`, `create_material` | a `ke_render_material_data` | a `ke_render_material_binding` the passes bind with `bind_material` |
 | mesh resolve | the system "render.mesh.resolve" of the module | a mesh component with no material handle | a handle made from the values authored on the mesh |
-| pass | gbuffer, forward | a mesh component's material handle | a pipeline and a bind group per draw |
+| pass | gbuffer, forward | a mesh component's material handle | a pipeline and the material's binding per draw |
 
 ## What ties the parts together
 
 **A material names no pass.** It implements `IMaterial` and reads one fixed parameter block,
 `mat` of `material_params.slang`, whose fields hold the factors and the textures `albedo`,
-`tex_sampler` and `normal_map`. The build embeds the reflection of that block in the service,
-which builds every material's bind group from it. A material cannot declare uniforms or
+`tex_sampler` and `normal_map`. The module is the resource binder's: the grouped binder's lives
+beside it, and the build embeds its reflection in the binder, which builds every material's bind
+group from it. A material cannot declare uniforms or
 textures of its own. Exactly one `IMaterial` struct per file is required by
 `scripts/generate_material_wrapper.cs`.
 
@@ -51,15 +54,16 @@ authored material by passing `shader` to `create_material`.
 
 **A pass draws a material in three steps.** It asks the service for the material's shader name
 (`material_shader`), loads `<name>.<pass>` into its pipeline template, and asks the pipeline
-cache for the pipeline; a draw whose shader is missing is skipped. It binds the material group
-at set 1 and the object at set 2.
+cache for the pipeline; a draw whose shader is missing is skipped. It hands the material's binding
+from `material_binding` to the binder's `bind_material`, which puts it wherever the shader reads
+it.
 
 ## What the parts agree on without a contract
 
 - The default shader name "standard", in the service and in both passes.
 - The shader file name `<material>.<pass>`, with the pass names "gbuffer" and "forward", between
   the build and the passes' `PASS_NAME`.
-- The material layout: a uniform block, an albedo texture, a sampler and a normal texture, in
-  that order, between `material_bgl` in the service and `forward_common.slang`.
-- The 48-byte layout of the material uniform, between `createMaterial` in `asset_upload.zig` and
-  the `Material` struct in `forward_common.slang`.
+- The fields of the `mat` block, between `ke_render_material_data` and the binder's
+  `material_params.slang`.
+- The layout of the material uniform, between `MaterialUniform` in
+  `resource_binder_grouped.zig` and the `MaterialParams` struct of `material_params.slang`.

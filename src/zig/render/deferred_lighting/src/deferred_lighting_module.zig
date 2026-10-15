@@ -12,27 +12,18 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 const Features = @import("feature_bindings").FeatureBindings(c);
 
-const frame_group_params = c.ke_render_shader_group_params{
-    .shader = "deferred_lighting",
-    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
-    .block = null,
-    .hints = null,
-    .hint_count = 0,
-};
-
 const depth_hint = [_]c.ke_render_binding_hint{.{ .name = "g_depth", .flags = c.KE_RENDER_BINDING_HINT_DEPTH }};
 
-const gbuffer_group_params = c.ke_render_shader_group_params{
+const shader_layout = c.ke_render_shader_layout_params{
     .shader = "deferred_lighting",
     .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
-    .block = "gbuffer",
     .hints = &depth_hint,
     .hint_count = depth_hint.len,
 };
 
 /// The state of one pass, created by `ke_render_deferred_lighting_create` and freed by
-/// `destroyHandle`. A GPU handle field stays KE_GPU_INVALID_HANDLE until `setup` or `system`
-/// creates it, and `system` replaces `gbuf_bind_group` each tick. `queries`, `access` and `io`
+/// `destroyHandle`. A handle field stays invalid until `setup` or `system` creates it, and
+/// `system` replaces `gbuffer_set` each tick. `queries`, `access` and `io`
 /// are handed to the runtime and to `begin_pass` by address, so the block is never copied.
 const DeferredLightingModule = struct {
     core: *c.ke_render_service = undefined,
@@ -45,10 +36,10 @@ const DeferredLightingModule = struct {
     skybox_cid: c.ke_component_id = undefined,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    frame_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
-    gbuffer_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
-    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
-    gbuf_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    binder: *c.ke_render_resource_binder = undefined,
+    layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
+    frame_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
+    gbuffer_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
     env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
 
     reads: [6][*c]const u8 = undefined,
@@ -75,13 +66,13 @@ inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-/// Recreates `frame_bind_group` over the feature bindings: the shadow map and
+/// Recreates `frame_set` over the feature bindings: the shadow map and
 /// matrix, the environment cubemap and the cluster light lists. The black cube stands in for the environment when `ibl_enabled` is
 /// false, and the white texture stands in for the shadow map when the service has none. It runs
-/// from `setup`, and from `system` when the sky cubemap changes; the group it replaces is
-/// destroyed. A failure is logged and not
-/// returned, so `frame_bind_group` then holds what the device returned.
-fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
+/// from `setup`, and from `system` when the sky cubemap changes; the set it replaces is
+/// destroyed. A failure is logged and not returned, so `frame_set` then holds what the binder
+/// returned.
+fn rebuildFrameSet(dl: *DeferredLightingModule) void {
     const core = dl.core;
     const env_view = core.*.texture_view.?(core, dl.env_cubemap);
     const black_cube_view = core.*.texture_view.?(core, .{ .bits = c.KE_HANDLE_NONE });
@@ -90,23 +81,22 @@ fn rebuildFrameBindGroup(dl: *DeferredLightingModule) void {
 
     var bindings: [Features.count]c.ke_render_shader_binding = undefined;
     Features.fill(core, ibl_view, &bindings);
-    if (dl.frame_bind_group != c.KE_GPU_INVALID_HANDLE) dl.device.destroy_bind_group.?(dl.device, dl.frame_bind_group);
+    dl.binder.destroy_set.?(dl.binder, dl.frame_set);
     var err: ?*c.ke_error = null;
-    dl.frame_bind_group = core.*.create_shader_bind_group.?(core, &frame_group_params, dl.frame_group.layout, "deferred_lighting.frame_bind_group", &bindings, bindings.len, &err);
-    if (err != null) logGpuError(dl.logger, err, "deferred frame bind group");
+    dl.frame_set = dl.binder.create_set.?(dl.binder, dl.layout, null, "deferred_lighting.frame_set", &bindings, bindings.len, &err);
+    if (err != null) logGpuError(dl.logger, err, "deferred frame set");
 }
 
 /// The `execute` of the system that `ke_render_deferred_lighting_create` registers in the render
 /// phase. It ends the pass on every path that began one. A missing pass returns true without
 /// work, and a missing camera returns true after ending an empty pass; neither is a failure. Only
-/// a failure to create the G-buffer bind group sets the error out-parameter and returns false.
+/// a failure to create the G-buffer set sets the error out-parameter and returns false.
 /// The camera and the light come from the frame globals the service holds; the sky selects the
-/// environment. The G-buffer views are wrapped in a fresh bind group every tick, because the
+/// environment. The G-buffer views are wrapped in a fresh set every tick, because the
 /// targets can be recreated.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const dl = moduleOf(user);
     const core = dl.core;
-    const dev = dl.device;
 
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
@@ -128,7 +118,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         .{ .bits = c.KE_HANDLE_NONE };
     if (want_env.bits != dl.env_cubemap.bits) {
         dl.env_cubemap = want_env;
-        rebuildFrameBindGroup(dl);
+        rebuildFrameSet(dl);
     }
 
     const albedo_view = pc.*.read.?(pc, "gbuffer_albedo");
@@ -141,21 +131,20 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         .{ .name = "g_emissive", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = emissive_view, .sampler = 0 },
         .{ .name = "g_depth", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = depth_view, .sampler = 0 },
     };
-    if (dl.gbuf_bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, dl.gbuf_bind_group);
+    dl.binder.destroy_set.?(dl.binder, dl.gbuffer_set);
     var err: ?*c.ke_error = null;
-    dl.gbuf_bind_group = core.*.create_shader_bind_group.?(core, &gbuffer_group_params, dl.gbuffer_group.layout, "deferred_lighting.gbuf_bind_group", &gbuffer_bindings, gbuffer_bindings.len, &err);
-    if (dl.gbuf_bind_group == c.KE_GPU_INVALID_HANDLE) {
-        logGpuError(dl.logger, err, "deferred gbuffer bind group");
+    dl.gbuffer_set = dl.binder.create_set.?(dl.binder, dl.layout, "gbuffer", "deferred_lighting.gbuffer_set", &gbuffer_bindings, gbuffer_bindings.len, &err);
+    if (dl.gbuffer_set == c.KE_RENDER_BINDING_INVALID) {
+        logGpuError(dl.logger, err, "deferred gbuffer set");
         core.*.end_pass.?(core, pc);
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "deferred lighting pass: gbuffer bind group creation failed", @src().file, @intCast(@src().line), err);
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "deferred lighting pass: gbuffer set creation failed", @src().file, @intCast(@src().line), err);
         return false;
     }
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &dl.pipeline_params));
-    rp.*.set_bind_group.?(rp, dl.frame_group.index, dl.frame_bind_group, null, 0);
-    rp.*.set_bind_group.?(rp, dl.gbuffer_group.index, dl.gbuf_bind_group, null, 0);
+    dl.binder.bind_render_set.?(dl.binder, rp, dl.frame_set, null, 0);
+    dl.binder.bind_render_set.?(dl.binder, rp, dl.gbuffer_set, null, 0);
     rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
@@ -180,8 +169,9 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.skybox_cid = skybox_cid;
     dl.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
 
-    if (!core.*.shader_group_layout.?(core, &frame_group_params, &dl.frame_group, out_error)) return false;
-    if (!core.*.shader_group_layout.?(core, &gbuffer_group_params, &dl.gbuffer_group, out_error)) return false;
+    dl.binder = core.*.resource_binder.?(core);
+    dl.layout = dl.binder.create_shader_layout.?(dl.binder, &shader_layout, out_error);
+    if (dl.layout == c.KE_RENDER_BINDING_INVALID) return false;
 
     const vs = core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (vs == c.KE_GPU_INVALID_HANDLE) return false;
@@ -201,9 +191,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     pp.depth_stencil.depth_test_enabled = 0;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    pp.bind_group_layouts[dl.frame_group.index] = dl.frame_group.layout;
-    pp.bind_group_layouts[dl.gbuffer_group.index] = dl.gbuffer_group.layout;
-    pp.bind_group_layout_count = @max(dl.frame_group.index, dl.gbuffer_group.index) + 1;
+    if (!dl.binder.pipeline_layouts.?(dl.binder, dl.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) return false;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     pp.color_target_count = 1;
     dl.pipeline_params = pp;
@@ -212,7 +200,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
         return false;
     }
 
-    rebuildFrameBindGroup(dl);
+    rebuildFrameSet(dl);
 
     const hdr_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
         .name = "hdr",
@@ -269,16 +257,14 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     return true;
 }
 
-/// Releases each GPU object in the block that is not KE_GPU_INVALID_HANDLE. It leaves the
+/// Releases the sets and the layout the block holds, those still invalid skipped. It leaves the
 /// pipeline, the shader modules and the "hdr" resource alone, and does not free the block, so it
 /// can release a partly built one.
 fn destroyModule(dl: *const DeferredLightingModule) void {
-    const dev = dl.device;
-    const invalid = c.KE_GPU_INVALID_HANDLE;
-    if (dl.gbuf_bind_group != invalid) dev.destroy_bind_group.?(dev, dl.gbuf_bind_group);
-    if (dl.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, dl.frame_bind_group);
-    if (dl.gbuffer_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, dl.gbuffer_group.layout);
-    if (dl.frame_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, dl.frame_group.layout);
+    if (dl.layout == c.KE_RENDER_BINDING_INVALID) return;
+    dl.binder.destroy_set.?(dl.binder, dl.gbuffer_set);
+    dl.binder.destroy_set.?(dl.binder, dl.frame_set);
+    dl.binder.destroy_shader_layout.?(dl.binder, dl.layout);
 }
 
 /// The `destroy` slot of the handle that `ke_render_deferred_lighting_create` returns. It releases

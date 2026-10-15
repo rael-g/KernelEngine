@@ -48,11 +48,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_material_handle (*)(struct ke_render_service *, const char *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, const char *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, float*, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, sbyte*, KernelEngine.Common.Native.ke_error**, ke_material_handle> create_material;
 
-    [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_render_service *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ulong> material_layout;
-
-    [NativeTypeName("ke_gpu_bind_group (*)(struct ke_render_service *, ke_material_handle)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_material_handle, ulong> material_bind_group;
+    [NativeTypeName("ke_render_material_binding (*)(struct ke_render_service *, ke_material_handle)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_material_handle, ulong> material_binding;
 
     [NativeTypeName("ke_alpha_mode (*)(struct ke_render_service *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_material_handle, ke_alpha_mode> material_alpha_mode;
@@ -135,11 +132,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("const ke_render_lighting *(*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_lighting*> lighting;
 
-    [NativeTypeName("bool (*)(struct ke_render_service *, const ke_render_shader_group_params *, ke_render_shader_group *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_shader_group_params*, ke_render_shader_group*, KernelEngine.Common.Native.ke_error**, bool> shader_group_layout;
-
-    [NativeTypeName("ke_gpu_bind_group (*)(struct ke_render_service *, const ke_render_shader_group_params *, ke_gpu_bind_group_layout, const char *, const ke_render_shader_binding *, uint32_t, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_shader_group_params*, ulong, sbyte*, ke_render_shader_binding*, uint, KernelEngine.Common.Native.ke_error**, ulong> create_shader_bind_group;
+    [NativeTypeName("ke_render_resource_binder *(*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_resource_binder*> resource_binder;
 
     [NativeTypeName("ke_gpu_texture_format (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_gpu_texture_format> backbuffer_format;

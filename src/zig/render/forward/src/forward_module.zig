@@ -68,7 +68,7 @@ const Objects = @import("object_uniforms").ObjectUniforms(c, PerObject);
 /// The state of one pass. `ke_render_forward_create` allocates it on the heap and `destroyHandle`
 /// frees it, and nothing else takes ownership. `core` and `device` are borrowed for its
 /// whole life and never released here. The GPU objects are made by `setup` and released by
-/// `destroyModule`, and `frame_bind_group` is replaced whenever the environment cubemap changes or
+/// `destroyModule`, and `frame_set` is replaced whenever the environment cubemap changes or
 /// the declared targets are recreated.
 /// Several fields point into the struct itself, so it must not be moved after `setup`.
 const ForwardModule = struct {
@@ -87,7 +87,7 @@ const ForwardModule = struct {
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
     groups: Groups = .{},
-    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    frame_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
     objects: ?Objects = null,
     env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
     resource_generation: u32 = 0,
@@ -141,14 +141,14 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-/// Replaces `frame_bind_group` with a group over the "hdr_opaque" view and the feature bindings,
+/// Replaces `frame_set` with a set over the "hdr_opaque" view and the feature bindings,
 /// whose environment is the black cube when `ibl_enabled` is false. `setup` calls it once, and
 /// `system` calls it when the skybox's cubemap changes or the service recreated its declared
-/// targets. The group it replaces is destroyed. A creation failure goes to `logGpuError`, and
-/// `frame_bind_group` then holds whatever creation returned.
-fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
-    const dev = fwd.device;
+/// targets. The set it replaces is destroyed. A creation failure goes to `logGpuError`, and
+/// `frame_set` then holds whatever creation returned.
+fn rebuildFrameSet(fwd: *ForwardModule) void {
     const core = fwd.core;
+    const binder = fwd.groups.binder;
     const env_view = core.*.texture_view.?(core, fwd.env_cubemap);
     const black_cube_view = core.*.texture_view.?(core, .{ .bits = c.KE_HANDLE_NONE });
     const ibl_view = if (fwd.ibl_enabled) env_view else black_cube_view;
@@ -157,18 +157,18 @@ fn rebuildFrameBindGroup(fwd: *ForwardModule) void {
     bindings[0] = .{ .name = "hdr_opaque", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = core.*.resource_view.?(core, "hdr_opaque"), .sampler = 0 };
     Features.fill(core, ibl_view, bindings[1..]);
 
-    if (fwd.frame_bind_group != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
+    binder.destroy_set.?(binder, fwd.frame_set);
     fwd.resource_generation = core.*.resource_generation.?(core);
     var err: ?*c.ke_error = null;
-    fwd.frame_bind_group = core.*.create_shader_bind_group.?(core, &fwd.groups.frame_params, fwd.groups.frame.layout, "forward.frame_bind_group", &bindings, bindings.len, &err);
-    if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame bind group");
+    fwd.frame_set = binder.create_set.?(binder, fwd.groups.layout, null, "forward.frame_set", &bindings, bindings.len, &err);
+    if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame set");
 }
 
 /// The render-phase system that `ke_render_forward_create` registers, with no pinned worker. It
 /// returns true on every path. Once
 /// `begin_pass` has returned a pass context, every path reaches `end_pass`. A scene without a
 /// camera does nothing. Otherwise it copies "hdr" into "hdr_opaque", so the blended materials can
-/// sample what lies behind them, and keeps `frame_bind_group` matching the sky. The view and the
+/// sample what lies behind them, and keeps `frame_set` matching the sky. The view and the
 /// projection come from the frame globals the service holds. A draw whose geometry or shader is missing is skipped.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const fwd = moduleOf(user);
@@ -202,11 +202,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         (@as(*const c.ke_skybox_component, @ptrCast(@alignCast(sky_segs[0].columns[0])))).cubemap
     else
         .{ .bits = c.KE_HANDLE_NONE };
-    if (want_env.bits != fwd.env_cubemap.bits or fwd.frame_bind_group == c.KE_GPU_INVALID_HANDLE or
+    if (want_env.bits != fwd.env_cubemap.bits or fwd.frame_set == c.KE_RENDER_BINDING_INVALID or
         fwd.resource_generation != core.*.resource_generation.?(core))
     {
         fwd.env_cubemap = want_env;
-        rebuildFrameBindGroup(fwd);
+        rebuildFrameSet(fwd);
     }
 
     var segc: usize = 0;
@@ -223,7 +223,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     }
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_bind_group.?(rp, fwd.groups.frame.index, fwd.frame_bind_group, null, 0);
+    fwd.groups.binder.bind_render_set.?(fwd.groups.binder, rp, fwd.frame_set, null, 0);
 
     for (fwd.draws.items, 0..) |draw, i| {
         const d: u32 = @intCast(i);
@@ -243,9 +243,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         const offset: u32 = Objects.offset(d);
         core.*.upload.?(core, objects.buffer, offset, &u, @sizeOf(PerObject));
 
-        const mat_bg = core.*.material_bind_group.?(core, draw.mesh.material);
-        rp.*.set_bind_group.?(rp, fwd.groups.material_index, mat_bg, null, 0);
-        rp.*.set_bind_group.?(rp, fwd.groups.object.index, objects.bind_group, &offset, 1);
+        fwd.groups.bindMaterial(rp, core.*.material_binding.?(core, draw.mesh.material));
+        objects.bind(rp, d);
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -276,7 +275,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.skybox_cid = skybox_cid;
     fwd.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
 
-    if (!fwd.groups.init(core, dev, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
+    if (!fwd.groups.init(core.*.resource_binder.?(core), DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
 
     fwd.attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -311,7 +310,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
-    fwd.groups.place(core, &pp);
+    if (!fwd.groups.place(&pp, out_error)) return false;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     pp.color_target_count = 1;
     fwd.pipeline_template = pp;
@@ -325,7 +324,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         return false;
     }
 
-    fwd.objects = .{ .device = dev, .core = core, .group = &fwd.groups.object_params, .layout = fwd.groups.object.layout, .buffer_label = "forward.obj_uniform", .bind_group_label = "forward.obj_bind_group" };
+    fwd.objects = .{ .device = dev, .binder = fwd.groups.binder, .layout = fwd.groups.layout, .buffer_label = "forward.obj_uniform", .set_label = "forward.obj_set" };
     if (!fwd.objects.?.ensure(1, out_error)) return false;
 
     const hdr_opaque_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
@@ -336,7 +335,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, out_error);
 
-    rebuildFrameBindGroup(fwd);
+    rebuildFrameSet(fwd);
 
     const shadow_map_cid = core.*.cid.?(core, "shadow_map");
     const shadow_enabled = shadow_map_cid != c.KE_COMPONENT_INVALID;
@@ -384,17 +383,14 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
-/// Releases the bind groups, buffers and layouts the module holds, skipping any handle still
-/// invalid, so it also works after a partial `setup`. It does not free the module, and it does not
+/// Releases the sets, buffers and layout the module holds, skipping any handle still invalid, so it also works after a partial `setup`. It does not free the module, and it does not
 /// release the pipeline or the "hdr_opaque" resource, which `setup` obtained from the render
 /// service.
 fn destroyModule(fwd: *ForwardModule) void {
-    const dev = fwd.device;
-    const invalid = c.KE_GPU_INVALID_HANDLE;
-    if (fwd.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, fwd.frame_bind_group);
+    if (fwd.frame_set != c.KE_RENDER_BINDING_INVALID) fwd.groups.binder.destroy_set.?(fwd.groups.binder, fwd.frame_set);
     if (fwd.objects) |*objects| objects.release();
     fwd.draws.deinit(gpa);
-    fwd.groups.release(dev);
+    fwd.groups.release();
 }
 
 /// The `destroy` slot of the handle that `ke_render_forward_create` returns. It is the only place

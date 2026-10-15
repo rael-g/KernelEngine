@@ -15,6 +15,7 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/service/render_service.h");
     @cInclude("kernel_engine/render/service/pass_context.h");
     @cInclude("kernel_engine/render/service/render_service_create.h");
+    @cInclude("kernel_engine/render/binder_grouped/resource_binder_grouped_create.h");
     @cInclude("kernel_engine/view/view_space.h");
     @cInclude("kernel_engine/view/space/view_space_rh_create.h");
     @cInclude("kernel_engine/render/camera.h");

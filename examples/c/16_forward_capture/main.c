@@ -141,7 +141,7 @@ int main(int argc, char **argv)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);
     if (!rt.ref) die("runtime", err);
 
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, frame_target, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
+    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, frame_target, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
     if (!render.ref) die("render module", err);
     ke_render_service *core = ke_render_module_core(render.ref);
 

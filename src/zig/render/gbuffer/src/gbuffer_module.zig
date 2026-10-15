@@ -76,7 +76,7 @@ const GBufferModule = struct {
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
     groups: Groups = .{},
-    frame_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    frame_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
     objects: ?Objects = null,
     draws: std.ArrayList(Draw) = .empty,
 
@@ -139,7 +139,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const view_proj = zm.loadMat(core.*.frame_globals.?(core).*.view_proj[0..]);
 
     const rp = pc.*.begin_render.?(pc);
-    rp.*.set_bind_group.?(rp, gb.groups.frame.index, gb.frame_bind_group, null, 0);
+    gb.groups.binder.bind_render_set.?(gb.groups.binder, rp, gb.frame_set, null, 0);
 
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 1, &segc);
@@ -175,9 +175,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         if (!gb.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
         rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &gb.pipeline_template));
 
-        const mat_bg = core.*.material_bind_group.?(core, draw.mesh.material);
-        rp.*.set_bind_group.?(rp, gb.groups.material_index, mat_bg, null, 0);
-        rp.*.set_bind_group.?(rp, gb.groups.object.index, objects.bind_group, &offset, 1);
+        gb.groups.bindMaterial(rp, core.*.material_binding.?(core, draw.mesh.material));
+        objects.bind(rp, draw_idx);
         rp.*.set_vertex_buffer.?(rp, 0, vbo, 0);
         rp.*.set_index_buffer.?(rp, ibo, c.KE_GPU_INDEX_FORMAT_UINT16, 0);
         rp.*.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
@@ -201,9 +200,10 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     gb.world_transform_cid = world_transform_cid;
     gb.camera_cid = camera_cid;
 
-    if (!gb.groups.init(core, dev, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
-    gb.frame_bind_group = core.*.create_shader_bind_group.?(core, &gb.groups.frame_params, gb.groups.frame.layout, "gbuffer.frame_bind_group", null, 0, out_error);
-    if (gb.frame_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
+    const binder: *c.ke_render_resource_binder = core.*.resource_binder.?(core);
+    if (!gb.groups.init(binder, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
+    gb.frame_set = binder.create_set.?(binder, gb.groups.layout, null, "gbuffer.frame_set", null, 0, out_error);
+    if (gb.frame_set == c.KE_RENDER_BINDING_INVALID) return false;
 
     gb.attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -231,7 +231,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.depth_stencil.depth_test_enabled = 1;
     pp.depth_stencil.depth_write_enabled = 1;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    gb.groups.place(core, &pp);
+    if (!gb.groups.place(&pp, out_error)) return false;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
     pp.color_target_formats[1] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
     pp.color_target_formats[2] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
@@ -247,7 +247,7 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         return false;
     }
 
-    gb.objects = .{ .device = dev, .core = core, .group = &gb.groups.object_params, .layout = gb.groups.object.layout, .buffer_label = "gbuffer.obj_uniform", .bind_group_label = "gbuffer.obj_bind_group" };
+    gb.objects = .{ .device = dev, .binder = binder, .layout = gb.groups.layout, .buffer_label = "gbuffer.obj_uniform", .set_label = "gbuffer.obj_set" };
     if (!gb.objects.?.ensure(1, out_error)) return false;
 
     const albedo_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
@@ -304,16 +304,13 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
-/// Releases the GPU objects `setup` created, skipping any still at KE_GPU_INVALID_HANDLE, so it
-/// also serves a module whose setup stopped partway. Used on creation failure and by
+/// Releases the GPU objects and sets `setup` created, skipping any still invalid, so it also serves a module whose setup stopped partway. Used on creation failure and by
 /// `destroyHandle`.
 fn destroyModule(gb: *GBufferModule) void {
-    const dev = gb.device;
-    const invalid = c.KE_GPU_INVALID_HANDLE;
     if (gb.objects) |*objects| objects.release();
     gb.draws.deinit(gpa);
-    if (gb.frame_bind_group != invalid) dev.destroy_bind_group.?(dev, gb.frame_bind_group);
-    gb.groups.release(dev);
+    if (gb.frame_set != c.KE_RENDER_BINDING_INVALID) gb.groups.binder.destroy_set.?(gb.groups.binder, gb.frame_set);
+    gb.groups.release();
 }
 
 /// The destroy slot of the handle `ke_render_gbuffer_create` returns: releases the module's GPU

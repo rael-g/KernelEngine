@@ -302,20 +302,93 @@ pub fn Stubs(comptime c: type) type {
             }
         };
 
+        /// Fake resource binder. `live` counts the layouts, sets and materials handed out and not
+        /// destroyed; every handle is read from and advanced in `next`.
+        pub const Binder = struct {
+            vtable: c.ke_render_resource_binder,
+            next: u64,
+            live: i64,
+
+            pub fn init(self: *Binder) void {
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_resource_binder), .next = 1, .live = 0 };
+                self.vtable.handle = self;
+                self.vtable.provide = &provide;
+                self.vtable.create_shader_layout = &createShaderLayout;
+                self.vtable.destroy_shader_layout = &destroyHandle;
+                self.vtable.pipeline_layouts = &pipelineLayouts;
+                self.vtable.create_set = &createSet;
+                self.vtable.destroy_set = &destroyHandle;
+                self.vtable.bind_render_set = &bindRenderSet;
+                self.vtable.bind_compute_set = &bindComputeSet;
+                self.vtable.create_material = &createMaterial;
+                self.vtable.destroy_material = &destroyHandle;
+                self.vtable.bind_material = &bindMaterial;
+            }
+
+            pub fn api(self: *Binder) *c.ke_render_resource_binder {
+                return &self.vtable;
+            }
+
+            fn of(self: [*c]c.ke_render_resource_binder) *Binder {
+                return @ptrCast(@alignCast(self.*.handle));
+            }
+
+            fn mint(self: [*c]c.ke_render_resource_binder) u64 {
+                const b = of(self);
+                b.live += 1;
+                const h = b.next;
+                b.next += 1;
+                return h;
+            }
+
+            fn destroyHandle(self: [*c]c.ke_render_resource_binder, h: u64) callconv(.c) void {
+                if (h != 0) of(self).live -= 1;
+            }
+
+            fn provide(_: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_shader_binding, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                return true;
+            }
+
+            fn createShaderLayout(self: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_shader_layout_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_shader_layout {
+                return mint(self);
+            }
+
+            /// Writes no layout.
+            fn pipelineLayouts(_: [*c]c.ke_render_resource_binder, _: c.ke_render_shader_layout, _: [*c]c.ke_gpu_bind_group_layout, _: u32, out_count: [*c]u32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                out_count.* = 0;
+                return true;
+            }
+
+            fn createSet(self: [*c]c.ke_render_resource_binder, _: c.ke_render_shader_layout, _: [*c]const u8, _: [*c]const u8, _: [*c]const c.ke_render_shader_binding, _: u32, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_resource_set {
+                return mint(self);
+            }
+
+            fn bindRenderSet(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_render_pass, _: c.ke_render_resource_set, _: [*c]const u32, _: u32) callconv(.c) void {}
+
+            fn bindComputeSet(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_compute_pass, _: c.ke_render_resource_set, _: [*c]const u32, _: u32) callconv(.c) void {}
+
+            fn createMaterial(self: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_material_data, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_material_binding {
+                return mint(self);
+            }
+
+            fn bindMaterial(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_render_pass, _: c.ke_render_shader_layout, _: c.ke_render_material_binding) callconv(.c) void {}
+        };
+
         /// Fake render service. Every id it hands out is read from and advanced in `next`, one
-        /// sequence shared by all its methods.
+        /// sequence shared by all its methods. It answers `resource_binder` with `binder`.
         pub const Core = struct {
             vtable: c.ke_render_service,
             next: u64,
             shader_loads_fail: bool,
             device: *c.ke_gpu_device,
+            binder: Binder,
 
-            /// The shader groups it answers are created on `device`, so they count in its `live`.
             pub fn init(self: *Core, device: *c.ke_gpu_device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false, .device = device };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false, .device = device, .binder = undefined };
+                self.binder.init();
                 self.vtable.handle = self;
-                self.vtable.shader_group_layout = &shaderGroupLayout;
-                self.vtable.create_shader_bind_group = &createShaderBindGroup;
+                self.vtable.resource_binder = &resourceBinder;
+                self.vtable.material_binding = &materialBinding;
                 self.vtable.load_shader = &loadShader;
                 self.vtable.backbuffer_format = &backbufferFormat;
                 self.vtable.resource_generation = &resourceGeneration;
@@ -325,7 +398,6 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.import_buffer = &importBuffer;
                 self.vtable.import_tag = &importTag;
                 self.vtable.resource_view = &resourceView;
-                self.vtable.material_layout = &materialLayout;
                 self.vtable.texture_view = &textureView;
                 self.vtable.white_texture = &whiteTexture;
                 self.vtable.resource_buffer = &resourceBuffer;
@@ -361,22 +433,13 @@ pub fn Stubs(comptime c: type) type {
                 return mint(self);
             }
 
-            /// An empty layout at group zero, created on the device.
-            fn shaderGroupLayout(self: [*c]c.ke_render_service, _: [*c]const c.ke_render_shader_group_params, out_group: [*c]c.ke_render_shader_group, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+            fn resourceBinder(self: [*c]c.ke_render_service) callconv(.c) [*c]c.ke_render_resource_binder {
                 const core: *Core = @ptrCast(@alignCast(self.*.handle));
-                const layout = core.device.create_bind_group_layout.?(core.device, &c.ke_gpu_bind_group_layout_params{ .label = null, .entry_count = 0, .entries = null });
-                if (layout == c.KE_GPU_INVALID_HANDLE) {
-                    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "stub shader_group_layout: the device refused the layout", @src().file, @intCast(@src().line), null);
-                    return false;
-                }
-                out_group.* = .{ .layout = layout, .index = 0 };
-                return true;
+                return core.binder.api();
             }
 
-            /// A bind group created on the device with no entries, whatever the bindings name.
-            fn createShaderBindGroup(self: [*c]c.ke_render_service, _: [*c]const c.ke_render_shader_group_params, layout: c.ke_gpu_bind_group_layout, label: [*c]const u8, _: [*c]const c.ke_render_shader_binding, _: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group {
-                const core: *Core = @ptrCast(@alignCast(self.*.handle));
-                return core.device.create_bind_group.?(core.device, &c.ke_gpu_bind_group_params{ .label = label, .layout = layout, .entry_count = 0, .entries = null }, out_error);
+            fn materialBinding(self: [*c]c.ke_render_service, _: c.ke_material_handle) callconv(.c) c.ke_render_material_binding {
+                return mint(self);
             }
 
             fn getOrCreatePipeline(self: ?*c.ke_render_service, _: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
@@ -401,10 +464,6 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn resourceView(self: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
-                return mint(self);
-            }
-
-            fn materialLayout(self: ?*c.ke_render_service) callconv(.c) c.ke_gpu_bind_group_layout {
                 return mint(self);
             }
 

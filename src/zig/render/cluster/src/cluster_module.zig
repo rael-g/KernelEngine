@@ -50,10 +50,9 @@ const ClusterParams = extern struct {
     depth: [4]f32,
 };
 
-const cull_group_params = c.ke_render_shader_group_params{
+const cull_layout_params = c.ke_render_shader_layout_params{
     .shader = "cluster_cull",
     .stages = c.KE_GPU_SHADER_STAGE_COMPUTE,
-    .block = null,
     .hints = null,
     .hint_count = 0,
 };
@@ -92,8 +91,9 @@ const ClusterModule = struct {
 
     cull_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
     cull_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    cull_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
-    cull_group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
+    binder: *c.ke_render_resource_binder = undefined,
+    cull_layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
+    cull_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
     cull_io: c.ke_render_pass_io = undefined,
     cull_access: [6]c.ke_component_access = undefined,
     cull_queries_terms: [6]c.ke_component_access = undefined,
@@ -226,7 +226,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 
     const cp = pc.*.begin_compute.?(pc);
     cp.*.set_pipeline.?(cp, cm.cull_pipeline);
-    cp.*.set_bind_group.?(cp, cm.cull_group.index, cm.cull_bind_group, null, 0);
+    cm.binder.bind_compute_set.?(cm.binder, cp, cm.cull_set, null, 0);
     cp.*.dispatch.?(cp, (cm.num_clusters + 63) / 64, 1, 1);
     cp.*.end.?(cp);
     core.*.end_pass.?(core, pc);
@@ -321,7 +321,9 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         if (core.*.import_buffer.?(core, name.resource, buffer.buffer, buffer.size, out_error) == c.KE_COMPONENT_INVALID) return false;
     }
 
-    if (!core.*.shader_group_layout.?(core, &cull_group_params, &cm.cull_group, out_error)) return false;
+    cm.binder = core.*.resource_binder.?(core);
+    cm.cull_layout = cm.binder.create_shader_layout.?(cm.binder, &cull_layout_params, out_error);
+    if (cm.cull_layout == c.KE_RENDER_BINDING_INVALID) return false;
 
     cm.cull_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .label = "cluster.cull_uniform",
@@ -340,21 +342,21 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .{ .name = "spot_indices", .buffer = cm.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
         .{ .name = "spot_counts", .buffer = cm.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
     };
-    cm.cull_bind_group = core.*.create_shader_bind_group.?(core, &cull_group_params, cm.cull_group.layout, "cluster.cull_bind_group", &cull_bindings, cull_bindings.len, out_error);
-    if (cm.cull_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
+    cm.cull_set = cm.binder.create_set.?(cm.binder, cm.cull_layout, null, "cluster.cull_set", &cull_bindings, cull_bindings.len, out_error);
+    if (cm.cull_set == c.KE_RENDER_BINDING_INVALID) return false;
 
     const cs = core.*.load_shader.?(core, "cluster_cull", c.KE_GPU_SHADER_STAGE_COMPUTE, out_error);
     if (cs == c.KE_GPU_INVALID_HANDLE) return false;
 
-    var cull_layouts = [_]c.ke_gpu_bind_group_layout{ 0, 0, 0, 0 };
-    cull_layouts[cm.cull_group.index] = cm.cull_group.layout;
-    cm.cull_pipeline = dev.create_compute_pipeline.?(dev, &c.ke_gpu_compute_pipeline_params{
+    var cull_pipeline_params = c.ke_gpu_compute_pipeline_params{
         .label = "cluster.cull_pipeline",
         .compute_module = cs,
         .compute_entry = "cs_main",
-        .bind_group_layouts = cull_layouts,
-        .bind_group_layout_count = cm.cull_group.index + 1,
-    });
+        .bind_group_layouts = .{ 0, 0, 0, 0 },
+        .bind_group_layout_count = 0,
+    };
+    if (!cm.binder.pipeline_layouts.?(cm.binder, cm.cull_layout, &cull_pipeline_params.bind_group_layouts, cull_pipeline_params.bind_group_layouts.len, &cull_pipeline_params.bind_group_layout_count, out_error)) return false;
+    cm.cull_pipeline = dev.create_compute_pipeline.?(dev, &cull_pipeline_params);
     if (cm.cull_pipeline == c.KE_GPU_INVALID_HANDLE) {
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "cull pass: compute pipeline creation failed", @src().file, @intCast(@src().line), null);
         return false;
@@ -379,14 +381,16 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
-/// Releases every GPU object whose handle is not the invalid handle, so it is safe on a module that
+/// Releases every GPU object, set and layout whose handle is not the invalid one, so it is safe on a module that
 /// `setup` did not finish. The device and the borrowed pointers are not released.
 fn destroyModule(cm: *const ClusterModule) void {
     const dev = cm.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
     if (cm.cull_pipeline != invalid) dev.destroy_compute_pipeline.?(dev, cm.cull_pipeline);
-    if (cm.cull_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.cull_bind_group);
-    if (cm.cull_group.layout != invalid) dev.destroy_bind_group_layout.?(dev, cm.cull_group.layout);
+    if (cm.cull_layout != c.KE_RENDER_BINDING_INVALID) {
+        cm.binder.destroy_set.?(cm.binder, cm.cull_set);
+        cm.binder.destroy_shader_layout.?(cm.binder, cm.cull_layout);
+    }
     if (cm.cull_uniform != invalid) dev.destroy_buffer.?(dev, cm.cull_uniform);
     if (cm.cluster_grid_uniform != invalid) dev.destroy_buffer.?(dev, cm.cluster_grid_uniform);
     const storage = [_]c.ke_gpu_buffer{

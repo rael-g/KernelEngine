@@ -28,12 +28,15 @@ extern "C"
  * @brief Creates a render service whose frames draw into @p target.
  * @param device Borrowed, must outlive the service.
  * @param target Borrowed, must outlive the service; every frame acquires and presents it.
- * @return Handle whose @c ref is NULL on failure; KE_ERROR_INVALID_ARGUMENT when @p target or
- *         @p shader_dir is NULL.
+ * @param binder Borrowed, must outlive the service; it holds the service's materials and is given
+ *        the parameters every shader shares.
+ * @return Handle whose @c ref is NULL on failure; KE_ERROR_INVALID_ARGUMENT when @p target,
+ *         @p shader_dir or @p binder is NULL.
  */
 KE_RENDER_CORE_API ke_render_service_handle
 ke_render_service_create(ke_gpu_device *device, ke_gpu_render_target *target, ke_ecs *ecs,
-                         const char *shader_dir, ke_error **out_error);
+                         const char *shader_dir, ke_render_resource_binder *binder,
+                         ke_error **out_error);
 
 #ifdef __cplusplus
 }

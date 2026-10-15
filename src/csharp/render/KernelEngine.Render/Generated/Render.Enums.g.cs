@@ -16,12 +16,3 @@ public enum RenderSizeMode
     Absolute = 0,
     RelativeToBackbuffer = 1,
 }
-
-/// <summary>What a pass states about a shader binding that the shader's reflection does not carry.</summary>
-public enum RenderBindingHintFlags
-{
-    /// <summary>The texture is bound to a depth-format view.</summary>
-    Depth = 0,
-    /// <summary>The buffer is bound with a dynamic offset given at set_bind_group.</summary>
-    DynamicOffset = 1,
-}

@@ -189,16 +189,10 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         }
     }
 
-    /// <summary>The per-material bind-group layout (descriptor set 1) a pipeline must declare so its set-1 bind groups (from material_bind_group) are valid.</summary>
-    public ulong MaterialLayout()
+    /// <summary>What the service's resource binder holds for a material handle, the argument a pass gives its bind_material; an unknown handle resolves to the built-in white material.</summary>
+    public ulong MaterialBinding(ke_material_handle h)
     {
-        return Handle->material_layout(Handle);
-    }
-
-    /// <summary>The set-1 bind group for a material handle; an unknown handle resolves to the built-in white material (handle 0).</summary>
-    public ulong MaterialBindGroup(ke_material_handle h)
-    {
-        return Handle->material_bind_group(Handle, h);
+        return Handle->material_binding(Handle, h);
     }
 
     /// <summary>The pass bucket for a material handle, resolved from CPU-side storage — no GPU state touched.</summary>
@@ -405,32 +399,10 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return Handle->lighting(Handle);
     }
 
-    /// <summary>Builds the layout of one bind group of a compiled shader from the reflection the build wrote beside it. The caller owns the layout and destroys it on the device.</summary>
-    /// <returns>False with the error filled: not found when a stage's reflection is missing or no stage declares the block, invalid argument when the reflection cannot be read or a hint names no parameter of the group.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public ke_render_shader_group ShaderGroupLayout(ke_render_shader_group_params* @params)
+    /// <summary>The resource binder the service was created with, through which a pass brings its resources to its shaders; the service has given it `ke_frame`, `ke_lighting` and the `ke_samp_*` samplers.</summary>
+    public ke_render_resource_binder* ResourceBinder()
     {
-        ke_render_shader_group result;
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->shader_group_layout(Handle, @params, &result, &err), err, "shader_group_layout");
-        return result;
-    }
-
-    /// <summary>Creates a bind group for one group of a compiled shader, matching each binding to the shader's parameter of the same name. A parameter the service provides itself, `ke_frame`, `ke_lighting` and the `ke_samp_*` samplers, is bound by the service when `bindings` leaves it out. The caller owns the bind group and destroys it on the device.</summary>
-    /// <param name="layout">The layout shader_group_layout returned for the same params.</param>
-    /// <param name="label">Optional name shown by capture and validation tools.</param>
-    /// <returns>The bind group, or KE_GPU_INVALID_HANDLE with the error filled: invalid argument when a binding names no parameter of the group, or a parameter of the group has no binding.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public ulong CreateShaderBindGroup(ke_render_shader_group_params* @params, ulong layout, string label, ke_render_shader_binding* bindings, uint bindingCount)
-    {
-        var labelBytes = System.Text.Encoding.UTF8.GetBytes(label + '\0');
-        fixed (byte* labelPtr = labelBytes)
-        {
-            ke_error* err = null;
-            var result = Handle->create_shader_bind_group(Handle, @params, layout, (sbyte*)labelPtr, bindings, bindingCount, &err);
-            if (err != null) throw NativeErrors.FromNative(err, "create_shader_bind_group");
-            return result;
-        }
+        return Handle->resource_binder(Handle);
     }
 
     /// <summary>Texel format of the backbuffer, the format a pipeline drawing into it declares.</summary>
