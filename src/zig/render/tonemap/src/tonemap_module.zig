@@ -11,6 +11,14 @@ const c = cimport.c;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
+const shader_group = c.ke_render_shader_group_params{
+    .shader = "tonemap",
+    .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .block = null,
+    .hints = null,
+    .hint_count = 0,
+};
+
 /// The state of one tonemap pass. The factory allocates it and `destroyHandle` frees it. The
 /// runtime receives it as the context of `system` at registration. `io` points into `reads` and
 /// `writes` of this same struct, which stays valid because the module is never moved after
@@ -21,7 +29,7 @@ pub const TonemapModule = struct {
     logger: ?*c.ke_logger = null,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    group: c.ke_render_shader_group = .{ .layout = c.KE_GPU_INVALID_HANDLE, .index = 0 },
     bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
 
     writes: [1][*c]const u8 = undefined,
@@ -63,19 +71,14 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
 
     const hdr_view = pc.*.read.?(pc, "hdr");
     const samp = core.*.sampler.?(core);
-    const entries = [2]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = hdr_view, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = samp },
+    const bindings = [2]c.ke_render_shader_binding{
+        .{ .name = "t_hdr", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = hdr_view, .sampler = 0 },
+        .{ .name = "s_hdr", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = samp },
     };
     if (tm.bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, tm.bind_group);
     var err: ?*c.ke_error = null;
-    tm.bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .label = "tonemap.bind_group",
-        .layout = tm.bgl,
-        .entry_count = 2,
-        .entries = &entries,
-    }, &err);
+    tm.bind_group = core.*.create_shader_bind_group.?(core, &shader_group, tm.group.layout, "tonemap.bind_group", &bindings, bindings.len, &err);
     if (tm.bind_group == c.KE_GPU_INVALID_HANDLE) {
         logGpuError(tm.logger, err, "tonemap bind group");
         core.*.end_pass.?(core, pc);
@@ -85,7 +88,7 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &tm.pipeline_params));
-    rp.*.set_bind_group.?(rp, 0, tm.bind_group, null, 0);
+    rp.*.set_bind_group.?(rp, tm.group.index, tm.bind_group, null, 0);
     rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
@@ -93,8 +96,8 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
 }
 
 /// Fills the module during `ke_render_tonemap_create`, before `system` is registered. A failed
-/// shader load returns false before the layout exists. A failed pipeline request destroys the
-/// layout here and then returns false. The caller releases the module after any false return. A
+/// shader load or layout request returns false before the layout exists; after it, a failed
+/// pipeline request returns false with the layout left for the caller's release. The caller releases the module after any false return. A
 /// successful call has asked the service for the pipeline once, so a failure surfaces at creation.
 fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
          logger: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) bool {
@@ -107,25 +110,15 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     const fs = core.*.load_shader.?(core, "tonemap", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
     if (fs == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const bgl_entries = [2]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_2D },
-        .{ .binding = 1, .visibility = c.KE_GPU_SHADER_STAGE_FRAGMENT, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    const bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "tonemap.bgl",
-        .entry_count = 2,
-        .entries = &bgl_entries,
-    });
-
-    tm.bgl = bgl;
+    if (!core.*.shader_group_layout.?(core, &shader_group, &tm.group, out_error)) return false;
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.label = "tonemap.pipeline";
     pp.vertex_module   = vs;
     pp.vertex_entry    = "vs_main";
     pp.fragment_module = fs;
     pp.fragment_entry  = "fs_main";
-    pp.bind_group_layouts[0] = bgl;
-    pp.bind_group_layout_count = 1;
+    pp.bind_group_layouts[tm.group.index] = tm.group.layout;
+    pp.bind_group_layout_count = tm.group.index + 1;
     pp.color_target_formats[0] = core.*.backbuffer_format.?(core);
     pp.color_target_count = 1;
     pp.blend_state.write_mask = 0x0F;
@@ -133,10 +126,7 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.depth_stencil.depth_write_enabled = 0;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     tm.pipeline_params = pp;
-    if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
-        dev.destroy_bind_group_layout.?(dev, bgl);
-        return false;
-    }
+    if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) return false;
 
     tm.bind_group = c.KE_GPU_INVALID_HANDLE;
 
@@ -163,8 +153,8 @@ fn destroyModule(tm: *const TonemapModule) void {
     const dev = tm.device;
     if (tm.bind_group != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_bind_group.?(dev, tm.bind_group);
-    if (tm.bgl != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group_layout.?(dev, tm.bgl);
+    if (tm.group.layout != c.KE_GPU_INVALID_HANDLE)
+        dev.destroy_bind_group_layout.?(dev, tm.group.layout);
 }
 
 /// The `destroy` slot of the handle `ke_render_tonemap_create` returns. It releases the GPU objects
@@ -221,7 +211,7 @@ test "creating and destroying the tonemap pass leaves no block allocated and no 
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     const h = ke_render_tonemap_create(rt.api(), core.api(), dev.api(), null, null);
@@ -235,7 +225,7 @@ test "a tonemap pass whose shader fails to load releases what it had created" {
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
@@ -249,7 +239,7 @@ test "a tonemap pass the runtime refuses to register releases what it had create
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;

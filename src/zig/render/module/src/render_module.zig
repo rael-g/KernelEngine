@@ -473,6 +473,10 @@ const Rig = struct {
         errdefer self.shaders.cleanup();
         for (authored_shaders) |name| {
             try self.shaders.dir.writeFile(testing.io, .{ .sub_path = name, .data = "// stand-in" });
+            var reflection_name: [64]u8 = undefined;
+            const stem = name[0 .. name.len - ".wgsl".len];
+            const reflection = try std.fmt.bufPrint(&reflection_name, "{s}.json", .{stem});
+            try self.shaders.dir.writeFile(testing.io, .{ .sub_path = reflection, .data = "{\"parameters\":[]}" });
         }
         const dir = try std.fmt.bufPrint(&self.shader_dir, ".zig-cache/tmp/{s}", .{self.shaders.sub_path});
         self.shader_dir[dir.len] = 0;

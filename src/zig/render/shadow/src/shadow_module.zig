@@ -360,7 +360,7 @@ test "creating and destroying the shadow pass leaves no block allocated and no G
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var view_space = std.mem.zeroes(c.ke_view_space);
@@ -376,7 +376,7 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
@@ -392,7 +392,7 @@ test "a shadow pass the runtime refuses to register releases what it had created
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;

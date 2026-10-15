@@ -603,7 +603,7 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var ecs: Stubs.Ecs = undefined;
@@ -620,7 +620,7 @@ test "a ui pass whose shader fails to load releases what it had created" {
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
@@ -637,7 +637,7 @@ test "a ui pass the runtime refuses to register releases what it had created" {
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
@@ -654,7 +654,7 @@ test "a ui pass the runtime refuses its second system takes the first one back" 
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 1;

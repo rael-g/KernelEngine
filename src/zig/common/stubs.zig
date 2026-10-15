@@ -308,10 +308,14 @@ pub fn Stubs(comptime c: type) type {
             vtable: c.ke_render_service,
             next: u64,
             shader_loads_fail: bool,
+            device: *c.ke_gpu_device,
 
-            pub fn init(self: *Core) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false };
+            /// The shader groups it answers are created on `device`, so they count in its `live`.
+            pub fn init(self: *Core, device: *c.ke_gpu_device) void {
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false, .device = device };
                 self.vtable.handle = self;
+                self.vtable.shader_group_layout = &shaderGroupLayout;
+                self.vtable.create_shader_bind_group = &createShaderBindGroup;
                 self.vtable.load_shader = &loadShader;
                 self.vtable.backbuffer_format = &backbufferFormat;
                 self.vtable.resource_generation = &resourceGeneration;
@@ -359,6 +363,24 @@ pub fn Stubs(comptime c: type) type {
                 const core: *Core = @ptrCast(@alignCast(self.?.handle));
                 if (core.shader_loads_fail) return c.KE_GPU_INVALID_HANDLE;
                 return mint(self);
+            }
+
+            /// An empty layout at group zero, created on the device.
+            fn shaderGroupLayout(self: [*c]c.ke_render_service, _: [*c]const c.ke_render_shader_group_params, out_group: [*c]c.ke_render_shader_group, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+                const core: *Core = @ptrCast(@alignCast(self.*.handle));
+                const layout = core.device.create_bind_group_layout.?(core.device, &c.ke_gpu_bind_group_layout_params{ .label = null, .entry_count = 0, .entries = null });
+                if (layout == c.KE_GPU_INVALID_HANDLE) {
+                    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "stub shader_group_layout: the device refused the layout", @src().file, @intCast(@src().line), null);
+                    return false;
+                }
+                out_group.* = .{ .layout = layout, .index = 0 };
+                return true;
+            }
+
+            /// A bind group created on the device with no entries, whatever the bindings name.
+            fn createShaderBindGroup(self: [*c]c.ke_render_service, _: [*c]const c.ke_render_shader_group_params, layout: c.ke_gpu_bind_group_layout, label: [*c]const u8, _: [*c]const c.ke_render_shader_binding, _: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group {
+                const core: *Core = @ptrCast(@alignCast(self.*.handle));
+                return core.device.create_bind_group.?(core.device, &c.ke_gpu_bind_group_params{ .label = label, .layout = layout, .entry_count = 0, .entries = null }, out_error);
             }
 
             fn getOrCreatePipeline(self: ?*c.ke_render_service, _: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {

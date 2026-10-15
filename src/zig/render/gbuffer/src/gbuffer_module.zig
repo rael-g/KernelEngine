@@ -526,7 +526,7 @@ test "creating and destroying the gbuffer pass leaves no block allocated and no 
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var camera = std.mem.zeroes(c.ke_render_camera);
@@ -541,7 +541,7 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
@@ -556,7 +556,7 @@ test "a gbuffer pass the runtime refuses to register releases what it had create
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;

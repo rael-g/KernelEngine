@@ -1,5 +1,5 @@
-[[vk::binding(0, 0)]] Texture2D<float4> t_hdr;
-[[vk::binding(1, 0)]] SamplerState      s_hdr;
+Texture2D<float4> t_hdr;
+SamplerState      s_hdr;
 
 struct VsOut {
     float4 clip : SV_Position;
