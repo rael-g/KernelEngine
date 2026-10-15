@@ -10,8 +10,6 @@ const fields_apply = @import("component_fields_apply.zig");
 
 const E = @import("kerror").Errors(c);
 
-const path_max = 512;
-const resolved_path_max = 1024;
 
 const res_prefix = "res://";
 
@@ -49,13 +47,13 @@ const Arena = struct {
 /// The loader keeps no scene data: nodes come from the `ke_scene_tree` of `world`, components
 /// from its `ke_ecs`, connections from its signal bus. What it owns is `arena`, which holds every
 /// string and table read from a scene and lives as long as the loader, so what a load read stays
-/// valid until `vtDestroy`, and `created`. `project_root` is a copy cut to the buffer. Every
+/// valid until `vtDestroy`, and `created`. `project_root` is a copy the loader owns, empty when none was given. Every
 /// failure fills the out error and returns false; faults in what a scene says go through
 /// `structural`, which also logs them. A load runs on its caller's thread.
 const State = struct {
     api: c.ke_scene_loader,
     world: *c.ke_world,
-    project_root: [path_max]u8,
+    project_root: []u8,
 
     script_factory: c.ke_script_factory_func,
     script_ctx: ?*anyopaque,
@@ -170,52 +168,23 @@ fn readVarIn(s: *State, tbl: *c.toml_table_t, key: [*c]const u8) c.ke_variant {
     return variantNull();
 }
 
-fn pathDirname(path: []const u8, out: []u8) []const u8 {
-    const idx = std.mem.lastIndexOfAny(u8, path, "/\\") orelse {
-        out[0] = '.';
-        out[1] = 0;
-        return out[0..1];
-    };
-    const n = @min(idx, out.len - 1);
-    @memcpy(out[0..n], path[0..n]);
-    out[n] = 0;
-    return out[0..n];
+fn pathDirname(path: []const u8) []const u8 {
+    const idx = std.mem.lastIndexOfAny(u8, path, "/\\") orelse return ".";
+    return path[0..idx];
 }
 
-/// Copies the parts into out one after another and terminates the result. It stops at the buffer's
-/// capacity without an error, so a longer path is opened in its truncated form.
-fn writeJoined(out: []u8, parts: []const []const u8) void {
-    var i: usize = 0;
-    for (parts) |part| {
-        for (part) |ch| {
-            if (i >= out.len - 1) break;
-            out[i] = ch;
-            i += 1;
-        }
-    }
-    out[i] = 0;
-}
-
-/// Writes the path a scene reference names into out. A "res://" reference joins the project root,
-/// or stands alone when no root was given; an absolute path stands as written; any other joins the
-/// directory of the file making the reference. Nothing here checks that the file exists.
-fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8, out: []u8) void {
-    if (std.mem.startsWith(u8, ref, res_prefix)) {
-        const rest = ref[res_prefix.len..];
-        const root = std.mem.sliceTo(&s.project_root, 0);
-        if (root.len != 0) {
-            writeJoined(out, &.{ root, "/", rest });
-        } else {
-            writeJoined(out, &.{rest});
-        }
-        return;
-    }
-    const is_absolute = ref.len > 0 and (ref[0] == '/' or (ref.len > 1 and ref[1] == ':'));
-    if (is_absolute) {
-        writeJoined(out, &.{ref});
-        return;
-    }
-    writeJoined(out, &.{ base_dir, "/", ref });
+/// Returns the path a scene reference names, allocated for the caller to free, or null when it
+/// cannot be allocated. A "res://" reference joins the project root, or stands alone when no root
+/// was given; an absolute path stands as written; any other joins the directory of the file making
+/// the reference. Nothing here checks that the file exists.
+fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8) ?[:0]u8 {
+    const parts: []const []const u8 = if (std.mem.startsWith(u8, ref, res_prefix))
+        (if (s.project_root.len != 0) &.{ s.project_root, "/", ref[res_prefix.len..] } else &.{ref[res_prefix.len..]})
+    else if (ref.len > 0 and (ref[0] == '/' or (ref.len > 1 and ref[1] == ':')))
+        &.{ref}
+    else
+        &.{ base_dir, "/", ref };
+    return std.mem.concatWithSentinel(heap.gpa, u8, parts, 0) catch null;
 }
 
 const type_name_max = 128;
@@ -693,14 +662,18 @@ fn processEntity(
 
     const scene_ref = c.toml_string_in(args.entity_tbl, "scene");
     if (scene_ref.ok != 0) {
-        var resolved: [resolved_path_max]u8 = undefined;
-        resolvePath(s, args.base_dir, std.mem.span(scene_ref.u.s), &resolved);
+        const resolved = resolvePath(s, args.base_dir, std.mem.span(scene_ref.u.s));
         std.c.free(scene_ref.u.s);
+        const resolved_path = resolved orelse {
+            E.fail(out_error, .out_of_memory, "scene path allocation failed", @src());
+            return false;
+        };
+        defer heap.gpa.free(resolved_path);
 
         var nested_root: c.ke_entity = c.KE_ENTITY_INVALID;
         if (!loadSceneRecursive(
             s,
-            @ptrCast(&resolved),
+            resolved_path.ptr,
             parent,
             effective_name,
             args.entity_tbl,
@@ -780,8 +753,7 @@ fn loadSceneRecursive(
 
     if (!checkHeader(s, root.?, out_error)) return false;
 
-    var base_buf: [path_max]u8 = undefined;
-    const base_dir = pathDirname(std.mem.span(path), &base_buf);
+    const base_dir = pathDirname(std.mem.span(path));
 
     const entities = c.toml_array_in(root, "entity") orelse {
         if (out_root) |r| r.* = c.KE_ENTITY_INVALID;
@@ -903,13 +875,14 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     s.created.deinit(heap.gpa);
+    heap.gpa.free(s.project_root);
     s.arena.deinit();
     heap.gpa.destroy(s);
 }
 
-/// Factory. Builds a loader over the given world, copying the project root into its state. A root
-/// longer than the buffer is cut short, and nothing reports it. A null world fails as an invalid
-/// argument and a failed state allocation as out of memory; each returns a null handle.
+/// Factory. Builds a loader over the given world, copying the project root into its state. A null
+/// world fails as an invalid argument and a failed allocation as out of memory; each returns a null
+/// handle.
 export fn ke_scene_loader_create(
     world_in: ?*c.ke_world,
     project_root: [*c]const u8,
@@ -928,7 +901,7 @@ export fn ke_scene_loader_create(
     s.* = .{
         .api = std.mem.zeroes(c.ke_scene_loader),
         .world = world,
-        .project_root = [_]u8{0} ** path_max,
+        .project_root = &.{},
         .script_factory = null,
         .script_ctx = null,
         .arena = .init(),
@@ -936,10 +909,12 @@ export fn ke_scene_loader_create(
     };
 
     if (project_root != null) {
-        const root = std.mem.span(project_root);
-        const n = @min(root.len, s.project_root.len - 1);
-        @memcpy(s.project_root[0..n], root[0..n]);
-        s.project_root[n] = 0;
+        s.project_root = heap.gpa.dupe(u8, std.mem.span(project_root)) catch {
+            s.arena.deinit();
+            heap.gpa.destroy(s);
+            E.fail(out_error, .out_of_memory, "project root allocation failed", @src());
+            return null_handle;
+        };
     }
 
     s.api.handle = s;
