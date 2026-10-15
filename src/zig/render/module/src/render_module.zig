@@ -1,6 +1,8 @@
 //! Assembles the render service and, optionally, the default passes on one runtime and one world,
 //! and hands them back as a single module handle.
 
+pub const std_options: std.Options = .{ .signal_stack_size = null };
+
 const std = @import("std");
 const cimport = @import("cimport.zig");
 const component_apply = @import("component_apply.zig");

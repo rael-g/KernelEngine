@@ -1,6 +1,8 @@
 //! Exports `ke_audio_register_scene_apply`, which makes the audio player component known to an ECS
 //! and to a world.
 
+pub const std_options: std.Options = .{ .signal_stack_size = null };
+
 const c = @import("cimport.zig").c;
 
 /// Hands the world a component id and the field table that describes that component, with the

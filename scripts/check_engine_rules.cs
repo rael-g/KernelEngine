@@ -68,6 +68,12 @@ var rules = new List<Rule>
         Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(zig|cs)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)
             && !s.Key.Contains("/scheduler/", StringComparison.Ordinal) && s.Key != "src/zig/runtime/src/runtime.zig"),
             l => pinning.IsMatch(l), outsideTests: true)),
+    new("a plugin's root file turns off the per-thread signal stack with std_options", 0,
+        tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p))
+            .Where(p => sources[p].Any(l => l.Contains(".linkage = .dynamic", StringComparison.Ordinal)))
+            .Select(p => (Build: p, Root: LibraryRoot(p, sources[p])))
+            .Where(x => x.Root is not null && !(sources.TryGetValue(x.Root, out var root) && root.Any(l => l.Contains("signal_stack_size = null", StringComparison.Ordinal))))
+            .Select(x => $"{x.Root}: no std_options with signal_stack_size = null")),
     new("a header has an #ifndef guard, never #pragma once", 0,
         Lines(headers, l => l.TrimStart().StartsWith("#pragma once", StringComparison.Ordinal))),
     new("a contract header declares no export macro", 0,
@@ -122,6 +128,13 @@ return 1;
 static IEnumerable<string> Segments(string path) => path.Split('/');
 
 static bool IsBuildFile(string path) => Path.GetFileName(path) == "build.zig";
+
+static string? LibraryRoot(string buildFile, string[] lines)
+{
+    var dir = Path.GetDirectoryName(buildFile)!.Replace('\\', '/');
+    var root = lines.Select(l => Regex.Match(l, @"\.root_source_file = b\.path\(""([^""]+)""\)")).FirstOrDefault(m => m.Success);
+    return root is null ? null : $"{dir}/{root.Groups[1].Value}";
+}
 
 static IEnumerable<string> Tracked(string rootDir)
 {
