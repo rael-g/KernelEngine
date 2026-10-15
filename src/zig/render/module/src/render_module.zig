@@ -395,7 +395,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return failCreate(rt, mark, st);
         }
 
-        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, st.camera.ref, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
+        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
         if (st.gbuffer.ref == null) {
             return failCreate(rt, mark, st);
         }

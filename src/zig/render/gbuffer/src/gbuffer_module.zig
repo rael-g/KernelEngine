@@ -66,7 +66,6 @@ fn collectDraws(
 const GBufferModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    camera: *c.ke_render_camera = undefined,
 
     mesh_cid: c.ke_component_id = undefined,
     world_transform_cid: c.ke_component_id = undefined,
@@ -137,18 +136,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     }
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
-
-    var bw: u32 = 0;
-    var bh: u32 = 0;
-    pc.*.backbuffer_size.?(pc, &bw, &bh);
-    const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
-
-    var view_m: c.ke_mat4 = undefined;
-    gb.camera.view.?(gb.camera, &cam_wt.matrix, &view_m);
-    var proj_m: c.ke_mat4 = undefined;
-    gb.camera.projection.?(gb.camera, cam, aspect, &proj_m);
-    const view_proj = zm.mul(zm.loadMat(&view_m.m), zm.loadMat(&proj_m.m));
+    const view_proj = zm.loadMat(core.*.frame_globals.?(core).*.view_proj[0..]);
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_bind_group.?(rp, 0, gb.empty_bg, null, 0);
@@ -205,11 +193,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 /// failure there fails creation instead of the first frame. On failure it returns false with the
 /// error written to the error output, and the module keeps the handles it made for `destroyModule`.
 fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         render_camera: *c.ke_render_camera, mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
+         mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
          camera_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     gb.core = core;
     gb.device = dev;
-    gb.camera = render_camera;
     gb.mesh_cid = mesh_cid;
     gb.world_transform_cid = world_transform_cid;
     gb.camera_cid = camera_cid;
@@ -370,7 +357,7 @@ fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
 /// error output. A failing setup, or a runtime that refuses the registration, writes the error and
 /// returns the empty handle after releasing the module.
 export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
+                                    device: ?*c.ke_gpu_device,
                                     mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_gbuffer_handle {
@@ -378,11 +365,10 @@ export fn ke_render_gbuffer_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     const rt = runtime orelse return empty;
     const core_ref = core orelse return empty;
     const dev = device orelse return empty;
-    const camera_api = render_camera orelse return empty;
 
     const gb = gpa.create(GBufferModule) catch return empty;
     gb.* = .{};
-    if (!setup(gb, dev, core_ref, camera_api, mesh_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
+    if (!setup(gb, dev, core_ref, mesh_cid, world_transform_cid, camera_cid, frame_cid, out_error)) {
         destroyModule(gb);
         gpa.destroy(gb);
         return empty;
@@ -529,8 +515,7 @@ test "creating and destroying the gbuffer pass leaves no block allocated and no 
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    var camera = std.mem.zeroes(c.ke_render_camera);
-    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), 1, 2, 3, 4, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -545,8 +530,7 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    var camera = std.mem.zeroes(c.ke_render_camera);
-    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), 1, 2, 3, 4, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -560,8 +544,7 @@ test "a gbuffer pass the runtime refuses to register releases what it had create
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    var camera = std.mem.zeroes(c.ke_render_camera);
-    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    const h = ke_render_gbuffer_create(rt.api(), core.api(), dev.api(), 1, 2, 3, 4, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

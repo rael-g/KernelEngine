@@ -569,7 +569,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step }, .has_tests);
 
-    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{}, null);
+    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const cluster = ctx.member("ke_render_cluster", .{
         .target = target,
         .optimize = optimize,

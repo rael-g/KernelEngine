@@ -34,8 +34,6 @@ pub fn build(b: *std.Build) void {
     mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_RENDER_CLUSTER_EXPORT", "");
 
-    const zmath = b.dependency("zmath", .{});
-    mod.addImport("zmath", zmath.module("root"));
 
     const lib = b.addLibrary(.{
         .name = "ke_render_cluster",
@@ -63,7 +61,6 @@ pub fn build(b: *std.Build) void {
     test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addCMacro("KE_RENDER_CLUSTER_EXPORT", "");
 
-    test_mod.addImport("zmath", zmath.module("root"));
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
 
     const unit_tests = b.addTest(.{ .root_module = test_mod });

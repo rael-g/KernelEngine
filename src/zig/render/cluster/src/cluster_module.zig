@@ -5,7 +5,6 @@
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
-const zm = @import("zmath");
 const feature_bindings = @import("feature_bindings");
 const cimport = @import("cimport.zig");
 const c = cimport.c;
@@ -49,8 +48,6 @@ const ClusterParams = extern struct {
     grid: [4]f32,
     counts: [4]f32,
     depth: [4]f32,
-    view: [16]f32,
-    inv_proj: [16]f32,
 };
 
 const cull_group_params = c.ke_render_shader_group_params{
@@ -206,7 +203,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const cam_segs = ctx.?.view.?(ctx, 2, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return true;
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, &cm.cull_io);
     if (pc == null) return true;
@@ -219,18 +215,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const depth_from_view_z = cm.view_space.params.?(cm.view_space).depth_from_view_z;
     var frustum: c.ke_camera_frustum = undefined;
     cm.camera.perspective_frustum.?(cm.camera, cam, aspect, &frustum);
-    var proj: c.ke_mat4 = undefined;
-    cm.camera.projection.?(cm.camera, cam, aspect, &proj);
-    var inv_proj: [16]f32 = undefined;
-    zm.storeMat(&inv_proj, zm.inverse(zm.loadMat(&proj.m)));
-    var view_m: c.ke_mat4 = undefined;
-    cm.camera.view.?(cm.camera, &cam_wt.matrix, &view_m);
     var params: ClusterParams = .{
         .grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
         .counts = .{ @floatFromInt(pn), @floatFromInt(sn), depth_from_view_z, 0.0 },
         .depth = .{ frustum.near_plane, frustum.far_plane, 0.0, 0.0 },
-        .view = view_m.m,
-        .inv_proj = inv_proj,
     };
     core.*.upload.?(core, cm.cull_uniform, 0, &params, @sizeOf(ClusterParams));
 
