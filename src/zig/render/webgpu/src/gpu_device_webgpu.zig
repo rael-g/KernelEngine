@@ -231,6 +231,33 @@ fn toWgpuCompareFunction(f: ke.ke_gpu_compare_function) wgpu.WGPUCompareFunction
     };
 }
 
+fn toWgpuFilter(f: ke.ke_gpu_filter) wgpu.WGPUFilterMode {
+    return switch (f) {
+        ke.KE_GPU_FILTER_NEAREST => wgpu.WGPUFilterMode_Nearest,
+        ke.KE_GPU_FILTER_LINEAR  => wgpu.WGPUFilterMode_Linear,
+        else                     => wgpu.WGPUFilterMode_Undefined,
+    };
+}
+
+fn toWgpuMipmapFilter(f: ke.ke_gpu_sampler_mipmap_filter) wgpu.WGPUMipmapFilterMode {
+    return switch (f) {
+        ke.KE_GPU_SAMPLER_MIPMAP_NEAREST => wgpu.WGPUMipmapFilterMode_Nearest,
+        ke.KE_GPU_SAMPLER_MIPMAP_LINEAR  => wgpu.WGPUMipmapFilterMode_Linear,
+        else                             => wgpu.WGPUMipmapFilterMode_Undefined,
+    };
+}
+
+/// WebGPU has no border colour, so a clamp to the border samples the edge.
+fn toWgpuAddressMode(m: ke.ke_gpu_address_mode) wgpu.WGPUAddressMode {
+    return switch (m) {
+        ke.KE_GPU_ADDRESS_MODE_REPEAT          => wgpu.WGPUAddressMode_Repeat,
+        ke.KE_GPU_ADDRESS_MODE_MIRRORED_REPEAT => wgpu.WGPUAddressMode_MirrorRepeat,
+        ke.KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE   => wgpu.WGPUAddressMode_ClampToEdge,
+        ke.KE_GPU_ADDRESS_MODE_CLAMP_TO_BORDER => wgpu.WGPUAddressMode_ClampToEdge,
+        else                                   => wgpu.WGPUAddressMode_Undefined,
+    };
+}
+
 fn toWgpuStencilOp(op: ke.ke_gpu_stencil_op) wgpu.WGPUStencilOperation {
     return switch (op) {
         ke.KE_GPU_STENCIL_OP_KEEP            => wgpu.WGPUStencilOperation_Keep,
@@ -680,18 +707,18 @@ fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]con
     return @intFromPtr(wgpu.wgpuTextureCreateView(wgpu_tex, &desc));
 }
 
-/// Returns the sampler as a handle. Filter and address modes are passed to wgpu as given.
+/// Returns the sampler as a handle, with each filter and address mode translated to wgpu's.
 fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_params) callconv(.c) ke.ke_gpu_sampler {
     const pp = @as(*const ke.ke_gpu_sampler_params, @ptrCast(p));
     const desc = wgpu.WGPUSamplerDescriptor{
         .nextInChain   = null,
         .label         = labelView(pp.label),
-        .addressModeU  = @intCast(pp.address_mode_u),
-        .addressModeV  = @intCast(pp.address_mode_v),
-        .addressModeW  = @intCast(pp.address_mode_w),
-        .magFilter     = @intCast(pp.mag_filter),
-        .minFilter     = @intCast(pp.min_filter),
-        .mipmapFilter  = @intCast(pp.mipmap_filter),
+        .addressModeU  = toWgpuAddressMode(pp.address_mode_u),
+        .addressModeV  = toWgpuAddressMode(pp.address_mode_v),
+        .addressModeW  = toWgpuAddressMode(pp.address_mode_w),
+        .magFilter     = toWgpuFilter(pp.mag_filter),
+        .minFilter     = toWgpuFilter(pp.min_filter),
+        .mipmapFilter  = toWgpuMipmapFilter(pp.mipmap_filter),
         .lodMinClamp   = pp.lod_min_clamp,
         .lodMaxClamp   = pp.lod_max_clamp,
         .compare       = toWgpuCompareFunction(pp.compare),
@@ -1647,6 +1674,14 @@ fn getCapabilities(dev: [*c]ke.ke_gpu_device, out: [*c]ke.ke_gpu_capabilities) c
 /// Answers null for every name: this backend defines no extension vtable.
 fn queryExtension(_: [*c]ke.ke_gpu_device, _: [*c]const u8) callconv(.c) ?*const anyopaque {
     return null;
+}
+
+test "a sampler's filters and address modes reach wgpu as the modes they name" {
+    try std.testing.expectEqual(@as(wgpu.WGPUFilterMode, wgpu.WGPUFilterMode_Linear), toWgpuFilter(ke.KE_GPU_FILTER_LINEAR));
+    try std.testing.expectEqual(@as(wgpu.WGPUFilterMode, wgpu.WGPUFilterMode_Nearest), toWgpuFilter(ke.KE_GPU_FILTER_NEAREST));
+    try std.testing.expectEqual(@as(wgpu.WGPUMipmapFilterMode, wgpu.WGPUMipmapFilterMode_Linear), toWgpuMipmapFilter(ke.KE_GPU_SAMPLER_MIPMAP_LINEAR));
+    try std.testing.expectEqual(@as(wgpu.WGPUAddressMode, wgpu.WGPUAddressMode_Repeat), toWgpuAddressMode(ke.KE_GPU_ADDRESS_MODE_REPEAT));
+    try std.testing.expectEqual(@as(wgpu.WGPUAddressMode, wgpu.WGPUAddressMode_ClampToEdge), toWgpuAddressMode(ke.KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE));
 }
 
 test "creating the device and destroying it, or failing to create it, leaves no block allocated" {
