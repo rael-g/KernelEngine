@@ -605,10 +605,16 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .has_tests);
 
-    const materials_dirs = [_][]const u8{
-        b.pathJoin(&.{ shader_lib_dir, "materials" }),
-        b.pathJoin(&.{ root, "examples/csharp/03_pbr_directional/materials" }),
-    };
+    var materials_dir_list: std.ArrayList([]const u8) = .empty;
+    materials_dir_list.append(b.allocator, b.pathJoin(&.{ shader_lib_dir, "materials" })) catch @panic("OOM");
+    materials_dir_list.append(b.allocator, b.pathJoin(&.{ root, "examples/csharp/03_pbr_directional/materials" })) catch @panic("OOM");
+    if (b.option([]const u8, "material-dirs", "'|'-separated directories of authored materials to compile beside the engine's")) |extra| {
+        var it = std.mem.splitScalar(u8, extra, '|');
+        while (it.next()) |dir| {
+            if (dir.len != 0) materials_dir_list.append(b.allocator, dir) catch @panic("OOM");
+        }
+    }
+    const materials_dirs = materials_dir_list.items;
 
     const gbuffer_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/gbuffer/shaders" }) };
     const gbuffer_material_shaders = ctx.materialShaders(
@@ -616,7 +622,7 @@ pub fn build(b: *std.Build) void {
         b.pathJoin(&.{ src_zig, "render/gbuffer/shaders/gbuffer_material.slang.in" }),
         &gbuffer_includes,
         shaders_out,
-        &materials_dirs,
+        materials_dirs,
     );
     const gbuffer = ctx.member("ke_render_gbuffer", .{
         .@"object-uniforms-src" = object_uniforms_src,
@@ -642,7 +648,7 @@ pub fn build(b: *std.Build) void {
         b.pathJoin(&.{ src_zig, "render/forward/shaders/forward_material.slang.in" }),
         &forward_includes,
         shaders_out,
-        &materials_dirs,
+        materials_dirs,
     );
     const forward = ctx.member("ke_render_forward", .{
         .@"object-uniforms-src" = object_uniforms_src,

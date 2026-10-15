@@ -28,8 +28,9 @@ templates call `ke_forward_vs` for the vertex stage and build the surface with
 `ke_surface_from_vertex`; the fragment stage then differs, `ke_gbuffer_fs` for gbuffer and
 `ke_transparent_fs` for forward. The shadow pass uses no material.
 
-**The material files searched are two directories.** `src/shaders/materials` and the
-`materials` directory of one example, both listed in the root `build.zig`.
+**The material files searched are listed by the build.** `src/shaders/materials` and the
+`materials` directory of one example, plus each directory given by `-Dmaterial-dirs`, separated by
+`|`, so a project outside the repository adds its own without editing the root `build.zig`.
 
 **The service owns the runtime side.** `create_material` is keyed and deduplicates. A null or
 empty shader name selects the default material shader, and a name of `MAX_SHADER_NAME` bytes or
