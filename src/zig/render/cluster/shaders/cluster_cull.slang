@@ -1,8 +1,9 @@
 struct ClusterParams {
     float4   grid;
     float4   counts;
-    float4   proj;
+    float4   depth;
     float4x4 view;
+    float4x4 inv_proj;
 };
 [[vk::binding(0, 0)]] ConstantBuffer<ClusterParams> params;
 
@@ -16,6 +17,19 @@ struct SpotLight { float4 pos_range; float4 dir_cos_inner; float4 color_intensit
 [[vk::binding(4, 0)]] RWStructuredBuffer<uint> point_counts;
 [[vk::binding(5, 0)]] RWStructuredBuffer<uint> spot_indices;
 [[vk::binding(6, 0)]] RWStructuredBuffer<uint> spot_counts;
+
+float3 unproject(float2 ndc, float ndc_z) {
+    float4 v = mul(params.inv_proj, float4(ndc, ndc_z, 1.0));
+    float3 p = v.xyz / v.w;
+    p.z *= params.counts.z;
+    return p;
+}
+
+float3 at_depth(float2 ndc, float z) {
+    float3 a = unproject(ndc, 0.25);
+    float3 b = unproject(ndc, 0.75);
+    return lerp(a, b, (z - a.z) / (b.z - a.z));
+}
 
 bool sphere_hits_aabb(float3 center, float radius, float3 amin, float3 amax) {
     float3 closest = max(amin, min(center, amax));
@@ -39,10 +53,8 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
     uint iy = (ci % (numX * numY)) / numX;
     uint ix = ci % numX;
 
-    float tan_half = params.proj.x;
-    float aspect   = params.proj.y;
-    float near     = params.proj.z;
-    float far      = params.proj.w;
+    float near = params.depth.x;
+    float far  = params.depth.y;
 
     float z_near = near * pow(far / near, (float)iz / (float)numZ);
     float z_far  = near * pow(far / near, (float)(iz + 1u) / (float)numZ);
@@ -59,8 +71,7 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
     for (int a = 0; a < 2; a++)
     for (int b = 0; b < 2; b++)
     for (int c = 0; c < 2; c++) {
-        float z = zs[a];
-        float3 v = float3(nxs[b] * z * tan_half * aspect, nys[c] * z * tan_half, z);
+        float3 v = at_depth(float2(nxs[b], nys[c]), zs[a]);
         amin = min(amin, v);
         amax = max(amax, v);
     }
