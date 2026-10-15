@@ -24,6 +24,7 @@ const WindowTarget = struct {
     wgpu_format: wgpu.WGPUTextureFormat,
     width: u32,
     height: u32,
+    present_mode: wgpu.WGPUPresentMode,
     texture: wgpu.WGPUTexture,
     view: wgpu.WGPUTextureView,
 };
@@ -108,7 +109,7 @@ fn configure(t: *WindowTarget, width: u32, height: u32) void {
         .alphaMode = wgpu.WGPUCompositeAlphaMode_Auto,
         .width = width,
         .height = height,
-        .presentMode = wgpu.WGPUPresentMode_Fifo,
+        .presentMode = t.present_mode,
     };
     wgpu.wgpuSurfaceConfigure(t.surface, &config);
     t.width = width;
@@ -237,15 +238,37 @@ fn chooseFormat(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter) ?Choice {
     return null;
 }
 
+/// The WebGPU present mode for the one asked for, when the surface offers it on this adapter.
+fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: ke.ke_gpu_present_mode) ?wgpu.WGPUPresentMode {
+    const wanted: wgpu.WGPUPresentMode = switch (mode) {
+        ke.KE_GPU_PRESENT_MODE_FIFO => wgpu.WGPUPresentMode_Fifo,
+        ke.KE_GPU_PRESENT_MODE_MAILBOX => wgpu.WGPUPresentMode_Mailbox,
+        ke.KE_GPU_PRESENT_MODE_IMMEDIATE => wgpu.WGPUPresentMode_Immediate,
+        else => return null,
+    };
+    var caps = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
+    if (wgpu.wgpuSurfaceGetCapabilities(surface, adapter, &caps) != wgpu.WGPUStatus_Success) return null;
+    defer wgpu.wgpuSurfaceCapabilitiesFreeMembers(caps);
+    for (caps.presentModes[0..caps.presentModeCount]) |offered| {
+        if (offered == wanted) return wanted;
+    }
+    return null;
+}
+
 /// The exported factory. Every failure returns the empty handle with the error set, and releases
 /// the surface and display made so far, so nothing is left allocated. A device is refused unless
 /// its `get_default_queue` slot is the function this plugin installs.
 export fn ke_gpu_render_target_webgpu_window_create(
-    device: [*c]ke.ke_gpu_device,
-    window: ?*ke.ke_window,
+    params_in: ?*const ke.ke_gpu_render_target_webgpu_window_params,
     out_error: [*c][*c]ke.ke_error,
 ) ke.ke_gpu_render_target_handle {
     const empty: ke.ke_gpu_render_target_handle = .{ .ref = null, .destroy = null };
+    const params = params_in orelse {
+        fail(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "window target: params are required", @src());
+        return empty;
+    };
+    const device: [*c]ke.ke_gpu_device = params.device;
+    const window: ?*ke.ke_window = params.window;
     if (device == null or device.*.get_default_queue != dev_impl.getDefaultQueue) {
         fail(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "window target: the device was not created by ke_gpu_device_webgpu_create", @src());
         return empty;
@@ -266,6 +289,12 @@ export fn ke_gpu_render_target_webgpu_window_create(
         fail(out_error, &ke.KE_ERROR_NOT_SUPPORTED, "window target: the surface offers no RGBA8 or BGRA8 format on this adapter", @src());
         return empty;
     };
+    const present_mode = presentModeOf(surface, ds.adapter, params.present_mode) orelse {
+        wgpu.wgpuSurfaceRelease(surface);
+        closeDisplay(created.display);
+        fail(out_error, &ke.KE_ERROR_NOT_SUPPORTED, "window target: the surface does not offer the present mode asked for", @src());
+        return empty;
+    };
     const t = gpa.create(WindowTarget) catch {
         wgpu.wgpuSurfaceRelease(surface);
         closeDisplay(created.display);
@@ -282,6 +311,7 @@ export fn ke_gpu_render_target_webgpu_window_create(
         .wgpu_format = choice.wgpu_format,
         .width = 0,
         .height = 0,
+        .present_mode = present_mode,
         .texture = null,
         .view = null,
     };
@@ -301,16 +331,20 @@ fn destroyUnconfigured(t: *WindowTarget) void {
     gpa.destroy(t);
 }
 
-test "a window target refuses a device it did not come from and a missing window" {
+test "a window target refuses missing params, a device it did not come from and a missing window" {
+    var none: [*c]ke.ke_error = null;
+    try std.testing.expect(ke_gpu_render_target_webgpu_window_create(null, &none).ref == null);
+    try std.testing.expect(none != null);
+
     var foreign = std.mem.zeroes(ke.ke_gpu_device);
     var err: [*c]ke.ke_error = null;
-    try std.testing.expect(ke_gpu_render_target_webgpu_window_create(&foreign, null, &err).ref == null);
+    try std.testing.expect(ke_gpu_render_target_webgpu_window_create(&.{ .device = &foreign, .window = null, .present_mode = ke.KE_GPU_PRESENT_MODE_FIFO }, &err).ref == null);
     try std.testing.expect(err != null);
 
     const handle = dev_impl.ke_gpu_device_webgpu_create(null, null);
     const dev = handle.ref orelse return error.SkipZigTest;
     defer handle.destroy.?(dev);
     var missing: [*c]ke.ke_error = null;
-    try std.testing.expect(ke_gpu_render_target_webgpu_window_create(dev, null, &missing).ref == null);
+    try std.testing.expect(ke_gpu_render_target_webgpu_window_create(&.{ .device = dev, .window = null, .present_mode = ke.KE_GPU_PRESENT_MODE_FIFO }, &missing).ref == null);
     try std.testing.expect(missing != null);
 }

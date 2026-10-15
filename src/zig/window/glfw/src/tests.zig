@@ -143,8 +143,8 @@ test "initialize forwards to the device and is idempotent" {
     const core = makeCore(&dev, null);
     defer destroyCore(core);
 
-    try testing.expect(core.initialize(.{ .title = "t", .width = 1, .height = 1, .fullscreen = false, .vsync = true }));
-    try testing.expect(core.initialize(.{ .title = "t", .width = 1, .height = 1, .fullscreen = false, .vsync = true }));
+    try testing.expect(core.initialize(.{ .title = "t", .width = 1, .height = 1, .fullscreen = false }));
+    try testing.expect(core.initialize(.{ .title = "t", .width = 1, .height = 1, .fullscreen = false }));
     try testing.expectEqual(@as(u32, 1), dev.initialize_calls);
 }
 
@@ -153,7 +153,7 @@ test "initialize reports failure when the device refuses" {
     const core = makeCore(&dev, null);
     defer destroyCore(core);
 
-    try testing.expect(!core.initialize(.{ .title = "t", .width = 1, .height = 1, .fullscreen = false, .vsync = true }));
+    try testing.expect(!core.initialize(.{ .title = "t", .width = 1, .height = 1, .fullscreen = false }));
 }
 
 test "should_close reflects the device" {

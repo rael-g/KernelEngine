@@ -93,6 +93,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddNodeType<Sprite2D>();
     }
 
+    /// <summary>
+    /// Creates the device, the window target and the render module. The window target presents
+    /// with vertical sync unless <c>[runtime.renderer] vsync</c> is false in
+    /// <see cref="IConfiguration"/>, in which case frames are shown at once.
+    /// </summary>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var window    = services.GetRequiredService<IWindow>();
@@ -117,7 +122,14 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (_device.@ref == null)
             throw Fail("webgpu device create failed", err);
 
-        _target = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(_device.@ref, win, &err);
+        var vsync = config?.GetBool("runtime.renderer", "vsync", true) ?? true;
+        var tp = new ke_gpu_render_target_webgpu_window_params
+        {
+            device = _device.@ref,
+            window = win,
+            present_mode = vsync ? ke_gpu_present_mode.KE_GPU_PRESENT_MODE_FIFO : ke_gpu_present_mode.KE_GPU_PRESENT_MODE_IMMEDIATE,
+        };
+        _target = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(&tp, &err);
         if (_target.@ref == null)
             throw Fail("webgpu window render target create failed", err);
 

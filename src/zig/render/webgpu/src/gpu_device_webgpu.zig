@@ -20,6 +20,7 @@ pub const ke = @cImport({
     @cInclude("kernel_engine/render/gpu/gpu_render_target.h");
     @cInclude("kernel_engine/window/window.h");
     @cInclude("kernel_engine/scheduler/scheduler.h");
+    @cInclude("kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h");
 });
 
 /// Read once by `ke_gpu_device_webgpu_create`. The `scheduler` it carries is borrowed: the state

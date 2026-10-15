@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(.{ .cwd_relative = ke_window });
     mod.addIncludePath(.{ .cwd_relative = ke_sched });
     mod.addIncludePath(.{ .cwd_relative = wgpu_inc });
+    mod.addIncludePath(b.path("include"));
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
     mod.linkSystemLibrary("ke_common", .{});
@@ -59,6 +60,8 @@ pub fn build(b: *std.Build) void {
     test_mod.addIncludePath(.{ .cwd_relative = ke_window });
     test_mod.addIncludePath(.{ .cwd_relative = ke_sched });
     test_mod.addIncludePath(.{ .cwd_relative = wgpu_inc });
+    test_mod.addIncludePath(b.path("include"));
+    test_mod.addCMacro("KE_GPU_WEBGPU_EXPORT", "");
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
     test_mod.linkSystemLibrary("ke_common", .{});

@@ -22,7 +22,7 @@ comptime {
 /// memory when the device or the core cannot be allocated, and a general failure when the core's
 /// initialization is refused; each returns a zeroed handle with the error set. On success the
 /// handle's ref is the core's window table and its destroy is the only way to release the window
-/// and its device. The title falls back to "KernelEngine" when absent, vsync is always requested,
+/// and its device. The title falls back to "KernelEngine" when absent,
 /// and a negative size becomes zero. The input in the params is handed to the core, which
 /// borrows it.
 export fn ke_window_glfw_create(
@@ -53,7 +53,6 @@ export fn ke_window_glfw_create(
         .width = @intCast(@max(params.width, 0)),
         .height = @intCast(@max(params.height, 0)),
         .fullscreen = params.fullscreen,
-        .vsync = true,
     };
 
     if (!core.initialize(config)) {
