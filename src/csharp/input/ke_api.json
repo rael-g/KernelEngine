@@ -1106,7 +1106,7 @@
           "tags": [
             "raw"
           ],
-          "doc": "Drains pending discrete events and clears the queue. Events beyond the buffer capacity are dropped. Must run on the same thread as the sinks below.",
+          "doc": "Moves the oldest pending discrete events, as many as the buffer holds, out of the queue; the rest stay queued for the next call. Must run on the same thread as the sinks below.",
           "return_doc": "Number of events written.",
           "params": [
             {

@@ -135,7 +135,7 @@ public unsafe partial class Input : IDisposable, INativeInput
         return Handle->snapshot_is_mouse_button_released(Handle, snapshot, (int)button) != 0;
     }
 
-    /// <summary>Drains pending discrete events and clears the queue. Events beyond the buffer capacity are dropped. Must run on the same thread as the sinks below.</summary>
+    /// <summary>Moves the oldest pending discrete events, as many as the buffer holds, out of the queue; the rest stay queued for the next call. Must run on the same thread as the sinks below.</summary>
     /// <param name="outBuf">Receives the drained events.</param>
     /// <returns>Number of events written.</returns>
     public uint DrainEventsRaw(Span<ke_input_event> outBuf)

@@ -16,13 +16,12 @@ const c = @cImport({
 const E = @import("kerror").Errors(c);
 
 const MAX_KEYS = c.KE_INPUT_MAX_KEYS;
-const EVENT_CAPACITY = 512;
 
-/// Allocated by `ke_input_create` and freed by `inputDestroy`. A zeroed `State` is the initial
-/// state: no key or button held, an empty queue, and `move_event` zero, which means no move event
-/// is open. `move_event` is the position in `events` plus one, so zero can stand for none. Once
-/// `event_overflow` is set, `pushEvent` refuses events until the queue is cleared, and no move
-/// event is recorded as open.
+/// Allocated by `ke_input_create` and freed by `inputDestroy`. The initial state holds no key or
+/// button and an empty queue, and `move_event` zero, which means no move event is open.
+/// `move_event` is the position in `events` plus one, so zero can stand for none. The queue grows
+/// as events arrive; `event_overflow` is set only when it could not, and then the event is lost
+/// and no move event is recorded as open.
 const State = struct {
     keys_down: [MAX_KEYS]bool,
     keys_pressed: [MAX_KEYS]bool,
@@ -38,8 +37,7 @@ const State = struct {
     mouse_buttons_pressed: u32,
     mouse_buttons_released: u32,
 
-    events: [EVENT_CAPACITY]c.ke_input_event,
-    event_count: u32,
+    events: std.ArrayList(c.ke_input_event),
     event_overflow: bool,
     move_event: u32,
 };
@@ -48,19 +46,12 @@ fn stateOf(self: *c.ke_input) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-/// Called by the four sinks that queue events. A full queue drops the event and sets
-/// `event_overflow`, and the queue stays full until `inputUpdate` or `inputDrainEvents` empties it.
+/// Called by the four sinks that queue events. An event the queue cannot grow for is dropped and
+/// sets `event_overflow`.
 fn pushEvent(s: *State, kind: c.ke_input_event_kind, code: i32, x: f32, y: f32) void {
-    if (s.event_count >= EVENT_CAPACITY) {
+    s.events.append(heap.gpa, .{ .kind = kind, .code = code, .x = x, .y = y }) catch {
         s.event_overflow = true;
-        return;
-    }
-    const e = &s.events[s.event_count];
-    s.event_count += 1;
-    e.kind = kind;
-    e.code = code;
-    e.x = x;
-    e.y = y;
+    };
 }
 
 /// Closes the frame: the edges and deltas the queries read are those accumulated since the previous
@@ -81,7 +72,7 @@ fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) b
     s.mouse_buttons_pressed = 0;
     s.mouse_buttons_released = 0;
 
-    s.event_count = 0;
+    s.events.clearRetainingCapacity();
     s.event_overflow = false;
     s.move_event = 0;
     return true;
@@ -116,13 +107,14 @@ fn inputOnMouseMove(self: ?*c.ke_input, x: f32, y: f32) callconv(.c) void {
     s.mouse_x = x;
     s.mouse_y = y;
     if (s.move_event != 0) {
-        const e = &s.events[s.move_event - 1];
+        const e = &s.events.items[s.move_event - 1];
         e.x = x;
         e.y = y;
         return;
     }
+    const before = s.events.items.len;
     pushEvent(s, c.KE_INPUT_EVENT_MOUSE_MOVE, 0, x, y);
-    if (!s.event_overflow) s.move_event = s.event_count;
+    if (s.events.items.len > before) s.move_event = @intCast(s.events.items.len);
 }
 
 /// Keeps the same edge rule as `inputOnKey`, on the button masks rather than the key arrays.
@@ -151,17 +143,17 @@ fn inputOnMouseScroll(self: ?*c.ke_input, dx: f32, dy: f32) callconv(.c) void {
     pushEvent(s, c.KE_INPUT_EVENT_MOUSE_SCROLL, 0, dx, dy);
 }
 
-/// Events beyond the buffer's capacity are not kept: the whole queue is emptied either way. A null
-/// buffer or a zero capacity returns zero and leaves the queue as it is.
+/// Moves the oldest events, as many as the buffer holds, out of the queue; the rest stay queued
+/// for the next call. A null buffer or a zero capacity returns zero and leaves the queue as it is.
 fn inputDrainEvents(self: ?*c.ke_input, out_buf: [*c]c.ke_input_event, capacity: u32) callconv(.c) u32 {
     const api = self orelse return 0;
     if (out_buf == null or capacity == 0) return 0;
     const s = stateOf(api);
-    const n = @min(s.event_count, capacity);
-    if (n > 0) @memcpy(out_buf[0..n], s.events[0..n]);
-    s.event_count = 0;
-    s.event_overflow = false;
-    s.move_event = 0;
+    const n: u32 = @intCast(@min(s.events.items.len, capacity));
+    if (n > 0) @memcpy(out_buf[0..n], s.events.items[0..n]);
+    s.events.replaceRangeAssumeCapacity(0, n, &.{});
+    s.move_event = if (s.move_event > n) s.move_event - n else 0;
+    if (s.events.items.len == 0) s.event_overflow = false;
     return n;
 }
 
@@ -272,6 +264,7 @@ fn snapshotIsMouseButtonReleased(self: ?*c.ke_input, snapshot: [*c]const c.ke_in
 /// ignored.
 fn inputDestroy(self: ?*c.ke_input) callconv(.c) void {
     const api = self orelse return;
+    stateOf(api).events.deinit(gpa);
     gpa.destroy(stateOf(api));
     gpa.destroy(api);
 }
@@ -292,6 +285,7 @@ export fn ke_input_create(log: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) cal
         return empty;
     };
     state.* = std.mem.zeroes(State);
+    state.events = .empty;
 
     api.handle = state;
     api.update = &inputUpdate;
@@ -456,7 +450,7 @@ test "a move after a drain starts a new move event" {
     try testing.expectEqual(@as(f32, 7), events[0].x);
 }
 
-test "draining never writes past the caller capacity" {
+test "draining never writes past the caller capacity and keeps the rest for the next drain" {
     const h = ke_input_create(null, null);
     defer h.destroy.?(h.ref);
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
@@ -464,17 +458,21 @@ test "draining never writes past the caller capacity" {
 
     var events = std.mem.zeroes([1]c.ke_input_event);
     try testing.expectEqual(@as(u32, 1), h.ref.*.drain_events.?(h.ref, &events, 1));
+    try testing.expectEqual(@as(i32, 65), events[0].code);
+    try testing.expectEqual(@as(u32, 1), h.ref.*.drain_events.?(h.ref, &events, 1));
+    try testing.expectEqual(@as(i32, 66), events[0].code);
+    try testing.expectEqual(@as(u32, 0), h.ref.*.drain_events.?(h.ref, &events, 1));
 }
 
-test "an overflowing event queue still drains what it kept" {
+test "the event queue keeps every event of a busy frame" {
     const h = ke_input_create(null, null);
     defer h.destroy.?(h.ref);
-    for (0..600) |_| {
+    for (0..2000) |_| {
         h.ref.*.on_mouse_scroll.?(h.ref, 1, 1);
     }
 
-    var events = std.mem.zeroes([10]c.ke_input_event);
-    try testing.expectEqual(@as(u32, 10), h.ref.*.drain_events.?(h.ref, &events, 10));
+    var events = std.mem.zeroes([4096]c.ke_input_event);
+    try testing.expectEqual(@as(u32, 2000), h.ref.*.drain_events.?(h.ref, &events, events.len));
 }
 
 test "a held key stays down across an update while pressed clears" {

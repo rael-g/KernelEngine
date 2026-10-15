@@ -91,8 +91,9 @@ extern "C"
         ke_bool (*snapshot_is_mouse_button_released)(struct ke_input *self, const ke_input_snapshot *snapshot, int32_t button);
 
         /**
-         * [raw] Drains pending discrete events and clears the queue. Events beyond the
-         * buffer capacity are dropped. Must run on the same thread as the sinks below.
+         * [raw] Moves the oldest pending discrete events, as many as the buffer holds, out
+         * of the queue; the rest stay queued for the next call. Must run on the same thread
+         * as the sinks below.
          * @param out_buf [out,array_of:capacity] Receives the drained events.
          * @param capacity Maximum number of events to write.
          * @return Number of events written.
