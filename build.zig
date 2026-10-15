@@ -678,11 +678,6 @@ pub fn build(b: *std.Build) void {
     for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
 
     const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
-    const magenta_slang = b.pathJoin(&.{ src_zig, "render/service/shaders/magenta.slang" });
-    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{}, null);
-    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, service_gen_dir, &.{}, null);
-    const magenta_vs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.vs.wgsl" });
-    const magenta_fs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.fs.wgsl" });
     const material_params = ctx.reflection("material_params", b.pathJoin(&.{ shader_lib_dir, "material_params.slang" }), service_gen_dir, &.{shader_lib_dir});
     const material_params_json = b.pathJoin(&.{ service_gen_dir, "material_params.json" });
 
@@ -705,12 +700,9 @@ pub fn build(b: *std.Build) void {
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/service/include" }),
         .@"ke-lib-dir" = lib_dir,
-        .@"magenta-vs-wgsl" = magenta_vs_wgsl,
-        .@"magenta-fs-wgsl" = magenta_fs_wgsl,
         .@"material-params-json" = material_params_json,
     }, &.{
-        &common.step,     &resource_cache_default.step,
-        &magenta_vs.step, &magenta_fs.step,
+        &common.step,          &resource_cache_default.step,
         &material_params.step,
     }, .has_tests);
 
