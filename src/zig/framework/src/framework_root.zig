@@ -16,6 +16,8 @@ comptime {
     _ = @import("scene_hierarchy.zig");
     _ = @import("input_actions.zig");
     _ = @import("scene_loader.zig");
+    _ = @import("scene_values.zig");
+    _ = @import("scene_names.zig");
     _ = @import("signal_bus.zig");
     _ = @import("script_host.zig");
 }

@@ -7,38 +7,17 @@ const c = @import("c.zig").c;
 const heap = @import("heap");
 const world_impl = @import("world.zig");
 const fields_apply = @import("component_fields_apply.zig");
+const values = @import("scene_values.zig");
+const names_mod = @import("scene_names.zig");
+const Arena = values.Arena;
+const NameMap = names_mod.NameMap;
+const type_name_max = names_mod.type_name_max;
+const normalizeTypeName = names_mod.normalizeTypeName;
 
 const E = @import("kerror").Errors(c);
 
 
 const res_prefix = "res://";
-
-/// Owns the strings and variant tables read from scene files. Nothing frees an allocation on its
-/// own; `deinit` releases all of them together, so a pointer handed out stays valid until the
-/// loader that owns this arena is destroyed.
-const Arena = struct {
-    inner: std.heap.ArenaAllocator,
-
-    fn init() Arena {
-        return .{ .inner = .init(heap.gpa) };
-    }
-
-    fn allocArray(self: *Arena, comptime T: type, n: usize) ?[]T {
-        if (n == 0) return &.{};
-        return self.inner.allocator().alloc(T, n) catch null;
-    }
-
-    /// The copy lives until the arena is deinitialized, so the caller may free its source at once.
-    fn dupeZ(self: *Arena, src: [*c]const u8) ?[*:0]u8 {
-        if (src == null) return null;
-        const owned = self.inner.allocator().dupeZ(u8, std.mem.span(src)) catch return null;
-        return owned.ptr;
-    }
-
-    fn deinit(self: *Arena) void {
-        self.inner.deinit();
-    }
-};
 
 /// Private state of one loader, allocated by `ke_scene_loader_create` and freed by the handle's
 /// destroy. `api.handle` points back here. `created` is cleared when a load starts and emptied by
@@ -76,98 +55,6 @@ fn treeOf(world: *c.ke_world) ?*c.ke_scene_tree {
     return if (t == null) null else t;
 }
 
-fn variantNull() c.ke_variant {
-    return .{ .type = c.KE_VARIANT_NULL, .unnamed_0 = .{ .i = 0 } };
-}
-fn variantBool(b: bool) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_BOOL, .unnamed_0 = .{ .b = b } };
-}
-fn variantInt(i: i64) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_INT, .unnamed_0 = .{ .i = i } };
-}
-fn variantFloat(f: f64) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = f } };
-}
-fn variantString(s: ?[*:0]const u8) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = s } };
-}
-fn variantVec2(x: f32, y: f32) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = x, .y = y } } };
-}
-fn variantVec3(x: f32, y: f32, z: f32) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = x, .y = y, .z = z } } };
-}
-fn variantVec4(x: f32, y: f32, z: f32, w: f32) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = x, .y = y, .z = z, .w = w } } };
-}
-fn variantTable(t: *const c.ke_variant_table) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_TABLE, .unnamed_0 = .{ .t = t } };
-}
-
-/// A one-element or empty array becomes null. A longer one becomes a vector variant sized by its
-/// length, up to the widest vector, so elements beyond that are dropped. An element that is not a
-/// number stays zero, and nothing reports it.
-fn variantFromArray(arr: *c.toml_array_t) c.ke_variant {
-    const n = c.toml_array_nelem(arr);
-    var comps = [_]f32{ 0, 0, 0, 0 };
-    const len = @min(n, @as(c_int, comps.len));
-    var k: c_int = 0;
-    while (k < len) : (k += 1) {
-        const d = c.toml_double_at(arr, k);
-        if (d.ok != 0) {
-            comps[@intCast(k)] = @floatCast(d.u.d);
-            continue;
-        }
-        const i = c.toml_int_at(arr, k);
-        if (i.ok != 0) comps[@intCast(k)] = @floatFromInt(i.u.i);
-    }
-    if (n == 2) return variantVec2(comps[0], comps[1]);
-    if (n == 3) return variantVec3(comps[0], comps[1], comps[2]);
-    if (n >= 4) return variantVec4(comps[0], comps[1], comps[2], comps[3]);
-    return variantNull();
-}
-
-fn variantFromTable(s: *State, tbl: *c.toml_table_t) c.ke_variant {
-    const n: usize = @intCast(c.toml_table_nkval(tbl) + c.toml_table_ntab(tbl) + c.toml_table_narr(tbl));
-    const entries = s.arena.allocArray(c.ke_variant_table_entry, n) orelse return variantNull();
-    const vtbl_mem = s.arena.allocArray(c.ke_variant_table, 1) orelse return variantNull();
-
-    var count: usize = 0;
-    var k: c_int = 0;
-    while (count < n) : (k += 1) {
-        const key = c.toml_key_in(tbl, k) orelse break;
-        entries[count] = .{
-            .key = s.arena.dupeZ(key),
-            .value = readVarIn(s, tbl, key),
-        };
-        count += 1;
-    }
-
-    vtbl_mem[0] = .{ .count = @intCast(count), .entries = entries.ptr };
-    return variantTable(&vtbl_mem[0]);
-}
-
-/// Reads the value of `key` in `tbl` by trying the TOML kinds in turn: string, integer, float,
-/// boolean, array, table. A string is copied into the arena and its TOML buffer freed here. A value
-/// of any other kind, such as a date, reads as null, and nothing reports it.
-fn readVarIn(s: *State, tbl: *c.toml_table_t, key: [*c]const u8) c.ke_variant {
-    const ds = c.toml_string_in(tbl, key);
-    if (ds.ok != 0) {
-        const v = variantString(s.arena.dupeZ(ds.u.s));
-        std.c.free(ds.u.s);
-        return v;
-    }
-    const di = c.toml_int_in(tbl, key);
-    if (di.ok != 0) return variantInt(di.u.i);
-    const dd = c.toml_double_in(tbl, key);
-    if (dd.ok != 0) return variantFloat(dd.u.d);
-    const db = c.toml_bool_in(tbl, key);
-    if (db.ok != 0) return variantBool(db.u.b != 0);
-    if (c.toml_array_in(tbl, key)) |arr| return variantFromArray(arr);
-    if (c.toml_table_in(tbl, key)) |sub| return variantFromTable(s, sub);
-    return variantNull();
-}
-
 fn pathDirname(path: []const u8) []const u8 {
     const idx = std.mem.lastIndexOfAny(u8, path, "/\\") orelse return ".";
     return path[0..idx];
@@ -185,48 +72,6 @@ fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8) ?[:0]u8 {
     else
         &.{ base_dir, "/", ref };
     return std.mem.concatWithSentinel(heap.gpa, u8, parts, 0) catch null;
-}
-
-const type_name_max = 128;
-
-/// Returns the type name spelled the way the script factory receives it, or null when the result
-/// would not fit the buffer; a longer name is refused, never truncated. Applying it to its own
-/// result returns the same name.
-fn normalizeTypeName(name: [*c]const u8, out: *[type_name_max]u8) ?[*:0]const u8 {
-    if (name == null) return null;
-    const src = std.mem.sliceTo(name, 0);
-    var len: usize = 0;
-
-    for (src, 0..) |ch, i| {
-        if (ch == '+') {
-            if (len + 1 >= out.len) return null;
-            out[len] = '.';
-            len += 1;
-            continue;
-        }
-        if (std.ascii.isUpper(ch)) {
-            const raw_prev: u8 = if (i > 0) src[i - 1] else '.';
-            const prev: u8 = if (raw_prev == '+') '.' else raw_prev;
-            const next_is_lower = i + 1 < src.len and std.ascii.isLower(src[i + 1]);
-            const starts_word = prev != '.' and prev != '_' and !std.ascii.isDigit(prev) and
-                (!std.ascii.isUpper(prev) or next_is_lower);
-            if (starts_word) {
-                if (len + 1 >= out.len) return null;
-                out[len] = '_';
-                len += 1;
-            }
-            if (len + 1 >= out.len) return null;
-            out[len] = std.ascii.toLower(ch);
-            len += 1;
-            continue;
-        }
-        if (len + 1 >= out.len) return null;
-        out[len] = ch;
-        len += 1;
-    }
-
-    out[len] = 0;
-    return @ptrCast(out);
 }
 
 /// Passes the entity's type name, normalized, to the script factory and returns its verdict. With
@@ -255,30 +100,6 @@ fn dispatchScript(
         E.fail(out_error, .general, "script factory rejected the entity type", @src());
     }
     return false;
-}
-
-fn tableEntryCount(tbl: *c.toml_table_t) usize {
-    return @intCast(c.toml_table_nkval(tbl) + c.toml_table_narr(tbl) + c.toml_table_ntab(tbl));
-}
-
-/// Reads every entry of a component table into arena memory and returns them, or null when the
-/// table has no entries or the arena cannot hold them. The caller treats both as an unreadable
-/// block.
-fn buildEntries(s: *State, tbl: *c.toml_table_t) ?[]c.ke_variant_table_entry {
-    const n = tableEntryCount(tbl);
-    if (n == 0) return null;
-    const entries = s.arena.allocArray(c.ke_variant_table_entry, n) orelse return null;
-    var count: usize = 0;
-    var k: c_int = 0;
-    while (count < n) : (k += 1) {
-        const key = c.toml_key_in(tbl, k) orelse break;
-        entries[count] = .{
-            .key = s.arena.dupeZ(key),
-            .value = readVarIn(s, tbl, key),
-        };
-        count += 1;
-    }
-    return entries[0..count];
 }
 
 /// Logs at the given level under the loader's own tag. The text is formatted into a fixed buffer,
@@ -353,7 +174,7 @@ fn applyComponentBlock(
         if (fields) |f| fields_apply.seedDefaults(comp, f, field_count);
     }
 
-    const entries = buildEntries(s, comp_tbl) orelse {
+    const entries = values.buildEntries(&s.arena, comp_tbl) orelse {
         structural(world, out_error, "component '{s}' block could not be read", .{comp_name});
         return false;
     };
@@ -537,65 +358,6 @@ fn applyConnections(
     }
     return true;
 }
-
-/// Maps the names one scene file declares to their entities, so a later entity can name one as its
-/// parent and a connection can name one as its target. The name copies live in the arena; the item
-/// array is heap memory that `deinit` frees. A map belongs to one file's load.
-const NameMap = struct {
-    const Entry = struct { name: [*:0]u8, entity: c.ke_entity };
-
-    items: ?[*]Entry = null,
-    count: u32 = 0,
-    capacity: u32 = 0,
-    arena: *Arena,
-
-    const initial_capacity: u32 = 16;
-
-    /// What a name refers to: nothing, one entity, or more than one, which a reference cannot use.
-    const Found = union(enum) { none, one: c.ke_entity, ambiguous };
-
-    /// Records a name and its entity, growing the item array when it is full. A name may be
-    /// recorded more than once; only a reference to it is refused. Fails as out of memory when the
-    /// array cannot grow or the name cannot be copied.
-    fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity, out_error: [*c][*c]c.ke_error) bool {
-        if (self.count == self.capacity) {
-            const cap = if (self.capacity != 0) self.capacity * 2 else initial_capacity;
-            const buf = heap.gpa.alloc(Entry, cap) catch {
-                E.fail(out_error, .out_of_memory, "entity name table allocation failed", @src());
-                return false;
-            };
-            if (self.items) |old| {
-                @memcpy(buf[0..self.count], old[0..self.count]);
-                heap.gpa.free(old[0..self.capacity]);
-            }
-            self.items = buf.ptr;
-            self.capacity = cap;
-        }
-        const owned = self.arena.dupeZ(name) orelse {
-            E.fail(out_error, .out_of_memory, "entity name copy failed", @src());
-            return false;
-        };
-        self.items.?[self.count] = .{ .name = owned, .entity = entity };
-        self.count += 1;
-        return true;
-    }
-
-    fn find(self: *const NameMap, name: []const u8) Found {
-        const items = self.items orelse return .none;
-        var found: Found = .none;
-        for (items[0..self.count]) |entry| {
-            if (!std.mem.eql(u8, std.mem.span(entry.name), name)) continue;
-            if (found != .none) return .ambiguous;
-            found = .{ .one = entry.entity };
-        }
-        return found;
-    }
-
-    fn deinit(self: *NameMap) void {
-        if (self.items) |items| heap.gpa.free(items[0..self.capacity]);
-        self.items = null;
-    }
-};
 
 /// The inputs to `processEntity` for one entity. The three override fields are set only for the
 /// first entity of a spliced subscene, which takes its name, its attach parent and the outer table
@@ -2031,52 +1793,6 @@ test "a factory's own error reaches the caller rather than being replaced" {
         std.mem.span(err.*.message),
     );
     try testing.expectEqual(E.typeOf(.not_found), @as(*const c.ke_error_type, @ptrCast(err.*.type)));
-}
-
-fn normalizedName(name: [*c]const u8) []const u8 {
-    const buf = struct {
-        var storage: [type_name_max]u8 = undefined;
-    };
-    const out = normalizeTypeName(name, &buf.storage) orelse return "";
-    return std.mem.sliceTo(out, 0);
-}
-
-test "a type name is spelled the same way whichever casing a scene authored" {
-    try testing.expectEqualStrings("pong.ball", normalizedName("Pong.Ball"));
-    try testing.expectEqualStrings("pong.ball", normalizedName("Pong+Ball"));
-    try testing.expectEqualStrings("pong.ball", normalizedName("pong.ball"));
-}
-
-test "a run of capitals stays one word until a lowercase starts the next" {
-    try testing.expectEqualStrings("http_server", normalizedName("HTTPServer"));
-    try testing.expectEqualStrings("ui_label", normalizedName("UILabel"));
-    try testing.expectEqualStrings("id", normalizedName("ID"));
-}
-
-test "a digit does not split the word it belongs to" {
-    try testing.expectEqualStrings("sprite2d", normalizedName("Sprite2D"));
-    try testing.expectEqualStrings("node3d", normalizedName("Node3D"));
-    try testing.expectEqualStrings("collider2d", normalizedName("Collider2D"));
-}
-
-test "a character outside ascii keeps its case" {
-    try testing.expectEqualStrings("État_ball", normalizedName("ÉtatBall"));
-    try testing.expectEqualStrings("Ω_node", normalizedName("ΩNode"));
-}
-
-test "normalizing is idempotent, so a binding may apply it twice" {
-    try testing.expectEqualStrings("paddle_controller", normalizedName("paddle_controller"));
-    try testing.expectEqualStrings("pong.ball", normalizedName("pong.ball"));
-    try testing.expectEqualStrings("sprite2d", normalizedName("sprite2d"));
-}
-
-test "a type name too long to normalize is refused rather than truncated" {
-    var long: [type_name_max + 8]u8 = undefined;
-    @memset(&long, 'A');
-    long[long.len - 1] = 0;
-
-    var buf: [type_name_max]u8 = undefined;
-    try testing.expect(normalizeTypeName(@ptrCast(&long), &buf) == null);
 }
 
 test "a scene authoring a dotted type reaches the factory in snake case" {
