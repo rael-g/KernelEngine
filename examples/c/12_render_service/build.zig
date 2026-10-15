@@ -39,6 +39,7 @@ pub fn build(b: *std.Build) void {
         mod.addObjectFile(.{ .cwd_relative = lib });
         mod.addRPath(.{ .cwd_relative = std.fs.path.dirname(lib).? });
     }
+    mod.addRPathSpecial("$ORIGIN/../lib");
 
     const exe = b.addExecutable(.{ .name = "demo", .root_module = mod });
     gen.expectExitCode(0);
