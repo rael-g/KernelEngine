@@ -132,8 +132,8 @@ public static class CrashHandler
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();
 
-    [DllImport("dbghelp.dll", SetLastError = true)]
-    private static extern bool MiniDumpWriteDump(
+    [DllImport("dbghelp.dll")]
+    private static extern int MiniDumpWriteDump(
         IntPtr hProcess, uint processId, IntPtr hFile, uint dumpType,
         IntPtr exceptionParam, IntPtr userStreamParam, IntPtr callbackParam);
 
@@ -178,13 +178,14 @@ public static class CrashHandler
                 bool ok = MiniDumpWriteDump(
                     GetCurrentProcess(), GetCurrentProcessId(),
                     fs.SafeFileHandle.DangerousGetHandle(),
-                    dumpType, exceptionPointers, IntPtr.Zero, IntPtr.Zero);
+                    dumpType, exceptionPointers, IntPtr.Zero, IntPtr.Zero) != 0;
+                int dumpError = Marshal.GetLastSystemError();
 
                 Console.Error.WriteLine();
                 Console.Error.WriteLine($"[FATAL] Native crash: {name}");
                 Console.Error.WriteLine(ok
                     ? $"        Crash dump: {dumpPath}"
-                    : $"        Failed to write crash dump (Win32 error {Marshal.GetLastWin32Error()})");
+                    : $"        Failed to write crash dump (Win32 error {dumpError})");
             }
             finally { Marshal.FreeHGlobal(exceptionPointers); }
         }
