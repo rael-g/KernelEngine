@@ -40,7 +40,7 @@ public readonly record struct FontHandle(uint Value)
 /// <see cref="IRenderResources.LoadFont"/> takes them.
 /// </summary>
 public readonly record struct FontGlyph(
-    uint  Codepoint,
+    uint Codepoint,
     float U0, float V0, float U1, float V1,
     float BearingX, float BearingY,
     float Width, float Height,

@@ -1,6 +1,7 @@
 ﻿
-using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Runtime;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Window.Glfw;
 
@@ -11,8 +12,8 @@ namespace KernelEngine.Window.Glfw;
 /// </summary>
 public sealed class GlfwWindowModule : IRuntimeModule
 {
-    private readonly int?    _width;
-    private readonly int?    _height;
+    private readonly int? _width;
+    private readonly int? _height;
     private readonly string? _title;
 
     public string Name => "Glfw.Window";
@@ -30,9 +31,9 @@ public sealed class GlfwWindowModule : IRuntimeModule
     /// </summary>
     public GlfwWindowModule(int width, int height, string title)
     {
-        _width  = width;
+        _width = width;
         _height = height;
-        _title  = title;
+        _title = title;
     }
 
     public void Configure(IServiceCollection services)

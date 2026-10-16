@@ -1,6 +1,7 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
+﻿using KernelEngine.Ecs;
 using KernelEngine.Scheduler;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Runtime;
 
@@ -37,7 +38,7 @@ public static class RuntimeStartup
     {
         var byType = modules.ToDictionary(m => m.GetType());
         var sorted = new List<IRuntimeModule>(modules.Count);
-        var state  = new Dictionary<IRuntimeModule, byte>();
+        var state = new Dictionary<IRuntimeModule, byte>();
 
         void Visit(IRuntimeModule m)
         {

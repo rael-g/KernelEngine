@@ -2,6 +2,7 @@
 namespace Kabic.CSharp;
 
 using System.Text.RegularExpressions;
+
 using Kabic;
 
 /// <summary>
@@ -2384,394 +2385,394 @@ public static class CSharpWriter
         switch (cs.Shape)
         {
             case SlotShape.ReturnsOutParam:
-            {
-                var ret = OutElement(model, cs.OutParam!, convention);
-                var ins = cs.PublicParams.Where(p => p != cs.OutParam).ToList();
-                var sig = Sig(ins);
-                var nativeArgs = string.Concat(NativeParams().Select(p =>
-                    ", " + (p == cs.OutParam ? OutAddress(model, p, convention, "result") : CallArg(p))));
+                {
+                    var ret = OutElement(model, cs.OutParam!, convention);
+                    var ins = cs.PublicParams.Where(p => p != cs.OutParam).ToList();
+                    var sig = Sig(ins);
+                    var nativeArgs = string.Concat(NativeParams().Select(p =>
+                        ", " + (p == cs.OutParam ? OutAddress(model, p, convention, "result") : CallArg(p))));
 
-                Declare(o, decls, XmlDoc("    ", slot.Doc, convention, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
-                    slot.ReturnDoc, cs.Fallible).TrimEnd(), $"{ret} {name}({sig})");
-                o.Add("    {");
-                var (roPro, roDepth) = Utf8Prologue(ins, new string(' ', 8));
-                var (roSeq, roSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + roDepth * 4), convention);
-                o.AddRange(roPro);
-                o.AddRange(roSeq);
-                var roSeqAt = roDepth;
-                roDepth += roSeqDepth;
-                var roClosers = SequenceClosers(model, cs.Sequences);
-                var roInd = new string(' ', 8 + roDepth * 4);
-                o.Add($"{roInd}{OutLocal(model, cs.OutParam!, convention)} result;");
-                if (cs.Fallible)
-                {
-                    o.Add($"{roInd}{convention.ErrorType}* err = null;");
-                    o.Add($"{roInd}{convention.ErrorHelperClass}.ThrowIfFailed(Handle->{slot.Name}(Handle{nativeArgs}, &err), err, \"{slot.Name}\");");
-                }
-                else
-                {
-                    o.Add($"{roInd}Handle->{slot.Name}(Handle{nativeArgs});");
-                }
-                o.Add($"{roInd}return {OutRead(cs.OutParam!, "result")};");
-                CloseScopes(o, roDepth, roSeqAt, roClosers);
-                o.Add("    }");
-                o.Add("");
-                return;
-            }
-            case SlotShape.TupleOutParams:
-            {
-                var ins = cs.PublicParams.Where(p => !cs.OutParams.Contains(p)).ToList();
-                var sig = Sig(ins);
-                var names = cs.OutParams.Select(p => Idioms.Pascal(WrittenName(p))).ToList();
-                var types = cs.OutParams.Select(p => OutElement(model, p, convention)).ToList();
-                var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
-                var locals = cs.OutParams.Select(p => Idioms.Ident(WrittenName(p))).ToList();
-                var nativeArgs = NativeParams()
-                    .Select(p => cs.OutParams.Contains(p)
-                        ? OutAddress(model, p, convention, Idioms.Ident(WrittenName(p))) : CallArg(p));
-                var callArgs = string.Concat(nativeArgs.Select(a => ", " + a));
-
-                Declare(o, decls, XmlDoc("    ", slot.Doc, convention, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
-                    throwsOnFail: cs.Fallible).TrimEnd(), $"({retTuple}) {name}({sig})");
-                o.Add("    {");
-                var (tuPro, tuDepth) = Utf8Prologue(ins, new string(' ', 8));
-                var (tuSeq, tuSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + tuDepth * 4), convention);
-                o.AddRange(tuPro);
-                o.AddRange(tuSeq);
-                var tuSeqAt = tuDepth;
-                tuDepth += tuSeqDepth;
-                var tuClosers = SequenceClosers(model, cs.Sequences);
-                var tuInd = new string(' ', 8 + tuDepth * 4);
-                foreach (var (p, n) in cs.OutParams.Zip(locals))
-                    o.Add($"{tuInd}{OutLocal(model, p, convention)} {n};");
-                if (cs.Fallible)
-                {
-                    o.Add($"{tuInd}{convention.ErrorType}* err = null;");
-                    o.Add($"{tuInd}{convention.ErrorHelperClass}.ThrowIfFailed(Handle->{slot.Name}(Handle{callArgs}, &err), err, \"{slot.Name}\");");
-                }
-                else
-                {
-                    o.Add($"{tuInd}Handle->{slot.Name}(Handle{callArgs});");
-                }
-                o.Add($"{tuInd}return ({string.Join(", ", cs.OutParams.Zip(locals, OutRead))});");
-                CloseScopes(o, tuDepth, tuSeqAt, tuClosers);
-                o.Add("    }");
-                o.Add("");
-                return;
-            }
-            case SlotShape.Try:
-            {
-                var ins = cs.PublicParams.Where(p => !p.Has("out")).ToList();
-                var outs = cs.OutParams;
-                var sigParts = SigParts(ins)
-                    .Concat(outs.Select(p => $"out {OutElement(model, p, convention)} {Idioms.Ident(WrittenName(p))}"));
-
-                var tryName = name.StartsWith("Try") ? name : $"Try{name}";
-                Declare(o, decls, XmlDoc("    ", slot.Doc, convention,
-                    cs.PublicParams.Select(p =>
-                        (Idioms.Ident(outs.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
-                    $"bool {tryName}({string.Join(", ", sigParts)})");
-                o.Add("    {");
-                foreach (var op in outs) o.Add($"        {OutLocal(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
-                var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
-                var (tSeq, tSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + tDepth * 4), convention);
-                o.AddRange(tPro);
-                o.AddRange(tSeq);
-                var tSeqAt = tDepth;
-                tDepth += tSeqDepth;
-                var tClosers = SequenceClosers(model, cs.Sequences);
-                var tInd = new string(' ', 8 + tDepth * 4);
-                var tryArgs = NativeParams()
-                    .Select(p => outs.Contains(p)
-                        ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local") : CallArg(p));
-                var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
-                    + (cs.Fallible ? ", null)" : ")")
-                    + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
-                o.Add($"{tInd}var found = {tryCall};");
-                foreach (var op in outs)
-                    o.Add($"{tInd}{Idioms.Ident(WrittenName(op))} = "
-                        + $"{OutRead(op, $"{Idioms.Ident(WrittenName(op))}Local")};");
-                o.Add($"{tInd}return found;");
-                CloseScopes(o, tDepth, tSeqAt, tClosers);
-                o.Add("    }");
-                o.Add("");
-                return;
-            }
-            case SlotShape.Fallible:
-            {
-                var args = cs.PublicParams;
-                var byReturn = convention.SignalsFailureByReturn(slot.Returns);
-                var retType = byReturn ? "void"
-                    : ownedReturn is not null ? ownedReturn.TypeName
-                    : ReturnType(model, slot.Returns, convention);
-                var sig = Sig(args);
-                var bagLocal = cs.ExpandedParam is null ? null : Idioms.Ident(cs.ExpandedParam.Name!);
-                var call = string.Concat(NativeParams()
-                    .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}" : CallArg(p))));
-                var fGenerics = cs.Blobs.Count == 0 ? ""
-                    : "<" + string.Join(", ", cs.Blobs.Select(bl => BlobTypeParam(bl.Blob))) + ">";
-                var fConstraints = string.Concat(cs.Blobs
-                    .Select(bl => $" where {BlobTypeParam(bl.Blob)} : unmanaged"));
-                Declare(o, decls, XmlDoc("    ", slot.Doc, convention, DocParams(args),
-                    byReturn ? null : slot.ReturnDoc, throwsOnFail: true).TrimEnd(),
-                    $"{retType} {name}{fGenerics}({sig}){fConstraints}");
-                o.Add("    {");
-                var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
-                var (fSeq, fSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + fDepth * 4), convention);
-                var (fBlob, fBlobDepth) = BlobPrologue(cs.Blobs,
-                    new string(' ', 8 + (fDepth + fSeqDepth) * 4));
-                o.AddRange(fPro);
-                o.AddRange(fSeq);
-                o.AddRange(fBlob);
-                var fSeqAt = fDepth;
-                fDepth += fSeqDepth + fBlobDepth;
-                var fClosers = SequenceClosers(model, cs.Sequences);
-                var fInd = new string(' ', 8 + fDepth * 4);
-                var rooted = args.Where(p => p.Has("rooted")).ToList();
-                foreach (var rp in rooted)
-                    o.Add($"{fInd}var {Idioms.Ident(rp.Name!)}Handle = System.Runtime.InteropServices.GCHandle.Alloc({Idioms.Ident(rp.Name!)});");
-
-                void BuildBag()
-                {
-                    if (bagLocal is null) return;
-                    o.Add($"{fInd}{cs.ExpandedStruct!.Name} {bagLocal} = default;");
-                    foreach (var f in cs.ExpandedStruct.Fields)
+                    Declare(o, decls, XmlDoc("    ", slot.Doc, convention, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
+                        slot.ReturnDoc, cs.Fallible).TrimEnd(), $"{ret} {name}({sig})");
+                    o.Add("    {");
+                    var (roPro, roDepth) = Utf8Prologue(ins, new string(' ', 8));
+                    var (roSeq, roSeqDepth) = SequencePrologue(model, cs.Sequences,
+                        new string(' ', 8 + roDepth * 4), convention);
+                    o.AddRange(roPro);
+                    o.AddRange(roSeq);
+                    var roSeqAt = roDepth;
+                    roDepth += roSeqDepth;
+                    var roClosers = SequenceClosers(model, cs.Sequences);
+                    var roInd = new string(' ', 8 + roDepth * 4);
+                    o.Add($"{roInd}{OutLocal(model, cs.OutParam!, convention)} result;");
+                    if (cs.Fallible)
                     {
-                        var arg = args.FirstOrDefault(a => a.Name == f.Name)
-                            ?? cs.Sequences.Select(s => s.Count).First(c => c.Name == f.Name);
-                        o.Add($"{fInd}{bagLocal}.{f.Name} = {CallArg(arg)};");
+                        o.Add($"{roInd}{convention.ErrorType}* err = null;");
+                        o.Add($"{roInd}{convention.ErrorHelperClass}.ThrowIfFailed(Handle->{slot.Name}(Handle{nativeArgs}, &err), err, \"{slot.Name}\");");
                     }
-                }
-
-                if (callbacks.Count > 0)
-                {
-                    var scoped = groups.Where(g => g.Lifetime == ClosureLifetime.Scoped).ToList();
-                    var parks = callbacks.Any(c => c.Parks && !c.Teardown);
-                    foreach (var g in groups)
+                    else
                     {
-                        if (!g.UsesState)
+                        o.Add($"{roInd}Handle->{slot.Name}(Handle{nativeArgs});");
+                    }
+                    o.Add($"{roInd}return {OutRead(cs.OutParam!, "result")};");
+                    CloseScopes(o, roDepth, roSeqAt, roClosers);
+                    o.Add("    }");
+                    o.Add("");
+                    return;
+                }
+            case SlotShape.TupleOutParams:
+                {
+                    var ins = cs.PublicParams.Where(p => !cs.OutParams.Contains(p)).ToList();
+                    var sig = Sig(ins);
+                    var names = cs.OutParams.Select(p => Idioms.Pascal(WrittenName(p))).ToList();
+                    var types = cs.OutParams.Select(p => OutElement(model, p, convention)).ToList();
+                    var retTuple = string.Join(", ", types.Zip(names, (t, n) => $"{t} {n}"));
+                    var locals = cs.OutParams.Select(p => Idioms.Ident(WrittenName(p))).ToList();
+                    var nativeArgs = NativeParams()
+                        .Select(p => cs.OutParams.Contains(p)
+                            ? OutAddress(model, p, convention, Idioms.Ident(WrittenName(p))) : CallArg(p));
+                    var callArgs = string.Concat(nativeArgs.Select(a => ", " + a));
+
+                    Declare(o, decls, XmlDoc("    ", slot.Doc, convention, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
+                        throwsOnFail: cs.Fallible).TrimEnd(), $"({retTuple}) {name}({sig})");
+                    o.Add("    {");
+                    var (tuPro, tuDepth) = Utf8Prologue(ins, new string(' ', 8));
+                    var (tuSeq, tuSeqDepth) = SequencePrologue(model, cs.Sequences,
+                        new string(' ', 8 + tuDepth * 4), convention);
+                    o.AddRange(tuPro);
+                    o.AddRange(tuSeq);
+                    var tuSeqAt = tuDepth;
+                    tuDepth += tuSeqDepth;
+                    var tuClosers = SequenceClosers(model, cs.Sequences);
+                    var tuInd = new string(' ', 8 + tuDepth * 4);
+                    foreach (var (p, n) in cs.OutParams.Zip(locals))
+                        o.Add($"{tuInd}{OutLocal(model, p, convention)} {n};");
+                    if (cs.Fallible)
+                    {
+                        o.Add($"{tuInd}{convention.ErrorType}* err = null;");
+                        o.Add($"{tuInd}{convention.ErrorHelperClass}.ThrowIfFailed(Handle->{slot.Name}(Handle{callArgs}, &err), err, \"{slot.Name}\");");
+                    }
+                    else
+                    {
+                        o.Add($"{tuInd}Handle->{slot.Name}(Handle{callArgs});");
+                    }
+                    o.Add($"{tuInd}return ({string.Join(", ", cs.OutParams.Zip(locals, OutRead))});");
+                    CloseScopes(o, tuDepth, tuSeqAt, tuClosers);
+                    o.Add("    }");
+                    o.Add("");
+                    return;
+                }
+            case SlotShape.Try:
+                {
+                    var ins = cs.PublicParams.Where(p => !p.Has("out")).ToList();
+                    var outs = cs.OutParams;
+                    var sigParts = SigParts(ins)
+                        .Concat(outs.Select(p => $"out {OutElement(model, p, convention)} {Idioms.Ident(WrittenName(p))}"));
+
+                    var tryName = name.StartsWith("Try") ? name : $"Try{name}";
+                    Declare(o, decls, XmlDoc("    ", slot.Doc, convention,
+                        cs.PublicParams.Select(p =>
+                            (Idioms.Ident(outs.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)), slot.ReturnDoc).TrimEnd(),
+                        $"bool {tryName}({string.Join(", ", sigParts)})");
+                    o.Add("    {");
+                    foreach (var op in outs) o.Add($"        {OutLocal(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
+                    var (tPro, tDepth) = Utf8Prologue(ins, new string(' ', 8));
+                    var (tSeq, tSeqDepth) = SequencePrologue(model, cs.Sequences,
+                        new string(' ', 8 + tDepth * 4), convention);
+                    o.AddRange(tPro);
+                    o.AddRange(tSeq);
+                    var tSeqAt = tDepth;
+                    tDepth += tSeqDepth;
+                    var tClosers = SequenceClosers(model, cs.Sequences);
+                    var tInd = new string(' ', 8 + tDepth * 4);
+                    var tryArgs = NativeParams()
+                        .Select(p => outs.Contains(p)
+                            ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local") : CallArg(p));
+                    var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
+                        + (cs.Fallible ? ", null)" : ")")
+                        + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                    o.Add($"{tInd}var found = {tryCall};");
+                    foreach (var op in outs)
+                        o.Add($"{tInd}{Idioms.Ident(WrittenName(op))} = "
+                            + $"{OutRead(op, $"{Idioms.Ident(WrittenName(op))}Local")};");
+                    o.Add($"{tInd}return found;");
+                    CloseScopes(o, tDepth, tSeqAt, tClosers);
+                    o.Add("    }");
+                    o.Add("");
+                    return;
+                }
+            case SlotShape.Fallible:
+                {
+                    var args = cs.PublicParams;
+                    var byReturn = convention.SignalsFailureByReturn(slot.Returns);
+                    var retType = byReturn ? "void"
+                        : ownedReturn is not null ? ownedReturn.TypeName
+                        : ReturnType(model, slot.Returns, convention);
+                    var sig = Sig(args);
+                    var bagLocal = cs.ExpandedParam is null ? null : Idioms.Ident(cs.ExpandedParam.Name!);
+                    var call = string.Concat(NativeParams()
+                        .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}" : CallArg(p))));
+                    var fGenerics = cs.Blobs.Count == 0 ? ""
+                        : "<" + string.Join(", ", cs.Blobs.Select(bl => BlobTypeParam(bl.Blob))) + ">";
+                    var fConstraints = string.Concat(cs.Blobs
+                        .Select(bl => $" where {BlobTypeParam(bl.Blob)} : unmanaged"));
+                    Declare(o, decls, XmlDoc("    ", slot.Doc, convention, DocParams(args),
+                        byReturn ? null : slot.ReturnDoc, throwsOnFail: true).TrimEnd(),
+                        $"{retType} {name}{fGenerics}({sig}){fConstraints}");
+                    o.Add("    {");
+                    var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
+                    var (fSeq, fSeqDepth) = SequencePrologue(model, cs.Sequences,
+                        new string(' ', 8 + fDepth * 4), convention);
+                    var (fBlob, fBlobDepth) = BlobPrologue(cs.Blobs,
+                        new string(' ', 8 + (fDepth + fSeqDepth) * 4));
+                    o.AddRange(fPro);
+                    o.AddRange(fSeq);
+                    o.AddRange(fBlob);
+                    var fSeqAt = fDepth;
+                    fDepth += fSeqDepth + fBlobDepth;
+                    var fClosers = SequenceClosers(model, cs.Sequences);
+                    var fInd = new string(' ', 8 + fDepth * 4);
+                    var rooted = args.Where(p => p.Has("rooted")).ToList();
+                    foreach (var rp in rooted)
+                        o.Add($"{fInd}var {Idioms.Ident(rp.Name!)}Handle = System.Runtime.InteropServices.GCHandle.Alloc({Idioms.Ident(rp.Name!)});");
+
+                    void BuildBag()
+                    {
+                        if (bagLocal is null) return;
+                        o.Add($"{fInd}{cs.ExpandedStruct!.Name} {bagLocal} = default;");
+                        foreach (var f in cs.ExpandedStruct.Fields)
                         {
-                            var fn = Idioms.Ident(g.Pairs[0].Fn.Name!);
-                            o.Add($"{fInd}var {g.Handle} = {fn} is null ? default : GCHandle.Alloc({fn});");
-                            continue;
+                            var arg = args.FirstOrDefault(a => a.Name == f.Name)
+                                ?? cs.Sequences.Select(s => s.Count).First(c => c.Name == f.Name);
+                            o.Add($"{fInd}{bagLocal}.{f.Name} = {CallArg(arg)};");
                         }
-                        var inits = string.Join(", ", g.Pairs
-                            .Select(p => $"{ClosureGroup.Field(p)} = {Idioms.Ident(p.Fn.Name!)}")
-                            .Prepend(g.NeedsOwner ? "Owner = this" : null)
-                            .Where(x => x is not null));
-                        var allNull = string.Join(" && ", g.Pairs.Select(p =>
-                            $"{Idioms.Ident(p.Fn.Name!)} is null"));
-                        o.Add($"{fInd}var {g.Handle} = {allNull}");
-                        o.Add($"{fInd}    ? default");
-                        o.Add($"{fInd}    : GCHandle.Alloc(new {g.StateType} {{ {inits} }});");
+                    }
+
+                    if (callbacks.Count > 0)
+                    {
+                        var scoped = groups.Where(g => g.Lifetime == ClosureLifetime.Scoped).ToList();
+                        var parks = callbacks.Any(c => c.Parks && !c.Teardown);
+                        foreach (var g in groups)
+                        {
+                            if (!g.UsesState)
+                            {
+                                var fn = Idioms.Ident(g.Pairs[0].Fn.Name!);
+                                o.Add($"{fInd}var {g.Handle} = {fn} is null ? default : GCHandle.Alloc({fn});");
+                                continue;
+                            }
+                            var inits = string.Join(", ", g.Pairs
+                                .Select(p => $"{ClosureGroup.Field(p)} = {Idioms.Ident(p.Fn.Name!)}")
+                                .Prepend(g.NeedsOwner ? "Owner = this" : null)
+                                .Where(x => x is not null));
+                            var allNull = string.Join(" && ", g.Pairs.Select(p =>
+                                $"{Idioms.Ident(p.Fn.Name!)} is null"));
+                            o.Add($"{fInd}var {g.Handle} = {allNull}");
+                            o.Add($"{fInd}    ? default");
+                            o.Add($"{fInd}    : GCHandle.Alloc(new {g.StateType} {{ {inits} }});");
+                        }
+                        BuildBag();
+                        if (parks) o.Add($"{fInd}s_parkedCallbackException = null;");
+                        var signalsOk = IsBoolType(slot.Returns, convention);
+                        var capture = signalsOk ? "ok" : retType == "void" ? null : "result";
+                        var failed = signalsOk ? "!ok" : "err != null";
+                        o.Add($"{fInd}{convention.ErrorType}* err = null;");
+                        if (signalsOk) o.Add($"{fInd}bool ok;");
+                        else if (capture is not null) o.Add($"{fInd}{retType} {capture};");
+                        o.Add($"{fInd}try");
+                        o.Add($"{fInd}{{");
+                        o.Add($"{fInd}    {(capture is null ? "" : capture + " = ")}"
+                            + $"{(signalsOk ? "" : ReturnCast(model, slot.Returns, convention))}"
+                            + $"Handle->{slot.Name}(Handle{call}, &err)"
+                            + (slot.Returns == convention.ByteBoolType ? " != 0" : "") + ";");
+                        o.Add($"{fInd}}}");
+                        if (scoped.Count > 0)
+                        {
+                            o.Add($"{fInd}finally");
+                            o.Add($"{fInd}{{");
+                            foreach (var g in scoped)
+                                o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
+                            o.Add($"{fInd}}}");
+                        }
+                        else
+                        {
+                            o.Add($"{fInd}catch");
+                            o.Add($"{fInd}{{");
+                            foreach (var g in groups)
+                                o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
+                            o.Add($"{fInd}    throw;");
+                            o.Add($"{fInd}}}");
+                        }
+                        if (parks)
+                        {
+                            o.Add($"{fInd}if (s_parkedCallbackException is {{ }} parked)");
+                            o.Add($"{fInd}{{");
+                            o.Add($"{fInd}    s_parkedCallbackException = null;");
+                            o.Add($"{fInd}    throw parked;");
+                            o.Add($"{fInd}}}");
+                        }
+                        var retained = groups.Where(g => g.Lifetime == ClosureLifetime.Retained).ToList();
+                        if (retained.Count == 0 && signalsOk)
+                            o.Add($"{fInd}{convention.ErrorHelperClass}.ThrowIfFailed(ok, err, \"{slot.Name}\");");
+                        else if (retained.Count == 0)
+                        {
+                            o.Add($"{fInd}if ({failed}) throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                        }
+                        else
+                        {
+                            o.Add($"{fInd}if ({failed})");
+                            o.Add($"{fInd}{{");
+                            foreach (var g in retained)
+                                o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
+                            o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                            o.Add($"{fInd}}}");
+                            foreach (var g in retained)
+                            {
+                                var field = g.Retained;
+                                if (g.RetainByReturn)
+                                    o.Add($"{fInd}if ({g.Handle}.IsAllocated) {field}[{capture}] = {g.Handle};");
+                                else if (g.RetainKey is { } key)
+                                {
+                                    var k = Idioms.Ident(key.Name!);
+                                    var replaced = $"replaced{Idioms.Pascal(g.Pairs[0].Fn.Name!)}";
+                                    o.Add($"{fInd}if ({field}.Remove({k}, out var {replaced})) {replaced}.Free();");
+                                    o.Add($"{fInd}{field}[{k}] = {g.Handle};");
+                                }
+                                else
+                                {
+                                    o.Add($"{fInd}if ({field}.IsAllocated) {field}.Free();");
+                                    o.Add($"{fInd}{field} = {g.Handle};");
+                                }
+                            }
+                        }
+                        if (capture == "result") o.Add($"{fInd}return result;");
+                        CloseScopes(o, fDepth, fSeqAt, fClosers);
+                        o.Add("    }");
+                        o.Add("");
+                        foreach (var g in groups.Where(x => x.UsesState)) RenderClosureState(o, g);
+                        foreach (var g in groups)
+                            foreach (var cb in g.Pairs)
+                                RenderTrampoline(model, o, cb, g, convention);
+                        return;
                     }
                     BuildBag();
-                    if (parks) o.Add($"{fInd}s_parkedCallbackException = null;");
-                    var signalsOk = IsBoolType(slot.Returns, convention);
-                    var capture = signalsOk ? "ok" : retType == "void" ? null : "result";
-                    var failed = signalsOk ? "!ok" : "err != null";
                     o.Add($"{fInd}{convention.ErrorType}* err = null;");
-                    if (signalsOk) o.Add($"{fInd}bool ok;");
-                    else if (capture is not null) o.Add($"{fInd}{retType} {capture};");
-                    o.Add($"{fInd}try");
-                    o.Add($"{fInd}{{");
-                    o.Add($"{fInd}    {(capture is null ? "" : capture + " = ")}"
-                        + $"{(signalsOk ? "" : ReturnCast(model, slot.Returns, convention))}"
-                        + $"Handle->{slot.Name}(Handle{call}, &err)"
-                        + (slot.Returns == convention.ByteBoolType ? " != 0" : "") + ";");
-                    o.Add($"{fInd}}}");
-                    if (scoped.Count > 0)
+                    if (byReturn && rooted.Count > 0)
                     {
-                        o.Add($"{fInd}finally");
+                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
+                            + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                        o.Add($"{fInd}if (!{boolCall})");
                         o.Add($"{fInd}{{");
-                        foreach (var g in scoped)
-                            o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
-                        o.Add($"{fInd}}}");
-                    }
-                    else
-                    {
-                        o.Add($"{fInd}catch");
-                        o.Add($"{fInd}{{");
-                        foreach (var g in groups)
-                            o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
-                        o.Add($"{fInd}    throw;");
-                        o.Add($"{fInd}}}");
-                    }
-                    if (parks)
-                    {
-                        o.Add($"{fInd}if (s_parkedCallbackException is {{ }} parked)");
-                        o.Add($"{fInd}{{");
-                        o.Add($"{fInd}    s_parkedCallbackException = null;");
-                        o.Add($"{fInd}    throw parked;");
-                        o.Add($"{fInd}}}");
-                    }
-                    var retained = groups.Where(g => g.Lifetime == ClosureLifetime.Retained).ToList();
-                    if (retained.Count == 0 && signalsOk)
-                        o.Add($"{fInd}{convention.ErrorHelperClass}.ThrowIfFailed(ok, err, \"{slot.Name}\");");
-                    else if (retained.Count == 0)
-                    {
-                        o.Add($"{fInd}if ({failed}) throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
-                    }
-                    else
-                    {
-                        o.Add($"{fInd}if ({failed})");
-                        o.Add($"{fInd}{{");
-                        foreach (var g in retained)
-                            o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
+                        foreach (var rp in rooted)
+                            o.Add($"{fInd}    {Idioms.Ident(rp.Name!)}Handle.Free();");
                         o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
                         o.Add($"{fInd}}}");
-                        foreach (var g in retained)
-                        {
-                            var field = g.Retained;
-                            if (g.RetainByReturn)
-                                o.Add($"{fInd}if ({g.Handle}.IsAllocated) {field}[{capture}] = {g.Handle};");
-                            else if (g.RetainKey is { } key)
-                            {
-                                var k = Idioms.Ident(key.Name!);
-                                var replaced = $"replaced{Idioms.Pascal(g.Pairs[0].Fn.Name!)}";
-                                o.Add($"{fInd}if ({field}.Remove({k}, out var {replaced})) {replaced}.Free();");
-                                o.Add($"{fInd}{field}[{k}] = {g.Handle};");
-                            }
-                            else
-                            {
-                                o.Add($"{fInd}if ({field}.IsAllocated) {field}.Free();");
-                                o.Add($"{fInd}{field} = {g.Handle};");
-                            }
-                        }
+                        foreach (var rp in rooted)
+                            o.Add($"{fInd}_rooted[{Idioms.Ident(rp.TagValue("rooted")!)}] = {Idioms.Ident(rp.Name!)}Handle;");
                     }
-                    if (capture == "result") o.Add($"{fInd}return result;");
+                    else if (byReturn && ownerDrains && slot.Has("drains"))
+                    {
+                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
+                            + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                        o.Add($"{fInd}if (!{boolCall} && _callbackFailures.IsEmpty)");
+                        o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                        o.Add($"{fInd}DrainCallbackFailures();");
+                    }
+                    else if (byReturn)
+                    {
+                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
+                            + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                        o.Add($"{fInd}{convention.ErrorHelperClass}.ThrowIfFailed({boolCall}, err, \"{slot.Name}\");");
+                    }
+                    else
+                    {
+                        o.Add($"{fInd}var result = {(ownedReturn is not null ? $"({ownedReturn.View})" : ReturnCast(model, slot.Returns, convention))}"
+                            + $"Handle->{slot.Name}(Handle{call}, &err);");
+                        if (CTypes.IsPointer(slot.Returns))
+                            o.Add($"{fInd}if (result == null) throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                        else
+                            o.Add($"{fInd}if (err != null) throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                        o.Add($"{fInd}return {(ownedReturn is null ? "result" : $"new {ownedReturn.TypeName}(this, result)")};");
+                    }
                     CloseScopes(o, fDepth, fSeqAt, fClosers);
                     o.Add("    }");
                     o.Add("");
-                    foreach (var g in groups.Where(x => x.UsesState)) RenderClosureState(o, g);
-                    foreach (var g in groups)
-                        foreach (var cb in g.Pairs)
-                            RenderTrampoline(model, o, cb, g, convention);
                     return;
                 }
-                BuildBag();
-                o.Add($"{fInd}{convention.ErrorType}* err = null;");
-                if (byReturn && rooted.Count > 0)
-                {
-                    var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
-                        + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
-                    o.Add($"{fInd}if (!{boolCall})");
-                    o.Add($"{fInd}{{");
-                    foreach (var rp in rooted)
-                        o.Add($"{fInd}    {Idioms.Ident(rp.Name!)}Handle.Free();");
-                    o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
-                    o.Add($"{fInd}}}");
-                    foreach (var rp in rooted)
-                        o.Add($"{fInd}_rooted[{Idioms.Ident(rp.TagValue("rooted")!)}] = {Idioms.Ident(rp.Name!)}Handle;");
-                }
-                else if (byReturn && ownerDrains && slot.Has("drains"))
-                {
-                    var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
-                        + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
-                    o.Add($"{fInd}if (!{boolCall} && _callbackFailures.IsEmpty)");
-                    o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
-                    o.Add($"{fInd}DrainCallbackFailures();");
-                }
-                else if (byReturn)
-                {
-                    var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
-                        + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
-                    o.Add($"{fInd}{convention.ErrorHelperClass}.ThrowIfFailed({boolCall}, err, \"{slot.Name}\");");
-                }
-                else
-                {
-                    o.Add($"{fInd}var result = {(ownedReturn is not null ? $"({ownedReturn.View})" : ReturnCast(model, slot.Returns, convention))}"
-                        + $"Handle->{slot.Name}(Handle{call}, &err);");
-                    if (CTypes.IsPointer(slot.Returns))
-                        o.Add($"{fInd}if (result == null) throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
-                    else
-                        o.Add($"{fInd}if (err != null) throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
-                    o.Add($"{fInd}return {(ownedReturn is null ? "result" : $"new {ownedReturn.TypeName}(this, result)")};");
-                }
-                CloseScopes(o, fDepth, fSeqAt, fClosers);
-                o.Add("    }");
-                o.Add("");
-                return;
-            }
             default:
-            {
-                var args = cs.PublicParams;
-                var sig = Sig(args);
-                var call = string.Concat(NativeParams().Select(p => ", " + CallArg(p)));
-                var spanElement = cs.ReturnCount is null ? null : ReturnElement(model, slot, convention);
-                if (ownedReturn is not null)
-                    throw new InvalidOperationException(
-                        $"{slot.Name}: answers with the memory [releases:{ownedReturn.TypeName}] owns, and"
-                        + " has no failure channel -- so a caller handed nothing back is never told why."
-                        + $" The slot needs a {convention.ErrorType}** parameter.");
-                var retType = spanElement is not null ? $"ReadOnlySpan<{spanElement}>"
-                    : slot.Returns == convention.ByteBoolType ? "bool"
-                    : ReturnType(model, slot.Returns, convention);
-                var needsCast = retType == "nint" ? "(nint)"
-                    : spanElement is null && slot.Returns != convention.ByteBoolType
-                        ? ReturnCast(model, slot.Returns, convention) : "";
-                var generics = cs.Blobs.Count == 0 ? ""
-                    : "<" + string.Join(", ", cs.Blobs.Select(b => BlobTypeParam(b.Blob))) + ">";
-                var constraints = string.Concat(cs.Blobs
-                    .Select(b => $" where {BlobTypeParam(b.Blob)} : unmanaged"));
-                Declare(o, decls,
-                    XmlDoc("    ", slot.Doc, convention, args.Select(p =>
-                        (Idioms.Ident(cs.TrailingOuts.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)),
-                        slot.ReturnDoc).TrimEnd(),
-                    $"{retType} {name}{generics}({sig}){constraints}", access: access);
-                o.Add("    {");
-                var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
-                var (pSeq, pSeqDepth) = SequencePrologue(model, cs.Sequences,
-                    new string(' ', 8 + pDepth * 4), convention);
-                var (pBlob, pBlobDepth) = BlobPrologue(cs.Blobs,
-                    new string(' ', 8 + (pDepth + pSeqDepth) * 4));
-                o.AddRange(pPro);
-                o.AddRange(pSeq);
-                o.AddRange(pBlob);
-                var pSeqAt = pDepth;
-                pDepth += pSeqDepth + pBlobDepth;
-                var pClosers = SequenceClosers(model, cs.Sequences);
-                var pInd = new string(' ', 8 + pDepth * 4);
-                foreach (var op in cs.TrailingOuts)
-                    o.Add($"{pInd}{OutLocal(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
-                var pCall = $"Handle->{slot.Name}(Handle{call})"
-                    + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
-                var pHolds = cs.TrailingOuts.Count > 0;
-                if (spanElement is not null)
                 {
-                    var countLocal = $"{Idioms.Ident(WrittenName(cs.ReturnCount!))}Local";
-                    var native = CsType(model, CTypes.Deref(slot.Returns), convention);
-                    var front = spanElement == native ? "front" : $"({spanElement}*)front";
-                    o.Add($"{pInd}{CsType(model, CTypes.Deref(cs.ReturnCount!.Type), convention)} {countLocal} = 0;");
-                    o.Add($"{pInd}var front = {pCall};");
-                    o.Add($"{pInd}{(pHolds ? "var result =" : "return")} front == null ? default"
-                        + $" : new ReadOnlySpan<{spanElement}>({front}, (int){countLocal});");
-                }
-                else if (retType == "void")
-                {
-                    o.Add($"{pInd}{pCall};");
-                    if (slot.TagValue("unroots") is string freedKey)
+                    var args = cs.PublicParams;
+                    var sig = Sig(args);
+                    var call = string.Concat(NativeParams().Select(p => ", " + CallArg(p)));
+                    var spanElement = cs.ReturnCount is null ? null : ReturnElement(model, slot, convention);
+                    if (ownedReturn is not null)
+                        throw new InvalidOperationException(
+                            $"{slot.Name}: answers with the memory [releases:{ownedReturn.TypeName}] owns, and"
+                            + " has no failure channel -- so a caller handed nothing back is never told why."
+                            + $" The slot needs a {convention.ErrorType}** parameter.");
+                    var retType = spanElement is not null ? $"ReadOnlySpan<{spanElement}>"
+                        : slot.Returns == convention.ByteBoolType ? "bool"
+                        : ReturnType(model, slot.Returns, convention);
+                    var needsCast = retType == "nint" ? "(nint)"
+                        : spanElement is null && slot.Returns != convention.ByteBoolType
+                            ? ReturnCast(model, slot.Returns, convention) : "";
+                    var generics = cs.Blobs.Count == 0 ? ""
+                        : "<" + string.Join(", ", cs.Blobs.Select(b => BlobTypeParam(b.Blob))) + ">";
+                    var constraints = string.Concat(cs.Blobs
+                        .Select(b => $" where {BlobTypeParam(b.Blob)} : unmanaged"));
+                    Declare(o, decls,
+                        XmlDoc("    ", slot.Doc, convention, args.Select(p =>
+                            (Idioms.Ident(cs.TrailingOuts.Contains(p) ? WrittenName(p) : p.Name!), p.Doc)),
+                            slot.ReturnDoc).TrimEnd(),
+                        $"{retType} {name}{generics}({sig}){constraints}", access: access);
+                    o.Add("    {");
+                    var (pPro, pDepth) = Utf8Prologue(args, new string(' ', 8));
+                    var (pSeq, pSeqDepth) = SequencePrologue(model, cs.Sequences,
+                        new string(' ', 8 + pDepth * 4), convention);
+                    var (pBlob, pBlobDepth) = BlobPrologue(cs.Blobs,
+                        new string(' ', 8 + (pDepth + pSeqDepth) * 4));
+                    o.AddRange(pPro);
+                    o.AddRange(pSeq);
+                    o.AddRange(pBlob);
+                    var pSeqAt = pDepth;
+                    pDepth += pSeqDepth + pBlobDepth;
+                    var pClosers = SequenceClosers(model, cs.Sequences);
+                    var pInd = new string(' ', 8 + pDepth * 4);
+                    foreach (var op in cs.TrailingOuts)
+                        o.Add($"{pInd}{OutLocal(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
+                    var pCall = $"Handle->{slot.Name}(Handle{call})"
+                        + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                    var pHolds = cs.TrailingOuts.Count > 0;
+                    if (spanElement is not null)
                     {
-                        o.Add($"{pInd}if (_rooted.TryRemove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
+                        var countLocal = $"{Idioms.Ident(WrittenName(cs.ReturnCount!))}Local";
+                        var native = CsType(model, CTypes.Deref(slot.Returns), convention);
+                        var front = spanElement == native ? "front" : $"({spanElement}*)front";
+                        o.Add($"{pInd}{CsType(model, CTypes.Deref(cs.ReturnCount!.Type), convention)} {countLocal} = 0;");
+                        o.Add($"{pInd}var front = {pCall};");
+                        o.Add($"{pInd}{(pHolds ? "var result =" : "return")} front == null ? default"
+                            + $" : new ReadOnlySpan<{spanElement}>({front}, (int){countLocal});");
                     }
+                    else if (retType == "void")
+                    {
+                        o.Add($"{pInd}{pCall};");
+                        if (slot.TagValue("unroots") is string freedKey)
+                        {
+                            o.Add($"{pInd}if (_rooted.TryRemove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
+                        }
+                    }
+                    else if (pHolds)
+                        o.Add($"{pInd}var result = {needsCast}{pCall};");
+                    else
+                        o.Add($"{pInd}return {needsCast}{pCall};");
+                    foreach (var op in cs.TrailingOuts)
+                        o.Add($"{pInd}{Idioms.Ident(WrittenName(op))} = "
+                            + $"{OutRead(op, $"{Idioms.Ident(WrittenName(op))}Local")};");
+                    if (retType != "void" && pHolds) o.Add($"{pInd}return result;");
+                    CloseScopes(o, pDepth, pSeqAt, pClosers);
+                    o.Add("    }");
+                    o.Add("");
+                    return;
                 }
-                else if (pHolds)
-                    o.Add($"{pInd}var result = {needsCast}{pCall};");
-                else
-                    o.Add($"{pInd}return {needsCast}{pCall};");
-                foreach (var op in cs.TrailingOuts)
-                    o.Add($"{pInd}{Idioms.Ident(WrittenName(op))} = "
-                        + $"{OutRead(op, $"{Idioms.Ident(WrittenName(op))}Local")};");
-                if (retType != "void" && pHolds) o.Add($"{pInd}return result;");
-                CloseScopes(o, pDepth, pSeqAt, pClosers);
-                o.Add("    }");
-                o.Add("");
-                return;
-            }
         }
 
         string CallArg(ApiParam p) =>

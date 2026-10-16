@@ -11,7 +11,7 @@ namespace KernelEngine.Cli;
 public sealed class ProjectManifest
 {
     private readonly string _path;
-    private TomlTable _root;
+    private readonly TomlTable _root;
 
     public string ProjectDirectory => Path.GetDirectoryName(_path)!;
 

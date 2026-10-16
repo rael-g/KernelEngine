@@ -1,15 +1,16 @@
-﻿using KernelEngine.Ecs.Flecs;
+﻿using KernelEngine.Ecs;
+using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
+using KernelEngine.Input;
+using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
 using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window;
-using KernelEngine.Logger;
-using KernelEngine.Input;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -29,7 +30,7 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
@@ -72,7 +73,7 @@ sealed class KeyEdgeListener : Node
         for (int i = 0; i < s_keys.Length; i++)
         {
             bool down = view.IsKeyDown(s_keys[i].Code);
-            if (down && !_prev[i])      Console.WriteLine($"KEY DOWN  {s_keys[i].Name}");
+            if (down && !_prev[i]) Console.WriteLine($"KEY DOWN  {s_keys[i].Name}");
             else if (!down && _prev[i]) Console.WriteLine($"KEY UP    {s_keys[i].Name}");
             _prev[i] = down;
         }

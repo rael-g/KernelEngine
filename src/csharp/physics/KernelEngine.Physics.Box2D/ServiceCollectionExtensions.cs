@@ -1,8 +1,9 @@
-using KernelEngine.Configuration;
 using KernelEngine.Common.Native;
-using KernelEngine.Physics.Box2D.Native;
-using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Configuration;
 using KernelEngine.Logger;
+using KernelEngine.Physics.Box2D.Native;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Physics.Box2D;
 
@@ -41,7 +42,7 @@ public static class ServiceCollectionExtensions
         var logger = sp.GetService<INativeLogger>();
         var @params = new ke_physics_2d_box2d_params
         {
-            logger    = logger != null ? logger.Native : null,
+            logger = logger != null ? logger.Native : null,
             gravity_x = gravityX,
             gravity_y = gravityY,
         };

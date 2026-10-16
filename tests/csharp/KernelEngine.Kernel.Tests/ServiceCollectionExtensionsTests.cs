@@ -1,7 +1,10 @@
-﻿using NSubstitute;
-using Xunit;
+﻿using KernelEngine.Configuration;
+
 using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Configuration;
+
+using NSubstitute;
+
+using Xunit;
 
 namespace EngineTests;
 

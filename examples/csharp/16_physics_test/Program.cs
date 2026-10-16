@@ -1,21 +1,23 @@
 ﻿using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
+using KernelEngine.Input;
+using KernelEngine.Logger;
+using KernelEngine.Physics;
 using KernelEngine.Physics.Box2D;
+using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
 using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window;
-using KernelEngine.Logger;
-using KernelEngine.Render;
-using KernelEngine.Physics;
-using KernelEngine.Input;
+using KernelEngine.Window.Glfw;
 
-const float FloorY     = -3f;
+using Microsoft.Extensions.DependencyInjection;
+
+const float FloorY = -3f;
 const float FloorHalfW = 8f;
 const float FloorHalfH = 0.5f;
 
@@ -44,17 +46,17 @@ var services = new ServiceCollection()
         tree.AddNode(new DirectionalLight
         {
             Direction = Vector3.Normalize(new Vector3(0.3f, -1.0f, -0.5f)),
-            Color     = Vector3.One,
+            Color = Vector3.One,
             Intensity = 5f,
         }, "Sun");
 
         var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.4f, 0.4f, 0.45f, 1f), roughness: 0.9f);
-        var ballMat  = resources.CreateMaterial("ball", new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f);
+        var ballMat = resources.CreateMaterial("ball", new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Position = new Vector3(0f, FloorY, 0f);
-        floor.Scale    = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f);
+        floor.Scale = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f);
         var floorBody = physics.CreateBody(BodyType2D.Static, new Vector2(0f, FloorY));
         physics.AddBoxFixture(floorBody, new Vector2(FloorHalfW, FloorHalfH), friction: 0.5f);
 
@@ -62,7 +64,7 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
@@ -86,12 +88,12 @@ Console.WriteLine("[16_physics_test] Exited cleanly.");
 
 sealed class PhysicsScene : Node
 {
-    private const int KeySpace  = 32;
-    private const int KeyR      = 82;
+    private const int KeySpace = 32;
+    private const int KeyR = 82;
     private const int KeyEscape = 256;
 
-    private readonly IPhysics2D     _physics;
-    private readonly MeshHandle     _ballMesh;
+    private readonly IPhysics2D _physics;
+    private readonly MeshHandle _ballMesh;
     private readonly MaterialHandle _ballMat;
     private readonly List<(MeshRenderer Node, BodyHandle2D Body)> _balls = new();
 
@@ -102,9 +104,9 @@ sealed class PhysicsScene : Node
 
     public PhysicsScene(IPhysics2D physics, MeshHandle ballMesh, MaterialHandle ballMat)
     {
-        _physics  = physics;
+        _physics = physics;
         _ballMesh = ballMesh;
-        _ballMat  = ballMat;
+        _ballMat = ballMat;
     }
 
     protected override bool HasBehavior => true;
@@ -122,14 +124,14 @@ sealed class PhysicsScene : Node
         for (int i = 0; i < _balls.Count; i++)
         {
             var (node, body) = _balls[i];
-            var s            = _physics.GetBodyState(body);
+            var s = _physics.GetBodyState(body);
             node.Position = new Vector3(s.Position.X, s.Position.Y, 0f);
             node.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, s.Angle);
         }
 
         bool space = view.IsKeyDown(KeySpace);
-        bool r     = view.IsKeyDown(KeyR);
-        bool esc   = view.IsKeyDown(KeyEscape);
+        bool r = view.IsKeyDown(KeyR);
+        bool esc = view.IsKeyDown(KeyEscape);
 
         if (space && !_prevSpace)
             Spawn(new Vector2((Random.Shared.NextSingle() - 0.5f) * 6f, 5f));
@@ -148,8 +150,8 @@ sealed class PhysicsScene : Node
         if (esc && !_prevEsc) Environment.Exit(0);
 
         _prevSpace = space;
-        _prevR     = r;
-        _prevEsc   = esc;
+        _prevR = r;
+        _prevEsc = esc;
     }
 
     private void Spawn(Vector2 at)

@@ -1,19 +1,21 @@
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Text.StbTrueType;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Native;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Text;
+using KernelEngine.Text.StbTrueType;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -34,36 +36,36 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Features: ui_overlay_pass, labels, stb_truetype");
 
         var fontPath = ExamplePaths.SystemFont;
-        var loader   = sp.GetRequiredService<IFontLoader>();
-        var font     = Font.Load(resources, loader, fontPath, pixelSize: 48f);
+        var loader = sp.GetRequiredService<IFontLoader>();
+        var font = Font.Load(resources, loader, fontPath, pixelSize: 48f);
         Console.WriteLine($"[KernelEngine] Font: {fontPath}, lineHeight={font.LineHeight:F1} ascent={font.Ascent:F1}");
 
         tree.AddNode(new Label
         {
-            Text   = "Top-left, anchor (0,0)",
-            Font     = fontPath,
+            Text = "Top-left, anchor (0,0)",
+            Font = fontPath,
             FontSize = 48f,
-            Color  = new Vector4(1f, 0.6f, 0.3f, 1f),
+            Color = new Vector4(1f, 0.6f, 0.3f, 1f),
             Anchor = new Vector2(0f, 0f),
             Offset = new Vector2(20, 20),
         }, "TopLeft");
 
         tree.AddNode(new Label
         {
-            Text   = "Top center, anchor (0.5, 0)",
-            Font     = fontPath,
+            Text = "Top center, anchor (0.5, 0)",
+            Font = fontPath,
             FontSize = 48f,
-            Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
+            Color = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.5f, 0f),
             Offset = new Vector2(0, 80),
         }, "TopCenter");
 
         tree.AddNode(new Label
         {
-            Text   = "Bottom-right (1,1)",
-            Font     = fontPath,
+            Text = "Bottom-right (1,1)",
+            Font = fontPath,
             FontSize = 48f,
-            Color  = new Vector4(0.3f, 0.7f, 1f, 1f),
+            Color = new Vector4(0.3f, 0.7f, 1f, 1f),
             Anchor = new Vector2(1f, 1f),
             Offset = new Vector2(-20, -20),
         }, "BottomRight");
@@ -72,7 +74,7 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
@@ -108,8 +110,14 @@ sealed class BackgroundQuad : Node
         var quad = new ke_ui_quad_component
         {
             texture_bits = TextureHandle.None.Value,
-            dst_x = 360, dst_y = 220, dst_w = 240, dst_h = 100,
-            u0 = 0, v0 = 0, u1 = 1, v1 = 1,
+            dst_x = 360,
+            dst_y = 220,
+            dst_w = 240,
+            dst_h = 100,
+            u0 = 0,
+            v0 = 0,
+            u1 = 1,
+            v1 = 1,
         };
         quad.color[0] = 0.20f * 0.5f;
         quad.color[1] = 0.85f * 0.5f;

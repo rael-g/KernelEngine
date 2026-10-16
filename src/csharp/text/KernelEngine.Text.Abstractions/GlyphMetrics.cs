@@ -15,7 +15,7 @@
 /// <param name="Height">Glyph height in pixels.</param>
 /// <param name="AdvanceX">Horizontal pen advance after this glyph (pixels).</param>
 public readonly record struct GlyphMetrics(
-    uint  Codepoint,
+    uint Codepoint,
     float U0, float V0, float U1, float V1,
     float BearingX, float BearingY,
     float Width, float Height,

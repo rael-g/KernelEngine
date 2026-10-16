@@ -1,4 +1,5 @@
 ﻿using System.Text;
+
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
@@ -15,9 +16,9 @@ namespace KernelEngine.Framework;
 /// </summary>
 public unsafe partial class ScriptHost
 {
-    private World              _world = null!;
-    private IEcsRegistry       _ecs = null!;
-    private uint                       _nameCid;
+    private World _world = null!;
+    private IEcsRegistry _ecs = null!;
+    private uint _nameCid;
 
     private readonly HashSet<Type> _announcedBehaviors = new();
 
@@ -192,10 +193,10 @@ public unsafe partial class ScriptHost
     /// <returns>The same instance, so composition reads as one expression.</returns>
     internal ScriptHost Compose(World world, IEcsRegistry ecs, SignalBus? signals = null)
     {
-        _signals    = signals;
-        _world      = world;
-        _ecs        = ecs;
-        _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
+        _signals = signals;
+        _world = world;
+        _ecs = ecs;
+        _nameCid = ecs.RegisterComponent<Native.ke_name_component>("name");
         _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
         _ = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
         StateCid = ecs.RegisterComponent<ScriptHostState>("scene.script_host");

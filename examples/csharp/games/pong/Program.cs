@@ -1,21 +1,23 @@
-﻿using KernelEngine.Audio.MiniAudio;
+﻿using KernelEngine.Audio;
+using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Configuration;
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
+using KernelEngine.Input;
+using KernelEngine.Logger;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Text.StbTrueType;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using Pong;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
 using KernelEngine.Window;
-using KernelEngine.Logger;
-using KernelEngine.Audio;
-using KernelEngine.Input;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
+
+using Pong;
 
 var services = new ServiceCollection()
     .AddProjectConfig()
@@ -39,7 +41,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new SceneRouterModule(sceneModuleDependency: typeof(SceneNodesModule)));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);

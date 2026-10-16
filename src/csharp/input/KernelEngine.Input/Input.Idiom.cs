@@ -1,4 +1,5 @@
 using System.Numerics;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Logger;

@@ -1,5 +1,6 @@
 ﻿
 using NSubstitute;
+
 using Xunit;
 
 namespace EngineTests;
@@ -8,12 +9,13 @@ public class LoggerSinkTests
 {
     [Fact]
     public void CustomSink_ReceivesLogEvents()
-    {        using var logger = new Logger();
+    {
+        using var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
         mockSink.MinLevel.Returns(LogLevel.Info);
 
         logger.AddSink(mockSink);
-        
+
         logger.Info("TestTag", "Hello Info");
         logger.Trace("TestTag", "Hello Trace");
 
@@ -23,9 +25,10 @@ public class LoggerSinkTests
 
     [Fact]
     public void Flush_CallsSinkFlush()
-    {        using var logger = new Logger();
+    {
+        using var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
-        
+
         logger.AddSink(mockSink);
         logger.Flush();
 
@@ -34,7 +37,8 @@ public class LoggerSinkTests
 
     [Fact]
     public void AllLogLevelMethods_ForwardCorrectLevel()
-    {        using var logger = new Logger();
+    {
+        using var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
         logger.AddSink(mockSink);
 

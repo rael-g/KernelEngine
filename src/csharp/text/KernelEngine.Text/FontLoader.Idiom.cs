@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+
 using KernelEngine.Text.Native;
 
 namespace KernelEngine.Text;
@@ -14,7 +15,7 @@ public unsafe partial class FontLoader : IFontLoader
     public Task<FontData> LoadFontAsync(
         string path,
         float pixelSize,
-        uint atlasSize      = 512,
+        uint atlasSize = 512,
         uint firstCodepoint = 32,
         uint codepointCount = 95)
     {
@@ -26,7 +27,7 @@ public unsafe partial class FontLoader : IFontLoader
             try
             {
                 var atlasLen = (int)(data->atlas_width * data->atlas_height * 4);
-                var atlas    = new byte[atlasLen];
+                var atlas = new byte[atlasLen];
                 Marshal.Copy((IntPtr)data->atlas_rgba, atlas, 0, atlasLen);
 
                 var glyphs = new GlyphMetrics[data->glyph_count];

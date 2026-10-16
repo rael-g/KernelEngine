@@ -1,8 +1,9 @@
 
 namespace Kabic.CSharp;
 
-using Kabic;
 using System.Text.RegularExpressions;
+
+using Kabic;
 
 /// <summary>
 /// Maps the spellings of a C ABI to the spellings a C# file uses: names to PascalCase and
@@ -13,10 +14,19 @@ public static class Idioms
 {
     static readonly Dictionary<string, string> Prim = new()
     {
-        ["_Bool"] = "bool", ["uint32_t"] = "uint", ["int32_t"] = "int",
-        ["uint64_t"] = "ulong", ["int64_t"] = "long", ["float"] = "float", ["double"] = "double",
-        ["void"] = "void", ["size_t"] = "nuint",
-        ["uint16_t"] = "ushort", ["int16_t"] = "short", ["uint8_t"] = "byte", ["int8_t"] = "sbyte",
+        ["_Bool"] = "bool",
+        ["uint32_t"] = "uint",
+        ["int32_t"] = "int",
+        ["uint64_t"] = "ulong",
+        ["int64_t"] = "long",
+        ["float"] = "float",
+        ["double"] = "double",
+        ["void"] = "void",
+        ["size_t"] = "nuint",
+        ["uint16_t"] = "ushort",
+        ["int16_t"] = "short",
+        ["uint8_t"] = "byte",
+        ["int8_t"] = "sbyte",
         ["char"] = "sbyte",
     };
 

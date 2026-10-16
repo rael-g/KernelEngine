@@ -85,6 +85,7 @@ List<Step> Gates() =>
         .Select(name => new Step($"kabic check {name}", "dotnet", ["run", "--project", "src/csharp/kabic/Kabic.Cli", "--", "check", name])),
     .. Directory.EnumerateFiles(Path.Combine(rootDir, "scripts"), "check_*.cs").Order()
         .Select(f => new Step(Path.GetFileName(f), "dotnet", ["run", f])),
+    new Step("dotnet format", "dotnet", ["format", "KernelEngine.slnx", "--verify-no-changes"]),
 ];
 
 int Run(Step step)

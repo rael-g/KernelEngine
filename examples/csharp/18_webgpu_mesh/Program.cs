@@ -1,7 +1,9 @@
 using System.Numerics;
+
 using KernelEngine.Ecs;
-using KernelEngine.Framework;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.Framework;
+using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
@@ -9,7 +11,7 @@ using KernelEngine.Scheduler;
 using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
-using KernelEngine.Logger;
+
 using Microsoft.Extensions.DependencyInjection;
 
 var render = new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir);
@@ -24,23 +26,23 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(render);
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
-var ecs     = sp.GetRequiredService<INativeEcs>();
+var ecs = sp.GetRequiredService<INativeEcs>();
 
 runtime.LoadModules(sp);
 
-var cube   = MeshPrimitives.Cube(render);
+var cube = MeshPrimitives.Cube(render);
 var orange = render.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
 
 EcsRegistry reg;
 unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
 var transformCid = reg.RegisterComponent<TransformComponent>(TransformComponent.Name);
-var worldCid     = reg.RegisterComponent<WorldTransformComponent>(WorldTransformComponent.Name);
-var cameraCid    = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
-var meshCid      = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
-var lightCid     = reg.RegisterComponent<DirectionalLightComponent>(DirectionalLightComponent.Name);
+var worldCid = reg.RegisterComponent<WorldTransformComponent>(WorldTransformComponent.Name);
+var cameraCid = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
+var meshCid = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
+var lightCid = reg.RegisterComponent<DirectionalLightComponent>(DirectionalLightComponent.Name);
 
 var cam = reg.CreateEntity();
 ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];
@@ -64,9 +66,9 @@ ref var sunL = ref reg.AddComponent<DirectionalLightComponent>(sun, lightCid)[0]
 sunL = DirectionalLightComponent.Default with
 {
     Direction = new Vector3(-0.4f, -1.0f, -0.3f),
-    Color     = Vector3.One,
+    Color = Vector3.One,
     Intensity = 3.0f,
-    Ambient   = new Vector3(0.03f, 0.03f, 0.04f),
+    Ambient = new Vector3(0.03f, 0.03f, 0.04f),
 };
 
 Console.WriteLine("[18_webgpu_mesh] Drawing a lit cube. Close the window to exit.");

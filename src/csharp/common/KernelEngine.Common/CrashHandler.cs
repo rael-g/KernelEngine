@@ -25,18 +25,18 @@ public static class CrashHandler
         if (OperatingSystem.IsWindows())
         {
             try { SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX); }
-            catch {  }
+            catch { }
 
             try { _set_abort_behavior_release(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT); } catch { }
-            try { _set_abort_behavior_debug  (0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT); } catch { }
+            try { _set_abort_behavior_debug(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT); } catch { }
 
             try
             {
-                _CrtSetReportMode(_CRT_WARN,   _CRTDBG_MODE_FILE);
-                _CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE);
+                _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+                _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
                 _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
             }
-            catch {  }
+            catch { }
 
             unsafe
             {
@@ -45,7 +45,7 @@ public static class CrashHandler
 
                 delegate* unmanaged[Cdecl]<int, void> sfp = &OnSigAbrt;
                 try { signal_release(SIGABRT, (IntPtr)sfp); } catch { }
-                try { signal_debug  (SIGABRT, (IntPtr)sfp); } catch { }
+                try { signal_debug(SIGABRT, (IntPtr)sfp); } catch { }
             }
         }
 
@@ -62,21 +62,21 @@ public static class CrashHandler
             Console.Error.WriteLine(ex?.ToString() ?? e.ExceptionObject?.ToString() ?? "(unknown)");
             Console.Error.Flush();
         }
-        catch {  }
+        catch { }
     }
 
     private const uint _CALL_REPORTFAULT = 2;
-    private const uint _WRITE_ABORT_MSG  = 1;
-    private const int  SIGABRT           = 22;
+    private const uint _WRITE_ABORT_MSG = 1;
+    private const int SIGABRT = 22;
 
     private const uint SEM_FAILCRITICALERRORS = 0x0001;
-    private const uint SEM_NOGPFAULTERRORBOX  = 0x0002;
+    private const uint SEM_NOGPFAULTERRORBOX = 0x0002;
     private const uint SEM_NOOPENFILEERRORBOX = 0x8000;
 
-    private const int _CRT_WARN          = 0;
-    private const int _CRT_ERROR         = 1;
-    private const int _CRT_ASSERT        = 2;
-    private const int _CRTDBG_MODE_FILE  = 1;
+    private const int _CRT_WARN = 0;
+    private const int _CRT_ERROR = 1;
+    private const int _CRT_ASSERT = 2;
+    private const int _CRTDBG_MODE_FILE = 1;
 
     [DllImport("kernel32.dll")]
     private static extern uint SetErrorMode(uint uMode);
@@ -101,9 +101,9 @@ public static class CrashHandler
     {
         try
         {
-            var t        = Thread.CurrentThread;
+            var t = Thread.CurrentThread;
             string tname = string.IsNullOrEmpty(t.Name) ? $"tid={t.ManagedThreadId}" : $"\"{t.Name}\" (tid={t.ManagedThreadId})";
-            string ts    = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            string ts = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
 
             Console.Error.WriteLine();
             Console.Error.WriteLine($"[FATAL] {ts} — process aborted (SIGABRT) on thread {tname}.");
@@ -116,7 +116,7 @@ public static class CrashHandler
             Console.Error.WriteLine(Environment.StackTrace);
             Console.Error.Flush();
         }
-        catch {  }
+        catch { }
         Environment.Exit(134);
     }
 
@@ -156,7 +156,7 @@ public static class CrashHandler
         };
 
         string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        string dumpPath  = Path.GetFullPath($"crash_{timestamp}.dmp");
+        string dumpPath = Path.GetFullPath($"crash_{timestamp}.dmp");
 
         try
         {
@@ -169,9 +169,9 @@ public static class CrashHandler
             {
                 var mei = new MINIDUMP_EXCEPTION_INFORMATION
                 {
-                    ThreadId          = GetCurrentThreadId(),
+                    ThreadId = GetCurrentThreadId(),
                     ExceptionPointers = exceptionInfo,
-                    ClientPointers    = false,
+                    ClientPointers = false,
                 };
                 Marshal.StructureToPtr(mei, exceptionPointers, false);
 
@@ -204,8 +204,8 @@ public static class CrashHandler
     [StructLayout(LayoutKind.Sequential, Pack = 4)]
     private struct MINIDUMP_EXCEPTION_INFORMATION
     {
-        public uint   ThreadId;
+        public uint ThreadId;
         public IntPtr ExceptionPointers;
-        public bool   ClientPointers;
+        public bool ClientPointers;
     }
 }

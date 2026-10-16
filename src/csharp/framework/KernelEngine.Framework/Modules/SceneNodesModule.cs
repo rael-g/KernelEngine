@@ -1,8 +1,9 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
+﻿using KernelEngine.Ecs;
 using KernelEngine.Input;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
 
@@ -46,7 +47,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         var (index, slices) = KernelEngine.Runtime.SystemCtx.Of(ctx).Slice();
         if (slices <= 1) return (0, count);
 
-        var per   = count / (int)slices;
+        var per = count / (int)slices;
         var first = (int)index * per;
         return (first, index == slices - 1 ? count : first + per);
     }
@@ -82,13 +83,13 @@ public sealed class SceneNodesModule : IRuntimeModule
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var scriptHost = services.GetRequiredService<ScriptHost>();
-        var world     = services.GetRequiredService<World>();
+        var world = services.GetRequiredService<World>();
         var sceneTree = world.SceneTree;
-        var input     = services.GetService<IInput>();
+        var input = services.GetService<IInput>();
         var evaluator = services.GetService<IActionEvaluator>();
 
         var hierarchyCid = scriptHost.CidOfName("hierarchy");
-        var nameCid      = scriptHost.CidOfName("name");
+        var nameCid = scriptHost.CidOfName("name");
 
         runtime.RegisterSystem("Scene.Input", RuntimePhase.PreUpdate, (_, _) =>
         {
@@ -119,7 +120,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             var uses = new List<NodeComponentUse>();
             probe.CollectBehaviorComponents(uses);
 
-            var owned  = new Dictionary<uint, bool>();
+            var owned = new Dictionary<uint, bool>();
             var reached = new Dictionary<uint, bool>();
             foreach (var use in uses)
             {
@@ -179,7 +180,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
         };
 
-        try   { _setup(scriptHost, services); }
+        try { _setup(scriptHost, services); }
         catch (Exception ex) { throw new InvalidOperationException("Scene setup failed", ex); }
     }
 

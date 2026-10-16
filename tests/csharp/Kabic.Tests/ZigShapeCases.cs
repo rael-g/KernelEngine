@@ -40,18 +40,18 @@ internal static class ZigShapeCases
             Register(what, failures =>
             {
                 var model = new ApiModel();
-            build(model);
-            var classified = Classifier.Classify(model, (providers ?? []).ToHashSet(), [], ProbeConvention.Value);
-            var emitted = ZigWriter.Render(model, classified, ProbeConvention.Value, foreign, ProbeErrorAbi.Model());
-            if (Environment.GetEnvironmentVariable("KE_ZIG_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                build(model);
+                var classified = Classifier.Classify(model, (providers ?? []).ToHashSet(), [], ProbeConvention.Value);
+                var emitted = ZigWriter.Render(model, classified, ProbeConvention.Value, foreign, ProbeErrorAbi.Model());
+                if (Environment.GetEnvironmentVariable("KE_ZIG_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 

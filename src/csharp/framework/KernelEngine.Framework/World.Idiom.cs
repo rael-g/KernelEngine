@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
@@ -33,10 +34,10 @@ public unsafe partial class World : IDisposable
     public World(ke_world_handle worldHandle, ke_scene_tree_handle treeHandle, IEcsRegistry ecs, IRuntime runtime)
         : this(worldHandle)
     {
-        _ownedTree   = treeHandle.@ref;
+        _ownedTree = treeHandle.@ref;
         _destroyTree = treeHandle.destroy;
-        Ecs          = ecs;
-        Runtime      = runtime;
+        Ecs = ecs;
+        Runtime = runtime;
     }
 
     /// <summary>

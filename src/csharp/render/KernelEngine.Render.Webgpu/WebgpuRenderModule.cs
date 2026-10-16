@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Configuration;
 using KernelEngine.Ecs;
@@ -6,11 +7,12 @@ using KernelEngine.Framework;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Native;
-using KernelEngine.Text.Native;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler;
+using KernelEngine.Text.Native;
 using KernelEngine.Window;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Render.Webgpu;
@@ -100,18 +102,18 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// </summary>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var window    = services.GetRequiredService<IWindow>();
-        var ecs       = services.GetRequiredService<INativeEcs>();
-        var logger    = services.GetService<INativeLogger>();
+        var window = services.GetRequiredService<IWindow>();
+        var ecs = services.GetRequiredService<INativeEcs>();
+        var logger = services.GetService<INativeLogger>();
         var scheduler = services.GetRequiredService<IScheduler>();
-        var world     = services.GetService<KernelEngine.Framework.World>();
+        var world = services.GetService<KernelEngine.Framework.World>();
 
         var win = ((INativeWindow)window).Native;
-        var rt  = ((INativeRuntime)runtime).Native;
-        var ec  = ecs.Native;
-        var lg  = logger != null ? logger.Native : null;
-        var sc  = ((INativeScheduler)scheduler).Native;
-        var wd  = world != null ? ((KernelEngine.Framework.INativeWorld)world).Native : null;
+        var rt = ((INativeRuntime)runtime).Native;
+        var ec = ecs.Native;
+        var lg = logger != null ? logger.Native : null;
+        var sc = ((INativeScheduler)scheduler).Native;
+        var wd = world != null ? ((KernelEngine.Framework.INativeWorld)world).Native : null;
 
         ke_error* err = null;
 
@@ -308,9 +310,14 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             native[i] = new ke_glyph_metrics
             {
                 codepoint = g.Codepoint,
-                u0 = g.U0, v0 = g.V0, u1 = g.U1, v1 = g.V1,
-                bearing_x = g.BearingX, bearing_y = g.BearingY,
-                width = g.Width, height = g.Height,
+                u0 = g.U0,
+                v0 = g.V0,
+                u1 = g.U1,
+                v1 = g.V1,
+                bearing_x = g.BearingX,
+                bearing_y = g.BearingY,
+                width = g.Width,
+                height = g.Height,
                 advance_x = g.AdvanceX,
             };
         }

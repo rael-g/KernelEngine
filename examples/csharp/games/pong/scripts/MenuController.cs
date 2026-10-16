@@ -1,7 +1,8 @@
 ﻿using System.Numerics;
+
 using KernelEngine.Framework;
-using KernelEngine.Text;
 using KernelEngine.Render;
+using KernelEngine.Text;
 
 namespace Pong;
 
@@ -13,9 +14,9 @@ namespace Pong;
 public sealed class MenuController : Node
 {
     private readonly IInputActionMap<PongAction> _actions;
-    private readonly ISceneRouter                _router;
-    private readonly IFontLoader                 _fontLoader;
-    private readonly IRenderResources             _resources;
+    private readonly ISceneRouter _router;
+    private readonly IFontLoader _fontLoader;
+    private readonly IRenderResources _resources;
 
     private Font? _font;
     private bool _prevLaunch;
@@ -24,10 +25,10 @@ public sealed class MenuController : Node
     public MenuController(IInputActionMap<PongAction> actions, ISceneRouter router, IFontLoader fontLoader,
                           IRenderResources resources)
     {
-        _actions    = actions;
-        _router     = router;
+        _actions = actions;
+        _router = router;
         _fontLoader = fontLoader;
-        _resources  = resources;
+        _resources = resources;
     }
 
     protected override void OnBind(ScriptHost scriptHost)
@@ -37,20 +38,20 @@ public sealed class MenuController : Node
 
         AddChild(new Label
         {
-            Text   = "Pong",
-            Font     = fontPath,
+            Text = "Pong",
+            Font = fontPath,
             FontSize = 72f,
-            Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
+            Color = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.5f, 0.0f),
             Offset = new Vector2(0f, 140f),
         }, "Title");
 
         AddChild(new Label
         {
-            Text   = "Press Space to start",
-            Font     = fontPath,
+            Text = "Press Space to start",
+            Font = fontPath,
             FontSize = 72f,
-            Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
+            Color = new Vector4(0.7f, 0.7f, 0.7f, 1f),
             Anchor = new Vector2(0.5f, 1.0f),
             Offset = new Vector2(0f, -120f),
         }, "Hint");
@@ -61,10 +62,10 @@ public sealed class MenuController : Node
     protected override void OnUpdate(in View view)
     {
         bool launch = _actions.IsPressed(PongAction.Launch, in view);
-        bool quit   = _actions.IsPressed(PongAction.Quit,   in view);
+        bool quit = _actions.IsPressed(PongAction.Quit, in view);
         if (launch && !_prevLaunch) _router.LoadScene<Scenes.Main>();
-        if (quit   && !_prevQuit)   Environment.Exit(0);
+        if (quit && !_prevQuit) Environment.Exit(0);
         _prevLaunch = launch;
-        _prevQuit   = quit;
+        _prevQuit = quit;
     }
 }

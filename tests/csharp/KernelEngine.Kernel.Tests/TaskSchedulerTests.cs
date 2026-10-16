@@ -1,6 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using Xunit;
+
 using SchedImpl = KernelEngine.Scheduler.Scheduler;
 
 namespace EngineTests;
@@ -60,9 +62,9 @@ public sealed class SchedulerTests
             *_ptr = new ke_scheduler
             {
                 dispatch_on_complete = &SyncDispatchOnComplete,
-                dispatch             = &SyncDispatch,
-                is_completed         = &AlwaysCompleted,
-                wait                 = &NoopWait,
+                dispatch = &SyncDispatch,
+                is_completed = &AlwaysCompleted,
+                wait = &NoopWait,
             };
             Scheduler = new SchedImpl(new ke_scheduler_handle { @ref = _ptr, destroy = &NoopDestroy });
         }

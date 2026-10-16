@@ -1,6 +1,7 @@
 using System.Numerics;
-using KernelEngine.Render;
+
 using KernelEngine.Asset;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
@@ -35,9 +36,9 @@ public static class ModelExtensions
         var materials = new MaterialHandle[sourceMaterials.Length];
         for (int i = 0; i < sourceMaterials.Length; i++)
         {
-            var m         = sourceMaterials[i];
-            var albedo    = m.AlbedoTextureIndex    >= 0 ? textures[m.AlbedoTextureIndex]    : default;
-            var normal    = m.NormalMapTextureIndex >= 0 ? (TextureHandle?)textures[m.NormalMapTextureIndex] : null;
+            var m = sourceMaterials[i];
+            var albedo = m.AlbedoTextureIndex >= 0 ? textures[m.AlbedoTextureIndex] : default;
+            var normal = m.NormalMapTextureIndex >= 0 ? (TextureHandle?)textures[m.NormalMapTextureIndex] : null;
             var baseColor = new Vector4(m.BaseColorR, m.BaseColorG, m.BaseColorB, m.BaseColorA);
             materials[i] = resources.CreateMaterial($"{rootName}#mat{i}", baseColor, m.Metallic, m.Roughness, albedo, normal);
         }
@@ -46,21 +47,21 @@ public static class ModelExtensions
         var nodes = new List<MeshRenderer>(sourceMeshes.Length);
         for (int i = 0; i < sourceMeshes.Length; i++)
         {
-            var src  = sourceMeshes[i];
-            var raw  = src.Vertices;
+            var src = sourceMeshes[i];
+            var raw = src.Vertices;
             var converted = new MeshVertex[raw.Length];
             for (int j = 0; j < raw.Length; j++)
             {
                 var v = raw[j];
                 converted[j] = new MeshVertex(
-                    new Vector3(v.X,  v.Y,  v.Z),
+                    new Vector3(v.X, v.Y, v.Z),
                     new Vector3(v.Nx, v.Ny, v.Nz),
-                    new Vector2(v.U,  v.V),
+                    new Vector2(v.U, v.V),
                     new Vector3(v.Tx, v.Ty, v.Tz));
             }
-            var mesh     = resources.UploadMesh($"{rootName}#mesh{i}", converted, src.Indices);
+            var mesh = resources.UploadMesh($"{rootName}#mesh{i}", converted, src.Indices);
             var material = src.MaterialIndex >= 0 ? materials[src.MaterialIndex] : default;
-            var name     = string.IsNullOrEmpty(src.Name) ? $"{rootName}.Mesh_{i}" : $"{rootName}.{src.Name}";
+            var name = string.IsNullOrEmpty(src.Name) ? $"{rootName}.Mesh_{i}" : $"{rootName}.{src.Name}";
             nodes.Add(scriptHost.AddNode(new MeshRenderer { MeshHandle = mesh, MaterialHandle = material }, name));
         }
         return nodes;

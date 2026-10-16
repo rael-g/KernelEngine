@@ -107,9 +107,9 @@ var rules = new List<Rule>
         Lines(sources.Where(s => s.Key.StartsWith("src/zig/", StringComparison.Ordinal) && s.Key.EndsWith(".zig", StringComparison.Ordinal)), l => bindingNumber.IsMatch(l))),
     new("no comment in a shader", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".slang", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),
-    new("no comment in a build manifest or a workflow", 2,
+    new("no comment in a build manifest, a workflow or the editor config", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".zon", StringComparison.Ordinal)), l => slashComment.IsMatch(l))
-            .Concat(Lines(sources.Where(s => s.Key.EndsWith(".yml", StringComparison.Ordinal)), l => hashComment.IsMatch(l)))),
+            .Concat(Lines(sources.Where(s => s.Key.EndsWith(".yml", StringComparison.Ordinal) || s.Key == ".editorconfig"), l => hashComment.IsMatch(l)))),
 };
 
 var failed = 0;
@@ -144,7 +144,7 @@ static string? LibraryRoot(string buildFile, string[] lines)
 
 static IEnumerable<string> Tracked(string rootDir)
 {
-    string[] roots = ["src", "scripts", "examples", "tests", "build.zig", "build.zig.zon", ".github"];
+    string[] roots = ["src", "scripts", "examples", "tests", "build.zig", "build.zig.zon", ".github", ".editorconfig"];
     string[] skipped = ["obj", "bin", "third_party", ".zig-cache", "zig-out", "zig-pkg", "node_modules"];
     foreach (var root in roots)
     {

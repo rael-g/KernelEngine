@@ -1,2 +1,2 @@
-﻿global using KernelEngine.Common.Native;
-global using KernelEngine.Audio.Native;
+﻿global using KernelEngine.Audio.Native;
+global using KernelEngine.Common.Native;

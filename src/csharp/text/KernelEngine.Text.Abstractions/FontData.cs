@@ -10,8 +10,8 @@ public sealed class FontData : IDisposable
     /// <summary>RGBA8 atlas bytes (<see cref="AtlasWidth"/> × <see cref="AtlasHeight"/> ×
     /// 4).</summary>
     public byte[] AtlasRgba { get; }
-    public uint   AtlasWidth { get; }
-    public uint   AtlasHeight { get; }
+    public uint AtlasWidth { get; }
+    public uint AtlasHeight { get; }
 
     /// <summary>One entry per baked glyph (UV + bearing + advance, in pixels at the font's
     /// size).</summary>
@@ -28,13 +28,13 @@ public sealed class FontData : IDisposable
     public FontData(byte[] atlasRgba, uint atlasWidth, uint atlasHeight,
                     GlyphMetrics[] glyphs, float lineHeight, float ascent)
     {
-        AtlasRgba   = atlasRgba;
-        AtlasWidth  = atlasWidth;
+        AtlasRgba = atlasRgba;
+        AtlasWidth = atlasWidth;
         AtlasHeight = atlasHeight;
-        Glyphs      = glyphs;
-        LineHeight  = lineHeight;
-        Ascent      = ascent;
+        Glyphs = glyphs;
+        LineHeight = lineHeight;
+        Ascent = ascent;
     }
 
-    public void Dispose() {  }
+    public void Dispose() { }
 }

@@ -1,6 +1,7 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
+
 using Xunit;
 
 namespace KernelEngine.Runtime.Tests;
@@ -8,7 +9,7 @@ namespace KernelEngine.Runtime.Tests;
 public class RuntimeTests : IDisposable
 {
     private readonly EnkiScheduler _taskScheduler = new();
-    private readonly FlecsEcs          _ecs           = new();
+    private readonly FlecsEcs _ecs = new();
 
     public void Dispose()
     {

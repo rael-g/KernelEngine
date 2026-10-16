@@ -1,5 +1,5 @@
-using Kabic.Pipeline;
 using Kabic.Conventions;
+using Kabic.Pipeline;
 
 namespace Kabic.Cli;
 

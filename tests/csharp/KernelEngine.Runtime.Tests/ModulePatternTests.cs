@@ -1,7 +1,9 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler.Enki;
+
 using Microsoft.Extensions.DependencyInjection;
+
 using Xunit;
 
 namespace KernelEngine.Runtime.Tests;
@@ -9,7 +11,7 @@ namespace KernelEngine.Runtime.Tests;
 public class ModulePatternTests : IDisposable
 {
     private readonly EnkiScheduler _taskScheduler = new();
-    private readonly FlecsEcs          _ecs           = new();
+    private readonly FlecsEcs _ecs = new();
 
     public void Dispose()
     {
@@ -20,8 +22,8 @@ public class ModulePatternTests : IDisposable
     private sealed class SimpleModule : IRuntimeModule
     {
         public bool ConfigureCalled { get; private set; }
-        public bool OnLoadCalled    { get; private set; }
-        public int  TimesRegistered { get; set; }
+        public bool OnLoadCalled { get; private set; }
+        public int TimesRegistered { get; set; }
 
         public void Configure(IServiceCollection services)
         {

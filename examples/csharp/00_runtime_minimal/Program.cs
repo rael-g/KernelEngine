@@ -1,13 +1,15 @@
 ﻿using System.Diagnostics;
-using KernelEngine.Ecs.Flecs;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
+
 using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
+using KernelEngine.Ecs.Flecs;
 using KernelEngine.Logger;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 #region compose
 var services = new ServiceCollection()
@@ -21,15 +23,15 @@ var services = new ServiceCollection()
 
 #region load
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 #endregion
 
-var sw           = Stopwatch.StartNew();
+var sw = Stopwatch.StartNew();
 double lastPrint = 0;
-long   ticks     = 0;
+long ticks = 0;
 #region system
 runtime.RegisterSystem("FpsCounter", RuntimePhase.Update, (_, _) =>
 {

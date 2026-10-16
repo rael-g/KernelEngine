@@ -1,17 +1,19 @@
 using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -56,24 +58,24 @@ var services = new ServiceCollection()
         tree.AddNode(new DirectionalLight
         {
             Direction = Vector3.Normalize(new Vector3(0.4f, 1f, 0.6f)),
-            Color     = Vector3.One,
+            Color = Vector3.One,
             Intensity = 2f,
         }, "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 0f, 6f);
 
-        var cube  = KernelEngine.Render.MeshPrimitives.Cube(resources);
-        var gray  = resources.CreateMaterial("gray", new Vector4(0.6f, 0.6f, 0.6f, 1f));
-        var back  = tree.AddNode(new MeshRenderer { MeshHandle = cube, MaterialHandle = gray }, "OpaqueCube");
+        var cube = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        var gray = resources.CreateMaterial("gray", new Vector4(0.6f, 0.6f, 0.6f, 1f));
+        var back = tree.AddNode(new MeshRenderer { MeshHandle = cube, MaterialHandle = gray }, "OpaqueCube");
         back.Position = new Vector3(0f, 0f, -2f);
         back.Scale = new Vector3(1.5f);
 
         var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
-        var red  = resources.CreateMaterial("red", new Vector4(1f, 0.15f, 0.15f, 0.5f), alphaMode: AlphaMode.Blend);
+        var red = resources.CreateMaterial("red", new Vector4(1f, 0.15f, 0.15f, 0.5f), alphaMode: AlphaMode.Blend);
         var blue = resources.CreateMaterial("blue", new Vector4(0.15f, 0.35f, 1f, 0.5f), alphaMode: AlphaMode.Blend);
 
-        var far  = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = red }, "FarQuad");
+        var far = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = red }, "FarQuad");
         far.Position = new Vector3(-0.4f, 0f, 0f);
         far.Scale = new Vector3(2f);
 
@@ -89,7 +91,7 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);

@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common.Native;
 
 namespace KernelEngine.Ecs;
@@ -19,7 +20,7 @@ public ref struct VariantReader
     public unsafe VariantReader(ke_variant_table_entry* entries, uint count)
     {
         _entries = (nint)entries;
-        _count   = count;
+        _count = count;
     }
 
     /// <summary>Number of entries in the table.</summary>

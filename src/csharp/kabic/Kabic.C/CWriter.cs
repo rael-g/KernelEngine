@@ -134,13 +134,13 @@ public static class CWriter
             return table.Variants.ContainsKey(projected) ? projected : null;
         return type switch
         {
-            "float" or "double"                        => "float",
-            "bool" or "_Bool"                          => "bool",
+            "float" or "double" => "float",
+            "bool" or "_Bool" => "bool",
             "int8_t" or "int16_t" or "int32_t" or "int64_t" => "int",
             "uint8_t" or "uint16_t" or "uint32_t" or "uint64_t" => "int",
-            "int" or "unsigned" or "unsigned int"      => "int",
-            var t when t.StartsWith("char[")           => "string",
-            _                                          => null,
+            "int" or "unsigned" or "unsigned int" => "int",
+            var t when t.StartsWith("char[") => "string",
+            _ => null,
         };
     }
 

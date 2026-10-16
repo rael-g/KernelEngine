@@ -1,13 +1,14 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text;
+
 using KernelEngine.Asset;
-using KernelEngine.Text;
-using KernelEngine.Common.Native;
 using KernelEngine.Asset.Native;
-using KernelEngine.Render.Native;
-using KernelEngine.Text.Native;
-using KernelEngine.Ecs.Native;
 using KernelEngine.Common;
+using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Render.Native;
+using KernelEngine.Text;
+using KernelEngine.Text.Native;
 
 namespace KernelEngine.Framework;
 
@@ -17,7 +18,7 @@ namespace KernelEngine.Framework;
 /// </summary>
 public sealed unsafe class ResolvedTextureData : IImageData
 {
-    private ke_asset_resolver* _resolver;
+    private readonly ke_asset_resolver* _resolver;
     private ke_texture_data* _data;
 
     internal ResolvedTextureData(ke_asset_resolver* resolver, ke_texture_data* data)
@@ -61,7 +62,7 @@ public sealed unsafe class ResolvedTextureData : IImageData
 /// </summary>
 public sealed unsafe class ResolvedMeshData : IDisposable
 {
-    private ke_asset_resolver* _resolver;
+    private readonly ke_asset_resolver* _resolver;
     private ke_mesh_shape_data _data;
     private bool _disposed;
 
@@ -107,13 +108,13 @@ public sealed unsafe class ResolvedMeshData : IDisposable
 /// </summary>
 public sealed unsafe class ResolvedFontData : IDisposable
 {
-    private ke_asset_resolver* _resolver;
+    private readonly ke_asset_resolver* _resolver;
     private ke_font_data* _data;
 
     internal ResolvedFontData(ke_asset_resolver* resolver, ke_font_data* data)
     {
         _resolver = resolver;
-        _data     = data;
+        _data = data;
     }
 
     /// <summary>Atlas RGBA8 pixel data. Valid only while this instance is not disposed.</summary>
@@ -128,7 +129,7 @@ public sealed unsafe class ResolvedFontData : IDisposable
     }
 
     /// <summary>Atlas width in pixels.</summary>
-    public uint AtlasWidth  => _data != null ? _data->atlas_width  : 0u;
+    public uint AtlasWidth => _data != null ? _data->atlas_width : 0u;
 
     /// <summary>Atlas height in pixels.</summary>
     public uint AtlasHeight => _data != null ? _data->atlas_height : 0u;
@@ -186,11 +187,11 @@ public sealed record MaterialSpec
     {
         return new MaterialSpec
         {
-            BaseColor   = [spec.base_color[0], spec.base_color[1], spec.base_color[2], spec.base_color[3]],
-            Metallic    = spec.metallic,
-            Roughness   = spec.roughness,
-            AlbedoPath  = new string((sbyte*)&spec.albedo_path),
-            NormalPath  = new string((sbyte*)&spec.normal_path),
+            BaseColor = [spec.base_color[0], spec.base_color[1], spec.base_color[2], spec.base_color[3]],
+            Metallic = spec.metallic,
+            Roughness = spec.roughness,
+            AlbedoPath = new string((sbyte*)&spec.albedo_path),
+            NormalPath = new string((sbyte*)&spec.normal_path),
         };
     }
 }

@@ -30,8 +30,8 @@ public static class GameActionsEnumEditor
 
     private static string InsertMember(SourceText text, EnumDeclarationSyntax decl, string memberName)
     {
-        var raw  = text.ToString();
-        var nl   = raw.Contains("\r\n") ? "\r\n" : "\n";
+        var raw = text.ToString();
+        var nl = raw.Contains("\r\n") ? "\r\n" : "\n";
 
         if (decl.Members.Count == 0)
         {
@@ -52,12 +52,12 @@ public static class GameActionsEnumEditor
         if (separators.Count == decl.Members.Count)
         {
             spliceAt = separators[^1].FullSpan.End;
-            prefix   = "";
+            prefix = "";
         }
         else
         {
             spliceAt = decl.Members[^1].FullSpan.End;
-            prefix   = ",";
+            prefix = ",";
             while (spliceAt > 0 && (raw[spliceAt - 1] == '\n' || raw[spliceAt - 1] == '\r')) spliceAt--;
         }
 

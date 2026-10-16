@@ -21,7 +21,7 @@ public interface IFontLoader : IDisposable
     Task<FontData> LoadFontAsync(
         string path,
         float pixelSize,
-        uint atlasSize     = 512,
+        uint atlasSize = 512,
         uint firstCodepoint = 32,
         uint codepointCount = 95);
 }

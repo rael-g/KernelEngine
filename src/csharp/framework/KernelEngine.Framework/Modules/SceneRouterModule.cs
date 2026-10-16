@@ -1,7 +1,8 @@
 ﻿using KernelEngine.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
 
@@ -17,7 +18,7 @@ namespace KernelEngine.Framework;
 public sealed class SceneRouterModule : IRuntimeModule
 {
     private readonly string? _initialSceneOverride;
-    private readonly Type    _sceneModuleDependency;
+    private readonly Type _sceneModuleDependency;
 
     /// <summary>The module name, "Scene.Router".</summary>
     public string Name => "Scene.Router";
@@ -31,7 +32,7 @@ public sealed class SceneRouterModule : IRuntimeModule
     /// </param>
     public SceneRouterModule(string? initialScene = null, Type? sceneModuleDependency = null)
     {
-        _initialSceneOverride  = initialScene;
+        _initialSceneOverride = initialScene;
         _sceneModuleDependency = sceneModuleDependency ?? typeof(SceneNodesModule);
     }
 
@@ -48,11 +49,11 @@ public sealed class SceneRouterModule : IRuntimeModule
     /// <exception cref="InvalidOperationException">The initial scene fails to load.</exception>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var loader    = services.GetRequiredService<SceneLoader>();
+        var loader = services.GetRequiredService<SceneLoader>();
         var scriptHost = services.GetRequiredService<ScriptHost>();
-        var types     = services.GetRequiredService<NodeTypeRegistry>();
-        var router    = services.GetRequiredService<SceneRouter>();
-        var initial   = ResolveInitialScene(services);
+        var types = services.GetRequiredService<NodeTypeRegistry>();
+        var router = services.GetRequiredService<SceneRouter>();
+        var initial = ResolveInitialScene(services);
 
         loader.RegisterScriptFactory((entity, typeName) =>
         {
@@ -88,8 +89,8 @@ public sealed class SceneRouterModule : IRuntimeModule
     private static string NormalizeSceneName(string raw)
     {
         var s = raw;
-        if (s.StartsWith("res://", StringComparison.Ordinal))   s = s.Substring(6);
-        if (s.StartsWith("scenes/", StringComparison.Ordinal))  s = s.Substring(7);
+        if (s.StartsWith("res://", StringComparison.Ordinal)) s = s.Substring(6);
+        if (s.StartsWith("scenes/", StringComparison.Ordinal)) s = s.Substring(7);
         if (s.EndsWith(".scene.toml", StringComparison.Ordinal)) s = s.Substring(0, s.Length - 11);
         else if (s.EndsWith(".scene", StringComparison.Ordinal)) s = s.Substring(0, s.Length - 6);
         return s;

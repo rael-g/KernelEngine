@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Logger.Native;
 
@@ -28,11 +29,11 @@ public sealed unsafe partial class Logger : ILogger
         }
     }
 
-    public void Trace(string tag, string message)    => Log(LogLevel.Trace, tag, message);
-    public void Debug(string tag, string message)    => Log(LogLevel.Debug, tag, message);
-    public void Info(string tag, string message)     => Log(LogLevel.Info, tag, message);
-    public void Warning(string tag, string message)  => Log(LogLevel.Warning, tag, message);
-    public void Error(string tag, string message)    => Log(LogLevel.Error, tag, message);
+    public void Trace(string tag, string message) => Log(LogLevel.Trace, tag, message);
+    public void Debug(string tag, string message) => Log(LogLevel.Debug, tag, message);
+    public void Info(string tag, string message) => Log(LogLevel.Info, tag, message);
+    public void Warning(string tag, string message) => Log(LogLevel.Warning, tag, message);
+    public void Error(string tag, string message) => Log(LogLevel.Error, tag, message);
     public void Critical(string tag, string message) => Log(LogLevel.Critical, tag, message);
 
     /// <summary>

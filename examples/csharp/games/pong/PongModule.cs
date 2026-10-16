@@ -1,7 +1,8 @@
-﻿using KernelEngine.Framework;
-using Microsoft.Extensions.DependencyInjection;
+﻿using KernelEngine.Ecs;
+using KernelEngine.Framework;
 using KernelEngine.Runtime;
-using KernelEngine.Ecs;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Pong;
 
@@ -26,7 +27,7 @@ public sealed class PongModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var ecs   = services.GetRequiredService<IEcsRegistry>();
+        var ecs = services.GetRequiredService<IEcsRegistry>();
         var world = services.GetRequiredService<World>();
 
         Paddle.RegisterSceneApply(world, ecs);

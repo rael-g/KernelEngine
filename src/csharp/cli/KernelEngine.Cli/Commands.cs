@@ -9,9 +9,9 @@ public static class Commands
 {
     public static void AddModule(string id, string? projectDir)
     {
-        var ctx     = ProjectContext.Discover(projectDir);
+        var ctx = ProjectContext.Discover(projectDir);
         var catalog = ModuleCatalog.DiscoverInEngineRepo(ctx.EngineRoot);
-        var spec    = catalog.Get(id);
+        var spec = catalog.Get(id);
 
         var manifest = ProjectManifest.Load(ctx.ProjectFilePath);
         var newlyAdded = new List<string>();
@@ -42,9 +42,9 @@ public static class Commands
 
     public static void RemoveModule(string id, string? projectDir)
     {
-        var ctx     = ProjectContext.Discover(projectDir);
+        var ctx = ProjectContext.Discover(projectDir);
         var catalog = ModuleCatalog.DiscoverInEngineRepo(ctx.EngineRoot);
-        var spec    = catalog.Get(id);
+        var spec = catalog.Get(id);
 
         var manifest = ProjectManifest.Load(ctx.ProjectFilePath);
         if (!manifest.RemoveModule(id))
@@ -93,11 +93,11 @@ public static class Commands
 
     private static string Format(object value) => value switch
     {
-        bool b   => b ? "true" : "false",
+        bool b => b ? "true" : "false",
         double d => d.ToString("G", System.Globalization.CultureInfo.InvariantCulture),
-        long l   => l.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        long l => l.ToString(System.Globalization.CultureInfo.InvariantCulture),
         string s => s,
-        _        => value.ToString() ?? "",
+        _ => value.ToString() ?? "",
     };
 
     public static void AddInputAction(string name, string type, string? projectDir)
@@ -145,7 +145,7 @@ public static class Commands
             throw new ArgumentException(
                 $"'{name}' is not a valid project name (PascalCase, alphanumeric + underscore, no leading digit).");
 
-        var parent     = Path.GetFullPath(targetParentDir ?? Directory.GetCurrentDirectory());
+        var parent = Path.GetFullPath(targetParentDir ?? Directory.GetCurrentDirectory());
         var projectDir = Path.Combine(parent, name);
         if (Directory.Exists(projectDir) && Directory.EnumerateFileSystemEntries(projectDir).Any())
             throw new InvalidOperationException(
@@ -153,7 +153,7 @@ public static class Commands
 
         Directory.CreateDirectory(projectDir);
 
-        DotnetRunner.Run("new", "sln",     "-n", name, "-o", parent);
+        DotnetRunner.Run("new", "sln", "-n", name, "-o", parent);
         DotnetRunner.Run("new", "console", "-n", name, "-o", projectDir, "-f", "net10.0");
         var slnPath = new[] { ".slnx", ".sln" }
             .Select(ext => Path.Combine(parent, name + ext))
@@ -174,9 +174,9 @@ public static class Commands
 
     public static void ListModules(string? projectDir)
     {
-        var ctx     = ProjectContext.Discover(projectDir);
+        var ctx = ProjectContext.Discover(projectDir);
         var catalog = ModuleCatalog.DiscoverInEngineRepo(ctx.EngineRoot);
-        var active  = ProjectManifest.Load(ctx.ProjectFilePath).Modules.ToHashSet(StringComparer.Ordinal);
+        var active = ProjectManifest.Load(ctx.ProjectFilePath).Modules.ToHashSet(StringComparer.Ordinal);
 
         Console.WriteLine("ACTIVE in this project:");
         foreach (var id in active.OrderBy(x => x, StringComparer.Ordinal))

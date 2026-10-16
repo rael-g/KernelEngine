@@ -1,7 +1,8 @@
-using KernelEngine.Ecs.Flecs;
-using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Ecs;
+using KernelEngine.Ecs.Flecs;
 using KernelEngine.Runtime;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
 
@@ -57,10 +58,10 @@ public sealed class FrameworkModule : IRuntimeModule
             unsafe
             {
                 ke_signal_bus_params sp = default;
-                sp.max_signals      = _signalCapacities.MaxSignals;
-                sp.max_connections  = _signalCapacities.MaxConnections;
-                sp.max_events       = _signalCapacities.MaxEvents;
-                sp.max_deliveries   = _signalCapacities.MaxDeliveries;
+                sp.max_signals = _signalCapacities.MaxSignals;
+                sp.max_connections = _signalCapacities.MaxConnections;
+                sp.max_events = _signalCapacities.MaxEvents;
+                sp.max_deliveries = _signalCapacities.MaxDeliveries;
                 sp.payload_capacity = _signalCapacities.PayloadCapacity;
                 var h = KernelEngine.Framework.Native.NativeMethods.signal_bus_create(&sp, null);
                 if (h.@ref == null) throw new InvalidOperationException("signal_bus_create failed");
@@ -70,10 +71,10 @@ public sealed class FrameworkModule : IRuntimeModule
 
         services.AddSingleton<World>(sp =>
         {
-            var flecsEcs  = sp.GetRequiredService<INativeEcs>();
+            var flecsEcs = sp.GetRequiredService<INativeEcs>();
             var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
-            var ecs       = sp.GetRequiredService<IEcsRegistry>();
-            var runtime   = sp.GetRequiredService<IRuntime>();
+            var ecs = sp.GetRequiredService<IEcsRegistry>();
+            var runtime = sp.GetRequiredService<IRuntime>();
             unsafe
             {
                 var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
@@ -81,11 +82,11 @@ public sealed class FrameworkModule : IRuntimeModule
                 if (tree.@ref == null) throw new InvalidOperationException("scene_tree_create failed");
 
                 ke_world_params p = default;
-                p.ecs        = flecsEcs.Native;
-                p.runtime    = ((INativeRuntime)rtRuntime).Native;
+                p.ecs = flecsEcs.Native;
+                p.runtime = ((INativeRuntime)rtRuntime).Native;
                 p.scene_tree = tree.@ref;
                 p.signal_bus = ((INativeSignalBus)sp.GetRequiredService<SignalBus>()).Native;
-                p.logger     = sp.GetService<KernelEngine.Logger.INativeLogger>() is { } lg ? lg.Native : null;
+                p.logger = sp.GetService<KernelEngine.Logger.INativeLogger>() is { } lg ? lg.Native : null;
                 var w = KernelEngine.Framework.Native.NativeMethods.world_create(&p, null);
                 if (w.@ref == null) throw new InvalidOperationException("world_create failed");
                 return new World(w, tree, ecs, runtime);

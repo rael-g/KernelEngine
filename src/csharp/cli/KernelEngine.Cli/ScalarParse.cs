@@ -16,16 +16,16 @@ public static class ScalarParse
         return type switch
         {
             ScalarType.String => raw,
-            ScalarType.Bool   => ParseBool(raw),
-            ScalarType.Int    => long.Parse(raw, CultureInfo.InvariantCulture),
-            ScalarType.Float  => double.Parse(raw, CultureInfo.InvariantCulture),
-            _                 => Auto(raw),
+            ScalarType.Bool => ParseBool(raw),
+            ScalarType.Int => long.Parse(raw, CultureInfo.InvariantCulture),
+            ScalarType.Float => double.Parse(raw, CultureInfo.InvariantCulture),
+            _ => Auto(raw),
         };
     }
 
     private static object Auto(string raw)
     {
-        if (raw.Equals("true",  StringComparison.OrdinalIgnoreCase)) return true;
+        if (raw.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
         if (raw.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
         if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i)) return i;
         if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)) return d;

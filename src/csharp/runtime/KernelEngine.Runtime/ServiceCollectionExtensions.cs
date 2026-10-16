@@ -1,7 +1,8 @@
 ﻿
-using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Ecs;
 using KernelEngine.Scheduler;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Runtime;
 
@@ -27,7 +28,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection Add<TContract, TImpl>(this IServiceCollection services)
         where TContract : class
-        where TImpl     : class, TContract
+        where TImpl : class, TContract
     {
         return services.AddSingleton<TContract, TImpl>();
     }

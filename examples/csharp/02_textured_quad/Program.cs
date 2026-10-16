@@ -1,16 +1,18 @@
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -25,26 +27,26 @@ var services = new ServiceCollection()
     {
         var resources = sp.GetRequiredService<IRenderResources>();
 
-        const uint width  = 128;
+        const uint width = 128;
         const uint height = 128;
         var pixels = new byte[width * height * 4];
         for (int y = 0; y < height; y++)
-        for (int x = 0; x < width;  x++)
-        {
-            bool white = ((x / 16) + (y / 16)) % 2 == 0;
-            byte v = (byte)(white ? 255 : 64);
-            int  i = (y * (int)width + x) * 4;
-            pixels[i] = v; pixels[i + 1] = v; pixels[i + 2] = v; pixels[i + 3] = 255;
-        }
+            for (int x = 0; x < width; x++)
+            {
+                bool white = ((x / 16) + (y / 16)) % 2 == 0;
+                byte v = (byte)(white ? 255 : 64);
+                int i = (y * (int)width + x) * 4;
+                pixels[i] = v; pixels[i + 1] = v; pixels[i + 2] = v; pixels[i + 3] = 255;
+            }
         var tex = resources.UploadTexture("checker", width, height, pixels);
         var mat = resources.CreateMaterial("checker_mat", Vector4.One, albedo: tex);
 
         tree.AddNode(new DirectionalLight
         {
             Direction = new(0.2f, 1f, 0.5f),
-            Color     = Vector3.One,
+            Color = Vector3.One,
             Intensity = 1f,
-            Ambient   = new(0.2f, 0.2f, 0.2f),
+            Ambient = new(0.2f, 0.2f, 0.2f),
         }, "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
@@ -55,8 +57,8 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 

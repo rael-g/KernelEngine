@@ -1,5 +1,7 @@
 using System.Text;
+
 using KernelEngine.Common.Native;
+
 using ConfigNative = KernelEngine.Configuration.Native.NativeMethods;
 
 namespace KernelEngine.Configuration;

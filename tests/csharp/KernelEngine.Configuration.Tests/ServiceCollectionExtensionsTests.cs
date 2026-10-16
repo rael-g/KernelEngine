@@ -1,6 +1,8 @@
-using Xunit;
-using Microsoft.Extensions.DependencyInjection;
 using KernelEngine.Configuration;
+
+using Microsoft.Extensions.DependencyInjection;
+
+using Xunit;
 
 namespace KernelEngine.Configuration.Tests;
 

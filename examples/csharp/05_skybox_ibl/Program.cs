@@ -1,18 +1,20 @@
 using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
+using KernelEngine.Input;
 using KernelEngine.Logger;
 using KernelEngine.Render;
-using KernelEngine.Input;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -56,7 +58,7 @@ var services = new ServiceCollection()
 
         tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
-        var quad      = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var mirrorMat = resources.CreateMaterial("mirror", Vector4.One, metallic: 0.8f, roughness: 0.1f);
         tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mirrorMat }, "MirrorQuad");
 
@@ -71,8 +73,8 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 
@@ -106,21 +108,21 @@ sealed class FreeLook : Camera
     {
         float dt = view.DeltaTime;
 
-        if (view.IsKeyDown(262)) _yaw   += RotateDeg * dt;
-        if (view.IsKeyDown(263)) _yaw   -= RotateDeg * dt;
+        if (view.IsKeyDown(262)) _yaw += RotateDeg * dt;
+        if (view.IsKeyDown(263)) _yaw -= RotateDeg * dt;
         if (view.IsKeyDown(265)) _pitch += RotateDeg * dt;
         if (view.IsKeyDown(264)) _pitch -= RotateDeg * dt;
         _pitch = Math.Clamp(_pitch, -89f, 89f);
 
-        var rot     = Quaternion.CreateFromYawPitchRoll(_yaw * MathF.PI / 180f, _pitch * MathF.PI / 180f, 0f);
+        var rot = Quaternion.CreateFromYawPitchRoll(_yaw * MathF.PI / 180f, _pitch * MathF.PI / 180f, 0f);
         var forward = Vector3.Transform(-Vector3.UnitZ, rot);
-        var right   = Vector3.Transform(-Vector3.UnitX, rot);
+        var right = Vector3.Transform(-Vector3.UnitX, rot);
 
         var move = Vector3.Zero;
-        if (view.IsKeyDown(87))  move += forward;
-        if (view.IsKeyDown(83))  move -= forward;
-        if (view.IsKeyDown(65))  move -= right;
-        if (view.IsKeyDown(68))  move += right;
+        if (view.IsKeyDown(87)) move += forward;
+        if (view.IsKeyDown(83)) move -= forward;
+        if (view.IsKeyDown(65)) move -= right;
+        if (view.IsKeyDown(68)) move += right;
         if (view.IsKeyDown(340)) move += Vector3.UnitY;
         if (view.IsKeyDown(341)) move -= Vector3.UnitY;
         if (move != Vector3.Zero) move = Vector3.Normalize(move);

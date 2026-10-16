@@ -2,6 +2,7 @@ using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Physics.Native;
 using KernelEngine.Runtime;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Physics;
@@ -27,7 +28,7 @@ public sealed unsafe class Body2DModule : IRuntimeModule
     /// <inheritdoc />
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var ecs     = services.GetRequiredService<INativeEcs>();
+        var ecs = services.GetRequiredService<INativeEcs>();
         var physics = services.GetRequiredService<IPhysics2D>();
 
         var logger = services.GetService<KernelEngine.Logger.INativeLogger>();
@@ -35,9 +36,9 @@ public sealed unsafe class Body2DModule : IRuntimeModule
         var @params = new ke_physics_body2d_module_params
         {
             runtime = ((INativeRuntime)runtime).Native,
-            ecs     = ((INativeEcs)ecs).Native,
+            ecs = ((INativeEcs)ecs).Native,
             physics = ((INativePhysics2d)physics).Native,
-            logger  = logger is not null ? logger.Native : null,
+            logger = logger is not null ? logger.Native : null,
         };
 
         ke_error* err = null;

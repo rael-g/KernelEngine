@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+
 using Xunit;
 
 namespace EngineTests;
@@ -11,10 +12,10 @@ public unsafe class InputDrainTests
     private static uint MockDrainEvents(ke_input* self, ke_input_event* buffer, uint capacity)
     {
         if (capacity < 5) return 0;
-        
+
         buffer[0].kind = ke_input_event_kind.KE_INPUT_EVENT_KEY_DOWN;
         buffer[0].code = (int)Key.W;
-        
+
         buffer[1].kind = ke_input_event_kind.KE_INPUT_EVENT_MOUSE_SCROLL;
         buffer[1].x = 1.5f;
         buffer[1].y = -2.5f;
@@ -27,7 +28,7 @@ public unsafe class InputDrainTests
 
         buffer[4].kind = ke_input_event_kind.KE_INPUT_EVENT_MOUSE_BUTTON_UP;
         buffer[4].code = (int)MouseButton.Right;
-        
+
         return 5;
     }
 
@@ -35,8 +36,8 @@ public unsafe class InputDrainTests
     public void DrainEvents_TranslatesNativeToManaged()
     {
         var mock = (ke_input*)NativeMemory.AllocZeroed((nuint)sizeof(ke_input));
-        mock->drain_events = &MockDrainEvents;        var input = new Input(null);
-        
+        mock->drain_events = &MockDrainEvents; var input = new Input(null);
+
         var field = typeof(Input).GetField("_native", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         var oldNativeValue = field!.GetValue(input)!;
         field.SetValue(input, System.Reflection.Pointer.Box(mock, typeof(ke_input*)));

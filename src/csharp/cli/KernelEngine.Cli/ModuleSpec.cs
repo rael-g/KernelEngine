@@ -13,12 +13,12 @@ namespace KernelEngine.Cli;
 /// <param name="DependsOn">Ids that must come earlier in the topological order.</param>
 /// <param name="SourcePath">Absolute path to the .ke-module file (for error messages).</param>
 public sealed record ModuleSpec(
-    string   Id,
-    string   Using,
-    string   Extension,
-    string   CsprojRef,
+    string Id,
+    string Using,
+    string Extension,
+    string CsprojRef,
     string[] DependsOn,
-    string   SourcePath)
+    string SourcePath)
 {
     public static ModuleSpec FromFile(string path)
     {
@@ -41,11 +41,11 @@ public sealed record ModuleSpec(
         }
 
         return new ModuleSpec(
-            Id:         Req("id"),
-            Using:      Req("using"),
-            Extension:  Req("extension"),
-            CsprojRef:  Req("csproj-ref"),
-            DependsOn:  Arr("depends-on"),
+            Id: Req("id"),
+            Using: Req("using"),
+            Extension: Req("extension"),
+            CsprojRef: Req("csproj-ref"),
+            DependsOn: Arr("depends-on"),
             SourcePath: path);
     }
 }

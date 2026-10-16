@@ -150,7 +150,7 @@ public abstract class Node
     internal void UnbindFromScene()
     {
         ScriptHost = null;
-        Entity    = 0;
+        Entity = 0;
     }
 
     /// <summary>Whether this node is bound to <paramref name="world"/>.</summary>
@@ -165,7 +165,7 @@ public abstract class Node
     internal void PreBind(ScriptHost scriptHost, ulong entity)
     {
         ScriptHost = scriptHost;
-        Entity    = entity;
+        Entity = entity;
     }
 
     /// <summary>

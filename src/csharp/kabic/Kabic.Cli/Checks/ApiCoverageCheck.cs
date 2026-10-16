@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+
 using Kabic.Conventions;
 
 namespace Kabic.Cli.Checks;
@@ -18,12 +19,12 @@ internal static class ApiCoverageCheck
         var args = options.Raw;
         var excluded = new Dictionary<string, string>
         {
-            ["common/export.h"]                 = "visibility macros, no declarations",
-            ["common/common_export.h"]          = "visibility macros, no declarations",
+            ["common/export.h"] = "visibility macros, no declarations",
+            ["common/common_export.h"] = "visibility macros, no declarations",
             ["resource_cache/default/resource_cache_default_create.h"] = "created natively by plugins, no managed caller",
-            ["render/gpu/gpu_commands.h"]       = "L4 command surface, rebuilt per backend rather than bound once (named debt)",
-            ["render/service/pass_context.h"]   = "pass-internal; a pass is native, no managed caller",
-            ["framework/scene_hierarchy.h"]     = "systems registered by the framework itself, nothing to call",
+            ["render/gpu/gpu_commands.h"] = "L4 command surface, rebuilt per backend rather than bound once (named debt)",
+            ["render/service/pass_context.h"] = "pass-internal; a pass is native, no managed caller",
+            ["framework/scene_hierarchy.h"] = "systems registered by the framework itself, nothing to call",
 
             ["framework/scene_hierarchy_create.h"] = "created by the framework itself, no managed caller",
             ["render/cluster/cluster_create.h"] = "render pass factory, called only by render_module",

@@ -1,17 +1,19 @@
 using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -29,16 +31,16 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Features: shadow_map_directional, ortho_light_frustum, animated_sun");
 
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
-        var cubeMesh  = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
 
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.5f, 0.5f, 0.5f, 1f), roughness: 0.8f);
-        var redMat   = resources.CreateMaterial("red", new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
+        var redMat = resources.CreateMaterial("red", new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
 
         tree.AddNode(new AnimatedSun
         {
-            Color     = Vector3.One,
+            Color = Vector3.One,
             Intensity = 3f,
-            Ambient   = new(0.15f, 0.15f, 0.15f),
+            Ambient = new(0.15f, 0.15f, 0.15f),
         }, "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
@@ -52,8 +54,8 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 

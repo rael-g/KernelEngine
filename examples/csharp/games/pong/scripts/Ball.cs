@@ -1,4 +1,5 @@
 using System.Numerics;
+
 using KernelEngine.Framework;
 using KernelEngine.Physics;
 
@@ -15,7 +16,7 @@ public sealed partial class Ball : Body2D
     const float GoalLineMargin = 0.5f;
 
     private readonly IInputActionMap<PongAction> _actions;
-    private readonly ISceneRouter                _router;
+    private readonly ISceneRouter _router;
 
     /// <summary>Speed the ball is launched at, in metres per second.</summary>
     public partial float InitialSpeed { get; set; }
@@ -31,16 +32,16 @@ public sealed partial class Ball : Body2D
 
     public Ball(IInputActionMap<PongAction> actions, ISceneRouter router)
     {
-        _actions       = actions;
-        _router        = router;
-        InitialSpeed   = 6f;
+        _actions = actions;
+        _router = router;
+        InitialSpeed = 6f;
         AwaitingLaunch = true;
-        Type           = BodyType2D.Dynamic;
-        FixedRotation  = true;
+        Type = BodyType2D.Dynamic;
+        FixedRotation = true;
     }
 
     void Update(in View view,
-        [NodeName("HitSound")]   Descendant<AudioPlayer> hit,
+        [NodeName("HitSound")] Descendant<AudioPlayer> hit,
         [NodeName("ScoreSound")] Descendant<AudioPlayer> sfx,
         Emit<GoalScored> goal,
         Emit<BallLaunched> launched)
@@ -54,7 +55,7 @@ public sealed partial class Ball : Body2D
             hit.Node?.Play();
         LastVelocity = Velocity;
 
-        if (Position.X >  Field.HalfW + GoalLineMargin) Score(leftScored: true,  goal, sfx);
+        if (Position.X > Field.HalfW + GoalLineMargin) Score(leftScored: true, goal, sfx);
         if (Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, goal, sfx);
     }
 
@@ -65,7 +66,7 @@ public sealed partial class Ball : Body2D
         float dirX = Launches % 2 == 0 ? 1f : -1f;
         Launches++;
         float dirY = (Random.Shared.NextSingle() - 0.5f) * 0.6f;
-        Velocity     = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
+        Velocity = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
         LastVelocity = Velocity;
     }
 
@@ -73,9 +74,9 @@ public sealed partial class Ball : Body2D
     {
         goal.Send(new GoalScored(leftScored));
         sfx.Node?.Play();
-        Position       = Vector2.Zero;
-        Velocity       = Vector2.Zero;
-        LastVelocity   = Vector2.Zero;
+        Position = Vector2.Zero;
+        Velocity = Vector2.Zero;
+        LastVelocity = Vector2.Zero;
         AwaitingLaunch = true;
     }
 }

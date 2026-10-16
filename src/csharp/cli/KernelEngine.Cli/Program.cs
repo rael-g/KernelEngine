@@ -1,4 +1,5 @@
 ﻿using System.CommandLine;
+
 using KernelEngine.Cli;
 
 var projectOpt = new Option<string?>("--project") { Description = "Project directory (default: walk up from CWD)." };
@@ -13,8 +14,8 @@ var addModuleCmd = new Command("module", "Add a module to the current project.")
 };
 addModuleCmd.SetAction(parseResult =>
 {
-    var id          = parseResult.GetValue(addModuleIdArg)!;
-    var projectArg  = parseResult.GetValue(projectOpt);
+    var id = parseResult.GetValue(addModuleIdArg)!;
+    var projectArg = parseResult.GetValue(projectOpt);
     return Run(() => Commands.AddModule(id, projectArg));
 });
 
@@ -41,8 +42,8 @@ var removeModuleCmd = new Command("module", "Remove a module from the current pr
 };
 removeModuleCmd.SetAction(parseResult =>
 {
-    var id          = parseResult.GetValue(removeModuleIdArg)!;
-    var projectArg  = parseResult.GetValue(projectOpt);
+    var id = parseResult.GetValue(removeModuleIdArg)!;
+    var projectArg = parseResult.GetValue(projectOpt);
     return Run(() => Commands.RemoveModule(id, projectArg));
 });
 
@@ -57,18 +58,18 @@ listModulesCmd.SetAction(parseResult =>
 
 var listCmd = new Command("list", "Enumerate entities matching a filter.") { listModulesCmd };
 
-var setConfigPathArg  = new Argument<string>("path")  { Description = "Dotted TOML path inside Project (e.g. 'runtime.window.width')." };
+var setConfigPathArg = new Argument<string>("path") { Description = "Dotted TOML path inside Project (e.g. 'runtime.window.width')." };
 var setConfigValueArg = new Argument<string>("value") { Description = "Value as a string; auto-coerced to bool/int/float when it parses." };
-var setConfigTypeOpt  = new Option<ScalarParse.ScalarType>("--type") { Description = "Force scalar type (overrides auto-detect).", DefaultValueFactory = _ => ScalarParse.ScalarType.Auto };
+var setConfigTypeOpt = new Option<ScalarParse.ScalarType>("--type") { Description = "Force scalar type (overrides auto-detect).", DefaultValueFactory = _ => ScalarParse.ScalarType.Auto };
 var setConfigCmd = new Command("config", "Set a scalar value in the project Project file.")
 {
     setConfigPathArg, setConfigValueArg, setConfigTypeOpt,
 };
 setConfigCmd.SetAction(parseResult =>
 {
-    var path  = parseResult.GetValue(setConfigPathArg)!;
+    var path = parseResult.GetValue(setConfigPathArg)!;
     var value = parseResult.GetValue(setConfigValueArg)!;
-    var type  = parseResult.GetValue(setConfigTypeOpt);
+    var type = parseResult.GetValue(setConfigTypeOpt);
     var projectArg = parseResult.GetValue(projectOpt);
     return Run(() => Commands.SetConfig(path, value, type, projectArg));
 });

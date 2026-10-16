@@ -1,4 +1,5 @@
 using System.Numerics;
+
 using KernelEngine.Framework;
 using KernelEngine.Physics;
 
@@ -21,7 +22,7 @@ public sealed partial class Paddle : Body2D
     public Paddle(IInputActionMap<PongAction> actions)
     {
         _actions = actions;
-        Type     = BodyType2D.Kinematic;
+        Type = BodyType2D.Kinematic;
     }
 
     void Update(in View view)
@@ -29,7 +30,7 @@ public sealed partial class Paddle : Body2D
         float vy = _actions.GetAxis1D(MoveAction, in view) * Speed;
 
         float maxY = Field.HalfH - Field.WallThickness - HalfH;
-        if (vy > 0 && Position.Y >=  maxY) vy = 0;
+        if (vy > 0 && Position.Y >= maxY) vy = 0;
         if (vy < 0 && Position.Y <= -maxY) vy = 0;
 
         Velocity = new Vector2(0f, vy);

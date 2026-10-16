@@ -1,5 +1,6 @@
 ﻿using KernelEngine.Configuration;
 using KernelEngine.Logger.Native;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Logger;

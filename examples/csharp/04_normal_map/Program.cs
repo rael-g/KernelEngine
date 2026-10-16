@@ -1,17 +1,19 @@
 using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -31,22 +33,22 @@ var services = new ServiceCollection()
         const uint w = 128, h = 128;
         var pixels = new byte[w * h * 4];
         for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++)
-        {
-            float nx = MathF.Sin(x / 8.0f * 2f * MathF.PI);
-            float ny = MathF.Cos(y / 8.0f * 2f * MathF.PI);
-            float nz = 1.0f;
-            float inv = 1f / MathF.Sqrt(nx * nx + ny * ny + nz * nz);
-            nx *= inv; ny *= inv; nz *= inv;
-            int i = (y * (int)w + x) * 4;
-            pixels[i]     = (byte)((nx * 0.5f + 0.5f) * 255);
-            pixels[i + 1] = (byte)((ny * 0.5f + 0.5f) * 255);
-            pixels[i + 2] = (byte)((nz * 0.5f + 0.5f) * 255);
-            pixels[i + 3] = 255;
-        }
+            for (int x = 0; x < w; x++)
+            {
+                float nx = MathF.Sin(x / 8.0f * 2f * MathF.PI);
+                float ny = MathF.Cos(y / 8.0f * 2f * MathF.PI);
+                float nz = 1.0f;
+                float inv = 1f / MathF.Sqrt(nx * nx + ny * ny + nz * nz);
+                nx *= inv; ny *= inv; nz *= inv;
+                int i = (y * (int)w + x) * 4;
+                pixels[i] = (byte)((nx * 0.5f + 0.5f) * 255);
+                pixels[i + 1] = (byte)((ny * 0.5f + 0.5f) * 255);
+                pixels[i + 2] = (byte)((nz * 0.5f + 0.5f) * 255);
+                pixels[i + 3] = 255;
+            }
         var nm = resources.UploadTexture("bumps_normal", w, h, pixels);
 
-        var matPlain  = resources.CreateMaterial("plain", Vector4.One, roughness: 0.3f);
+        var matPlain = resources.CreateMaterial("plain", Vector4.One, roughness: 0.3f);
         var matNormal = resources.CreateMaterial("normal_mapped", Vector4.One, roughness: 0.3f, normalMap: nm);
 
         tree.AddNode(
@@ -66,8 +68,8 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 

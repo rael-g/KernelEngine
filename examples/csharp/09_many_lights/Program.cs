@@ -1,17 +1,19 @@
 using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 int LightCount = int.TryParse(Environment.GetEnvironmentVariable("LIGHT_COUNT"), out var lc) ? lc : 10000;
 bool EnableShadows = Environment.GetEnvironmentVariable("ENABLE_SHADOWS") != "0";
@@ -74,17 +76,17 @@ var services = new ServiceCollection()
 
             tree.AddNode(new CorridorLight(rand, anchor)
             {
-                Color     = new Vector3((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble()),
+                Color = new Vector3((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble()),
                 Intensity = 2f + (float)rand.NextDouble() * 3f,
-                Radius    = 4f + (float)rand.NextDouble() * 4f,
-                Speed     = 0.5f + (float)rand.NextDouble() * 2f,
+                Radius = 4f + (float)rand.NextDouble() * 4f,
+                Speed = 0.5f + (float)rand.NextDouble() * 2f,
             }, $"Light_{i}");
         }
     }));
 
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 
@@ -108,7 +110,7 @@ while (!window.ShouldClose())
         double fps = frameCount / (now - fpsWindowStart);
         double frameMs = fps > 0 ? 1000.0 / fps : 0.0;
         Console.WriteLine($"[KernelEngine] FPS: {fps:F2} ({frameMs:F2} ms/frame)  Lights: {LightCount}p");
-        frameCount     = 0;
+        frameCount = 0;
         fpsWindowStart = now;
     }
 }
