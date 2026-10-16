@@ -111,6 +111,8 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const libraries_step = b.allocator.create(std.Build.Step) catch @panic("OOM");
+    libraries_step.* = std.Build.Step.init(.{ .id = .custom, .name = "plugin libraries", .owner = b });
     var ctx = Ctx{
         .b = b,
         .root = root,
@@ -120,6 +122,7 @@ pub fn build(b: *std.Build) void {
         .slangc_exe = slangc_exe,
         .slang_step = &slang_fetch.step,
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
+        .libraries_step = libraries_step,
         .test_step = b.step("test", "Run every plugin's own Zig tests"),
         .docs_step = b.step("docs", "Write the documentation of the native sources and of kabic"),
     };
@@ -167,7 +170,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const input_default = ctx.member("ke_input_default", .{
+    _ = ctx.member("ke_input_default", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -212,7 +215,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const framework = ctx.member("ke_framework", .{
+    _ = ctx.member("ke_framework", .{
         .target = target,
         .optimize = optimize,
         .@"component-fields-src" = component_fields_src,
@@ -251,7 +254,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const asset_stb_image = ctx.member("ke_asset_stb_image", .{
+    _ = ctx.member("ke_asset_stb_image", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -265,7 +268,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const audio_miniaudio = ctx.member("ke_audio_miniaudio", .{
+    _ = ctx.member("ke_audio_miniaudio", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -281,7 +284,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&resource_cache_default.step, &common.step}, .has_tests);
 
-    const text_stb_truetype = ctx.member("ke_text_stb_truetype", .{
+    _ = ctx.member("ke_text_stb_truetype", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -294,7 +297,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const physics_box2d = ctx.member("ke_physics_2d_box2d", .{
+    _ = ctx.member("ke_physics_2d_box2d", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -319,7 +322,7 @@ pub fn build(b: *std.Build) void {
         else
             "libminizip.a" }),
     });
-    const asset_assimp = ctx.member("ke_asset_assimp", .{
+    _ = ctx.member("ke_asset_assimp", .{
         .target = target,
         .optimize = optimize,
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -334,7 +337,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const configuration = ctx.member("ke_configuration", .{
+    _ = ctx.member("ke_configuration", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -343,7 +346,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const configuration_toml = ctx.member("ke_configuration_toml", .{
+    _ = ctx.member("ke_configuration_toml", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -484,7 +487,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step }, .has_tests);
 
-    const physics_body2d = ctx.member("ke_physics_body2d", .{
+    _ = ctx.member("ke_physics_body2d", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -501,7 +504,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step }, .has_tests);
 
-    const audio_module = ctx.member("ke_audio_module", .{
+    _ = ctx.member("ke_audio_module", .{
         .target = target,
         .optimize = optimize,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
@@ -755,17 +758,7 @@ pub fn build(b: *std.Build) void {
         &deferred_lighting.step, &forward.step, &render_camera.step,
     }, .has_tests);
 
-    const all_plugins = [_]*std.Build.Step.InstallArtifact{
-        render_module,     common,                 logger_simple,      ecs_flecs,
-        input_default,     resource_cache_default, scheduler_enki,     runtime,
-        framework,         window_glfw,            asset_stb_image,    audio_miniaudio,
-        text_stb_truetype, physics_box2d,          physics_body2d,     asset_assimp,
-        configuration,     audio_module,           configuration_toml, tonemap,
-        skybox,            ui,                     shadow,             cluster,
-        deferred_lighting, gpu_device_webgpu,      gbuffer,            forward,
-        render_service,    render_camera,          binder_grouped,
-    };
-    for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
+    ctx.plugins_step.dependOn(ctx.libraries_step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
     b.getInstallStep().dependOn(ctx.plugins_step);
     ctx.plugins_step.dependOn(&wgpu_copy.step);
@@ -775,7 +768,7 @@ pub fn build(b: *std.Build) void {
     const stamp_text = abi_stamp.compute(b.allocator, stamp_threaded.io(), root) catch |err|
         std.debug.panic("cannot stamp the contract headers: {s}", .{@errorName(err)});
     const stamp_install = b.addInstallFileWithDir(b.addWriteFiles().add("abi.stamp", stamp_text), .prefix, "abi.stamp");
-    for (all_plugins) |p| stamp_install.step.dependOn(&p.step);
+    stamp_install.step.dependOn(ctx.libraries_step);
     stamp_install.step.dependOn(&wgpu_copy.step);
     b.getInstallStep().dependOn(&stamp_install.step);
     ctx.plugins_step.dependOn(&stamp_install.step);
@@ -785,7 +778,7 @@ pub fn build(b: *std.Build) void {
             "sh",                                                                                 "-c",
             b.fmt("cp -f '{s}'/*.dll '{s}'/", .{ lib_dir, b.pathJoin(&.{ ctx.prefix, "bin" }) }),
         });
-        for (all_plugins) |p| copy_dlls_to_bin.step.dependOn(&p.step);
+        copy_dlls_to_bin.step.dependOn(ctx.libraries_step);
         copy_dlls_to_bin.step.dependOn(&wgpu_copy.step);
         copy_dlls_to_bin.setName("copy plugin DLLs into bin/");
         b.getInstallStep().dependOn(&copy_dlls_to_bin.step);
@@ -1144,6 +1137,7 @@ const Ctx = struct {
     slangc_exe: []const u8,
     slang_step: *std.Build.Step,
     plugins_step: *std.Build.Step,
+    libraries_step: *std.Build.Step,
     test_step: *std.Build.Step,
     docs_step: *std.Build.Step,
     exe_suffix: []const u8,
@@ -1295,7 +1289,7 @@ const Ctx = struct {
         artifact.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| artifact.step.dependOn(d);
         const install = b.addInstallArtifact(artifact, .{ .dest_dir = .{ .override = .{ .custom = "lib" } } });
-        ctx.plugins_step.dependOn(&install.step);
+        ctx.libraries_step.dependOn(&install.step);
 
         switch (tests) {
             .no_tests => {},
