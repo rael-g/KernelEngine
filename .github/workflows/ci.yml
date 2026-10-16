@@ -112,6 +112,9 @@ jobs:
       - name: Managed tests
         run: dotnet run scripts/verify.cs -- test-managed
 
+      - name: Smoke test, a headless example run to its end
+        run: dotnet run scripts/verify.cs -- smoke
+
       - name: Gates
         if: runner.os == 'Linux'
         run: dotnet run scripts/verify.cs -- gates
