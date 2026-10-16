@@ -284,7 +284,6 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     gb.io.name = "render.gbuffer";
     gb.io.writes = @ptrCast(&gb.writes);
     gb.io.writes_count = 4;
-    gb.io.cmd_slot = 3;
 
     gb.access = .{
         .{ .cid = albedo_cid, .access = c.KE_ACCESS_WRITE },

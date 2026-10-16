@@ -4,23 +4,25 @@ const rc = @import("render_service.zig");
 const c = rc.c;
 const gpa = rc.gpa;
 
-/// Opens a pass in the command slot of the io. The encoder is the slot's precreated one, or a
-/// fresh one for a slot past the precreated ones. The pass and its context stay allocated until
-/// `endPass` frees them. Returns null, filling no error, when no frame is live or an allocation
-/// fails.
+/// Opens a pass on a command encoder of its own. The pass and its context stay allocated until
+/// `endPass` frees them. Returns null, filling no error, when no frame is live, the device gives
+/// no encoder or an allocation fails.
 pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
     const st = rc.coreOf(self);
     if (!st.frame_live) return null;
-    const ps = gpa.create(rc.PassState) catch return null;
-    const slot = io.*.cmd_slot;
-    const enc = if (slot < rc.NUM_PRECREATED_ENCODERS) st.cmd_encoders[slot] else st.device.create_command_encoder.?(st.device, null);
+    const enc: *c.ke_gpu_command_encoder = st.device.create_command_encoder.?(st.device, null) orelse return null;
+    const ps = gpa.create(rc.PassState) catch {
+        enc.destroy.?(enc);
+        return null;
+    };
     ps.* = .{
         .core = st,
         .io = io.*,
         .encoder = enc,
-        .is_compute = false,
+        .record = null,
     };
     const ctx = gpa.create(c.ke_render_pass_ctx) catch {
+        enc.destroy.?(enc);
         gpa.destroy(ps);
         return null;
     };
@@ -37,17 +39,17 @@ pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_i
     return ctx;
 }
 
-/// Hands the encoder back to its slot and frees the pass and its context, so the context pointer is
-/// invalid afterwards. The slot is flagged for submission unless the pass was compute, so a slot is
-/// either finished as a render encoder or replayed from its compute record. A slot past the
-/// command-buffer limit has no entry in the slot arrays, so its encoder is destroyed here instead.
+/// Places the pass's encoder next in the frame's submission order and frees the pass and its
+/// context, so the context pointer is invalid afterwards. A pass that depends on another declares
+/// access that conflicts with it, so the runtime runs it in a later wave and it ends later; passes
+/// of one wave end in any order, which none of them depends on. A pass past the command-buffer
+/// limit is not submitted and its encoder is destroyed here.
 pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) callconv(.c) void {
     const st = rc.coreOf(self);
     const ps = rc.passOf(ctx);
-    const slot = ps.io.cmd_slot;
-    if (slot < rc.MAX_CMD_BUFFERS) {
-        st.cmd_encoders[slot] = ps.encoder;
-        st.cmd_valid[slot] = !ps.is_compute;
+    const at = st.ended_count.fetchAdd(1, .monotonic);
+    if (at < rc.MAX_CMD_BUFFERS) {
+        st.ended[at] = .{ .encoder = ps.encoder, .record = ps.record };
     } else {
         ps.encoder.destroy.?(ps.encoder);
     }
@@ -123,18 +125,17 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     return ps.encoder.begin_render_pass.?(ps.encoder, &params);
 }
 
-/// Replaces the slot's record with an empty one and returns a compute pass that records into it;
-/// nothing runs until `endFrame` replays the record on the slot's encoder. Each call of the
-/// returned pass appends a `ComputeCmd`. A slot past the command-buffer limit gets null.
+/// Takes the frame's next free record, empties it and returns a compute pass that records into it;
+/// nothing runs until `endFrame` replays the record on the pass's encoder. Each call of the
+/// returned pass appends a `ComputeCmd`. Past the command-buffer limit it returns null.
 fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_compute_pass {
     const ps = rc.passOf(self);
-    ps.is_compute = true;
-    const slot = ps.io.cmd_slot;
-    if (slot >= rc.MAX_CMD_BUFFERS) return null;
-    const rec = &ps.core.compute_records[slot];
+    const at = ps.core.compute_count.fetchAdd(1, .monotonic);
+    if (at >= rc.MAX_CMD_BUFFERS) return null;
+    const rec = &ps.core.compute_records[at];
+    ps.record = rec;
     rec.cmds.clearRetainingCapacity();
     rec.offsets.clearRetainingCapacity();
-    rec.valid = true;
     rec.pass_label = rec.storeLabel(ps.io.name);
     rec.pass = .{
         .handle = rec,
@@ -199,7 +200,7 @@ fn cpInsertDebugMarker(self: [*c]c.ke_gpu_compute_pass, label: [*c]const u8) cal
     cpAppend(rec, .{ .insert_debug_marker = rec.storeLabel(label) });
 }
 
-/// Returns the slot's raw command encoder; the pass keeps recording into the same one.
+/// Returns the pass's raw command encoder; the pass keeps recording into the same one.
 fn ctxEncoder(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_command_encoder {
     return rc.passOf(self).encoder;
 }

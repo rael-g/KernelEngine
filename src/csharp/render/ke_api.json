@@ -229,12 +229,6 @@
           "doc": null
         },
         {
-          "name": "cmd_slot",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "The frame command-buffer slot this pass records into."
-        },
-        {
           "name": "load",
           "type": "uint32_t",
           "tags": [],

@@ -365,7 +365,6 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     cm.clusters_cid = core.*.import_tag.?(core, "light_clusters", null);
     cm.cull_io = std.mem.zeroes(c.ke_render_pass_io);
     cm.cull_io.name = "render.cull";
-    cm.cull_io.cmd_slot = 2;
     cm.cull_access = .{
         .{ .cid = cm.clusters_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = cm.point_light_cid, .access = c.KE_ACCESS_READ },

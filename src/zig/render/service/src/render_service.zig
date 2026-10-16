@@ -29,7 +29,6 @@ const shader_loader = @import("shader_loader.zig");
 const frame_globals = @import("frame_globals.zig");
 
 pub const MAX_CMD_BUFFERS = 64;
-pub const NUM_PRECREATED_ENCODERS = 9;
 pub const MAX_COLOR_ATTACH = 8;
 pub const first_upload_records = 4096;
 const first_resources = 16;
@@ -115,7 +114,6 @@ pub const ComputeRecord = struct {
     pass: c.ke_gpu_compute_pass,
     cmds: std.ArrayList(ComputeCmd),
     offsets: std.ArrayList(u32),
-    valid: bool,
     pass_label: ?u32,
     labels: std.ArrayList(u8),
 
@@ -160,10 +158,11 @@ pub const CoreState = struct {
 
     frame_live: bool,
 
-    cmd_encoders: [MAX_CMD_BUFFERS][*c]c.ke_gpu_command_encoder,
-    cmd_valid: [MAX_CMD_BUFFERS]bool,
+    ended: [MAX_CMD_BUFFERS]EndedPass,
+    ended_count: std.atomic.Value(u32),
 
     compute_records: [MAX_CMD_BUFFERS]ComputeRecord,
+    compute_count: std.atomic.Value(u32),
 
     upload_records: []UploadRecord,
     upload_spill: std.atomic.Value(?*SpilledUpload),
@@ -231,7 +230,14 @@ pub const PassState = struct {
     core: *CoreState,
     io: c.ke_render_pass_io,
     encoder: *c.ke_gpu_command_encoder,
-    is_compute: bool,
+    record: ?*ComputeRecord,
+};
+
+/// A pass that ended during the frame: its encoder, and the record replayed on it before it is
+/// finished when the pass recorded compute work. The frame submits them in the order they ended.
+pub const EndedPass = struct {
+    encoder: *c.ke_gpu_command_encoder,
+    record: ?*ComputeRecord,
 };
 
 /// The state behind a render service vtable.
@@ -361,9 +367,10 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .sized_h = bb_h,
         .resource_generation = 0,
         .frame_live = false,
-        .cmd_encoders = undefined,
-        .cmd_valid = std.mem.zeroes([MAX_CMD_BUFFERS]bool),
+        .ended = undefined,
+        .ended_count = std.atomic.Value(u32).init(0),
         .compute_records = undefined,
+        .compute_count = std.atomic.Value(u32).init(0),
         .upload_records = upload_records,
         .upload_spill = std.atomic.Value(?*SpilledUpload).init(null),
         .upload_count = std.atomic.Value(u32).init(0),
@@ -735,7 +742,6 @@ test "a compute pass replays at the end of the frame under its name and with the
 
     var io = std.mem.zeroes(c.ke_render_pass_io);
     io.name = "render.cull";
-    io.cmd_slot = 2;
 
     try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;

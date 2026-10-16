@@ -386,8 +386,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 /// `destroyState` to release. On success `io` and `access` describe the pass that `system` begins
 /// and the backbuffer write it makes.
 fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         ndc: c.ke_ndc_convention, bb_cid: c.ke_component_id,
-         cmd_slot: u32, out_error: [*c][*c]c.ke_error) bool {
+         ndc: c.ke_ndc_convention, bb_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
     ui.core = core;
     ui.device = dev;
     ui.ndc = ndc;
@@ -468,7 +467,6 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     ui.io.name = "render.ui";
     ui.io.writes = @ptrCast(&ui.writes);
     ui.io.writes_count = 1;
-    ui.io.cmd_slot = cmd_slot;
     ui.io.load = 1;
     ui.access = .{
         .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
@@ -516,8 +514,7 @@ fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
 /// first back. On success the returned handle owns the state until its destroy slot runs.
 export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*c.ke_render_service,
                                device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention,
-                               bb_cid: c.ke_component_id, cmd_slot: u32,
-                               out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_ui_handle {
+                               bb_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_ui_handle {
     const empty = c.ke_render_ui_handle{ .ref = null, .destroy = null };
     const rt = runtime orelse return empty;
     const e = ecs orelse return empty;
@@ -527,7 +524,7 @@ export fn ke_render_ui_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, core: ?*
     const ui = gpa.create(UiState) catch return empty;
     ui.* = .{};
     ui.api = .{ .handle = ui, .load_font = uiLoadFont };
-    if (!setup(ui, dev, core_ref, ndc, bb_cid, cmd_slot, out_error)) {
+    if (!setup(ui, dev, core_ref, ndc, bb_cid, out_error)) {
         destroyState(ui);
         gpa.destroy(ui);
         return empty;
@@ -591,7 +588,7 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
-    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -609,7 +606,7 @@ test "a ui pass whose shader fails to load releases what it had created" {
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
-    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -626,7 +623,7 @@ test "a ui pass the runtime refuses to register releases what it had created" {
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
-    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -643,7 +640,7 @@ test "a ui pass the runtime refuses its second system takes the first one back" 
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
-    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, 7, null);
+    const h = ke_render_ui_create(rt.api(), ecs.api(), core.api(), dev.api(), ndc, 1, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(u32, 0), rt.live_count);
     try testing.expectEqual(@as(i64, 0), dev.live);

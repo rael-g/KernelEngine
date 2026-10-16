@@ -350,7 +350,6 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.io.reads = @ptrCast(&fwd.reads);
     fwd.io.reads_count = if (shadow_enabled) 1 else 0;
     fwd.io.load = 1;
-    fwd.io.cmd_slot = 6;
 
     var ac: u32 = 0;
     fwd.access[ac] = .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE };

@@ -289,7 +289,6 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.io.name = "render.clear";
     st.io.writes = @ptrCast(&st.bb_writes);
     st.io.writes_count = 1;
-    st.io.cmd_slot = 0;
 
     const bb_cid = core_h.ref.*.cid.?(core_h.ref, "backbuffer");
     st.frame_cid = e.component_register.?(e, "render.frame", 0, null, 0, null);
@@ -428,7 +427,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         if (st.tonemap.ref == null) {
             return failCreate(rt, mark, st);
         }
-        st.ui = c.ke_render_ui_create(rt, e, st.core.ref, dev, ndc, bb_cid, 8, out_error);
+        st.ui = c.ke_render_ui_create(rt, e, st.core.ref, dev, ndc, bb_cid, out_error);
         if (st.ui.ref == null) {
             return failCreate(rt, mark, st);
         }

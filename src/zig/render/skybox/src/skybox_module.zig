@@ -188,7 +188,6 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sm.io.reads = @ptrCast(&sm.reads);
     sm.io.reads_count = 1;
     sm.io.load = 1;
-    sm.io.cmd_slot = 5;
 
     sm.access = .{
         .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE },

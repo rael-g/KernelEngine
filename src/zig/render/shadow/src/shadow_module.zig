@@ -277,7 +277,6 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sh.io.name = "render.shadow";
     sh.io.writes = @ptrCast(&sh.writes);
     sh.io.writes_count = 2;
-    sh.io.cmd_slot = 1;
     sh.access = .{
         .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = shadow_depth_cid, .access = c.KE_ACCESS_WRITE },

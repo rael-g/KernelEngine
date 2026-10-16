@@ -86,8 +86,6 @@ typedef struct ke_render_pass_io
     uint32_t           reads_count;
     const char *const *writes;
     uint32_t           writes_count;
-    /// The frame command-buffer slot this pass records into.
-    uint32_t           cmd_slot;
     /// When non-zero, color attachments load their existing contents instead of
     /// clearing.
     uint32_t           load;

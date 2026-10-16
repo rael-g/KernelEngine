@@ -53,8 +53,7 @@ extern "C"
 
     KE_RENDER_UI_API ke_render_ui_handle ke_render_ui_create(
         ke_runtime *runtime, ke_ecs *ecs, ke_render_service *core, ke_gpu_device *device,
-        ke_ndc_convention ndc, ke_component_id bb_cid, uint32_t cmd_slot,
-        ke_error **out_error);
+        ke_ndc_convention ndc, ke_component_id bb_cid, ke_error **out_error);
 
 #ifdef __cplusplus
 }

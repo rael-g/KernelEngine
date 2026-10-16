@@ -133,7 +133,6 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     tm.io.writes_count = 1;
     tm.io.reads = @ptrCast(&tm.reads);
     tm.io.reads_count = 1;
-    tm.io.cmd_slot = 7;
 
     tm.access = .{
         .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_READ },

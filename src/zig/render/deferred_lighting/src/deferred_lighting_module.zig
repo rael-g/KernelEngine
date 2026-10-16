@@ -222,7 +222,6 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     dl.io.writes_count = 1;
     dl.io.reads = @ptrCast(&dl.reads);
     dl.io.reads_count = if (shadow_enabled) 6 else 5;
-    dl.io.cmd_slot = 4;
 
     var ac: u32 = 0;
     dl.access[ac] = .{ .cid = hdr_cid, .access = c.KE_ACCESS_WRITE };

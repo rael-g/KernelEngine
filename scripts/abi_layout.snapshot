@@ -296,14 +296,13 @@ ke_render_lighting size=48 align=4
   direction 0
   color 16
   ambient 32
-ke_render_pass_io size=48 align=8
+ke_render_pass_io size=40 align=8
   name 0
   reads 8
   reads_count 16
   writes 24
   writes_count 32
-  cmd_slot 36
-  load 40
+  load 36
 ke_render_service size=368 align=8
   handle 0
   declare 8

@@ -6,17 +6,16 @@ const rc = @import("render_service.zig");
 const resource_table = @import("resource_table.zig");
 const c = rc.c;
 
-/// Opens a frame. The previous frame's slot flags, compute records and upload counters are
+/// Opens a frame. The previous frame's ended passes, compute records and upload counters are
 /// cleared before the target is acquired, so a failed acquire leaves the frame closed and
-/// returns zero with the target's error. Once it has returned one, the precreated encoders
-/// exist, the backbuffer size is read from the target, the "backbuffer" entry holds the acquired
-/// view and the frame is live.
+/// returns zero with the target's error. Once it has returned one, the backbuffer size is read
+/// from the target, the "backbuffer" entry holds the acquired view and the frame is live.
 pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     const st = rc.coreOf(self);
     st.frame_live = false;
-    @memset(st.cmd_valid[0..], false);
+    st.ended_count.store(0, .monotonic);
+    st.compute_count.store(0, .monotonic);
     for (&st.compute_records) |*r| {
-        r.valid = false;
         r.cmds.clearRetainingCapacity();
         r.offsets.clearRetainingCapacity();
         r.labels.clearRetainingCapacity();
@@ -25,10 +24,6 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     st.upload_arena_offset.store(0, .monotonic);
     const view = st.target.acquire.?(st.target, out_error);
     if (view == c.KE_GPU_INVALID_HANDLE) return 0;
-    var pe: u32 = 0;
-    while (pe < rc.NUM_PRECREATED_ENCODERS) : (pe += 1) {
-        st.cmd_encoders[pe] = st.device.create_command_encoder.?(st.device, null);
-    }
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
     resource_table.resizeRelative(st);
     if (st.find("backbuffer")) |bb| bb.view = view;
@@ -37,66 +32,55 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
 }
 
 /// Closes the frame. The queued uploads are written to their buffers before any command buffer
-/// is finished. Each slot flagged by `endPass` has its encoder finished, and a slot that holds
-/// only a compute record has the record replayed on its encoder first. The command buffers are
-/// submitted in one call and destroyed, the precreated encoders are destroyed, and the frame
-/// stops being live. Returns the result of the present, with the target's error on failure; the
-/// queue is polled whatever it returned. Returns zero and does nothing when no frame is live.
+/// is finished. Each pass that ended has its encoder finished in the order the passes ended, a
+/// compute record replayed on it first. The command buffers are submitted in one call and
+/// destroyed with their encoders, and the frame stops being live. Returns the result of the
+/// present, with the target's error on failure; the queue is polled whatever it returned. Returns
+/// zero and does nothing when no frame is live.
 pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
     const st = rc.coreOf(self);
     if (!st.frame_live) return 0;
 
     flushUploads(st);
 
+    const ended = st.ended[0..@min(st.ended_count.load(.monotonic), rc.MAX_CMD_BUFFERS)];
     var submit: [rc.MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer = undefined;
-    var n: u32 = 0;
-    var s: u32 = 0;
-    while (s < rc.MAX_CMD_BUFFERS) : (s += 1) {
-        if (st.cmd_valid[s]) {
-            const enc = st.cmd_encoders[s];
-            submit[n] = enc.*.finish.?(enc);
-            n += 1;
-        } else if (st.compute_records[s].valid) {
-            const enc = st.cmd_encoders[s];
-            const rec = &st.compute_records[s];
-            const cp = enc.*.begin_compute_pass.?(enc, &c.ke_gpu_compute_pass_params{ .label = rec.label(rec.pass_label) });
-            for (rec.cmds.items) |cmd| {
-                switch (cmd) {
-                    .set_pipeline => |p| cp.*.set_pipeline.?(cp, p),
-                    .set_bind_group => |b| {
-                        if (b.count > 0)
-                            cp.*.set_bind_group.?(cp, b.index, b.bg, rec.offsets.items[b.first_offset..].ptr, b.count)
-                        else
-                            cp.*.set_bind_group.?(cp, b.index, b.bg, null, 0);
-                    },
-                    .dispatch => |d| cp.*.dispatch.?(cp, d.x, d.y, d.z),
-                    .dispatch_indirect => |d| cp.*.dispatch_indirect.?(cp, d.buf, d.offset),
-                    .push_debug_group => |l| cp.*.push_debug_group.?(cp, rec.label(l)),
-                    .pop_debug_group => cp.*.pop_debug_group.?(cp),
-                    .insert_debug_marker => |l| cp.*.insert_debug_marker.?(cp, rec.label(l)),
-                }
-            }
-            cp.*.end.?(cp);
-            submit[n] = enc.*.finish.?(enc);
-            n += 1;
-        }
+    for (ended, 0..) |pass, i| {
+        if (pass.record) |rec| replay(pass.encoder, rec);
+        submit[i] = pass.encoder.*.finish.?(pass.encoder);
     }
-    if (n > 0) {
-        st.device.queue_submit.?(st.device, st.queue, &submit, n);
-        var i: u32 = 0;
-        while (i < n) : (i += 1) submit[i].*.destroy.?(submit[i]);
-        @memset(st.cmd_valid[0..], false);
+    if (ended.len > 0) {
+        st.device.queue_submit.?(st.device, st.queue, &submit, @intCast(ended.len));
+        for (submit[0..ended.len]) |cb| cb.*.destroy.?(cb);
     }
-    var pe: u32 = 0;
-    while (pe < rc.NUM_PRECREATED_ENCODERS) : (pe += 1) {
-        const enc = st.cmd_encoders[pe];
-        enc.*.destroy.?(enc);
-    }
+    for (ended) |pass| pass.encoder.*.destroy.?(pass.encoder);
+    st.ended_count.store(0, .monotonic);
     st.frame_live = false;
     if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
     const presented = st.target.present.?(st.target, out_error);
     st.device.queue_poll.?(st.device, st.queue);
     return @intFromBool(presented);
+}
+
+fn replay(enc: *c.ke_gpu_command_encoder, rec: *const rc.ComputeRecord) void {
+    const cp = enc.*.begin_compute_pass.?(enc, &c.ke_gpu_compute_pass_params{ .label = rec.label(rec.pass_label) });
+    for (rec.cmds.items) |cmd| {
+        switch (cmd) {
+            .set_pipeline => |p| cp.*.set_pipeline.?(cp, p),
+            .set_bind_group => |b| {
+                if (b.count > 0)
+                    cp.*.set_bind_group.?(cp, b.index, b.bg, rec.offsets.items[b.first_offset..].ptr, b.count)
+                else
+                    cp.*.set_bind_group.?(cp, b.index, b.bg, null, 0);
+            },
+            .dispatch => |d| cp.*.dispatch.?(cp, d.x, d.y, d.z),
+            .dispatch_indirect => |d| cp.*.dispatch_indirect.?(cp, d.buf, d.offset),
+            .push_debug_group => |l| cp.*.push_debug_group.?(cp, rec.label(l)),
+            .pop_debug_group => cp.*.pop_debug_group.?(cp),
+            .insert_debug_marker => |l| cp.*.insert_debug_marker.?(cp, rec.label(l)),
+        }
+    }
+    cp.*.end.?(cp);
 }
 
 /// Writes the frame's uploads in the order they were reserved, the arena's first and then the
