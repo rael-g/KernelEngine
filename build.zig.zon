@@ -58,6 +58,41 @@
             .url = "https://github.com/cktan/tomlc99/archive/29076dfd095bbbbd50a3c1b2760d29f4b83e74ac.tar.gz",
             .hash = "N-V-__8AADiWAQDqp6cfVlWT31hdl0BKXD2WKRPW-YZnlewm",
         },
+        .vcpkg_bundle = .{
+            .url = "https://github.com/microsoft/vcpkg-tool/releases/download/2026-07-13/vcpkg-standalone-bundle.tar.gz",
+            .hash = "N-V-__8AAN_JIQCJcgEhUcWkFHiVVvAh4dqWyvAYc4-lRNrk",
+            .lazy = true,
+        },
+        .slang_linux = .{
+            .url = "https://github.com/shader-slang/slang/releases/download/v2025.17.2/slang-2025.17.2-linux-x86_64.zip",
+            .hash = "N-V-__8AAA1OhAgT1hr9fnYGXl8YakkwuWy-htN3FkNxvBpg",
+            .lazy = true,
+        },
+        .slang_windows = .{
+            .url = "https://github.com/shader-slang/slang/releases/download/v2025.17.2/slang-2025.17.2-windows-x86_64.zip",
+            .hash = "N-V-__8AACvJGwe1DZm3XCYmuzIGFFAHoftdQlDGnfNjUa0V",
+            .lazy = true,
+        },
+        .wgpu_linux = .{
+            .url = "https://github.com/gfx-rs/wgpu-native/releases/download/v24.0.3.1/wgpu-linux-x86_64-release.zip",
+            .hash = "N-V-__8AAITjhANmNfoekJX8MHS_1DHUYtfqpiKRCF1p1xnD",
+            .lazy = true,
+        },
+        .wgpu_windows = .{
+            .url = "https://github.com/gfx-rs/wgpu-native/releases/download/v24.0.3.1/wgpu-windows-x86_64-msvc-release.zip",
+            .hash = "N-V-__8AAFtzvQMv_k3TTiH8dbhNqD1bCdID9-eVLbuDf8n6",
+            .lazy = true,
+        },
+        .renderdoc_linux = .{
+            .url = "https://renderdoc.org/stable/1.46/renderdoc_1.46.tar.gz",
+            .hash = "N-V-__8AAIdPGg1DUM_X3Kbzq8VlD0HKktPg33yMSGdWIsz_",
+            .lazy = true,
+        },
+        .renderdoc_windows = .{
+            .url = "https://renderdoc.org/stable/1.46/RenderDoc_1.46_64.zip",
+            .hash = "N-V-__8AAEb3hwxFOiGkvnZ43HPEFxkwq7375J6V5ZQrPnd3",
+            .lazy = true,
+        },
     },
     .paths = .{"."},
 }

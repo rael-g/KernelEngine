@@ -3,6 +3,7 @@ const std = @import("std");
 const docir = @import("docir");
 
 const abi_stamp = @import("scripts/abi_stamp.zig");
+const ToolTree = @import("scripts/tool_tree.zig").ToolTree;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -27,20 +28,28 @@ pub fn build(b: *std.Build) void {
         b.graph.environ_map.get("VCPKG_ROOT") orelse
         vcpkg_dir_default;
     const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (host_windows) "vcpkg.exe" else "vcpkg" });
-    const vcpkg_bundle_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/vcpkg-standalone-bundle.tar.gz", .{vcpkg_tool_version});
-    const vcpkg_bin_asset = if (host_windows) "vcpkg.exe" else "vcpkg-glibc";
-    const vcpkg_bin_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_bin_asset });
-    const vcpkg_name = if (host_windows) "vcpkg.exe" else "vcpkg";
     const vcpkg_archives = b.pathJoin(&.{ root, "build", "vcpkg-archives" });
     const vcpkg_registries = b.pathJoin(&.{ root, "build", "vcpkg-registries" });
     const zig_global_cache_dir = b.pathJoin(&.{ root, "build", "zig-global" });
-    const vcpkg_fetch = b.addSystemCommand(&.{
-        "sh", "-c",
-        b.fmt(
-            "mkdir -p '{s}' '{s}' '{s}' && ([ -f '{s}' ] || (cd '{s}' && curl -fsSL -o bundle.tar.gz '{s}' && tar -xzf bundle.tar.gz && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
-            .{ vcpkg_root, vcpkg_archives, vcpkg_registries, vcpkg_exe, vcpkg_root, vcpkg_bundle_url, vcpkg_name, vcpkg_bin_url, vcpkg_name },
-        ),
-    });
+    createDirs(b, &.{ vcpkg_archives, vcpkg_registries });
+
+    const slang_version = "2025.17.2";
+    const slang_package = b.lazyDependency(if (host_windows) "slang_windows" else "slang_linux", .{});
+    const wgpu_package = b.lazyDependency(if (target.result.os.tag == .windows) "wgpu_windows" else "wgpu_linux", .{});
+    const renderdoc_package = b.lazyDependency(if (host_windows) "renderdoc_windows" else "renderdoc_linux", .{});
+    const fetches_vcpkg = std.mem.eql(u8, vcpkg_root, vcpkg_dir_default);
+    const vcpkg_package = if (fetches_vcpkg) b.lazyDependency("vcpkg_bundle", .{}) else null;
+    if (slang_package == null or wgpu_package == null or renderdoc_package == null or (fetches_vcpkg and vcpkg_package == null)) return;
+
+    const vcpkg_name = if (host_windows) "vcpkg.exe" else "vcpkg";
+    const vcpkg_asset = if (host_windows) "vcpkg.exe" else "vcpkg-glibc";
+    const vcpkg_sha256 = if (host_windows) "67958c6a13a35130ff8035bef33097ffe3376a6708577a826cfa41fa592db611" else "9f68d6f2158c8a1ae4800260fad2972a21a48f2d43c02d40e79049650b5260c9";
+    const vcpkg_ready: *std.Build.Step = if (vcpkg_package) |package| &ToolTree.create(b, "lay out vcpkg", .{
+        .package = package.path(""),
+        .dest = vcpkg_root,
+        .stamp = vcpkg_tool_version,
+        .added = &.{.{ .path = vcpkg_name, .source = fetchFile(b, b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_asset }), vcpkg_sha256, vcpkg_name) }},
+    }).step else b.step("vcpkg-given", "the vcpkg checkout given by -Dvcpkg-root or VCPKG_ROOT");
 
     const vcpkg_installed = if (target.result.os.tag == b.graph.host.result.os.tag)
         b.pathJoin(&.{ root, "build", "vcpkg-installed" })
@@ -62,14 +71,15 @@ pub fn build(b: *std.Build) void {
     vcpkg_install.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", zig_global_cache_dir);
     vcpkg_install.setEnvironmentVariable("VCPKG_DEFAULT_BINARY_CACHE", vcpkg_archives);
     vcpkg_install.setEnvironmentVariable("X_VCPKG_REGISTRIES_CACHE", vcpkg_registries);
-    vcpkg_install.step.dependOn(&vcpkg_fetch.step);
+    vcpkg_install.step.dependOn(vcpkg_ready);
 
     const ports_digest = portsDigest(b, root, &.{ vcpkg_tool_version, @import("builtin").zig_version_string, triplet, host_triplet });
     const ports_stamp = b.pathJoin(&.{ vcpkg_installed, "ke-ports.stamp" });
     const ports_step: *std.Build.Step = if (portsCurrent(b, ports_stamp, ports_digest, b.pathJoin(&.{ vcpkg_installed, triplet, "lib" })))
         b.step("vcpkg-current", "the installed ports match the manifest, the triplets and the toolchain")
     else blk: {
-        const write_stamp = b.addSystemCommand(&.{ "sh", "-c", b.fmt("printf '%s' '{s}' > '{s}'", .{ ports_digest, ports_stamp }) });
+        const write_stamp = b.addUpdateSourceFiles();
+        write_stamp.addBytesToSource(b.dupe(&ports_digest), ports_stamp[root.len + 1 ..]);
         write_stamp.step.dependOn(&vcpkg_install.step);
         break :blk &write_stamp.step;
     };
@@ -95,20 +105,13 @@ pub fn build(b: *std.Build) void {
     else
         b.pathJoin(&.{ root, b.install_prefix });
 
-    const slang_version = "2025.17.2";
-    const slang_url_name = switch (b.graph.host.result.os.tag) {
-        .windows => b.fmt("slang-{s}-windows-x86_64", .{slang_version}),
-        else => b.fmt("slang-{s}-linux-x86_64", .{slang_version}),
-    };
-    const slang_dir = b.pathJoin(&.{ tools_dir, slang_url_name });
-    const slang_zip = b.pathJoin(&.{ slang_dir, "slang.zip" });
-    const slang_url = b.fmt("https://github.com/shader-slang/slang/releases/download/v{s}/{s}.zip", .{ slang_version, slang_url_name });
+    const slang_dir = b.pathJoin(&.{ tools_dir, b.fmt("slang-{s}", .{slang_version}) });
     const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (host_windows) "slangc.exe" else "slangc" });
-    const slang_fetch = b.addSystemCommand(&.{
-        "sh", "-c",
-        b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
-            slang_dir, slangc_exe, slang_zip, slang_url, slang_zip, slang_dir,
-        }),
+    const slang_fetch = ToolTree.create(b, "lay out slang", .{
+        .package = slang_package.?.path(""),
+        .dest = slang_dir,
+        .stamp = slang_version,
+        .executable_dirs = &.{"bin"},
     });
 
     const libraries_step = b.allocator.create(std.Build.Step) catch @panic("OOM");
@@ -356,28 +359,12 @@ pub fn build(b: *std.Build) void {
         .@"tomlc99-dir" = tomlc99_dir,
     }, &.{&common.step}, .has_tests);
 
-    const wgpu_version = "v24.0.3.1";
-    const wgpu_url_name = switch (target.result.os.tag) {
-        .windows => "wgpu-windows-x86_64-msvc-release",
-        else => "wgpu-linux-x86_64-release",
-    };
-    const wgpu_dir = b.pathJoin(&.{ tools_dir, wgpu_url_name });
-    const wgpu_zip = b.pathJoin(&.{ wgpu_dir, "wgpu.zip" });
-    const wgpu_url = b.fmt("https://github.com/gfx-rs/wgpu-native/releases/download/{s}/{s}.zip", .{ wgpu_version, wgpu_url_name });
     const wgpu_native_filename = switch (target.result.os.tag) {
         .windows => "wgpu_native.dll",
         else => "libwgpu_native.so",
     };
-    const wgpu_marker = b.pathJoin(&.{ wgpu_dir, "lib", wgpu_native_filename });
-    const wgpu_fetch = b.addSystemCommand(&.{
-        "sh", "-c",
-        b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
-            wgpu_dir, wgpu_marker, wgpu_zip, wgpu_url, wgpu_zip, wgpu_dir,
-        }),
-    });
-
-    const wgpu_include = b.pathJoin(&.{ wgpu_dir, "include" });
-    const wgpu_lib_dir = b.pathJoin(&.{ wgpu_dir, "lib" });
+    const wgpu_include = wgpu_package.?.path("include").getPath(b);
+    const wgpu_lib_dir = wgpu_package.?.path("lib").getPath(b);
     const gpu_device_webgpu = ctx.member("ke_gpu_device_webgpu", .{
         .target = target,
         .optimize = optimize,
@@ -389,12 +376,9 @@ pub fn build(b: *std.Build) void {
         .@"ke-scheduler-include" = b.pathJoin(&.{ src_c, "scheduler" }),
         .@"wgpu-include" = wgpu_include,
         .@"wgpu-lib" = wgpu_lib_dir,
-    }, &.{ &common.step, &wgpu_fetch.step }, .has_tests);
+    }, &.{&common.step}, .has_tests);
 
-    const wgpu_copy = b.addSystemCommand(&.{
-        "cp",                                                 "-f",
-        b.pathJoin(&.{ wgpu_lib_dir, wgpu_native_filename }), b.pathJoin(&.{ ctx.prefix, "lib", wgpu_native_filename }),
-    });
+    const wgpu_copy = b.addInstallLibFile(wgpu_package.?.path(b.pathJoin(&.{ "lib", wgpu_native_filename })), wgpu_native_filename);
     wgpu_copy.step.dependOn(&gpu_device_webgpu.step);
 
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
@@ -438,21 +422,19 @@ pub fn build(b: *std.Build) void {
 
     const renderdoc_version = "1.46";
     const renderdoc_dir = b.pathJoin(&.{ tools_dir, b.fmt("renderdoc-{s}", .{renderdoc_version}) });
-    const renderdoc_include = b.pathJoin(&.{ renderdoc_dir, if (host_windows) b.fmt("RenderDoc_{s}_64", .{renderdoc_version}) else "include" });
-    const renderdoc_marker = if (host_windows)
-        b.pathJoin(&.{ renderdoc_include, "renderdoc_app.h" })
-    else
-        b.pathJoin(&.{ renderdoc_dir, "share/vulkan/implicit_layer.d/renderdoc_capture.json" });
-    const renderdoc_fetch = b.addSystemCommand(&.{
-        "sh", "-c",
-        if (host_windows)
-            b.fmt("mkdir -p '{0s}' && ([ -f '{1s}' ] || (curl -fsSL -o '{0s}/renderdoc.zip' 'https://renderdoc.org/stable/{2s}/RenderDoc_{2s}_64.zip' && echo '9ca4d09ecaba2cc791168660d6fc2a7e3d70fe67146e87ec05c5f8dea70772f7  {0s}/renderdoc.zip' | sha256sum -c - && unzip -oq '{0s}/renderdoc.zip' -d '{0s}'))", .{
-                renderdoc_dir, renderdoc_marker, renderdoc_version,
-            })
-        else
-            b.fmt("mkdir -p '{0s}/share/vulkan/implicit_layer.d' && ([ -f '{1s}' ] || (curl -fsSL -o '{0s}/renderdoc.tar.gz' 'https://renderdoc.org/stable/{2s}/renderdoc_{2s}.tar.gz' && echo '6fedf15eab1288d9a81889ba8a4452dca53f5c10de8162be32a0f8972f62dc09  {0s}/renderdoc.tar.gz' | sha256sum -c - && tar -xzf '{0s}/renderdoc.tar.gz' -C '{0s}' --strip-components=1 && sed 's|\"library_path\": *\"[^\"]*\"|\"library_path\": \"../../../lib/librenderdoc.so\"|' '{0s}/etc/vulkan/implicit_layer.d/renderdoc_capture.json' > '{1s}'))", .{
-                renderdoc_dir, renderdoc_marker, renderdoc_version,
-            }),
+    const renderdoc_include = b.pathJoin(&.{ renderdoc_dir, if (host_windows) "" else "include" });
+    const renderdoc_layer = "implicit_layer.d/renderdoc_capture.json";
+    const renderdoc_fetch = ToolTree.create(b, "lay out RenderDoc", .{
+        .package = renderdoc_package.?.path(""),
+        .dest = renderdoc_dir,
+        .stamp = renderdoc_version,
+        .executable_dirs = &.{"bin"},
+        .patched = if (host_windows) &.{} else &.{.{
+            .from = "etc/vulkan/" ++ renderdoc_layer,
+            .to = "share/vulkan/" ++ renderdoc_layer,
+            .find = "\"library_path\": \"/io/dist/lib/librenderdoc.so\"",
+            .replace = "\"library_path\": \"../../../lib/librenderdoc.so\"",
+        }},
     });
 
     const gpu_render_target_renderdoc = ctx.member("ke_gpu_render_target_renderdoc", .{
@@ -774,13 +756,14 @@ pub fn build(b: *std.Build) void {
     ctx.plugins_step.dependOn(&stamp_install.step);
 
     if (target.result.os.tag == .windows) {
-        const copy_dlls_to_bin = b.addSystemCommand(&.{
-            "sh",                                                                                 "-c",
-            b.fmt("cp -f '{s}'/*.dll '{s}'/", .{ lib_dir, b.pathJoin(&.{ ctx.prefix, "bin" }) }),
+        const copy_dlls_to_bin = b.addInstallDirectory(.{
+            .source_dir = .{ .cwd_relative = lib_dir },
+            .install_dir = .bin,
+            .install_subdir = "",
+            .include_extensions = &.{".dll"},
         });
         copy_dlls_to_bin.step.dependOn(ctx.libraries_step);
         copy_dlls_to_bin.step.dependOn(&wgpu_copy.step);
-        copy_dlls_to_bin.setName("copy plugin DLLs into bin/");
         b.getInstallStep().dependOn(&copy_dlls_to_bin.step);
     }
 
@@ -1366,6 +1349,27 @@ fn portsCurrent(b: *std.Build, stamp_path: []const u8, digest: [64]u8, lib_dir: 
     if (!std.mem.eql(u8, recorded, &digest)) return false;
     cwd.access(io, lib_dir, .{}) catch return false;
     return true;
+}
+
+/// The file at `url`, downloaded by `scripts/fetch_file.zig` built for the host and kept only when
+/// its SHA-256 is `sha256`; the run is cached on its arguments, so it downloads once.
+fn fetchFile(b: *std.Build, url: []const u8, sha256: []const u8, basename: []const u8) std.Build.LazyPath {
+    const exe = b.addExecutable(.{
+        .name = "fetch_file",
+        .root_module = b.createModule(.{ .root_source_file = b.path("scripts/fetch_file.zig"), .target = b.graph.host, .optimize = .ReleaseSafe }),
+    });
+    const run = b.addRunArtifact(exe);
+    run.addArgs(&.{ url, sha256 });
+    return run.addOutputFileArg(basename);
+}
+
+/// Creates each directory with its parents, for a tool that writes into one it does not create.
+fn createDirs(b: *std.Build, dirs: []const []const u8) void {
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    for (dirs) |dir| std.Io.Dir.cwd().createDirPath(io, dir) catch |err|
+        std.debug.panic("cannot create {s}: {s}", .{ dir, @errorName(err) });
 }
 
 fn joinPaths(b: *std.Build, paths: []const []const u8) []const u8 {
