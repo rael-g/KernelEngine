@@ -1,5 +1,6 @@
 using ClangSharp;
 using ClangSharp.Interop;
+
 using static ClangSharp.Interop.CXDiagnosticSeverity;
 using static ClangSharp.Interop.CXErrorCode;
 using static ClangSharp.Interop.CXTranslationUnit_Flags;
@@ -14,7 +15,8 @@ public static class ClangSharpRunner
     static readonly string[] FixedRemaps = ["uint64_t=ulong", "int64_t=long"];
 
     /// <summary>
-    /// Generates the bindings of <paramref name="job"/> into <paramref name="outputDirectory"/>.
+    /// Generates the bindings of <paramref name="job"/> into <paramref name="outputDirectory"/>, with
+    /// the <c>using</c> directives of each file ordered by <see cref="UsingBlock"/>.
     /// Returns whether no error was counted, with the log of what the parse and the generator
     /// reported. The current directory is the job's native directory while the generator runs and
     /// is restored afterwards, also when it throws.
@@ -111,6 +113,7 @@ public static class ClangSharpRunner
             Directory.SetCurrentDirectory(previous);
         }
 
+        UsingBlock.NormalizeDirectory(outputDirectory);
         return new BindingRun(errors == 0, log);
     }
 

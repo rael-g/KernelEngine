@@ -1,6 +1,7 @@
-using KernelEngine.Common.Native;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+
+using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Native;
 
