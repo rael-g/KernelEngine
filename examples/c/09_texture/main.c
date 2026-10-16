@@ -110,7 +110,7 @@ int main(void)
         .address_mode_w = KE_GPU_ADDRESS_MODE_REPEAT,
         .mag_filter     = KE_GPU_FILTER_LINEAR,
         .min_filter     = KE_GPU_FILTER_LINEAR,
-        .mipmap_filter  = KE_GPU_FILTER_NEAREST,
+        .mipmap_filter  = KE_GPU_SAMPLER_MIPMAP_NEAREST,
         .lod_min_clamp  = 0.0f,
         .lod_max_clamp  = 1.0f,
         .compare        = KE_GPU_COMPARE_UNDEFINED,

@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     const implementation = b.addWriteFiles().add("stb_font_impl.c", "#define STB_TRUETYPE_IMPLEMENTATION\n#include <stb_truetype.h>\n");
-    mod.addCSourceFile(.{ .file = implementation, .flags = &.{"-fno-sanitize=undefined"} });
+    mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror" } });
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
@@ -55,7 +55,7 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_text, ke_self, stb_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    test_mod.addCSourceFile(.{ .file = implementation, .flags = &.{"-fno-sanitize=undefined"} });
+    test_mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror" } });
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addImport("kerror", b.createModule(.{

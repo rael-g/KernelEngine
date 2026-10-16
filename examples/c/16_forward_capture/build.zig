@@ -13,8 +13,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    mod.addCSourceFile(.{ .file = b.path("main.c"), .flags = &.{} });
-    mod.addCSourceFile(.{ .file = b.path("stb_image_write_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    mod.addCSourceFile(.{ .file = b.path("main.c"), .flags = &.{ "-Wall", "-Wextra", "-Werror" } });
+    mod.addCSourceFile(.{ .file = b.path("stb_image_write_impl.c"), .flags = &.{ "-fno-sanitize=undefined", "-Werror" } });
 
     var inc_it = std.mem.splitScalar(u8, include_dirs, '|');
     while (inc_it.next()) |inc| {

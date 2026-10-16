@@ -60,6 +60,6 @@ pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
     mod.addIncludePath(.{ .cwd_relative = dir });
     mod.addCSourceFile(.{
         .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "toml.c" }) },
-        .flags = &.{"-fno-sanitize=undefined"},
+        .flags = &.{ "-fno-sanitize=undefined", "-Werror" },
     });
 }
