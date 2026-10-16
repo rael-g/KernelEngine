@@ -37,8 +37,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    mod.addCSourceFile(.{ .file = b.path("main.c"), .flags = &.{ "-Wall", "-Wextra", "-Werror" } });
-    mod.addCSourceFile(.{ .file = b.path("stb_image_write_impl.c"), .flags = &.{ "-fno-sanitize=undefined", "-Werror" } });
+    mod.addCSourceFile(.{ .file = b.path("main.c"), .flags = &.{ "-Wall", "-Wextra", "-Werror", "-Wno-unused-command-line-argument" } });
+    mod.addCSourceFile(.{ .file = b.path("stb_image_write_impl.c"), .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
     mod.addIncludePath(.{ .cwd_relative = shader_out_dir });
 
     var inc_it = std.mem.splitScalar(u8, include_dirs, '|');
