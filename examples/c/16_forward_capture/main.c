@@ -134,7 +134,7 @@ int main(int argc, char **argv)
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
 
-    ke_scheduler_handle sched = ke_scheduler_enki_create(&err);
+    ke_scheduler_handle sched = ke_scheduler_enki_create(NULL, &err);
     if (!sched.ref) die("scheduler", err);
 
     ke_runtime_params rtp = { 0 };

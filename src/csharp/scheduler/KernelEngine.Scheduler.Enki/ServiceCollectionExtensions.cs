@@ -1,5 +1,6 @@
 ﻿
 using KernelEngine.Common.Native;
+using KernelEngine.Scheduler.Enki.Native;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,7 +20,8 @@ public static class ServiceCollectionExtensions
             unsafe
             {
                 ke_error* err = null;
-                var handle = KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&err);
+                ke_scheduler_enki_params @params = default;
+                var handle = KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&@params, &err);
                 if (handle.@ref == null) throw NativeErrors.FromNative(err, "scheduler_enki_create");
                 return new KernelEngine.Scheduler.Scheduler(handle);
             }

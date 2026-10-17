@@ -1082,7 +1082,7 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 const testing = std.testing;
 
 extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ecs_handle;
-extern fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle;
+extern fn ke_scheduler_enki_create(params: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle;
 
 const Fixture = struct {
     scheduler_h: c.ke_scheduler_handle,
@@ -1090,7 +1090,7 @@ const Fixture = struct {
     runtime_h: c.ke_runtime_handle,
 
     fn init() !Fixture {
-        const sh = ke_scheduler_enki_create(null);
+        const sh = ke_scheduler_enki_create(null, null);
         try testing.expect(sh.ref != null);
 
         const eh = ke_ecs_flecs_create(null, null);

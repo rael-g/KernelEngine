@@ -229,10 +229,12 @@ fn destroy(self_in: ?*c.ke_scheduler) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// The factory. Returns a handle whose `ref` is null when the `State` cannot be allocated
+/// The factory. A `worker_count` of 0, or no params, lets enkiTS size the pool from the hardware;
+/// any other count is the workers besides the calling thread, which enkiTS counts as one of its
+/// threads. Returns a handle whose `ref` is null when the `State` cannot be allocated
 /// (`out_of_memory`) or the enkiTS object cannot be created (`general`), with the reason set in
 /// the error output. In either case nothing stays allocated.
-export fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle {
+export fn ke_scheduler_enki_create(params_in: ?*const c.ke_scheduler_enki_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle {
     const null_handle = std.mem.zeroes(c.ke_scheduler_handle);
 
     const s = heap.gpa.create(State) catch {
@@ -246,7 +248,8 @@ export fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c
         E.fail(out_error, .general, "task scheduler creation failed", @src());
         return null_handle;
     };
-    c.enkiInitTaskScheduler(s.ets);
+    const worker_count: u32 = if (params_in) |p| p.*.worker_count else 0;
+    if (worker_count == 0) c.enkiInitTaskScheduler(s.ets) else c.enkiInitTaskSchedulerNumThreads(s.ets, worker_count + 1);
 
     s.api.handle = s;
     s.api.dispatch = dispatch;
@@ -307,7 +310,7 @@ fn recordCompletionFailure(task_in: ?*c.ke_task, user_data: ?*anyopaque, failure
 }
 
 test "a task that fails reports its type to the thread that waits on it" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -321,7 +324,7 @@ test "a task that fails reports its type to the thread that waits on it" {
 }
 
 test "a task that succeeds leaves the waiter's error channel untouched" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -335,7 +338,7 @@ test "a task that succeeds leaves the waiter's error channel untouched" {
 }
 
 test "a completion callback is handed the type the body failed with" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -348,7 +351,7 @@ test "a completion callback is handed the type the body failed with" {
 }
 
 test "a dispatched task runs and reports completion" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -361,7 +364,7 @@ test "a dispatched task runs and reports completion" {
 }
 
 test "a completion callback fires after the task body" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -377,7 +380,7 @@ test "a completion callback fires after the task body" {
 }
 
 test "a task flips to completed while it is still waited on" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -391,7 +394,7 @@ test "a task flips to completed while it is still waited on" {
 }
 
 test "user data reaches the task body unchanged" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -404,7 +407,7 @@ test "user data reaches the task body unchanged" {
 }
 
 test "ten dispatched tasks all execute" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -420,7 +423,7 @@ test "ten dispatched tasks all execute" {
 }
 
 test "dispatch refuses a null scheduler or a null task function" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -429,7 +432,7 @@ test "dispatch refuses a null scheduler or a null task function" {
 }
 
 test "dispatch on complete refuses a null scheduler or a null task function" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -438,7 +441,7 @@ test "dispatch on complete refuses a null scheduler or a null task function" {
 }
 
 test "wait tolerates a null scheduler and a null task" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -447,7 +450,7 @@ test "wait tolerates a null scheduler and a null task" {
 }
 
 test "a null task counts as completed" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -455,7 +458,7 @@ test "a null task counts as completed" {
 }
 
 test "the worker count excludes the calling thread" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -463,8 +466,17 @@ test "the worker count excludes the calling thread" {
     try testing.expectEqual(@as(u32, 0), h.ref.*.get_num_workers.?(null));
 }
 
+test "a worker count in the params sizes the pool" {
+    var params = std.mem.zeroes(c.ke_scheduler_enki_params);
+    params.worker_count = 3;
+    const h = ke_scheduler_enki_create(&params, null);
+    try testing.expect(h.ref != null);
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(@as(u32, 3), h.ref.*.get_num_workers.?(h.ref));
+}
+
 test "a pinned task runs on its worker and reports completion" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
@@ -478,7 +490,7 @@ test "a pinned task runs on its worker and reports completion" {
 }
 
 test "destroying a null scheduler is safe" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
 
     h.destroy.?(h.ref);
@@ -486,7 +498,7 @@ test "destroying a null scheduler is safe" {
 }
 
 test "creating and destroying a scheduler leaves no block allocated" {
-    const h = ke_scheduler_enki_create(null);
+    const h = ke_scheduler_enki_create(null, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
