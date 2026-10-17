@@ -41,10 +41,10 @@ public static class CWriter
 
         foreach (var s in Describable(model, convention))
         {
-            var fields = s.Fields.Where(f => Describes(model, f, table, convention)).ToList();
+            var fields = FieldTables.Fields(model, s, convention).ToList();
             sb.AppendLine($"static const {table.EntryType} {s.Name}_fields[] = {{");
             foreach (var f in fields)
-                sb.AppendLine($"    {{ \"{f.TagValue("name") ?? f.Name}\", {table.Variants[VariantOf(model, f, table, convention)!].Constant}, "
+                sb.AppendLine($"    {{ \"{FieldTables.KeyOf(f)}\", {table.Variants[FieldTables.KindOf(model, f, convention)!].Constant}, "
                     + $"offsetof({s.Name}, {f.Name}), sizeof((({s.Name} *)0)->{f.Name}), "
                     + $"{DefaultOf(model, f, table, convention)} }},");
             sb.AppendLine("};");
@@ -69,15 +69,9 @@ public static class CWriter
     public static string NameMacro(ApiStruct s, Convention convention) =>
         convention.FieldTable!.NameMacroPrefix + convention.ComponentNameFor(s.Name).ToUpperInvariant();
 
-    /// <summary>
-    /// The structs a scene file can address: the domain's own component structs, in declaration
-    /// order, that have at least one field <c>Describes</c> accepts.
-    /// </summary>
+    /// <summary>The structs a scene file can address; see <see cref="FieldTables.Describable"/>.</summary>
     public static IEnumerable<ApiStruct> Describable(ApiModel model, Convention convention) =>
-        model.Structs.Where(s => !s.IsVtable
-            && !s.External
-            && s.Name.EndsWith(convention.ComponentSuffix, StringComparison.Ordinal)
-            && s.Fields.Any(f => Describes(model, f, convention.FieldTable!, convention)));
+        FieldTables.Describable(model, convention);
 
     /// <summary>
     /// Renders a field's <c>[default:]</c> as an initializer for the table's
@@ -85,24 +79,15 @@ public static class CWriter
     /// </summary>
     private static string DefaultOf(ApiModel model, ApiField f, FieldTableConvention table, Convention convention)
     {
-        var d = f.TagValue("default");
-        if (d is null) return NullVariant(table);
-
-        var kind = VariantOf(model, f, table, convention)!;
-        var variant = table.Variants[kind];
-        var parts = d.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var lanes = convention.ShapeOf(model, Base(f.Type))?.Shape.Lanes.Count ?? 1;
-        if (parts.Length != lanes)
-            throw new InvalidOperationException(
-                $"{f.Name}: [default:{d}] has {parts.Length} components but {variant.Constant} takes {lanes}");
-
-        var value = kind switch
+        if (FieldTables.DefaultOf(model, f, convention) is not { } d) return NullVariant(table);
+        var variant = table.Variants[d.Kind];
+        var value = d.Kind switch
         {
-            "string" => $"\"{d}\"",
-            "bool" => d is "1" or "true" ? "true" : "false",
-            "int" => d,
-            "float" => CDouble(parts[0]),
-            _ => "{ " + string.Join(", ", parts.Select(p => CDouble(p) + "f")) + " }",
+            "string" => $"\"{d.Raw}\"",
+            "bool" => d.Raw is "1" or "true" ? "true" : "false",
+            "int" => d.Raw,
+            "float" => CDouble(d.Lanes[0]),
+            _ => "{ " + string.Join(", ", d.Lanes.Select(p => CDouble(p) + "f")) + " }",
         };
         return $"{{ {variant.Constant}, {{ {variant.Member} = {value} }} }}";
     }
@@ -111,39 +96,4 @@ public static class CWriter
 
     /// <summary>A C floating literal: "5" is not one, "5.0" is.</summary>
     private static string CDouble(string raw) => raw.Contains('.') ? raw : raw + ".0";
-
-    /// <summary>
-    /// Whether a scene file can address this field at all. <c>[output]</c> is a
-    /// field a system writes every tick; describing it would invite a scene to
-    /// author a value that is overwritten before anything reads it.
-    /// </summary>
-    private static bool Describes(ApiModel model, ApiField f, FieldTableConvention table, Convention convention) =>
-        !f.Has("output") && VariantOf(model, f, table, convention) is not null;
-
-    /// <summary>
-    /// The kind a field is addressed as, or null when the field has no scene-file spelling: a
-    /// derived matrix or an opaque handle is produced by a system, never written down. C's own
-    /// scalars and strings are kinds here; every other kind is what a pack projects the type to.
-    /// </summary>
-    private static string? VariantOf(ApiModel model, ApiField f, FieldTableConvention table, Convention convention)
-    {
-        if (f.Has("bool")) return "bool";
-        var type = Base(f.Type);
-        if (model.Enums.Any(e => e.Name == type)) return "int";
-        if (convention.Project(Languages.FieldTable, model, type) is { } projected)
-            return table.Variants.ContainsKey(projected) ? projected : null;
-        return type switch
-        {
-            "float" or "double" => "float",
-            "bool" or "_Bool" => "bool",
-            "int8_t" or "int16_t" or "int32_t" or "int64_t" => "int",
-            "uint8_t" or "uint16_t" or "uint32_t" or "uint64_t" => "int",
-            "int" or "unsigned" or "unsigned int" => "int",
-            var t when t.StartsWith("char[") => "string",
-            _ => null,
-        };
-    }
-
-    private static string Base(string cType) =>
-        cType.Replace("const ", "").Replace("struct ", "").Trim();
 }
