@@ -9,7 +9,7 @@ using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.</summary>
+/// <summary>A 2D rigid body. Holds the motion of its entity; its pose is the entity's ke_transform2d_component, which the body is created at, which moves it when written, and which the simulation writes each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct Body2dComponent : global::KernelEngine.Ecs.IComponentLayout
 {
@@ -18,9 +18,6 @@ public partial struct Body2dComponent : global::KernelEngine.Ecs.IComponentLayou
 
     /// <summary>Read when the body is created; a later change does not reach it.</summary>
     public BodyType2D Type;
-    public Vector2 Position;
-    /// <summary>Radians, CCW positive.</summary>
-    public float Angle;
     public Vector2 Velocity;
     /// <summary>Radians per second, CCW positive.</summary>
     public float AngularVelocity;
@@ -41,8 +38,6 @@ public partial struct Body2dComponent : global::KernelEngine.Ecs.IComponentLayou
         return
         [
             global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Type, "type", global::KernelEngine.Ecs.ComponentFieldKind.Int, global::KernelEngine.Ecs.ComponentFieldValue.None),
-            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Position, "position", global::KernelEngine.Ecs.ComponentFieldKind.Vec2, global::KernelEngine.Ecs.ComponentFieldValue.None),
-            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Angle, "angle", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.None),
             global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Velocity, "velocity", global::KernelEngine.Ecs.ComponentFieldKind.Vec2, global::KernelEngine.Ecs.ComponentFieldValue.None),
             global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.AngularVelocity, "angular_velocity", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.None),
             global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.GravityScale, "gravity_scale", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(1.0)),

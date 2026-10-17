@@ -11,17 +11,15 @@ extern "C"
 #endif
 
     /// [node:Body2D,base:Node2D]
-    /// A 2D rigid body. Holds the pose and motion of its entity, which the simulation
-    /// updates each tick. The entity is the identity of the body: a caller never acquires,
-    /// passes, or releases a body handle. The body is destroyed on the first update in which
-    /// the entity no longer holds the component.
+    /// A 2D rigid body. Holds the motion of its entity; its pose is the entity's
+    /// ke_transform2d_component, which the body is created at, which moves it when written,
+    /// and which the simulation writes each tick. The entity is the identity of the body: a
+    /// caller never acquires, passes, or releases a body handle. The body is destroyed on the
+    /// first update in which the entity no longer holds the component.
     typedef struct ke_body2d_component
     {
         /// Read when the body is created; a later change does not reach it.
         ke_body_type_2d type;
-        ke_vec2         position;
-        /// Radians, CCW positive.
-        float           angle;
         ke_vec2         velocity;
         /// Radians per second, CCW positive.
         float           angular_velocity;

@@ -25,10 +25,11 @@ field of the component and is the only link between the two sides.
 "hierarchy". They conflict on "body2d", so the runtime separates them into waves in registration
 order, body first.
 
-**A tick copies in four directions.** For each body, "physics.body2d" creates the body when the
-component has none, pushes the component's position, angle and velocity into the world when they
-differ from it, steps the world with the `dt` it is given, and pulls position, angle and
-velocities back into the component and the position and angle into "transform2d". The collider
+**The transform is the pose.** "body2d" holds motion only. For each body, "physics.body2d" creates
+the body at the position and rotation of "transform2d" when the component has none, pushes the
+transform and the component's velocity into the world when they differ from it, steps the world
+with the `dt` it is given, and pulls velocities back into the component and position and angle
+into "transform2d". The collider
 system attaches a fixture to the nearest ancestor of the shape's entity that has a body, and sets
 `attached`; it does nothing while every collider is attached.
 

@@ -8,7 +8,7 @@ using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.</summary>
+/// <summary>A 2D rigid body. Holds the motion of its entity; its pose is the entity's ke_transform2d_component, which the body is created at, which moves it when written, and which the simulation writes each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.</summary>
 [GeneratedNodeComponent(typeof(Body2dComponent), "body2d")]
 public partial class Body2D : Node2D
 {
@@ -16,13 +16,6 @@ public partial class Body2D : Node2D
     /// <summary>Read when the body is created; a later change does not reach it.</summary>
     [NativeField("Type", Component = typeof(Body2dComponent))]
     public partial BodyType2D Type { get; set; }
-
-    [NativeField("Position", Component = typeof(Body2dComponent))]
-    public partial Vector2 Position { get; set; }
-
-    /// <summary>Radians, CCW positive.</summary>
-    [NativeField("Angle", Component = typeof(Body2dComponent))]
-    public partial float Angle { get; set; }
 
     [NativeField("Velocity", Component = typeof(Body2dComponent))]
     public partial Vector2 Velocity { get; set; }

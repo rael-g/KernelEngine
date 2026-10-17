@@ -45,17 +45,16 @@ fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anyt
     if (lg.log) |f| f(lg, &ev);
 }
 
-/// The update-phase system that reconciles every body with its component, in this order: a
-/// component with no body gets one; a component whose position, angle or velocity differs from
-/// the world's pushes it in; the world steps by `dt`; every body's state is then written back
-/// into its component and its transform, which takes the body's position and angle directly. A
-/// body created here is therefore simulated in the same update. A component whose stored position
-/// is exactly zero first takes the transform's position and rotation. The body type, gravity scale
-/// and fixed rotation are read only when the body is created. A failed creation, or a body the
-/// module cannot record, leaves the component without a body, to be retried on the next update;
-/// nothing is written to the error output and the system still returns true. Before the step, a
-/// recorded body whose entity no longer holds it, destroyed or stripped of the component, is
-/// destroyed.
+/// The update-phase system that reconciles every body with its component and transform, in this
+/// order: a component with no body gets one at its transform's position and rotation; a transform
+/// or a velocity that differs from the world's pushes it in; the world steps by `dt`; every body's
+/// state is then written back, its velocities into its component and its position and angle into
+/// its transform. A body created here is therefore simulated in the same update. The body type,
+/// gravity scale and fixed rotation are read only when the body is created. A failed creation, or
+/// a body the module cannot record, leaves the component without a body, to be retried on the next
+/// update; nothing is written to the error output and the system still returns true. Before the
+/// step, a recorded body whose entity no longer holds it, destroyed or stripped of the component,
+/// is destroyed.
 fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const m = moduleOf(user);
     const p = m.physics;
@@ -71,24 +70,22 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             const b = &bodies[i];
+            const pose = tcs0[i];
             if (b.body == c.KE_BODY_2D_INVALID) {
-                if (b.position.x == 0 and b.position.y == 0) {
-                    b.position = tcs0[i].position;
-                    b.angle = tcs0[i].rotation;
-                }
-                b.body = p.create_body.?(p, b.type, b.position.x, b.position.y, null);
+                b.body = p.create_body.?(p, b.type, pose.position.x, pose.position.y, null);
                 if (b.body == c.KE_BODY_2D_INVALID) continue;
                 m.tracked.put(gpa, segs[s].entities[i], .{ .body = b.body, .seen = m.update }) catch {
                     p.destroy_body.?(p, b.body);
                     b.body = c.KE_BODY_2D_INVALID;
                     continue;
                 };
+                p.set_body_position.?(p, b.body, pose.position.x, pose.position.y, pose.rotation);
                 p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
                 p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
                 p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
                 log(m.logger, c.KE_LOG_LEVEL_INFO,
                     "body on entity {d}: type={d} pos=({d:.3},{d:.3}) angle={d:.4} scale=({d:.3},{d:.3})",
-                    .{ segs[s].entities[i], b.type, b.position.x, b.position.y, b.angle, tcs0[i].scale.x, tcs0[i].scale.y });
+                    .{ segs[s].entities[i], b.type, pose.position.x, pose.position.y, pose.rotation, pose.scale.x, pose.scale.y });
                 continue;
             }
 
@@ -96,8 +93,8 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
 
             var st: c.ke_body_state_2d = undefined;
             p.get_body_state.?(p, b.body, &st);
-            if (b.position.x != st.x or b.position.y != st.y or b.angle != st.angle)
-                p.set_body_position.?(p, b.body, b.position.x, b.position.y, b.angle);
+            if (pose.position.x != st.x or pose.position.y != st.y or pose.rotation != st.angle)
+                p.set_body_position.?(p, b.body, pose.position.x, pose.position.y, pose.rotation);
             if (b.velocity.x != st.velocity_x or b.velocity.y != st.velocity_y)
                 p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
         }
@@ -118,8 +115,6 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
             var st: c.ke_body_state_2d = undefined;
             p.get_body_state.?(p, b.body, &st);
 
-            b.position = .{ .x = st.x, .y = st.y };
-            b.angle = st.angle;
             b.velocity = .{ .x = st.velocity_x, .y = st.velocity_y };
             b.angular_velocity = st.angular_velocity;
 
