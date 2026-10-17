@@ -310,6 +310,45 @@
             }
           ],
           "receiver": "struct ke_asset_resolver *"
+        },
+        {
+          "name": "resolve_path",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Writes the file path \u0060path\u0060 names into \u0060out\u0060, terminated: a path that begins with \u0022res://\u0022 is joined to the project root the resolver was created with, or stands as its remainder when none was given; any other path is copied as written. Nothing checks that the file exists. Fails as an invalid argument when the result and its terminator do not fit in \u0060out_size\u0060 bytes.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "char *",
+              "tags": [
+                "out",
+                "array_of:out_size"
+              ],
+              "doc": "Receives the resolved path."
+            },
+            {
+              "name": "out_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Bytes \u0060out\u0060 holds."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_asset_resolver *"
         }
       ]
     },

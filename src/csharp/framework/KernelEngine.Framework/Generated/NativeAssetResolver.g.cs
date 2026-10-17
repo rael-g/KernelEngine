@@ -170,6 +170,22 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         }
     }
 
+    /// <summary>Writes the file path `path` names into `out`, terminated: a path that begins with "res://" is joined to the project root the resolver was created with, or stands as its remainder when none was given; any other path is copied as written. Nothing checks that the file exists. Fails as an invalid argument when the result and its terminator do not fit in `out_size` bytes.</summary>
+    /// <param name="@out">Receives the resolved path.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void ResolvePath(string path, Span<sbyte> @out)
+    {
+        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        fixed (byte* pathPtr = pathBytes)
+        {
+            fixed (sbyte* @outPtr = @out)
+            {
+                ke_error* err = null;
+                NativeErrors.ThrowIfFailed(Handle->resolve_path(Handle, (sbyte*)pathPtr, @outPtr, (nuint)@out.Length, &err), err, "resolve_path");
+            }
+        }
+    }
+
     /// <summary>Releases the native nativeassetresolver.</summary>
     public void Dispose()
     {

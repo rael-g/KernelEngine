@@ -26,13 +26,13 @@ const res_prefix = "res://";
 /// The loader keeps no scene data: nodes come from the `ke_scene_tree` of `world`, components
 /// from its `ke_ecs`, connections from its signal bus. What it owns is `arena`, which holds every
 /// string and table read from a scene and lives as long as the loader, so what a load read stays
-/// valid until `vtDestroy`, and `created`. `project_root` is a copy the loader owns, empty when none was given. Every
-/// failure fills the out error and returns false; faults in what a scene says go through
+/// valid until `vtDestroy`, and `created`. `assets` is borrowed and resolves every "res://"
+/// reference. Every failure fills the out error and returns false; faults in what a scene says go through
 /// `structural`, which also logs them. A load runs on its caller's thread.
 const State = struct {
     api: c.ke_scene_loader,
     world: *c.ke_world,
-    project_root: []u8,
+    assets: *c.ke_asset_resolver,
 
     script_factory: c.ke_script_factory_func,
     script_ctx: ?*anyopaque,
@@ -60,18 +60,21 @@ fn pathDirname(path: []const u8) []const u8 {
     return path[0..idx];
 }
 
-/// Returns the path a scene reference names, allocated for the caller to free, or null when it
-/// cannot be allocated. A "res://" reference joins the project root, or stands alone when no root
-/// was given; an absolute path stands as written; any other joins the directory of the file making
-/// the reference. Nothing here checks that the file exists.
-fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8) ?[:0]u8 {
-    const parts: []const []const u8 = if (std.mem.startsWith(u8, ref, res_prefix))
-        (if (s.project_root.len != 0) &.{ s.project_root, "/", ref[res_prefix.len..] } else &.{ref[res_prefix.len..]})
-    else if (ref.len > 0 and (ref[0] == '/' or (ref.len > 1 and ref[1] == ':')))
-        &.{ref}
-    else
-        &.{ base_dir, "/", ref };
-    return std.mem.concatWithSentinel(heap.gpa, u8, parts, 0) catch null;
+/// Writes the path a scene reference names into `out`, terminated. A "res://" reference is the asset
+/// resolver's to resolve; an absolute path stands as written; any other joins the directory of the
+/// file making the reference. A result that does not fit fails as an invalid argument. Nothing here
+/// checks that the file exists.
+fn resolvePath(s: *const State, base_dir: []const u8, ref: [*:0]const u8, out: []u8, out_error: [*c][*c]c.ke_error) bool {
+    const r = std.mem.span(ref);
+    if (std.mem.startsWith(u8, r, res_prefix))
+        return s.assets.resolve_path.?(s.assets, ref, out.ptr, out.len, out_error);
+    const absolute = r.len > 0 and (r[0] == '/' or (r.len > 1 and r[1] == ':'));
+    const written = if (absolute) std.fmt.bufPrintZ(out, "{s}", .{r}) else std.fmt.bufPrintZ(out, "{s}/{s}", .{ base_dir, r });
+    _ = written catch {
+        E.fail(out_error, .invalid_argument, "scene path does not fit", @src());
+        return false;
+    };
+    return true;
 }
 
 /// Passes the entity's type name, normalized, to the script factory and returns its verdict. With
@@ -424,18 +427,16 @@ fn processEntity(
 
     const scene_ref = c.toml_string_in(args.entity_tbl, "scene");
     if (scene_ref.ok != 0) {
-        const resolved = resolvePath(s, args.base_dir, std.mem.span(scene_ref.u.s));
+        var resolved_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const resolved = resolvePath(s, args.base_dir, scene_ref.u.s, &resolved_buf, out_error);
         std.c.free(scene_ref.u.s);
-        const resolved_path = resolved orelse {
-            E.fail(out_error, .out_of_memory, "scene path allocation failed", @src());
-            return false;
-        };
-        defer heap.gpa.free(resolved_path);
+        if (!resolved) return false;
+        const resolved_path: [*:0]const u8 = @ptrCast(&resolved_buf);
 
         var nested_root: c.ke_entity = c.KE_ENTITY_INVALID;
         if (!loadSceneRecursive(
             s,
-            resolved_path.ptr,
+            resolved_path,
             parent,
             effective_name,
             args.entity_tbl,
@@ -637,21 +638,24 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     s.created.deinit(heap.gpa);
-    heap.gpa.free(s.project_root);
     s.arena.deinit();
     heap.gpa.destroy(s);
 }
 
-/// Factory. Builds a loader over the given world, copying the project root into its state. A null
-/// world fails as an invalid argument and a failed allocation as out of memory; each returns a null
-/// handle.
+/// Factory. Builds a loader over the given world, resolving "res://" references through the given
+/// asset resolver. A null world or resolver fails as an invalid argument and a failed allocation as
+/// out of memory; each returns a null handle.
 export fn ke_scene_loader_create(
     world_in: ?*c.ke_world,
-    project_root: [*c]const u8,
+    assets_in: ?*c.ke_asset_resolver,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_scene_loader_handle {
     const null_handle = std.mem.zeroes(c.ke_scene_loader_handle);
     const world = world_in orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return null_handle;
+    };
+    const assets = assets_in orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return null_handle;
     };
@@ -663,21 +667,12 @@ export fn ke_scene_loader_create(
     s.* = .{
         .api = std.mem.zeroes(c.ke_scene_loader),
         .world = world,
-        .project_root = &.{},
+        .assets = assets,
         .script_factory = null,
         .script_ctx = null,
         .arena = .init(),
         .created = .empty,
     };
-
-    if (project_root != null) {
-        s.project_root = heap.gpa.dupe(u8, std.mem.span(project_root)) catch {
-            s.arena.deinit();
-            heap.gpa.destroy(s);
-            E.fail(out_error, .out_of_memory, "project root allocation failed", @src());
-            return null_handle;
-        };
-    }
 
     s.api.handle = s;
     s.api.load = vtLoad;
@@ -919,6 +914,7 @@ const Fixture = struct {
     tree_h: c.ke_scene_tree_handle,
     bus_h: c.ke_signal_bus_handle,
     world_h: c.ke_world_handle,
+    assets_h: c.ke_asset_resolver_handle,
     loader_h: c.ke_scene_loader_handle,
 
     fn init(self: *Fixture) !void {
@@ -971,7 +967,17 @@ const Fixture = struct {
         self.describe(rc.KE_COMPONENT_NAME_AUDIO_PLAYER, @sizeOf(rc.ke_audio_player_component), generatedFields(&rc.ke_audio_player_component_fields), rc.ke_audio_player_component_fields.len);
         self.describe(rc.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(rc.ke_collider2d_component), generatedFields(&rc.ke_collider2d_component_fields), rc.ke_collider2d_component_fields.len);
 
-        self.loader_h = ke_scene_loader_create(self.world_h.ref, null, null);
+        self.assets_h = std.mem.zeroes(c.ke_asset_resolver_handle);
+        self.loader_h = std.mem.zeroes(c.ke_scene_loader_handle);
+        try self.rootAt(null);
+    }
+
+    fn rootAt(self: *Fixture, root: [*c]const u8) !void {
+        if (self.loader_h.destroy) |d| d(self.loader_h.ref);
+        if (self.assets_h.destroy) |d| d(self.assets_h.ref);
+        self.assets_h = c.ke_asset_resolver_create(null, null, root, null);
+        try testing.expect(self.assets_h.ref != null);
+        self.loader_h = ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, null);
         try testing.expect(self.loader_h.ref != null);
     }
 
@@ -990,6 +996,7 @@ const Fixture = struct {
 
     fn deinit(self: *Fixture) void {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
+        if (self.assets_h.destroy) |d| d(self.assets_h.ref);
         if (self.world_h.destroy) |d| d(self.world_h.ref);
         if (self.bus_h.destroy) |d| d(self.bus_h.ref);
         if (self.tree_h.destroy) |d| d(self.tree_h.ref);
@@ -1554,6 +1561,36 @@ test "a referenced scene is spliced under the name that referenced it" {
     try testing.expectApproxEqAbs(@as(f32, 1.8), vt.scale.y, 1e-6);
 }
 
+test "a res:// subscene is found under the root its asset resolver was given" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("sub.scene.toml",
+        \\[[entity]]
+        \\name = "Root"
+        \\
+        \\[[entity]]
+        \\name   = "Inner"
+        \\parent = "Root"
+        \\
+    );
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name  = "Outer"
+        \\scene = "res://sub.scene.toml"
+        \\
+    );
+    var root_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const root = try std.fmt.bufPrintZ(&root_buf, ".zig-cache/tmp/{s}", .{scene.tmp.sub_path});
+    try f.rootAt(root.ptr);
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    try testing.expect(f.find("Inner") != c.KE_ENTITY_INVALID);
+}
+
 test "two instances of one subscene keep their own outer transform and overrides" {
     var f: Fixture = undefined;
     try f.init();
@@ -1993,8 +2030,12 @@ test "a scene that fails to load leaves none of the entities it had already crea
     try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Third"));
 }
 
-test "a loader is never created without a world" {
+test "a loader is never created without a world or an asset resolver" {
     try testing.expect(ke_scene_loader_create(null, null, null).ref == null);
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    try testing.expect(ke_scene_loader_create(f.world_h.ref, null, null).ref == null);
 }
 
 test "destroying a null loader is safe" {

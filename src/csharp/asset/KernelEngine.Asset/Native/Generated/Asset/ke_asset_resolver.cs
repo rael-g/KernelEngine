@@ -35,4 +35,7 @@ public unsafe partial struct ke_asset_resolver
 
     [NativeTypeName("ke_material_handle (*)(struct ke_asset_resolver *, ke_render_service *, const char *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, KernelEngine.Render.Native.ke_render_service*, sbyte*, KernelEngine.Common.Native.ke_error**, KernelEngine.Render.Native.ke_material_handle> resolve_material_into;
+
+    [NativeTypeName("bool (*)(struct ke_asset_resolver *, const char *, char *, size_t, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, sbyte*, sbyte*, nuint, KernelEngine.Common.Native.ke_error**, bool> resolve_path;
 }

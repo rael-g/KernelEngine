@@ -61,45 +61,38 @@ fn copyStringClamped(dst: []u8, src: []const u8) void {
     dst[n] = 0;
 }
 
-fn joinPath(out: []u8, root: []const u8, remainder: []const u8) void {
-    if (out.len == 0) return;
-    const need_sep = root.len > 0 and
-        root[root.len - 1] != '/' and root[root.len - 1] != '\\' and
-        (remainder.len == 0 or (remainder[0] != '/' and remainder[0] != '\\'));
-
-    var i: usize = 0;
-    for (root) |ch| {
-        if (i >= out.len - 1) break;
-        out[i] = ch;
-        i += 1;
-    }
-    if (need_sep and i < out.len - 1) {
-        out[i] = '/';
-        i += 1;
-    }
-    for (remainder) |ch| {
-        if (i >= out.len - 1) break;
-        out[i] = ch;
-        i += 1;
-    }
-    out[i] = 0;
+/// Writes the file path `path` names into `out`, terminated: a path that begins with "res://" is
+/// joined to the project root, or stands as its remainder when there is none, and any other path
+/// is copied as written. Fails as an invalid argument, leaving `out` unspecified, when the result
+/// and its terminator do not fit.
+fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8, out_error: [*c][*c]c.ke_error) bool {
+    const p = std.mem.span(path);
+    const written = if (!std.mem.startsWith(u8, p, res_prefix))
+        std.fmt.bufPrintZ(out, "{s}", .{p})
+    else if (s.project_root) |root| blk: {
+        const remainder = p[res_prefix.len..];
+        const sep: []const u8 = if (root.len > 0 and root[root.len - 1] != '/' and root[root.len - 1] != '\\' and
+            (remainder.len == 0 or (remainder[0] != '/' and remainder[0] != '\\'))) "/" else "";
+        break :blk std.fmt.bufPrintZ(out, "{s}{s}{s}", .{ root, sep, remainder });
+    } else std.fmt.bufPrintZ(out, "{s}", .{p[res_prefix.len..]});
+    _ = written catch {
+        E.fail(out_error, .invalid_argument, "resolved path does not fit", @src());
+        return false;
+    };
+    return true;
 }
 
-/// Called by the texture, font and material slots before they open a file. A path that begins
-/// with "res://" is rewritten against the project root, and any other path is used as written.
-/// The buffer it writes is always terminated, so the path can be passed on as a C string.
-fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
-    const p = std.mem.span(path);
-    if (std.mem.startsWith(u8, p, res_prefix)) {
-        const remainder = p[res_prefix.len..];
-        if (s.project_root) |root| {
-            joinPath(out, root, remainder);
-        } else {
-            copyStringClamped(out, remainder);
-        }
-        return;
+/// Slot `resolve_path`. Resolves through `resolvePath` into the caller's buffer.
+fn vtResolvePath(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8, out_size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    };
+    if (self.handle == null or path == null or out == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
     }
-    copyStringClamped(out, p);
+    return resolvePath(stateOf(self), path, out[0..out_size], out_error);
 }
 
 fn tomlNumberIn(tab: ?*c.toml_table_t, key: [*c]const u8) ?f32 {
@@ -204,7 +197,7 @@ fn vtResolveTexture(
     };
 
     var buf: [path_buf_max]u8 = undefined;
-    resolvePath(s, path, &buf);
+    if (!resolvePath(s, path, &buf, out_error)) return false;
     const resolved: [*:0]const u8 = @ptrCast(&buf);
     if (!fileExists(resolved)) {
         E.fail(out_error, .not_found, "texture file not found", @src());
@@ -292,7 +285,7 @@ fn vtResolveMaterial(
     }
     const s = stateOf(self);
     var buf: [path_buf_max]u8 = undefined;
-    resolvePath(s, path, &buf);
+    if (!resolvePath(s, path, &buf, out_error)) return false;
     parseMaterialFile(@ptrCast(&buf), out.?) catch |err| {
         switch (err) {
             error.NotFound => E.fail(out_error, .not_found, "material file not found", @src()),
@@ -330,7 +323,7 @@ fn vtResolveFont(
     };
 
     var buf: [path_buf_max]u8 = undefined;
-    resolvePath(s, path, &buf);
+    if (!resolvePath(s, path, &buf, out_error)) return false;
     const resolved: [*:0]const u8 = @ptrCast(&buf);
     if (!fileExists(resolved)) {
         E.fail(out_error, .not_found, "font file not found", @src());
@@ -569,6 +562,7 @@ export fn ke_asset_resolver_create(
     s.api.resolve_texture_into = vtResolveTextureInto;
     s.api.resolve_mesh_into = vtResolveMeshInto;
     s.api.resolve_material_into = vtResolveMaterialInto;
+    s.api.resolve_path = vtResolvePath;
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
@@ -1157,6 +1151,29 @@ test "a live handle is never zero, not even at index zero" {
             handles.generation(h.bits),
         );
     }
+}
+
+test "a res:// path joins the project root and any other path stands as written" {
+    const h = ke_asset_resolver_create(null, null, "/game", null);
+    defer h.destroy.?(h.ref);
+    const r = h.ref.?;
+    var out: [64]u8 = undefined;
+
+    try testing.expect(r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len, null));
+    try testing.expectEqualStrings("/game/scenes/a.toml", std.mem.sliceTo(&out, 0));
+    try testing.expect(r.*.resolve_path.?(r, "other/b.toml", &out, out.len, null));
+    try testing.expectEqualStrings("other/b.toml", std.mem.sliceTo(&out, 0));
+}
+
+test "a resolved path that does not fit is refused rather than cut" {
+    const h = ke_asset_resolver_create(null, null, "/game", null);
+    defer h.destroy.?(h.ref);
+    const r = h.ref.?;
+    var out: [8]u8 = undefined;
+    var err: [*c]c.ke_error = null;
+
+    try testing.expect(!r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len, &err));
+    try testing.expectEqual(E.typeOf(.invalid_argument), err.*.type);
 }
 
 test "creating and destroying a resolver leaves no block allocated" {

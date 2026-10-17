@@ -13,7 +13,7 @@ public static unsafe partial class NativeMethods
     public static extern ke_scene_tree_handle scene_tree_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_runtime *")] KernelEngine.Runtime.Native.ke_runtime* runtime, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_loader_create", ExactSpelling = true)]
-    public static extern ke_scene_loader_handle scene_loader_create([NativeTypeName("struct ke_world *")] ke_world* world, [NativeTypeName("const char *")] sbyte* project_root, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
+    public static extern ke_scene_loader_handle scene_loader_create([NativeTypeName("struct ke_world *")] ke_world* world, [NativeTypeName("ke_asset_resolver *")] KernelEngine.Asset.Native.ke_asset_resolver* assets, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_create", ExactSpelling = true)]
     public static extern ke_input_actions_handle input_actions_create([NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);

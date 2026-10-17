@@ -32,7 +32,7 @@ public static class SceneServiceCollectionExtensions
         services.AddSingleton<SceneLoader>(sp =>
             new SceneLoader(
                 sp.GetRequiredService<World>(),
-                AppContext.BaseDirectory));
+                sp.GetRequiredService<NativeAssetResolver>()));
 
     }
 }
