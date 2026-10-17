@@ -7,13 +7,14 @@ using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle.</summary>
+/// <summary>A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public partial struct Body2dComponent
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "body2d";
 
+    /// <summary>Read when the body is created; a later change does not reach it.</summary>
     public BodyType2D Type;
     public Vector2 Position;
     /// <summary>Radians, CCW positive.</summary>
@@ -22,7 +23,7 @@ public partial struct Body2dComponent
     /// <summary>Radians per second, CCW positive.</summary>
     public float AngularVelocity;
     public float GravityScale;
-    /// <summary>Keeps the body's angle fixed against every torque, including contacts.</summary>
+    /// <summary>Keeps the body's angle fixed against every torque, including contacts. Read when the body is created.</summary>
     public bool FixedRotation;
     /// <summary>The body for this entity, assigned when the component is reconciled. Callers do not write it.</summary>
     public uint Body;

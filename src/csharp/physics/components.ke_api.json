@@ -355,7 +355,7 @@
     },
     {
       "name": "ke_body2d_component",
-      "doc": "A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle.",
+      "doc": "A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.",
       "tags": [
         "node:Body2D",
         "base:Node2D"
@@ -365,7 +365,7 @@
           "name": "type",
           "type": "ke_body_type_2d",
           "tags": [],
-          "doc": null
+          "doc": "Read when the body is created; a later change does not reach it."
         },
         {
           "name": "position",
@@ -403,7 +403,7 @@
           "name": "fixed_rotation",
           "type": "_Bool",
           "tags": [],
-          "doc": "Keeps the body\u0027s angle fixed against every torque, including contacts."
+          "doc": "Keeps the body\u0027s angle fixed against every torque, including contacts. Read when the body is created."
         },
         {
           "name": "body",

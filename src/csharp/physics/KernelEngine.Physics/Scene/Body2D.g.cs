@@ -6,7 +6,7 @@ using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle.</summary>
+/// <summary>A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.</summary>
 [GeneratedNodeComponent(typeof(Body2dComponent), "body2d")]
 public partial class Body2D : Node2D
 {
@@ -15,6 +15,7 @@ public partial class Body2D : Node2D
         _generatedState0 = Body2dComponent.Default;
     }
 
+    /// <summary>Read when the body is created; a later change does not reach it.</summary>
     [NativeField("Type", Component = typeof(Body2dComponent))]
     public partial BodyType2D Type { get; set; }
 
@@ -35,7 +36,7 @@ public partial class Body2D : Node2D
     [NativeField("GravityScale", Component = typeof(Body2dComponent))]
     public partial float GravityScale { get; set; }
 
-    /// <summary>Keeps the body's angle fixed against every torque, including contacts.</summary>
+    /// <summary>Keeps the body's angle fixed against every torque, including contacts. Read when the body is created.</summary>
     [NativeField("FixedRotation", Component = typeof(Body2dComponent))]
     public partial bool FixedRotation { get; set; }
 }

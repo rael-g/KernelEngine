@@ -13,9 +13,11 @@ extern "C"
     /// [node:Body2D,base:Node2D]
     /// A 2D rigid body. Holds the pose and motion of its entity, which the simulation
     /// updates each tick. The entity is the identity of the body: a caller never acquires,
-    /// passes, or releases a body handle.
+    /// passes, or releases a body handle. The body is destroyed on the first update in which
+    /// the entity no longer holds the component.
     typedef struct ke_body2d_component
     {
+        /// Read when the body is created; a later change does not reach it.
         ke_body_type_2d type;
         ke_vec2         position;
         /// Radians, CCW positive.
@@ -23,9 +25,11 @@ extern "C"
         ke_vec2         velocity;
         /// Radians per second, CCW positive.
         float           angular_velocity;
-        /// Multiplies world gravity for this body alone. 1 = normal, 0 = weightless.
+        /// Multiplies world gravity for this body alone. 1 = normal, 0 = weightless. Read when
+        /// the body is created.
         float           gravity_scale; ///< [default:1]
-        /// Keeps the body's angle fixed against every torque, including contacts.
+        /// Keeps the body's angle fixed against every torque, including contacts. Read when the
+        /// body is created.
         bool            fixed_rotation;
 
         /// [idiom] The body for this entity, assigned when the component is reconciled.
