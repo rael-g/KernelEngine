@@ -149,7 +149,7 @@
           "returns": "ke_component_id",
           "tags": [],
           "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same layout as its first registration. With \u0060fields\u0060 the two are compared field by field; without it, only \u0060element_size\u0060 is compared, which a same-size field swap or a reordering satisfies.",
-          "return_doc": "The component\u0027s id, or 0 on error.",
+          "return_doc": "The component\u0027s id, or KE_COMPONENT_INVALID on error.",
           "params": [
             {
               "name": "name",

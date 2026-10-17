@@ -14,7 +14,7 @@ extern "C"
 #define KE_ENTITY_INVALID 0
 
     typedef uint32_t ke_component_id;
-#define KE_COMPONENT_INVALID ((ke_component_id)-1)
+#define KE_COMPONENT_INVALID 0
 
     typedef struct ke_component_meta
     {

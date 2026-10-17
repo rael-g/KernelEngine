@@ -62,7 +62,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <param name="elementSize">Bytes per entity; 0 registers a tag (no storage).</param>
     /// <param name="fields">The type's field layout, normally its field table. Must outlive the ecs. NULL registers the size alone.</param>
     /// <param name="fieldCount">Entries in `fields`; 0 when `fields` is NULL.</param>
-    /// <returns>The component's id, or 0 on error.</returns>
+    /// <returns>The component's id, or KE_COMPONENT_INVALID on error.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint ComponentRegister(string name, nuint elementSize, ke_component_field* fields, uint fieldCount)
     {

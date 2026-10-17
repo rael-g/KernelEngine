@@ -55,7 +55,7 @@ extern "C"
          * @param field_count Entries in `fields`; 0 when `fields` is NULL.
          * @param out_error [out,optional] Set when the layout conflicts with the name's
          *        prior registration, naming the field that disagrees.
-         * @return The component's id, or 0 on error.
+         * @return The component's id, or KE_COMPONENT_INVALID on error.
          */
         ke_component_id (*component_register)(struct ke_ecs            *self,
                                                const char               *name,

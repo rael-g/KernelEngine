@@ -11,7 +11,7 @@ const c = rc.c;
 /// from the size the service last read from the target. Entries made here are the only
 /// transient ones: `destroyCore` destroys the texture and view of transient entries and of no
 /// other entry. Returns the invalid component id, with an out-of-memory error, when the table
-/// cannot grow; a texture the device fails to create is not detected.
+/// cannot grow or the name cannot be registered; a texture the device fails to create is not detected.
 pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resource_desc, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     const st = rc.coreOf(self);
     st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
@@ -19,7 +19,8 @@ pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resour
         return c.KE_COMPONENT_INVALID;
     };
 
-    const cid = st.ecs.component_register.?(st.ecs, desc.*.name, 0, null, 0, null);
+    const cid = st.ecs.component_register.?(st.ecs, desc.*.name, 0, null, 0, out_error);
+    if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
 
     var w = desc.*.width;
     var h = desc.*.height;
@@ -122,7 +123,8 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
     };
-    const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, null);
+    const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, out_error);
+    if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
     st.resources.appendAssumeCapacity(.{
         .name = name,
         .cid = cid,
@@ -144,7 +146,8 @@ pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
     };
-    const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, null);
+    const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, out_error);
+    if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
     st.resources.appendAssumeCapacity(.{
         .name = name,
         .cid = cid,
@@ -166,7 +169,8 @@ pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
     };
-    const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, null);
+    const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, out_error);
+    if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
     st.resources.appendAssumeCapacity(.{
         .name = name,
         .cid = cid,
