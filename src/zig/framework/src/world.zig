@@ -33,11 +33,9 @@ const Alias = struct {
 /// params and never freed. `apply_registry` stays null until the first registration, and
 /// `apply_capacity` is the length of the buffer it points to, which is what `worldDestroy` frees.
 const State = struct {
-    scheduler: ?*c.ke_scheduler,
     ecs: ?*c.ke_ecs,
     runtime: ?*c.ke_runtime,
     scene_tree: ?*c.ke_scene_tree,
-    project_root: [*c]const u8,
     logger: ?*c.ke_logger,
     signal_bus: ?*c.ke_signal_bus,
 
@@ -368,11 +366,9 @@ export fn ke_world_create(
     const state = &block.state;
     const world = &block.world;
 
-    state.scheduler = params.scheduler;
     state.ecs = params.ecs;
     state.runtime = params.runtime;
     state.scene_tree = params.scene_tree;
-    state.project_root = params.project_root;
     state.logger = params.logger;
     state.signal_bus = params.signal_bus;
 
@@ -471,7 +467,6 @@ test "a world hands back the ecs and runtime it was built with, and no tree it n
     var params = std.mem.zeroes(c.ke_world_params);
     params.ecs = &ecs.vtable;
     params.runtime = &runtime;
-    params.project_root = "res/";
 
     const h = ke_world_create(&params, null);
     try testing.expect(h.ref != null);
@@ -533,7 +528,6 @@ test "creating and destroying a world leaves no block allocated" {
     var params = std.mem.zeroes(c.ke_world_params);
     params.ecs = &ecs.vtable;
     params.runtime = &runtime;
-    params.project_root = "res/";
 
     const h = ke_world_create(&params, null);
     h.destroy.?(h.ref);

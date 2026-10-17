@@ -437,14 +437,12 @@ ke_world_transform_component size=64 align=4
   matrix 0
 
 [world]
-ke_world_params size=56 align=8
-  scheduler 0
-  ecs 8
-  runtime 16
-  scene_tree 24
-  project_root 32
-  logger 40
-  signal_bus 48
+ke_world_params size=40 align=8
+  ecs 0
+  runtime 8
+  scene_tree 16
+  logger 24
+  signal_bus 32
 ke_world size=80 align=8
   handle 0
   ecs 8

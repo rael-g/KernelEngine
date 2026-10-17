@@ -12,7 +12,6 @@ extern "C"
 {
 #endif
 
-    struct ke_scheduler;
     struct ke_scene_tree;
     struct ke_logger;
     struct ke_signal_bus;
@@ -40,11 +39,14 @@ extern "C"
 
     typedef struct ke_world_params
     {
-        struct ke_scheduler *scheduler;
+        /// The ecs the world registers scene components on; required, borrowed.
         ke_ecs                   *ecs;
+        /// The runtime the world hands out; required, borrowed.
         ke_runtime               *runtime;
+        /// The scene tree the world hands out; optional, borrowed.
         struct ke_scene_tree     *scene_tree;
-        const char               *project_root;
+        /// The logger the scene loader writes to while loading into this world;
+        /// optional, borrowed.
         struct ke_logger         *logger;
         /// Signal bus scene-declared connections are wired into; optional,
         /// borrowed. Without one, a scene's connection blocks are reported and

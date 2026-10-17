@@ -7,40 +7,28 @@
       "tags": [],
       "fields": [
         {
-          "name": "scheduler",
-          "type": "struct ke_scheduler *",
-          "tags": [],
-          "doc": null
-        },
-        {
           "name": "ecs",
           "type": "ke_ecs *",
           "tags": [],
-          "doc": null
+          "doc": "The ecs the world registers scene components on; required, borrowed."
         },
         {
           "name": "runtime",
           "type": "ke_runtime *",
           "tags": [],
-          "doc": null
+          "doc": "The runtime the world hands out; required, borrowed."
         },
         {
           "name": "scene_tree",
           "type": "struct ke_scene_tree *",
           "tags": [],
-          "doc": null
-        },
-        {
-          "name": "project_root",
-          "type": "const char *",
-          "tags": [],
-          "doc": null
+          "doc": "The scene tree the world hands out; optional, borrowed."
         },
         {
           "name": "logger",
           "type": "struct ke_logger *",
           "tags": [],
-          "doc": null
+          "doc": "The logger the scene loader writes to while loading into this world; optional, borrowed."
         },
         {
           "name": "signal_bus",
