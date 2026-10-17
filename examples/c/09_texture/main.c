@@ -7,8 +7,12 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 
-#include "tex_vs_wgsl.h"
-#include "tex_fs_wgsl.h"
+static const char tex_vs_wgsl[] = {
+#embed "tex_vs.wgsl"
+    , 0};
+static const char tex_fs_wgsl[] = {
+#embed "tex_fs.wgsl"
+    , 0};
 #include <string.h>
 
 #include <stdint.h>

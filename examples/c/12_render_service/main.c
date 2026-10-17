@@ -13,7 +13,9 @@
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 
-#include "triangle_wgsl.h"
+static const char triangle_wgsl[] = {
+#embed "triangle.wgsl"
+    , 0};
 
 #include <stdio.h>
 #include <string.h>

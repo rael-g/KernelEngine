@@ -7,8 +7,12 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 
-#include "triangle_vs_wgsl.h"
-#include "triangle_fs_wgsl.h"
+static const char triangle_vs_wgsl[] = {
+#embed "triangle_vs.wgsl"
+    , 0};
+static const char triangle_fs_wgsl[] = {
+#embed "triangle_fs.wgsl"
+    , 0};
 #include <string.h>
 
 #include <stdio.h>

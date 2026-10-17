@@ -25,7 +25,7 @@ works inside is on the generated page of its file. Shared shader modules are und
 beside it, and the build embeds its reflection in the binder, which builds every material's bind
 group from it. A material cannot declare uniforms or
 textures of its own. Exactly one `IMaterial` struct per file is required by
-`scripts/generate_material_wrapper.cs`.
+`materialStruct` in the root `build.zig`.
 
 **The build binds a material to each consuming pass.** For every material file and every pass
 that consumes materials, a wrapper is generated from the pass's template and compiled. Both

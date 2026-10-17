@@ -7,8 +7,12 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 
-#include "rotate_vs_wgsl.h"
-#include "rotate_fs_wgsl.h"
+static const char rotate_vs_wgsl[] = {
+#embed "rotate_vs.wgsl"
+    , 0};
+static const char rotate_fs_wgsl[] = {
+#embed "rotate_fs.wgsl"
+    , 0};
 
 #include <math.h>
 #include <stdio.h>

@@ -4,29 +4,20 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const compile_slang = b.option([]const u8, "compile-slang", "path to the built compile_slang.dll") orelse @panic("-Dcompile-slang required");
     const slangc = b.option([]const u8, "slangc", "path to the fetched slangc executable") orelse @panic("-Dslangc required");
-    const shader_out_dir = b.option([]const u8, "shader-out-dir", "directory to write the generated shader header into") orelse @panic("-Dshader-out-dir required");
     const include_dirs = b.option([]const u8, "include-dirs", "'|'-separated include directories") orelse "";
     const libs = b.option([]const u8, "libs", "'|'-separated absolute shared-library paths, in link order") orelse @panic("-Dlibs required");
 
-    const header = b.pathJoin(&.{ shader_out_dir, "triangle_wgsl.h" });
-    const gen = b.addSystemCommand(&.{
-        "dotnet",  compile_slang,
-        "--slangc", slangc,
-        "--input",  b.pathFromRoot("triangle.slang"),
-        "--output", header,
-        "--name",   "triangle_wgsl",
-        "--target", "wgsl",
-    });
+    const gen = b.addSystemCommand(&.{ slangc, b.pathFromRoot("triangle.slang"), "-target", "wgsl" });
+    const wgsl = gen.captureStdOut(.{ .basename = "triangle.wgsl" });
 
     const mod = b.createModule(.{
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
-    mod.addCSourceFile(.{ .file = b.path("main.c"), .flags = &.{ "-Wall", "-Wextra", "-Werror", "-Wno-unused-command-line-argument" } });
-    mod.addIncludePath(.{ .cwd_relative = shader_out_dir });
+    mod.addCSourceFile(.{ .file = b.path("main.c"), .flags = &.{ "-std=gnu23", "-Wall", "-Wextra", "-Werror", "-Wno-unused-command-line-argument" } });
+    mod.addEmbedPath(wgsl.dirname());
 
     var inc_it = std.mem.splitScalar(u8, include_dirs, '|');
     while (inc_it.next()) |inc| {
@@ -42,9 +33,6 @@ pub fn build(b: *std.Build) void {
     mod.addRPathSpecial("$ORIGIN/../lib");
 
     const exe = b.addExecutable(.{ .name = "demo", .root_module = mod });
-    gen.expectExitCode(0);
-    gen.has_side_effects = true;
-    exe.step.dependOn(&gen.step);
 
     const install = b.addInstallArtifact(exe, .{
         .dest_dir = .{ .override = .{ .custom = "bin" } },

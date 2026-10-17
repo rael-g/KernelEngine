@@ -782,7 +782,6 @@ pub fn build(b: *std.Build) void {
     const demo_step = b.step("demo01", "Build examples/c/01_minimal_log");
     demo_step.dependOn(&demo01.step);
 
-    const examples_gen = b.pathJoin(&.{ ctx.prefix, "gen", "examples" });
 
     const demo05 = ctx.example("c_demo_05", .{
         .target = target,
@@ -797,19 +796,12 @@ pub fn build(b: *std.Build) void {
         .@"libs" = b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
     }, &.{&gpu_device_webgpu.step});
 
-    const compile_slang_dir = b.pathJoin(&.{ root, "build", "tools", "compile_slang" });
-    const compile_slang_dll = b.pathJoin(&.{ compile_slang_dir, "compile_slang.dll" });
-    const compile_slang_build = b.addSystemCommand(&.{ "dotnet", "build", b.pathJoin(&.{ root, "scripts/compile_slang.cs" }), "-o", compile_slang_dir, "--nologo", "-v", "q" });
-    compile_slang_build.expectExitCode(0);
-    compile_slang_build.has_side_effects = true;
 
     const demo06 = ctx.example("c_demo_06", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "triangle",
-        .@"compile-slang" = compile_slang_dll,
         .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "06_triangle" }),
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -824,15 +816,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo15 = ctx.example("c_demo_15", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "triangle",
-        .@"compile-slang" = compile_slang_dll,
         .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "15_offscreen_capture" }),
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -848,15 +838,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &gpu_render_target_texture.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &gpu_render_target_texture.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo07 = ctx.example("c_demo_07", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "rotate",
-        .@"compile-slang" = compile_slang_dll,
         .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "07_uniform" }),
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -872,15 +860,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
         .@"link-m" = true,
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo08 = ctx.example("c_demo_08", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "mesh",
-        .@"compile-slang" = compile_slang_dll,
         .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "08_vertex_buffer" }),
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -895,15 +881,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo09 = ctx.example("c_demo_09", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "tex",
-        .@"compile-slang" = compile_slang_dll,
         .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "09_texture" }),
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -918,15 +902,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo10 = ctx.example("c_demo_10", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "depth",
-        .@"compile-slang" = compile_slang_dll,
         .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "10_depth" }),
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -941,14 +923,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
 
     const demo12 = ctx.example("c_demo_12", .{
         .target = target,
         .optimize = optimize,
-        .@"compile-slang" = compile_slang_dll,
         .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "12_render_service" }),
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
@@ -971,7 +951,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &render_module.step, &ecs_flecs.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &render_module.step, &ecs_flecs.step, ctx.slang_step });
 
     const demo13 = ctx.example("c_demo_13", .{
         .target = target,
@@ -1124,12 +1104,6 @@ const Ctx = struct {
     test_step: *std.Build.Step,
     docs_step: *std.Build.Step,
     exe_suffix: []const u8,
-    dotnet_tail: ?*std.Build.Step = null,
-
-    fn serializeDotnet(ctx: *Ctx, step: *std.Build.Step) void {
-        if (ctx.dotnet_tail) |tail| step.dependOn(tail);
-        ctx.dotnet_tail = step;
-    }
 
     fn addSlangInputs(ctx: *Ctx, run: *std.Build.Step.Run, dir_path: []const u8) void {
         const b = ctx.b;
@@ -1146,14 +1120,18 @@ const Ctx = struct {
         }
     }
 
-    /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs.
-    /// Every render pass loads its shaders at runtime by logical name via
-    /// ke_render_service::load_shader, so the output always lands in the one
-    /// shared runtime shaders directory, never embedded in a plugin's own .so
-    /// (render/service's own embedded fallback shader is the one exception —
-    /// handled separately, since @embedFile needs the file before that
-    /// module's own `zig build` even starts).
+    /// Compiles one Slang entry point of the file at `input` to WGSL with `slangc`, writing its
+    /// reflection beside it, both installed in `out_dir`, which a pass loads them from by logical
+    /// name.
     fn shader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8, after: ?*std.Build.Step) *std.Build.Step.InstallFile {
+        const run = ctx.compileShader(name, stage, entry, .{ .cwd_relative = input }, out_dir, includes, after);
+        ctx.addSlangInputs(run.run, std.fs.path.dirname(input) orelse ".");
+        return run.install;
+    }
+
+    /// The compile of one entry point of `input`, which may be a file the build generates, and
+    /// the install of its output; `shader` is the form for a file of the tree.
+    fn compileShader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: std.Build.LazyPath, out_dir: []const u8, includes: []const []const u8, after: ?*std.Build.Step) struct { run: *std.Build.Step.Run, install: *std.Build.Step.InstallFile } {
         const b = ctx.b;
         const suffix = if (std.mem.eql(u8, stage, "vertex"))
             "vs"
@@ -1166,13 +1144,12 @@ const Ctx = struct {
         run.step.dependOn(ctx.slang_step);
         if (after) |a| run.step.dependOn(a);
         for (includes) |inc| run.addArgs(&.{ "-I", inc });
-        run.addFileArg(.{ .cwd_relative = input });
+        run.addFileArg(input);
         run.addArg("-o");
         const compiled = run.addOutputFileArg(file_name);
         const reflection_name = b.fmt("{s}.{s}.json", .{ name, suffix });
         run.addArg("-reflection-json");
         const reflected = run.addOutputFileArg(reflection_name);
-        ctx.addSlangInputs(run, std.fs.path.dirname(input) orelse ".");
         for (includes) |inc| ctx.addSlangInputs(run, inc);
         run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));
 
@@ -1181,7 +1158,7 @@ const Ctx = struct {
         const install_reflection = b.addInstallFileWithDir(reflected, .{ .custom = relative }, reflection_name);
         const install = b.addInstallFileWithDir(compiled, .{ .custom = relative }, file_name);
         install.step.dependOn(&install_reflection.step);
-        return install;
+        return .{ .run = run, .install = install };
     }
 
     /// Writes the reflection of a Slang module that declares parameters and no entry point, as
@@ -1220,7 +1197,7 @@ const Ctx = struct {
     ) []const *std.Build.Step.InstallFile {
         const b = ctx.b;
         var steps: std.ArrayList(*std.Build.Step.InstallFile) = .empty;
-        const gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", pass });
+        const wrappers = b.addWriteFiles();
 
         var wrapper_includes: std.ArrayList([]const u8) = .empty;
         wrapper_includes.appendSlice(b.allocator, includes) catch @panic("OOM");
@@ -1229,6 +1206,8 @@ const Ctx = struct {
         var threaded: std.Io.Threaded = .init(b.allocator, .{});
         defer threaded.deinit();
         const io = threaded.io();
+        const template_text = std.Io.Dir.cwd().readFileAlloc(io, template, b.allocator, .limited(1024 * 1024)) catch |err|
+            std.debug.panic("cannot read {s}: {s}", .{ template, @errorName(err) });
 
         for (materials_dirs) |mdir| {
             var dir = std.Io.Dir.openDirAbsolute(io, mdir, .{ .iterate = true }) catch continue;
@@ -1239,20 +1218,14 @@ const Ctx = struct {
                 const material_name = entry.name[0 .. entry.name.len - ".slang".len];
                 const material_path = b.pathJoin(&.{ mdir, entry.name });
                 const combined_name = b.fmt("{s}.{s}", .{ material_name, pass });
-                const wrapper = b.pathJoin(&.{ gen_dir, b.fmt("{s}.slang", .{combined_name}) });
+                const material_source = std.Io.Dir.cwd().readFileAlloc(io, material_path, b.allocator, .limited(1024 * 1024)) catch |err|
+                    std.debug.panic("cannot read {s}: {s}", .{ material_path, @errorName(err) });
+                const wrapper_text = std.mem.replaceOwned(u8, b.allocator, template_text, "@MATERIAL_MODULE@", material_name) catch @panic("OOM");
+                const wrapper_source = std.mem.replaceOwned(u8, b.allocator, wrapper_text, "@MATERIAL_STRUCT@", materialStruct(material_path, material_source)) catch @panic("OOM");
+                const wrapper = wrappers.add(b.fmt("{s}.slang", .{combined_name}), wrapper_source);
 
-                const gen_wrapper = b.addSystemCommand(&.{
-                    "dotnet",     "run",         b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.cs" }),
-                    "--material", material_path, "--template",
-                    template,     "--output",    wrapper,
-                });
-                gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
-                ctx.serializeDotnet(&gen_wrapper.step);
-
-                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
-                vs.step.dependOn(&gen_wrapper.step);
-                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
-                fs.step.dependOn(&gen_wrapper.step);
+                const vs = ctx.compileShader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, null).install;
+                const fs = ctx.compileShader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items, null).install;
 
                 steps.append(b.allocator, vs) catch @panic("OOM");
                 steps.append(b.allocator, fs) catch @panic("OOM");
@@ -1361,6 +1334,27 @@ fn fetchFile(b: *std.Build, url: []const u8, sha256: []const u8, basename: []con
     const run = b.addRunArtifact(exe);
     run.addArgs(&.{ url, sha256 });
     return run.addOutputFileArg(basename);
+}
+
+/// The name of the one struct the material file declares as `struct <Name> : IMaterial`; the build
+/// stops when the file declares none or more than one, since the file name identifies the material.
+fn materialStruct(path: []const u8, source: []const u8) []const u8 {
+    var found: ?[]const u8 = null;
+    var lines = std.mem.splitScalar(u8, source, '\n');
+    while (lines.next()) |raw| {
+        const line = std.mem.trimStart(u8, raw, " \t");
+        if (!std.mem.startsWith(u8, line, "struct ")) continue;
+        const rest = std.mem.trimStart(u8, line["struct ".len..], " \t");
+        const name_end = std.mem.indexOfNone(u8, rest, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") orelse rest.len;
+        const after = std.mem.trimStart(u8, rest[name_end..], " \t");
+        if (name_end == 0 or after.len == 0 or after[0] != ':') continue;
+        const base = std.mem.trimStart(u8, after[1..], " \t");
+        if (!std.mem.startsWith(u8, base, "IMaterial")) continue;
+        if (base.len > "IMaterial".len and (std.ascii.isAlphanumeric(base["IMaterial".len]) or base["IMaterial".len] == '_')) continue;
+        if (found != null) std.debug.panic("{s}: more than one IMaterial struct; one material per file, so the file name identifies it", .{path});
+        found = rest[0..name_end];
+    }
+    return found orelse std.debug.panic("{s}: no `struct <Name> : IMaterial`; an authored material must declare its IMaterial conformance", .{path});
 }
 
 /// Creates each directory with its parents, for a tool that writes into one it does not create.
