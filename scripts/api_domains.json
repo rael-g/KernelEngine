@@ -772,6 +772,7 @@
       "namespace": "KernelEngine.Configuration.Native",
       "headers": [
         "src/c/configuration/kernel_engine/configuration/configuration.h",
+        "src/c/configuration/kernel_engine/configuration/configuration_source.h",
         "src/zig/configuration/include/kernel_engine/configuration/configuration_create.h"
       ],
       "library": "ke_configuration",

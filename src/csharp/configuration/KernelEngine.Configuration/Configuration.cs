@@ -29,12 +29,21 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
     /// <summary>Reads <paramref name="path"/> into the store. A missing file is a no-op.</summary>
     public void LoadToml(string path)
     {
-        var bytes = Encoding.UTF8.GetBytes(path + '\0');
-        fixed (byte* p = bytes)
+        ke_error* err = null;
+        var source = ConfigNative.configuration_toml_create(&err);
+        if (source.@ref == null) throw NativeErrors.FromNative(err, "configuration_toml_create");
+        try
         {
-            ke_error* err = null;
-            if (!ConfigNative.configuration_toml_load(_native, (sbyte*)p, &err))
-                throw NativeErrors.FromNative(err, "configuration_toml_load");
+            var bytes = Encoding.UTF8.GetBytes(path + '\0');
+            fixed (byte* p = bytes)
+            {
+                if (!source.@ref->load(source.@ref, _native, (sbyte*)p, &err))
+                    throw NativeErrors.FromNative(err, "load");
+            }
+        }
+        finally
+        {
+            source.destroy(source.@ref);
         }
     }
 
