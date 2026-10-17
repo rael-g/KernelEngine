@@ -4,16 +4,20 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const slangc = b.option([]const u8, "slangc", "path to the fetched slangc executable") orelse @panic("-Dslangc required");
+    const slangc = b.option(std.Build.LazyPath, "slangc", "the slangc the root build laid out") orelse @panic("-Dslangc required");
     const shader_name = b.option([]const u8, "shader-name", "base name of the .slang file holding vs_main and fs_main") orelse @panic("-Dshader-name required");
     const include_dirs = b.option([]const u8, "include-dirs", "'|'-separated include directories") orelse "";
     const libs = b.option([]const u8, "libs", "'|'-separated absolute shared-library paths, in link order") orelse @panic("-Dlibs required");
     const link_m = b.option(bool, "link-m", "link libm") orelse false;
 
     const source = b.pathFromRoot(b.fmt("{s}.slang", .{shader_name}));
-    const gen_vert = b.addSystemCommand(&.{ slangc, source, "-target", "wgsl", "-entry", "vs_main", "-stage", "vertex", "-o" });
+    const gen_vert = std.Build.Step.Run.create(b, "slangc");
+    gen_vert.addFileArg(slangc);
+    gen_vert.addArgs(&.{ source, "-target", "wgsl", "-entry", "vs_main", "-stage", "vertex", "-o" });
     const vert_wgsl = gen_vert.addOutputFileArg(b.fmt("{s}_vs.wgsl", .{shader_name}));
-    const gen_frag = b.addSystemCommand(&.{ slangc, source, "-target", "wgsl", "-entry", "fs_main", "-stage", "fragment", "-o" });
+    const gen_frag = std.Build.Step.Run.create(b, "slangc");
+    gen_frag.addFileArg(slangc);
+    gen_frag.addArgs(&.{ source, "-target", "wgsl", "-entry", "fs_main", "-stage", "fragment", "-o" });
     const frag_wgsl = gen_frag.addOutputFileArg(b.fmt("{s}_fs.wgsl", .{shader_name}));
 
     const mod = b.createModule(.{

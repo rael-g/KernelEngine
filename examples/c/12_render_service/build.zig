@@ -4,11 +4,13 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const slangc = b.option([]const u8, "slangc", "path to the fetched slangc executable") orelse @panic("-Dslangc required");
+    const slangc = b.option(std.Build.LazyPath, "slangc", "the slangc the root build laid out") orelse @panic("-Dslangc required");
     const include_dirs = b.option([]const u8, "include-dirs", "'|'-separated include directories") orelse "";
     const libs = b.option([]const u8, "libs", "'|'-separated absolute shared-library paths, in link order") orelse @panic("-Dlibs required");
 
-    const gen = b.addSystemCommand(&.{ slangc, b.pathFromRoot("triangle.slang"), "-target", "wgsl" });
+    const gen = std.Build.Step.Run.create(b, "slangc");
+    gen.addFileArg(slangc);
+    gen.addArgs(&.{ b.pathFromRoot("triangle.slang"), "-target", "wgsl" });
     const wgsl = gen.captureStdOut(.{ .basename = "triangle.wgsl" });
 
     const mod = b.createModule(.{

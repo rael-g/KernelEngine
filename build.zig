@@ -120,15 +120,12 @@ pub fn build(b: *std.Build) void {
         b.pathJoin(&.{ root, b.install_prefix });
 
     const slang_dir = b.pathJoin(&.{ tools_dir, b.fmt("slang-{s}", .{slang_version}) });
-    const slang_step: *std.Build.Step, const slangc_exe = if (slang_package) |package| .{
-        &ToolTree.create(b, "lay out slang", .{
-            .package = package.path(""),
-            .dest = slang_dir,
-            .stamp = slang_version,
-            .executable_dirs = &.{"bin"},
-        }).step,
-        b.pathJoin(&.{ slang_dir, "bin", if (host_windows) "slangc.exe" else "slangc" }),
-    } else .{ b.step("slangc-given", "the slangc given by -Dslangc"), slangc_given.? };
+    const slangc: std.Build.LazyPath = if (slang_package) |package| ToolTree.create(b, "lay out slang", .{
+        .package = package.path(""),
+        .dest = slang_dir,
+        .stamp = slang_version,
+        .executable_dirs = &.{"bin"},
+    }).path(if (host_windows) "bin/slangc.exe" else "bin/slangc") else .{ .cwd_relative = slangc_given.? };
 
     const libraries_step = b.allocator.create(std.Build.Step) catch @panic("OOM");
     libraries_step.* = std.Build.Step.init(.{ .id = .custom, .name = "plugin libraries", .owner = b });
@@ -138,8 +135,7 @@ pub fn build(b: *std.Build) void {
         .prefix = absolute_prefix,
         .vcpkg_step = ports_step,
         .exe_suffix = if (target.result.os.tag == .windows) ".exe" else "",
-        .slangc_exe = slangc_exe,
-        .slang_step = slang_step,
+        .slangc = slangc,
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
         .libraries_step = libraries_step,
         .test_step = b.step("test", "Run every plugin's own Zig tests"),
@@ -815,7 +811,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "triangle",
-        .@"slangc" = ctx.slangc_exe,
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -830,13 +826,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo15 = ctx.example("c_demo_15", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "triangle",
-        .@"slangc" = ctx.slangc_exe,
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -852,13 +848,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &gpu_render_target_texture.step, &gpu_device_webgpu.step, ctx.slang_step });
+    }, &.{ &common.step, &gpu_render_target_texture.step, &gpu_device_webgpu.step });
 
     const demo07 = ctx.example("c_demo_07", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "rotate",
-        .@"slangc" = ctx.slangc_exe,
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -874,13 +870,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
         .@"link-m" = true,
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo08 = ctx.example("c_demo_08", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "mesh",
-        .@"slangc" = ctx.slangc_exe,
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -895,13 +891,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo09 = ctx.example("c_demo_09", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "tex",
-        .@"slangc" = ctx.slangc_exe,
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -916,13 +912,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo10 = ctx.example("c_demo_10", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "depth",
-        .@"slangc" = ctx.slangc_exe,
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -937,12 +933,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo12 = ctx.example("c_demo_12", .{
         .target = target,
         .optimize = optimize,
-        .@"slangc" = ctx.slangc_exe,
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
@@ -965,7 +961,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &render_module.step, &ecs_flecs.step, ctx.slang_step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &render_module.step, &ecs_flecs.step });
 
     const demo13 = ctx.example("c_demo_13", .{
         .target = target,
@@ -1111,8 +1107,7 @@ const Ctx = struct {
     root: []const u8,
     prefix: []const u8,
     vcpkg_step: *std.Build.Step,
-    slangc_exe: []const u8,
-    slang_step: *std.Build.Step,
+    slangc: std.Build.LazyPath,
     plugins_step: *std.Build.Step,
     libraries_step: *std.Build.Step,
     test_step: *std.Build.Step,
@@ -1154,8 +1149,9 @@ const Ctx = struct {
         else
             "cs";
         const file_name = b.fmt("{s}.{s}.wgsl", .{ name, suffix });
-        const run = b.addSystemCommand(&.{ ctx.slangc_exe, "-target", "wgsl", "-entry", entry, "-stage", stage });
-        run.step.dependOn(ctx.slang_step);
+        const run = std.Build.Step.Run.create(b, "slangc");
+        run.addFileArg(ctx.slangc);
+        run.addArgs(&.{ "-target", "wgsl", "-entry", entry, "-stage", stage });
         if (after) |a| run.step.dependOn(a);
         for (includes) |inc| run.addArgs(&.{ "-I", inc });
         run.addFileArg(input);
@@ -1180,8 +1176,9 @@ const Ctx = struct {
     fn reflection(ctx: *Ctx, name: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8) *std.Build.Step.InstallFile {
         const b = ctx.b;
         const file_name = b.fmt("{s}.json", .{name});
-        const run = b.addSystemCommand(&.{ ctx.slangc_exe, "-target", "wgsl" });
-        run.step.dependOn(ctx.slang_step);
+        const run = std.Build.Step.Run.create(b, "slangc");
+        run.addFileArg(ctx.slangc);
+        run.addArgs(&.{ "-target", "wgsl" });
         for (includes) |inc| run.addArgs(&.{ "-I", inc });
         run.addFileArg(.{ .cwd_relative = input });
         run.addArg("-reflection-json");

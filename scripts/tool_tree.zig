@@ -32,20 +32,28 @@ pub const Options = struct {
     added: []const Added = &.{},
 };
 
-/// The step, its options and the package directory resolved when the step runs.
+/// The step, its options, and the laid-out directory, which a step reading from it through `path`
+/// depends on.
 pub const ToolTree = struct {
     step: std.Build.Step,
     options: Options,
+    dir: std.Build.GeneratedFile,
 
     pub fn create(b: *std.Build, name: []const u8, options: Options) *ToolTree {
         const self = b.allocator.create(ToolTree) catch @panic("OOM");
         self.* = .{
             .step = std.Build.Step.init(.{ .id = .custom, .name = name, .owner = b, .makeFn = make }),
             .options = options,
+            .dir = .{ .step = &self.step },
         };
         options.package.addStepDependencies(&self.step);
         for (options.added) |a| a.source.addStepDependencies(&self.step);
         return self;
+    }
+
+    /// The file `sub_path` of the laid-out tool, available once the step has run.
+    pub fn path(self: *ToolTree, sub_path: []const u8) std.Build.LazyPath {
+        return .{ .generated = .{ .file = &self.dir, .sub_path = sub_path } };
     }
 };
 
@@ -57,6 +65,7 @@ fn make(step: *std.Build.Step, _: std.Build.Step.MakeOptions) anyerror!void {
     const io = b.graph.io;
     const o = self.options;
     const cwd = std.Io.Dir.cwd();
+    self.dir.path = o.dest;
 
     const stamp_path = b.pathJoin(&.{ o.dest, stamp_file });
     if (cwd.readFileAlloc(io, stamp_path, b.allocator, .limited(256))) |recorded| {
