@@ -1480,9 +1480,6 @@ fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gp
     return cp;
 }
 
-/// Not implemented: does nothing.
-fn encPipelineBarrier(_: [*c]ke.ke_gpu_command_encoder, _: [*c]const ke.ke_gpu_barrier) callconv(.c) void {}
-
 /// Records the copy on the raw encoder; wgpu validates the ranges.
 fn encCopyBufferToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buffer, src_off: usize, dst: ke.ke_gpu_buffer, dst_off: usize, size: usize) callconv(.c) void {
     wgpu.wgpuCommandEncoderCopyBufferToBuffer(@ptrCast(enc.*.handle), @ptrFromInt(src), src_off, @ptrFromInt(dst), dst_off, size);
@@ -1578,7 +1575,6 @@ fn createCommandEncoder(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_comman
         .device                 = dev,
         .begin_render_pass      = encBeginRenderPass,
         .begin_compute_pass     = encBeginComputePass,
-        .pipeline_barrier       = encPipelineBarrier,
         .copy_buffer_to_buffer  = encCopyBufferToBuffer,
         .copy_buffer_to_texture = encCopyBufferToTexture,
         .copy_texture_to_texture = encCopyTextureToTexture,

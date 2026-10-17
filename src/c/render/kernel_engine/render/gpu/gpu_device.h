@@ -263,35 +263,6 @@ typedef struct ke_gpu_compute_pass_params
     const char *label;
 } ke_gpu_compute_pass_params;
 
-typedef enum ke_gpu_barrier_type
-{
-    KE_GPU_BARRIER_BUFFER,
-    KE_GPU_BARRIER_TEXTURE,
-} ke_gpu_barrier_type;
-
-typedef struct ke_gpu_buffer_barrier
-{
-    ke_gpu_buffer       buffer;
-    ke_gpu_buffer_usage from_state;
-    ke_gpu_buffer_usage to_state;
-} ke_gpu_buffer_barrier;
-
-typedef struct ke_gpu_texture_barrier
-{
-    ke_gpu_texture       texture;
-    ke_gpu_texture_usage from_state;
-    ke_gpu_texture_usage to_state;
-} ke_gpu_texture_barrier;
-
-typedef struct ke_gpu_barrier
-{
-    ke_gpu_barrier_type type;
-    union {
-        ke_gpu_buffer_barrier  buffer;
-        ke_gpu_texture_barrier texture;
-    };
-} ke_gpu_barrier;
-
 typedef struct ke_gpu_device
 {
     void *handle;

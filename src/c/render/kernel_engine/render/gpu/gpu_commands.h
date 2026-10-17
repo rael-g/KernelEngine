@@ -77,7 +77,6 @@ struct ke_gpu_command_encoder
     /// Begins a compute pass. p may be NULL, which begins it unlabeled.
     struct ke_gpu_compute_pass *(*begin_compute_pass)(struct ke_gpu_command_encoder *self,
                                                       const ke_gpu_compute_pass_params *p);
-    void (*pipeline_barrier)(struct ke_gpu_command_encoder *self, const ke_gpu_barrier *b);
     void (*copy_buffer_to_buffer)(struct ke_gpu_command_encoder *self,
                                   ke_gpu_buffer src, size_t src_offset,
                                   ke_gpu_buffer dst, size_t dst_offset, size_t size);
