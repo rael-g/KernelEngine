@@ -24,6 +24,9 @@ const Tracked = struct {
 /// `update` counts the body system's runs, so a body whose entity no longer holds it is found.
 const Module = struct {
     physics: *c.ke_physics_2d,
+    runtime: *c.ke_runtime,
+    body_system: c.ke_system_id = 0,
+    collider_system: c.ke_system_id = 0,
     logger: ?*c.ke_logger = null,
     tracked: std.AutoHashMapUnmanaged(c.ke_entity, Tracked) = .empty,
     update: u64 = 0,
@@ -248,10 +251,13 @@ fn findBody(
 }
 
 /// The `destroy` slot of the handle `ke_physics_body2d_module_create` returns, called by the owner
-/// of that handle. The bodies the module created are destroyed with it, so the physics world it
-/// was given must still be alive.
+/// of that handle. Its two systems are unregistered from the runtime and the bodies the module
+/// created are destroyed with it, so the runtime and the physics world it was given must still be
+/// alive.
 fn destroyHandle(self: ?*c.ke_physics_body2d_module) callconv(.c) void {
     const m: *Module = @ptrCast(@alignCast(self orelse return));
+    _ = m.runtime.unregister_system.?(m.runtime, m.collider_system, null);
+    _ = m.runtime.unregister_system.?(m.runtime, m.body_system, null);
     var it = m.tracked.valueIterator();
     while (it.next()) |t| m.physics.destroy_body.?(m.physics, t.body);
     m.tracked.deinit(gpa);
@@ -274,7 +280,7 @@ export fn ke_physics_body2d_module_create(
     const physics = pr.physics orelse return empty;
 
     const m = gpa.create(Module) catch return empty;
-    m.* = .{ .physics = physics, .logger = pr.logger };
+    m.* = .{ .physics = physics, .runtime = rt, .logger = pr.logger };
 
     const body_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_BODY2D, @sizeOf(c.ke_body2d_component), &c.ke_body2d_component_fields, c.ke_body2d_component_fields.len, null);
     const transform_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, @sizeOf(c.ke_transform2d_component), &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len, null);
@@ -294,8 +300,8 @@ export fn ke_physics_body2d_module_create(
     sp.pinned_thread = 0;
     sp.user_data = m;
     sp.execute = bodySystem;
-    const body_system = rt.*.register_system.?(rt, &sp, @ptrCast(out_error));
-    if (body_system == 0) {
+    m.body_system = rt.*.register_system.?(rt, &sp, @ptrCast(out_error));
+    if (m.body_system == 0) {
         gpa.destroy(m);
         return empty;
     }
@@ -310,8 +316,9 @@ export fn ke_physics_body2d_module_create(
     cp.pinned_thread = 0;
     cp.user_data = m;
     cp.execute = colliderSystem;
-    if (rt.*.register_system.?(rt, &cp, @ptrCast(out_error)) == 0) {
-        _ = rt.*.unregister_system.?(rt, body_system, null);
+    m.collider_system = rt.*.register_system.?(rt, &cp, @ptrCast(out_error));
+    if (m.collider_system == 0) {
+        _ = rt.*.unregister_system.?(rt, m.body_system, null);
         gpa.destroy(m);
         return empty;
     }
@@ -333,7 +340,7 @@ const testing = std.testing;
 
 const Stubs = @import("stubs").Stubs(c);
 
-test "creating and destroying the body2d module leaves no block allocated and registers its two systems" {
+test "creating and destroying the body2d module leaves no block allocated and no system registered" {
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
     var rt: Stubs.Runtime = undefined;
@@ -349,6 +356,7 @@ test "creating and destroying the body2d module leaves no block allocated and re
     try testing.expect(h.ref != null);
     try testing.expectEqual(@as(u32, 2), rt.registered);
     h.destroy.?(h.ref);
+    try testing.expectEqual(@as(u32, 0), rt.live_count);
     try heap.expectNoLeaks();
 }
 
@@ -460,8 +468,10 @@ const BodyView = struct {
 test "a body whose entity no longer holds it is destroyed on the next update" {
     FakeWorld.reset();
     var physics = FakeWorld.api();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
     const m = try gpa.create(Module);
-    m.* = .{ .physics = &physics };
+    m.* = .{ .physics = &physics, .runtime = rt.api() };
     var ctx = std.mem.zeroes(c.ke_system_ctx);
     ctx.view = BodyView.view;
 
@@ -487,8 +497,10 @@ test "a body whose entity no longer holds it is destroyed on the next update" {
 test "destroying the module destroys the bodies it created" {
     FakeWorld.reset();
     var physics = FakeWorld.api();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
     const m = try gpa.create(Module);
-    m.* = .{ .physics = &physics };
+    m.* = .{ .physics = &physics, .runtime = rt.api() };
     var ctx = std.mem.zeroes(c.ke_system_ctx);
     ctx.view = BodyView.view;
 
