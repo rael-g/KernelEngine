@@ -11,8 +11,8 @@ namespace KernelEngine.Framework;
 /// Managed handle to a native world: the ECS, the runtime and the scene tree a scene is built
 /// on, and the per-component registry of how a scene block fills a component. Disposing it
 /// destroys the world and then the scene tree it was created with. This part declares the
-/// typed <c>RegisterComponentApply</c> and the managed <c>Ecs</c>, <c>Runtime</c> and
-/// <c>SceneTree</c> properties; the members that mirror the vtable are generated.
+/// typed <c>RegisterComponentApply</c> and the managed <c>SceneTree</c> property; the members
+/// that mirror the vtable are generated.
 /// </summary>
 public unsafe partial class World : IDisposable
 {
@@ -20,24 +20,16 @@ public unsafe partial class World : IDisposable
     private readonly delegate* unmanaged[Cdecl]<ke_scene_tree*, void> _destroyTree;
     private SceneTree? _sceneTree;
 
-    /// <summary>ECS registry the world was constructed with.</summary>
-    public IEcsRegistry Ecs { get; }
-
-    /// <summary>Runtime the world was constructed with.</summary>
-    public IRuntime Runtime { get; }
-
     /// <summary>
     /// Creates a <see cref="World"/> wrapper that also owns the scene tree of
     /// <paramref name="treeHandle"/>, destroying it on <see cref="Dispose"/> after the world is
     /// destroyed.
     /// </summary>
-    public World(ke_world_handle worldHandle, ke_scene_tree_handle treeHandle, IEcsRegistry ecs, IRuntime runtime)
+    public World(ke_world_handle worldHandle, ke_scene_tree_handle treeHandle)
         : this(worldHandle)
     {
         _ownedTree = treeHandle.@ref;
         _destroyTree = treeHandle.destroy;
-        Ecs = ecs;
-        Runtime = runtime;
     }
 
     /// <summary>

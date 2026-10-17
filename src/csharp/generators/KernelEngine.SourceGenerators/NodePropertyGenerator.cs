@@ -143,7 +143,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         foreach (var slot in slots)
         {
-            sb.AppendLine($"    private {slot.TypeName} {slot.State};");
+            sb.AppendLine(HasDefault(slot.Symbol)
+                ? $"    private {slot.TypeName} {slot.State} = {slot.TypeName}.Default;"
+                : $"    private {slot.TypeName} {slot.State};");
             sb.AppendLine($"    private uint {slot.Cid};");
         }
         sb.AppendLine();
@@ -544,6 +546,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         public string Cid => $"_generatedCid{Index}";
         public string Current => $"GeneratedCurrent{Index}";
     }
+
+    /// <summary>
+    /// Whether the component declares a static <c>Default</c> of its own type, the neutral value
+    /// its <c>[default:]</c> fields hold, which every constructor of the node then starts from.
+    /// </summary>
+    static bool HasDefault(INamedTypeSymbol? component) =>
+        component is not null && component.GetMembers("Default").OfType<IPropertySymbol>()
+            .Any(d => d.IsStatic && SymbolEqualityComparer.Default.Equals(d.Type, component));
 
     static INamedTypeSymbol? NamedComponentOf(AttributeData? attr) =>
         attr?.NamedArguments.FirstOrDefault(kv => kv.Key == "Component").Value.Value as INamedTypeSymbol;

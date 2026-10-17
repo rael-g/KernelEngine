@@ -73,8 +73,6 @@ public sealed class FrameworkModule : IRuntimeModule
         {
             var flecsEcs = sp.GetRequiredService<INativeEcs>();
             var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
-            var ecs = sp.GetRequiredService<IEcsRegistry>();
-            var runtime = sp.GetRequiredService<IRuntime>();
             unsafe
             {
                 var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
@@ -89,7 +87,7 @@ public sealed class FrameworkModule : IRuntimeModule
                 p.logger = sp.GetService<KernelEngine.Logger.INativeLogger>() is { } lg ? lg.Native : null;
                 var w = KernelEngine.Framework.Native.NativeMethods.world_create(&p, null);
                 if (w.@ref == null) throw new InvalidOperationException("world_create failed");
-                return new World(w, tree, ecs, runtime);
+                return new World(w, tree);
             }
         });
 

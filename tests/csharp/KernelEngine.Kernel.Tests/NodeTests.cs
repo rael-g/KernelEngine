@@ -56,8 +56,25 @@ public sealed partial class ReadOnlyProbe : Node
     }
 }
 
+/// <summary>
+/// A node built only through a constructor that takes an argument, as one depending on a
+/// service is.
+/// </summary>
+public sealed partial class ConstructedProbe : Node2D
+{
+    public ConstructedProbe(float rotation) => Rotation = rotation;
+}
+
 public class NodeTests
 {
+    [Fact]
+    public void A_node_built_through_its_own_constructor_starts_from_its_component_defaults()
+    {
+        var node = new ConstructedProbe(0.5f);
+        Assert.Equal(Vector2.One, node.Scale);
+        Assert.Equal(0.5f, node.Rotation);
+    }
+
     [Fact]
     public void Transform_ValueTypeBehavior()
     {

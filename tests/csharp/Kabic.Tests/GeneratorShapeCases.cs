@@ -423,16 +423,15 @@ internal static class GeneratorShapeCases
                 ("layers", "uint32_t", ["default:1"])),
             contains: ["[GeneratedNodeComponent(typeof(ProbeComponent), \"probe\")]",
                        "public partial class Probe3D : Node",
-                       "_generatedState0 = ProbeComponent.Default;",
                        "[NativeField(\"Position\", Component = typeof(ProbeComponent))]",
                        "public partial Vector3 Position { get; set; }",
                        "[NativeField(\"Layers\", Component = typeof(ProbeComponent))]"],
             absent: ["typeof(ke_probe_component)", "ke_vec3", "_generatedState0.position"]);
 
-        ExpectNodeType("a node type with no stated default seeds nothing",
-            NodeStruct("ke_bare_component", "Bare", ("value", "float", [])),
-            contains: ["public Bare()"],
-            absent: ["Default;"]);
+        ExpectNodeType("a node type declares no constructor, so one written beside it is its only one",
+            NodeStruct("ke_probe_component", "Probe3D", ("layers", "uint32_t", ["default:1"])),
+            contains: ["public partial class Probe3D : Node"],
+            absent: ["public Probe3D()", "Default;"]);
 
         ExpectValueStruct("a node component is projected without saying [value] as well",
             NodeStruct("ke_probe_component", "Probe3D", ("position", "ke_vec3", [])),
