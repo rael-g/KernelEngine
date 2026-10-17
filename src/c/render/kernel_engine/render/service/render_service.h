@@ -30,7 +30,7 @@ typedef enum ke_render_size_mode
     KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER = 1,
 } ke_render_size_mode;
 
-typedef struct ke_render_resource_desc
+typedef struct ke_render_resource_params
 {
     const char             *name;
     ke_render_resource_type type;
@@ -42,7 +42,7 @@ typedef struct ke_render_resource_desc
     float                   scale_y;
     /// Per-resource clear color.
     float                   clear_value[4];
-} ke_render_resource_desc;
+} ke_render_resource_params;
 
 /// What every shader reads about the frame being drawn, under the parameter `ke_frame`. Matrices are
 /// stored the way the math library stores them.
@@ -98,7 +98,7 @@ struct ke_render_service
     /// Declares a transient resource the service allocates and recycles.
     /// @return The tag-component cid to place in a pass's access_list.
     ke_component_id (*declare)(struct ke_render_service *self,
-                               const ke_render_resource_desc *desc, ke_error **out_error);
+                               const ke_render_resource_params *params, ke_error **out_error);
     /// Imports an externally-owned texture under `name`.
     /// @return Its tag-component cid.
     ke_component_id (*import_texture)(struct ke_render_service *self, const char *name,

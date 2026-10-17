@@ -250,28 +250,28 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     gb.objects = .{ .device = dev, .binder = binder, .layout = gb.groups.layout, .buffer_label = "gbuffer.obj_uniform", .set_label = "gbuffer.obj_set" };
     if (!gb.objects.?.ensure(1, out_error)) return false;
 
-    const albedo_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
+    const albedo_cid = core.*.declare.?(core, &c.ke_render_resource_params{
         .name = "gbuffer_albedo",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
-    const normal_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
+    const normal_cid = core.*.declare.?(core, &c.ke_render_resource_params{
         .name = "gbuffer_normal",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
-    const emissive_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
+    const emissive_cid = core.*.declare.?(core, &c.ke_render_resource_params{
         .name = "gbuffer_emissive",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
     }, null);
-    const depth_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
+    const depth_cid = core.*.declare.?(core, &c.ke_render_resource_params{
         .name = "depth",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,

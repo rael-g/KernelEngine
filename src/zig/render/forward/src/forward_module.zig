@@ -327,7 +327,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.objects = .{ .device = dev, .binder = fwd.groups.binder, .layout = fwd.groups.layout, .buffer_label = "forward.obj_uniform", .set_label = "forward.obj_set" };
     if (!fwd.objects.?.ensure(1, out_error)) return false;
 
-    const hdr_opaque_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
+    const hdr_opaque_cid = core.*.declare.?(core, &c.ke_render_resource_params{
         .name = "hdr_opaque",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,

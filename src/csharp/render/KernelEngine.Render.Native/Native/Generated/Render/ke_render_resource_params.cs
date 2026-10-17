@@ -4,7 +4,7 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Native;
 
-public unsafe partial struct ke_render_resource_desc
+public unsafe partial struct ke_render_resource_params
 {
     [NativeTypeName("const char *")]
     public sbyte* name;

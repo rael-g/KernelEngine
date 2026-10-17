@@ -614,7 +614,7 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
-    var desc = std.mem.zeroes(c.ke_render_resource_desc);
+    var desc = std.mem.zeroes(c.ke_render_resource_params);
     desc.name = "hdr";
     desc.format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
     desc.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
@@ -686,7 +686,7 @@ test "a declared resource's texture and view carry the name it was declared unde
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
-    var desc = std.mem.zeroes(c.ke_render_resource_desc);
+    var desc = std.mem.zeroes(c.ke_render_resource_params);
     desc.name = "hdr_color";
     desc.format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
     desc.size_mode = c.KE_RENDER_SIZE_ABSOLUTE;

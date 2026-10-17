@@ -35,7 +35,7 @@
   ],
   "structs": [
     {
-      "name": "ke_render_resource_desc",
+      "name": "ke_render_resource_params",
       "doc": null,
       "tags": [],
       "fields": [
@@ -259,8 +259,8 @@
           "return_doc": "The tag-component cid to place in a pass\u0027s access_list.",
           "params": [
             {
-              "name": "desc",
-              "type": "const ke_render_resource_desc *",
+              "name": "params",
+              "type": "const ke_render_resource_params *",
               "tags": [],
               "doc": null
             },

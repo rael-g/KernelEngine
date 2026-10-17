@@ -451,7 +451,7 @@ pub fn Stubs(comptime c: type) type {
                 return @intCast(mint(self));
             }
 
-            fn declare(self: ?*c.ke_render_service, _: [*c]const c.ke_render_resource_desc, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+            fn declare(self: ?*c.ke_render_service, _: [*c]const c.ke_render_resource_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
                 return @intCast(mint(self));
             }
 

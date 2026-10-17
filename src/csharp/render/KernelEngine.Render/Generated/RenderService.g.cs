@@ -48,10 +48,10 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     /// <summary>Declares a transient resource the service allocates and recycles.</summary>
     /// <returns>The tag-component cid to place in a pass's access_list.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint Declare(ke_render_resource_desc* desc)
+    public uint Declare(ke_render_resource_params* @params)
     {
         ke_error* err = null;
-        var result = Handle->declare(Handle, desc, &err);
+        var result = Handle->declare(Handle, @params, &err);
         if (err != null) throw NativeErrors.FromNative(err, "declare");
         return result;
     }

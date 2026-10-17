@@ -12,36 +12,36 @@ const c = rc.c;
 /// transient ones: `destroyCore` destroys the texture and view of transient entries and of no
 /// other entry. Returns the invalid component id, with an out-of-memory error, when the table
 /// cannot grow or the name cannot be registered; a texture the device fails to create is not detected.
-pub fn declare(self: [*c]c.ke_render_service, desc: [*c]const c.ke_render_resource_desc, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_resource_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     const st = rc.coreOf(self);
     st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
     };
 
-    const cid = st.ecs.component_register.?(st.ecs, desc.*.name, 0, null, 0, out_error);
+    const cid = st.ecs.component_register.?(st.ecs, params.*.name, 0, null, 0, out_error);
     if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
 
-    var w = desc.*.width;
-    var h = desc.*.height;
-    if (desc.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER) {
-        w = scaled(st.backbuffer_w, desc.*.scale_x);
-        h = scaled(st.backbuffer_h, desc.*.scale_y);
+    var w = params.*.width;
+    var h = params.*.height;
+    if (params.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER) {
+        w = scaled(st.backbuffer_w, params.*.scale_x);
+        h = scaled(st.backbuffer_h, params.*.scale_y);
     }
 
-    const made = createTarget(st, desc.*.name, desc.*.format, w, h);
+    const made = createTarget(st, params.*.name, params.*.format, w, h);
     st.resources.appendAssumeCapacity(.{
-        .name = desc.*.name,
+        .name = params.*.name,
         .cid = cid,
-        .format = desc.*.format,
+        .format = params.*.format,
         .texture = made.texture,
         .view = made.view,
         .is_backbuffer = false,
         .is_transient = true,
-        .clear_value = desc.*.clear_value,
-        .relative = desc.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
-        .scale_x = desc.*.scale_x,
-        .scale_y = desc.*.scale_y,
+        .clear_value = params.*.clear_value,
+        .relative = params.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
+        .scale_x = params.*.scale_x,
+        .scale_y = params.*.scale_y,
     });
     return cid;
 }

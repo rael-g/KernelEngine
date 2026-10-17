@@ -6,8 +6,8 @@ public unsafe partial struct ke_render_service
 {
     public void* handle;
 
-    [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const ke_render_resource_desc *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_resource_desc*, KernelEngine.Common.Native.ke_error**, uint> declare;
+    [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const ke_render_resource_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_resource_params*, KernelEngine.Common.Native.ke_error**, uint> declare;
 
     [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *, ke_gpu_texture, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong, KernelEngine.Common.Native.ke_error**, uint> import_texture;

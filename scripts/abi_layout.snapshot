@@ -270,7 +270,7 @@ ke_font_loader_handle size=16 align=8
   destroy 8
 
 [render]
-ke_render_resource_desc size=56 align=8
+ke_render_resource_params size=56 align=8
   name 0
   type 8
   format 12

@@ -202,7 +202,7 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
 
     rebuildFrameSet(dl);
 
-    const hdr_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
+    const hdr_cid = core.*.declare.?(core, &c.ke_render_resource_params{
         .name = "hdr",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,

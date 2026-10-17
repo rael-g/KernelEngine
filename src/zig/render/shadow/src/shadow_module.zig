@@ -205,7 +205,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
 
     if (!enabled) return true;
 
-    const shadow_map_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
+    const shadow_map_cid = core.*.declare.?(core, &c.ke_render_resource_params{
         .name = "shadow_map",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
@@ -216,7 +216,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .scale_y = 1.0,
         .clear_value = .{ 1.0, 1.0, 1.0, 1.0 },
     }, null);
-    const shadow_depth_cid = core.*.declare.?(core, &c.ke_render_resource_desc{
+    const shadow_depth_cid = core.*.declare.?(core, &c.ke_render_resource_params{
         .name = "shadow_depth",
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
