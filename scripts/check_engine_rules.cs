@@ -87,7 +87,7 @@ var rules = new List<Rule>
             .SelectMany(s => s.Value.Select((l, i) => (s.Key, Line: i + 1, Match: exportFn.Match(l))))
             .Where(x => x.Match.Success && !declaredNames.Contains(x.Match.Groups[1].Value))
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),
-    new("a factory header declares one function", 4,
+    new("a factory header declares one function", 2,
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
     new("a parameter bag is named _params, never _desc, _descriptor, _info or _config", 0,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),

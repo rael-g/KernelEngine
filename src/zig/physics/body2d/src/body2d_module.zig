@@ -1,6 +1,6 @@
 //! Keeps the entity components of 2D bodies and colliders in agreement with a `ke_physics_2d`
-//! world, through two update-phase systems. It also exports the registration of the scene field
-//! tables of those components.
+//! world, through two update-phase systems. It also exports the set of those components a scene
+//! file can author.
 
 const std = @import("std");
 
@@ -324,25 +324,14 @@ export fn ke_physics_body2d_module_create(
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
 
-fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
-    const fields = @typeInfo(@TypeOf(table.*)).array;
-    _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
-}
+const Components = @import("scene_components").Set(c, &.{
+    .{ .name = c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(c.ke_body2d_component), .fields = &c.ke_body2d_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(c.ke_collider2d_component), .fields = &c.ke_collider2d_component_fields },
+});
 
-/// Registers the body and collider component ids with `ecs`, then their field tables with `world`,
-/// so scene blocks for those components apply to it. Returns false when either pointer is null.
-/// The result of each field-table registration is discarded, so true does not confirm that the
-/// tables were accepted.
-export fn ke_physics_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) callconv(.c) bool {
-    const e = ecs orelse return false;
-    const w = world orelse return false;
-
-    const body_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_BODY2D, @sizeOf(c.ke_body2d_component), &c.ke_body2d_component_fields, c.ke_body2d_component_fields.len, null);
-    const collider_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(c.ke_collider2d_component), &c.ke_collider2d_component_fields, c.ke_collider2d_component_fields.len, null);
-
-    registerFields(w, body_cid, &c.ke_body2d_component_fields);
-    registerFields(w, collider_cid, &c.ke_collider2d_component_fields);
-    return true;
+/// The factory of the scene component set. The set holds no state, so it cannot fail.
+export fn ke_physics_scene_components_create() callconv(.c) c.ke_scene_component_set_handle {
+    return Components.handle();
 }
 
 const testing = std.testing;

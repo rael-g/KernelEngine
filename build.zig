@@ -107,6 +107,7 @@ pub fn build(b: *std.Build) void {
     const kerror_src = b.pathJoin(&.{ src_zig, "common/kerror.zig" });
     const heap_src = b.pathJoin(&.{ src_zig, "common/heap.zig" });
     const component_fields_src = b.pathJoin(&.{ src_zig, "common/component_fields.zig" });
+    const scene_components_src = b.pathJoin(&.{ src_zig, "common/scene_components.zig" });
     const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
     const object_uniforms_src = b.pathJoin(&.{ src_zig, "render/common/object_uniforms.zig" });
     const feature_bindings_src = b.pathJoin(&.{ src_zig, "render/common/feature_bindings.zig" });
@@ -482,6 +483,7 @@ pub fn build(b: *std.Build) void {
     _ = ctx.member("ke_physics_body2d", .{
         .target = target,
         .optimize = optimize,
+        .@"scene-components-src" = scene_components_src,
         .@"heap-src" = heap_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
@@ -499,6 +501,7 @@ pub fn build(b: *std.Build) void {
     _ = ctx.member("ke_audio_module", .{
         .target = target,
         .optimize = optimize,
+        .@"scene-components-src" = scene_components_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-ecs-include" = b.pathJoin(&.{ src_c, "ecs" }),
@@ -715,6 +718,7 @@ pub fn build(b: *std.Build) void {
     const render_module = ctx.member("ke_render_module", .{
         .target = target,
         .optimize = optimize,
+        .@"scene-components-src" = scene_components_src,
         .@"heap-src" = heap_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),

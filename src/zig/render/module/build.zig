@@ -4,6 +4,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const scene_components_src = b.option([]const u8, "scene-components-src", "path to the shared Zig scene_components.zig") orelse @panic("-Dscene-components-src required");
+
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
@@ -39,6 +41,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    mod.addImport("scene_components", b.createModule(.{ .root_source_file = .{ .cwd_relative = scene_components_src }, .target = target, .optimize = optimize }));
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     const zmath = b.dependency("zmath", .{});
     mod.addImport("zmath", zmath.module("root"));
@@ -88,6 +91,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    test_mod.addImport("scene_components", b.createModule(.{ .root_source_file = .{ .cwd_relative = scene_components_src }, .target = target, .optimize = optimize }));
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     test_mod.addImport("zmath", zmath.module("root"));
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));

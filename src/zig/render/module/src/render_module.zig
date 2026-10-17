@@ -162,44 +162,21 @@ fn destroyModule(self: ?*c.ke_render_module) callconv(.c) void {
 
 const empty = c.ke_render_module_handle{ .ref = null, .destroy = null };
 
-/// Registers the render components in the ecs and gives the world their field tables, then the
-/// apply callbacks of the camera, the mesh and the sprite. Returns false, setting no error, when
-/// the ecs or the world is null or the world refuses one of its apply callbacks. Components
-/// registered before that point stay registered.
-export fn ke_render_register_scene_apply(ecs: ?*c.ke_ecs, world: ?*c.ke_world) callconv(.c) bool {
-    const e = ecs orelse return false;
-    const w = world orelse return false;
+const Components = @import("scene_components").Set(c, &.{
+    .{ .name = c.KE_COMPONENT_NAME_MESH, .size = @sizeOf(c.ke_mesh_component), .fields = &c.ke_mesh_component_fields, .apply = component_apply.ke_render_apply_mesh },
+    .{ .name = c.KE_COMPONENT_NAME_CAMERA, .size = @sizeOf(c.ke_camera_component), .fields = &c.ke_camera_component_fields, .apply = component_apply.ke_render_apply_camera },
+    .{ .name = c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = @sizeOf(c.ke_directional_light_component), .fields = &c.ke_directional_light_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_POINT_LIGHT, .size = @sizeOf(c.ke_point_light_component), .fields = &c.ke_point_light_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_SPOT_LIGHT, .size = @sizeOf(c.ke_spot_light_component), .fields = &c.ke_spot_light_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_AMBIENT_LIGHT, .size = @sizeOf(c.ke_ambient_light_component), .fields = &c.ke_ambient_light_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(c.ke_skybox_component) },
+    .{ .name = c.KE_COMPONENT_NAME_SPRITE2D, .size = @sizeOf(c.ke_sprite2d_component), .fields = &c.ke_sprite2d_component_fields, .apply = component_apply.ke_render_apply_sprite2d },
+    .{ .name = c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(c.ke_label_component), .fields = &c.ke_label_component_fields },
+});
 
-    const mesh_cid = registerComponent(e, c.KE_COMPONENT_NAME_MESH, c.ke_mesh_component, &c.ke_mesh_component_fields);
-    const camera_cid = registerComponent(e, c.KE_COMPONENT_NAME_CAMERA, c.ke_camera_component, &c.ke_camera_component_fields);
-    const light_cid = registerComponent(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, c.ke_directional_light_component, &c.ke_directional_light_component_fields);
-    const point_light_cid = registerComponent(e, c.KE_COMPONENT_NAME_POINT_LIGHT, c.ke_point_light_component, &c.ke_point_light_component_fields);
-    const spot_light_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, c.ke_spot_light_component, &c.ke_spot_light_component_fields);
-    const ambient_light_cid = registerComponent(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, c.ke_ambient_light_component, &c.ke_ambient_light_component_fields);
-    _ = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component), null, 0, null);
-    const sprite_cid = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
-
-    registerFields(w, mesh_cid, &c.ke_mesh_component_fields);
-    registerFields(w, camera_cid, &c.ke_camera_component_fields);
-    registerFields(w, light_cid, &c.ke_directional_light_component_fields);
-    registerFields(w, point_light_cid, &c.ke_point_light_component_fields);
-    registerFields(w, spot_light_cid, &c.ke_spot_light_component_fields);
-    registerFields(w, ambient_light_cid, &c.ke_ambient_light_component_fields);
-    registerFields(w, sprite_cid, &c.ke_sprite2d_component_fields);
-
-    const label_cid = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields);
-    registerFields(w, label_cid, &c.ke_label_component_fields);
-
-    if (!w.register_component_apply.?(w, camera_cid, component_apply.ke_render_apply_camera, null, null)) return false;
-    if (!w.register_component_apply.?(w, mesh_cid, component_apply.ke_render_apply_mesh, null, null)) return false;
-    if (!w.register_component_apply.?(w, sprite_cid, component_apply.ke_render_apply_sprite2d, null, null)) return false;
-    return true;
-}
-
-/// Gives the world the field table of a component so that scene files can author it.
-fn registerFields(w: *c.ke_world, cid: c.ke_component_id, table: anytype) void {
-    const fields = @typeInfo(@TypeOf(table.*)).array;
-    _ = w.register_component_fields.?(w, cid, table, @intCast(fields.len), null);
+/// The factory of the scene component set. The set holds no state, so it cannot fail.
+export fn ke_render_scene_components_create() callconv(.c) c.ke_scene_component_set_handle {
+    return Components.handle();
 }
 
 /// Stops unregistering at the first system the runtime refuses to remove, so the systems after
@@ -335,7 +312,10 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const ambient_cid = registerComponent(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, c.ke_ambient_light_component, &c.ke_ambient_light_component_fields);
         const skybox_cid = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component), null, 0, null);
 
-        _ = ke_render_register_scene_apply(e, world);
+        if (world) |w| {
+            const set = Components.handle();
+            if (!set.ref.*.register_into.?(set.ref, e, w, out_error)) return failCreate(rt, mark, st);
+        }
 
         st.mesh_resolve_queries_terms = .{ .{ .cid = mesh_cid, .access = c.KE_ACCESS_WRITE } };
         st.mesh_resolve_queries = .{ .{ .terms = &st.mesh_resolve_queries_terms[0], .term_count = 1 } };

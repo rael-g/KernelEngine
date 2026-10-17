@@ -18,7 +18,6 @@ extern "C"
 
 struct ke_logger;
 
-
 typedef struct ke_render_module ke_render_module;
 
 typedef struct ke_render_module_handle
@@ -56,9 +55,6 @@ ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_view_space *view_space,
                         ke_render_resource_binder *binder,
                         const char *shader_dir, ke_error **out_error);
-
-KE_RENDER_CORE_API bool
-ke_render_register_scene_apply(ke_ecs *ecs, ke_world *world);
 
 KE_RENDER_CORE_API ke_render_service *ke_render_module_core(ke_render_module *module);
 

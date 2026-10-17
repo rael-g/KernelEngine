@@ -11,7 +11,7 @@ plugins under `src/zig/physics/`.
 | world | `ke_physics_2d` | box2d | gravity, body and fixture requests | body ids, body state after a step |
 | components | `ke_body2d_component`, `ke_collider2d_component` | none | scene fields, script writes | the description of a body and of a shape |
 | module | none; `ke_physics_body2d_module_create` | body2d | `ke_runtime`, `ke_ecs`, `ke_physics_2d` | two runtime systems |
-| scene registration | none; `ke_physics_register_scene_apply` | body2d | `ke_ecs`, `ke_world` | the field tables of both components |
+| scene registration | `ke_scene_component_set`; `ke_physics_scene_components_create` | body2d | `ke_ecs`, `ke_world` | the field tables of both components |
 | managed | `IPhysics2D`, `Body2DModule` | `KernelEngine.Physics` | the host's service collection | the world and the module in a host |
 
 **Game code edits components, never handles.** A body is an entity with a `ke_body2d_component`
@@ -34,8 +34,8 @@ system attaches a fixture to the nearest ancestor of the shape's entity that has
 
 **The world is one thread's.** One `ke_physics_2d` is one world; its handles are the body's index
 plus one, with `KE_BODY_2D_INVALID` as zero. The managed `AddBox2D` creates it with the gravity of
-"runtime.physics_2d"; `Body2DModule` creates the module in `OnLoad` and calls
-`ke_physics_register_scene_apply` when a `World` is registered.
+"runtime.physics_2d"; `Body2DModule` creates the module in `OnLoad` and, when a `World` is
+registered, registers the set from `ke_physics_scene_components_create` into it.
 
 ## What the parts agree on without a contract
 

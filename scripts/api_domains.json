@@ -826,6 +826,7 @@
         "src/c/framework/kernel_engine/framework/world.h",
         "src/c/framework/kernel_engine/framework/input_actions.h",
         "src/c/framework/kernel_engine/framework/scene_loader.h",
+        "src/c/framework/kernel_engine/framework/scene_component_set.h",
         "src/zig/framework/include/kernel_engine/framework/world_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h",
@@ -884,7 +885,8 @@
       "project": "src/csharp/physics/KernelEngine.Physics",
       "namespace": "KernelEngine.Physics.Native",
       "headers": [
-        "src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h"
+        "src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h",
+        "src/zig/physics/body2d/include/kernel_engine/physics/body2d/scene_components.h"
       ],
       "library": "ke_physics_body2d",
       "output": "Generated/Body2DModule/"
@@ -918,6 +920,7 @@
       "headers": [
         "src/zig/render/shadow/include/kernel_engine/render/shadow/shadow_create.h",
         "src/zig/render/module/include/kernel_engine/render/module/render_module_create.h",
+        "src/zig/render/module/include/kernel_engine/render/module/scene_components.h",
         "src/zig/render/ui/include/kernel_engine/render/ui/ui_create.h"
       ],
       "library": "ke_render_module",

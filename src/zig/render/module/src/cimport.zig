@@ -21,6 +21,8 @@ pub const c = @cImport({
     @cInclude("kernel_engine/render/camera.h");
     @cInclude("kernel_engine/render/camera/camera_create.h");
     @cInclude("kernel_engine/render/module/render_module_create.h");
+    @cInclude("kernel_engine/render/module/scene_components.h");
+    @cInclude("kernel_engine/framework/scene_component_set.h");
     @cInclude("kernel_engine/render/tonemap/tonemap_create.h");
     @cInclude("kernel_engine/render/skybox/skybox_create.h");
     @cInclude("kernel_engine/render/ui/components.h");
