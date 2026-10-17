@@ -89,6 +89,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     }
 
     /// <summary>Parses a `.material` TOML file into ke_material_spec. Texture fields stay as path strings — feed them back through resolve_texture to materialise.</summary>
+    /// <returns>false with a not-found error when the file cannot be opened, and with an io error when it is not TOML or holds no material table.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ke_material_spec ResolveMaterial(string path)
     {

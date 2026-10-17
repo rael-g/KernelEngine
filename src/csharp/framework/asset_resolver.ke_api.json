@@ -116,7 +116,7 @@
           "returns": "_Bool",
           "tags": [],
           "doc": "Parses a \u0060.material\u0060 TOML file into ke_material_spec. Texture fields stay as path strings \u2014 feed them back through resolve_texture to materialise.",
-          "return_doc": null,
+          "return_doc": "false with a not-found error when the file cannot be opened, and with an io error when it is not TOML or holds no material table.",
           "params": [
             {
               "name": "path",

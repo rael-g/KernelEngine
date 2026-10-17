@@ -57,6 +57,8 @@ extern "C"
          * resolve_texture to materialise.
          * @param path [utf8]
          * @param out [out] Receives the parsed material spec on success.
+         * @return false with a not-found error when the file cannot be opened, and with an
+         *         io error when it is not TOML or holds no material table.
          */
         bool (*resolve_material)(struct ke_asset_resolver *self,
                                       const char               *path,

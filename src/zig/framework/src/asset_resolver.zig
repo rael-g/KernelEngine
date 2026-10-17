@@ -121,7 +121,7 @@ fn tomlNumberAt(arr: ?*c.toml_array_t, idx: c_int) ?f32 {
 /// The only reader of material files, called by vtResolveMaterial with the path it resolved. Every
 /// field it sets is first written with its default, so a key the file leaves out keeps that
 /// default. On failure the spec holds only those defaults.
-fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
+fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) error{ NotFound, Malformed }!void {
     out.base_color[0] = 1.0;
     out.base_color[1] = 1.0;
     out.base_color[2] = 1.0;
@@ -135,14 +135,14 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
     out.ior = 1.5;
     out.distortion_strength = 0.05;
 
-    const fp = std.c.fopen(path, "rb") orelse return false;
+    const fp = std.c.fopen(path, "rb") orelse return error.NotFound;
     var errbuf: [200]u8 = undefined;
     const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
-    if (root == null) return false;
+    if (root == null) return error.Malformed;
     defer c.toml_free(root);
 
-    const mat = c.toml_table_in(root, "material") orelse return false;
+    const mat = c.toml_table_in(root, "material") orelse return error.Malformed;
 
     if (c.toml_array_in(mat, "base_color")) |bc| {
         for (0..4) |i| {
@@ -177,8 +177,6 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
         }
         std.c.free(am.u.s);
     }
-
-    return true;
 }
 
 /// Slot `resolve_texture`, and the decode step of `vtResolveTextureInto` on a cache miss. A
@@ -276,7 +274,8 @@ fn vtFreeMesh(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_mesh_shape_data) call
 
 /// Slot `resolve_material`, and the first step of `vtResolveMaterialInto` on a cache miss. The
 /// file is TOML read by `parseMaterialFile`, so a key it omits keeps its default. A file that
-/// cannot be opened or parsed reports io and returns false.
+/// cannot be opened reports not found, one that is not TOML or has no material table reports io;
+/// both return false.
 fn vtResolveMaterial(
     self_in: ?*c.ke_asset_resolver,
     path: [*c]const u8,
@@ -294,10 +293,13 @@ fn vtResolveMaterial(
     const s = stateOf(self);
     var buf: [path_buf_max]u8 = undefined;
     resolvePath(s, path, &buf);
-    if (!parseMaterialFile(@ptrCast(&buf), out.?)) {
-        E.fail(out_error, .io, "failed to parse material file", @src());
+    parseMaterialFile(@ptrCast(&buf), out.?) catch |err| {
+        switch (err) {
+            error.NotFound => E.fail(out_error, .not_found, "material file not found", @src()),
+            error.Malformed => E.fail(out_error, .io, "failed to parse material file", @src()),
+        }
         return false;
-    }
+    };
     return true;
 }
 
@@ -605,7 +607,7 @@ const MaterialFile = struct {
 
 test "a material file that is not there fails instead of yielding a blank material" {
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(!parseMaterialFile("/this/does/not/exist.material", &spec));
+    try testing.expectError(error.NotFound, parseMaterialFile("/this/does/not/exist.material", &spec));
 }
 
 test "a file without a material section is not a material" {
@@ -613,7 +615,7 @@ test "a file without a material section is not a material" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(!parseMaterialFile(file.cPath(), &spec));
+    try testing.expectError(error.Malformed, parseMaterialFile(file.cPath(), &spec));
 }
 
 test "every authored key reaches the spec it was written for" {
@@ -629,7 +631,7 @@ test "every authored key reaches the spec it was written for" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(parseMaterialFile(file.cPath(), &spec));
+    try parseMaterialFile(file.cPath(), &spec);
 
     try testing.expectApproxEqAbs(@as(f32, 0.8), spec.base_color[0], material_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 0.2), spec.base_color[1], material_tolerance);
@@ -646,7 +648,7 @@ test "a key the author left out falls back to the default rather than to zero" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(parseMaterialFile(file.cPath(), &spec));
+    try parseMaterialFile(file.cPath(), &spec);
 
     try testing.expectApproxEqAbs(@as(f32, 1.0), spec.metallic, material_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 1.0), spec.base_color[0], material_tolerance);
