@@ -114,7 +114,22 @@ public static class ClangSharpRunner
         }
 
         UsingBlock.NormalizeDirectory(outputDirectory);
+        DropAssemblyAttributeFile(outputDirectory);
         return new BindingRun(errors == 0, log);
+    }
+
+    const string AssemblyAttributeFile = "DisableRuntimeMarshalling.cs";
+
+    /// <summary>
+    /// Deletes the file declaring <c>[assembly: DisableRuntimeMarshalling]</c> that the
+    /// <c>generate-disable-runtime-marshalling</c> option writes beside the bindings. The build applies
+    /// that attribute to every engine assembly, which a second declaration would make fail to compile;
+    /// the option stays because it is also what makes ClangSharp spell a C <c>bool</c> as <c>bool</c>.
+    /// </summary>
+    static void DropAssemblyAttributeFile(string outputDirectory)
+    {
+        var path = Path.Combine(outputDirectory, AssemblyAttributeFile);
+        if (File.Exists(path)) File.Delete(path);
     }
 
     static PInvokeGeneratorConfigurationOptions Apply(PInvokeGeneratorConfigurationOptions options, string flag) => flag switch

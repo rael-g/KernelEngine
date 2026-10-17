@@ -13,4 +13,6 @@
     <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
   </ItemGroup>
 
+  <Import Project="../../src/csharp/DisableRuntimeMarshalling.props" />
+
 </Project>

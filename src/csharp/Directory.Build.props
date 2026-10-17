@@ -26,4 +26,6 @@
     <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
   </ItemGroup>
 
+  <Import Project="DisableRuntimeMarshalling.props" Condition="!$(MSBuildProjectDirectory.Contains('kabic'))" />
+
 </Project>

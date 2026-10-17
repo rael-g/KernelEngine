@@ -164,30 +164,28 @@ public static class CrashHandler
 
             uint dumpType = 0x00000000 | 0x00000004 | 0x00000020 | 0x00001000;
 
-            var exceptionPointers = Marshal.AllocHGlobal(Marshal.SizeOf<MINIDUMP_EXCEPTION_INFORMATION>());
-            try
+            var mei = new MINIDUMP_EXCEPTION_INFORMATION
             {
-                var mei = new MINIDUMP_EXCEPTION_INFORMATION
-                {
-                    ThreadId = GetCurrentThreadId(),
-                    ExceptionPointers = exceptionInfo,
-                    ClientPointers = false,
-                };
-                Marshal.StructureToPtr(mei, exceptionPointers, false);
+                ThreadId = GetCurrentThreadId(),
+                ExceptionPointers = exceptionInfo,
+                ClientPointers = 0,
+            };
 
-                bool ok = MiniDumpWriteDump(
+            bool ok;
+            unsafe
+            {
+                ok = MiniDumpWriteDump(
                     GetCurrentProcess(), GetCurrentProcessId(),
                     fs.SafeFileHandle.DangerousGetHandle(),
-                    dumpType, exceptionPointers, IntPtr.Zero, IntPtr.Zero) != 0;
-                int dumpError = Marshal.GetLastSystemError();
-
-                Console.Error.WriteLine();
-                Console.Error.WriteLine($"[FATAL] Native crash: {name}");
-                Console.Error.WriteLine(ok
-                    ? $"        Crash dump: {dumpPath}"
-                    : $"        Failed to write crash dump (Win32 error {dumpError})");
+                    dumpType, (IntPtr)(&mei), IntPtr.Zero, IntPtr.Zero) != 0;
             }
-            finally { Marshal.FreeHGlobal(exceptionPointers); }
+            int dumpError = Marshal.GetLastSystemError();
+
+            Console.Error.WriteLine();
+            Console.Error.WriteLine($"[FATAL] Native crash: {name}");
+            Console.Error.WriteLine(ok
+                ? $"        Crash dump: {dumpPath}"
+                : $"        Failed to write crash dump (Win32 error {dumpError})");
         }
         catch (Exception ex)
         {
@@ -206,6 +204,6 @@ public static class CrashHandler
     {
         public uint ThreadId;
         public IntPtr ExceptionPointers;
-        public bool ClientPointers;
+        public int ClientPointers;
     }
 }
