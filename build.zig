@@ -13,11 +13,10 @@ pub fn build(b: *std.Build) void {
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
 
     const host_windows = b.graph.host.result.os.tag == .windows;
-    const triplet = switch (target.result.os.tag) {
-        .windows => "x64-windows-zig",
-        else => "x64-linux-zig",
-    };
-    const host_triplet = if (host_windows) "x64-windows-zig" else "x64-linux-zig";
+    const triplet = b.option([]const u8, "vcpkg-triplet", "vcpkg triplet of the target; default: the one vcpkg-triplets/ holds for the platform, else vcpkg's own") orelse
+        defaultTriplet(b, root, target.result);
+    const host_triplet = b.option([]const u8, "vcpkg-host-triplet", "vcpkg triplet of the host, chosen as -Dvcpkg-triplet is") orelse
+        defaultTriplet(b, root, b.graph.host.result);
 
     const tools_dir = b.pathJoin(&.{ root, "build", "tools" });
     const zig_cache_dir = b.pathJoin(&.{ root, ".zig-cache" });
@@ -34,12 +33,27 @@ pub fn build(b: *std.Build) void {
     createDirs(b, &.{ vcpkg_archives, vcpkg_registries });
 
     const slang_version = "2025.17.2";
-    const slang_package = b.lazyDependency(if (host_windows) "slang_windows" else "slang_linux", .{});
-    const wgpu_package = b.lazyDependency(if (target.result.os.tag == .windows) "wgpu_windows" else "wgpu_linux", .{});
+    const slangc_given = b.option([]const u8, "slangc", "a slangc of your own, for a host the build carries no slang package for");
+    const wgpu_given = b.option([]const u8, "wgpu-native", "a wgpu-native directory of your own, holding include/ and lib/, for a target the build carries no package for");
+    const slang_package_name = slang_package_name: {
+        if (slangc_given != null) break :slang_package_name null;
+        break :slang_package_name packageFor(b.graph.host.result, "slang_linux", "slang_windows") orelse
+            std.process.fatal("no slang package for the host {s}; pass -Dslangc=<path to slangc>", .{hostName(b, b.graph.host.result)});
+    };
+    const wgpu_package_name = wgpu_package_name: {
+        if (wgpu_given != null) break :wgpu_package_name null;
+        break :wgpu_package_name packageFor(target.result, "wgpu_linux", "wgpu_windows") orelse
+            std.process.fatal("no wgpu-native package for the target {s}; pass -Dwgpu-native=<directory with include/ and lib/>", .{hostName(b, target.result)});
+    };
+    const slang_package = if (slang_package_name) |name| b.lazyDependency(name, .{}) else null;
+    const wgpu_package = if (wgpu_package_name) |name| b.lazyDependency(name, .{}) else null;
     const renderdoc_package = b.lazyDependency(if (host_windows) "renderdoc_windows" else "renderdoc_linux", .{});
     const fetches_vcpkg = std.mem.eql(u8, vcpkg_root, vcpkg_dir_default);
+    if (fetches_vcpkg and packageFor(b.graph.host.result, "vcpkg", "vcpkg") == null)
+        std.process.fatal("no vcpkg binary is fetched for the host {s}; pass -Dvcpkg-root=<vcpkg checkout> or set VCPKG_ROOT", .{hostName(b, b.graph.host.result)});
     const vcpkg_package = if (fetches_vcpkg) b.lazyDependency("vcpkg_bundle", .{}) else null;
-    if (slang_package == null or wgpu_package == null or renderdoc_package == null or (fetches_vcpkg and vcpkg_package == null)) return;
+    if ((slang_package_name != null and slang_package == null) or (wgpu_package_name != null and wgpu_package == null) or
+        renderdoc_package == null or (fetches_vcpkg and vcpkg_package == null)) return;
 
     const vcpkg_name = if (host_windows) "vcpkg.exe" else "vcpkg";
     const vcpkg_asset = if (host_windows) "vcpkg.exe" else "vcpkg-glibc";
@@ -51,7 +65,7 @@ pub fn build(b: *std.Build) void {
         .added = &.{.{ .path = vcpkg_name, .source = fetchFile(b, b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_asset }), vcpkg_sha256, vcpkg_name) }},
     }).step else b.step("vcpkg-given", "the vcpkg checkout given by -Dvcpkg-root or VCPKG_ROOT");
 
-    const vcpkg_installed = if (target.result.os.tag == b.graph.host.result.os.tag)
+    const vcpkg_installed = if (std.mem.eql(u8, triplet, host_triplet))
         b.pathJoin(&.{ root, "build", "vcpkg-installed" })
     else
         b.pathJoin(&.{ root, "build", b.fmt("vcpkg-installed-{s}", .{triplet}) });
@@ -106,13 +120,15 @@ pub fn build(b: *std.Build) void {
         b.pathJoin(&.{ root, b.install_prefix });
 
     const slang_dir = b.pathJoin(&.{ tools_dir, b.fmt("slang-{s}", .{slang_version}) });
-    const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (host_windows) "slangc.exe" else "slangc" });
-    const slang_fetch = ToolTree.create(b, "lay out slang", .{
-        .package = slang_package.?.path(""),
-        .dest = slang_dir,
-        .stamp = slang_version,
-        .executable_dirs = &.{"bin"},
-    });
+    const slang_step: *std.Build.Step, const slangc_exe = if (slang_package) |package| .{
+        &ToolTree.create(b, "lay out slang", .{
+            .package = package.path(""),
+            .dest = slang_dir,
+            .stamp = slang_version,
+            .executable_dirs = &.{"bin"},
+        }).step,
+        b.pathJoin(&.{ slang_dir, "bin", if (host_windows) "slangc.exe" else "slangc" }),
+    } else .{ b.step("slangc-given", "the slangc given by -Dslangc"), slangc_given.? };
 
     const libraries_step = b.allocator.create(std.Build.Step) catch @panic("OOM");
     libraries_step.* = std.Build.Step.init(.{ .id = .custom, .name = "plugin libraries", .owner = b });
@@ -123,7 +139,7 @@ pub fn build(b: *std.Build) void {
         .vcpkg_step = ports_step,
         .exe_suffix = if (target.result.os.tag == .windows) ".exe" else "",
         .slangc_exe = slangc_exe,
-        .slang_step = &slang_fetch.step,
+        .slang_step = slang_step,
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
         .libraries_step = libraries_step,
         .test_step = b.step("test", "Run every plugin's own Zig tests"),
@@ -359,12 +375,10 @@ pub fn build(b: *std.Build) void {
         .@"tomlc99-dir" = tomlc99_dir,
     }, &.{&common.step}, .has_tests);
 
-    const wgpu_native_filename = switch (target.result.os.tag) {
-        .windows => "wgpu_native.dll",
-        else => "libwgpu_native.so",
-    };
-    const wgpu_include = wgpu_package.?.path("include").getPath(b);
-    const wgpu_lib_dir = wgpu_package.?.path("lib").getPath(b);
+    const wgpu_native_filename = b.fmt("{s}wgpu_native{s}", .{ target.result.libPrefix(), target.result.dynamicLibSuffix() });
+    const wgpu_root: std.Build.LazyPath = if (wgpu_package) |package| package.path("") else .{ .cwd_relative = wgpu_given.? };
+    const wgpu_include = wgpu_root.path(b, "include").getPath(b);
+    const wgpu_lib_dir = wgpu_root.path(b, "lib").getPath(b);
     const gpu_device_webgpu = ctx.member("ke_gpu_device_webgpu", .{
         .target = target,
         .optimize = optimize,
@@ -378,7 +392,7 @@ pub fn build(b: *std.Build) void {
         .@"wgpu-lib" = wgpu_lib_dir,
     }, &.{&common.step}, .has_tests);
 
-    const wgpu_copy = b.addInstallLibFile(wgpu_package.?.path(b.pathJoin(&.{ "lib", wgpu_native_filename })), wgpu_native_filename);
+    const wgpu_copy = b.addInstallLibFile(wgpu_root.path(b, b.pathJoin(&.{ "lib", wgpu_native_filename })), wgpu_native_filename);
     wgpu_copy.step.dependOn(&gpu_device_webgpu.step);
 
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
@@ -1355,6 +1369,43 @@ fn materialStruct(path: []const u8, source: []const u8) []const u8 {
         found = rest[0..name_end];
     }
     return found orelse std.debug.panic("{s}: no `struct <Name> : IMaterial`; an authored material must declare its IMaterial conformance", .{path});
+}
+
+/// The triplet `vcpkg-triplets/` holds for the platform of `t`, `<arch>-<os>-zig`, when there is
+/// one; vcpkg's own `<arch>-<os>` otherwise.
+fn defaultTriplet(b: *std.Build, root: []const u8, t: std.Target) []const u8 {
+    const arch = switch (t.cpu.arch) {
+        .x86_64 => "x64",
+        .x86 => "x86",
+        .aarch64 => "arm64",
+        .arm => "arm",
+        else => @tagName(t.cpu.arch),
+    };
+    const os = if (t.abi.isAndroid()) "android" else switch (t.os.tag) {
+        .macos => "osx",
+        else => @tagName(t.os.tag),
+    };
+    const standard = b.fmt("{s}-{s}", .{ arch, os });
+    const ours = b.fmt("{s}-zig", .{standard});
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    std.Io.Dir.cwd().access(threaded.io(), b.pathJoin(&.{ root, "vcpkg-triplets", b.fmt("{s}.cmake", .{ours}) }), .{}) catch return standard;
+    return ours;
+}
+
+/// The package of `linux` or `windows` when `t` is x86_64 on that system, the only ones the build
+/// manifest carries; null for any other.
+fn packageFor(t: std.Target, linux: []const u8, windows: []const u8) ?[]const u8 {
+    if (t.cpu.arch != .x86_64) return null;
+    return switch (t.os.tag) {
+        .linux => linux,
+        .windows => windows,
+        else => null,
+    };
+}
+
+fn hostName(b: *std.Build, t: std.Target) []const u8 {
+    return b.fmt("{s}-{s}", .{ @tagName(t.cpu.arch), @tagName(t.os.tag) });
 }
 
 /// Creates each directory with its parents, for a tool that writes into one it does not create.

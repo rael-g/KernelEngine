@@ -120,8 +120,11 @@ library path points into the laid-out tree. A step leaves a tree whose stamp nam
 it is. No step runs `sh`, `curl`, `tar`, `unzip`, `cp` or `sha256sum`.
 
 vcpkg runs in manifest mode against `vcpkg.json` with the overlay triplets in `vcpkg-triplets/`,
-installing into `build/vcpkg-installed`. The triplet is chosen by the target OS: `x64-windows-zig` or
-`x64-linux-zig`.
+installing into `build/vcpkg-installed`. The triplet of a platform is the one `vcpkg-triplets/`
+holds for it, `<arch>-<os>-zig`, and vcpkg's own `<arch>-<os>` when it holds none; any other is
+named with `-Dvcpkg-triplet` (and `-Dvcpkg-host-triplet` for the host). The build carries tool
+packages for x86_64 Linux and Windows only; on any other host or target it stops and names the
+option to pass: `-Dslangc`, `-Dwgpu-native` or `-Dvcpkg-root`.
 
 The install step is skipped when the installed tree is current. The root build hashes `vcpkg.json`,
 `vcpkg-configuration.json`, every file in `vcpkg-triplets/`, the vcpkg version and the Zig version
@@ -161,7 +164,7 @@ The root `build.zig` separates what runs on the machine doing the build (the **h
 
 | what | decided by | Windows | elsewhere |
 |---|---|---|---|
-| vcpkg triplet | target | `x64-windows-zig` | `x64-linux-zig` |
+| vcpkg triplet | target, unless `-Dvcpkg-triplet` | `x64-windows-zig` | `x64-linux-zig` on x86_64 Linux |
 | wgpu-native | target | `wgpu_windows`, `wgpu_native.dll` | `wgpu_linux`, `libwgpu_native.so` |
 | vcpkg binary | host | `vcpkg.exe` | `vcpkg` (the `glibc` asset) |
 | `slangc` | host | `slang_windows`, `slangc.exe` | `slang_linux`, `slangc` |
