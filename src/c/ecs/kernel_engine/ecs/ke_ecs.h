@@ -76,7 +76,10 @@ extern "C"
                                  ke_error         **out_error);
 
         /**
-         * Attaches a component to an entity, returning its zero-initialized storage.
+         * Attaches a component to an entity, returning its storage: zeroed, then seeded with
+         * the defaults of the field table the component was registered with, on the first
+         * attach; an entity that already has the component gets its storage unchanged.
+         * The pointer is valid until the next structural change on this ecs.
          * Structural; single-threaded. Returns NULL for an unknown entity or cid.
          */
         void *(*component_add)(struct ke_ecs *self,
@@ -88,7 +91,10 @@ extern "C"
                                  ke_entity      entity,
                                  ke_component_id component);
 
-        /** Returns an entity's component storage, or NULL if it doesn't have that component. */
+        /**
+         * Returns an entity's component storage, or NULL if it doesn't have that component.
+         * The pointer is valid until the next structural change on this ecs.
+         */
         void *(*component_get)(struct ke_ecs *self,
                                ke_entity      entity,
                                ke_component_id component);

@@ -232,7 +232,7 @@
           "name": "component_add",
           "returns": "void *",
           "tags": [],
-          "doc": "Attaches a component to an entity, returning its zero-initialized storage. Structural; single-threaded. Returns NULL for an unknown entity or cid.",
+          "doc": "Attaches a component to an entity, returning its storage: zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component gets its storage unchanged. The pointer is valid until the next structural change on this ecs. Structural; single-threaded. Returns NULL for an unknown entity or cid.",
           "return_doc": null,
           "params": [
             {
@@ -276,7 +276,7 @@
           "name": "component_get",
           "returns": "void *",
           "tags": [],
-          "doc": "Returns an entity\u0027s component storage, or NULL if it doesn\u0027t have that component.",
+          "doc": "Returns an entity\u0027s component storage, or NULL if it doesn\u0027t have that component. The pointer is valid until the next structural change on this ecs.",
           "return_doc": null,
           "params": [
             {

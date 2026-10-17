@@ -92,7 +92,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         }
     }
 
-    /// <summary>Attaches a component to an entity, returning its zero-initialized storage. Structural; single-threaded. Returns NULL for an unknown entity or cid.</summary>
+    /// <summary>Attaches a component to an entity, returning its storage: zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component gets its storage unchanged. The pointer is valid until the next structural change on this ecs. Structural; single-threaded. Returns NULL for an unknown entity or cid.</summary>
     public nint ComponentAdd(ulong entity, uint component)
     {
         return (nint)Handle->component_add(Handle, entity, component);
@@ -104,7 +104,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         Handle->component_remove(Handle, entity, component);
     }
 
-    /// <summary>Returns an entity's component storage, or NULL if it doesn't have that component.</summary>
+    /// <summary>Returns an entity's component storage, or NULL if it doesn't have that component. The pointer is valid until the next structural change on this ecs.</summary>
     public nint ComponentGet(ulong entity, uint component)
     {
         return (nint)Handle->component_get(Handle, entity, component);

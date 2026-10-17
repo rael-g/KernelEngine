@@ -19,7 +19,7 @@
           "name": "dispatch",
           "returns": "ke_task *",
           "tags": [],
-          "doc": "Schedules a fire-and-forget task.",
+          "doc": "Schedules a task, which the caller releases by waiting on it.",
           "return_doc": null,
           "params": [
             {
@@ -90,7 +90,7 @@
           "name": "wait",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Blocks the calling thread until the task completes, then reports whatever the task body failed with. A task that nobody waits on reports its failure nowhere. The error is created on the waiting thread from the type the body named. Its message names the slot rather than the failure.",
+          "doc": "Blocks the calling thread until the task completes, then reports whatever the task body failed with, and releases the task. Every task a dispatch slot returns is waited on exactly once: afterwards the pointer is invalid for wait and is_completed alike, and a task never waited on is never released and reports its failure nowhere. The error is created on the waiting thread from the type the body named. Its message names the slot rather than the failure.",
           "return_doc": null,
           "params": [
             {
@@ -112,7 +112,7 @@
           "name": "is_completed",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Returns true if the task has finished.",
+          "doc": "Returns true if the task has finished. Valid only before the task is waited on.",
           "return_doc": null,
           "params": [
             {
@@ -128,7 +128,7 @@
           "name": "dispatch_pinned",
           "returns": "ke_task *",
           "tags": [],
-          "doc": "Schedules a fire-and-forget task on one specific worker thread.",
+          "doc": "Schedules a task on one specific worker thread, which the caller releases by waiting on it.",
           "return_doc": null,
           "params": [
             {
