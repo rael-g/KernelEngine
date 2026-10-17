@@ -141,6 +141,12 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         Handle->propagate_transforms(Handle);
     }
 
+    /// <summary>A count that changes whenever a node is linked into or unlinked from the tree, including when deferred commands apply. Two equal readings mean no parent link changed between them.</summary>
+    public ulong HierarchyGeneration()
+    {
+        return Handle->hierarchy_generation(Handle);
+    }
+
     /// <summary>Releases the native scenetree.</summary>
     public void Dispose()
     {

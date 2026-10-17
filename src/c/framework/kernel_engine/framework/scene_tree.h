@@ -70,6 +70,13 @@ extern "C"
 
         void (*propagate_transforms)(struct ke_scene_tree *self);
 
+        /**
+         * A count that changes whenever a node is linked into or unlinked from the tree,
+         * including when deferred commands apply. Two equal readings mean no parent link
+         * changed between them.
+         */
+        uint64_t (*hierarchy_generation)(struct ke_scene_tree *self);
+
     } ke_scene_tree;
 
     typedef struct ke_scene_tree_handle

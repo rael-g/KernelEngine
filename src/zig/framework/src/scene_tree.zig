@@ -21,6 +21,7 @@ const name_max = @typeInfo(@FieldType(c.ke_name_component, "name")).array.len;
 /// child, previous and next sibling), and a node's children are the chain from its first child.
 /// `root` is the entity the invalid entity stands for as a parent. The ecs is borrowed;
 /// `hierarchy` is owned and stays null unless the tree was created with a runtime.
+/// `hierarchy_generation` moves with every link and unlink of a node.
 const State = struct {
     api: c.ke_scene_tree,
     ecs: *c.ke_ecs,
@@ -30,6 +31,7 @@ const State = struct {
     world_transform_cid: c.ke_component_id,
     hierarchy_cid: c.ke_component_id,
     name_cid: c.ke_component_id,
+    hierarchy_generation: u64 = 0,
     hierarchy: c.ke_scene_hierarchy_handle,
 };
 
@@ -147,6 +149,7 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
         writeName(&n.name, name);
     }
 
+    s.hierarchy_generation +%= 1;
     const h = getHierarchy(s, entity);
     const ph = getHierarchy(s, parent);
     if (ph != null and h != null) {
@@ -317,6 +320,7 @@ fn destroySubtree(s: *State, entity: c.ke_entity) void {
     const h_prev = h.prev_sibling;
     const h_next = h.next_sibling;
     const h_parent = h.parent;
+    s.hierarchy_generation +%= 1;
 
     if (h_parent != c.KE_ENTITY_INVALID) {
         if (getHierarchy(s, h_parent)) |ph| {
@@ -408,6 +412,7 @@ fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     const s = stateOf(self);
 
     const rh = getHierarchy(s, s.root) orelse return;
+    s.hierarchy_generation +%= 1;
     var child = rh.first_child;
     while (child != c.KE_ENTITY_INVALID) {
         const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
@@ -446,12 +451,21 @@ fn propagateRecursive(s: *State, entity: c.ke_entity, parent_world: *const c.ke_
 
 /// Slot `propagate_transforms`. Refreshes every world matrix under the root now, recursively. The
 /// root has no world transform, so the walk starts from the identity matrix at its children.
+/// Slot `hierarchy_generation`. Returns the count `populateNode`, `destroySubtree` and
+/// `vtDestroyAll` move, or 0 for a null tree.
+fn vtHierarchyGeneration(self_in: ?*c.ke_scene_tree) callconv(.c) u64 {
+    const self = self_in orelse return 0;
+    if (self.handle == null) return 0;
+    return stateOf(self).hierarchy_generation;
+}
+
 fn vtPropagateTransforms(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
     const identity = identityMatrix();
     const rh = getHierarchy(s, s.root) orelse return;
+    s.hierarchy_generation +%= 1;
     var child = rh.first_child;
     while (child != c.KE_ENTITY_INVALID) {
         const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
@@ -554,6 +568,7 @@ export fn ke_scene_tree_create(
     s.api.first_child = vtFirstChild;
     s.api.next_sibling = vtNextSibling;
     s.api.propagate_transforms = vtPropagateTransforms;
+    s.api.hierarchy_generation = vtHierarchyGeneration;
 
     if (runtime) |rt| {
         s.hierarchy = c.ke_scene_hierarchy_create(rt, ecs, out_error);
@@ -1308,6 +1323,21 @@ test "a tree whose component the ecs refuses is not created and carries the ecs'
     try testing.expect(ke_scene_tree_create(&f.ecs.vtable, null, &err).ref == null);
     try testing.expect(err != null);
     try testing.expectEqual(E.typeOf(.invalid_argument), err.*.type);
+}
+
+test "linking and unlinking a node each move the hierarchy generation" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const t = f.tree();
+    const before = t.*.hierarchy_generation.?(t);
+    try testing.expectEqual(before, t.*.hierarchy_generation.?(t));
+    const n = f.create("Node", c.KE_ENTITY_INVALID);
+    const linked = t.*.hierarchy_generation.?(t);
+    try testing.expect(linked != before);
+    try testing.expect(t.*.destroy_node.?(t, n, null));
+    try testing.expect(t.*.hierarchy_generation.?(t) != linked);
 }
 
 test "creating nodes and destroying the tree leaves no block allocated" {

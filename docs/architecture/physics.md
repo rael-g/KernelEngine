@@ -31,7 +31,9 @@ transform and the component's velocity into the world when they differ from it, 
 with the `dt` it is given, and pulls velocities back into the component and position and angle
 into "transform2d". The collider
 system attaches a fixture to the nearest ancestor of the shape's entity that has a body, and sets
-`attached`; it does nothing while every collider is attached.
+`attached`; it does nothing while every collider is attached, and retries a collider left without
+a body only once the scene tree's hierarchy generation, the set of bodies or the number of
+colliders has changed.
 
 **The world is one thread's.** One `ke_physics_2d` is one world; its handles are the body's index
 plus one, with `KE_BODY_2D_INVALID` as zero. The managed `AddBox2D` creates it with the gravity of

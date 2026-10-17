@@ -25,6 +25,9 @@ const Tracked = struct {
 const Module = struct {
     physics: *c.ke_physics_2d,
     runtime: *c.ke_runtime,
+    tree: *c.ke_scene_tree,
+    body_generation: u64 = 0,
+    attempt: ?Attempt = null,
     body_system: c.ke_system_id = 0,
     collider_system: c.ke_system_id = 0,
     logger: ?*c.ke_logger = null,
@@ -35,6 +38,11 @@ const Module = struct {
     collider_queries_terms: [4]c.ke_component_access = undefined,
     collider_queries: [3]c.ke_query_decl = undefined,
 };
+
+/// What the collider system last tried to attach against: the tree's hierarchy generation, the
+/// module's body generation and the number of colliders. An unattached collider is retried only
+/// once one of them differs.
+const Attempt = struct { hierarchy: u64, bodies: u64, colliders: usize };
 
 fn moduleOf(user: ?*anyopaque) *Module {
     return @ptrCast(@alignCast(user.?));
@@ -82,6 +90,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
                     b.body = c.KE_BODY_2D_INVALID;
                     continue;
                 };
+                m.body_generation +%= 1;
                 p.set_body_position.?(p, b.body, pose.position.x, pose.position.y, pose.rotation);
                 p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
                 p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
@@ -136,37 +145,49 @@ fn destroyUnseen(m: *Module) void {
         if (entry.value_ptr.seen == m.update) continue;
         m.physics.destroy_body.?(m.physics, entry.value_ptr.body);
         m.tracked.removeByPtr(entry.key_ptr);
+        m.body_generation +%= 1;
         it = m.tracked.iterator();
     }
 }
 
-/// Lets `colliderSystem` return before it builds any index when every collider already has its
-/// fixture.
-fn anyUnattached(ctx: ?*c.ke_system_ctx) bool {
+/// Counts the colliders and those still unattached, so `colliderSystem` can return before it
+/// builds any index.
+fn countColliders(ctx: ?*c.ke_system_ctx) struct { total: usize, unattached: usize } {
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &segc);
+    var total: usize = 0;
+    var unattached: usize = 0;
     var s: usize = 0;
     while (s < segc) : (s += 1) {
         const cols: [*c]c.ke_collider2d_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        total += segs[s].count;
         var i: usize = 0;
-        while (i < segs[s].count) : (i += 1) if (!cols[i].attached) return true;
+        while (i < segs[s].count) : (i += 1) {
+            if (!cols[i].attached) unattached += 1;
+        }
     }
-    return false;
+    return .{ .total = total, .unattached = unattached };
 }
 
-/// The update-phase system that attaches fixtures to colliders. It returns at once while
-/// `anyUnattached` is false; otherwise each unattached collider is resolved to a body through
+/// The update-phase system that attaches fixtures to colliders. It returns at once when every
+/// collider is attached, or when neither the tree's hierarchy generation, the module's body
+/// generation nor the number of colliders moved since its last attempt, so a collider that
+/// resolved to no body is retried, and its warning logged again, only once its ancestors or the
+/// bodies may have changed. Otherwise each unattached collider is resolved to a body through
 /// `findBody` and gets a fixture whose offset is its own transform's position. Its entity indexes
-/// are complete
-/// before the first fixture is added, so an out-of-memory failure, reported through the error
-/// output, leaves every collider unattached. A shape that resolves to no body, or whose fixture the
-/// world refuses, is logged and stays unattached; neither is reported through the error output.
+/// are complete before the first fixture is added, so an out-of-memory failure, reported through
+/// the error output, leaves every collider unattached. A shape that resolves to no body, or whose
+/// fixture the world refuses, is logged and stays unattached; neither is reported through the
+/// error output.
 fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     _ = dt;
     const m = moduleOf(user);
     const p = m.physics;
 
-    if (!anyUnattached(ctx)) return true;
+    const counted = countColliders(ctx);
+    if (counted.unattached == 0) return true;
+    const attempt: Attempt = .{ .hierarchy = m.tree.hierarchy_generation.?(m.tree), .bodies = m.body_generation, .colliders = counted.total };
+    if (m.attempt) |last| if (std.meta.eql(last, attempt)) return true;
 
     var parents = std.AutoHashMap(c.ke_entity, c.ke_entity).init(gpa);
     defer parents.deinit();
@@ -230,6 +251,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
                 .{ segs[s].entities[i], col.kind, col.half_extents.x, col.half_extents.y, col.radius, off.x, off.y, angle, col.density, col.friction, col.restitution, ok });
         }
     }
+    m.attempt = attempt;
     return true;
 }
 
@@ -278,9 +300,10 @@ export fn ke_physics_body2d_module_create(
     const rt = pr.runtime orelse return empty;
     const ecs = pr.ecs orelse return empty;
     const physics = pr.physics orelse return empty;
+    const tree = pr.scene_tree orelse return empty;
 
     const m = gpa.create(Module) catch return empty;
-    m.* = .{ .physics = physics, .runtime = rt, .logger = pr.logger };
+    m.* = .{ .physics = physics, .runtime = rt, .tree = tree, .logger = pr.logger };
 
     const body_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_BODY2D, @sizeOf(c.ke_body2d_component), &c.ke_body2d_component_fields, c.ke_body2d_component_fields.len, null);
     const transform_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, @sizeOf(c.ke_transform2d_component), &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len, null);
@@ -351,6 +374,9 @@ test "creating and destroying the body2d module leaves no block allocated and no
     params.runtime = rt.api();
     params.ecs = ecs.api();
     params.physics = &physics;
+    var tree: Stubs.Tree = undefined;
+    tree.init();
+    params.scene_tree = tree.api();
 
     const h = ke_physics_body2d_module_create(&params, null);
     try testing.expect(h.ref != null);
@@ -360,7 +386,7 @@ test "creating and destroying the body2d module leaves no block allocated and no
     try heap.expectNoLeaks();
 }
 
-test "a body2d module missing its runtime, ecs or physics is refused" {
+test "a body2d module missing its runtime, ecs, physics or scene tree is refused" {
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
     var rt: Stubs.Runtime = undefined;
@@ -375,6 +401,10 @@ test "a body2d module missing its runtime, ecs or physics is refused" {
     params.ecs = ecs.api();
     try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
     params.physics = &physics;
+    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    var tree: Stubs.Tree = undefined;
+    tree.init();
+    params.scene_tree = tree.api();
     const h = ke_physics_body2d_module_create(&params, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
@@ -394,6 +424,9 @@ test "a body2d module the runtime refuses a system of fails the create and leave
         params.runtime = rt.api();
         params.ecs = ecs.api();
         params.physics = &physics;
+        var tree: Stubs.Tree = undefined;
+        tree.init();
+        params.scene_tree = tree.api();
 
         try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
         try testing.expectEqual(@as(u32, 0), rt.live_count);
@@ -471,7 +504,9 @@ test "a body whose entity no longer holds it is destroyed on the next update" {
     var rt: Stubs.Runtime = undefined;
     rt.init();
     const m = try gpa.create(Module);
-    m.* = .{ .physics = &physics, .runtime = rt.api() };
+    var tree: Stubs.Tree = undefined;
+    tree.init();
+    m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
     var ctx = std.mem.zeroes(c.ke_system_ctx);
     ctx.view = BodyView.view;
 
@@ -494,13 +529,70 @@ test "a body whose entity no longer holds it is destroyed on the next update" {
     try heap.expectNoLeaks();
 }
 
+const OrphanView = struct {
+    var colliders: [1]c.ke_collider2d_component = undefined;
+    var transforms: [1]c.ke_transform2d_component = undefined;
+    var hierarchies: [1]c.ke_hierarchy_component = undefined;
+    var entities: [1]c.ke_entity = .{9};
+    var columns: [2]?*anyopaque = undefined;
+    var segment: c.ke_ecs_segment = undefined;
+    var hierarchy_reads: usize = 0;
+
+    fn view(_: [*c]c.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
+        segment = std.mem.zeroes(c.ke_ecs_segment);
+        segment.entities = &entities;
+        segment.count = 1;
+        switch (index) {
+            0 => columns = .{ &colliders, &transforms },
+            2 => {
+                hierarchy_reads += 1;
+                columns = .{ &hierarchies, null };
+            },
+            else => segment.count = 0,
+        }
+        segment.columns = &columns[0];
+        out_count.* = 1;
+        return &segment;
+    }
+};
+
+test "a collider with no body above it is retried only once the hierarchy has moved" {
+    var physics = FakeWorld.api();
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var tree: Stubs.Tree = undefined;
+    tree.init();
+    const m = try gpa.create(Module);
+    m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
+    var ctx = std.mem.zeroes(c.ke_system_ctx);
+    ctx.view = OrphanView.view;
+
+    OrphanView.colliders[0] = std.mem.zeroes(c.ke_collider2d_component);
+    OrphanView.hierarchies[0] = std.mem.zeroes(c.ke_hierarchy_component);
+    OrphanView.hierarchy_reads = 0;
+
+    try testing.expect(colliderSystem(&ctx, m, 0.0, null));
+    try testing.expect(colliderSystem(&ctx, m, 0.0, null));
+    try testing.expectEqual(@as(usize, 1), OrphanView.hierarchy_reads);
+
+    tree.generation += 1;
+    try testing.expect(colliderSystem(&ctx, m, 0.0, null));
+    try testing.expectEqual(@as(usize, 2), OrphanView.hierarchy_reads);
+    try testing.expect(!OrphanView.colliders[0].attached);
+
+    destroyHandle(@ptrCast(m));
+    try heap.expectNoLeaks();
+}
+
 test "destroying the module destroys the bodies it created" {
     FakeWorld.reset();
     var physics = FakeWorld.api();
     var rt: Stubs.Runtime = undefined;
     rt.init();
     const m = try gpa.create(Module);
-    m.* = .{ .physics = &physics, .runtime = rt.api() };
+    var tree: Stubs.Tree = undefined;
+    tree.init();
+    m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
     var ctx = std.mem.zeroes(c.ke_system_ctx);
     ctx.view = BodyView.view;
 

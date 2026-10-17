@@ -12,6 +12,9 @@ public unsafe partial struct ke_physics_body2d_module_params
 
     public ke_physics_2d* physics;
 
+    [NativeTypeName("ke_scene_tree *")]
+    public KernelEngine.Framework.Native.ke_scene_tree* scene_tree;
+
     [NativeTypeName("ke_logger *")]
     public KernelEngine.Logger.Native.ke_logger* logger;
 }

@@ -534,6 +534,28 @@ pub fn Stubs(comptime c: type) type {
             }
         };
 
+        /// Fake scene tree. Answers `generation` as its hierarchy generation, which a test moves by
+        /// hand.
+        pub const Tree = struct {
+            vtable: c.ke_scene_tree,
+            generation: u64,
+
+            pub fn init(self: *Tree) void {
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_scene_tree), .generation = 0 };
+                self.vtable.handle = self;
+                self.vtable.hierarchy_generation = &hierarchyGeneration;
+            }
+
+            pub fn api(self: *Tree) *c.ke_scene_tree {
+                return &self.vtable;
+            }
+
+            fn hierarchyGeneration(self: ?*c.ke_scene_tree) callconv(.c) u64 {
+                const t: *Tree = @ptrCast(@alignCast(self.?.handle));
+                return t.generation;
+            }
+        };
+
         /// Fake ecs. Component and query ids are both drawn from `next`, so they never collide.
         pub const Ecs = struct {
             vtable: c.ke_ecs,
