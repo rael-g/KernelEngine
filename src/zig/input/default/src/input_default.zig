@@ -20,8 +20,8 @@ const MAX_KEYS = c.KE_INPUT_MAX_KEYS;
 /// Allocated by `ke_input_create` and freed by `inputDestroy`. The initial state holds no key or
 /// button and an empty queue, and `move_event` zero, which means no move event is open.
 /// `move_event` is the position in `events` plus one, so zero can stand for none. The queue grows
-/// as events arrive; `event_overflow` is set only when it could not, and then the event is lost
-/// and no move event is recorded as open.
+/// as events arrive; `events_dropped` counts the events it could not grow for since the last
+/// `inputUpdate`, which are lost, with no move event recorded as open.
 const State = struct {
     keys_down: [MAX_KEYS]bool,
     keys_pressed: [MAX_KEYS]bool,
@@ -38,7 +38,7 @@ const State = struct {
     mouse_buttons_released: u32,
 
     events: std.ArrayList(c.ke_input_event),
-    event_overflow: bool,
+    events_dropped: u32,
     move_event: u32,
 };
 
@@ -47,10 +47,10 @@ fn stateOf(self: *c.ke_input) *State {
 }
 
 /// Called by the four sinks that queue events. An event the queue cannot grow for is dropped and
-/// sets `event_overflow`.
+/// counted in `events_dropped`.
 fn pushEvent(s: *State, kind: c.ke_input_event_kind, code: i32, x: f32, y: f32) void {
     s.events.append(heap.gpa, .{ .kind = kind, .code = code, .x = x, .y = y }) catch {
-        s.event_overflow = true;
+        s.events_dropped +|= 1;
     };
 }
 
@@ -73,7 +73,7 @@ fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) b
     s.mouse_buttons_released = 0;
 
     s.events.clearRetainingCapacity();
-    s.event_overflow = false;
+    s.events_dropped = 0;
     s.move_event = 0;
     return true;
 }
@@ -153,7 +153,6 @@ fn inputDrainEvents(self: ?*c.ke_input, out_buf: [*c]c.ke_input_event, capacity:
     if (n > 0) @memcpy(out_buf[0..n], s.events.items[0..n]);
     s.events.replaceRangeAssumeCapacity(0, n, &.{});
     s.move_event = if (s.move_event > n) s.move_event - n else 0;
-    if (s.events.items.len == 0) s.event_overflow = false;
     return n;
 }
 
@@ -206,6 +205,7 @@ fn inputGetSnapshot(self: ?*c.ke_input, out: [*c]c.ke_input_snapshot) callconv(.
     o.mouse_buttons_down = s.mouse_buttons_down;
     o.mouse_buttons_pressed = s.mouse_buttons_pressed;
     o.mouse_buttons_released = s.mouse_buttons_released;
+    o.events_dropped = s.events_dropped;
 }
 
 /// Reads one key from a snapshot's packed words; a null snapshot or out-of-range key is false.
@@ -392,6 +392,20 @@ test "scroll deltas reach the snapshot" {
     h.ref.*.get_snapshot.?(h.ref, &snapshot);
     try testing.expectEqual(@as(f32, 1.5), snapshot.scroll_dx);
     try testing.expectEqual(@as(f32, -2.5), snapshot.scroll_dy);
+}
+
+test "the snapshot reports the events dropped this frame and an update clears the count" {
+    const h = ke_input_create(null, null);
+    defer h.destroy.?(h.ref);
+    stateOf(h.ref).events_dropped = 3;
+
+    var snapshot = std.mem.zeroes(c.ke_input_snapshot);
+    h.ref.*.get_snapshot.?(h.ref, &snapshot);
+    try testing.expectEqual(@as(u32, 3), snapshot.events_dropped);
+
+    try testing.expect(h.ref.*.update.?(h.ref, null));
+    h.ref.*.get_snapshot.?(h.ref, &snapshot);
+    try testing.expectEqual(@as(u32, 0), snapshot.events_dropped);
 }
 
 test "draining yields the key events in the order they arrived" {

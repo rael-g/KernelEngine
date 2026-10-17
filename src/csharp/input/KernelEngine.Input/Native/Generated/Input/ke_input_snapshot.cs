@@ -36,6 +36,9 @@ public partial struct ke_input_snapshot
     [NativeTypeName("uint32_t")]
     public uint mouse_buttons_released;
 
+    [NativeTypeName("uint32_t")]
+    public uint events_dropped;
+
     [InlineArray(8)]
     public partial struct _keys_down_e__FixedBuffer
     {

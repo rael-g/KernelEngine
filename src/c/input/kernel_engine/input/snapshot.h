@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -47,6 +46,9 @@ extern "C"
         uint32_t mouse_buttons_down;
         uint32_t mouse_buttons_pressed;
         uint32_t mouse_buttons_released;
+
+        /** Events lost this frame because the event queue could not grow to hold them. */
+        uint32_t events_dropped;
 
     } ke_input_snapshot;
 

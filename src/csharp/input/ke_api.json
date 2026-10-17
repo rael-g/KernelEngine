@@ -807,6 +807,12 @@
           "type": "uint32_t",
           "tags": [],
           "doc": null
+        },
+        {
+          "name": "events_dropped",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Events lost this frame because the event queue could not grow to hold them."
         }
       ]
     },

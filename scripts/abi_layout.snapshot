@@ -15,6 +15,7 @@ ke_input_snapshot size=232 align=8
   mouse_buttons_down 216
   mouse_buttons_pressed 220
   mouse_buttons_released 224
+  events_dropped 228
 ke_input_event size=16 align=4
   kind 0
   code 4
