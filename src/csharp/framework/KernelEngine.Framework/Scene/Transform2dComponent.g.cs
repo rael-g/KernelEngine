@@ -8,7 +8,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>An entity's authored 2D pose, read and written as one unit.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct Transform2dComponent
+public partial struct Transform2dComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "transform2d";
@@ -19,6 +19,23 @@ public partial struct Transform2dComponent
     public Vector2 Scale;
     /// <summary>Where the plane sits along Z.</summary>
     public float Depth;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        var v = default(Transform2dComponent);
+        return
+        [
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Position, "position", global::KernelEngine.Ecs.ComponentFieldKind.Vec2, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Rotation, "rotation", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Scale, "scale", global::KernelEngine.Ecs.ComponentFieldKind.Vec2, global::KernelEngine.Ecs.ComponentFieldValue.Of(global::KernelEngine.Ecs.ComponentFieldKind.Vec2, new global::System.Numerics.Vector4(1.0f, 1.0f, 0f, 0f))),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Depth, "depth", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.None),
+        ];
+    }
 
     /// <summary>The value every <c>[default:]</c> field of <c>ke_transform2d_component</c> declares. A zero-initialized instance is not the same thing: zero is a value the ABI reads as itself, so a field whose neutral value is not zero has to be seeded.</summary>
     public static Transform2dComponent Default => new()

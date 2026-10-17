@@ -7,7 +7,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct CameraComponent
+public partial struct CameraComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "camera";
@@ -18,6 +18,25 @@ public partial struct CameraComponent
     public float OrthographicSize;
     public byte Orthographic;
     public uint CullMask;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        var v = default(CameraComponent);
+        return
+        [
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Fov, "fov", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(60.0)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.NearPlane, "near_plane", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(0.1)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.FarPlane, "far_plane", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(1000.0)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.OrthographicSize, "orthographic_size", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(5.0)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Orthographic, "orthographic", global::KernelEngine.Ecs.ComponentFieldKind.Bool, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.CullMask, "cull_mask", global::KernelEngine.Ecs.ComponentFieldKind.Int, global::KernelEngine.Ecs.ComponentFieldValue.Of(4294967295L)),
+        ];
+    }
 
     /// <summary>The value every <c>[default:]</c> field of <c>ke_camera_component</c> declares. A zero-initialized instance is not the same thing: zero is a value the ABI reads as itself, so a field whose neutral value is not zero has to be seeded.</summary>
     public static CameraComponent Default => new()

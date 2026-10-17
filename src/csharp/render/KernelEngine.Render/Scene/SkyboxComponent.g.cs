@@ -7,10 +7,20 @@ namespace KernelEngine.Framework;
 
 /// <summary>Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct SkyboxComponent
+public partial struct SkyboxComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "skybox";
 
     public KernelEngine.Render.TextureHandle Cubemap;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        return [];
+    }
 }

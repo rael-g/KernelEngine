@@ -130,12 +130,13 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine();
             }
 
-            sb.AppendLine($"    private struct {slots[0].TypeName}");
+            sb.AppendLine($"    private struct {slots[0].TypeName} : global::KernelEngine.Ecs.IComponentLayout");
             sb.AppendLine("    {");
             foreach (var p in properties)
                 sb.AppendLine(p.Type.SpecialType == SpecialType.System_String
                     ? $"        public {p.Name}Buffer {p.Name};"
                     : $"        public {p.Type.ToDisplayString()} {p.Name};");
+            EmitLayout(sb, slots[0].TypeName, properties);
             sb.AppendLine("    }");
             sb.AppendLine();
         }
@@ -385,6 +386,51 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("}");
 
         spc.AddSource($"{className}.NodeProperties.g.cs", sb.ToString());
+    }
+
+    /// <summary>
+    /// Emits the field table the slot struct states: one row per property a scene can write, under
+    /// the key <c>EmitSceneApply</c> reads it by, with no default, since a game node's defaults are
+    /// the initial values of its properties.
+    /// </summary>
+    static void EmitLayout(StringBuilder sb, string typeName, ImmutableArray<IPropertySymbol> properties)
+    {
+        const string ns = "global::KernelEngine.Ecs";
+        sb.AppendLine();
+        sb.AppendLine($"        private static readonly {ns}.ComponentField[] s_fields = DescribeFields();");
+        sb.AppendLine();
+        sb.AppendLine($"        public static global::System.ReadOnlySpan<{ns}.ComponentField> Fields => s_fields;");
+        sb.AppendLine();
+        sb.AppendLine($"        private static {ns}.ComponentField[] DescribeFields()");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            var v = default({typeName});");
+        sb.AppendLine("            return");
+        sb.AppendLine("            [");
+        foreach (var p in properties)
+        {
+            if (KindOf(p.Type) is not { } kind) continue;
+            sb.AppendLine($"                {ns}.ComponentFields.Row(ref v, ref v.{p.Name}, \"{SnakeCase(p.Name)}\", {ns}.ComponentFieldKind.{kind}, {ns}.ComponentFieldValue.None),");
+        }
+        sb.AppendLine("            ];");
+        sb.AppendLine("        }");
+    }
+
+    /// <summary>The field kind a property is addressed as, or null for a type a scene cannot write.</summary>
+    static string? KindOf(ITypeSymbol t)
+    {
+        if (t.TypeKind == TypeKind.Enum) return "Int";
+        if (t.SpecialType == SpecialType.System_String) return "String";
+        return t.ToDisplayString() switch
+        {
+            "float" or "double" => "Float",
+            "bool" => "Bool",
+            "int" or "uint" or "long" or "short" or "byte" => "Int",
+            "System.Numerics.Vector2" => "Vec2",
+            "System.Numerics.Vector3" => "Vec3",
+            "System.Numerics.Vector4" => "Vec4",
+            "System.Numerics.Quaternion" => "Quat",
+            _ => null,
+        };
     }
 
     const int DefaultTextCapacity = 128;

@@ -9,7 +9,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>A screen-space text label. Text, anchor, offset, color and font are the caller's input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct LabelComponent
+public partial struct LabelComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "label";
@@ -38,6 +38,25 @@ public partial struct LabelComponent
     public uint GlyphCount;
     /// <summary>Shaped output, see glyph_count.</summary>
     public GlyphsBuffer Glyphs;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        var v = default(LabelComponent);
+        return
+        [
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Font, "font", global::KernelEngine.Ecs.ComponentFieldKind.String, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.FontSize, "font_size", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(32.0)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Anchor, "anchor", global::KernelEngine.Ecs.ComponentFieldKind.Vec2, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Offset, "offset", global::KernelEngine.Ecs.ComponentFieldKind.Vec2, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Color, "color", global::KernelEngine.Ecs.ComponentFieldKind.Vec4, global::KernelEngine.Ecs.ComponentFieldValue.Of(global::KernelEngine.Ecs.ComponentFieldKind.Vec4, new global::System.Numerics.Vector4(1.0f, 1.0f, 1.0f, 1.0f))),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Text, "text", global::KernelEngine.Ecs.ComponentFieldKind.String, global::KernelEngine.Ecs.ComponentFieldValue.None),
+        ];
+    }
 
     /// <summary>The value every <c>[default:]</c> field of <c>ke_label_component</c> declares. A zero-initialized instance is not the same thing: zero is a value the ABI reads as itself, so a field whose neutral value is not zero has to be seeded.</summary>
     public static LabelComponent Default => new()

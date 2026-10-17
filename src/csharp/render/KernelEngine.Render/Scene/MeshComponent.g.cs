@@ -9,7 +9,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>Renders a mesh with a material. `mesh` and `material` double as output: the engine fills them, at KE_PHASE_UPDATE, whenever `primitive` names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles writes them and leaves `primitive` empty; the engine only acts where a handle is still invalid.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct MeshComponent
+public partial struct MeshComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "mesh";
@@ -29,6 +29,27 @@ public partial struct MeshComponent
     public float Ior;
     public float DistortionStrength;
     public uint Layers;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        var v = default(MeshComponent);
+        return
+        [
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Primitive, "mesh", global::KernelEngine.Ecs.ComponentFieldKind.String, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.BaseColor, "color", global::KernelEngine.Ecs.ComponentFieldKind.Vec4, global::KernelEngine.Ecs.ComponentFieldValue.Of(global::KernelEngine.Ecs.ComponentFieldKind.Vec4, new global::System.Numerics.Vector4(1.0f, 1.0f, 1.0f, 1.0f))),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Roughness, "roughness", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(1.0)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.AlphaMode, "alpha_mode", global::KernelEngine.Ecs.ComponentFieldKind.Int, global::KernelEngine.Ecs.ComponentFieldValue.Of(0L)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.AlphaCutoff, "alpha_cutoff", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(0.5)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Ior, "ior", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(1.5)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.DistortionStrength, "distortion_strength", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(0.05)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Layers, "layers", global::KernelEngine.Ecs.ComponentFieldKind.Int, global::KernelEngine.Ecs.ComponentFieldValue.Of(1L)),
+        ];
+    }
 
     /// <summary>The value every <c>[default:]</c> field of <c>ke_mesh_component</c> declares. A zero-initialized instance is not the same thing: zero is a value the ABI reads as itself, so a field whose neutral value is not zero has to be seeded.</summary>
     public static MeshComponent Default => new()

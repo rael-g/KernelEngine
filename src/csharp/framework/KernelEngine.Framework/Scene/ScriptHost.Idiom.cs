@@ -187,8 +187,9 @@ public unsafe partial class ScriptHost
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
     /// <summary>
-    /// Gives the host the world, the ECS registry and the optional signal bus, and registers the
-    /// name, transform and hierarchy components.
+    /// Gives the host the world, the ECS registry and the optional signal bus, looks up the name,
+    /// transform and hierarchy components the scene tree registered, and registers the host's own
+    /// state component.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
     internal ScriptHost Compose(World world, IEcsRegistry ecs, SignalBus? signals = null)
@@ -196,9 +197,9 @@ public unsafe partial class ScriptHost
         _signals = signals;
         _world = world;
         _ecs = ecs;
-        _nameCid = ecs.RegisterComponent<Native.ke_name_component>("name");
-        _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
-        _ = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
+        _nameCid = CidOfName("name");
+        _nativeTransformCid = CidOfName("transform");
+        _ = CidOfName("hierarchy");
         StateCid = ecs.RegisterComponent<ScriptHostState>("scene.script_host");
         return this;
     }
@@ -210,7 +211,10 @@ public unsafe partial class ScriptHost
     /// </summary>
     public uint StateCid { get; private set; }
 
-    private struct ScriptHostState;
+    private struct ScriptHostState : IComponentLayout
+    {
+        public static ReadOnlySpan<ComponentField> Fields => [];
+    }
 
     /// <summary>
     /// Creates the entity of a node under <paramref name="parent"/>, deferred when a system
@@ -478,10 +482,10 @@ public unsafe partial class ScriptHost
     }
 
     /// <summary>
-    /// Registers <typeparamref name="T"/> under <paramref name="name"/>, or returns the existing
-    /// cid if that name is already registered.
+    /// Registers <typeparamref name="T"/> under <paramref name="name"/> with the field table it
+    /// states, or returns the existing cid if that name is already registered with an agreeing one.
     /// </summary>
-    public uint RegisterComponent<T>(string name) where T : unmanaged => _ecs.RegisterComponent<T>(name);
+    public uint RegisterComponent<T>(string name) where T : unmanaged, IComponentLayout => _ecs.RegisterComponent<T>(name);
 
     /// <summary>
     /// Attaches component <paramref name="cid"/> to <paramref name="entity"/> with

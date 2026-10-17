@@ -709,8 +709,10 @@ public static class CSharpWriter
         o.Add(s.Doc is not null
             ? XmlDoc("", s.Doc, convention).TrimEnd()
             : $"/// <summary>Mirrors <c>{s.Name}</c>.</summary>");
+        var layoutNs = convention.IsComponentType(s.Name) ? convention.FieldTable?.ManagedNamespace : null;
         o.Add("[StructLayout(LayoutKind.Sequential)]");
-        o.Add($"public partial struct {Idioms.TypeName(s.Name, convention)}");
+        o.Add($"public partial struct {Idioms.TypeName(s.Name, convention)}"
+            + (layoutNs is null ? "" : $" : global::{layoutNs}.IComponentLayout"));
         o.Add("{");
         if (convention.IsComponentType(s.Name))
         {
@@ -733,6 +735,8 @@ public static class CSharpWriter
             if (!string.IsNullOrEmpty(f.Doc)) o.Add($"    /// <summary>{Escape(f.Doc)}</summary>");
             o.Add($"    public {ValueFieldType(model, s, f, convention)} {Idioms.Pascal(f.Name)};");
         }
+
+        if (layoutNs is not null) o.AddRange(LayoutMembers(model, s, layoutNs, convention));
 
         var seeded = s.Fields.Where(f => f.TagValue("default") is not null).ToList();
         if (seeded.Count > 0)
@@ -762,6 +766,61 @@ public static class CSharpWriter
         o.Add("}");
         o.Add("");
         return string.Join('\n', o);
+    }
+
+    /// <summary>
+    /// The members by which a component struct states its field table: the rows
+    /// <see cref="FieldTables"/> describes, each with its offset and size taken from the struct at
+    /// run time, so the table the native registry compares is the struct's actual layout.
+    /// </summary>
+    private static IEnumerable<string> LayoutMembers(ApiModel model, ApiStruct s, string ns, Convention convention)
+    {
+        var typeName = Idioms.TypeName(s.Name, convention);
+        var field = $"global::{ns}.ComponentField";
+        yield return "";
+        yield return $"    private static readonly {field}[] s_fields = DescribeFields();";
+        yield return "";
+        yield return "    /// <inheritdoc/>";
+        yield return $"    public static global::System.ReadOnlySpan<{field}> Fields => s_fields;";
+        yield return "";
+        yield return $"    private static {field}[] DescribeFields()";
+        yield return "    {";
+        var rows = FieldTables.Fields(model, s, convention).ToList();
+        if (rows.Count == 0)
+        {
+            yield return "        return [];";
+            yield return "    }";
+            yield break;
+        }
+        yield return $"        var v = default({typeName});";
+        yield return "        return";
+        yield return "        [";
+        foreach (var f in rows)
+        {
+            var kind = FieldTables.KindOf(model, f, convention)!;
+            yield return $"            global::{ns}.ComponentFields.Row(ref v, ref v.{Idioms.Pascal(f.Name)}, \"{FieldTables.KeyOf(f)}\","
+                + $" global::{ns}.ComponentFieldKind.{KindMember(kind)}, {LayoutDefault(model, f, ns, convention)}),";
+        }
+        yield return "        ];";
+        yield return "    }";
+    }
+
+    private static string KindMember(string kind) => char.ToUpperInvariant(kind[0]) + kind[1..];
+
+    private static string LayoutDefault(ApiModel model, ApiField f, string ns, Convention convention)
+    {
+        var value = $"global::{ns}.ComponentFieldValue";
+        if (FieldTables.DefaultOf(model, f, convention) is not { } d) return $"{value}.None";
+        static string Lane(string raw) => (raw.Contains('.') ? raw : raw + ".0") + "f";
+        return d.Kind switch
+        {
+            "string" => $"{value}.Of(\"{d.Raw}\")",
+            "bool" => $"{value}.Of({(d.Raw is "1" or "true" ? "true" : "false")})",
+            "int" => $"{value}.Of({d.Raw}L)",
+            "float" => $"{value}.Of({(d.Lanes[0].Contains('.') ? d.Lanes[0] : d.Lanes[0] + ".0")})",
+            _ => $"{value}.Of(global::{ns}.ComponentFieldKind.{KindMember(d.Kind)}, new global::System.Numerics.Vector4("
+                + string.Join(", ", d.Lanes.Select(Lane).Concat(Enumerable.Repeat("0f", 4 - d.Lanes.Length))) + "))",
+        };
     }
 
     /// <summary>

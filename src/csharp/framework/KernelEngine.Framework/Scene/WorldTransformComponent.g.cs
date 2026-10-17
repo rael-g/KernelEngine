@@ -8,10 +8,20 @@ namespace KernelEngine.Framework;
 
 /// <summary>An entity's place in world space, composed down the hierarchy. Written by the hierarchy alone.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct WorldTransformComponent
+public partial struct WorldTransformComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "world_transform";
 
     public Matrix4x4 Matrix;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        return [];
+    }
 }

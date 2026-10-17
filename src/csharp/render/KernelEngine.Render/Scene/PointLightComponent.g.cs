@@ -8,7 +8,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>Point light node — emits light in all directions from this entity's world position.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct PointLightComponent
+public partial struct PointLightComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "point_light";
@@ -17,6 +17,22 @@ public partial struct PointLightComponent
     public Vector3 Color;
     public float Intensity;
     public float Radius;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        var v = default(PointLightComponent);
+        return
+        [
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Color, "color", global::KernelEngine.Ecs.ComponentFieldKind.Vec3, global::KernelEngine.Ecs.ComponentFieldValue.Of(global::KernelEngine.Ecs.ComponentFieldKind.Vec3, new global::System.Numerics.Vector4(1.0f, 1.0f, 1.0f, 0f))),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Intensity, "intensity", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(1.0)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Radius, "radius", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(10.0)),
+        ];
+    }
 
     /// <summary>The value every <c>[default:]</c> field of <c>ke_point_light_component</c> declares. A zero-initialized instance is not the same thing: zero is a value the ABI reads as itself, so a field whose neutral value is not zero has to be seeded.</summary>
     public static PointLightComponent Default => new()

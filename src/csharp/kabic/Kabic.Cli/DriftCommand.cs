@@ -102,6 +102,17 @@ internal static class DriftCommand
                 Console.WriteLine($"[!] error kinds: the mapping from native errors to exceptions is out of date (committed: {convention.ErrorKindsOut})");
                 driftDetected = true;
             }
+
+            if (convention.FieldTable is { ManagedOut: { } managedOut, NativeOut: { } nativeOut })
+            {
+                foreach (var (path, text) in new[] { (managedOut, Generation.ComponentLayout(convention)), (nativeOut, Generation.NativeFieldTable(convention)) })
+                {
+                    var committed = Path.Combine(rootDir, path);
+                    if (File.Exists(committed) && File.ReadAllText(committed) == text) continue;
+                    Console.WriteLine($"[!] component layout: out of date (committed: {path})");
+                    driftDetected = true;
+                }
+            }
         }
         finally
         {

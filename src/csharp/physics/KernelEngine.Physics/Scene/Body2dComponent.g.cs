@@ -9,7 +9,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>A 2D rigid body. Holds the pose and motion of its entity, which the simulation updates each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct Body2dComponent
+public partial struct Body2dComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "body2d";
@@ -27,6 +27,26 @@ public partial struct Body2dComponent
     public bool FixedRotation;
     /// <summary>The body for this entity, assigned when the component is reconciled. Callers do not write it.</summary>
     public uint Body;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        var v = default(Body2dComponent);
+        return
+        [
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Type, "type", global::KernelEngine.Ecs.ComponentFieldKind.Int, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Position, "position", global::KernelEngine.Ecs.ComponentFieldKind.Vec2, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Angle, "angle", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Velocity, "velocity", global::KernelEngine.Ecs.ComponentFieldKind.Vec2, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.AngularVelocity, "angular_velocity", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.None),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.GravityScale, "gravity_scale", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(1.0)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.FixedRotation, "fixed_rotation", global::KernelEngine.Ecs.ComponentFieldKind.Bool, global::KernelEngine.Ecs.ComponentFieldValue.None),
+        ];
+    }
 
     /// <summary>The value every <c>[default:]</c> field of <c>ke_body2d_component</c> declares. A zero-initialized instance is not the same thing: zero is a value the ABI reads as itself, so a field whose neutral value is not zero has to be seeded.</summary>
     public static Body2dComponent Default => new()

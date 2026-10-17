@@ -8,7 +8,7 @@ namespace KernelEngine.Framework;
 
 /// <summary>Directional light node. Its properties give the light's direction, color, intensity and ambient term.</summary>
 [StructLayout(LayoutKind.Sequential)]
-public partial struct DirectionalLightComponent
+public partial struct DirectionalLightComponent : global::KernelEngine.Ecs.IComponentLayout
 {
     /// <summary>The name this component is registered under, which is its only identity across languages. Derived from the struct the ABI declares, so a caller naming the component and the storage holding it cannot come to disagree.</summary>
     public const string Name = "directional_light";
@@ -18,6 +18,23 @@ public partial struct DirectionalLightComponent
     public Vector3 Color;
     public float Intensity;
     public Vector3 Ambient;
+
+    private static readonly global::KernelEngine.Ecs.ComponentField[] s_fields = DescribeFields();
+
+    /// <inheritdoc/>
+    public static global::System.ReadOnlySpan<global::KernelEngine.Ecs.ComponentField> Fields => s_fields;
+
+    private static global::KernelEngine.Ecs.ComponentField[] DescribeFields()
+    {
+        var v = default(DirectionalLightComponent);
+        return
+        [
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Direction, "direction", global::KernelEngine.Ecs.ComponentFieldKind.Vec3, global::KernelEngine.Ecs.ComponentFieldValue.Of(global::KernelEngine.Ecs.ComponentFieldKind.Vec3, new global::System.Numerics.Vector4(0.2f, 1.0f, 0.5f, 0f))),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Color, "color", global::KernelEngine.Ecs.ComponentFieldKind.Vec3, global::KernelEngine.Ecs.ComponentFieldValue.Of(global::KernelEngine.Ecs.ComponentFieldKind.Vec3, new global::System.Numerics.Vector4(1.0f, 1.0f, 1.0f, 0f))),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Intensity, "intensity", global::KernelEngine.Ecs.ComponentFieldKind.Float, global::KernelEngine.Ecs.ComponentFieldValue.Of(1.0)),
+            global::KernelEngine.Ecs.ComponentFields.Row(ref v, ref v.Ambient, "ambient", global::KernelEngine.Ecs.ComponentFieldKind.Vec3, global::KernelEngine.Ecs.ComponentFieldValue.Of(global::KernelEngine.Ecs.ComponentFieldKind.Vec3, new global::System.Numerics.Vector4(0.2f, 0.2f, 0.2f, 0f))),
+        ];
+    }
 
     /// <summary>The value every <c>[default:]</c> field of <c>ke_directional_light_component</c> declares. A zero-initialized instance is not the same thing: zero is a value the ABI reads as itself, so a field whose neutral value is not zero has to be seeded.</summary>
     public static DirectionalLightComponent Default => new()
