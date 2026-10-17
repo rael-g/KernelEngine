@@ -98,7 +98,7 @@ public static class Idioms
     /// boolean.
     /// </summary>
     public static string? Primitive(string cType, Convention convention) =>
-        Base(cType) == convention.ByteBoolType ? "bool" : Prim.GetValueOrDefault(Base(cType));
+        Prim.GetValueOrDefault(Base(cType));
 
     /// <summary>
     /// The C type spelling <paramref name="cType"/> with its <c>const</c>, <c>struct</c> and

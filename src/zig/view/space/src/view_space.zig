@@ -137,7 +137,7 @@ fn viewSpaceFromTransform(
 /// `y_flip` of the clip convention is set.
 fn intoClip(p_in: zm.Mat, clip: c.ke_ndc_convention) zm.Mat {
     var p = p_in;
-    if (clip.y_flip != 0) p[1][1] = -p[1][1];
+    if (clip.y_flip) p[1][1] = -p[1][1];
     return p;
 }
 
@@ -156,7 +156,7 @@ fn viewSpacePerspective(
     const self = self_in orelse return;
     if (self.handle == null or clip_in == null) return;
     const clip = clip_in.*;
-    const zero_to_one = clip.z_zero_to_one != 0;
+    const zero_to_one = clip.z_zero_to_one;
     const p = switch (stateOf(self).hand) {
         .right => if (zero_to_one)
             zm.perspectiveFovRh(fov_y, aspect, near_plane, far_plane)
@@ -185,7 +185,7 @@ fn viewSpaceOrthographic(
     const self = self_in orelse return;
     if (self.handle == null or clip_in == null) return;
     const clip = clip_in.*;
-    const zero_to_one = clip.z_zero_to_one != 0;
+    const zero_to_one = clip.z_zero_to_one;
     const p = switch (stateOf(self).hand) {
         .right => if (zero_to_one)
             zm.orthographicRh(width, height, near_plane, far_plane)
@@ -246,7 +246,7 @@ export fn ke_view_space_lh_create(
 
 const testing = std.testing;
 
-const webgpu_clip: c.ke_ndc_convention = .{ .z_zero_to_one = 1, .y_flip = 0, .clip_left_handed = 1 };
+const webgpu_clip: c.ke_ndc_convention = .{ .z_zero_to_one = true, .y_flip = false, .clip_left_handed = true };
 
 fn viewDepthOf(h: c.ke_view_space_handle, world: c.ke_vec3, eye: c.ke_vec3) f32 {
     const target = c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
@@ -291,7 +291,7 @@ test "the two view spaces disagree on the sign of view z and only there" {
 
 test "a top-left framebuffer origin flips the projection's y row, whatever the view space" {
     var flipped_clip = webgpu_clip;
-    flipped_clip.y_flip = 1;
+    flipped_clip.y_flip = true;
 
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
         const h = factory(null);

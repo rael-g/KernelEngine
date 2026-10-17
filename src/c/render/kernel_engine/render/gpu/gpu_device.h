@@ -48,7 +48,7 @@ typedef struct ke_gpu_buffer_params
     const void        *initial_data;
     size_t             size;
     ke_gpu_buffer_usage usage;
-    ke_bool            mapped_at_creation;
+    bool               mapped_at_creation;
 } ke_gpu_buffer_params;
 
 typedef struct ke_gpu_texture_params
@@ -123,7 +123,7 @@ typedef struct ke_gpu_vertex_buffer_layout
 
 typedef struct ke_gpu_blend_state
 {
-    ke_bool             blend_enabled;
+    bool                blend_enabled;
     ke_gpu_blend_factor src_color;
     ke_gpu_blend_factor dst_color;
     ke_gpu_blend_op     color_op;
@@ -135,10 +135,10 @@ typedef struct ke_gpu_blend_state
 
 typedef struct ke_gpu_depth_stencil_state
 {
-    ke_bool                 depth_test_enabled;
-    ke_bool                 depth_write_enabled;
+    bool                    depth_test_enabled;
+    bool                    depth_write_enabled;
     ke_gpu_compare_function depth_compare;
-    ke_bool                 stencil_test_enabled;
+    bool                    stencil_test_enabled;
     ke_gpu_stencil_op       stencil_front_fail;
     ke_gpu_stencil_op       stencil_front_depth_fail;
     ke_gpu_stencil_op       stencil_front_pass;
@@ -156,7 +156,7 @@ typedef struct ke_gpu_bind_group_layout_entry
     uint32_t            binding;
     ke_gpu_shader_stage visibility;
     ke_gpu_binding_type type;
-    ke_bool             has_dynamic_offset;
+    bool                has_dynamic_offset;
     /// For TEXTURE bindings: KE_GPU_TEXTURE_DIM_CUBE selects a cubemap binding;
     /// any other value (incl. zero-init) is a 2D texture.
     ke_gpu_texture_dimension view_dimension;
@@ -207,7 +207,7 @@ typedef struct ke_gpu_render_pipeline_params
     ke_gpu_depth_stencil_state       depth_stencil;
     ke_gpu_bind_group_layout         bind_group_layouts[4];
     uint32_t                         bind_group_layout_count;
-    ke_bool                          alpha_to_coverage_enabled;
+    bool                             alpha_to_coverage_enabled;
     ke_gpu_texture_format            color_target_formats[8];
     uint32_t                         color_target_count;
 } ke_gpu_render_pipeline_params;
@@ -238,8 +238,8 @@ typedef struct ke_gpu_depth_stencil_attachment
     ke_gpu_store_op     stencil_store_op;
     float               clear_depth;
     uint8_t             clear_stencil;
-    ke_bool             depth_read_only;
-    ke_bool             stencil_read_only;
+    bool                depth_read_only;
+    bool                stencil_read_only;
 } ke_gpu_depth_stencil_attachment;
 
 typedef struct ke_gpu_render_pass_params

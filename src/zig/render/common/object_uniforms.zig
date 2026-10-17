@@ -33,7 +33,7 @@ pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
                 .initial_data = null,
                 .size = @as(u64, stride) * slots,
                 .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-                .mapped_at_creation = 0,
+                .mapped_at_creation = false,
             }, out_error);
             if (buffer == c.KE_GPU_INVALID_HANDLE) return false;
             const binding = [_]c.ke_render_shader_binding{.{

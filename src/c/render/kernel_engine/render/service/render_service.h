@@ -122,10 +122,10 @@ struct ke_render_service
     /// Acquires the service's render target as the backbuffer (a built-in resource named
     /// "backbuffer") and clears the per-pass command slot table. Returns false when the target
     /// has nothing to draw into this frame, with out_error set when acquiring it failed.
-    ke_bool (*begin_frame)(struct ke_render_service *self, ke_error **out_error);
+    bool (*begin_frame)(struct ke_render_service *self, ke_error **out_error);
     /// Submits the populated command slots in ascending slot order, then presents the render
     /// target. Returns false when no frame began, or with out_error set when presenting failed.
-    ke_bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
+    bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
     /// @return The handle of the uploaded mesh.
@@ -139,7 +139,7 @@ struct ke_render_service
     /// @param out_vbo [out]
     /// @param out_ibo [out]
     /// @param out_index_count [out]
-    ke_bool (*mesh_buffers)(struct ke_render_service *self, ke_mesh_handle h,
+    bool (*mesh_buffers)(struct ke_render_service *self, ke_mesh_handle h,
                             ke_gpu_buffer *out_vbo, ke_gpu_buffer *out_ibo,
                             uint32_t *out_index_count);
 
@@ -233,19 +233,19 @@ struct ke_render_service
      * @param key [utf8] Dedup cache key.
      * @param out [out] Receives the resident handle on a cache hit.
      */
-    ke_bool (*try_get_mesh)(struct ke_render_service *self, const char *key, ke_mesh_handle *out);
+    bool (*try_get_mesh)(struct ke_render_service *self, const char *key, ke_mesh_handle *out);
     /**
      * [try] Path-keyed probe for a resident texture upload.
      * @param key [utf8] Dedup cache key.
      * @param out [out] Receives the resident handle on a cache hit.
      */
-    ke_bool (*try_get_texture)(struct ke_render_service *self, const char *key, ke_texture_handle *out);
+    bool (*try_get_texture)(struct ke_render_service *self, const char *key, ke_texture_handle *out);
     /**
      * [try] Path-keyed probe for a resident material.
      * @param key [utf8] Dedup cache key.
      * @param out [out] Receives the resident handle on a cache hit.
      */
-    ke_bool (*try_get_material)(struct ke_render_service *self, const char *key, ke_material_handle *out);
+    bool (*try_get_material)(struct ke_render_service *self, const char *key, ke_material_handle *out);
 
     /// The built-in 1×1 white texture, resolvable everywhere a neutral albedo
     /// is wanted.

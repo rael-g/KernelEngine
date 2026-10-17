@@ -385,7 +385,7 @@ fn createMaterial(self: [*c]c.ke_render_resource_binder, data: [*c]const c.ke_re
         .initial_data = &uniform,
         .size = @sizeOf(MaterialUniform),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (buffer == c.KE_GPU_INVALID_HANDLE) return c.KE_RENDER_BINDING_INVALID;
     var sampler: c.ke_gpu_sampler = c.KE_GPU_INVALID_HANDLE;

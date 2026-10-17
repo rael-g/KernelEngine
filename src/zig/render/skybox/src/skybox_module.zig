@@ -158,8 +158,8 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     skp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     skp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     skp.blend_state.write_mask = 0x0F;
-    skp.depth_stencil.depth_test_enabled = 0;
-    skp.depth_stencil.depth_write_enabled = 0;
+    skp.depth_stencil.depth_test_enabled = false;
+    skp.depth_stencil.depth_write_enabled = false;
     skp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     if (!sm.binder.pipeline_layouts.?(sm.binder, sm.layout, &skp.bind_group_layouts, skp.bind_group_layouts.len, &skp.bind_group_layout_count, out_error)) return false;
     skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
@@ -175,7 +175,7 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .initial_data = null,
         .size = @sizeOf(SkyFrame),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (sm.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
 

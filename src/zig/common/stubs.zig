@@ -241,7 +241,7 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn ndcConvention(_: ?*c.ke_gpu_device) callconv(.c) c.ke_ndc_convention {
-                return .{ .z_zero_to_one = 1, .y_flip = 1, .clip_left_handed = 1 };
+                return .{ .z_zero_to_one = true, .y_flip = true, .clip_left_handed = true };
             }
 
             /// The handle is not checked: each call gives back one count, so releasing the same

@@ -407,7 +407,7 @@
         },
         {
           "name": "begin_frame",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022) and clears the per-pass command slot table. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.",
           "return_doc": null,
@@ -423,7 +423,7 @@
         },
         {
           "name": "end_frame",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Submits the populated command slots in ascending slot order, then presents the render target. Returns false when no frame began, or with out_error set when presenting failed.",
           "return_doc": null,
@@ -487,7 +487,7 @@
         },
         {
           "name": "mesh_buffers",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [
             "try"
           ],
@@ -1044,7 +1044,7 @@
         },
         {
           "name": "try_get_mesh",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [
             "try"
           ],
@@ -1072,7 +1072,7 @@
         },
         {
           "name": "try_get_texture",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [
             "try"
           ],
@@ -1100,7 +1100,7 @@
         },
         {
           "name": "try_get_material",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [
             "try"
           ],

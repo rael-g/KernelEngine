@@ -98,10 +98,10 @@ pub const Core = struct {
     }
 
     /// A missing handle or device answers that the window should close.
-    fn shouldClose(self_in: ?*c.ke_window) callconv(.c) c.ke_bool {
-        const self = from(self_in) orelse return 1;
-        const dev = self.dev orelse return 1;
-        return if (dev.shouldClose()) 1 else 0;
+    fn shouldClose(self_in: ?*c.ke_window) callconv(.c) bool {
+        const self = from(self_in) orelse return true;
+        const dev = self.dev orelse return true;
+        return if (dev.shouldClose()) true else false;
     }
 
     /// The `poll_events` slot. Drains the device's pending events through `handleEvent` before it
@@ -326,9 +326,9 @@ test "should_close reflects the device" {
     defer destroyCore(core);
 
     const api = core.toApi();
-    try testing.expectEqual(@as(c.ke_bool, 0), api.should_close.?(api));
+    try testing.expectEqual(false, api.should_close.?(api));
     dev.should_close_result = true;
-    try testing.expectEqual(@as(c.ke_bool, 1), api.should_close.?(api));
+    try testing.expectEqual(true, api.should_close.?(api));
 }
 
 test "get_size and get_native_handle delegate to the device" {
@@ -372,7 +372,7 @@ test "the C ABI slots tolerate a null self" {
 
     const api = core.toApi();
     try testing.expect(!api.poll_events.?(null, null));
-    try testing.expectEqual(@as(c.ke_bool, 1), api.should_close.?(null));
+    try testing.expectEqual(true, api.should_close.?(null));
     try testing.expectEqual(@as(?*anyopaque, null), api.get_native_handle.?(null));
     try testing.expect(!api.get_size.?(null, null, null, null));
     try testing.expect(!api.on_shutdown.?(null, null));

@@ -50,7 +50,7 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
     /// <summary>Returns true once the user has requested the window to close.</summary>
     public bool ShouldClose()
     {
-        return Handle->should_close(Handle) != 0;
+        return Handle->should_close(Handle);
     }
 
     /// <summary>Processes pending OS events. Call once per frame.</summary>

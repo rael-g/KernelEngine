@@ -159,25 +159,25 @@ fn inputDrainEvents(self: ?*c.ke_input, out_buf: [*c]c.ke_input_event, capacity:
 
 /// True from the notification that raised the edge until the next `inputUpdate`. Out-of-range
 /// codes and a null input answer false.
-fn inputIsKeyPressed(self: ?*c.ke_input, key: i32) callconv(.c) c.ke_bool {
-    const api = self orelse return 0;
-    if (key < 0 or key >= MAX_KEYS) return 0;
-    return @intFromBool(stateOf(api).keys_pressed[@intCast(key)]);
+fn inputIsKeyPressed(self: ?*c.ke_input, key: i32) callconv(.c) bool {
+    const api = self orelse return false;
+    if (key < 0 or key >= MAX_KEYS) return false;
+    return stateOf(api).keys_pressed[@intCast(key)];
 }
 
 /// True from the notification that released the key until the next `inputUpdate`. Out-of-range
 /// codes and a null input answer false.
-fn inputIsKeyReleased(self: ?*c.ke_input, key: i32) callconv(.c) c.ke_bool {
-    const api = self orelse return 0;
-    if (key < 0 or key >= MAX_KEYS) return 0;
-    return @intFromBool(stateOf(api).keys_released[@intCast(key)]);
+fn inputIsKeyReleased(self: ?*c.ke_input, key: i32) callconv(.c) bool {
+    const api = self orelse return false;
+    if (key < 0 or key >= MAX_KEYS) return false;
+    return stateOf(api).keys_released[@intCast(key)];
 }
 
 /// True while the key is held, across updates. Out-of-range codes and a null input answer false.
-fn inputIsKeyDown(self: ?*c.ke_input, key: i32) callconv(.c) c.ke_bool {
-    const api = self orelse return 0;
-    if (key < 0 or key >= MAX_KEYS) return 0;
-    return @intFromBool(stateOf(api).keys_down[@intCast(key)]);
+fn inputIsKeyDown(self: ?*c.ke_input, key: i32) callconv(.c) bool {
+    const api = self orelse return false;
+    if (key < 0 or key >= MAX_KEYS) return false;
+    return stateOf(api).keys_down[@intCast(key)];
 }
 
 /// Writes the whole state into the caller's struct, which is zeroed first. The snapshot queries
@@ -209,54 +209,54 @@ fn inputGetSnapshot(self: ?*c.ke_input, out: [*c]c.ke_input_snapshot) callconv(.
 }
 
 /// Reads one key from a snapshot's packed words; a null snapshot or out-of-range key is false.
-fn keyBit(snapshot: [*c]const c.ke_input_snapshot, words: *const [c.KE_INPUT_KEY_WORDS]u64, key: i32) c.ke_bool {
-    if (snapshot == null) return 0;
-    if (key < 0 or key >= MAX_KEYS) return 0;
+fn keyBit(snapshot: [*c]const c.ke_input_snapshot, words: *const [c.KE_INPUT_KEY_WORDS]u64, key: i32) bool {
+    if (snapshot == null) return false;
+    if (key < 0 or key >= MAX_KEYS) return false;
     const idx: usize = @intCast(key);
     const bit = @as(u64, 1) << @intCast(idx % 64);
-    return @intFromBool((words[idx / 64] & bit) != 0);
+    return (words[idx / 64] & bit) != 0;
 }
 
 /// Reads one button from a snapshot's mask; a null snapshot or out-of-range button is false.
-fn buttonBit(snapshot: [*c]const c.ke_input_snapshot, mask: u32, button: i32) c.ke_bool {
-    if (snapshot == null) return 0;
-    if (button < 0 or button >= c.KE_INPUT_MAX_MOUSE_BUTTONS) return 0;
-    return @intFromBool((mask & (@as(u32, 1) << @intCast(button))) != 0);
+fn buttonBit(snapshot: [*c]const c.ke_input_snapshot, mask: u32, button: i32) bool {
+    if (snapshot == null) return false;
+    if (button < 0 or button >= c.KE_INPUT_MAX_MOUSE_BUTTONS) return false;
+    return (mask & (@as(u32, 1) << @intCast(button))) != 0;
 }
 
-fn snapshotIsKeyDown(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+fn snapshotIsKeyDown(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) bool {
     _ = self;
-    if (snapshot == null) return 0;
+    if (snapshot == null) return false;
     return keyBit(snapshot, &snapshot.*.keys_down, key);
 }
 
-fn snapshotIsKeyPressed(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+fn snapshotIsKeyPressed(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) bool {
     _ = self;
-    if (snapshot == null) return 0;
+    if (snapshot == null) return false;
     return keyBit(snapshot, &snapshot.*.keys_pressed, key);
 }
 
-fn snapshotIsKeyReleased(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) c.ke_bool {
+fn snapshotIsKeyReleased(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, key: i32) callconv(.c) bool {
     _ = self;
-    if (snapshot == null) return 0;
+    if (snapshot == null) return false;
     return keyBit(snapshot, &snapshot.*.keys_released, key);
 }
 
-fn snapshotIsMouseButtonDown(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+fn snapshotIsMouseButtonDown(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) bool {
     _ = self;
-    if (snapshot == null) return 0;
+    if (snapshot == null) return false;
     return buttonBit(snapshot, snapshot.*.mouse_buttons_down, button);
 }
 
-fn snapshotIsMouseButtonPressed(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+fn snapshotIsMouseButtonPressed(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) bool {
     _ = self;
-    if (snapshot == null) return 0;
+    if (snapshot == null) return false;
     return buttonBit(snapshot, snapshot.*.mouse_buttons_pressed, button);
 }
 
-fn snapshotIsMouseButtonReleased(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) c.ke_bool {
+fn snapshotIsMouseButtonReleased(self: ?*c.ke_input, snapshot: [*c]const c.ke_input_snapshot, button: i32) callconv(.c) bool {
     _ = self;
-    if (snapshot == null) return 0;
+    if (snapshot == null) return false;
     return buttonBit(snapshot, snapshot.*.mouse_buttons_released, button);
 }
 
@@ -340,7 +340,7 @@ test "a key press is visible until the next update" {
     defer h.destroy.?(h.ref);
     _ = h.ref.*.update.?(h.ref, null);
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
-    try testing.expect(h.ref.*.is_key_pressed.?(h.ref, 65) != 0);
+    try testing.expect(h.ref.*.is_key_pressed.?(h.ref, 65));
 }
 
 test "a pressed key appears in the snapshot bitset" {
@@ -479,15 +479,15 @@ test "a held key stays down across an update while pressed clears" {
     const h = ke_input_create(null, null);
     defer h.destroy.?(h.ref);
     h.ref.*.on_key.?(h.ref, 10, c.KE_INPUT_ACTION_PRESS);
-    try testing.expect(h.ref.*.is_key_down.?(h.ref, 10) != 0);
+    try testing.expect(h.ref.*.is_key_down.?(h.ref, 10));
 
     _ = h.ref.*.update.?(h.ref, null);
-    try testing.expect(h.ref.*.is_key_down.?(h.ref, 10) != 0);
-    try testing.expect(h.ref.*.is_key_pressed.?(h.ref, 10) == 0);
+    try testing.expect(h.ref.*.is_key_down.?(h.ref, 10));
+    try testing.expect(!h.ref.*.is_key_pressed.?(h.ref, 10));
 
     h.ref.*.on_key.?(h.ref, 10, c.KE_INPUT_ACTION_RELEASE);
-    try testing.expect(h.ref.*.is_key_down.?(h.ref, 10) == 0);
-    try testing.expect(h.ref.*.is_key_released.?(h.ref, 10) != 0);
+    try testing.expect(!h.ref.*.is_key_down.?(h.ref, 10));
+    try testing.expect(h.ref.*.is_key_released.?(h.ref, 10));
 }
 
 test "an out of range key code is ignored" {
@@ -503,19 +503,19 @@ test "an out of range key code is ignored" {
 test "is key down on a null self returns false" {
     const h = ke_input_create(null, null);
     defer h.destroy.?(h.ref);
-    try testing.expectEqual(@as(c.ke_bool, 0), h.ref.*.is_key_down.?(null, 65));
+    try testing.expectEqual(false, h.ref.*.is_key_down.?(null, 65));
 }
 
 test "is key pressed on a null self returns false" {
     const h = ke_input_create(null, null);
     defer h.destroy.?(h.ref);
-    try testing.expectEqual(@as(c.ke_bool, 0), h.ref.*.is_key_pressed.?(null, 65));
+    try testing.expectEqual(false, h.ref.*.is_key_pressed.?(null, 65));
 }
 
 test "is key released on a null self returns false" {
     const h = ke_input_create(null, null);
     defer h.destroy.?(h.ref);
-    try testing.expectEqual(@as(c.ke_bool, 0), h.ref.*.is_key_released.?(null, 65));
+    try testing.expectEqual(false, h.ref.*.is_key_released.?(null, 65));
 }
 
 test "get snapshot tolerates a null self or a null destination" {
@@ -553,13 +553,13 @@ test "snapshot accessors read the key and button bitsets" {
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     api.get_snapshot.?(h.ref, &snapshot);
 
-    try testing.expectEqual(@as(c.ke_bool, 1), api.snapshot_is_key_down.?(h.ref, &snapshot, 65));
-    try testing.expectEqual(@as(c.ke_bool, 1), api.snapshot_is_key_pressed.?(h.ref, &snapshot, 65));
-    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_released.?(h.ref, &snapshot, 65));
-    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, &snapshot, 66));
-    try testing.expectEqual(@as(c.ke_bool, 1), api.snapshot_is_mouse_button_down.?(h.ref, &snapshot, 2));
-    try testing.expectEqual(@as(c.ke_bool, 1), api.snapshot_is_mouse_button_pressed.?(h.ref, &snapshot, 2));
-    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_mouse_button_released.?(h.ref, &snapshot, 2));
+    try testing.expectEqual(true, api.snapshot_is_key_down.?(h.ref, &snapshot, 65));
+    try testing.expectEqual(true, api.snapshot_is_key_pressed.?(h.ref, &snapshot, 65));
+    try testing.expectEqual(false, api.snapshot_is_key_released.?(h.ref, &snapshot, 65));
+    try testing.expectEqual(false, api.snapshot_is_key_down.?(h.ref, &snapshot, 66));
+    try testing.expectEqual(true, api.snapshot_is_mouse_button_down.?(h.ref, &snapshot, 2));
+    try testing.expectEqual(true, api.snapshot_is_mouse_button_pressed.?(h.ref, &snapshot, 2));
+    try testing.expectEqual(false, api.snapshot_is_mouse_button_released.?(h.ref, &snapshot, 2));
 }
 
 test "snapshot accessors read out-of-range codes and a null snapshot as false" {
@@ -568,11 +568,11 @@ test "snapshot accessors read out-of-range codes and a null snapshot as false" {
     const api = h.ref.*;
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
 
-    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, &snapshot, -1));
-    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, &snapshot, c.KE_INPUT_MAX_KEYS));
-    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_mouse_button_down.?(h.ref, &snapshot, c.KE_INPUT_MAX_MOUSE_BUTTONS));
-    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_key_down.?(h.ref, null, 65));
-    try testing.expectEqual(@as(c.ke_bool, 0), api.snapshot_is_mouse_button_down.?(h.ref, null, 0));
+    try testing.expectEqual(false, api.snapshot_is_key_down.?(h.ref, &snapshot, -1));
+    try testing.expectEqual(false, api.snapshot_is_key_down.?(h.ref, &snapshot, c.KE_INPUT_MAX_KEYS));
+    try testing.expectEqual(false, api.snapshot_is_mouse_button_down.?(h.ref, &snapshot, c.KE_INPUT_MAX_MOUSE_BUTTONS));
+    try testing.expectEqual(false, api.snapshot_is_key_down.?(h.ref, null, 65));
+    try testing.expectEqual(false, api.snapshot_is_mouse_button_down.?(h.ref, null, 0));
 }
 
 test "creating and destroying the input leaves no block allocated" {

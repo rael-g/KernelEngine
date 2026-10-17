@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_INPUT_SNAPSHOT_H_
 #define KERNEL_ENGINE_INPUT_SNAPSHOT_H_
 
-#include <kernel_engine/common/types.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdbool.h>
 

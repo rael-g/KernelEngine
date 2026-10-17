@@ -12,8 +12,8 @@ public unsafe partial struct ke_window
     [NativeTypeName("bool (*)(struct ke_window *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_window*, KernelEngine.Common.Native.ke_error**, bool> on_shutdown;
 
-    [NativeTypeName("ke_bool (*)(struct ke_window *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, byte> should_close;
+    [NativeTypeName("bool (*)(struct ke_window *)")]
+    public delegate* unmanaged[Cdecl]<ke_window*, bool> should_close;
 
     [NativeTypeName("bool (*)(struct ke_window *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_window*, KernelEngine.Common.Native.ke_error**, bool> poll_events;

@@ -9,7 +9,7 @@ public class AudioTests
     private static bool LastResult = true;
     private static uint LastSoundId = 0;
     private static float LastVolume = 0;
-    private static byte LastLoop = 0;
+    private static bool LastLoop;
     private static bool DestroyCalled = false;
     private static string? LastPath = null;
 
@@ -27,7 +27,7 @@ public class AudioTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe bool MockPlay(ke_audio* self, uint soundId, float volume, byte loop, ke_error** out_error)
+    private static unsafe bool MockPlay(ke_audio* self, uint soundId, float volume, bool loop, ke_error** out_error)
     {
         LastSoundId = soundId;
         LastVolume = volume;
@@ -122,7 +122,7 @@ public class AudioTests
 
         Assert.Equal(123u, LastSoundId);
         Assert.Equal(0.5f, LastVolume);
-        Assert.Equal(1, LastLoop);
+        Assert.True(LastLoop);
         NativeMemory.Free(h.@ref);
     }
 

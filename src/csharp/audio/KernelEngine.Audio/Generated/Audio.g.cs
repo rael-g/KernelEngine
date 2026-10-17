@@ -74,7 +74,7 @@ public unsafe partial class Audio : IDisposable, INativeAudio
     public void Play(uint sound, float volume, bool loop)
     {
         ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->play(Handle, sound, volume, loop ? (byte)1 : (byte)0, &err), err, "play");
+        NativeErrors.ThrowIfFailed(Handle->play(Handle, sound, volume, loop, &err), err, "play");
     }
 
     /// <summary>Stops a playing sound; no-op when it is not playing.</summary>

@@ -150,7 +150,7 @@ fn findSound(state: *State, id: c.ke_audio_sound) ?*LoadedSound {
 /// flag. When the start fails, the sound is left stopped. Fails with an invalid-argument error for
 /// a null backend or the invalid id, with a not-found error for an id that is not loaded, and with
 /// a general error when miniaudio cannot start the sound.
-fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: c.ke_bool, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: bool, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     if (self == null or id == c.KE_AUDIO_SOUND_INVALID) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
@@ -167,7 +167,7 @@ fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: c.ke_b
     _ = ma.ma_sound_stop(&s.sound);
     _ = ma.ma_sound_seek_to_pcm_frame(&s.sound, 0);
     ma.ma_sound_set_volume(&s.sound, volume);
-    ma.ma_sound_set_looping(&s.sound, if (loop != 0) ma.MA_TRUE else ma.MA_FALSE);
+    ma.ma_sound_set_looping(&s.sound, if (loop) ma.MA_TRUE else ma.MA_FALSE);
     const r = ma.ma_sound_start(&s.sound);
     if (r != ma.MA_SUCCESS) {
         E.fail(out_error, .general, "ma_sound_start failed", @src());
@@ -329,7 +329,7 @@ test "playing a sound that was never loaded fails" {
     if (h.ref == null) return error.SkipZigTest;
     defer h.destroy.?(h.ref);
 
-    const ok = h.ref.*.play.?(h.ref, 12345, 1.0, 0, null);
+    const ok = h.ref.*.play.?(h.ref, 12345, 1.0, false, null);
     try testing.expect(!ok);
 }
 
@@ -344,7 +344,7 @@ test "the master volume accepts the full unit range" {
 }
 
 test "playing through a null backend returns false" {
-    const ok = audioPlay(null, c.KE_AUDIO_SOUND_INVALID, 1.0, 0, null);
+    const ok = audioPlay(null, c.KE_AUDIO_SOUND_INVALID, 1.0, false, null);
     try testing.expect(!ok);
 }
 

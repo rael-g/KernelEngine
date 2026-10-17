@@ -110,7 +110,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     public void BeginFrame()
     {
         ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->begin_frame(Handle, &err) != 0, err, "begin_frame");
+        NativeErrors.ThrowIfFailed(Handle->begin_frame(Handle, &err), err, "begin_frame");
     }
 
     /// <summary>Submits the populated command slots in ascending slot order, then presents the render target. Returns false when no frame began, or with out_error set when presenting failed.</summary>
@@ -118,7 +118,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     public void EndFrame()
     {
         ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->end_frame(Handle, &err) != 0, err, "end_frame");
+        NativeErrors.ThrowIfFailed(Handle->end_frame(Handle, &err), err, "end_frame");
     }
 
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
@@ -143,7 +143,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         ulong vboLocal;
         ulong iboLocal;
         uint indexCountLocal;
-        var found = Handle->mesh_buffers(Handle, h, &vboLocal, &iboLocal, &indexCountLocal) != 0;
+        var found = Handle->mesh_buffers(Handle, h, &vboLocal, &iboLocal, &indexCountLocal);
         vbo = vboLocal;
         ibo = iboLocal;
         indexCount = indexCountLocal;
@@ -323,7 +323,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
         fixed (byte* keyPtr = keyBytes)
         {
-            var found = Handle->try_get_mesh(Handle, (sbyte*)keyPtr, &@outLocal) != 0;
+            var found = Handle->try_get_mesh(Handle, (sbyte*)keyPtr, &@outLocal);
             @out = @outLocal;
             return found;
         }
@@ -338,7 +338,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
         fixed (byte* keyPtr = keyBytes)
         {
-            var found = Handle->try_get_texture(Handle, (sbyte*)keyPtr, &@outLocal) != 0;
+            var found = Handle->try_get_texture(Handle, (sbyte*)keyPtr, &@outLocal);
             @out = @outLocal;
             return found;
         }
@@ -353,7 +353,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
         fixed (byte* keyPtr = keyBytes)
         {
-            var found = Handle->try_get_material(Handle, (sbyte*)keyPtr, &@outLocal) != 0;
+            var found = Handle->try_get_material(Handle, (sbyte*)keyPtr, &@outLocal);
             @out = @outLocal;
             return found;
         }

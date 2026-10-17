@@ -2292,12 +2292,11 @@ public static class CSharpWriter
                     + $" failure channel, so there is nothing for a getter to drop. Got {cs.Shape}"
                     + $" with {cs.PublicParams.Count} parameter(s).");
 
-            var pType = slot.Returns == convention.ByteBoolType ? "bool" : ReturnType(model, slot.Returns, convention);
+            var pType = ReturnType(model, slot.Returns, convention);
             Declare(o, decls, XmlDoc("    ", slot.Doc ?? slot.ReturnDoc, convention).TrimEnd(),
                 $"{pType} {name}", property: true);
             o.Add("    {");
-            o.Add($"        get => {(slot.Returns == convention.ByteBoolType ? "" : ReturnCast(model, slot.Returns, convention))}Handle->{slot.Name}(Handle)"
-                + (slot.Returns == convention.ByteBoolType ? " != 0" : "") + ";");
+            o.Add($"        get => {ReturnCast(model, slot.Returns, convention)}Handle->{slot.Name}(Handle);");
             o.Add("    }");
             o.Add("");
             return;
@@ -2489,8 +2488,7 @@ public static class CSharpWriter
                         .Select(p => outs.Contains(p)
                             ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local") : CallArg(p));
                     var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
-                        + (cs.Fallible ? ", null)" : ")")
-                        + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                        + (cs.Fallible ? ", null)" : ")");
                     o.Add($"{tInd}var found = {tryCall};");
                     foreach (var op in outs)
                         o.Add($"{tInd}{Idioms.Ident(WrittenName(op))} = "
@@ -2582,8 +2580,7 @@ public static class CSharpWriter
                         o.Add($"{fInd}{{");
                         o.Add($"{fInd}    {(capture is null ? "" : capture + " = ")}"
                             + $"{(signalsOk ? "" : ReturnCast(model, slot.Returns, convention))}"
-                            + $"Handle->{slot.Name}(Handle{call}, &err)"
-                            + (slot.Returns == convention.ByteBoolType ? " != 0" : "") + ";");
+                            + $"Handle->{slot.Name}(Handle{call}, &err)" + ";");
                         o.Add($"{fInd}}}");
                         if (scoped.Count > 0)
                         {
@@ -2658,8 +2655,7 @@ public static class CSharpWriter
                     o.Add($"{fInd}{convention.ErrorType}* err = null;");
                     if (byReturn && rooted.Count > 0)
                     {
-                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
-                            + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)";
                         o.Add($"{fInd}if (!{boolCall})");
                         o.Add($"{fInd}{{");
                         foreach (var rp in rooted)
@@ -2671,16 +2667,14 @@ public static class CSharpWriter
                     }
                     else if (byReturn && ownerDrains && slot.Has("drains"))
                     {
-                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
-                            + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)";
                         o.Add($"{fInd}if (!{boolCall} && _callbackFailures.IsEmpty)");
                         o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
                         o.Add($"{fInd}DrainCallbackFailures();");
                     }
                     else if (byReturn)
                     {
-                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)"
-                            + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)";
                         o.Add($"{fInd}{convention.ErrorHelperClass}.ThrowIfFailed({boolCall}, err, \"{slot.Name}\");");
                     }
                     else
@@ -2710,10 +2704,9 @@ public static class CSharpWriter
                             + " has no failure channel -- so a caller handed nothing back is never told why."
                             + $" The slot needs a {convention.ErrorType}** parameter.");
                     var retType = spanElement is not null ? $"ReadOnlySpan<{spanElement}>"
-                        : slot.Returns == convention.ByteBoolType ? "bool"
                         : ReturnType(model, slot.Returns, convention);
                     var needsCast = retType == "nint" ? "(nint)"
-                        : spanElement is null && slot.Returns != convention.ByteBoolType
+                        : spanElement is null
                             ? ReturnCast(model, slot.Returns, convention) : "";
                     var generics = cs.Blobs.Count == 0 ? ""
                         : "<" + string.Join(", ", cs.Blobs.Select(b => BlobTypeParam(b.Blob))) + ">";
@@ -2739,8 +2732,7 @@ public static class CSharpWriter
                     var pInd = new string(' ', 8 + pDepth * 4);
                     foreach (var op in cs.TrailingOuts)
                         o.Add($"{pInd}{OutLocal(model, op, convention)} {Idioms.Ident(WrittenName(op))}Local;");
-                    var pCall = $"Handle->{slot.Name}(Handle{call})"
-                        + (slot.Returns == convention.ByteBoolType ? " != 0" : "");
+                    var pCall = $"Handle->{slot.Name}(Handle{call})";
                     var pHolds = cs.TrailingOuts.Count > 0;
                     if (spanElement is not null)
                     {
@@ -2800,7 +2792,6 @@ public static class CSharpWriter
             : p.Has("rooted") ? $"(void*)System.Runtime.InteropServices.GCHandle.ToIntPtr({Idioms.Ident(p.Name!)}Handle)"
             : p.Has("ctx") ? $"({CTypes.Normalize(p.Type)}){Idioms.Ident(p.Name!)}"
             : p.Has("utf8") ? $"(sbyte*){Idioms.Ident(p.Name!)}Ptr"
-            : p.Type.Trim() == convention.ByteBoolType ? $"{Idioms.Ident(p.Name!)} ? (byte)1 : (byte)0"
             : model.Enums.Any(e => e.Name == p.Type.Trim()) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") && CTypes.IsPointer(p.Type) ? $"({p.Type.Trim()}){Idioms.Ident(p.Name!)}"
             : p.Has("enum") ? $"({Idioms.CsPrimitive(p.Type, convention)}){Idioms.Ident(p.Name!)}"
@@ -2982,7 +2973,7 @@ public static class CSharpWriter
             : tupleOuts.Count > 0
                 ? "(" + string.Join(", ", tupleOuts.Select(p =>
                     $"{OutElement(model, p, convention)} {Idioms.Pascal(WrittenName(p))}")) + ")"
-            : f.Returns == convention.ByteBoolType ? "bool" : ReturnType(model, f.Returns, convention);
+            : ReturnType(model, f.Returns, convention);
 
         string Local(ApiParam p) => Idioms.Ident(writes.Contains(p) || p == cs.ReturnCount
             ? WrittenName(p) : p.Name!)
@@ -2997,8 +2988,7 @@ public static class CSharpWriter
             : p.Has("enum") ? $"(int){Idioms.Ident(p.Name!)}"
             : Idioms.Ident(p.Name!)));
         var call = $"{(cs.ReturnCount is null ? ReturnCast(model, f.Returns, convention) : "")}"
-            + $"Native.{f.Name}({string.Join(", ", args)})"
-            + (f.Returns == convention.ByteBoolType ? " != 0" : "");
+            + $"Native.{f.Name}({string.Join(", ", args)})";
 
         var sigParts = (selfSig is null ? [] : new[] { selfSig }).Concat(ins.Select(p =>
             cs.Blobs.Any(b => b.Blob == p)
@@ -3103,7 +3093,7 @@ public static class CSharpWriter
             var nativeSig = string.Join(", ", (selfParamSig is not null ? [selfParamSig] : Array.Empty<string>()).Concat(rest));
             o.Add($"        [DllImport(\"{libraryName}\", CallingConvention = CallingConvention.Cdecl,");
             o.Add($"                   EntryPoint = \"{f.Name}\", ExactSpelling = true)]");
-            o.Add($"        public static extern {(f.Returns == convention.ByteBoolType ? "byte" : CsType(model, f.Returns, convention))} {f.Name}({nativeSig});");
+            o.Add($"        public static extern {CsType(model, f.Returns, convention)} {f.Name}({nativeSig});");
             o.Add("");
         }
         o.Add("    }");

@@ -248,7 +248,7 @@ fn ensureVertexBuffer(ui: *UiState, bytes: usize, out_error: [*c][*c]c.ke_error)
         .initial_data = null,
         .size = size,
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (vbo == c.KE_GPU_INVALID_HANDLE) return false;
     if (ui.vbo != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, ui.vbo);
@@ -360,7 +360,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     var bh: u32 = 0;
     pc.*.backbuffer_size.?(pc, &bw, &bh);
     var proj = zm.orthographicOffCenterLh(0.0, @floatFromInt(bw), 0.0, @floatFromInt(bh), 0.0, 1.0);
-    if (ui.ndc.y_flip != 0) proj[1][1] = -proj[1][1];
+    if (ui.ndc.y_flip) proj[1][1] = -proj[1][1];
     var proj_arr: [16]f32 = undefined;
     zm.storeMat(proj_arr[0..], proj);
     core.*.upload.?(core, ui.frame_uniform, 0, &proj_arr, 64);
@@ -424,7 +424,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &vbl;
     if (!ui.binder.pipeline_layouts.?(ui.binder, ui.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) return false;
-    pp.blend_state.blend_enabled = 1;
+    pp.blend_state.blend_enabled = true;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_ONE;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     pp.blend_state.color_op = c.KE_GPU_BLEND_OP_ADD;
@@ -432,8 +432,8 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.blend_state.dst_alpha = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     pp.blend_state.alpha_op = c.KE_GPU_BLEND_OP_ADD;
     pp.blend_state.write_mask = 0x0F;
-    pp.depth_stencil.depth_test_enabled = 0;
-    pp.depth_stencil.depth_write_enabled = 0;
+    pp.depth_stencil.depth_test_enabled = false;
+    pp.depth_stencil.depth_write_enabled = false;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     pp.color_target_formats[0] = core.*.backbuffer_format.?(core);
     pp.color_target_count = 1;
@@ -449,7 +449,7 @@ fn setup(ui: *UiState, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .initial_data = null,
         .size = 64,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (ui.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
 

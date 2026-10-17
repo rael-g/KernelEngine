@@ -75,8 +75,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         _maxLightsPerClusterOverride = maxLightsPerCluster;
         _featureParams = new ke_render_feature_params
         {
-            enable_shadows = (byte)(enableShadows ? 1 : 0),
-            enable_ibl = (byte)(enableIbl ? 1 : 0),
+            enable_shadows = enableShadows,
+            enable_ibl = enableIbl,
         };
     }
 
@@ -119,7 +119,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         var config = services.GetService<IConfiguration>();
         var debugLabels = _debugLabelsOverride || (config?.GetBool("render", "debug_labels", false) ?? false);
-        var dp = new ke_gpu_device_webgpu_params { enable_validation = 1, scheduler = sc, debug_labels = (byte)(debugLabels ? 1 : 0) };
+        var dp = new ke_gpu_device_webgpu_params { enable_validation = true, scheduler = sc, debug_labels = debugLabels };
         _device = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, &err);
         if (_device.@ref == null)
             throw Fail("webgpu device create failed", err);
@@ -150,7 +150,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             : null;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
         fixed (byte* sd = shaderDirBytes)
-            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, _target.@ref, wd, 1, lg, ar, &cp, &fp, null, null, null, (sbyte*)sd, &err);
+            _module = KernelEngine.Render.Webgpu.Native.NativeMethods.render_module_create(rt, ec, _device.@ref, _target.@ref, wd, true, lg, ar, &cp, &fp, null, null, null, (sbyte*)sd, &err);
         if (_module.@ref == null)
             throw Fail("render module create failed", err);
 

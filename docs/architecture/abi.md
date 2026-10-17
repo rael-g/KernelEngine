@@ -41,8 +41,10 @@ inner exception, and the full type name is kept in the exception's `Data` under 
 **One call ends the process.** `ke_error_fatal` prints the chain and exits; the header reserves it
 for a caller with nowhere left to send an error.
 
-**Booleans are `ke_bool`.** In a slot or a struct that crosses the ABI, a boolean is `ke_bool`
-(`kernel_engine/common/types.h`), not C `bool`.
+**Booleans are C `bool`.** A slot or a struct that crosses the ABI takes C `bool`, one byte. It
+reaches C# as a one-byte `bool` because every engine assembly disables runtime marshalling
+(`src/csharp/DisableRuntimeMarshalling.props`); an assembly that marshalled it would read a
+four-byte `BOOL`.
 
 ## How a resource is named
 

@@ -251,7 +251,7 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, ou
         .initial_data = null,
         .size = size,
         .usage = c.KE_GPU_BUFFER_USAGE_STORAGE | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
 }
 
@@ -305,7 +305,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .initial_data = null,
         .size = @sizeOf(ClusterGridUniform),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (cm.cluster_grid_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     const published = [_]struct { buffer: c.ke_gpu_buffer, size: usize }{
@@ -330,7 +330,7 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .initial_data = null,
         .size = @sizeOf(ClusterParams),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (cm.cull_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     const cull_bindings = [_]c.ke_render_shader_binding{

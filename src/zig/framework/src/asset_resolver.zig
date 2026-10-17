@@ -383,7 +383,7 @@ fn vtResolveTextureInto(
     }
 
     var cached: c.ke_texture_handle = undefined;
-    if (core.try_get_texture.?(core, path, &cached) != 0) return cached;
+    if (core.try_get_texture.?(core, path, &cached)) return cached;
 
     var data: ?*c.ke_texture_data = null;
     if (!vtResolveTexture(self, path, &data, out_error)) return c.KE_TEXTURE_NONE;
@@ -421,7 +421,7 @@ fn vtResolveMeshInto(
     }
 
     var cached: c.ke_mesh_handle = undefined;
-    if (core.try_get_mesh.?(core, path, &cached) != 0) return cached;
+    if (core.try_get_mesh.?(core, path, &cached)) return cached;
 
     var shape: c.ke_mesh_shape_data = undefined;
     if (!vtResolveMesh(self, path, &shape, out_error)) return c.KE_MESH_NONE;
@@ -488,7 +488,7 @@ fn vtResolveMaterialInto(
     }
 
     var cached: c.ke_material_handle = undefined;
-    if (core.try_get_material.?(core, path, &cached) != 0) return cached;
+    if (core.try_get_material.?(core, path, &cached)) return cached;
 
     var spec: c.ke_material_spec = undefined;
     if (!vtResolveMaterial(self, path, &spec, out_error)) return c.KE_MATERIAL_NONE;

@@ -162,7 +162,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         var vbo: c.ke_gpu_buffer = 0;
         var ibo: c.ke_gpu_buffer = 0;
         var idx_count: u32 = 0;
-        if (core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count) == 0) continue;
+        if (!core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count)) continue;
 
         const model = zm.loadMat(draw.world.matrix.m[0..]);
         const mvp = zm.mul(model, view_proj);
@@ -228,8 +228,8 @@ fn setup(gb: *GBufferModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &gb.vbl;
     pp.blend_state.write_mask = 0x0F;
-    pp.depth_stencil.depth_test_enabled = 1;
-    pp.depth_stencil.depth_write_enabled = 1;
+    pp.depth_stencil.depth_test_enabled = true;
+    pp.depth_stencil.depth_write_enabled = true;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
     if (!gb.groups.place(&pp, out_error)) return false;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;

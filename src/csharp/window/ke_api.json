@@ -55,7 +55,7 @@
         },
         {
           "name": "should_close",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true once the user has requested the window to close.",
           "return_doc": null,

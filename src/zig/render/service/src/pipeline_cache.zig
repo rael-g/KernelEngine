@@ -25,7 +25,7 @@ const PsoKey = struct {
     depth_stencil: c.ke_gpu_depth_stencil_state,
     bind_group_layouts: [4]c.ke_gpu_bind_group_layout,
     bind_group_layout_count: u32,
-    alpha_to_coverage_enabled: c.ke_bool,
+    alpha_to_coverage_enabled: bool,
     color_target_formats: [MAX_COLOR_TARGETS]c.ke_gpu_texture_format,
     color_target_count: u32,
 

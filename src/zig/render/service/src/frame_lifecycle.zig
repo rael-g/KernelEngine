@@ -10,7 +10,7 @@ const c = rc.c;
 /// cleared before the target is acquired, so a failed acquire leaves the frame closed and
 /// returns zero with the target's error. Once it has returned one, the backbuffer size is read
 /// from the target, the "backbuffer" entry holds the acquired view and the frame is live.
-pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
+pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = rc.coreOf(self);
     st.frame_live = false;
     st.ended_count.store(0, .monotonic);
@@ -23,12 +23,12 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     st.upload_count.store(0, .monotonic);
     st.upload_arena_offset.store(0, .monotonic);
     const view = st.target.acquire.?(st.target, out_error);
-    if (view == c.KE_GPU_INVALID_HANDLE) return 0;
+    if (view == c.KE_GPU_INVALID_HANDLE) return false;
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
     resource_table.resizeRelative(st);
     if (st.find("backbuffer")) |bb| bb.view = view;
     st.frame_live = true;
-    return 1;
+    return true;
 }
 
 /// Closes the frame. The queued uploads are written to their buffers before any command buffer
@@ -37,9 +37,9 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
 /// destroyed with their encoders, and the frame stops being live. Returns the result of the
 /// present, with the target's error on failure; the queue is polled whatever it returned. Returns
 /// zero and does nothing when no frame is live.
-pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
+pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = rc.coreOf(self);
-    if (!st.frame_live) return 0;
+    if (!st.frame_live) return false;
 
     flushUploads(st);
 
@@ -59,7 +59,7 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
     if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
     const presented = st.target.present.?(st.target, out_error);
     st.device.queue_poll.?(st.device, st.queue);
-    return @intFromBool(presented);
+    return presented;
 }
 
 fn replay(enc: *c.ke_gpu_command_encoder, rec: *const rc.ComputeRecord) void {

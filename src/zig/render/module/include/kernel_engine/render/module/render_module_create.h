@@ -37,8 +37,8 @@ typedef struct ke_render_cluster_params
 
 typedef struct ke_render_feature_params
 {
-    ke_bool enable_shadows;
-    ke_bool enable_ibl;
+    bool    enable_shadows;
+    bool    enable_ibl;
 } ke_render_feature_params;
 
 /// The asset_resolver argument is borrowed and may be NULL. It turns an authored
@@ -48,7 +48,7 @@ typedef struct ke_render_feature_params
 KE_RENDER_CORE_API ke_render_module_handle
 ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_gpu_render_target *target,
-                        ke_world *world, ke_bool default_passes, struct ke_logger *logger,
+                        ke_world *world, bool default_passes, struct ke_logger *logger,
                         ke_asset_resolver *asset_resolver,
                         const ke_render_cluster_params *cluster_params,
                         const ke_render_feature_params *feature_params,

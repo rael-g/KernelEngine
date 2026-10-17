@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/common/types.h>
+#include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -56,7 +56,7 @@ extern "C"
 
     KE_RENDER_SHADOW_API ke_render_shadow_handle ke_render_shadow_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_ndc_convention ndc, ke_view_space *view_space, ke_bool enabled,
+        ke_ndc_convention ndc, ke_view_space *view_space, bool enabled,
         ke_component_id mesh_cid, ke_component_id world_transform_cid,
         ke_component_id light_cid, ke_component_id frame_cid,
         const ke_render_shadow_params *params,

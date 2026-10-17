@@ -4,9 +4,7 @@ namespace KernelEngine.Render.Webgpu.Native;
 
 public partial struct ke_render_feature_params
 {
-    [NativeTypeName("ke_bool")]
-    public byte enable_shadows;
+    public bool enable_shadows;
 
-    [NativeTypeName("ke_bool")]
-    public byte enable_ibl;
+    public bool enable_ibl;
 }

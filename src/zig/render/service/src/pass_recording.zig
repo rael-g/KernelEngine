@@ -88,8 +88,8 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
                 .stencil_store_op = c.KE_GPU_STORE_OP_DONT_CARE,
                 .clear_depth = 1.0,
                 .clear_stencil = 0,
-                .depth_read_only = 0,
-                .stencil_read_only = 0,
+                .depth_read_only = false,
+                .stencil_read_only = false,
             } else .{
                 .view = r.view,
                 .depth_load_op = c.KE_GPU_LOAD_OP_CLEAR,
@@ -97,8 +97,8 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
                 .stencil_store_op = c.KE_GPU_STORE_OP_DONT_CARE,
                 .clear_depth = 1.0,
                 .clear_stencil = 0,
-                .depth_read_only = 0,
-                .stencil_read_only = 0,
+                .depth_read_only = false,
+                .stencil_read_only = false,
             };
             has_depth = true;
         } else if (color_count < rc.MAX_COLOR_ATTACH) {

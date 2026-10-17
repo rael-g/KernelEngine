@@ -9,7 +9,6 @@
     "paramsSuffix": "_params",
     "outParamPrefix": "out_",
     "errorLaneName": "out_error",
-    "byteBoolType": "ke_bool",
     "errorType": "ke_error",
     "errorKindType": "ke_error_type",
     "errorIsFunction": "ke_error_is",
@@ -752,7 +751,6 @@
       "project": "src/csharp/common/KernelEngine.Common",
       "namespace": "KernelEngine.Common.Native",
       "headers": [
-        "src/zig/common/include/kernel_engine/common/types.h",
         "src/zig/common/include/kernel_engine/common/error.h",
         "src/c/math/kernel_engine/math/math.h",
         "src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h",

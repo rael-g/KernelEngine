@@ -230,7 +230,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         var vbo: c.ke_gpu_buffer = 0;
         var ibo: c.ke_gpu_buffer = 0;
         var idx_count: u32 = 0;
-        if (core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count) == 0) continue;
+        if (!core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count)) continue;
 
         if (!fwd.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
         rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &fwd.pipeline_template));
@@ -299,7 +299,7 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &fwd.vbl;
-    pp.blend_state.blend_enabled = 1;
+    pp.blend_state.blend_enabled = true;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_SRC_ALPHA;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     pp.blend_state.color_op = c.KE_GPU_BLEND_OP_ADD;
@@ -307,8 +307,8 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.blend_state.dst_alpha = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
     pp.blend_state.alpha_op = c.KE_GPU_BLEND_OP_ADD;
     pp.blend_state.write_mask = 0x0F;
-    pp.depth_stencil.depth_test_enabled = 1;
-    pp.depth_stencil.depth_write_enabled = 0;
+    pp.depth_stencil.depth_test_enabled = true;
+    pp.depth_stencil.depth_write_enabled = false;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS_EQUAL;
     if (!fwd.groups.place(&pp, out_error)) return false;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
@@ -407,7 +407,7 @@ fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
 /// `out_error` on to `register_system`.
 export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                     device: ?*c.ke_gpu_device,
-                                    logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
+                                    logger: ?*c.ke_logger, ibl_enabled: bool,
                                     mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                     camera_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
                                     frame_cid: c.ke_component_id,
@@ -419,7 +419,7 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
 
     const fwd = gpa.create(ForwardModule) catch return empty;
     fwd.* = .{};
-    if (!setup(fwd, dev, core_ref, logger, ibl_enabled != 0,
+    if (!setup(fwd, dev, core_ref, logger, ibl_enabled,
                mesh_cid, world_transform_cid, camera_cid, skybox_cid, frame_cid, out_error))
     {
         destroyModule(fwd);
@@ -656,7 +656,7 @@ test "creating and destroying the forward pass leaves no block allocated and no 
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, 0, 1, 2, 3, 4, 5, null);
+    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, 5, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -671,7 +671,7 @@ test "a forward pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, 0, 1, 2, 3, 4, 5, null);
+    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, 5, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -685,7 +685,7 @@ test "a forward pass the runtime refuses to register releases what it had create
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, 0, 1, 2, 3, 4, 5, null);
+    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, 5, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

@@ -544,7 +544,7 @@ test "a frame that never began ends without submitting or presenting anything" {
     var state: CoreState = undefined;
     var core = deadFrame(&state);
 
-    try testing.expectEqual(@as(c.ke_bool, 0), frame_lifecycle.endFrame(&core, null));
+    try testing.expectEqual(false, frame_lifecycle.endFrame(&core, null));
 }
 
 const Stubs = @import("stubs").Stubs(c);
@@ -594,11 +594,11 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
     try testing.expectEqual(@as(c.ke_gpu_texture_format, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
     try testing.expect(target.acquired);
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.end_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
     try testing.expectEqual(@as(u32, 1), target.presented);
-    try testing.expectEqual(@as(c.ke_bool, 0), svc.*.end_frame.?(svc, null));
+    try testing.expectEqual(false, svc.*.end_frame.?(svc, null));
     try testing.expectEqual(@as(u32, 1), target.presented);
 }
 
@@ -623,14 +623,14 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     _ = svc.*.declare.?(svc, &desc, null);
     const first = svc.*.resource_view.?(svc, "hdr");
 
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
     _ = svc.*.end_frame.?(svc, null);
     try testing.expectEqual(first, svc.*.resource_view.?(svc, "hdr"));
     try testing.expectEqual(@as(u32, 0), svc.*.resource_generation.?(svc));
 
     target.width = 640;
     target.height = 360;
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
     _ = svc.*.end_frame.?(svc, null);
     try testing.expect(svc.*.resource_view.?(svc, "hdr") != first);
     try testing.expectEqual(@as(u32, 1), svc.*.resource_generation.?(svc));
@@ -654,7 +654,7 @@ test "uploads beyond the first frame's records and arena are all written, and th
 
     const upload_count = first_upload_records + 100;
     var word: u32 = 7;
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
     for (0..upload_count) |_| svc.*.upload.?(svc, 1, 0, &word, @sizeOf(u32));
     const big = try heap.gpa.alloc(u8, first_upload_arena);
     svc.*.upload.?(svc, 1, 0, big.ptr, big.len);
@@ -717,12 +717,12 @@ test "a render pass is opened under the name its pass declared" {
     io.writes = &writes;
     io.writes_count = 1;
 
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
     const rp = pass.*.begin_render.?(pass);
     rp.*.end.?(rp);
     svc.*.end_pass.?(svc, pass);
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.end_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
 
     try testing.expectEqualStrings("render.clear", std.mem.span(dev.render_pass_label));
 }
@@ -743,7 +743,7 @@ test "a compute pass replays at the end of the frame under its name and with the
     var io = std.mem.zeroes(c.ke_render_pass_io);
     io.name = "render.cull";
 
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.begin_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
     const cp = pass.*.begin_compute.?(pass);
     var transient = [_:0]u8{ 'b', 'i', 'n' };
@@ -753,7 +753,7 @@ test "a compute pass replays at the end of the frame under its name and with the
     cp.*.end.?(cp);
     svc.*.end_pass.?(svc, pass);
     try testing.expect(dev.compute_pass_label == null);
-    try testing.expectEqual(@as(c.ke_bool, 1), svc.*.end_frame.?(svc, null));
+    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
 
     try testing.expectEqualStrings("render.cull", std.mem.span(dev.compute_pass_label));
     try testing.expectEqualStrings("bin", std.mem.span(dev.debug_group_label));

@@ -43,8 +43,7 @@ public unsafe partial struct ke_gpu_render_pipeline_params
     [NativeTypeName("uint32_t")]
     public uint bind_group_layout_count;
 
-    [NativeTypeName("ke_bool")]
-    public byte alpha_to_coverage_enabled;
+    public bool alpha_to_coverage_enabled;
 
     [NativeTypeName("ke_gpu_texture_format[8]")]
     public _color_target_formats_e__FixedBuffer color_target_formats;

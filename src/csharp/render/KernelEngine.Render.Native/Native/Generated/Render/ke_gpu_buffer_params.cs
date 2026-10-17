@@ -16,6 +16,5 @@ public unsafe partial struct ke_gpu_buffer_params
     [NativeTypeName("ke_gpu_buffer_usage")]
     public uint usage;
 
-    [NativeTypeName("ke_bool")]
-    public byte mapped_at_creation;
+    public bool mapped_at_creation;
 }

@@ -107,21 +107,19 @@ public static class Idioms
     public static string CsPrimitive(string cType, Convention convention)
     {
         var t = cType.Trim();
-        if (t == convention.ByteBoolType) return "bool";
         if (t is "void *" or "void*") return "nint";
         return Prim.GetValueOrDefault(t, t);
     }
 
     /// <summary>
     /// The C# spelling of a C type that may be a pointer: strips <c>const</c> and <c>struct</c>,
-    /// returns <c>bool</c> for the byte-boolean type, and maps a primitive name without a pointer
+    /// and maps a primitive name without a pointer
     /// through the primitive table. Any other name is returned without its trailing pointer marks,
     /// with one <c>*</c> appended when the type is a pointer.
     /// </summary>
     public static string CsForeignType(string cType, Convention convention)
     {
         var t = cType.Trim().Replace("const ", "").Replace("struct ", "");
-        if (t == convention.ByteBoolType) return "bool";
         return Prim.TryGetValue(t.TrimEnd('*', ' '), out var prim) && !t.Contains('*')
             ? prim
             : t.TrimEnd('*', ' ') + (t.Contains('*') ? "*" : "");

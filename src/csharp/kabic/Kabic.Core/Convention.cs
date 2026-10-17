@@ -91,7 +91,7 @@ public sealed class Convention
     /// Boolean return-type spellings that mean "succeeded", paired with <see
     /// cref="ErrorOutParamType"/>.
     /// </summary>
-    public IReadOnlyList<string> BooleanReturnTypes => ["_Bool", "bool", ByteBoolType];
+    public IReadOnlyList<string> BooleanReturnTypes => ["_Bool", "bool"];
 
     /// <summary>
     /// True if <paramref name="structName"/> names an owner-wrapper rather than a real vtable.
@@ -171,11 +171,6 @@ public sealed class Convention
     /// <summary>Class that holds the raw P/Invoke methods of a binding assembly.</summary>
     public string BindingsMethodsClass { get; init; } = "NativeMethods";
 
-    /// <summary>
-    /// The C typedef for a boolean that crosses the ABI as one byte (<c>ke_bool</c>), which the
-    /// managed side widens to <c>bool</c>.
-    /// </summary>
-    public string ByteBoolType { get; init; } = "";
 
     /// <summary>The C struct a failed call reports through (<c>ke_error</c>).</summary>
     public string ErrorType { get; init; } = "";
@@ -304,7 +299,6 @@ public sealed class Convention
         var builder = new ConventionBuilder()
             .Symbols(Text(json, "symbolPrefix"), Text(json, "handleSuffix"), Text(json, "factorySuffix"),
                 Text(json, "componentSuffix"), Text(json, "paramsSuffix"))
-            .Booleans(Text(json, "byteBoolType"))
             .OutParams(Or(json, "outParamPrefix", "out_"), Or(json, "errorLaneName", "out_error"))
             .Bindings(Or(json, "includeDirectoryName", "kernel_engine"), Or(json, "commonBindingsNamespace", ""),
                 Or(json, "bindingsMethodsClass", "NativeMethods"))

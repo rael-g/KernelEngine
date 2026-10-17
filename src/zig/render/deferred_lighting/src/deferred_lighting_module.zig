@@ -188,8 +188,8 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     pp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.blend_state.write_mask = 0x0F;
-    pp.depth_stencil.depth_test_enabled = 0;
-    pp.depth_stencil.depth_write_enabled = 0;
+    pp.depth_stencil.depth_test_enabled = false;
+    pp.depth_stencil.depth_write_enabled = false;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     if (!dl.binder.pipeline_layouts.?(dl.binder, dl.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) return false;
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
@@ -281,7 +281,7 @@ fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
 /// out-parameter.
 export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                               device: ?*c.ke_gpu_device,
-                                              logger: ?*c.ke_logger, ibl_enabled: c.ke_bool,
+                                              logger: ?*c.ke_logger, ibl_enabled: bool,
                                               camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
                                               skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
                                               out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_deferred_lighting_handle {
@@ -292,7 +292,7 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
 
     const dl = gpa.create(DeferredLightingModule) catch return empty;
     dl.* = .{};
-    if (!setup(dl, dev, core_ref, logger, ibl_enabled != 0,
+    if (!setup(dl, dev, core_ref, logger, ibl_enabled,
                camera_cid, world_transform_cid, skybox_cid, frame_cid, out_error))
     {
         destroyModule(dl);
@@ -330,7 +330,7 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, 0, 1, 2, 3, 4, null);
+    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -345,7 +345,7 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, 0, 1, 2, 3, 4, null);
+    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -359,7 +359,7 @@ test "a deferred lighting pass the runtime refuses to register releases what it 
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, 0, 1, 2, 3, 4, null);
+    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

@@ -79,9 +79,9 @@ extern "C"
                          void                       *event_ctx,
                          ke_error                  **out_error);
 
-        bool  (*is_action_down)(struct ke_input_actions *self, int32_t action_id);
-        bool  (*was_action_pressed)(struct ke_input_actions *self, int32_t action_id);
-        bool  (*was_action_released)(struct ke_input_actions *self, int32_t action_id);
+        bool (*is_action_down)(struct ke_input_actions *self, int32_t action_id);
+        bool (*was_action_pressed)(struct ke_input_actions *self, int32_t action_id);
+        bool (*was_action_released)(struct ke_input_actions *self, int32_t action_id);
         float (*get_axis1d)(struct ke_input_actions *self, int32_t action_id);
         /** @param out_x [out] @param out_y [out] */
         void  (*get_axis2d)(struct ke_input_actions *self, int32_t action_id,

@@ -120,7 +120,7 @@ fn uniformBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, out_er
         .initial_data = null,
         .size = size,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
 }
 

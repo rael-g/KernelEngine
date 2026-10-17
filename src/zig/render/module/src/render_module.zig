@@ -100,7 +100,7 @@ fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 /// error when it cannot.
 fn endFrameSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = stateOf(user);
-    return st.core.ref.*.end_frame.?(st.core.ref, out_error) != 0;
+    return st.core.ref.*.end_frame.?(st.core.ref, out_error);
 }
 
 /// Registers a render-phase system pinned to the first worker, with the access list given and
@@ -226,7 +226,7 @@ fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_re
 /// types it registered in the ecs stay registered.
 export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, device: ?*c.ke_gpu_device,
                                   target: ?*c.ke_gpu_render_target,
-                                  world: ?*c.ke_world, default_passes: c.ke_bool, logger: ?*c.ke_logger,
+                                  world: ?*c.ke_world, default_passes: bool, logger: ?*c.ke_logger,
                                   asset_resolver: ?*c.ke_asset_resolver,
                                   cluster_params: ?*const c.ke_render_cluster_params,
                                   feature_params: ?*const c.ke_render_feature_params,
@@ -281,8 +281,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     st.view_space = .{ .ref = null, .destroy = null };
     st.owns_view_space = false;
     st.camera = .{ .ref = null, .destroy = null };
-    const shadow_enabled = if (feature_params) |p| p.enable_shadows != 0 else true;
-    const ibl_enabled = if (feature_params) |p| p.enable_ibl != 0 else true;
+    const shadow_enabled = if (feature_params) |p| p.enable_shadows else true;
+    const ibl_enabled = if (feature_params) |p| p.enable_ibl else true;
     st.logger = logger;
     st.bb_writes = .{"backbuffer"};
     st.io = std.mem.zeroes(c.ke_render_pass_io);
@@ -305,7 +305,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         .{ .cid = st.frame_cid, .access = c.KE_ACCESS_WRITE },
     };
 
-    if (default_passes != 0) {
+    if (default_passes) {
         const ndc = dev.get_ndc_convention.?(dev);
         if (view_space) |supplied| {
             st.view_space = .{ .ref = supplied, .destroy = null };
@@ -316,7 +316,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         const vs = st.view_space.ref orelse {
             return failCreate(rt, mark, st);
         };
-        if (ndc.clip_left_handed == 0) {
+        if (!ndc.clip_left_handed) {
             c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render: no projection builds a right-handed clip space", @src().file, @intCast(@src().line), null);
             return failCreate(rt, mark, st);
         }
@@ -392,7 +392,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return failCreate(rt, mark, st);
         }
 
-        st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, @intFromBool(shadow_enabled),
+        st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, shadow_enabled,
                                               mesh_cid, world_transform_cid, light_cid, st.frame_cid, shadow_params, out_error);
         if (st.shadow.ref == null) {
             return failCreate(rt, mark, st);
@@ -409,7 +409,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
             return failCreate(rt, mark, st);
         }
 
-        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, logger, @intFromBool(ibl_enabled),
+        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, logger, ibl_enabled,
                                                             camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
         if (st.deferred.ref == null) {
             return failCreate(rt, mark, st);
@@ -418,7 +418,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         if (st.skybox.ref == null) {
             return failCreate(rt, mark, st);
         }
-        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, logger, @intFromBool(ibl_enabled),
+        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, logger, ibl_enabled,
                                                 mesh_cid, world_transform_cid, camera_cid, skybox_cid, st.frame_cid, out_error);
         if (st.forward.ref == null) {
             return failCreate(rt, mark, st);
@@ -620,7 +620,7 @@ const Rig = struct {
 
     fn create(self: *Rig) c.ke_render_module_handle {
         const dir: [*:0]const u8 = @ptrCast(&self.shader_dir);
-        return ke_render_module_create(self.rt.api(), self.ecs.api(), self.dev.api(), self.target.api(), self.world.api(), 1, null, null, null, null, null, null, null, dir, null);
+        return ke_render_module_create(self.rt.api(), self.ecs.api(), self.dev.api(), self.target.api(), self.world.api(), true, null, null, null, null, null, null, null, dir, null);
     }
 };
 
@@ -683,9 +683,9 @@ test "a render module whose runtime refuses any one system registration fails th
     }
 }
 
-fn failingFrame(_: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_bool {
+fn failingFrame(_: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "no backbuffer", @src().file, @intCast(@src().line), null);
-    return 0;
+    return false;
 }
 
 test "a frame the service cannot begin or end fails the render phase with the service's own error" {
@@ -710,8 +710,8 @@ test "a render module without a runtime, an ecs or a device is refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    try testing.expect(ke_render_module_create(null, rig.ecs.api(), rig.dev.api(), rig.target.api(), null, 1, null, null, null, null, null, null, null, "shaders", null).ref == null);
-    try testing.expect(ke_render_module_create(rig.rt.api(), null, rig.dev.api(), rig.target.api(), null, 1, null, null, null, null, null, null, null, "shaders", null).ref == null);
-    try testing.expect(ke_render_module_create(rig.rt.api(), rig.ecs.api(), null, rig.target.api(), null, 1, null, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(null, rig.ecs.api(), rig.dev.api(), rig.target.api(), null, true, null, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(rig.rt.api(), null, rig.dev.api(), rig.target.api(), null, true, null, null, null, null, null, null, null, "shaders", null).ref == null);
+    try testing.expect(ke_render_module_create(rig.rt.api(), rig.ecs.api(), null, rig.target.api(), null, true, null, null, null, null, null, null, null, "shaders", null).ref == null);
     try heap.expectNoLeaks();
 }

@@ -119,8 +119,8 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.color_target_formats[0] = core.*.backbuffer_format.?(core);
     pp.color_target_count = 1;
     pp.blend_state.write_mask = 0x0F;
-    pp.depth_stencil.depth_test_enabled = 0;
-    pp.depth_stencil.depth_write_enabled = 0;
+    pp.depth_stencil.depth_test_enabled = false;
+    pp.depth_stencil.depth_write_enabled = false;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     tm.pipeline_params = pp;
     if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) return false;

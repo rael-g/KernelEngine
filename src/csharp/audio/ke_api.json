@@ -77,7 +77,7 @@
             },
             {
               "name": "loop",
-              "type": "ke_bool",
+              "type": "_Bool",
               "tags": [],
               "doc": "Non-zero to restart the sound when it ends."
             },

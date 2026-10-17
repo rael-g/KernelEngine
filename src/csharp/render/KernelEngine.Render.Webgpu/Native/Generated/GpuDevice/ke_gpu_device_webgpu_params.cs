@@ -7,12 +7,10 @@ public unsafe partial struct ke_gpu_device_webgpu_params
     [NativeTypeName("struct ke_logger *")]
     public KernelEngine.Logger.Native.ke_logger* logger;
 
-    [NativeTypeName("ke_bool")]
-    public byte enable_validation;
+    public bool enable_validation;
 
     [NativeTypeName("struct ke_scheduler *")]
     public KernelEngine.Scheduler.Native.ke_scheduler* scheduler;
 
-    [NativeTypeName("ke_bool")]
-    public byte debug_labels;
+    public bool debug_labels;
 }

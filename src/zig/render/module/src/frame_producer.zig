@@ -25,7 +25,7 @@ pub const ambient_query = 2;
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st: *State = @alignCast(@ptrCast(user.?));
     const core = st.core;
-    if (core.*.begin_frame.?(core, out_error) == 0) return false;
+    if (!core.*.begin_frame.?(core, out_error)) return false;
     st.time += dt;
 
     var bw: u32 = 0;

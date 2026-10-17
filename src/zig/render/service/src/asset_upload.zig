@@ -45,7 +45,7 @@ pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*
         .initial_data = vertices,
         .size = vertices_size,
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (vbo == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
@@ -54,7 +54,7 @@ pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*
         .initial_data = @ptrCast(indices),
         .size = index_count * @sizeOf(u16),
         .usage = c.KE_GPU_BUFFER_USAGE_INDEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (ibo == c.KE_GPU_INVALID_HANDLE) {
         st.device.destroy_buffer.?(st.device, vbo);
@@ -73,13 +73,13 @@ pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*
 
 /// Writes the buffers and the index count of the mesh through the out-parameters. Returns zero and
 /// writes nothing when the handle no longer names a stored mesh.
-pub fn meshBuffers(self: [*c]c.ke_render_service, h: c.ke_mesh_handle, out_vbo: [*c]c.ke_gpu_buffer, out_ibo: [*c]c.ke_gpu_buffer, out_index_count: [*c]u32) callconv(.c) c.ke_bool {
+pub fn meshBuffers(self: [*c]c.ke_render_service, h: c.ke_mesh_handle, out_vbo: [*c]c.ke_gpu_buffer, out_ibo: [*c]c.ke_gpu_buffer, out_index_count: [*c]u32) callconv(.c) bool {
     const st = rc.coreOf(self);
-    const m = st.meshAt(h) orelse return 0;
+    const m = st.meshAt(h) orelse return false;
     out_vbo.* = m.vbo;
     out_ibo.* = m.ibo;
     out_index_count.* = m.index_count;
-    return 1;
+    return true;
 }
 
 /// Sets the color a color attachment is cleared to when its resource carries no clear value of
@@ -322,30 +322,30 @@ pub fn releaseMaterial(self: [*c]c.ke_render_service, h: c.ke_material_handle) c
 
 /// Looks the key up in the mesh cache without creating anything. Returns zero and leaves the
 /// out-parameter alone on a miss.
-pub fn tryGetMesh(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_mesh_handle) callconv(.c) c.ke_bool {
+pub fn tryGetMesh(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_mesh_handle) callconv(.c) bool {
     const st = rc.coreOf(self);
     var bits: c.ke_resource_handle = c.KE_HANDLE_NONE;
-    if (!st.mesh_cache.try_get_cached.?(st.mesh_cache, key, &bits)) return 0;
+    if (!st.mesh_cache.try_get_cached.?(st.mesh_cache, key, &bits)) return false;
     out.* = .{ .bits = bits };
-    return 1;
+    return true;
 }
 /// Looks the key up in the texture cache without creating anything. Returns zero and leaves the
 /// out-parameter alone on a miss.
-pub fn tryGetTexture(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_texture_handle) callconv(.c) c.ke_bool {
+pub fn tryGetTexture(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_texture_handle) callconv(.c) bool {
     const st = rc.coreOf(self);
     var bits: c.ke_resource_handle = c.KE_HANDLE_NONE;
-    if (!st.texture_cache.try_get_cached.?(st.texture_cache, key, &bits)) return 0;
+    if (!st.texture_cache.try_get_cached.?(st.texture_cache, key, &bits)) return false;
     out.* = .{ .bits = bits };
-    return 1;
+    return true;
 }
 /// Looks the key up in the material cache without creating anything. Returns zero and leaves
 /// the out-parameter alone on a miss.
-pub fn tryGetMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_material_handle) callconv(.c) c.ke_bool {
+pub fn tryGetMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_material_handle) callconv(.c) bool {
     const st = rc.coreOf(self);
     var bits: c.ke_resource_handle = c.KE_HANDLE_NONE;
-    if (!st.material_cache.try_get_cached.?(st.material_cache, key, &bits)) return 0;
+    if (!st.material_cache.try_get_cached.?(st.material_cache, key, &bits)) return false;
     out.* = .{ .bits = bits };
-    return 1;
+    return true;
 }
 
 /// Runs from the mesh cache when the last reference goes. Removes the slot and destroys both

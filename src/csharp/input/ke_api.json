@@ -874,7 +874,7 @@
         },
         {
           "name": "is_key_pressed",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to down during this tick.",
           "return_doc": null,
@@ -892,7 +892,7 @@
         },
         {
           "name": "is_key_released",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to up during this tick.",
           "return_doc": null,
@@ -910,7 +910,7 @@
         },
         {
           "name": "is_key_down",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true while the key is held down.",
           "return_doc": null,
@@ -946,7 +946,7 @@
         },
         {
           "name": "snapshot_is_key_down",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true while the key is held down in a snapshot.",
           "return_doc": null,
@@ -972,7 +972,7 @@
         },
         {
           "name": "snapshot_is_key_pressed",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to down during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -998,7 +998,7 @@
         },
         {
           "name": "snapshot_is_key_released",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to up during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -1024,7 +1024,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_down",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true while the mouse button is held down in a snapshot.",
           "return_doc": null,
@@ -1050,7 +1050,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_pressed",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the mouse button transitioned to down during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -1076,7 +1076,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_released",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the mouse button transitioned to up during the snapshot\u0027s frame.",
           "return_doc": null,

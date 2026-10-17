@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_DEFERRED_LIGHTING_DEFERRED_LIGHTING_CREATE_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/common/types.h>
+#include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/logger/logger.h>
 #include <kernel_engine/render/service/render_service.h>
@@ -36,7 +36,7 @@ extern "C"
 
     KE_RENDER_DEFERRED_LIGHTING_API ke_render_deferred_lighting_handle ke_render_deferred_lighting_create(
         ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_logger *logger, ke_bool ibl_enabled,
+        ke_logger *logger, bool ibl_enabled,
         ke_component_id camera_cid, ke_component_id world_transform_cid,
         ke_component_id skybox_cid, ke_component_id frame_cid,
         ke_error **out_error);

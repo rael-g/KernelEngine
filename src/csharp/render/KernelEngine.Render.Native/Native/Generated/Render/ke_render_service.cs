@@ -27,17 +27,17 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("void (*)(struct ke_render_service *, struct ke_render_pass_ctx *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_pass_ctx*, void> end_pass;
 
-    [NativeTypeName("ke_bool (*)(struct ke_render_service *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Common.Native.ke_error**, byte> begin_frame;
+    [NativeTypeName("bool (*)(struct ke_render_service *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Common.Native.ke_error**, bool> begin_frame;
 
-    [NativeTypeName("ke_bool (*)(struct ke_render_service *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Common.Native.ke_error**, byte> end_frame;
+    [NativeTypeName("bool (*)(struct ke_render_service *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Common.Native.ke_error**, bool> end_frame;
 
     [NativeTypeName("ke_mesh_handle (*)(struct ke_render_service *, const char *, const void *, size_t, const uint16_t *, uint32_t, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, void*, nuint, ushort*, uint, KernelEngine.Common.Native.ke_error**, ke_mesh_handle> upload_mesh;
 
-    [NativeTypeName("ke_bool (*)(struct ke_render_service *, ke_mesh_handle, ke_gpu_buffer *, ke_gpu_buffer *, uint32_t *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_mesh_handle, ulong*, ulong*, uint*, byte> mesh_buffers;
+    [NativeTypeName("bool (*)(struct ke_render_service *, ke_mesh_handle, ke_gpu_buffer *, ke_gpu_buffer *, uint32_t *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_mesh_handle, ulong*, ulong*, uint*, bool> mesh_buffers;
 
     [NativeTypeName("void (*)(struct ke_render_service *, float, float, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, float, float, float, float, void> set_clear_color;
@@ -105,14 +105,14 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("void (*)(struct ke_render_service *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_material_handle, void> release_material;
 
-    [NativeTypeName("ke_bool (*)(struct ke_render_service *, const char *, ke_mesh_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ke_mesh_handle*, byte> try_get_mesh;
+    [NativeTypeName("bool (*)(struct ke_render_service *, const char *, ke_mesh_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ke_mesh_handle*, bool> try_get_mesh;
 
-    [NativeTypeName("ke_bool (*)(struct ke_render_service *, const char *, ke_texture_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ke_texture_handle*, byte> try_get_texture;
+    [NativeTypeName("bool (*)(struct ke_render_service *, const char *, ke_texture_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ke_texture_handle*, bool> try_get_texture;
 
-    [NativeTypeName("ke_bool (*)(struct ke_render_service *, const char *, ke_material_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ke_material_handle*, byte> try_get_material;
+    [NativeTypeName("bool (*)(struct ke_render_service *, const char *, ke_material_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ke_material_handle*, bool> try_get_material;
 
     [NativeTypeName("ke_texture_handle (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_texture_handle> white_texture;

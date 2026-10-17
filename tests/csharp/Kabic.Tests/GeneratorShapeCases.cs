@@ -168,9 +168,9 @@ internal static class GeneratorShapeCases
                 Param("body", "uint32_t"),
                 Param("impulse_x", "float", "vector2:impulse"),
                 Param("impulse_y", "float"),
-                Param("wake", "ke_bool"))),
+                Param("wake", "bool"))),
             contains: ["public void ApplyImpulse(uint body, Vector2 impulse, bool wake)",
-                       "body, impulse.X, impulse.Y, wake ? (byte)1 : (byte)0"],
+                       "body, impulse.X, impulse.Y, wake"],
             absent: ["float impulseX"]);
 
         Expect("a callback and its context become one delegate parameter",

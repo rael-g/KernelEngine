@@ -27,9 +27,9 @@ pub const ke = @cImport({
 /// keeps the pointer, and this file never frees it.
 const Params = extern struct {
     logger:            ?*anyopaque,
-    enable_validation: ke.ke_bool,
+    enable_validation: bool,
     scheduler:         ?*ke.ke_scheduler,
-    debug_labels:      ke.ke_bool,
+    debug_labels:      bool,
 };
 
 const GpuError = error{
@@ -390,8 +390,8 @@ pub export fn ke_gpu_device_webgpu_create(
 ) ke.ke_gpu_device_handle {
     var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;
     if (params) |p| {
-        if (p.enable_validation != 0) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
-        if (p.debug_labels != 0) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
+        if (p.enable_validation) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
+        if (p.debug_labels) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
     }
     const s = createDeviceState(instance_flags) catch |err| {
         setError(out_error, err, "webgpu: device initialisation failed", @src());
@@ -603,7 +603,7 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params,
         .label            = labelView(pp.label),
         .usage            = usage,
         .size             = pp.size,
-        .mappedAtCreation = if (pp.mapped_at_creation != 0) 1 else 0,
+        .mappedAtCreation = if (pp.mapped_at_creation) 1 else 0,
     };
 
     wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
@@ -734,7 +734,7 @@ fn shaderLanguage(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_shader_languag
 
 /// Answers depth zero to one, no y flip and a left-handed clip space.
 fn getNdcConvention(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_ndc_convention {
-    return .{ .z_zero_to_one = 1, .y_flip = 0, .clip_left_handed = 1 };
+    return .{ .z_zero_to_one = true, .y_flip = false, .clip_left_handed = true };
 }
 
 const SPIRV_MAGIC: u32 = 0x07230203;
@@ -898,7 +898,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         build.color_targets[ti] = .{
             .nextInChain = null,
             .format      = toWgpuTextureFormat(fmt),
-            .blend       = if (bs.blend_enabled != 0) &build.wgpu_blend else null,
+            .blend       = if (bs.blend_enabled) &build.wgpu_blend else null,
             .writeMask   = pp.blend_state.write_mask,
         };
     }
@@ -916,7 +916,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
     build.ds_state = .{
         .nextInChain         = null,
         .format              = wgpu.WGPUTextureFormat_Depth32Float,
-        .depthWriteEnabled   = if (ds.depth_write_enabled != 0) @intFromBool(true) else @intFromBool(false),
+        .depthWriteEnabled   = @intFromBool(ds.depth_write_enabled),
         .depthCompare        = toWgpuCompareFunction(ds.depth_compare),
         .stencilFront        = .{
             .compare     = toWgpuCompareFunction(ds.stencil_front_compare),
@@ -970,12 +970,12 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
             .frontFace        = toWgpuFrontFace(pp.front_face),
             .cullMode         = toWgpuCullMode(pp.cull_mode),
         },
-        .depthStencil = if (ds.depth_test_enabled != 0) &build.ds_state else null,
+        .depthStencil = if (ds.depth_test_enabled) &build.ds_state else null,
         .multisample  = .{
             .nextInChain            = null,
             .count                  = 1,
             .mask                   = 0xFFFFFFFF,
-            .alphaToCoverageEnabled = if (pp.alpha_to_coverage_enabled != 0) 1 else 0,
+            .alphaToCoverageEnabled = if (pp.alpha_to_coverage_enabled) 1 else 0,
         },
         .fragment = &build.frag_state,
     };
@@ -1180,17 +1180,17 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
         switch (src.type) {
             ke.KE_GPU_BINDING_TYPE_BUFFER => {
                 entries[i].buffer.type             = wgpu.WGPUBufferBindingType_Uniform;
-                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset) 1 else 0;
                 entries[i].buffer.minBindingSize   = 0;
             },
             ke.KE_GPU_BINDING_TYPE_STORAGE_BUFFER => {
                 entries[i].buffer.type             = wgpu.WGPUBufferBindingType_Storage;
-                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset) 1 else 0;
                 entries[i].buffer.minBindingSize   = 0;
             },
             ke.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER => {
                 entries[i].buffer.type             = wgpu.WGPUBufferBindingType_ReadOnlyStorage;
-                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset) 1 else 0;
                 entries[i].buffer.minBindingSize   = 0;
             },
             ke.KE_GPU_BINDING_TYPE_SAMPLER => {
@@ -1413,7 +1413,7 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
     const has_ds = pp.depth_stencil_attachment != null;
     if (has_ds) {
         const dsa = @as(*const ke.ke_gpu_depth_stencil_attachment, @ptrCast(pp.depth_stencil_attachment));
-        const depth_ro = dsa.depth_read_only != 0;
+        const depth_ro = dsa.depth_read_only;
         ds_attach = .{
             .view              = @ptrFromInt(dsa.view),
             .depthLoadOp       = if (depth_ro) wgpu.WGPULoadOp_Undefined else toWgpuLoadOp(dsa.depth_load_op),
@@ -1423,7 +1423,7 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
             .stencilLoadOp     = wgpu.WGPULoadOp_Undefined,
             .stencilStoreOp    = toWgpuStoreOp(dsa.stencil_store_op),
             .stencilClearValue = dsa.clear_stencil,
-            .stencilReadOnly   = if (dsa.stencil_read_only != 0) 1 else 0,
+            .stencilReadOnly   = if (dsa.stencil_read_only) 1 else 0,
         };
     }
 
@@ -1732,7 +1732,7 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
         .initial_data = null,
         .size = row_bytes * height,
         .usage = ke.KE_GPU_BUFFER_USAGE_MAP_READ | ke.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, null);
     try std.testing.expect(buf != ke.KE_GPU_INVALID_HANDLE);
     defer dev.*.destroy_buffer.?(dev, buf);

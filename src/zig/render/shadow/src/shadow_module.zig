@@ -157,7 +157,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
             var vbo: c.ke_gpu_buffer = 0;
             var ibo: c.ke_gpu_buffer = 0;
             var idx_count: u32 = 0;
-            if (core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count) == 0) continue;
+            if (!core.*.mesh_buffers.?(core, meshes[i].mesh, &vbo, &ibo, &idx_count)) continue;
 
             var u: ShadowObj = undefined;
             @memcpy(u.model[0..], wts[i].matrix.m[0..16]);
@@ -199,7 +199,7 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     sh.light_cid = light_cid;
     sh.frame_cid = frame_cid;
 
-    sh.lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = 0 }, out_error);
+    sh.lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, out_error);
     if (sh.lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
     _ = core.*.import_buffer.?(core, "shadow_lvp", sh.lvp_uniform, 64, null);
 
@@ -251,8 +251,8 @@ fn setup(sh: *ShadowModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     shp.vertex_buffer_count = 1;
     shp.vertex_buffers = &sh_vbl;
     shp.blend_state.write_mask = 0x0F;
-    shp.depth_stencil.depth_test_enabled = 1;
-    shp.depth_stencil.depth_write_enabled = 1;
+    shp.depth_stencil.depth_test_enabled = true;
+    shp.depth_stencil.depth_write_enabled = true;
     shp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
     if (!sh.binder.pipeline_layouts.?(sh.binder, sh.layout, &shp.bind_group_layouts, shp.bind_group_layouts.len, &shp.bind_group_layout_count, out_error)) return false;
     shp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
@@ -317,7 +317,7 @@ fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
 /// enabled argument is set; the light uniform is created either way and the handle owns it.
 export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
                                    device: ?*c.ke_gpu_device, ndc: c.ke_ndc_convention, view_space: ?*c.ke_view_space,
-                                   enabled: c.ke_bool, mesh_cid: c.ke_component_id,
+                                   enabled: bool, mesh_cid: c.ke_component_id,
                                    world_transform_cid: c.ke_component_id, light_cid: c.ke_component_id,
                                    frame_cid: c.ke_component_id,
                                    params: [*c]const c.ke_render_shadow_params,
@@ -330,7 +330,7 @@ export fn ke_render_shadow_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
 
     const sh = gpa.create(ShadowModule) catch return empty;
     sh.* = .{};
-    if (!setup(sh, dev, core_ref, ndc, vs, enabled != 0, mesh_cid, world_transform_cid, light_cid, frame_cid, params, out_error)) {
+    if (!setup(sh, dev, core_ref, ndc, vs, enabled, mesh_cid, world_transform_cid, light_cid, frame_cid, params, out_error)) {
         destroyModule(sh);
         gpa.destroy(sh);
         return empty;
@@ -370,7 +370,7 @@ test "creating and destroying the shadow pass leaves no block allocated and no G
     rt.init();
     var view_space = std.mem.zeroes(c.ke_view_space);
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
-    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, 1, 1, 2, 3, 4, &default_params, null);
+    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, true, 1, 2, 3, 4, &default_params, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -387,7 +387,7 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     rt.init();
     var view_space = std.mem.zeroes(c.ke_view_space);
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
-    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, 1, 1, 2, 3, 4, &default_params, null);
+    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, true, 1, 2, 3, 4, &default_params, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -403,7 +403,7 @@ test "a shadow pass the runtime refuses to register releases what it had created
     rt.limit = 0;
     var view_space = std.mem.zeroes(c.ke_view_space);
     const ndc = std.mem.zeroes(c.ke_ndc_convention);
-    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, 1, 1, 2, 3, 4, &default_params, null);
+    const h = ke_render_shadow_create(rt.api(), core.api(), dev.api(), ndc, &view_space, true, 1, 2, 3, 4, &default_params, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

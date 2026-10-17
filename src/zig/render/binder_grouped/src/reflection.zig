@@ -203,7 +203,7 @@ pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const
             .binding = b.binding,
             .visibility = b.stages,
             .type = b.type,
-            .has_dynamic_offset = @intFromBool(b.has_dynamic_offset),
+            .has_dynamic_offset = b.has_dynamic_offset,
             .view_dimension = b.view_dimension,
         };
     }

@@ -8,7 +8,6 @@ public sealed class ConventionBuilder
 {
     string symbolPrefix = "", handleSuffix = "", factorySuffix = "", componentSuffix = "", paramsSuffix = "";
     string outParamPrefix = "out_", errorLaneName = "out_error";
-    string byteBoolType = "";
     string includeDirectoryName = "", commonBindingsNamespace = "", bindingsMethodsClass = "NativeMethods";
     string commonManagedNamespace = "";
     string errorType = "", errorKindType = "", errorIsFunction = "", errorGeneral = "";
@@ -26,15 +25,6 @@ public sealed class ConventionBuilder
     public ConventionBuilder Symbols(string prefix, string handle, string factory, string component, string parameters)
     {
         (symbolPrefix, handleSuffix, factorySuffix, componentSuffix, paramsSuffix) = (prefix, handle, factory, component, parameters);
-        return this;
-    }
-
-    /// <summary>
-    /// The one-byte boolean typedef the ABI declares; <c>_Bool</c> and <c>bool</c> are C's own.
-    /// </summary>
-    public ConventionBuilder Booleans(string byteBool)
-    {
-        byteBoolType = byteBool;
         return this;
     }
 
@@ -138,7 +128,6 @@ public sealed class ConventionBuilder
         ParamsSuffix = paramsSuffix,
         OutParamPrefix = outParamPrefix,
         ErrorLaneName = errorLaneName,
-        ByteBoolType = byteBoolType,
         IncludeDirectoryName = includeDirectoryName,
         CommonBindingsNamespace = commonBindingsNamespace,
         BindingsMethodsClass = bindingsMethodsClass,
