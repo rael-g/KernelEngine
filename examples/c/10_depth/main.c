@@ -72,8 +72,8 @@ int main(void)
         .dimension = KE_GPU_TEXTURE_DIM_2D,
         .usage = KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH,
         .mip_level_count = 1, .sample_count = 1,
-    });
-    if (depth_tex == KE_GPU_INVALID_HANDLE) die("depth texture", NULL);
+    }, &err);
+    if (depth_tex == KE_GPU_INVALID_HANDLE) die("depth texture", err);
 
     ke_gpu_texture_view depth_view = gpu.ref->create_texture_view(gpu.ref, depth_tex,
         &(ke_gpu_texture_view_params){
@@ -81,8 +81,8 @@ int main(void)
             .dimension = KE_GPU_TEXTURE_DIM_2D,
             .aspect = KE_GPU_TEXTURE_ASPECT_DEPTH,
             .mip_level_count = 1, .array_layer_count = 1,
-        });
-    if (depth_view == KE_GPU_INVALID_HANDLE) die("depth view", NULL);
+        }, &err);
+    if (depth_view == KE_GPU_INVALID_HANDLE) die("depth view", err);
 
     ke_gpu_buffer vbo_back  = gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
         .initial_data = back_verts,  .size = sizeof(back_verts),  .usage = KE_GPU_BUFFER_USAGE_VERTEX }, &err);
@@ -125,8 +125,8 @@ int main(void)
             .depth_compare       = KE_GPU_COMPARE_LESS_EQUAL,
         },
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", NULL);
+    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
+    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", err);
 
     gpu.ref->destroy_shader_module(gpu.ref, vs);
     gpu.ref->destroy_shader_module(gpu.ref, fs);

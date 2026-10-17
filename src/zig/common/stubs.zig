@@ -169,7 +169,7 @@ pub fn Stubs(comptime c: type) type {
                 return mint(self);
             }
 
-            fn createBindGroupLayout(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_layout_params) callconv(.c) c.ke_gpu_bind_group_layout {
+            fn createBindGroupLayout(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_layout_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group_layout {
                 return mint(self);
             }
 
@@ -181,7 +181,7 @@ pub fn Stubs(comptime c: type) type {
             }
 
             /// Also counts toward `compute_live`, which `destroyComputePipeline` releases.
-            fn createComputePipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_compute_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
+            fn createComputePipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_compute_pipeline_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_pipeline {
                 _ = @atomicRmw(i64, &of(self).compute_live, .Add, 1, .monotonic);
                 return mint(self);
             }
@@ -191,11 +191,11 @@ pub fn Stubs(comptime c: type) type {
                 destroyHandle(self, h);
             }
 
-            fn createRenderPipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
+            fn createRenderPipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_pipeline {
                 return mint(self);
             }
 
-            fn createSampler(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_sampler_params) callconv(.c) c.ke_gpu_sampler {
+            fn createSampler(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_sampler_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_sampler {
                 return mint(self);
             }
 
@@ -216,12 +216,12 @@ pub fn Stubs(comptime c: type) type {
                 if (on_ready) |ready| ready(mint(self), user);
             }
 
-            fn createTexture(self: ?*c.ke_gpu_device, p: [*c]const c.ke_gpu_texture_params) callconv(.c) c.ke_gpu_texture {
+            fn createTexture(self: ?*c.ke_gpu_device, p: [*c]const c.ke_gpu_texture_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture {
                 of(self).texture_label = p.*.label;
                 return mint(self);
             }
 
-            fn createTextureView(self: ?*c.ke_gpu_device, _: c.ke_gpu_texture, p: [*c]const c.ke_gpu_texture_view_params) callconv(.c) c.ke_gpu_texture_view {
+            fn createTextureView(self: ?*c.ke_gpu_device, _: c.ke_gpu_texture, p: [*c]const c.ke_gpu_texture_view_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
                 of(self).texture_view_label = p.*.label;
                 return mint(self);
             }

@@ -54,11 +54,8 @@ pub const Globals = struct {
                 .lod_max_clamp = 1.0,
                 .compare = c.KE_GPU_COMPARE_UNDEFINED,
                 .max_anisotropy = s.anisotropy,
-            });
-            if (out.* == c.KE_GPU_INVALID_HANDLE) {
-                c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "render service: a common sampler could not be created", @src().file, @intCast(@src().line), null);
-                return false;
-            }
+            }, out_error);
+            if (out.* == c.KE_GPU_INVALID_HANDLE) return false;
         }
         return true;
     }

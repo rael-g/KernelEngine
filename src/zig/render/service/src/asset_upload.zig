@@ -114,7 +114,7 @@ pub fn uploadTexture(self: [*c]c.ke_render_service, key: [*c]const u8, width: u3
         .sample_count = 1,
         .initial_data = rgba,
         .initial_data_size = width * height * 4,
-    });
+    }, out_error);
     if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
@@ -126,7 +126,11 @@ pub fn uploadTexture(self: [*c]c.ke_render_service, key: [*c]const u8, width: u3
         .mip_level_count = 1,
         .base_array_layer = 0,
         .array_layer_count = 1,
-    });
+    }, out_error);
+    if (view == c.KE_GPU_INVALID_HANDLE) {
+        st.device.destroy_texture.?(st.device, tex);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
 
     const bits = st.texture_store.insert(.{ .tex = tex, .view = view });
     if (bits == c.KE_HANDLE_NONE) {
@@ -163,7 +167,7 @@ pub fn uploadCubemap(self: [*c]c.ke_render_service, key: [*c]const u8, face_size
         .sample_count = 1,
         .initial_data = faces,
         .initial_data_size = face_size * face_size * 4 * 6,
-    });
+    }, out_error);
     if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
@@ -175,7 +179,11 @@ pub fn uploadCubemap(self: [*c]c.ke_render_service, key: [*c]const u8, face_size
         .mip_level_count = 1,
         .base_array_layer = 0,
         .array_layer_count = 6,
-    });
+    }, out_error);
+    if (view == c.KE_GPU_INVALID_HANDLE) {
+        st.device.destroy_texture.?(st.device, tex);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
 
     const bits = st.texture_store.insert(.{ .tex = tex, .view = view });
     if (bits == c.KE_HANDLE_NONE) {

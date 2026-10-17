@@ -292,7 +292,7 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_p
     var fallback_params = p.*;
     fallback_params.fragment_module = magentaFragmentModule(st, p.color_target_count);
     fallback_params.fragment_entry = "fs_main";
-    return st.device.create_render_pipeline.?(st.device, &fallback_params);
+    return st.device.create_render_pipeline.?(st.device, &fallback_params, null);
 }
 
 /// Answers the render service's pipeline request. A key already in the table returns its current
@@ -311,7 +311,7 @@ pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke
     if (st.pipeline_cache.find(hash, &key)) |entry| return entry.current();
 
     const entry = heap.gpa.create(Entry) catch {
-        return st.device.create_render_pipeline.?(st.device, params);
+        return st.device.create_render_pipeline.?(st.device, params, null);
     };
     entry.* = .{
         .key = key,
@@ -334,7 +334,7 @@ pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke
         .failed => {
             st.device.destroy_pipeline.?(st.device, entry.fallback_pso);
             heap.gpa.destroy(entry);
-            return st.device.create_render_pipeline.?(st.device, params);
+            return st.device.create_render_pipeline.?(st.device, params, null);
         },
     }
 }

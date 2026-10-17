@@ -85,8 +85,8 @@ int main(void)
         .entry_count = 1,
         .entries     = &bgl_entry,
     };
-    ke_gpu_bind_group_layout bgl = gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params);
-    if (bgl == KE_GPU_INVALID_HANDLE) die("bind group layout creation failed", NULL);
+    ke_gpu_bind_group_layout bgl = gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params, &err);
+    if (bgl == KE_GPU_INVALID_HANDLE) die("bind group layout creation failed", err);
 
     ke_gpu_bind_group_entry bg_entry = {
         .binding      = 0,
@@ -148,8 +148,8 @@ int main(void)
         .bind_group_layout_count = 1,
         .alpha_to_coverage_enabled = 0,
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline creation failed", NULL);
+    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
+    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline creation failed", err);
 
     gpu.ref->destroy_shader_module(gpu.ref, vs);
     gpu.ref->destroy_shader_module(gpu.ref, fs);

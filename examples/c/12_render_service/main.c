@@ -77,8 +77,8 @@ int main(void)
         .color_target_formats = { core.ref->backbuffer_format(core.ref) },
         .color_target_count = 1,
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", NULL);
+    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
+    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", err);
     gpu.ref->destroy_shader_module(gpu.ref, shader);
 
     const char *writes[] = { "backbuffer" };

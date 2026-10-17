@@ -10,8 +10,8 @@ const c = rc.c;
 /// a depth attachment, any other a color attachment. A size relative to the backbuffer is scaled
 /// from the size the service last read from the target. Entries made here are the only
 /// transient ones: `destroyCore` destroys the texture and view of transient entries and of no
-/// other entry. Returns the invalid component id, with an out-of-memory error, when the table
-/// cannot grow or the name cannot be registered; a texture the device fails to create is not detected.
+/// other entry. Returns the invalid component id, with the error set, when the table cannot grow,
+/// the name cannot be registered, or the device refuses the texture or its view.
 pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_resource_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     const st = rc.coreOf(self);
     st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
@@ -29,7 +29,7 @@ pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_reso
         h = scaled(st.backbuffer_h, params.*.scale_y);
     }
 
-    const made = createTarget(st, params.*.name, params.*.format, w, h);
+    const made = createTarget(st, params.*.name, params.*.format, w, h, out_error) orelse return c.KE_COMPONENT_INVALID;
     st.resources.appendAssumeCapacity(.{
         .name = params.*.name,
         .cid = cid,
@@ -49,8 +49,9 @@ pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_reso
 const Target = struct { texture: c.ke_gpu_texture, view: c.ke_gpu_texture_view };
 
 /// Creates a declared target's texture and its view. A depth format gets a depth attachment, any
-/// other a color attachment.
-fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_format, w: u32, h: u32) Target {
+/// other a color attachment. Null, with the device's error, when either is refused; a refused view
+/// destroys the texture.
+fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_format, w: u32, h: u32, out_error: [*c][*c]c.ke_error) ?Target {
     const depth = rc.isDepthFormat(format);
     const usage: c.ke_gpu_texture_usage = if (depth)
         c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED |
@@ -71,7 +72,8 @@ fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_
         .sample_count = 1,
         .initial_data = null,
         .initial_data_size = 0,
-    });
+    }, out_error);
+    if (tex == c.KE_GPU_INVALID_HANDLE) return null;
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
         .label = name,
@@ -82,7 +84,11 @@ fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_
         .mip_level_count = 1,
         .base_array_layer = 0,
         .array_layer_count = 1,
-    });
+    }, out_error);
+    if (view == c.KE_GPU_INVALID_HANDLE) {
+        st.device.destroy_texture.?(st.device, tex);
+        return null;
+    }
     return .{ .texture = tex, .view = view };
 }
 
@@ -93,7 +99,8 @@ fn scaled(size: u32, scale: f32) u32 {
 /// Recreates the texture and view of every target declared relative to the backbuffer when the
 /// backbuffer is no longer the size they were made for, and counts the change in
 /// `resource_generation`. The component ids stay; the old views are destroyed, so a pass that kept
-/// one rebuilds what it made from it.
+/// one rebuilds what it made from it. A target the device refuses is left with no texture and no
+/// view.
 pub fn resizeRelative(st: *rc.CoreState) void {
     if (st.backbuffer_w == st.sized_w and st.backbuffer_h == st.sized_h) return;
     if (st.backbuffer_w == 0 or st.backbuffer_h == 0) return;
@@ -101,7 +108,7 @@ pub fn resizeRelative(st: *rc.CoreState) void {
         if (!r.relative) continue;
         if (r.view != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture_view.?(st.device, r.view);
         if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
-        const made = createTarget(st, r.name, r.format, scaled(st.backbuffer_w, r.scale_x), scaled(st.backbuffer_h, r.scale_y));
+        const made = createTarget(st, r.name, r.format, scaled(st.backbuffer_w, r.scale_x), scaled(st.backbuffer_h, r.scale_y), null) orelse Target{ .texture = c.KE_GPU_INVALID_HANDLE, .view = c.KE_GPU_INVALID_HANDLE };
         r.texture = made.texture;
         r.view = made.view;
     }

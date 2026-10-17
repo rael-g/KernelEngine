@@ -111,11 +111,8 @@ export fn ke_gpu_render_target_texture_create(
         .mip_level_count = 1,
         .base_array_layer = 0,
         .array_layer_count = 1,
-    });
-    if (view == c.KE_GPU_INVALID_HANDLE) {
-        E.fail(out_error, .invalid_argument, "texture target: the texture has no color view", @src());
-        return empty;
-    }
+    }, out_error);
+    if (view == c.KE_GPU_INVALID_HANDLE) return empty;
     const t = gpa.create(TextureTarget) catch {
         dev.destroy_texture_view.?(dev, view);
         E.fail(out_error, .out_of_memory, "texture target: out of memory", @src());

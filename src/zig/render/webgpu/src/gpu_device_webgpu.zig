@@ -606,31 +606,20 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params,
         .mappedAtCreation = if (pp.mapped_at_creation) 1 else 0,
     };
 
-    wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
+    pushScope(s.device);
     const buf: wgpu.WGPUBuffer = wgpu.wgpuDeviceCreateBuffer(s.device, &desc);
-    var se = ScopeError{ .captured = false, .buf = undefined };
-    _ = wgpu.wgpuDevicePopErrorScope(s.device, .{
-        .nextInChain = null,
-        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
-        .callback  = popErrorCallback,
-        .userdata1 = &se,
-        .userdata2 = null,
-    });
-    _ = wgpu.wgpuDevicePoll(s.device, 1, null);
-
-    if (se.captured) {
-        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, &se.buf, @src().file, @intCast(@src().line), null);
+    if (scopeFailed(s.device, buf != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
         if (buf != null) wgpu.wgpuBufferRelease(buf);
         return ke.KE_GPU_INVALID_HANDLE;
     }
-    const handle = buf orelse return ke.KE_GPU_INVALID_HANDLE;
+    const handle = buf.?;
     if (pp.initial_data != null) wgpu.wgpuQueueWriteBuffer(s.queue, handle, 0, pp.initial_data, pp.size);
     return @intFromPtr(handle);
 }
 
-/// Has no error output: a failed create returns the invalid handle. A repack buffer that cannot be
-/// allocated returns the texture with the layers from that one on not uploaded.
-fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params) callconv(.c) ke.ke_gpu_texture {
+/// Shares the error scope protocol of `createBuffer`. A repack buffer that cannot be allocated
+/// returns the texture with the layers from that one on not uploaded.
+fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_texture {
     const pp = @as(*const ke.ke_gpu_texture_params, @ptrCast(p));
     const s = state(dev);
     var usage = mapTextureUsage(pp.usage);
@@ -648,7 +637,13 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
         .viewFormatCount = 0,
         .viewFormats     = null,
     };
-    const tex: wgpu.WGPUTexture = wgpu.wgpuDeviceCreateTexture(s.device, &desc) orelse return ke.KE_GPU_INVALID_HANDLE;
+    pushScope(s.device);
+    const made: wgpu.WGPUTexture = wgpu.wgpuDeviceCreateTexture(s.device, &desc);
+    if (scopeFailed(s.device, made != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (made != null) wgpu.wgpuTextureRelease(made);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    const tex = made.?;
     if (pp.initial_data != null) {
         const bytes_per_pixel: u32 = 4;
         const unaligned_bpr: u32 = pp.width * bytes_per_pixel;
@@ -689,8 +684,8 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     return @intFromPtr(tex);
 }
 
-/// Returns the view as a handle; the invalid handle when wgpu refuses it. Sets no error.
-fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]const ke.ke_gpu_texture_view_params) callconv(.c) ke.ke_gpu_texture_view {
+/// Shares the error scope protocol of `createBuffer`.
+fn createTextureView(dev: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]const ke.ke_gpu_texture_view_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_texture_view {
     const pp = @as(*const ke.ke_gpu_texture_view_params, @ptrCast(p));
     const desc = wgpu.WGPUTextureViewDescriptor{
         .nextInChain     = null,
@@ -704,11 +699,19 @@ fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]con
         .arrayLayerCount = if (pp.array_layer_count == 0) 1 else pp.array_layer_count,
     };
     const wgpu_tex: wgpu.WGPUTexture = @ptrFromInt(tex);
-    return @intFromPtr(wgpu.wgpuTextureCreateView(wgpu_tex, &desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const view = wgpu.wgpuTextureCreateView(wgpu_tex, &desc);
+    if (scopeFailed(device, view != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (view != null) wgpu.wgpuTextureViewRelease(view);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(view);
 }
 
 /// Returns the sampler as a handle, with each filter and address mode translated to wgpu's.
-fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_params) callconv(.c) ke.ke_gpu_sampler {
+/// Shares the error scope protocol of `createBuffer`.
+fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_sampler {
     const pp = @as(*const ke.ke_gpu_sampler_params, @ptrCast(p));
     const desc = wgpu.WGPUSamplerDescriptor{
         .nextInChain   = null,
@@ -724,7 +727,14 @@ fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_param
         .compare       = toWgpuCompareFunction(pp.compare),
         .maxAnisotropy = pp.max_anisotropy,
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateSampler(state(dev).device, &desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const sampler = wgpu.wgpuDeviceCreateSampler(device, &desc);
+    if (scopeFailed(device, sampler != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (sampler != null) wgpu.wgpuSamplerRelease(sampler);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(sampler);
 }
 
 /// Answers WGSL; `createShaderModule` also accepts SPIR-V by its magic number.
@@ -785,6 +795,35 @@ fn popErrorCallback(
     }
 }
 
+/// Opens the validation error scope that `scopeFailed` closes.
+fn pushScope(device: wgpu.WGPUDevice) void {
+    wgpu.wgpuDevicePushErrorScope(device, wgpu.WGPUErrorFilter_Validation);
+}
+
+/// Closes the scope `pushScope` opened and polls the device until its result is in. Answers true,
+/// with `etype` set on the error output, when the scope captured a validation message, which
+/// becomes the error's message, or when `made` is false, which is wgpu returning no object.
+fn scopeFailed(device: wgpu.WGPUDevice, made: bool, out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, src: std.builtin.SourceLocation) bool {
+    var se = ScopeError{ .captured = false, .buf = undefined };
+    _ = wgpu.wgpuDevicePopErrorScope(device, .{
+        .nextInChain = null,
+        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
+        .callback  = popErrorCallback,
+        .userdata1 = &se,
+        .userdata2 = null,
+    });
+    _ = wgpu.wgpuDevicePoll(device, 1, null);
+    if (se.captured) {
+        ke.ke_error_set(out_error, etype, &se.buf, src.file, @intCast(src.line), null);
+        return true;
+    }
+    if (!made) {
+        ke.ke_error_set(out_error, etype, "wgpu returned no object", src.file, @intCast(src.line), null);
+        return true;
+    }
+    return false;
+}
+
 /// Reads the code as SPIR-V when it is at least four bytes long and its first word is
 /// `SPIRV_MAGIC`, otherwise as WGSL. The module is created inside a validation error scope that
 /// is polled before returning; a captured error releases the module, sets
@@ -816,20 +855,9 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
         desc.nextInChain = @ptrCast(&wgsl);
     }
 
-    wgpu.wgpuDevicePushErrorScope(device, wgpu.WGPUErrorFilter_Validation);
+    pushScope(device);
     const handle = wgpu.wgpuDeviceCreateShaderModule(device, &desc);
-    var se = ScopeError{ .captured = false, .buf = undefined };
-    _ = wgpu.wgpuDevicePopErrorScope(device, .{
-        .nextInChain = null,
-        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
-        .callback  = popErrorCallback,
-        .userdata1 = &se,
-        .userdata2 = null,
-    });
-    _ = wgpu.wgpuDevicePoll(device, 1, null);
-
-    if (se.captured) {
-        ke.ke_error_set(out_error, &KE_ERROR_WGPU_SHADER_COMPILATION, &se.buf, @src().file, @intCast(@src().line), null);
+    if (scopeFailed(device, handle != null, out_error, &KE_ERROR_WGPU_SHADER_COMPILATION, @src())) {
         if (handle != null) wgpu.wgpuShaderModuleRelease(handle);
         return ke.KE_GPU_INVALID_HANDLE;
     }
@@ -990,14 +1018,25 @@ fn colorTargetsDeclared(p: [*c]const ke.ke_gpu_render_pipeline_params) bool {
     return true;
 }
 
-/// Compiles on the calling thread and never touches the scheduler. Returns the invalid handle when
-/// a fragment target has no mappable format.
-fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
-    if (!colorTargetsDeclared(p)) return ke.KE_GPU_INVALID_HANDLE;
+/// Compiles on the calling thread and never touches the scheduler. A fragment target with no
+/// mappable format fails as an invalid argument; otherwise it shares the error scope protocol of
+/// `createBuffer`.
+fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_pipeline {
+    if (!colorTargetsDeclared(p)) {
+        ke.ke_error_set(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "a color target has no format", @src().file, @intCast(@src().line), null);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
     var build: RenderPipelineDescBuild = undefined;
     buildRenderPipelineDescriptor(dev, p, &build);
     defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
-    return @intFromPtr(wgpu.wgpuDeviceCreateRenderPipeline(state(dev).device, &build.desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(device, &build.desc);
+    if (scopeFailed(device, pipeline != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (pipeline != null) wgpu.wgpuRenderPipelineRelease(pipeline);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(pipeline);
 }
 
 /// Copies the text into `gpa`, null-terminated. Null input and a failed copy both yield null; the
@@ -1131,9 +1170,9 @@ fn flushPipelineCompiles(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     s.pending_compiles_count = 0;
 }
 
-/// Compiles on the calling thread. The pipeline is released with `destroyComputePipeline`.
-/// Returns the invalid handle when wgpu refuses it.
-fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compute_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
+/// Compiles on the calling thread. The pipeline is released with `destroyComputePipeline`. Shares
+/// the error scope protocol of `createBuffer`.
+fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compute_pipeline_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_pipeline {
     const pp = @as(*const ke.ke_gpu_compute_pipeline_params, @ptrCast(p));
 
     var pipeline_layout: wgpu.WGPUPipelineLayout = null;
@@ -1163,12 +1202,20 @@ fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compu
             .constants     = null,
         },
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateComputePipeline(state(dev).device, &desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const pipeline = wgpu.wgpuDeviceCreateComputePipeline(device, &desc);
+    if (scopeFailed(device, pipeline != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (pipeline != null) wgpu.wgpuComputePipelineRelease(pipeline);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(pipeline);
 }
 
 /// Maps each binding type to a wgpu layout entry; entries beyond the local capacity are
-/// dropped with no error. A storage texture is fixed to write-only RGBA8 2D.
-fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_layout_params) callconv(.c) ke.ke_gpu_bind_group_layout {
+/// dropped with no error. A storage texture is fixed to write-only RGBA8 2D. Shares the error
+/// scope protocol of `createBuffer`.
+fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_layout_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_bind_group_layout {
     const pp = @as(*const ke.ke_gpu_bind_group_layout_params, @ptrCast(p));
     const n = @min(pp.entry_count, 32);
     var entries: [32]wgpu.WGPUBindGroupLayoutEntry = undefined;
@@ -1223,7 +1270,14 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
         .entryCount  = n,
         .entries     = if (n > 0) &entries else null,
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateBindGroupLayout(state(dev).device, &desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const layout = wgpu.wgpuDeviceCreateBindGroupLayout(device, &desc);
+    if (scopeFailed(device, layout != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (layout != null) wgpu.wgpuBindGroupLayoutRelease(layout);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(layout);
 }
 
 /// Shares the error scope protocol of `createBuffer`: a validation error captured while the group
@@ -1265,24 +1319,13 @@ fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_
     };
     const s = state(dev);
 
-    wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
+    pushScope(s.device);
     const bg: wgpu.WGPUBindGroup = wgpu.wgpuDeviceCreateBindGroup(s.device, &desc);
-    var se = ScopeError{ .captured = false, .buf = undefined };
-    _ = wgpu.wgpuDevicePopErrorScope(s.device, .{
-        .nextInChain = null,
-        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
-        .callback  = popErrorCallback,
-        .userdata1 = &se,
-        .userdata2 = null,
-    });
-    _ = wgpu.wgpuDevicePoll(s.device, 1, null);
-
-    if (se.captured) {
-        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, &se.buf, @src().file, @intCast(@src().line), null);
+    if (scopeFailed(s.device, bg != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
         if (bg != null) wgpu.wgpuBindGroupRelease(bg);
         return ke.KE_GPU_INVALID_HANDLE;
     }
-    return @intFromPtr(bg orelse return ke.KE_GPU_INVALID_HANDLE);
+    return @intFromPtr(bg);
 }
 
 /// Destroys the buffer's GPU memory and drops the handle's reference.
@@ -1720,7 +1763,7 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
         .sample_count = 1,
         .initial_data = &pixels,
         .initial_data_size = pixels.len,
-    });
+    }, null);
     try std.testing.expect(tex != ke.KE_GPU_INVALID_HANDLE);
     defer dev.*.destroy_texture.?(dev, tex);
 

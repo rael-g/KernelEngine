@@ -287,21 +287,27 @@ typedef struct ke_gpu_device
                                             const ke_gpu_buffer_params *p,
                                             ke_error **out_error);
     ke_gpu_texture         (*create_texture)(struct ke_gpu_device *self,
-                                             const ke_gpu_texture_params *p);
+                                             const ke_gpu_texture_params *p,
+                                             ke_error **out_error);
     ke_gpu_texture_view    (*create_texture_view)(struct ke_gpu_device *self,
                                                   ke_gpu_texture tex,
-                                                  const ke_gpu_texture_view_params *p);
+                                                  const ke_gpu_texture_view_params *p,
+                                                  ke_error **out_error);
     ke_gpu_sampler         (*create_sampler)(struct ke_gpu_device *self,
-                                             const ke_gpu_sampler_params *p);
+                                             const ke_gpu_sampler_params *p,
+                                             ke_error **out_error);
     ke_gpu_shader_module   (*create_shader_module)(struct ke_gpu_device *self,
                                                    const ke_gpu_shader_module_params *p,
                                                    ke_error **out_error);
     ke_gpu_pipeline        (*create_render_pipeline)(struct ke_gpu_device *self,
-                                                     const ke_gpu_render_pipeline_params *p);
+                                                     const ke_gpu_render_pipeline_params *p,
+                                                     ke_error **out_error);
     ke_gpu_pipeline        (*create_compute_pipeline)(struct ke_gpu_device *self,
-                                                      const ke_gpu_compute_pipeline_params *p);
+                                                      const ke_gpu_compute_pipeline_params *p,
+                                                      ke_error **out_error);
     ke_gpu_bind_group_layout (*create_bind_group_layout)(struct ke_gpu_device *self,
-                                                         const ke_gpu_bind_group_layout_params *p);
+                                                         const ke_gpu_bind_group_layout_params *p,
+                                                         ke_error **out_error);
     ke_gpu_bind_group      (*create_bind_group)(struct ke_gpu_device *self,
                                                 const ke_gpu_bind_group_params *p,
                                                 ke_error **out_error);

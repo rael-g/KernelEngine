@@ -113,8 +113,8 @@ int main(int argc, char **argv)
         .width = WIDTH, .height = HEIGHT, .depth_or_array_layers = 1,
         .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, .dimension = KE_GPU_TEXTURE_DIM_2D,
         .usage = KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | KE_GPU_TEXTURE_USAGE_COPY_SRC,
-        .mip_level_count = 1, .sample_count = 1 });
-    if (texture == KE_GPU_INVALID_HANDLE) die("texture create failed", NULL);
+        .mip_level_count = 1, .sample_count = 1 }, &err);
+    if (texture == KE_GPU_INVALID_HANDLE) die("texture create failed", err);
 
     ke_gpu_render_target_handle target = ke_gpu_render_target_texture_create(gpu.ref,
         &(ke_gpu_render_target_texture_params){ .texture = texture, .width = WIDTH, .height = HEIGHT,

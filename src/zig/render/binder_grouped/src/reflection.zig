@@ -211,8 +211,7 @@ pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const
         .label = label,
         .entry_count = @intCast(entries.len),
         .entries = entries.ptr,
-    });
-    if (layout == c.KE_GPU_INVALID_HANDLE) fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "shader group: the device refused the layout", @src());
+    }, out_error);
     return layout;
 }
 

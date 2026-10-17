@@ -356,11 +356,8 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .bind_group_layout_count = 0,
     };
     if (!cm.binder.pipeline_layouts.?(cm.binder, cm.cull_layout, &cull_pipeline_params.bind_group_layouts, cull_pipeline_params.bind_group_layouts.len, &cull_pipeline_params.bind_group_layout_count, out_error)) return false;
-    cm.cull_pipeline = dev.create_compute_pipeline.?(dev, &cull_pipeline_params);
-    if (cm.cull_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "cull pass: compute pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
-    }
+    cm.cull_pipeline = dev.create_compute_pipeline.?(dev, &cull_pipeline_params, out_error);
+    if (cm.cull_pipeline == c.KE_GPU_INVALID_HANDLE) return false;
 
     cm.clusters_cid = core.*.import_tag.?(core, "light_clusters", null);
     cm.cull_io = std.mem.zeroes(c.ke_render_pass_io);

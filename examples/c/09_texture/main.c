@@ -94,8 +94,8 @@ int main(void)
         .initial_data         = pixels,
         .initial_data_size    = sizeof(pixels),
     };
-    ke_gpu_texture tex = gpu.ref->create_texture(gpu.ref, &tp);
-    if (tex == KE_GPU_INVALID_HANDLE) die("texture creation failed", NULL);
+    ke_gpu_texture tex = gpu.ref->create_texture(gpu.ref, &tp, &err);
+    if (tex == KE_GPU_INVALID_HANDLE) die("texture creation failed", err);
 
     ke_gpu_texture_view_params tvp = {
         .format          = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
@@ -105,8 +105,8 @@ int main(void)
         .mip_level_count = 1,
         .base_array_layer = 0,
     };
-    ke_gpu_texture_view tex_view = gpu.ref->create_texture_view(gpu.ref, tex, &tvp);
-    if (tex_view == KE_GPU_INVALID_HANDLE) die("texture view creation failed", NULL);
+    ke_gpu_texture_view tex_view = gpu.ref->create_texture_view(gpu.ref, tex, &tvp, &err);
+    if (tex_view == KE_GPU_INVALID_HANDLE) die("texture view creation failed", err);
 
     ke_gpu_sampler_params sp = {
         .address_mode_u = KE_GPU_ADDRESS_MODE_REPEAT,
@@ -120,16 +120,16 @@ int main(void)
         .compare        = KE_GPU_COMPARE_UNDEFINED,
         .max_anisotropy = 1,
     };
-    ke_gpu_sampler sampler = gpu.ref->create_sampler(gpu.ref, &sp);
-    if (sampler == KE_GPU_INVALID_HANDLE) die("sampler creation failed", NULL);
+    ke_gpu_sampler sampler = gpu.ref->create_sampler(gpu.ref, &sp, &err);
+    if (sampler == KE_GPU_INVALID_HANDLE) die("sampler creation failed", err);
 
     ke_gpu_bind_group_layout_entry bgl_entries[2] = {
         { .binding = 0, .visibility = KE_GPU_SHADER_STAGE_FRAGMENT, .type = KE_GPU_BINDING_TYPE_TEXTURE },
         { .binding = 1, .visibility = KE_GPU_SHADER_STAGE_FRAGMENT, .type = KE_GPU_BINDING_TYPE_SAMPLER },
     };
     ke_gpu_bind_group_layout_params bgl_params = { .entry_count = 2, .entries = bgl_entries };
-    ke_gpu_bind_group_layout bgl = gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params);
-    if (bgl == KE_GPU_INVALID_HANDLE) die("bind group layout creation failed", NULL);
+    ke_gpu_bind_group_layout bgl = gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params, &err);
+    if (bgl == KE_GPU_INVALID_HANDLE) die("bind group layout creation failed", err);
 
     ke_gpu_bind_group_entry bg_entries[2] = {
         { .binding = 0, .type = KE_GPU_BINDING_TYPE_TEXTURE, .texture_view = tex_view },
@@ -182,8 +182,8 @@ int main(void)
         .bind_group_layouts[0]   = bgl,
         .bind_group_layout_count = 1,
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline creation failed", NULL);
+    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
+    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline creation failed", err);
 
     gpu.ref->destroy_shader_module(gpu.ref, vs);
     gpu.ref->destroy_shader_module(gpu.ref, fs);
