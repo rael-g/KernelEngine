@@ -28,6 +28,20 @@ typedef struct ke_gpu_command_buffer  ke_gpu_command_buffer;
 typedef struct ke_gpu_render_pass     ke_gpu_render_pass;
 typedef struct ke_gpu_compute_pass    ke_gpu_compute_pass;
 
+/// Owns a command encoder: destroy releases it, whether or not it was finished.
+typedef struct ke_gpu_command_encoder_handle
+{
+    ke_gpu_command_encoder *ref;
+    void (*destroy)(ke_gpu_command_encoder *self);
+} ke_gpu_command_encoder_handle;
+
+/// Owns a finished command buffer: destroy releases it, after it was submitted or instead.
+typedef struct ke_gpu_command_buffer_handle
+{
+    ke_gpu_command_buffer *ref;
+    void (*destroy)(ke_gpu_command_buffer *self);
+} ke_gpu_command_buffer_handle;
+
 typedef struct ke_gpu_device ke_gpu_device;
 
 /// A shader module failed to compile/validate (source rejected by the backend).
@@ -322,9 +336,11 @@ typedef struct ke_gpu_device
     void (*destroy_bind_group_layout)(struct ke_gpu_device *self, ke_gpu_bind_group_layout h);
     void (*destroy_bind_group)(struct ke_gpu_device *self, ke_gpu_bind_group h);
 
-    /// Creates a command encoder. p may be NULL, which creates it unlabeled.
-    ke_gpu_command_encoder *(*create_command_encoder)(struct ke_gpu_device *self,
-                                                      const ke_gpu_command_encoder_params *p);
+    /// Creates a command encoder. p may be NULL, which creates it unlabeled. On failure the
+    /// handle's ref is NULL.
+    ke_gpu_command_encoder_handle (*create_command_encoder)(struct ke_gpu_device *self,
+                                                            const ke_gpu_command_encoder_params *p,
+                                                            ke_error **out_error);
 
     void (*write_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,
                          uint64_t offset, const void *data, size_t size);

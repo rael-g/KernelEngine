@@ -67,7 +67,6 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.queue_poll = &queuePoll;
                 self.encoder = std.mem.zeroes(c.ke_gpu_command_encoder);
                 self.encoder.handle = self;
-                self.encoder.destroy = &destroyEncoder;
                 self.encoder.begin_render_pass = &beginRenderPass;
                 self.encoder.begin_compute_pass = &beginComputePass;
                 self.encoder.finish = &finishEncoder;
@@ -79,7 +78,6 @@ pub fn Stubs(comptime c: type) type {
                 self.compute_pass.push_debug_group = &pushDebugGroup;
                 self.compute_pass.pop_debug_group = &popDebugGroup;
                 self.command_buffer = std.mem.zeroes(c.ke_gpu_command_buffer);
-                self.command_buffer.destroy = &destroyCommandBuffer;
             }
 
             fn encoderOwner(enc: ?*c.ke_gpu_command_encoder) *Device {
@@ -121,14 +119,14 @@ pub fn Stubs(comptime c: type) type {
                 passOwner(pass).debug_groups_open -= 1;
             }
 
-            fn finishEncoder(enc: ?*c.ke_gpu_command_encoder) callconv(.c) [*c]c.ke_gpu_command_buffer {
-                return &encoderOwner(enc).command_buffer;
+            fn finishEncoder(enc: ?*c.ke_gpu_command_encoder, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_command_buffer_handle {
+                return .{ .ref = &encoderOwner(enc).command_buffer, .destroy = &destroyCommandBuffer };
             }
 
             fn destroyCommandBuffer(_: ?*c.ke_gpu_command_buffer) callconv(.c) void {}
 
-            fn createCommandEncoder(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_command_encoder_params) callconv(.c) [*c]c.ke_gpu_command_encoder {
-                return &of(self).encoder;
+            fn createCommandEncoder(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_command_encoder_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_command_encoder_handle {
+                return .{ .ref = &of(self).encoder, .destroy = &destroyEncoder };
             }
 
             fn destroyEncoder(_: ?*c.ke_gpu_command_encoder) callconv(.c) void {}

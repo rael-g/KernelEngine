@@ -1426,7 +1426,8 @@ fn cpEnd(cp: [*c]ke.ke_gpu_compute_pass) callconv(.c) void {
     gpa.destroy(@as(*ke.ke_gpu_compute_pass, @ptrCast(cp)));
 }
 
-/// Releases the raw command buffer and frees its wrapper. Run after the buffer was submitted.
+/// The `destroy` of the handle `encFinish` returns: releases the raw command buffer and frees its
+/// wrapper, whether or not it was submitted.
 fn cmdBufDestroy(cmd: [*c]ke.ke_gpu_command_buffer) callconv(.c) void {
     wgpu.wgpuCommandBufferRelease(@ptrCast(cmd.*.handle));
     gpa.destroy(@as(*ke.ke_gpu_command_buffer, @ptrCast(cmd)));
@@ -1484,7 +1485,6 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
     const rp = gpa.create(ke.ke_gpu_render_pass) catch return null;
     rp.* = .{
         .handle            = raw,
-        .device            = enc.*.device,
         .set_pipeline      = rpSetPipeline,
         .set_bind_group    = rpSetBindGroup,
         .set_vertex_buffer = rpSetVertexBuffer,
@@ -1510,7 +1510,6 @@ fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gp
     const cp = gpa.create(ke.ke_gpu_compute_pass) catch return null;
     cp.* = .{
         .handle            = raw,
-        .device            = enc.*.device,
         .set_pipeline      = cpSetPipeline,
         .set_bind_group    = cpSetBindGroup,
         .dispatch          = cpDispatch,
@@ -1591,31 +1590,47 @@ fn encCopyTextureToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_te
     wgpu.wgpuCommandEncoderCopyTextureToTexture(@ptrCast(enc.*.handle), &src_info, &dst_info, &extent);
 }
 
-/// Finishes the raw encoder into a command buffer wrapper that `cmdBufDestroy` frees. A failed
-/// finish or allocation returns null with no error set.
-fn encFinish(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) [*c]ke.ke_gpu_command_buffer {
+/// Finishes the raw encoder into a command buffer wrapper that `cmdBufDestroy` frees. A finish
+/// wgpu refuses or a wrapper that cannot be allocated returns a null ref with the error set.
+fn encFinish(enc: [*c]ke.ke_gpu_command_encoder, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_command_buffer_handle {
+    const none: ke.ke_gpu_command_buffer_handle = .{ .ref = null, .destroy = null };
     const desc = wgpu.WGPUCommandBufferDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
-    const raw = wgpu.wgpuCommandEncoderFinish(@ptrCast(enc.*.handle), &desc) orelse return null;
-    const cmd = gpa.create(ke.ke_gpu_command_buffer) catch return null;
-    cmd.* = .{ .handle = raw, .device = enc.*.device, .destroy = cmdBufDestroy };
-    return cmd;
+    const raw = wgpu.wgpuCommandEncoderFinish(@ptrCast(enc.*.handle), &desc) orelse {
+        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, "wgpu returned no command buffer", @src().file, @intCast(@src().line), null);
+        return none;
+    };
+    const cmd = gpa.create(ke.ke_gpu_command_buffer) catch {
+        wgpu.wgpuCommandBufferRelease(raw);
+        ke.ke_error_set(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "command buffer allocation failed", @src().file, @intCast(@src().line), null);
+        return none;
+    };
+    cmd.* = .{ .handle = raw };
+    return .{ .ref = cmd, .destroy = cmdBufDestroy };
 }
 
-/// Releases the raw encoder and frees its wrapper.
+/// The `destroy` of the handle `createCommandEncoder` returns: releases the raw encoder and frees
+/// its wrapper.
 fn encDestroy(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) void {
     wgpu.wgpuCommandEncoderRelease(@ptrCast(enc.*.handle));
     gpa.destroy(@as(*ke.ke_gpu_command_encoder, @ptrCast(enc)));
 }
 
-/// Wraps a raw wgpu encoder in a wrapper from `gpa` that `encDestroy` frees. `p` may be null.
-/// A failed encoder or wrapper allocation returns null with no error set.
-fn createCommandEncoder(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_command_encoder_params) callconv(.c) [*c]ke.ke_gpu_command_encoder {
+/// Wraps a raw wgpu encoder in a wrapper from `gpa` that `encDestroy` frees. `p` may be null. An
+/// encoder wgpu refuses or a wrapper that cannot be allocated returns a null ref with the error set.
+fn createCommandEncoder(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_command_encoder_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_command_encoder_handle {
+    const none: ke.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
     const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = labelView(if (p != null) p.*.label else null) };
-    const raw = wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc) orelse return null;
-    const enc = gpa.create(ke.ke_gpu_command_encoder) catch return null;
+    const raw = wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc) orelse {
+        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, "wgpu returned no command encoder", @src().file, @intCast(@src().line), null);
+        return none;
+    };
+    const enc = gpa.create(ke.ke_gpu_command_encoder) catch {
+        wgpu.wgpuCommandEncoderRelease(raw);
+        ke.ke_error_set(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "command encoder allocation failed", @src().file, @intCast(@src().line), null);
+        return none;
+    };
     enc.* = .{
         .handle                 = raw,
-        .device                 = dev,
         .begin_render_pass      = encBeginRenderPass,
         .begin_compute_pass     = encBeginComputePass,
         .copy_buffer_to_buffer  = encCopyBufferToBuffer,
@@ -1623,12 +1638,11 @@ fn createCommandEncoder(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_comman
         .copy_texture_to_texture = encCopyTextureToTexture,
         .copy_texture_to_buffer = encCopyTextureToBuffer,
         .finish                 = encFinish,
-        .destroy                = encDestroy,
         .push_debug_group       = encPushDebugGroup,
         .pop_debug_group        = encPopDebugGroup,
         .insert_debug_marker    = encInsertDebugMarker,
     };
-    return enc;
+    return .{ .ref = enc, .destroy = encDestroy };
 }
 
 /// Queues a write that wgpu applies before the next submit; the data is copied during the call.
@@ -1776,8 +1790,10 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     try std.testing.expect(buf != ke.KE_GPU_INVALID_HANDLE);
     defer dev.*.destroy_buffer.?(dev, buf);
 
-    const enc = dev.*.create_command_encoder.?(dev, null);
-    defer enc.*.destroy.?(enc);
+    const enc_h = dev.*.create_command_encoder.?(dev, null, null);
+    try std.testing.expect(enc_h.ref != null);
+    defer enc_h.destroy.?(enc_h.ref);
+    const enc = enc_h.ref;
 
     var misaligned: ?*ke.ke_error = null;
     try std.testing.expect(!enc.*.copy_texture_to_buffer.?(enc, tex, 0, 0, 0, buf, 0, row_bytes - 1, width, height, &misaligned));
@@ -1785,8 +1801,10 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     try std.testing.expect(ke.ke_error_is(misaligned, &ke.KE_ERROR_INVALID_ARGUMENT));
 
     try std.testing.expect(enc.*.copy_texture_to_buffer.?(enc, tex, 0, 0, 0, buf, 0, row_bytes, width, height, null));
-    const cmd = enc.*.finish.?(enc);
-    var cmds = [_][*c]ke.ke_gpu_command_buffer{cmd};
+    const cmd = enc.*.finish.?(enc, null);
+    try std.testing.expect(cmd.ref != null);
+    defer cmd.destroy.?(cmd.ref);
+    var cmds = [_][*c]ke.ke_gpu_command_buffer{cmd.ref};
     const queue = dev.*.get_default_queue.?(dev);
     dev.*.queue_submit.?(dev, queue, &cmds, 1);
 

@@ -10,9 +10,10 @@ const gpa = rc.gpa;
 pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
     const st = rc.coreOf(self);
     if (!st.frame_live) return null;
-    const enc: *c.ke_gpu_command_encoder = st.device.create_command_encoder.?(st.device, null) orelse return null;
+    const enc = st.device.create_command_encoder.?(st.device, null, null);
+    if (enc.ref == null) return null;
     const ps = gpa.create(rc.PassState) catch {
-        enc.destroy.?(enc);
+        enc.destroy.?(enc.ref);
         return null;
     };
     ps.* = .{
@@ -22,7 +23,7 @@ pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_i
         .record = null,
     };
     const ctx = gpa.create(c.ke_render_pass_ctx) catch {
-        enc.destroy.?(enc);
+        enc.destroy.?(enc.ref);
         gpa.destroy(ps);
         return null;
     };
@@ -51,7 +52,7 @@ pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) cal
     if (at < rc.MAX_CMD_BUFFERS) {
         st.ended[at] = .{ .encoder = ps.encoder, .record = ps.record };
     } else {
-        ps.encoder.destroy.?(ps.encoder);
+        ps.encoder.destroy.?(ps.encoder.ref);
     }
     gpa.destroy(ps);
     gpa.destroy(@as(*c.ke_render_pass_ctx, @ptrCast(ctx)));
@@ -122,7 +123,8 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
         .color_attachment_count = color_count,
         .depth_stencil_attachment = if (has_depth) &depth else null,
     };
-    return ps.encoder.begin_render_pass.?(ps.encoder, &params);
+    const enc = ps.encoder.ref;
+    return enc.*.begin_render_pass.?(enc, &params);
 }
 
 /// Takes the frame's next free record, empties it and returns a compute pass that records into it;
@@ -139,7 +141,6 @@ fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_com
     rec.pass_label = rec.storeLabel(ps.io.name);
     rec.pass = .{
         .handle = rec,
-        .device = ps.core.device,
         .set_pipeline = cpSetPipeline,
         .set_bind_group = cpSetBindGroup,
         .dispatch = cpDispatch,
@@ -202,7 +203,7 @@ fn cpInsertDebugMarker(self: [*c]c.ke_gpu_compute_pass, label: [*c]const u8) cal
 
 /// Returns the pass's raw command encoder; the pass keeps recording into the same one.
 fn ctxEncoder(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_command_encoder {
-    return rc.passOf(self).encoder;
+    return rc.passOf(self).encoder.ref;
 }
 
 /// Forwards to the device's `query_extension`; null when the device has no such extension.

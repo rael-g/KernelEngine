@@ -33,8 +33,8 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
 
 /// Closes the frame. The queued uploads are written to their buffers before any command buffer
 /// is finished. Each pass that ended has its encoder finished in the order the passes ended, a
-/// compute record replayed on it first. The command buffers are submitted in one call and
-/// destroyed with their encoders, and the frame stops being live. Returns the result of the
+/// compute record replayed on it first; one whose finish fails is left out. The command buffers
+/// are submitted in one call and destroyed with their encoders, and the frame stops being live. Returns the result of the
 /// present, with the target's error on failure; the queue is polled whatever it returned. Returns
 /// zero and does nothing when no frame is live.
 pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -44,16 +44,21 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
     flushUploads(st);
 
     const ended = st.ended[0..@min(st.ended_count.load(.monotonic), rc.MAX_CMD_BUFFERS)];
+    var finished: [rc.MAX_CMD_BUFFERS]c.ke_gpu_command_buffer_handle = undefined;
     var submit: [rc.MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer = undefined;
-    for (ended, 0..) |pass, i| {
-        if (pass.record) |rec| replay(pass.encoder, rec);
-        submit[i] = pass.encoder.*.finish.?(pass.encoder);
+    var count: u32 = 0;
+    for (ended) |pass| {
+        const enc = pass.encoder.ref;
+        if (pass.record) |rec| replay(enc, rec);
+        const cmd = enc.*.finish.?(enc, null);
+        if (cmd.ref == null) continue;
+        finished[count] = cmd;
+        submit[count] = cmd.ref;
+        count += 1;
     }
-    if (ended.len > 0) {
-        st.device.queue_submit.?(st.device, st.queue, &submit, @intCast(ended.len));
-        for (submit[0..ended.len]) |cb| cb.*.destroy.?(cb);
-    }
-    for (ended) |pass| pass.encoder.*.destroy.?(pass.encoder);
+    if (count > 0) st.device.queue_submit.?(st.device, st.queue, &submit, count);
+    for (finished[0..count]) |cmd| cmd.destroy.?(cmd.ref);
+    for (ended) |pass| pass.encoder.destroy.?(pass.encoder.ref);
     st.ended_count.store(0, .monotonic);
     st.frame_live = false;
     if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;

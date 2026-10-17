@@ -186,19 +186,25 @@ int main(void)
             .depth_stencil_attachment = NULL,
         };
 
-        ke_gpu_command_encoder *enc = gpu.ref->create_command_encoder(gpu.ref, NULL);
+        ke_gpu_command_encoder_handle enc_handle = gpu.ref->create_command_encoder(gpu.ref, NULL, &err);
+
+        if (!enc_handle.ref) die("command encoder creation failed", err);
+
+        ke_gpu_command_encoder *enc = enc_handle.ref;
         ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
         rp->set_pipeline(rp, pipeline);
         rp->set_bind_group(rp, 0, bg, NULL, 0);
         rp->draw(rp, 3, 1, 0, 0);
         rp->end(rp);
 
-        ke_gpu_command_buffer *cmd = enc->finish(enc);
-        enc->destroy(enc);
+        ke_gpu_command_buffer_handle cmd = enc->finish(enc, &err);
 
-        ke_gpu_command_buffer *cmds[] = { cmd };
+        if (!cmd.ref) die("command encoder finish failed", err);
+        enc_handle.destroy(enc);
+
+        ke_gpu_command_buffer *cmds[] = { cmd.ref };
         gpu.ref->queue_submit(gpu.ref, q, cmds, 1);
-        cmd->destroy(cmd);
+        cmd.destroy(cmd.ref);
         if (!target.ref->present(target.ref, &err)) die("present failed", err);
         gpu.ref->queue_poll(gpu.ref, q);
     }

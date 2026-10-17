@@ -10,8 +10,7 @@ extern "C"
 
 struct ke_gpu_render_pass
 {
-    void              *handle;
-    ke_gpu_device     *device;
+    void *handle;
 
     void (*set_pipeline)(struct ke_gpu_render_pass *self, ke_gpu_pipeline pipe);
     void (*set_bind_group)(struct ke_gpu_render_pass *self, uint32_t group_index,
@@ -45,8 +44,7 @@ struct ke_gpu_render_pass
 
 struct ke_gpu_compute_pass
 {
-    void          *handle;
-    ke_gpu_device *device;
+    void *handle;
 
     void (*set_pipeline)(struct ke_gpu_compute_pass *self, ke_gpu_pipeline pipe);
     void (*set_bind_group)(struct ke_gpu_compute_pass *self, uint32_t group_index,
@@ -69,8 +67,7 @@ struct ke_gpu_compute_pass
 
 struct ke_gpu_command_encoder
 {
-    void          *handle;
-    ke_gpu_device *device;
+    void *handle;
 
     struct ke_gpu_render_pass  *(*begin_render_pass)(struct ke_gpu_command_encoder *self,
                                                      const ke_gpu_render_pass_params *p);
@@ -92,8 +89,9 @@ struct ke_gpu_command_encoder
     void (*copy_texture_to_texture)(struct ke_gpu_command_encoder *self,
                                     ke_gpu_texture src, ke_gpu_texture dst,
                                     uint32_t width, uint32_t height);
-    struct ke_gpu_command_buffer *(*finish)(struct ke_gpu_command_encoder *self);
-    void (*destroy)(struct ke_gpu_command_encoder *self);
+    /// Ends recording and returns the commands as a buffer to submit. The encoder records
+    /// nothing more and is still released by its own handle. On failure the handle's ref is NULL.
+    ke_gpu_command_buffer_handle (*finish)(struct ke_gpu_command_encoder *self, ke_error **out_error);
 
     /// Copies a texture region into a buffer created with KE_GPU_BUFFER_USAGE_COPY_DST; the
     /// texture needs KE_GPU_TEXTURE_USAGE_COPY_SRC. Fails with KE_ERROR_INVALID_ARGUMENT when
@@ -114,12 +112,10 @@ struct ke_gpu_command_encoder
     void (*insert_debug_marker)(struct ke_gpu_command_encoder *self, const char *label);
 };
 
+/** Recorded commands, submitted with ke_gpu_device::queue_submit and released by their handle. */
 struct ke_gpu_command_buffer
 {
-    void          *handle;
-    ke_gpu_device *device;
-
-    void (*destroy)(struct ke_gpu_command_buffer *self);
+    void *handle;
 };
 
 #ifdef __cplusplus

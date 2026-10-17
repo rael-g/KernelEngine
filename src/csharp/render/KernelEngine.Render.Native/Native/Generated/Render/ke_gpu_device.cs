@@ -84,8 +84,8 @@ public unsafe partial struct ke_gpu_device
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_bind_group)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, void> destroy_bind_group;
 
-    [NativeTypeName("ke_gpu_command_encoder *(*)(struct ke_gpu_device *, const ke_gpu_command_encoder_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_command_encoder_params*, ke_gpu_command_encoder*> create_command_encoder;
+    [NativeTypeName("ke_gpu_command_encoder_handle (*)(struct ke_gpu_device *, const ke_gpu_command_encoder_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_command_encoder_params*, KernelEngine.Common.Native.ke_error**, ke_gpu_command_encoder_handle> create_command_encoder;
 
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_buffer, uint64_t, const void *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ulong, void*, nuint, void> write_buffer;

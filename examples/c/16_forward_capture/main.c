@@ -76,14 +76,17 @@ static void read_texture(ke_gpu_device *gpu, ke_gpu_texture texture, uint8_t *ou
     if (staging == KE_GPU_INVALID_HANDLE) die("staging buffer create failed", err);
 
     ke_gpu_queue q = gpu->get_default_queue(gpu);
-    ke_gpu_command_encoder *enc = gpu->create_command_encoder(gpu, NULL);
+    ke_gpu_command_encoder_handle enc_handle = gpu->create_command_encoder(gpu, NULL, &err);
+    if (!enc_handle.ref) die("command encoder creation failed", err);
+    ke_gpu_command_encoder *enc = enc_handle.ref;
     if (!enc->copy_texture_to_buffer(enc, texture, 0, 0, 0, staging, 0, padded_row, WIDTH, HEIGHT, &err))
         die("copy to buffer failed", err);
-    ke_gpu_command_buffer *cmd = enc->finish(enc);
-    enc->destroy(enc);
-    ke_gpu_command_buffer *cmds[] = { cmd };
+    ke_gpu_command_buffer_handle cmd = enc->finish(enc, &err);
+    if (!cmd.ref) die("command encoder finish failed", err);
+    enc_handle.destroy(enc);
+    ke_gpu_command_buffer *cmds[] = { cmd.ref };
     gpu->queue_submit(gpu, q, cmds, 1);
-    cmd->destroy(cmd);
+    cmd.destroy(cmd.ref);
 
     readback r = { 0 };
     gpu->map_buffer_read(gpu, staging, 0, (size_t)padded_row * HEIGHT, on_mapped, &r);

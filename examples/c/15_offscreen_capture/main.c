@@ -60,18 +60,23 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
     };
     ke_gpu_render_pass_params rpp = { .color_attachments = &ca, .color_attachment_count = 1 };
 
-    ke_gpu_command_encoder *enc = gpu->create_command_encoder(gpu, NULL);
+    ke_gpu_command_encoder_handle enc_handle = gpu->create_command_encoder(gpu, NULL, &err);
+
+    if (!enc_handle.ref) die("command encoder creation failed", err);
+
+    ke_gpu_command_encoder *enc = enc_handle.ref;
     ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
     rp->set_pipeline(rp, pipeline);
     rp->draw(rp, 3, 1, 0, 0);
     rp->end(rp);
     if (!enc->copy_texture_to_buffer(enc, texture, 0, 0, 0, staging, 0, padded_row, WIDTH, HEIGHT, &err))
         die("copy to buffer failed", err);
-    ke_gpu_command_buffer *cmd = enc->finish(enc);
-    enc->destroy(enc);
-    ke_gpu_command_buffer *cmds[] = { cmd };
+    ke_gpu_command_buffer_handle cmd = enc->finish(enc, &err);
+    if (!cmd.ref) die("command encoder finish failed", err);
+    enc_handle.destroy(enc);
+    ke_gpu_command_buffer *cmds[] = { cmd.ref };
     gpu->queue_submit(gpu, q, cmds, 1);
-    cmd->destroy(cmd);
+    cmd.destroy(cmd.ref);
     if (!target->present(target, &err)) die("present failed", err);
 
     readback r = { 0 };

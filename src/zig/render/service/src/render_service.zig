@@ -229,14 +229,14 @@ pub const CoreState = struct {
 pub const PassState = struct {
     core: *CoreState,
     io: c.ke_render_pass_io,
-    encoder: *c.ke_gpu_command_encoder,
+    encoder: c.ke_gpu_command_encoder_handle,
     record: ?*ComputeRecord,
 };
 
 /// A pass that ended during the frame: its encoder, and the record replayed on it before it is
 /// finished when the pass recorded compute work. The frame submits them in the order they ended.
 pub const EndedPass = struct {
-    encoder: *c.ke_gpu_command_encoder,
+    encoder: c.ke_gpu_command_encoder_handle,
     record: ?*ComputeRecord,
 };
 
