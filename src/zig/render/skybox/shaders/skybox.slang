@@ -14,8 +14,8 @@ struct VsOut {
 
 [shader("vertex")]
 VsOut vs_main(uint vid : SV_VertexID) {
-    float2 pos = float2((vid & 1u) ? 3.0 : -1.0,
-                        (vid & 2u) ? -3.0 : 1.0);
+    float2 pos = float2((vid & 1u) != 0u ? 3.0 : -1.0,
+                        (vid & 2u) != 0u ? -3.0 : 1.0);
     VsOut o;
     o.clip = float4(pos, 0.0, 1.0);
     o.uv   = pos * float2(0.5, -0.5) + 0.5;
