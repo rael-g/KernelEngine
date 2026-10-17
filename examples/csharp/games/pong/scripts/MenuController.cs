@@ -61,8 +61,8 @@ public sealed class MenuController : Node
 
     protected override void OnUpdate(in View view)
     {
-        bool launch = _actions.IsPressed(PongAction.Launch, in view);
-        bool quit = _actions.IsPressed(PongAction.Quit, in view);
+        bool launch = _actions.IsPressed(PongAction.Launch);
+        bool quit = _actions.IsPressed(PongAction.Quit);
         if (launch && !_prevLaunch) _router.LoadScene<Scenes.Main>();
         if (quit && !_prevQuit) Environment.Exit(0);
         _prevLaunch = launch;

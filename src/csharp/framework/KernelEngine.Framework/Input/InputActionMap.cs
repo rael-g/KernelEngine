@@ -45,15 +45,15 @@ public sealed unsafe class InputActionMap<TEnum> : IInputActionMap<TEnum>, IActi
     }
 
     /// <inheritdoc/>
-    public float GetAxis1D(TEnum action, in View view)
+    public float GetAxis1D(TEnum action)
         => _ids.TryGetValue(action, out var id) ? _native.GetAxis1d(id) : 0f;
 
     /// <inheritdoc/>
-    public bool IsPressed(TEnum action, in View view)
+    public bool IsPressed(TEnum action)
         => _ids.TryGetValue(action, out var id) && _native.IsActionDown(id);
 
     /// <inheritdoc/>
-    public bool IsJustPressed(TEnum action, in View view)
+    public bool IsJustPressed(TEnum action)
         => _ids.TryGetValue(action, out var id) && _native.WasActionPressed(id);
 
     /// <inheritdoc/>

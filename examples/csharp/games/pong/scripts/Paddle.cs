@@ -27,7 +27,7 @@ public sealed partial class Paddle : Body2D
 
     void Update(in View view)
     {
-        float vy = _actions.GetAxis1D(MoveAction, in view) * Speed;
+        float vy = _actions.GetAxis1D(MoveAction) * Speed;
 
         float maxY = Field.HalfH - Field.WallThickness - HalfH;
         if (vy > 0 && Position.Y >= maxY) vy = 0;

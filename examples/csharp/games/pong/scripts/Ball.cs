@@ -46,9 +46,9 @@ public sealed partial class Ball : Body2D
         Emit<GoalScored> goal,
         Emit<BallLaunched> launched)
     {
-        if (_actions.IsJustPressed(PongAction.Quit, in view)) _router.LoadScene<Scenes.Menu>();
+        if (_actions.IsJustPressed(PongAction.Quit)) _router.LoadScene<Scenes.Menu>();
 
-        if (_actions.IsJustPressed(PongAction.Launch, in view) && AwaitingLaunch) Launch(launched);
+        if (_actions.IsJustPressed(PongAction.Launch) && AwaitingLaunch) Launch(launched);
         if (AwaitingLaunch) return;
 
         if (Math.Sign(Velocity.X) != Math.Sign(LastVelocity.X) && LastVelocity.X != 0)
