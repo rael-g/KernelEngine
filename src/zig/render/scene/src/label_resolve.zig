@@ -33,7 +33,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     const path = std.mem.sliceTo(&l.font, 0);
 
     const resolver = st.resolver orelse {
-        reportUnresolved(st, path, "the render module was given no asset resolver");
+        reportUnresolved(st, path, "the label resolve was given no asset resolver");
         return c.KE_UI_FONT_FAILED;
     };
 

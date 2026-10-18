@@ -7,7 +7,17 @@
 #include <kernel_engine/render/texture_target/gpu_render_target_texture_create.h>
 #include <kernel_engine/render/renderdoc_target/gpu_render_target_renderdoc_create.h>
 #include <kernel_engine/render/service/render_service.h>
-#include <kernel_engine/render/module/render_module_create.h>
+#include <kernel_engine/render/binder_grouped/resource_binder_grouped_create.h>
+#include <kernel_engine/render/service/render_service_create.h>
+#include <kernel_engine/view/space/view_space_rh_create.h>
+#include <kernel_engine/render/camera/camera_create.h>
+#include <kernel_engine/render/scene/scene_resolve_create.h>
+#include <kernel_engine/render/frame/frame_create.h>
+#include <kernel_engine/render/shadow/shadow_create.h>
+#include <kernel_engine/render/cluster/cluster_create.h>
+#include <kernel_engine/render/gbuffer/gbuffer_create.h>
+#include <kernel_engine/render/deferred_lighting/deferred_lighting_create.h>
+#include <kernel_engine/render/tonemap/tonemap_create.h>
 #include <kernel_engine/render/components.h>
 #include <kernel_engine/render/component_fields.h>
 #include <kernel_engine/spatial/transform.h>
@@ -101,6 +111,87 @@ static void read_texture(ke_gpu_device *gpu, ke_gpu_texture texture, uint8_t *ou
     gpu->destroy_buffer(gpu, staging);
 }
 
+typedef struct renderer
+{
+    ke_render_resource_binder_handle binder;
+    ke_render_service_handle service;
+    ke_view_space_handle view_space;
+    ke_render_camera_handle camera;
+    ke_render_scene_resolve_handle scene;
+    ke_render_frame_handle frame;
+    ke_render_shadow_handle shadow;
+    ke_render_cluster_handle cluster;
+    ke_render_gbuffer_handle gbuffer;
+    ke_render_deferred_lighting_handle deferred;
+    ke_render_tonemap_handle tonemap;
+} renderer;
+
+static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target)
+{
+    ke_error *err = NULL;
+    r->binder = ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = "shaders" }, &err);
+    if (!r->binder.ref) die("resource binder", err);
+    r->service = ke_render_service_create(&(ke_render_service_params){
+        .device = gpu, .target = target, .ecs = ecs, .shader_dir = "shaders", .binder = r->binder.ref }, &err);
+    if (!r->service.ref) die("render service", err);
+    ke_render_service *core = r->service.ref;
+
+    ke_ndc_convention ndc = gpu->get_ndc_convention(gpu);
+    r->view_space = ke_view_space_rh_create(&err);
+    if (!r->view_space.ref) die("view space", err);
+    r->camera = ke_render_camera_create(r->view_space.ref, &ndc, &err);
+    if (!r->camera.ref) die("camera", err);
+
+    r->scene = ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt, .ecs = ecs, .service = core }, &err);
+    if (!r->scene.ref) die("scene resolve", err);
+    const ke_render_scene_component_ids *ids = r->scene.ref->component_ids(r->scene.ref);
+
+    r->frame = ke_render_frame_create(&(ke_render_frame_params){
+        .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref,
+        .camera_cid = ids->camera, .world_transform_cid = ids->world_transform,
+        .directional_light_cid = ids->directional_light, .ambient_light_cid = ids->ambient_light }, &err);
+    if (!r->frame.ref) die("frame", err);
+    ke_component_id frame_cid = r->frame.ref->frame_cid(r->frame.ref);
+
+    r->shadow = ke_render_shadow_create(&(ke_render_shadow_params){
+        .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .ndc = ndc,
+        .mesh_cid = ids->mesh, .world_transform_cid = ids->world_transform, .light_cid = ids->directional_light,
+        .frame_cid = frame_cid, .output = "shadow" }, &err);
+    if (!r->shadow.ref) die("shadow pass", err);
+    r->cluster = ke_render_cluster_create(&(ke_render_cluster_params){
+        .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .camera = r->camera.ref,
+        .point_light_cid = ids->point_light, .spot_light_cid = ids->spot_light, .world_transform_cid = ids->world_transform,
+        .camera_cid = ids->camera, .frame_cid = frame_cid, .output = "clusters" }, &err);
+    if (!r->cluster.ref) die("cluster pass", err);
+    r->gbuffer = ke_render_gbuffer_create(&(ke_render_gbuffer_params){
+        .runtime = rt, .service = core, .device = gpu, .mesh_cid = ids->mesh, .world_transform_cid = ids->world_transform,
+        .camera_cid = ids->camera, .frame_cid = frame_cid, .output = "gbuffer" }, &err);
+    if (!r->gbuffer.ref) die("gbuffer pass", err);
+    r->deferred = ke_render_deferred_lighting_create(&(ke_render_deferred_lighting_params){
+        .runtime = rt, .service = core, .device = gpu, .ibl_enabled = true,
+        .camera_cid = ids->camera, .world_transform_cid = ids->world_transform, .skybox_cid = ids->skybox, .frame_cid = frame_cid,
+        .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &err);
+    if (!r->deferred.ref) die("deferred lighting pass", err);
+    r->tonemap = ke_render_tonemap_create(&(ke_render_tonemap_params){
+        .runtime = rt, .service = core, .device = gpu, .frame_cid = frame_cid }, &err);
+    if (!r->tonemap.ref) die("tonemap pass", err);
+}
+
+static void renderer_destroy(renderer *r)
+{
+    r->tonemap.destroy(r->tonemap.ref);
+    r->deferred.destroy(r->deferred.ref);
+    r->gbuffer.destroy(r->gbuffer.ref);
+    r->cluster.destroy(r->cluster.ref);
+    r->shadow.destroy(r->shadow.ref);
+    r->frame.destroy(r->frame.ref);
+    r->scene.destroy(r->scene.ref);
+    r->camera.destroy(r->camera.ref);
+    r->service.destroy(r->service.ref);
+    r->binder.destroy(r->binder.ref);
+    r->view_space.destroy(r->view_space.ref);
+}
+
 int main(int argc, char **argv)
 {
     printf("--- c_demo_16: forward lit cube captured offscreen ---\n");
@@ -144,9 +235,9 @@ int main(int argc, char **argv)
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);
     if (!rt.ref) die("runtime", err);
 
-    ke_render_module_handle render = ke_render_module_create(rt.ref, ecs.ref, gpu.ref, frame_target, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, "shaders", &err);
-    if (!render.ref) die("render module", err);
-    ke_render_service *core = ke_render_module_core(render.ref);
+    renderer render;
+    renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target);
+    ke_render_service *core = render.service.ref;
 
     ke_mesh_handle cube_h = core->upload_mesh(core, "example:cube", cube, sizeof(cube), cube_idx,
                                               sizeof(cube_idx) / sizeof(cube_idx[0]), &err);
@@ -216,7 +307,7 @@ int main(int argc, char **argv)
     }
     free(pixels);
 
-    render.destroy(render.ref);
+    renderer_destroy(&render);
     rt.destroy(rt.ref);
     sched.destroy(sched.ref);
     ecs.destroy(ecs.ref);

@@ -1,0 +1,10 @@
+.{
+    .name = .ke_render_scene,
+    .version = "0.1.0",
+    .fingerprint = 0x4bb1efb81c900ae3,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_common = .{ .path = "../../common" },
+    },
+    .paths = .{"."},
+}

@@ -516,7 +516,7 @@ pub fn build(b: *std.Build) void {
 
     const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{shader_lib_dir}, null);
-    const skybox = ctx.member("ke_render_skybox", .{
+    _ = ctx.member("ke_render_skybox", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -534,7 +534,7 @@ pub fn build(b: *std.Build) void {
 
     const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{shader_lib_dir}, null);
-    const ui = ctx.member("ke_render_ui", .{
+    _ = ctx.member("ke_render_ui", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -717,44 +717,42 @@ pub fn build(b: *std.Build) void {
         .@"shader-files-src" = shader_files_src,
     }, &.{ &common.step, &resource_cache_default.step, &blit_vs.step, &blit_fs.step }, .has_tests);
 
-    const render_module = ctx.member("ke_render_module", .{
+    const render_frame = ctx.member("ke_render_frame", .{
+        .target = target,
+        .optimize = optimize,
+        .@"heap-src" = heap_src,
+        .@"stubs-src" = stubs_src,
+        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
+        .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
+        .@"ke-runtime-include" = b.pathJoin(&.{ src_c, "runtime" }),
+        .@"ke-ecs-include" = b.pathJoin(&.{ src_c, "ecs" }),
+        .@"ke-spatial-include" = b.pathJoin(&.{ src_c, "spatial" }),
+        .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
+        .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/frame/include" }),
+        .@"ke-lib-dir" = lib_dir,
+    }, &.{&common.step}, .has_tests);
+
+    const render_scene = ctx.member("ke_render_scene", .{
         .target = target,
         .optimize = optimize,
         .@"scene-components-src" = scene_components_src,
+        .@"kerror-src" = kerror_src,
         .@"heap-src" = heap_src,
         .@"stubs-src" = stubs_src,
-        .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
+        .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-ecs-include" = b.pathJoin(&.{ src_c, "ecs" }),
         .@"ke-runtime-include" = b.pathJoin(&.{ src_c, "runtime" }),
         .@"ke-spatial-include" = b.pathJoin(&.{ src_c, "spatial" }),
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
-        .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
         .@"ke-framework-include" = b.pathJoin(&.{ src_c, "framework" }),
         .@"ke-text-include" = b.pathJoin(&.{ src_c, "text" }),
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-asset-include" = b.pathJoin(&.{ src_c, "asset" }),
-        .@"ke-service-include" = b.pathJoin(&.{ src_zig, "render/service/include" }),
-        .@"ke-binder-grouped-include" = b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
-        .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/module/include" }),
-        .@"ke-view-space-include" = b.pathJoin(&.{ src_zig, "view/space/include" }),
-        .@"ke-camera-include" = b.pathJoin(&.{ src_zig, "render/camera/include" }),
-        .@"ke-tonemap-include" = b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
-        .@"ke-skybox-include" = b.pathJoin(&.{ src_zig, "render/skybox/include" }),
         .@"ke-ui-include" = b.pathJoin(&.{ src_zig, "render/ui/include" }),
-        .@"ke-gbuffer-include" = b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
-        .@"ke-shadow-include" = b.pathJoin(&.{ src_zig, "render/shadow/include" }),
-        .@"ke-cluster-include" = b.pathJoin(&.{ src_zig, "render/cluster/include" }),
-        .@"ke-deferred-lighting-include" = b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
-        .@"ke-forward-include" = b.pathJoin(&.{ src_zig, "render/forward/include" }),
+        .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/scene/include" }),
         .@"ke-lib-dir" = lib_dir,
-        .@"kerror-src" = kerror_src,
-    }, &.{
-        &common.step,            &render_service.step, &view_space.step, &binder_grouped.step,
-        &tonemap.step,           &skybox.step,  &ui.step,
-        &gbuffer.step,           &shadow.step,  &cluster.step,
-        &deferred_lighting.step, &forward.step, &render_camera.step,
-    }, .has_tests);
+    }, &.{&common.step}, .has_tests);
 
     ctx.plugins_step.dependOn(ctx.libraries_step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
@@ -964,10 +962,9 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &render_module.step, &ecs_flecs.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &ecs_flecs.step });
 
     const demo13 = ctx.example("c_demo_13", .{
         .target = target,
@@ -984,7 +981,15 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
+            b.pathJoin(&.{ src_zig, "view/space/include" }),
+            b.pathJoin(&.{ src_zig, "render/camera/include" }),
+            b.pathJoin(&.{ src_zig, "render/scene/include" }),
+            b.pathJoin(&.{ src_zig, "render/frame/include" }),
+            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
+            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
+            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
+            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
             b.pathJoin(&.{ src_zig, "render/shadow/include" }),
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
             b.pathJoin(&.{ src_c, "text" }),
@@ -1001,13 +1006,17 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
     }, &.{
-        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step,
         &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 
@@ -1026,10 +1035,19 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
+            b.pathJoin(&.{ src_zig, "view/space/include" }),
+            b.pathJoin(&.{ src_zig, "render/camera/include" }),
+            b.pathJoin(&.{ src_zig, "render/scene/include" }),
+            b.pathJoin(&.{ src_zig, "render/frame/include" }),
+            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
+            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
+            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
+            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
             b.pathJoin(&.{ src_zig, "render/shadow/include" }),
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
             b.pathJoin(&.{ src_c, "text" }),
+            b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
@@ -1043,14 +1061,23 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_shadow") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_cluster") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_gbuffer") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
         .@"link-m" = true,
     }, &.{
-        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
         &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 
@@ -1070,10 +1097,19 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/renderdoc_target/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
+            b.pathJoin(&.{ src_zig, "view/space/include" }),
+            b.pathJoin(&.{ src_zig, "render/camera/include" }),
+            b.pathJoin(&.{ src_zig, "render/scene/include" }),
+            b.pathJoin(&.{ src_zig, "render/frame/include" }),
+            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
+            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
+            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
+            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
             b.pathJoin(&.{ src_zig, "render/shadow/include" }),
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
             b.pathJoin(&.{ src_c, "text" }),
+            b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
@@ -1089,14 +1125,23 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_renderdoc") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_shadow") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_cluster") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_gbuffer") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
         .@"link-m" = true,
     }, &.{
-        &common.step,    &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &common.step,    &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
         &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 

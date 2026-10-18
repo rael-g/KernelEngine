@@ -27,8 +27,9 @@ the same order. Forward alone also calls `refraction_contribution`
 
 **A feature that is off is a neutral resource, not another shader.** The shadow function reads a
 white texture when no "shadow_map" exists, the environment is a black cube when image-based light
-is disabled or no skybox exists, and a cluster with no lights has a zero count. The switches are
-`enable_shadows` and `enable_ibl` of `ke_render_feature_params`.
+is disabled or no skybox exists, and a cluster with no lights has a zero count. A host without
+shadows creates no shadow pass and gives the shading passes no shadow group; `ibl_enabled` of
+`ke_render_deferred_lighting_params` and `ke_render_forward_params` turns image-based light off.
 
 **The directional light and the ambient light are the first of their kind.** Both shading passes
 and the shadow pass read only the first directional light; the first ambient light replaces the
@@ -55,8 +56,7 @@ These are string literals and numbers in the plugins. No header declares them.
   (deferred) or the material (forward). Set 2 is empty (deferred) or the object (forward). Set 3
   is "cluster_lights", bindings 0 to 6. A pipeline takes four layouts, so there is no fifth set.
 - The layout of the per-frame uniform of each shading pass, between its Zig struct and the
-  `frame` block of its shader. Its `shadow_params` lane z carries "a directional light exists",
-  not "shadows are on".
+  `frame` block of its shader.
 - The cluster grid uniform and the cull parameters, between `ClusterGridUniform` and
   `ClusterParams` in `cluster_module.zig` and the cluster shaders.
 - The cull shader workgroup size, which the cluster pass repeats when it dispatches.

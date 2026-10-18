@@ -13,10 +13,11 @@ plugins under `src/zig/render/`.
 | service | `ke_render_service` | service | device, target, `ke_ecs` | named resources, passes, uploads, materials, pipelines |
 | camera | `ke_render_camera` | camera | `ke_view_space`, the clip-space convention | view and projection matrices from a camera component |
 | pass | none; a `ke_runtime_system_params` and a `ke_render_pass_io` | one plugin per pass | `ke_runtime`, service, device, component ids | commands recorded into its slot |
-| module | none; `ke_render_module_create` | module | everything above, plus `ke_runtime` | a composed pipeline, and the service to the host |
+| scene | `ke_render_scene_resolve`, `ke_render_label_resolve` | scene | `ke_runtime`, `ke_ecs`, service; the ui pass for labels | the scene's component ids, and the meshes, sprites and fonts they name |
+| frame | `ke_render_frame` | frame | `ke_runtime`, `ke_ecs`, service, camera, the scene's component ids | the frame tag, and the begin and end of each frame |
 
-A host that wants the default pipeline calls `ke_render_module_create` and nothing else of this
-table. A host that composes its own creates the service and the passes it wants.
+No plugin composes the renderer. The host creates the service, the camera, the scene resolve, the
+frame and the passes it wants, and hands each the component ids of the others.
 
 ## What ties the parts together
 

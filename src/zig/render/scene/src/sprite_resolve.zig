@@ -16,8 +16,8 @@ const Vertex = extern struct {
     tangent: [3]f32,
 };
 
-/// The user data of `system`, stored inside the module's state, whose address the runtime is
-/// given. `core` and `resolver` are pointers the module passed in, and this type does not own
+/// The user data of `system`, stored inside the scene resolve's state, whose address the runtime
+/// is given. `core` and `resolver` are pointers its creator passed in, and this type does not own
 /// them. `resolver` is null when no asset resolver was supplied, and then no texture is ever
 /// loaded.
 pub const State = struct {

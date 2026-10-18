@@ -1,0 +1,14 @@
+.{
+    .name = .ke_render_frame,
+    .version = "0.1.0",
+    .fingerprint = 0x27303caf6a4bbb79,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_common = .{ .path = "../../common" },
+        .zmath = .{
+            .url = "https://github.com/zig-gamedev/zmath/archive/9e42b04a24c970a297b365f3d3022f92dbf3219d.tar.gz",
+            .hash = "zmath-0.11.0-dev-wjwivTwtAwDOjG2_KGP-HLtHrONfsFfHttalmxFAGVAK",
+        },
+    },
+    .paths = .{"."},
+}
