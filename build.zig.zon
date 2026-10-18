@@ -64,13 +64,13 @@
             .lazy = true,
         },
         .slang_linux = .{
-            .url = "https://github.com/shader-slang/slang/releases/download/v2025.17.2/slang-2025.17.2-linux-x86_64.zip",
-            .hash = "N-V-__8AAA1OhAgT1hr9fnYGXl8YakkwuWy-htN3FkNxvBpg",
+            .url = "https://github.com/shader-slang/slang/releases/download/v2026.19/slang-2026.19-linux-x86_64.zip",
+            .hash = "N-V-__8AAHS71g4AmiW1A7gwOYvr4uEj6PwjnPVXSue-7NUX",
             .lazy = true,
         },
         .slang_windows = .{
-            .url = "https://github.com/shader-slang/slang/releases/download/v2025.17.2/slang-2025.17.2-windows-x86_64.zip",
-            .hash = "N-V-__8AACvJGwe1DZm3XCYmuzIGFFAHoftdQlDGnfNjUa0V",
+            .url = "https://github.com/shader-slang/slang/releases/download/v2026.19/slang-2026.19-windows-x86_64.zip",
+            .hash = "N-V-__8AAAYJXwopSCjsQvHuu7Ke3AURwVDNubNvxph8Yk5e",
             .lazy = true,
         },
         .wgpu_linux = .{

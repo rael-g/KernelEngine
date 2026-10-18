@@ -10,8 +10,8 @@ pub fn build(b: *std.Build) void {
 
     const gen = std.Build.Step.Run.create(b, "slangc");
     gen.addFileArg(slangc);
-    gen.addArgs(&.{ b.pathFromRoot("triangle.slang"), "-target", "wgsl" });
-    const wgsl = gen.captureStdOut(.{ .basename = "triangle.wgsl" });
+    gen.addArgs(&.{ b.pathFromRoot("triangle.slang"), "-target", "wgsl", "-o" });
+    const wgsl = gen.addOutputFileArg("triangle.wgsl");
 
     const mod = b.createModule(.{
         .target = target,

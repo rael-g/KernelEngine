@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) void {
     const zig_global_cache_dir = b.pathJoin(&.{ root, "build", "zig-global" });
     createDirs(b, &.{ vcpkg_archives, vcpkg_registries });
 
-    const slang_version = "2025.17.2";
+    const slang_version = "2026.19";
     const slangc_given = b.option([]const u8, "slangc", "a slangc of your own, for a host the build carries no slang package for");
     const wgpu_given = b.option([]const u8, "wgpu-native", "a wgpu-native directory of your own, holding include/ and lib/, for a target the build carries no package for");
     const slang_package_name = slang_package_name: {
