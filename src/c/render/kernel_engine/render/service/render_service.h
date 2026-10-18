@@ -76,7 +76,8 @@ typedef struct ke_render_lighting
     float ambient[4];
 } ke_render_lighting;
 
-/// A pass's declared resource I/O by name.
+/// A pass's declared resource I/O by name. Every write is cleared when the pass's render pass
+/// opens, except the first color write when `load_from` names a resource.
 typedef struct ke_render_pass_io
 {
     /// Optional name the pass's render or compute pass is labeled with; copied when the pass
@@ -86,9 +87,13 @@ typedef struct ke_render_pass_io
     uint32_t           reads_count;
     const char *const *writes;
     uint32_t           writes_count;
-    /// When non-zero, color attachments load their existing contents instead of
-    /// clearing.
-    uint32_t           load;
+    /// Optional name of a resource the pass reads that its first color write starts as: the
+    /// service draws it into that write before the pass's render pass opens, converting the
+    /// format when the two differ.
+    const char        *load_from;
+    /// Optional name of a depth resource the pass reads that its render pass is depth-tested
+    /// against without writing it. Ignored when a write is already a depth resource.
+    const char        *depth_test;
 } ke_render_pass_io;
 
 struct ke_render_service
@@ -270,6 +275,10 @@ struct ke_render_service
 
     /// Texel format of the backbuffer, the format a pipeline drawing into it declares.
     ke_gpu_texture_format (*backbuffer_format)(struct ke_render_service *self);
+
+    /// Texel format of the named texture resource, the format a pipeline drawing into it
+    /// declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.
+    ke_gpu_texture_format (*resource_format)(struct ke_render_service *self, const char *name);
 
     /// Counts the times the targets declared relative to the backbuffer were recreated, which
     /// `begin_frame` does when the backbuffer changes size. A pass that keeps something made from

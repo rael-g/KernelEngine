@@ -34,12 +34,36 @@ extern "C"
         void (*destroy)(ke_render_forward *self);
     } ke_render_forward_handle;
 
+    /// What the transparent forward pass draws over and into. The names are copied.
+    typedef struct ke_render_forward_params
+    {
+        ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
+        ke_render_service *service; ///< Holds the resources it reads and writes; borrowed.
+        ke_gpu_device     *device;  ///< Borrowed.
+        ke_logger         *logger;  ///< Optional, borrowed.
+        bool               ibl_enabled;
+        ke_component_id    mesh_cid;
+        ke_component_id    world_transform_cid;
+        ke_component_id    camera_cid;
+        ke_component_id    skybox_cid;
+        ke_component_id    frame_cid;
+        /// [utf8] The opaque scene: the output starts as it, and blended materials sample it.
+        const char *input;
+        /// [utf8] The depth resource the blended draws are tested against, unwritten.
+        const char *depth;
+        /// [utf8] Optional shadow group; without one the shadow is the neutral one.
+        const char *shadow;
+        /// [utf8] Optional cluster group; without one no clustered light is bound.
+        const char *clusters;
+        /// [utf8] The HDR resource it writes, declared the size of the backbuffer when the
+        /// service has none of that name.
+        const char *output;
+    } ke_render_forward_params;
+
+    /// Registers the pass's render-phase system. A missing runtime, service, device, input,
+    /// depth or output fails as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_FORWARD_API ke_render_forward_handle ke_render_forward_create(
-        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_logger *logger, bool ibl_enabled,
-        ke_component_id mesh_cid, ke_component_id world_transform_cid,
-        ke_component_id camera_cid, ke_component_id skybox_cid,
-        ke_component_id frame_cid, ke_error **out_error);
+        const ke_render_forward_params *params, ke_error **out_error);
 
 #ifdef __cplusplus
 }

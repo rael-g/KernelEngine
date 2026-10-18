@@ -1,6 +1,6 @@
-//! The tonemap pass: the render-phase system "render.tonemap" that draws the "hdr" target into the
-//! "backbuffer" target. It also owns the creation and teardown of that pass, behind the one
-//! factory it exports.
+//! The tonemap pass: the render-phase system "render.tonemap" that draws the HDR resource it is
+//! given into the resource it is told to write. It also owns the creation and teardown of that
+//! pass, behind the one factory it exports.
 
 const std = @import("std");
 
@@ -20,7 +20,7 @@ const shader_layout = c.ke_render_shader_layout_params{
 /// The state of one tonemap pass. The factory allocates it and `destroyHandle` frees it. The
 /// runtime receives it as the context of `system` at registration. `io` points into `reads` and
 /// `writes` of this same struct, which stays valid because the module is never moved after
-/// allocation.
+/// allocation; those point at `input` and `output`, the module's copies of the names.
 pub const TonemapModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -31,6 +31,8 @@ pub const TonemapModule = struct {
     layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
     set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
 
+    input: ?[:0]u8 = null,
+    output: ?[:0]u8 = null,
     writes: [1][*c]const u8 = undefined,
     reads: [1][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
@@ -58,8 +60,8 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
 /// When the set cannot be created, the pass is ended, and the error output receives
 /// `KE_ERROR_NOT_INITIALIZED` with the set error as its cause; the body then returns false.
 /// Each frame it draws one full-screen triangle with no vertex input and no depth test, sampling
-/// "hdr" through the shader named "tonemap". It recreates the set every frame, because the
-/// "hdr" view is read from the pass each time.
+/// its input through the shader named "tonemap". It recreates the set every frame, because the
+/// input's view is read from the pass each time.
 fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const tm = moduleOf(user);
     const core = tm.core;
@@ -67,7 +69,7 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
     const pc = core.*.begin_pass.?(core, &tm.io);
     if (pc == null) return true;
 
-    const hdr_view = pc.*.read.?(pc, "hdr");
+    const hdr_view = pc.*.read.?(pc, tm.input.?.ptr);
     const bindings = [1]c.ke_render_shader_binding{
         .{ .name = "t_hdr", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = hdr_view, .sampler = 0 },
     };
@@ -90,15 +92,32 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
     return true;
 }
 
-/// Fills the module during `ke_render_tonemap_create`, before `system` is registered. A failed
-/// shader load or layout request returns false before the layout exists; after it, a failed
-/// pipeline request returns false with the layout left for the caller's release. The caller releases the module after any false return. A
+/// Fills the module during `ke_render_tonemap_create`, before `system` is registered: copies the
+/// names, declares the output when the service has none of that name, and builds the pipeline in
+/// the output's format. A failed copy, declaration, shader load or layout request returns false
+/// before the layout exists; after it, a failed pipeline request returns false with the layout
+/// left for the caller's release. The caller releases the module after any false return. A
 /// successful call has asked the service for the pipeline once, so a failure surfaces at creation.
-fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         logger: ?*c.ke_logger, out_error: [*c][*c]c.ke_error) bool {
+fn setup(tm: *TonemapModule, p: *const c.ke_render_tonemap_params, out_error: [*c][*c]c.ke_error) bool {
+    const core: *c.ke_render_service = p.service;
     tm.core = core;
-    tm.device = dev;
-    tm.logger = logger;
+    tm.device = p.device;
+    tm.logger = p.logger;
+
+    tm.input = gpa.dupeZ(u8, std.mem.span(p.input)) catch return outOfMemory(out_error);
+    tm.output = gpa.dupeZ(u8, std.mem.span(p.output)) catch return outOfMemory(out_error);
+
+    var format = core.*.resource_format.?(core, tm.output.?.ptr);
+    if (format == c.KE_GPU_TEXTURE_FORMAT_INVALID) {
+        format = if (p.output_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.output_format else core.*.backbuffer_format.?(core);
+        if (core.*.declare.?(core, &c.ke_render_resource_params{
+            .name = tm.output.?.ptr,
+            .type = c.KE_RENDER_RESOURCE_TEXTURE,
+            .format = format,
+            .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
+            .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
+        }, out_error) == c.KE_COMPONENT_INVALID) return false;
+    }
 
     const vs = core.*.load_shader.?(core, "tonemap", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (vs == c.KE_GPU_INVALID_HANDLE) return false;
@@ -115,7 +134,7 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     pp.fragment_module = fs;
     pp.fragment_entry  = "fs_main";
     if (!tm.binder.pipeline_layouts.?(tm.binder, tm.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) return false;
-    pp.color_target_formats[0] = core.*.backbuffer_format.?(core);
+    pp.color_target_formats[0] = format;
     pp.color_target_count = 1;
     pp.blend_state.write_mask = 0x0F;
     pp.depth_stencil.depth_test_enabled = false;
@@ -124,8 +143,8 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     tm.pipeline_params = pp;
     if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) return false;
 
-    tm.writes = .{"backbuffer"};
-    tm.reads  = .{"hdr"};
+    tm.writes = .{tm.output.?.ptr};
+    tm.reads  = .{tm.input.?.ptr};
     tm.io = std.mem.zeroes(c.ke_render_pass_io);
     tm.io.name = "render.tonemap";
     tm.io.writes = @ptrCast(&tm.writes);
@@ -134,15 +153,22 @@ fn setup(tm: *TonemapModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     tm.io.reads_count = 1;
 
     tm.access = .{
-        .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_READ },
-        .{ .cid = core.*.cid.?(core, "backbuffer"), .access = c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.cid.?(core, tm.input.?.ptr), .access = c.KE_ACCESS_READ },
+        .{ .cid = core.*.cid.?(core, tm.output.?.ptr), .access = c.KE_ACCESS_WRITE },
     };
     return true;
+}
+
+fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
+    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "tonemap pass: name allocation failed", @src().file, @intCast(@src().line), null);
+    return false;
 }
 
 /// Releases the set of the last frame and the layout, each only when it is valid. Runs from
 /// `destroyHandle` and from the failure paths of `ke_render_tonemap_create`.
 fn destroyModule(tm: *const TonemapModule) void {
+    if (tm.input) |name| gpa.free(name);
+    if (tm.output) |name| gpa.free(name);
     if (tm.layout == c.KE_RENDER_BINDING_INVALID) return;
     tm.binder.destroy_set.?(tm.binder, tm.set);
     tm.binder.destroy_shader_layout.?(tm.binder, tm.layout);
@@ -156,22 +182,23 @@ fn destroyHandle(self: ?*c.ke_render_tonemap) callconv(.c) void {
     gpa.destroy(tm);
 }
 
-/// The factory declared in tonemap_create.h. A null runtime, service or device returns a handle
-/// with a null reference and leaves the error output untouched, as does a failed allocation. A
-/// failed shader load in `setup`, or the runtime refusing `system`, sets the error output and
-/// returns the null handle. On success the runtime holds the module as the context of `system`, and
-/// the handle frees it.
-export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
+/// The factory declared in tonemap_create.h. A missing runtime, service, device, input or output
+/// fails as an invalid argument and a failed allocation as out of memory. A failure in `setup`, or
+/// the runtime refusing `system`, sets the error output and returns the null handle. On success the
+/// runtime holds the module as the context of `system`, and the handle frees it.
+export fn ke_render_tonemap_create(params_in: ?*const c.ke_render_tonemap_params,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_tonemap_handle {
     const empty = c.ke_render_tonemap_handle{ .ref = null, .destroy = null };
-    const rt = runtime orelse return empty;
-    const core_ref = core orelse return empty;
-    const dev = device orelse return empty;
+    const p = params_in orelse return refused(out_error);
+    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
+    if (p.service == null or p.device == null or p.input == null or p.output == null) return refused(out_error);
 
-    const tm = gpa.create(TonemapModule) catch return empty;
+    const tm = gpa.create(TonemapModule) catch {
+        _ = outOfMemory(out_error);
+        return empty;
+    };
     tm.* = .{};
-    if (!setup(tm, dev, core_ref, logger, out_error)) {
+    if (!setup(tm, p, out_error)) {
         destroyModule(tm);
         gpa.destroy(tm);
         return empty;
@@ -194,9 +221,18 @@ export fn ke_render_tonemap_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     return .{ .ref = @ptrCast(tm), .destroy = destroyHandle };
 }
 
+fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_tonemap_handle {
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "tonemap pass: runtime, service, device, input and output are required", @src().file, @intCast(@src().line), null);
+    return .{ .ref = null, .destroy = null };
+}
+
 const testing = std.testing;
 
 const Stubs = @import("stubs").Stubs(c);
+
+fn testParams(rt: *Stubs.Runtime, core: *Stubs.Core, dev: *Stubs.Device) c.ke_render_tonemap_params {
+    return .{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .input = "scene", .output = "ldr", .output_format = 0 };
+}
 
 test "creating and destroying the tonemap pass leaves no block allocated and no GPU resource live" {
     var dev: Stubs.Device = undefined;
@@ -205,7 +241,7 @@ test "creating and destroying the tonemap pass leaves no block allocated and no 
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_tonemap_create(rt.api(), core.api(), dev.api(), null, null);
+    const h = ke_render_tonemap_create(&testParams(&rt, &core, &dev), null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -220,7 +256,7 @@ test "a tonemap pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_tonemap_create(rt.api(), core.api(), dev.api(), null, null);
+    const h = ke_render_tonemap_create(&testParams(&rt, &core, &dev), null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -234,8 +270,23 @@ test "a tonemap pass the runtime refuses to register releases what it had create
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_tonemap_create(rt.api(), core.api(), dev.api(), null, null);
+    const h = ke_render_tonemap_create(&testParams(&rt, &core, &dev), null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a tonemap pass missing its input or output is refused as an invalid argument" {
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var core: Stubs.Core = undefined;
+    core.init(dev.api());
+    var rt: Stubs.Runtime = undefined;
+    rt.init();
+    var p = testParams(&rt, &core, &dev);
+    p.output = null;
+    var err: [*c]c.ke_error = null;
+    try testing.expect(ke_render_tonemap_create(&p, &err).ref == null);
+    try testing.expectEqual(&c.KE_ERROR_INVALID_ARGUMENT, err.*.type);
     try heap.expectNoLeaks();
 }

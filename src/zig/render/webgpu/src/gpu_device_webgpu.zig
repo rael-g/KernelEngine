@@ -1454,7 +1454,7 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
             .depthClearValue   = dsa.clear_depth,
             .depthReadOnly     = if (depth_ro) 1 else 0,
             .stencilLoadOp     = wgpu.WGPULoadOp_Undefined,
-            .stencilStoreOp    = toWgpuStoreOp(dsa.stencil_store_op),
+            .stencilStoreOp    = if (dsa.stencil_read_only) wgpu.WGPUStoreOp_Undefined else toWgpuStoreOp(dsa.stencil_store_op),
             .stencilClearValue = dsa.clear_stencil,
             .stencilReadOnly   = if (dsa.stencil_read_only) 1 else 0,
         };

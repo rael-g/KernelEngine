@@ -26,13 +26,13 @@ typedef struct ke_render_module_handle
     void (*destroy)(ke_render_module *self);
 } ke_render_module_handle;
 
-typedef struct ke_render_cluster_params
+typedef struct ke_render_cluster_grid
 {
     uint32_t grid_x;
     uint32_t grid_y;
     uint32_t grid_z;
     uint32_t max_lights_per_cluster;
-} ke_render_cluster_params;
+} ke_render_cluster_grid;
 
 typedef struct ke_render_feature_params
 {
@@ -49,7 +49,7 @@ ke_render_module_create(ke_runtime *runtime, ke_ecs *ecs, ke_gpu_device *device,
                         ke_gpu_render_target *target,
                         ke_world *world, bool default_passes, struct ke_logger *logger,
                         ke_asset_resolver *asset_resolver,
-                        const ke_render_cluster_params *cluster_params,
+                        const ke_render_cluster_grid *cluster_params,
                         const ke_render_feature_params *feature_params,
                         const ke_render_shadow_params *shadow_params,
                         ke_view_space *view_space,

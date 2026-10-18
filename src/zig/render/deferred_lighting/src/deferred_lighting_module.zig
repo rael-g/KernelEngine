@@ -34,6 +34,14 @@ const DeferredLightingModule = struct {
     world_transform_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
+    albedo: ?[:0]u8 = null,
+    normal: ?[:0]u8 = null,
+    emissive: ?[:0]u8 = null,
+    depth: ?[:0]u8 = null,
+    shadow: ?[:0]u8 = null,
+    clusters: ?[:0]u8 = null,
+    output: ?[:0]u8 = null,
+
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     binder: *c.ke_render_resource_binder = undefined,
     layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
@@ -66,8 +74,9 @@ inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
 }
 
 /// Recreates `frame_set` over the feature bindings: the shadow map and
-/// matrix, the environment cubemap and the cluster light lists. The black cube stands in for the environment when `ibl_enabled` is
-/// false, and the white texture stands in for the shadow map when the service has none. It runs
+/// matrix, the environment cubemap and the cluster light lists. The black cube stands in for the
+/// environment when `ibl_enabled` is false, and the white texture for the shadow map when the pass
+/// was given no shadow group or the group published none. It runs
 /// from `setup`, and from `system` when the sky cubemap changes; the set it replaces is
 /// destroyed. A failure is logged and not returned, so `frame_set` then holds what the binder
 /// returned.
@@ -79,7 +88,7 @@ fn rebuildFrameSet(dl: *DeferredLightingModule) void {
     const ibl_view = if (dl.ibl_enabled) env_view else black_cube_view;
 
     var bindings: [Features.count]c.ke_render_shader_binding = undefined;
-    Features.fill(core, ibl_view, &bindings);
+    Features.fill(core, ibl_view, nameOf(dl.shadow), nameOf(dl.clusters), &bindings);
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
     var err: ?*c.ke_error = null;
     dl.frame_set = dl.binder.create_set.?(dl.binder, dl.layout, null, "deferred_lighting.frame_set", &bindings, bindings.len, &err);
@@ -120,10 +129,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         rebuildFrameSet(dl);
     }
 
-    const albedo_view = pc.*.read.?(pc, "gbuffer_albedo");
-    const normal_view = pc.*.read.?(pc, "gbuffer_normal");
-    const emissive_view = pc.*.read.?(pc, "gbuffer_emissive");
-    const depth_view = pc.*.read.?(pc, "depth");
+    const albedo_view = pc.*.read.?(pc, dl.albedo.?.ptr);
+    const normal_view = pc.*.read.?(pc, dl.normal.?.ptr);
+    const emissive_view = pc.*.read.?(pc, dl.emissive.?.ptr);
+    const depth_view = pc.*.read.?(pc, dl.depth.?.ptr);
     const gbuffer_bindings = [4]c.ke_render_shader_binding{
         .{ .name = "g_albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = albedo_view, .sampler = 0 },
         .{ .name = "g_normal", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = normal_view, .sampler = 0 },
@@ -154,19 +163,29 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 /// only when every object it creates exists, the pipeline included, and the io, access list and
 /// queries are filled. On false, the objects already created stay in the block for the caller to
 /// release through `destroyModule`.
-fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         logger: ?*c.ke_logger, ibl_enabled: bool,
-         camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
-         skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
-         out_error: [*c][*c]c.ke_error) bool {
+fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_params, out_error: [*c][*c]c.ke_error) bool {
+    const core: *c.ke_render_service = p.service;
+    const camera_cid = p.camera_cid;
+    const world_transform_cid = p.world_transform_cid;
+    const skybox_cid = p.skybox_cid;
+    const frame_cid = p.frame_cid;
     dl.core = core;
-    dl.device = dev;
-    dl.logger = logger;
-    dl.ibl_enabled = ibl_enabled;
+    dl.device = p.device;
+    dl.logger = p.logger;
+    dl.ibl_enabled = p.ibl_enabled;
     dl.camera_cid = camera_cid;
     dl.world_transform_cid = world_transform_cid;
     dl.skybox_cid = skybox_cid;
     dl.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
+
+    const group = std.mem.span(p.gbuffer);
+    dl.albedo = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_ALBEDO }, 0) catch return outOfMemory(out_error);
+    dl.normal = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_NORMAL }, 0) catch return outOfMemory(out_error);
+    dl.emissive = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_EMISSIVE }, 0) catch return outOfMemory(out_error);
+    dl.depth = gpa.dupeZ(u8, std.mem.span(p.depth)) catch return outOfMemory(out_error);
+    dl.output = gpa.dupeZ(u8, std.mem.span(p.output)) catch return outOfMemory(out_error);
+    if (p.shadow != null) dl.shadow = gpa.dupeZ(u8, std.mem.span(p.shadow)) catch return outOfMemory(out_error);
+    if (p.clusters != null) dl.clusters = gpa.dupeZ(u8, std.mem.span(p.clusters)) catch return outOfMemory(out_error);
 
     dl.binder = core.*.resource_binder.?(core);
     dl.layout = dl.binder.create_shader_layout.?(dl.binder, &shader_layout, out_error);
@@ -201,44 +220,43 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
 
     rebuildFrameSet(dl);
 
-    const hdr_cid = core.*.declare.?(core, &c.ke_render_resource_params{
-        .name = "hdr",
+    if (core.*.resource_format.?(core, dl.output.?.ptr) == c.KE_GPU_TEXTURE_FORMAT_INVALID and
+        core.*.declare.?(core, &c.ke_render_resource_params{
+        .name = dl.output.?.ptr,
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
         .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
-    }, null);
+    }, out_error) == c.KE_COMPONENT_INVALID) return false;
 
-    const shadow_map_cid = core.*.cid.?(core, "shadow_map");
-    const shadow_enabled = shadow_map_cid != c.KE_COMPONENT_INVALID;
-    const cluster_lights_cid = core.*.cid.?(core, "light_clusters");
-
-    dl.writes = .{"hdr"};
-    dl.reads = .{ "gbuffer_albedo", "gbuffer_normal", "gbuffer_emissive", "depth", "shadow_map", "light_clusters" };
+    dl.writes = .{dl.output.?.ptr};
+    dl.reads[0] = dl.albedo.?.ptr;
+    dl.reads[1] = dl.normal.?.ptr;
+    dl.reads[2] = dl.emissive.?.ptr;
+    dl.reads[3] = dl.depth.?.ptr;
+    var rc: u32 = 4;
+    if (dl.shadow) |g| {
+        dl.reads[rc] = g.ptr;
+        rc += 1;
+    }
     dl.io = std.mem.zeroes(c.ke_render_pass_io);
     dl.io.name = "render.deferred_lighting";
     dl.io.writes = @ptrCast(&dl.writes);
     dl.io.writes_count = 1;
     dl.io.reads = @ptrCast(&dl.reads);
-    dl.io.reads_count = if (shadow_enabled) 6 else 5;
+    dl.io.reads_count = rc;
 
     var ac: u32 = 0;
-    dl.access[ac] = .{ .cid = hdr_cid, .access = c.KE_ACCESS_WRITE };
+    dl.access[ac] = .{ .cid = core.*.cid.?(core, dl.output.?.ptr), .access = c.KE_ACCESS_WRITE };
     ac += 1;
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, "gbuffer_albedo"), .access = c.KE_ACCESS_READ };
-    ac += 1;
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, "gbuffer_normal"), .access = c.KE_ACCESS_READ };
-    ac += 1;
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, "gbuffer_emissive"), .access = c.KE_ACCESS_READ };
-    ac += 1;
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ };
-    ac += 1;
-    if (shadow_enabled) {
-        dl.access[ac] = .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_READ };
+    for (dl.reads[0..rc]) |name| {
+        dl.access[ac] = .{ .cid = core.*.cid.?(core, name), .access = c.KE_ACCESS_READ };
         ac += 1;
     }
-    dl.access[ac] = .{ .cid = cluster_lights_cid, .access = c.KE_ACCESS_READ };
-    ac += 1;
+    if (dl.clusters) |g| {
+        dl.access[ac] = .{ .cid = core.*.cid.?(core, g.ptr), .access = c.KE_ACCESS_READ };
+        ac += 1;
+    }
     dl.access[ac] = .{ .cid = camera_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
     dl.access[ac] = .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ };
@@ -255,10 +273,11 @@ fn setup(dl: *DeferredLightingModule, dev: *c.ke_gpu_device, core: *c.ke_render_
     return true;
 }
 
-/// Releases the sets and the layout the block holds, those still invalid skipped. It leaves the
-/// pipeline, the shader modules and the "hdr" resource alone, and does not free the block, so it
-/// can release a partly built one.
+/// Releases the names, the sets and the layout the block holds, those still absent skipped. It
+/// leaves the pipeline, the shader modules and the output resource alone, and does not free the
+/// block, so it can release a partly built one.
 fn destroyModule(dl: *const DeferredLightingModule) void {
+    for ([_]?[:0]u8{ dl.albedo, dl.normal, dl.emissive, dl.depth, dl.shadow, dl.clusters, dl.output }) |name| if (name) |n| gpa.free(n);
     if (dl.layout == c.KE_RENDER_BINDING_INVALID) return;
     dl.binder.destroy_set.?(dl.binder, dl.gbuffer_set);
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
@@ -274,26 +293,24 @@ fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
 }
 
 /// Builds the pass and registers its system in the render phase, with `pinned_thread` set to zero.
-/// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A null
-/// argument returns an empty handle. A failed setup or a refused registration also returns an
-/// empty handle, after the block is released; errors those steps report go to the error
-/// out-parameter.
-export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                              device: ?*c.ke_gpu_device,
-                                              logger: ?*c.ke_logger, ibl_enabled: bool,
-                                              camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
-                                              skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
+/// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A missing
+/// runtime, service, device, gbuffer, depth or output fails as an invalid argument. A failed setup
+/// or a refused registration also returns an empty handle, after the block is released; errors
+/// those steps report go to the error out-parameter.
+export fn ke_render_deferred_lighting_create(params_in: ?*const c.ke_render_deferred_lighting_params,
                                               out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_deferred_lighting_handle {
     const empty = c.ke_render_deferred_lighting_handle{ .ref = null, .destroy = null };
-    const rt = runtime orelse return empty;
-    const core_ref = core orelse return empty;
-    const dev = device orelse return empty;
+    const p = params_in orelse return refused(out_error);
+    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
+    if (p.service == null or p.device == null or p.gbuffer == null or p.depth == null or p.output == null)
+        return refused(out_error);
 
-    const dl = gpa.create(DeferredLightingModule) catch return empty;
+    const dl = gpa.create(DeferredLightingModule) catch {
+        _ = outOfMemory(out_error);
+        return empty;
+    };
     dl.* = .{};
-    if (!setup(dl, dev, core_ref, logger, ibl_enabled,
-               camera_cid, world_transform_cid, skybox_cid, frame_cid, out_error))
-    {
+    if (!setup(dl, p, out_error)) {
         destroyModule(dl);
         gpa.destroy(dl);
         return empty;
@@ -318,6 +335,20 @@ export fn ke_render_deferred_lighting_create(runtime: ?*c.ke_runtime, core: ?*c.
     return .{ .ref = @ptrCast(dl), .destroy = destroyHandle };
 }
 
+fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
+    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "deferred lighting pass: allocation failed", @src().file, @intCast(@src().line), null);
+    return false;
+}
+
+fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
+    return if (name) |n| n.ptr else null;
+}
+
+fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_deferred_lighting_handle {
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "deferred lighting pass: runtime, service, device, gbuffer, depth and output are required", @src().file, @intCast(@src().line), null);
+    return .{ .ref = null, .destroy = null };
+}
+
 const testing = std.testing;
 
 const Stubs = @import("stubs").Stubs(c);
@@ -329,7 +360,7 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "lit" }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -344,7 +375,7 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "lit" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -358,7 +389,7 @@ test "a deferred lighting pass the runtime refuses to register releases what it 
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_deferred_lighting_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "lit" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

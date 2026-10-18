@@ -2,7 +2,7 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public partial struct ke_render_cluster_params
+public partial struct ke_render_cluster_grid
 {
     [NativeTypeName("uint32_t")]
     public uint grid_x;

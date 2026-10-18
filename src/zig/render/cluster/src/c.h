@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_RENDER_CLUSTER_C_H_
 
 #include <kernel_engine/common/error.h>
+#include <kernel_engine/render/resource_groups.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/logger/logger.h>
 #include <kernel_engine/runtime/runtime.h>

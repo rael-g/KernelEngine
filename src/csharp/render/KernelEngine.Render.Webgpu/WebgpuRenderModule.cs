@@ -135,7 +135,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (_target.@ref == null)
             throw Fail("webgpu window render target create failed", err);
 
-        var cp = new ke_render_cluster_params
+        var cp = new ke_render_cluster_grid
         {
             grid_x = _clusterGridXOverride != 0 ? _clusterGridXOverride : (uint)(config?.GetInt("render", "cluster_grid_x", 0) ?? 0),
             grid_y = _clusterGridYOverride != 0 ? _clusterGridYOverride : (uint)(config?.GetInt("render", "cluster_grid_y", 0) ?? 0),

@@ -11,6 +11,7 @@ const heap = @import("heap");
 pub const gpa = heap.gpa;
 
 const resource_table = @import("resource_table.zig");
+const blit_mod = @import("blit.zig");
 const pass_recording = @import("pass_recording.zig");
 const frame_lifecycle = @import("frame_lifecycle.zig");
 const asset_upload = @import("asset_upload.zig");
@@ -71,8 +72,9 @@ pub const Material = struct {
 
 /// One named entry of `resources`. The fields from `buffer` on keep their defaults unless an import
 /// sets them: `importBuffer` sets the buffer and its size.
+/// One named entry of the table. `name` is a copy the table owns, freed with the table.
 pub const Resource = struct {
-    name: [*c]const u8,
+    name: [*:0]const u8,
     cid: c.ke_component_id,
     format: c.ke_gpu_texture_format,
     texture: c.ke_gpu_texture,
@@ -188,6 +190,9 @@ pub const CoreState = struct {
 
     pipeline_cache: pipeline_cache.PipelineCache,
 
+    api: [*c]c.ke_render_service = null,
+    blit: blit_mod.Blit = .{},
+
     /// Null when the handle is stale or was never issued.
     pub fn meshAt(self: *CoreState, h: c.ke_mesh_handle) ?*Mesh {
         return self.mesh_store.get(h.bits);
@@ -259,7 +264,9 @@ fn resourceBinder(self: [*c]c.ke_render_service) callconv(.c) [*c]c.ke_render_re
 fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     const st = coreOf(self);
     if (st.device.flush_pipeline_compiles) |flush| flush(st.device);
+    st.blit.release(st.binder);
     for (st.resources.items) |*r| {
+        gpa.free(std.mem.span(r.name));
         if (r.is_transient) {
             if (r.view != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture_view.?(st.device, r.view);
             if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
@@ -297,11 +304,12 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
 /// The factory of the render service. It builds in an order its steps depend on: the target's size
 /// and the device's queue and NDC convention, then the resource caches, each given its destroy
 /// function and the state as context, then the "backbuffer" entry of `resources`, then the vtable,
-/// then the shared globals, which it gives the binder. The default resources come last because they
-/// are uploaded through the functions of the vtable just built. `destroyCore` undoes this in reverse
-/// and frees the vtable last. A null device or ecs returns a null ref without setting the
-/// error. A null target, shader directory or binder sets the invalid-argument error. Any other failure
-/// returns a null ref with no error set. On success the ref is the new vtable and `destroy` is
+/// then the shared globals, which it gives the binder. The default resources and the "blit" shaders
+/// come last because they go through the functions of the vtable just built. `destroyCore` undoes
+/// this in reverse and frees the vtable last. A null device or ecs returns a null ref without
+/// setting the error. A null target, shader directory or binder sets the invalid-argument error,
+/// and blit shaders that cannot be loaded set the loader's error. Any other failure returns a null
+/// ref with no error set. On success the ref is the new vtable and `destroy` is
 /// `destroyCore`.
 export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu_render_target, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, binder: ?*c.ke_render_resource_binder, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
     const dev = device orelse return .{ .ref = null, .destroy = null };
@@ -429,8 +437,12 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
     st.shader_cache_destroy = shader_ch.destroy.?;
 
     const bb_cid = e.component_register.?(e, "backbuffer", 0, null, 0, null);
+    const bb_name = gpa.dupeZ(u8, "backbuffer") catch {
+        gpa.destroy(st);
+        return .{ .ref = null, .destroy = null };
+    };
     st.resources.appendAssumeCapacity(.{
-        .name = "backbuffer",
+        .name = bb_name.ptr,
         .cid = bb_cid,
         .format = tgt.format.?(tgt),
         .texture = c.KE_GPU_INVALID_HANDLE,
@@ -468,6 +480,7 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .texture_view = asset_upload.textureView,
         .resource_view = resource_table.resourceView,
         .resource_texture = resource_table.resourceTexture,
+        .resource_format = resource_table.resourceFormat,
         .resource_buffer = resource_table.resourceBuffer,
         .resource_buffer_size = resource_table.resourceBufferSize,
         .backbuffer_size = resource_table.backbufferSize,
@@ -506,6 +519,12 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
     st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, null);
 
+    st.api = core;
+    if (!st.blit.prepare(core, st.binder, out_error)) {
+        destroyCore(core);
+        return .{ .ref = null, .destroy = null };
+    }
+
     return .{ .ref = core, .destroy = destroyCore };
 }
 
@@ -540,7 +559,31 @@ test "a frame that never began ends without submitting or presenting anything" {
 
 const Stubs = @import("stubs").Stubs(c);
 
+/// A temporary shader directory holding the two "blit" files the service loads when created.
+const ShaderDir = struct {
+    tmp: std.testing.TmpDir,
+    buf: [std.fs.max_path_bytes]u8,
+
+    fn init(self: *ShaderDir) !void {
+        self.tmp = std.testing.tmpDir(.{});
+        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = "blit.vs.wgsl", .data = "" });
+        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = "blit.fs.wgsl", .data = "" });
+        _ = try std.fmt.bufPrintZ(&self.buf, ".zig-cache/tmp/{s}", .{self.tmp.sub_path});
+    }
+
+    fn path(self: *ShaderDir) [*:0]const u8 {
+        return @ptrCast(&self.buf);
+    }
+
+    fn deinit(self: *ShaderDir) void {
+        self.tmp.cleanup();
+    }
+};
+
 test "creating and destroying the render service leaves no block allocated and no GPU resource live" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -549,7 +592,7 @@ test "creating and destroying the render service leaves no block allocated and n
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -558,6 +601,9 @@ test "creating and destroying the render service leaves no block allocated and n
 }
 
 test "a render service created without a render target is refused and leaves nothing behind" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -565,7 +611,7 @@ test "a render service created without a render target is refused and leaves not
     var binder: Stubs.Binder = undefined;
     binder.init();
     var err: [*c]c.ke_error = null;
-    const h = ke_render_service_create(dev.api(), null, ecs.api(), "shaders", binder.api(), &err);
+    const h = ke_render_service_create(dev.api(), null, ecs.api(), sd.path(), binder.api(), &err);
     try testing.expect(h.ref == null);
     try testing.expect(err != null);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -573,6 +619,9 @@ test "a render service created without a render target is refused and leaves not
 }
 
 test "a frame acquires the render target as the backbuffer and presents it once at its end" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -581,7 +630,7 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
     try testing.expectEqual(@as(c.ke_gpu_texture_format, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
@@ -594,6 +643,9 @@ test "a frame acquires the render target as the backbuffer and presents it once 
 }
 
 test "a target declared relative to the backbuffer is recreated when the backbuffer changes size" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -602,7 +654,7 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     var desc = std.mem.zeroes(c.ke_render_resource_params);
@@ -632,6 +684,9 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
 }
 
 test "uploads beyond the first frame's records and arena are all written, and the next frame needs no spill" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -640,7 +695,7 @@ test "uploads beyond the first frame's records and arena are all written, and th
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const upload_count = first_upload_records + 100;
@@ -665,6 +720,9 @@ test "uploads beyond the first frame's records and arena are all written, and th
 }
 
 test "a declared resource's texture and view carry the name it was declared under" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -673,7 +731,7 @@ test "a declared resource's texture and view carry the name it was declared unde
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -690,6 +748,9 @@ test "a declared resource's texture and view carry the name it was declared unde
 }
 
 test "a render pass is opened under the name its pass declared" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -698,7 +759,7 @@ test "a render pass is opened under the name its pass declared" {
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -718,7 +779,136 @@ test "a render pass is opened under the name its pass declared" {
     try testing.expectEqualStrings("render.clear", std.mem.span(dev.render_pass_label));
 }
 
+/// A service over the stubs with a source and a destination color resource and a depth resource
+/// declared, and a frame begun.
+const PassHarness = struct {
+    sd: ShaderDir,
+    dev: Stubs.Device,
+    ecs: Stubs.Ecs,
+    binder: Stubs.Binder,
+    target: Stubs.Target,
+    h: c.ke_render_service_handle,
+
+    fn init(self: *PassHarness) !void {
+        try self.sd.init();
+        self.dev.init();
+        self.ecs.init();
+        self.binder.init();
+        self.target.init();
+        self.h = ke_render_service_create(self.dev.api(), self.target.api(), self.ecs.api(), self.sd.path(), self.binder.api(), null);
+        const svc = self.h.ref orelse return error.TestUnexpectedResult;
+        for ([_][*:0]const u8{ "src", "dst" }) |name| {
+            var desc = std.mem.zeroes(c.ke_render_resource_params);
+            desc.name = name;
+            desc.format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+            desc.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+            desc.scale_x = 1.0;
+            desc.scale_y = 1.0;
+            try testing.expect(svc.*.declare.?(svc, &desc, null) != c.KE_COMPONENT_INVALID);
+        }
+        var depth = std.mem.zeroes(c.ke_render_resource_params);
+        depth.name = "depth";
+        depth.format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
+        depth.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+        depth.scale_x = 1.0;
+        depth.scale_y = 1.0;
+        try testing.expect(svc.*.declare.?(svc, &depth, null) != c.KE_COMPONENT_INVALID);
+        try testing.expect(svc.*.begin_frame.?(svc, null));
+    }
+
+    fn run(self: *PassHarness, io: *const c.ke_render_pass_io) !void {
+        const svc = self.h.ref.?;
+        self.dev.render_passes = 0;
+        const pass = svc.*.begin_pass.?(svc, io) orelse return error.TestUnexpectedResult;
+        const rp = pass.*.begin_render.?(pass);
+        rp.*.end.?(rp);
+        svc.*.end_pass.?(svc, pass);
+    }
+
+    fn deinit(self: *PassHarness) void {
+        const svc = self.h.ref.?;
+        _ = svc.*.end_frame.?(svc, null);
+        self.h.destroy.?(svc);
+        self.sd.deinit();
+    }
+};
+
+test "a pass whose write starts as a resource it reads draws that resource first and then loads the write" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+
+    const writes = [_][*c]const u8{"dst"};
+    const reads = [_][*c]const u8{"src"};
+    var io = std.mem.zeroes(c.ke_render_pass_io);
+    io.name = "render.over";
+    io.writes = &writes;
+    io.writes_count = 1;
+    io.reads = &reads;
+    io.reads_count = 1;
+    io.load_from = "src";
+    try ph.run(&io);
+
+    try testing.expectEqual(@as(u32, 2), ph.dev.render_passes);
+    try testing.expectEqualStrings("render.over", std.mem.span(ph.dev.render_pass_label));
+    try testing.expectEqual(@as(c.ke_gpu_load_op, c.KE_GPU_LOAD_OP_LOAD), ph.dev.color_load);
+}
+
+test "a pass that names nothing to start from clears its write in a single render pass" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+
+    const writes = [_][*c]const u8{"dst"};
+    var io = std.mem.zeroes(c.ke_render_pass_io);
+    io.writes = &writes;
+    io.writes_count = 1;
+    try ph.run(&io);
+
+    try testing.expectEqual(@as(u32, 1), ph.dev.render_passes);
+    try testing.expectEqual(@as(c.ke_gpu_load_op, c.KE_GPU_LOAD_OP_CLEAR), ph.dev.color_load);
+    try testing.expectEqual(@as(?c.ke_gpu_load_op, null), ph.dev.depth_load);
+}
+
+test "a depth resource a pass tests against is attached loaded" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+
+    const writes = [_][*c]const u8{"dst"};
+    const reads = [_][*c]const u8{"depth"};
+    var io = std.mem.zeroes(c.ke_render_pass_io);
+    io.writes = &writes;
+    io.writes_count = 1;
+    io.reads = &reads;
+    io.reads_count = 1;
+    io.depth_test = "depth";
+    try ph.run(&io);
+
+    try testing.expectEqual(@as(?c.ke_gpu_load_op, c.KE_GPU_LOAD_OP_LOAD), ph.dev.depth_load);
+}
+
+test "declaring a name again with the same description answers the same resource, and another description is refused" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+    const svc = ph.h.ref.?;
+
+    var desc = std.mem.zeroes(c.ke_render_resource_params);
+    desc.name = "src";
+    desc.format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    desc.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+    desc.scale_x = 1.0;
+    desc.scale_y = 1.0;
+    try testing.expectEqual(svc.*.cid.?(svc, "src"), svc.*.declare.?(svc, &desc, null));
+    desc.format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    try testing.expectEqual(@as(c.ke_component_id, c.KE_COMPONENT_INVALID), svc.*.declare.?(svc, &desc, null));
+}
+
 test "a compute pass replays at the end of the frame under its name and with the debug groups recorded into it" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -727,7 +917,7 @@ test "a compute pass replays at the end of the frame under its name and with the
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -783,6 +973,9 @@ const Stress = struct {
 };
 
 test "pipelines requested from several threads at once settle on one answer per key and leak nothing" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -791,7 +984,7 @@ test "pipelines requested from several threads at once settle on one answer per 
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     try testing.expect(h.ref != null);
 
     var params: [stress_keys]c.ke_gpu_render_pipeline_params = undefined;
@@ -819,6 +1012,9 @@ test "pipelines requested from several threads at once settle on one answer per 
 }
 
 test "a pipeline is answered with its fallback first and with the compiled one afterwards" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -827,7 +1023,7 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     try testing.expect(h.ref != null);
 
     var p = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
@@ -847,6 +1043,9 @@ test "a pipeline is answered with its fallback first and with the compiled one a
 }
 
 test "a pipeline is keyed by its vertex layout's content, not by where the layout lives" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
     var dev: Stubs.Device = undefined;
     dev.init();
     var ecs: Stubs.Ecs = undefined;
@@ -855,7 +1054,7 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), "shaders", binder.api(), null);
+    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
     try testing.expect(h.ref != null);
 
     const attrs = [_]c.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};

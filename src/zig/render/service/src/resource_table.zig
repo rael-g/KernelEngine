@@ -1,5 +1,6 @@
 //! The table of named resources a pass can refer to, and the lookups on it.
 
+const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
 
@@ -14,6 +15,12 @@ const c = rc.c;
 /// the name cannot be registered, or the device refuses the texture or its view.
 pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_resource_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     const st = rc.coreOf(self);
+    if (st.find(params.*.name)) |r| {
+        const relative = params.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+        if (r.is_transient and r.format == params.*.format and r.relative == relative) return r.cid;
+        c.ke_error_set(out_error, &c.KE_ERROR_ALREADY_EXISTS, "declare: a resource of that name exists with another description", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    }
     st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
@@ -29,9 +36,16 @@ pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_reso
         h = scaled(st.backbuffer_h, params.*.scale_y);
     }
 
-    const made = createTarget(st, params.*.name, params.*.format, w, h, out_error) orelse return c.KE_COMPONENT_INVALID;
+    const owned = rc.gpa.dupeZ(u8, std.mem.span(params.*.name)) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
+    const made = createTarget(st, params.*.name, params.*.format, w, h, out_error) orelse {
+        rc.gpa.free(owned);
+        return c.KE_COMPONENT_INVALID;
+    };
     st.resources.appendAssumeCapacity(.{
-        .name = params.*.name,
+        .name = owned.ptr,
         .cid = cid,
         .format = params.*.format,
         .texture = made.texture,
@@ -132,8 +146,12 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
     };
     const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, out_error);
     if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
+    const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
     st.resources.appendAssumeCapacity(.{
-        .name = name,
+        .name = owned.ptr,
         .cid = cid,
         .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
         .texture = tex,
@@ -149,14 +167,19 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
 /// invalid component id when the table cannot grow, with an out-of-memory error.
 pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
     const st = rc.coreOf(self);
+    if (st.find(name)) |r| return r.cid;
     st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
     };
     const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, out_error);
     if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
+    const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
     st.resources.appendAssumeCapacity(.{
-        .name = name,
+        .name = owned.ptr,
         .cid = cid,
         .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
         .texture = c.KE_GPU_INVALID_HANDLE,
@@ -178,8 +201,12 @@ pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c
     };
     const cid = st.ecs.component_register.?(st.ecs, name, 0, null, 0, out_error);
     if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
+    const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
+        return c.KE_COMPONENT_INVALID;
+    };
     st.resources.appendAssumeCapacity(.{
-        .name = name,
+        .name = owned.ptr,
         .cid = cid,
         .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
         .texture = c.KE_GPU_INVALID_HANDLE,
@@ -234,6 +261,13 @@ pub fn backbufferSize(self: [*c]c.ke_render_service, out_w: [*c]u32, out_h: [*c]
 
 /// Asks the render target for its format on every call, not the format recorded for the
 /// backbuffer entry when the service was created.
+/// Returns the format of the named entry; the invalid format for an unknown name.
+pub fn resourceFormat(self: [*c]c.ke_render_service, name: [*c]const u8) callconv(.c) c.ke_gpu_texture_format {
+    const st = rc.coreOf(self);
+    if (st.find(name)) |r| return r.format;
+    return c.KE_GPU_TEXTURE_FORMAT_INVALID;
+}
+
 pub fn backbufferFormat(self: [*c]c.ke_render_service) callconv(.c) c.ke_gpu_texture_format {
     const st = rc.coreOf(self);
     return st.target.format.?(st.target);

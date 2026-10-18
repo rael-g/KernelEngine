@@ -51,9 +51,26 @@ extern "C"
         void (*destroy)(ke_render_ui *self);
     } ke_render_ui_handle;
 
-    KE_RENDER_UI_API ke_render_ui_handle ke_render_ui_create(
-        ke_runtime *runtime, ke_ecs *ecs, ke_render_service *core, ke_gpu_device *device,
-        ke_ndc_convention ndc, ke_component_id bb_cid, ke_error **out_error);
+    /// What the ui pass draws over and into. The names are copied.
+    typedef struct ke_render_ui_params
+    {
+        ke_runtime        *runtime; ///< Registers the pass's systems; borrowed, must outlive it.
+        ke_ecs            *ecs;     ///< Registers the quad and label components; borrowed.
+        ke_render_service *service; ///< Holds the resources it reads and writes; borrowed.
+        ke_gpu_device     *device;  ///< Borrowed.
+        ke_ndc_convention  ndc;
+        /// [utf8] Optional resource the output starts as; without one the output is cleared.
+        const char *input;
+        /// [utf8] The resource it writes. When the service has none of that name, the pass
+        /// declares one the size and format of the backbuffer.
+        const char *output;
+    } ke_render_ui_params;
+
+    /// Registers the pass's update-phase label system and render-phase system. A missing
+    /// runtime, ecs, service, device or output fails as an invalid argument; the handle's ref is
+    /// NULL on failure.
+    KE_RENDER_UI_API ke_render_ui_handle ke_render_ui_create(const ke_render_ui_params *params,
+                                                             ke_error **out_error);
 
 #ifdef __cplusplus
 }

@@ -195,7 +195,7 @@
     },
     {
       "name": "ke_render_pass_io",
-      "doc": "A pass\u0027s declared resource I/O by name.",
+      "doc": "A pass\u0027s declared resource I/O by name. Every write is cleared when the pass\u0027s render pass opens, except the first color write when \u0060load_from\u0060 names a resource.",
       "tags": [],
       "fields": [
         {
@@ -229,10 +229,16 @@
           "doc": null
         },
         {
-          "name": "load",
-          "type": "uint32_t",
+          "name": "load_from",
+          "type": "const char *",
           "tags": [],
-          "doc": "When non-zero, color attachments load their existing contents instead of clearing."
+          "doc": "Optional name of a resource the pass reads that its first color write starts as: the service draws it into that write before the pass\u0027s render pass opens, converting the format when the two differ."
+        },
+        {
+          "name": "depth_test",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name of a depth resource the pass reads that its render pass is depth-tested against without writing it. Ignored when a write is already a depth resource."
         }
       ]
     }
@@ -1229,6 +1235,22 @@
           "doc": "Texel format of the backbuffer, the format a pipeline drawing into it declares.",
           "return_doc": null,
           "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of the named texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
           "receiver": "struct ke_render_service *"
         },
         {

@@ -22,9 +22,8 @@ const DEFAULT_GRID_Y: u32 = 18;
 const DEFAULT_GRID_Z: u32 = 24;
 const DEFAULT_MAX_LIGHTS_PER_CLUSTER: u32 = 256;
 
-/// Allocated by `ke_render_module_create` and freed by `destroyModule`. The begin, clear and
-/// end systems receive its address, and the queries and the pass `io` point into its own
-/// fields, so it must not be copied after creation. Its pass handles and camera are null until
+/// Allocated by `ke_render_module_create` and freed by `destroyModule`. The begin and end systems
+/// receive its address, and the queries point into its own fields, so it must not be copied after creation. Its pass handles and camera are null until
 /// the create reaches their step, and `view_space` is destroyed only when `owns_view_space` is
 /// set. `binder` has no destroy when the host supplied it.
 const ModuleState = struct {
@@ -34,15 +33,12 @@ const ModuleState = struct {
     ndc: c.ke_ndc_convention,
     logger: ?*c.ke_logger,
 
-    bb_writes: [1][*c]const u8,
-    io: c.ke_render_pass_io,
     frame_cid: c.ke_component_id,
-    begin_access: [2]c.ke_component_access,
+    begin_access: [1]c.ke_component_access,
     frame_state: frame_producer.State,
     frame_queries_terms: [4]c.ke_component_access,
     frame_queries: [3]c.ke_query_decl,
-    clear_access: [2]c.ke_component_access,
-    end_access: [2]c.ke_component_access,
+    end_access: [1]c.ke_component_access,
     mesh_resolve_queries_terms: [1]c.ke_component_access,
     mesh_resolve_queries: [1]c.ke_query_decl,
     sprite_resolve_queries_terms: [3]c.ke_component_access,
@@ -81,18 +77,6 @@ fn registerComponent(
 ) c.ke_component_id {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     return e.component_register.?(e, name, @sizeOf(T), table, @intCast(fields.len), null);
-}
-
-/// Render-phase system that opens and closes a pass over the state's `io` so the backbuffer is
-/// cleared. It draws nothing and returns true even when the core grants no pass.
-fn clearSys(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
-    const st = stateOf(user);
-    const pc = st.core.ref.*.begin_pass.?(st.core.ref, &st.io);
-    if (pc == null) return true;
-    const rp = pc.*.begin_render.?(pc);
-    rp.*.end.?(rp);
-    st.core.ref.*.end_pass.?(st.core.ref, pc);
-    return true;
 }
 
 /// Render-phase system that ends the frame on the core and returns false with the core's own
@@ -204,7 +188,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
                                   target: ?*c.ke_gpu_render_target,
                                   world: ?*c.ke_world, default_passes: bool, logger: ?*c.ke_logger,
                                   asset_resolver: ?*c.ke_asset_resolver,
-                                  cluster_params: ?*const c.ke_render_cluster_params,
+                                  cluster_params: ?*const c.ke_render_cluster_grid,
                                   feature_params: ?*const c.ke_render_feature_params,
                                   shadow_params: ?*const c.ke_render_shadow_params,
                                   view_space: ?*c.ke_view_space,
@@ -260,25 +244,14 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     const shadow_enabled = if (feature_params) |p| p.enable_shadows else true;
     const ibl_enabled = if (feature_params) |p| p.enable_ibl else true;
     st.logger = logger;
-    st.bb_writes = .{"backbuffer"};
-    st.io = std.mem.zeroes(c.ke_render_pass_io);
-    st.io.name = "render.clear";
-    st.io.writes = @ptrCast(&st.bb_writes);
-    st.io.writes_count = 1;
 
     const bb_cid = core_h.ref.*.cid.?(core_h.ref, "backbuffer");
     st.frame_cid = e.component_register.?(e, "render.frame", 0, null, 0, null);
     st.begin_access = .{
-        .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = st.frame_cid, .access = c.KE_ACCESS_WRITE },
-    };
-    st.clear_access = .{
-        .{ .cid = bb_cid, .access = c.KE_ACCESS_WRITE },
-        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
     };
     st.end_access = .{
         .{ .cid = bb_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_WRITE },
     };
 
     if (default_passes) {
@@ -367,49 +340,69 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         if (rt.register_system.?(rt, &begin_params, out_error) == 0) {
             return failCreate(rt, mark, st);
         }
-        if (!registerSys(rt, "render.clear", &st.clear_access, st.clear_access.len, st, clearSys, out_error)) {
-            return failCreate(rt, mark, st);
-        }
 
-        st.shadow = c.ke_render_shadow_create(rt, st.core.ref, dev, ndc, vs, shadow_enabled,
-                                              mesh_cid, world_transform_cid, light_cid, st.frame_cid, shadow_params, out_error);
-        if (st.shadow.ref == null) {
-            return failCreate(rt, mark, st);
+        if (shadow_enabled) {
+            var sp = std.mem.zeroes(c.ke_render_shadow_params);
+            if (shadow_params) |tuning| sp = tuning.*;
+            sp.runtime = rt;
+            sp.service = st.core.ref;
+            sp.device = dev;
+            sp.view_space = vs;
+            sp.ndc = ndc;
+            sp.mesh_cid = mesh_cid;
+            sp.world_transform_cid = world_transform_cid;
+            sp.light_cid = light_cid;
+            sp.frame_cid = st.frame_cid;
+            sp.output = "shadow";
+            st.shadow = c.ke_render_shadow_create(&sp, out_error);
+            if (st.shadow.ref == null) return failCreate(rt, mark, st);
         }
+        const shadow_group: [*c]const u8 = if (shadow_enabled) "shadow" else null;
 
-        st.cluster = c.ke_render_cluster_create(rt, st.core.ref, dev, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-                                                point_light_cid, spot_light_cid, world_transform_cid, camera_cid, st.frame_cid, vs, st.camera.ref, out_error);
-        if (st.cluster.ref == null) {
-            return failCreate(rt, mark, st);
-        }
+        st.cluster = c.ke_render_cluster_create(&.{
+            .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger, .view_space = vs, .camera = st.camera.ref,
+            .point_light_cid = point_light_cid, .spot_light_cid = spot_light_cid, .world_transform_cid = world_transform_cid,
+            .camera_cid = camera_cid, .frame_cid = st.frame_cid, .output = "clusters",
+            .grid_x = grid_x, .grid_y = grid_y, .grid_z = grid_z, .max_lights_per_cluster = max_lights_per_cluster,
+        }, out_error);
+        if (st.cluster.ref == null) return failCreate(rt, mark, st);
 
-        st.gbuffer = c.ke_render_gbuffer_create(rt, st.core.ref, dev, mesh_cid, world_transform_cid, camera_cid, st.frame_cid, out_error);
-        if (st.gbuffer.ref == null) {
-            return failCreate(rt, mark, st);
-        }
+        st.gbuffer = c.ke_render_gbuffer_create(&.{
+            .runtime = rt, .service = st.core.ref, .device = dev, .mesh_cid = mesh_cid, .world_transform_cid = world_transform_cid,
+            .camera_cid = camera_cid, .frame_cid = st.frame_cid, .output = "gbuffer", .depth = "depth",
+        }, out_error);
+        if (st.gbuffer.ref == null) return failCreate(rt, mark, st);
 
-        st.deferred = c.ke_render_deferred_lighting_create(rt, st.core.ref, dev, logger, ibl_enabled,
-                                                            camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
-        if (st.deferred.ref == null) {
-            return failCreate(rt, mark, st);
-        }
-        st.skybox = c.ke_render_skybox_create(rt, st.core.ref, dev, st.camera.ref, camera_cid, world_transform_cid, skybox_cid, st.frame_cid, out_error);
-        if (st.skybox.ref == null) {
-            return failCreate(rt, mark, st);
-        }
-        st.forward = c.ke_render_forward_create(rt, st.core.ref, dev, logger, ibl_enabled,
-                                                mesh_cid, world_transform_cid, camera_cid, skybox_cid, st.frame_cid, out_error);
-        if (st.forward.ref == null) {
-            return failCreate(rt, mark, st);
-        }
-        st.tonemap = c.ke_render_tonemap_create(rt, st.core.ref, dev, logger, out_error);
-        if (st.tonemap.ref == null) {
-            return failCreate(rt, mark, st);
-        }
-        st.ui = c.ke_render_ui_create(rt, e, st.core.ref, dev, ndc, bb_cid, out_error);
-        if (st.ui.ref == null) {
-            return failCreate(rt, mark, st);
-        }
+        st.deferred = c.ke_render_deferred_lighting_create(&.{
+            .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger, .ibl_enabled = ibl_enabled,
+            .camera_cid = camera_cid, .world_transform_cid = world_transform_cid, .skybox_cid = skybox_cid, .frame_cid = st.frame_cid,
+            .gbuffer = "gbuffer", .depth = "depth", .shadow = shadow_group, .clusters = "clusters", .output = "lit",
+        }, out_error);
+        if (st.deferred.ref == null) return failCreate(rt, mark, st);
+
+        st.skybox = c.ke_render_skybox_create(&.{
+            .runtime = rt, .service = st.core.ref, .device = dev, .camera = st.camera.ref,
+            .camera_cid = camera_cid, .world_transform_cid = world_transform_cid, .skybox_cid = skybox_cid, .frame_cid = st.frame_cid,
+            .input = "lit", .depth = "depth", .output = "sky",
+        }, out_error);
+        if (st.skybox.ref == null) return failCreate(rt, mark, st);
+
+        st.forward = c.ke_render_forward_create(&.{
+            .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger, .ibl_enabled = ibl_enabled,
+            .mesh_cid = mesh_cid, .world_transform_cid = world_transform_cid, .camera_cid = camera_cid, .skybox_cid = skybox_cid,
+            .frame_cid = st.frame_cid, .input = "sky", .depth = "depth", .shadow = shadow_group, .clusters = "clusters", .output = "scene",
+        }, out_error);
+        if (st.forward.ref == null) return failCreate(rt, mark, st);
+
+        st.tonemap = c.ke_render_tonemap_create(&.{
+            .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger, .input = "scene", .output = "ldr", .output_format = 0,
+        }, out_error);
+        if (st.tonemap.ref == null) return failCreate(rt, mark, st);
+
+        st.ui = c.ke_render_ui_create(&.{
+            .runtime = rt, .ecs = e, .service = st.core.ref, .device = dev, .ndc = ndc, .input = "ldr", .output = "backbuffer",
+        }, out_error);
+        if (st.ui.ref == null) return failCreate(rt, mark, st);
 
         const label_cid = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields);
         st.label_resolve_state = .{ .core = st.core.ref, .ui = st.ui.ref, .resolver = asset_resolver, .logger = logger };
@@ -440,6 +433,8 @@ const testing = std.testing;
 const Stubs = @import("stubs").Stubs(c);
 
 const authored_shaders = [_][]const u8{
+    "blit.vs.wgsl",
+    "blit.fs.wgsl",
     "cluster_cull.cs.wgsl",
     "standard.gbuffer.vs.wgsl",
     "standard.gbuffer.fs.wgsl",

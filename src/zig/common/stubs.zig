@@ -29,6 +29,9 @@ pub fn Stubs(comptime c: type) type {
             texture_label: [*c]const u8,
             texture_view_label: [*c]const u8,
             render_pass_label: [*c]const u8,
+            render_passes: u32,
+            color_load: c.ke_gpu_load_op,
+            depth_load: ?c.ke_gpu_load_op,
             compute_pass_label: [*c]const u8,
             debug_group_label: [*c]const u8,
             debug_groups_open: i32,
@@ -36,7 +39,7 @@ pub fn Stubs(comptime c: type) type {
             bytes_written: usize,
 
             pub fn init(self: *Device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0, .buffer_writes = 0, .bytes_written = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .render_passes = 0, .color_load = 0, .depth_load = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0, .buffer_writes = 0, .bytes_written = 0 };
                 self.vtable.handle = self;
                 self.vtable.create_buffer = &createBuffer;
                 self.vtable.create_bind_group_layout = &createBindGroupLayout;
@@ -72,6 +75,8 @@ pub fn Stubs(comptime c: type) type {
                 self.encoder.finish = &finishEncoder;
                 self.render_pass = std.mem.zeroes(c.ke_gpu_render_pass);
                 self.render_pass.end = &endRenderPass;
+                self.render_pass.set_pipeline = &setRenderPipeline;
+                self.render_pass.draw = &drawRenderPass;
                 self.compute_pass = std.mem.zeroes(c.ke_gpu_compute_pass);
                 self.compute_pass.handle = self;
                 self.compute_pass.end = &endComputePass;
@@ -88,11 +93,15 @@ pub fn Stubs(comptime c: type) type {
                 return @ptrCast(@alignCast(pass.?.handle.?));
             }
 
-            /// Every begin returns the same render pass record, so the label of the latest begin
-            /// replaces the one before it.
+            /// Every begin returns the same render pass record, so the label, the first color
+            /// load and the depth's read-only flag of the latest begin replace the ones before it;
+            /// `render_passes` counts the begins.
             fn beginRenderPass(enc: ?*c.ke_gpu_command_encoder, p: [*c]const c.ke_gpu_render_pass_params) callconv(.c) [*c]c.ke_gpu_render_pass {
                 const self = encoderOwner(enc);
                 self.render_pass_label = p.*.label;
+                self.render_passes += 1;
+                self.color_load = if (p.*.color_attachment_count > 0) p.*.color_attachments[0].load_op else 0;
+                self.depth_load = if (p.*.depth_stencil_attachment != null) p.*.depth_stencil_attachment.*.depth_load_op else null;
                 return &self.render_pass;
             }
 
@@ -105,6 +114,8 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn endRenderPass(_: ?*c.ke_gpu_render_pass) callconv(.c) void {}
+            fn setRenderPipeline(_: ?*c.ke_gpu_render_pass, _: c.ke_gpu_pipeline) callconv(.c) void {}
+            fn drawRenderPass(_: ?*c.ke_gpu_render_pass, _: u32, _: u32, _: u32, _: u32) callconv(.c) void {}
 
             fn endComputePass(_: ?*c.ke_gpu_compute_pass) callconv(.c) void {}
 
@@ -389,6 +400,7 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.material_binding = &materialBinding;
                 self.vtable.load_shader = &loadShader;
                 self.vtable.backbuffer_format = &backbufferFormat;
+                self.vtable.resource_format = &resourceFormat;
                 self.vtable.resource_generation = &resourceGeneration;
                 self.vtable.get_or_create_pipeline = &getOrCreatePipeline;
                 self.vtable.cid = &cid;
@@ -404,6 +416,11 @@ pub fn Stubs(comptime c: type) type {
 
             fn backbufferFormat(_: ?*c.ke_render_service) callconv(.c) c.ke_gpu_texture_format {
                 return c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+            }
+
+            /// Knows no resource, so a pass declares every one it writes.
+            fn resourceFormat(_: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_texture_format {
+                return c.KE_GPU_TEXTURE_FORMAT_INVALID;
             }
 
             fn resourceGeneration(_: [*c]c.ke_render_service) callconv(.c) u32 {

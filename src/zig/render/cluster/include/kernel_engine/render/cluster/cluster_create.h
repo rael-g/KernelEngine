@@ -35,15 +35,37 @@ extern "C"
         void (*destroy)(ke_render_cluster *self);
     } ke_render_cluster_handle;
 
+    /// What the light-cluster pass culls and publishes. The name is copied.
+    typedef struct ke_render_cluster_params
+    {
+        ke_runtime        *runtime;    ///< Registers the pass's system; borrowed, must outlive it.
+        ke_render_service *service;    ///< Receives the published buffers; borrowed.
+        ke_gpu_device     *device;     ///< Borrowed.
+        ke_logger         *logger;     ///< Optional, borrowed.
+        ke_view_space     *view_space; ///< Builds the cluster frusta; borrowed.
+        ke_render_camera  *camera;     ///< Gives the camera's projection; borrowed.
+        ke_component_id    point_light_cid;
+        ke_component_id    spot_light_cid;
+        ke_component_id    world_transform_cid;
+        ke_component_id    camera_cid;
+        ke_component_id    frame_cid;
+        /// [utf8] The cluster group it writes: a tag under the group's own name, and the light
+        /// lists and grid under the suffixes of kernel_engine/render/resource_groups.h.
+        const char *output;
+        /// Clusters across the screen. 0 takes the default.
+        uint32_t grid_x;
+        /// Clusters down the screen. 0 takes the default.
+        uint32_t grid_y;
+        /// Depth slices. 0 takes the default.
+        uint32_t grid_z;
+        /// Lights one cluster can list. 0 takes the default.
+        uint32_t max_lights_per_cluster;
+    } ke_render_cluster_params;
+
+    /// Registers the pass's render-phase system. A missing runtime, service, device, view space,
+    /// camera or output fails as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_CLUSTER_API ke_render_cluster_handle ke_render_cluster_create(
-        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_logger *logger, uint32_t grid_x, uint32_t grid_y, uint32_t grid_z,
-        uint32_t max_lights_per_cluster,
-        ke_component_id point_light_cid, ke_component_id spot_light_cid,
-        ke_component_id world_transform_cid, ke_component_id camera_cid,
-        ke_component_id frame_cid, ke_view_space *view_space,
-        ke_render_camera *camera,
-        ke_error **out_error);
+        const ke_render_cluster_params *params, ke_error **out_error);
 
 #ifdef __cplusplus
 }

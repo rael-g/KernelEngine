@@ -693,6 +693,8 @@ pub fn build(b: *std.Build) void {
         .@"material-params-json" = material_params_json,
     }, &.{ &common.step, &material_params.step }, .has_tests);
 
+    const blit_vs = ctx.shader("blit", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/service/shaders/blit.slang" }), shaders_out, &.{shader_lib_dir}, null);
+    const blit_fs = ctx.shader("blit", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/service/shaders/blit.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const render_service = ctx.member("ke_render_service", .{
         .target = target,
         .optimize = optimize,
@@ -713,7 +715,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/service/include" }),
         .@"ke-lib-dir" = lib_dir,
         .@"shader-files-src" = shader_files_src,
-    }, &.{ &common.step, &resource_cache_default.step }, .has_tests);
+    }, &.{ &common.step, &resource_cache_default.step, &blit_vs.step, &blit_fs.step }, .has_tests);
 
     const render_module = ctx.member("ke_render_module", .{
         .target = target,

@@ -82,6 +82,12 @@ const ForwardModule = struct {
     camera_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
+    input: ?[:0]u8 = null,
+    depth: ?[:0]u8 = null,
+    shadow: ?[:0]u8 = null,
+    clusters: ?[:0]u8 = null,
+    output: ?[:0]u8 = null,
+
     pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
     vbl: c.ke_gpu_vertex_buffer_layout = undefined,
@@ -93,8 +99,8 @@ const ForwardModule = struct {
 
     draws: std.ArrayList(Draw) = .empty,
 
-    writes: [2][*c]const u8 = undefined,
-    reads: [1][*c]const u8 = undefined,
+    writes: [1][*c]const u8 = undefined,
+    reads: [3][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [12]c.ke_component_access = undefined,
     access_count: u32 = 0,
@@ -140,7 +146,8 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-/// Replaces `frame_set` with a set over the "hdr_opaque" view and the feature bindings,
+/// Replaces `frame_set` with a set over the input's view, sampled as "hdr_opaque", and the feature
+/// bindings,
 /// whose environment is the black cube when `ibl_enabled` is false. `setup` calls it once, and
 /// `system` calls it when the skybox's cubemap changes or the service recreated its declared
 /// targets. The set it replaces is destroyed. A creation failure goes to `logGpuError`, and
@@ -153,8 +160,8 @@ fn rebuildFrameSet(fwd: *ForwardModule) void {
     const ibl_view = if (fwd.ibl_enabled) env_view else black_cube_view;
 
     var bindings: [1 + Features.count]c.ke_render_shader_binding = undefined;
-    bindings[0] = .{ .name = "hdr_opaque", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = core.*.resource_view.?(core, "hdr_opaque"), .sampler = 0 };
-    Features.fill(core, ibl_view, bindings[1..]);
+    bindings[0] = .{ .name = "hdr_opaque", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = core.*.resource_view.?(core, fwd.input.?.ptr), .sampler = 0 };
+    Features.fill(core, ibl_view, nameOf(fwd.shadow), nameOf(fwd.clusters), bindings[1..]);
 
     binder.destroy_set.?(binder, fwd.frame_set);
     fwd.resource_generation = core.*.resource_generation.?(core);
@@ -166,8 +173,8 @@ fn rebuildFrameSet(fwd: *ForwardModule) void {
 /// The render-phase system that `ke_render_forward_create` registers, with no pinned worker. It
 /// returns true on every path. Once
 /// `begin_pass` has returned a pass context, every path reaches `end_pass`. A scene without a
-/// camera does nothing. Otherwise it copies "hdr" into "hdr_opaque", so the blended materials can
-/// sample what lies behind them, and keeps `frame_set` matching the sky. The view and the
+/// camera does nothing. Otherwise its output starts as its input, which the blended materials also
+/// sample for what lies behind them, and it keeps `frame_set` matching the sky. The view and the
 /// projection come from the frame globals the service holds. A draw whose geometry or shader is missing is skipped.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const fwd = moduleOf(user);
@@ -181,15 +188,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 
     const pc = core.*.begin_pass.?(core, &fwd.io);
     if (pc == null) return true;
-
-    var bw: u32 = 0;
-    var bh: u32 = 0;
-    pc.*.backbuffer_size.?(pc, &bw, &bh);
-
-    const enc = pc.*.encoder.?(pc);
-    const hdr_tex = core.*.resource_texture.?(core, "hdr");
-    const hdr_opaque_tex = core.*.resource_texture.?(core, "hdr_opaque");
-    enc.*.copy_texture_to_texture.?(enc, hdr_tex, hdr_opaque_tex, bw, bh);
 
     const globals = core.*.frame_globals.?(core);
     const view = zm.loadMat(globals.*.view[0..]);
@@ -254,25 +252,42 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 }
 
 /// Called once by `ke_render_forward_create` on a module that still has its default fields. It
-/// builds the layouts and the pipeline template, resolves the default material shader and requests
-/// one pipeline from it, creates the uniform buffers and the "hdr_opaque" target, and fills the
-/// pass io, the access list and the queries. On failure it returns false with `out_error` set,
-/// and leaves the handles it had already made in the module, where `destroyModule` finds and
-/// releases them.
-fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         logger: ?*c.ke_logger, ibl_enabled: bool,
-         mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
-         skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
-         out_error: [*c][*c]c.ke_error) bool {
+/// copies the names, declares the output when the service has none of that name, builds the layouts
+/// and the pipeline template, resolves the default material shader and requests one pipeline from
+/// it, creates the uniform buffers, and fills the pass io, the access list and the queries. On
+/// failure it returns false with `out_error` set, and leaves the handles it had already made in the
+/// module, where `destroyModule` finds and releases them.
+fn setup(fwd: *ForwardModule, p: *const c.ke_render_forward_params, out_error: [*c][*c]c.ke_error) bool {
+    const core: *c.ke_render_service = p.service;
+    const dev: *c.ke_gpu_device = p.device;
+    const mesh_cid = p.mesh_cid;
+    const world_transform_cid = p.world_transform_cid;
+    const camera_cid = p.camera_cid;
+    const skybox_cid = p.skybox_cid;
+    const frame_cid = p.frame_cid;
     fwd.core = core;
     fwd.device = dev;
-    fwd.logger = logger;
-    fwd.ibl_enabled = ibl_enabled;
+    fwd.logger = p.logger;
+    fwd.ibl_enabled = p.ibl_enabled;
     fwd.mesh_cid = mesh_cid;
     fwd.world_transform_cid = world_transform_cid;
     fwd.camera_cid = camera_cid;
     fwd.skybox_cid = skybox_cid;
     fwd.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
+
+    fwd.input = copyName(p.input, out_error) orelse return false;
+    fwd.depth = copyName(p.depth, out_error) orelse return false;
+    fwd.output = copyName(p.output, out_error) orelse return false;
+    if (p.shadow != null) fwd.shadow = copyName(p.shadow, out_error) orelse return false;
+    if (p.clusters != null) fwd.clusters = copyName(p.clusters, out_error) orelse return false;
+    if (core.*.resource_format.?(core, fwd.output.?.ptr) == c.KE_GPU_TEXTURE_FORMAT_INVALID and
+        core.*.declare.?(core, &c.ke_render_resource_params{
+        .name = fwd.output.?.ptr,
+        .type = c.KE_RENDER_RESOURCE_TEXTURE,
+        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
+        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
+        .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
+    }, out_error) == c.KE_COMPONENT_INVALID) return false;
 
     if (!fwd.groups.init(core.*.resource_binder.?(core), DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
 
@@ -326,36 +341,31 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     fwd.objects = .{ .device = dev, .binder = fwd.groups.binder, .layout = fwd.groups.layout, .buffer_label = "forward.obj_uniform", .set_label = "forward.obj_set" };
     if (!fwd.objects.?.ensure(1, out_error)) return false;
 
-    const hdr_opaque_cid = core.*.declare.?(core, &c.ke_render_resource_params{
-        .name = "hdr_opaque",
-        .type = c.KE_RENDER_RESOURCE_TEXTURE,
-        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
-        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
-        .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
-    }, out_error);
-
     rebuildFrameSet(fwd);
 
-    const shadow_map_cid = core.*.cid.?(core, "shadow_map");
-    const shadow_enabled = shadow_map_cid != c.KE_COMPONENT_INVALID;
-    const cluster_lights_cid = core.*.cid.?(core, "light_clusters");
-
-    fwd.writes = .{ "hdr", "depth" };
-    fwd.reads = .{"shadow_map"};
+    fwd.writes = .{fwd.output.?.ptr};
+    fwd.reads[0] = fwd.input.?.ptr;
+    fwd.reads[1] = fwd.depth.?.ptr;
+    var rc: u32 = 2;
+    if (fwd.shadow) |g| {
+        fwd.reads[rc] = g.ptr;
+        rc += 1;
+    }
     fwd.io = std.mem.zeroes(c.ke_render_pass_io);
     fwd.io.name = "render.forward_transparent";
     fwd.io.writes = @ptrCast(&fwd.writes);
-    fwd.io.writes_count = 2;
+    fwd.io.writes_count = 1;
     fwd.io.reads = @ptrCast(&fwd.reads);
-    fwd.io.reads_count = if (shadow_enabled) 1 else 0;
-    fwd.io.load = 1;
+    fwd.io.reads_count = rc;
+    fwd.io.load_from = fwd.input.?.ptr;
+    fwd.io.depth_test = fwd.depth.?.ptr;
 
     var ac: u32 = 0;
-    fwd.access[ac] = .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE };
+    fwd.access[ac] = .{ .cid = core.*.cid.?(core, fwd.output.?.ptr), .access = c.KE_ACCESS_WRITE };
     ac += 1;
-    fwd.access[ac] = .{ .cid = hdr_opaque_cid, .access = c.KE_ACCESS_WRITE };
+    fwd.access[ac] = .{ .cid = core.*.cid.?(core, fwd.input.?.ptr), .access = c.KE_ACCESS_READ };
     ac += 1;
-    fwd.access[ac] = .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ };
+    fwd.access[ac] = .{ .cid = core.*.cid.?(core, fwd.depth.?.ptr), .access = c.KE_ACCESS_READ };
     ac += 1;
     fwd.access[ac] = .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
@@ -367,10 +377,9 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     ac += 1;
     fwd.access[ac] = .{ .cid = frame_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
-    fwd.access[ac] = .{ .cid = cluster_lights_cid, .access = c.KE_ACCESS_READ };
-    ac += 1;
-    if (shadow_enabled) {
-        fwd.access[ac] = .{ .cid = shadow_map_cid, .access = c.KE_ACCESS_READ };
+    for ([_]?[:0]u8{ fwd.clusters, fwd.shadow }) |group| {
+        const g = group orelse continue;
+        fwd.access[ac] = .{ .cid = core.*.cid.?(core, g.ptr), .access = c.KE_ACCESS_READ };
         ac += 1;
     }
     fwd.access_count = ac;
@@ -381,10 +390,11 @@ fn setup(fwd: *ForwardModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
-/// Releases the sets, buffers and layout the module holds, skipping any handle still invalid, so it also works after a partial `setup`. It does not free the module, and it does not
-/// release the pipeline or the "hdr_opaque" resource, which `setup` obtained from the render
-/// service.
+/// Releases the names, sets, buffers and layout the module holds, skipping any still absent, so it
+/// also works after a partial `setup`. It does not free the module, and it does not release the
+/// pipeline or the output resource, which `setup` obtained from the render service.
 fn destroyModule(fwd: *ForwardModule) void {
+    for ([_]?[:0]u8{ fwd.input, fwd.depth, fwd.shadow, fwd.clusters, fwd.output }) |name| if (name) |n| gpa.free(n);
     if (fwd.frame_set != c.KE_RENDER_BINDING_INVALID) fwd.groups.binder.destroy_set.?(fwd.groups.binder, fwd.frame_set);
     if (fwd.objects) |*objects| objects.release();
     fwd.draws.deinit(gpa);
@@ -401,26 +411,23 @@ fn destroyHandle(self: ?*c.ke_render_forward) callconv(.c) void {
 
 /// Factory declared in the plugin's forward_create.h. On success the returned handle's `ref` is the
 /// module, and its `destroy` must be called to release it. On failure `ref` is null and the module
-/// and its GPU objects are released. A null argument returns the null handle without setting
-/// `out_error`. A failure in `setup` sets it, and so does a failed registration, which passes
-/// `out_error` on to `register_system`.
-export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device,
-                                    logger: ?*c.ke_logger, ibl_enabled: bool,
-                                    mesh_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
-                                    camera_cid: c.ke_component_id, skybox_cid: c.ke_component_id,
-                                    frame_cid: c.ke_component_id,
+/// and its GPU objects are released. A missing runtime, service, device, input, depth or output
+/// fails as an invalid argument. A failure in `setup` sets the error, and so does a failed
+/// registration, which passes `out_error` on to `register_system`.
+export fn ke_render_forward_create(params_in: ?*const c.ke_render_forward_params,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_forward_handle {
     const empty = c.ke_render_forward_handle{ .ref = null, .destroy = null };
-    const rt = runtime orelse return empty;
-    const core_ref = core orelse return empty;
-    const dev = device orelse return empty;
+    const p = params_in orelse return refused(out_error);
+    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
+    if (p.service == null or p.device == null or p.input == null or p.depth == null or p.output == null)
+        return refused(out_error);
 
-    const fwd = gpa.create(ForwardModule) catch return empty;
+    const fwd = gpa.create(ForwardModule) catch {
+        _ = copyName(null, out_error);
+        return empty;
+    };
     fwd.* = .{};
-    if (!setup(fwd, dev, core_ref, logger, ibl_enabled,
-               mesh_cid, world_transform_cid, camera_cid, skybox_cid, frame_cid, out_error))
-    {
+    if (!setup(fwd, p, out_error)) {
         destroyModule(fwd);
         gpa.destroy(fwd);
         return empty;
@@ -443,6 +450,25 @@ export fn ke_render_forward_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     }
 
     return .{ .ref = @ptrCast(fwd), .destroy = destroyHandle };
+}
+
+/// A copy of `name`, or null with an out-of-memory error when it cannot be made or there is no
+/// name to copy.
+fn copyName(name: [*c]const u8, out_error: [*c][*c]c.ke_error) ?[:0]u8 {
+    if (name != null) {
+        if (gpa.dupeZ(u8, std.mem.span(name))) |copy| return copy else |_| {}
+    }
+    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "forward pass: allocation failed", @src().file, @intCast(@src().line), null);
+    return null;
+}
+
+fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
+    return if (name) |n| n.ptr else null;
+}
+
+fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_forward_handle {
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "forward pass: runtime, service, device, input, depth and output are required", @src().file, @intCast(@src().line), null);
+    return .{ .ref = null, .destroy = null };
 }
 
 const testing = std.testing;
@@ -655,7 +681,7 @@ test "creating and destroying the forward pass leaves no block allocated and no 
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, 5, null);
+    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .input = "sky", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "scene" }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -670,7 +696,7 @@ test "a forward pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, 5, null);
+    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .input = "sky", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "scene" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -684,7 +710,7 @@ test "a forward pass the runtime refuses to register releases what it had create
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_forward_create(rt.api(), core.api(), dev.api(), null, false, 1, 2, 3, 4, 5, null);
+    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .input = "sky", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "scene" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

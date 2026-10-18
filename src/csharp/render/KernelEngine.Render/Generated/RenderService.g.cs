@@ -413,6 +413,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         return Handle->backbuffer_format(Handle);
     }
 
+    /// <summary>Texel format of the named texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.</summary>
+    public ke_gpu_texture_format ResourceFormat(sbyte* name)
+    {
+        return Handle->resource_format(Handle, name);
+    }
+
     /// <summary>Counts the times the targets declared relative to the backbuffer were recreated, which `begin_frame` does when the backbuffer changes size. A pass that keeps something made from a declared target's view, a bind group for instance, rebuilds it when the count changes.</summary>
     public uint ResourceGeneration()
     {

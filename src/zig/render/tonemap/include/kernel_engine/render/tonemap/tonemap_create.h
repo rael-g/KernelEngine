@@ -32,9 +32,26 @@ extern "C"
         void (*destroy)(ke_render_tonemap *self);
     } ke_render_tonemap_handle;
 
+    /// What the tonemap pass draws from and into. The names are copied.
+    typedef struct ke_render_tonemap_params
+    {
+        ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
+        ke_render_service *service; ///< Holds the resources it reads and writes; borrowed.
+        ke_gpu_device     *device;  ///< Borrowed.
+        ke_logger         *logger;  ///< Optional, borrowed.
+        /// [utf8] The HDR resource it reads.
+        const char *input;
+        /// [utf8] The resource it writes. When the service has none of that name, the pass
+        /// declares one the size of the backbuffer in `output_format`.
+        const char *output;
+        /// Format of a declared `output`; zero selects the backbuffer's.
+        ke_gpu_texture_format output_format;
+    } ke_render_tonemap_params;
+
+    /// Registers the pass's render-phase system. A missing runtime, service, device, input or
+    /// output fails as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_TONEMAP_API ke_render_tonemap_handle ke_render_tonemap_create(
-        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_logger *logger, ke_error **out_error);
+        const ke_render_tonemap_params *params, ke_error **out_error);
 
 #ifdef __cplusplus
 }

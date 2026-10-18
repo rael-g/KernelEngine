@@ -13,6 +13,7 @@ const c = rc.c;
 pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = rc.coreOf(self);
     st.frame_live = false;
+    st.blit.releaseSets(st.binder);
     st.ended_count.store(0, .monotonic);
     st.compute_count.store(0, .monotonic);
     for (&st.compute_records) |*r| {
