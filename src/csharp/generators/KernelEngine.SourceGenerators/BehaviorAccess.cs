@@ -9,27 +9,36 @@ using Microsoft.CodeAnalysis.Operations;
 namespace KernelEngine.SourceGenerators;
 
 /// <summary>
-/// Finds the components a behavior hook reaches on its own node, by reading the operations of the
-/// hook and of the methods of its class it calls. A component is one of the node's generated
-/// properties, read or written through <c>this</c>. The result is null whenever the body does
-/// something the reading cannot follow, and the caller then declares everything the type carries.
+/// Finds the components a behavior hook reaches, by reading the operations of the hook and of the
+/// methods of its class it calls. A component is a generated property of the hook's own node,
+/// reached through <c>this</c>, or of a node it borrows, reached through the borrow's
+/// <c>Node</c> or <c>Value</c>. A node the body creates is not in the world until the wave ends,
+/// so touching it reaches nothing. Any other node is one the scheduler cannot see, which is an
+/// error. The result is null whenever the body does something the reading cannot follow, and the
+/// caller then declares everything the type carries.
 /// </summary>
 static class BehaviorAccess
 {
     /// <summary>One component the hook reaches: the expression naming it at runtime, and whether
     /// the hook writes it.</summary>
-    internal sealed class Use(string nameExpression, bool writes)
+    internal sealed class Use(string nameExpression, bool writes, bool owned)
     {
         public string NameExpression { get; } = nameExpression;
         public bool Writes { get; } = writes;
+        public bool Owned { get; } = owned;
     }
 
-    /// <summary>Why a hook's access could not be read, and where.</summary>
-    internal sealed class Unknown(string reason, Location location)
+    /// <summary>Why a hook's access could not be read, and where. <c>Foreign</c> marks a node
+    /// reached outside <c>this</c>, a borrow and what the body created, which no declaration can
+    /// cover.</summary>
+    internal sealed class Unknown(string reason, Location location, bool foreign = false)
     {
         public string Reason { get; } = reason;
         public Location Location { get; } = location;
+        public bool Foreign { get; } = foreign;
     }
+
+    enum Holder { Other, Self, Borrowed, Created, Foreign }
 
     /// <summary>
     /// The components <paramref name="hook"/>, declared on <paramref name="owner"/>, reaches on its
@@ -42,12 +51,12 @@ static class BehaviorAccess
     {
         var walk = new Walk(compilation, owner);
         unknown = walk.Visit(hook, hook.Locations.FirstOrDefault() ?? Location.None);
-        return unknown is null ? walk.Uses.Select(u => new Use(u.Key, u.Value)).ToList() : null;
+        return unknown is null ? walk.Uses.Select(u => new Use(u.Key.Name, u.Value, u.Key.Owned)).ToList() : null;
     }
 
     sealed class Walk(Compilation compilation, INamedTypeSymbol owner)
     {
-        public readonly Dictionary<string, bool> Uses = new();
+        public readonly Dictionary<(string Name, bool Owned), bool> Uses = new();
         readonly HashSet<IMethodSymbol> visited = new(SymbolEqualityComparer.Default);
 
         public Unknown? Visit(IMethodSymbol method, Location at)
@@ -63,13 +72,95 @@ static class BehaviorAccess
                 {
                     IInstanceReferenceOperation self when self.ReferenceKind == InstanceReferenceKind.ContainingTypeInstance && !IsReceiver(self)
                         => new Unknown("it hands 'this' to code the generator does not follow", self.Syntax.GetLocation()),
-                    IPropertyReferenceOperation pr when pr.Instance is IInstanceReferenceOperation => Record(pr),
-                    IInvocationOperation call when call.Instance is IInstanceReferenceOperation => Follow(call.TargetMethod, call.Syntax.GetLocation()),
+                    IPropertyReferenceOperation pr when pr.Instance is not null => Member(pr, pr.Instance, null),
+                    IInvocationOperation call when call.Instance is not null => Member(call, call.Instance, call.TargetMethod),
+                    IArgumentOperation arg when IsNode(arg.Value.Type) => Argument(arg),
                     _ => null,
                 };
                 if (found is not null) return found;
             }
             return null;
+        }
+
+        Unknown? Member(IOperation op, IOperation instance, IMethodSymbol? method)
+        {
+            var at = op.Syntax.GetLocation();
+            var (holder, borrowed) = Classify(instance);
+            switch (holder)
+            {
+                case Holder.Self:
+                    return method is null ? Record((IPropertyReferenceOperation)op) : Follow(method, at);
+                case Holder.Borrowed:
+                    if (method is null)
+                    {
+                        var pr = (IPropertyReferenceOperation)op;
+                        var name = ComponentOf(pr.Property.OriginalDefinition, owner);
+                        if (name is not null)
+                        {
+                            var writes = AccessOf(pr).Writes;
+                            Uses[(name, false)] = (Uses.TryGetValue((name, false), out var w) && w) || writes;
+                            return null;
+                        }
+                        if (IsNodeMember(pr.Property) || IsAutoProperty(pr.Property)) return null;
+                    }
+                    else if (IsNodeMember(method)) return null;
+                    DeclareAll(borrowed!);
+                    return null;
+                case Holder.Foreign:
+                    return new($"it reaches a node through '{instance.Syntax}', which is neither this node, a borrow nor one it created; borrow it with a Descendant, an Ancestor or a named borrow parameter instead", at, foreign: true);
+                default:
+                    return null;
+            }
+        }
+
+        Unknown? Argument(IArgumentOperation arg)
+        {
+            var (holder, borrowed) = Classify(arg.Value);
+            if (holder == Holder.Borrowed) DeclareAll(borrowed!);
+            if (holder == Holder.Foreign)
+                return new($"it passes the node '{arg.Value.Syntax}', which is neither this node, a borrow nor one it created; borrow it with a Descendant, an Ancestor or a named borrow parameter instead", arg.Syntax.GetLocation(), foreign: true);
+            return null;
+        }
+
+        void DeclareAll(INamedTypeSymbol type)
+        {
+            foreach (var name in AllComponentsOf(type)) Uses[(name, false)] = true;
+        }
+
+        (Holder, INamedTypeSymbol?) Classify(IOperation value)
+        {
+            switch (value)
+            {
+                case IInstanceReferenceOperation { ReferenceKind: InstanceReferenceKind.ContainingTypeInstance }:
+                    return (Holder.Self, null);
+                case IInstanceReferenceOperation { ReferenceKind: InstanceReferenceKind.ImplicitReceiver }:
+                    return (Holder.Created, null);
+                case IConditionalAccessInstanceOperation ci:
+                    for (var up = ci.Parent; up is not null; up = up.Parent)
+                        if (up is IConditionalAccessOperation ca) return Classify(ca.Operation);
+                    return (Holder.Other, null);
+                case IConversionOperation conversion:
+                    return Classify(conversion.Operand);
+                case IParenthesizedOperation parens:
+                    return Classify(parens.Operand);
+                case IPropertyReferenceOperation p when p.Instance is { Type: INamedTypeSymbol wrapper } && IsBorrow(wrapper)
+                    && (p.Property.Name == "Node" || p.Property.Name == "Value"):
+                    return (Holder.Borrowed, p.Type as INamedTypeSymbol);
+                case IObjectCreationOperation:
+                    return (Holder.Created, null);
+                case IInvocationOperation call when IsNodeMember(call.TargetMethod) && call.TargetMethod.Name == "AddChild":
+                    return (Holder.Created, null);
+                case ILocalReferenceOperation local when InitializerOf(local.Local) is { } init:
+                    return Classify(init);
+            }
+            return IsNode(value.Type) ? (Holder.Foreign, null) : (Holder.Other, null);
+        }
+
+        IOperation? InitializerOf(ILocalSymbol local)
+        {
+            var declarator = local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as VariableDeclaratorSyntax;
+            if (declarator?.Initializer is not { } init) return null;
+            return compilation.GetSemanticModel(init.SyntaxTree).GetOperation(init.Value);
         }
 
         Unknown? Follow(IMethodSymbol target, Location at)
@@ -88,7 +179,7 @@ static class BehaviorAccess
             var name = ComponentOf(property, owner);
             if (name is not null)
             {
-                Uses[name] = (Uses.TryGetValue(name, out var w) && w) || writes;
+                Uses[(name, true)] = (Uses.TryGetValue((name, true), out var w) && w) || writes;
                 return null;
             }
             if (IsNodeMember(property))
@@ -99,6 +190,35 @@ static class BehaviorAccess
             if (reads && property.GetMethod is { } get && Follow(get, at) is { } r) return r;
             if (writes && property.SetMethod is { } set && Follow(set, at) is { } w2) return w2;
             return null;
+        }
+    }
+
+    static bool IsNode(ITypeSymbol? type)
+    {
+        for (var t = type as INamedTypeSymbol; t is not null; t = t.BaseType)
+            if (t.Name == "Node" && t.ContainingNamespace.ToDisplayString() == "KernelEngine.Framework") return true;
+        return false;
+    }
+
+    static bool IsBorrow(INamedTypeSymbol type) =>
+        type.GetAttributes().Any(a => a.AttributeClass?.Name == "NodeBorrowAttribute");
+
+    /// <summary>
+    /// The expressions naming every component a node of <paramref name="type"/> carries: the
+    /// native ones its <c>GeneratedNodeComponent</c> attributes name and the script slot of each
+    /// type of its chain declared in source with <c>partial</c> properties.
+    /// </summary>
+    internal static IEnumerable<string> AllComponentsOf(INamedTypeSymbol type)
+    {
+        for (var t = type; t is not null; t = t.BaseType)
+        {
+            var markers = t.GetAttributes().Where(a => a.AttributeClass?.Name == "GeneratedNodeComponentAttribute" && a.ConstructorArguments.Length > 1).ToList();
+            foreach (var m in markers) yield return $"\"{(string)m.ConstructorArguments[1].Value!}\"";
+            if (markers.Count > 0) continue;
+            var scripted = t.GetMembers().OfType<IPropertySymbol>().Any(p => p.DeclaringSyntaxReferences.Select(r => r.GetSyntax())
+                .OfType<PropertyDeclarationSyntax>().Any(d => d.Modifiers.Any(SyntaxKind.PartialKeyword)));
+            if (scripted)
+                yield return $"global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}).FullName!)";
         }
     }
 

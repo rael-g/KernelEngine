@@ -81,6 +81,41 @@ public partial class HookProbe : Node3D
 public sealed class HookProbeSubclass : HookProbe;
 
 /// <summary>
+/// A node whose update reads the position of a node it borrows and whose fixed update calls a
+/// method on it, which the generator cannot read.
+/// </summary>
+public sealed partial class BorrowingProbe : Node3D
+{
+    void Update(in View view, Descendant<Node3D> target) => _ = target.Value.Position.X;
+
+    void FixedUpdate(in View view, Descendant<Node3D> target) => target.Node?.GetHashCode();
+
+    public List<NodeComponentUse>? Uses(bool fixedStep)
+    {
+        var into = new List<NodeComponentUse>();
+        return CollectHookComponents(into, fixedStep) ? into : null;
+    }
+}
+
+/// <summary>
+/// A node whose update configures a node it creates, which is not in the world before the wave ends.
+/// </summary>
+public sealed partial class CreatingProbe : Node3D
+{
+    void Update(in View view)
+    {
+        var made = new Node3D { Position = Vector3.One };
+        made.Scale = Vector3.One;
+    }
+
+    public List<NodeComponentUse>? Uses()
+    {
+        var into = new List<NodeComponentUse>();
+        return CollectHookComponents(into, fixedStep: false) ? into : null;
+    }
+}
+
+/// <summary>
 /// A node whose update hands itself to code the generator does not read.
 /// </summary>
 public sealed partial class EscapingProbe : Node3D
@@ -257,5 +292,25 @@ public class NodeTests
     public void A_hook_that_hands_its_node_away_leaves_its_access_unknown()
     {
         Assert.False(new EscapingProbe().Known());
+    }
+
+    [Fact]
+    public void A_borrowed_node_property_is_declared_as_reached_and_only_as_read()
+    {
+        var use = Assert.Single(new BorrowingProbe().Uses(fixedStep: false)!);
+        Assert.Equal(("transform", false, false), (use.Name, use.Writes, use.Owned));
+    }
+
+    [Fact]
+    public void A_method_called_on_a_borrowed_node_declares_every_component_of_its_type_as_written()
+    {
+        var use = Assert.Single(new BorrowingProbe().Uses(fixedStep: true)!);
+        Assert.Equal(("transform", true, false), (use.Name, use.Writes, use.Owned));
+    }
+
+    [Fact]
+    public void A_node_the_hook_creates_is_not_declared()
+    {
+        Assert.Empty(new CreatingProbe().Uses()!);
     }
 }

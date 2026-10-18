@@ -177,8 +177,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             if (method is null) continue;
             if (BehaviorAccess.Analyze(compilation, classSymbol, method, out var unknown) is { } uses)
                 precise.Add((hook, uses, hookBorrows));
+            else if (unknown!.Foreign)
+                spc.ReportDiagnostic(Diagnostic.Create(ForeignNodeRule, unknown.Location,
+                    classSymbol.Name, hook.Method, unknown.Reason));
             else
-                spc.ReportDiagnostic(Diagnostic.Create(WholeTypeAccessRule, unknown!.Location,
+                spc.ReportDiagnostic(Diagnostic.Create(WholeTypeAccessRule, unknown.Location,
                     classSymbol.Name, hook.Method, unknown.Reason));
         }
         if (precise.Count > 0) EmitHookComponents(sb, className, overrideModifier, precise);
@@ -303,8 +306,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         foreach (var b in borrows)
         {
             if (BorrowKindOf(b.Type) == "Emit") continue;
-            foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
-                sb.AppendLine($"        into.Add(new(\"{cn}\", true, false));");
+            foreach (var cn in BehaviorAccess.AllComponentsOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
+                sb.AppendLine($"        into.Add(new({cn}, true, false));");
         }
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -693,13 +696,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine($"        if ({(hook.Method == "FixedUpdate" ? "fixedStep" : "!fixedStep")})");
             sb.AppendLine("        {");
             foreach (var u in uses)
-                sb.AppendLine($"            into.Add(new({u.NameExpression}, {(u.Writes ? "true" : "false")}, true));");
-            foreach (var b in borrows)
-            {
-                if (BorrowKindOf(b.Type) == "Emit") continue;
-                foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
-                    sb.AppendLine($"            into.Add(new(\"{cn}\", true, false));");
-            }
+                sb.AppendLine($"            into.Add(new({u.NameExpression}, {(u.Writes ? "true" : "false")}, {(u.Owned ? "true" : "false")}));");
             sb.AppendLine("            return true;");
             sb.AppendLine("        }");
         }
@@ -707,6 +704,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
     }
+
+    static readonly DiagnosticDescriptor ForeignNodeRule = new(
+        id: "KESG009",
+        title: "Behavior hook reaches a node the scheduler cannot see",
+        messageFormat: "'{0}.{1}': {2}",
+        category: "KernelEngine.SourceGenerators",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 
     static readonly DiagnosticDescriptor WholeTypeAccessRule = new(
         id: "KESG008",
@@ -809,17 +814,5 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         var arg = marker.ConstructorArguments[0];
         return (arg.Type as INamedTypeSymbol)?.GetMembers().OfType<IFieldSymbol>()
             .FirstOrDefault(f => f.HasConstantValue && Equals(f.ConstantValue, arg.Value))?.Name;
-    }
-
-    /// <summary>
-    /// The component names a node type declares through <c>GeneratedNodeComponent</c> on itself
-    /// and its bases. A type carrying no such attribute contributes nothing.
-    /// </summary>
-    static IEnumerable<string> ComponentNamesOf(INamedTypeSymbol type)
-    {
-        for (var t = type; t is not null; t = t.BaseType)
-            foreach (var a in t.GetAttributes())
-                if (a.AttributeClass?.Name == "GeneratedNodeComponentAttribute" && a.ConstructorArguments.Length > 1)
-                    yield return (string)a.ConstructorArguments[1].Value!;
     }
 }
