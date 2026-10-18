@@ -14,8 +14,10 @@ namespace KernelEngine.Framework;
 /// evaluates actions), "Scene.Signals.Clear" (pre-update) and "Scene.Signals.Deliver"
 /// (post-update) when a <see cref="SignalBus"/> is registered, and one system
 /// "Scene.Behaviors.&lt;type&gt;" in the update phase for each node type with behavior,
-/// registered when the first node of that type binds. That system declares the component access
-/// of the type's <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
+/// registered when the first node of that type binds, and likewise "Scene.FixedBehaviors.&lt;type&gt;"
+/// in the fixed update phase. Each system declares the component access of its hook from
+/// <see cref="Node.CollectHookComponents"/>, or, when that access is not known, of the type's
+/// <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
 /// query and the reached ones its access list, with hierarchy and name always read, and it is
 /// sliced per entity when the type reaches only itself. Its query requires the type's tag, which
 /// is declared a member of the host's exclusive group of type tags, so the
@@ -119,37 +121,39 @@ public sealed class SceneNodesModule : IRuntimeModule
 
         scriptHost.BehaviorTypeAdded += (type, probe) =>
         {
-            var uses = new List<NodeComponentUse>();
-            probe.CollectBehaviorComponents(uses);
-
-            var owned = new Dictionary<uint, bool>();
-            var reached = new Dictionary<uint, bool>();
-            foreach (var use in uses)
-            {
-                var cid = scriptHost.CidOfName(use.Name);
-                if (cid == hierarchyCid || cid == nameCid) continue;
-                var into = use.Owned ? owned : reached;
-                into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
-            }
-
             var tag = scriptHost.TagOf(type);
             runtime.DeclareExclusive(scriptHost.TypeTagGroup(), tag);
-            var terms = owned.Select(e => Touches(e.Key, e.Value))
-                .Append(Touches(tag, writes: false))
-                .ToArray();
 
-            var access = new List<ComponentAccess>
+            void Register(string name, RuntimePhase phase, bool fixedStep)
             {
-                Touches(hierarchyCid, writes: false),
-                Touches(nameCid, writes: false),
-            };
-            foreach (var (cid, isWrite) in reached)
-                if (!owned.ContainsKey(cid))
-                    access.Add(Touches(cid, isWrite));
+                var uses = new List<NodeComponentUse>();
+                if (!probe.CollectHookComponents(uses, fixedStep)) probe.CollectBehaviorComponents(uses);
 
-            var queries = new[] { new QueryDecl { Terms = terms } };
+                var owned = new Dictionary<uint, bool>();
+                var reached = new Dictionary<uint, bool>();
+                foreach (var use in uses)
+                {
+                    var cid = scriptHost.CidOfName(use.Name);
+                    if (cid == hierarchyCid || cid == nameCid) continue;
+                    var into = use.Owned ? owned : reached;
+                    into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
+                }
 
-            void Register(string name, RuntimePhase phase, bool fixedStep) =>
+                var terms = owned.Select(e => Touches(e.Key, e.Value))
+                    .Append(Touches(tag, writes: false))
+                    .ToArray();
+
+                var access = new List<ComponentAccess>
+                {
+                    Touches(hierarchyCid, writes: false),
+                    Touches(nameCid, writes: false),
+                };
+                foreach (var (cid, isWrite) in reached)
+                    if (!owned.ContainsKey(cid))
+                        access.Add(Touches(cid, isWrite));
+
+                var queries = new[] { new QueryDecl { Terms = terms } };
+
                 runtime.RegisterSystem(name, phase, (ctx, dt) =>
                 {
                     var view = new View(scriptHost, dt, _inputSnapshot, ctx);
@@ -175,6 +179,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                         }
                     }
                 }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
+            }
 
             if (probe.HasBehavior) Register($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, fixedStep: false);
             if (probe.HasFixedBehavior) Register($"Scene.FixedBehaviors.{type.Name}", RuntimePhase.FixedUpdate, fixedStep: true);

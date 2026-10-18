@@ -104,6 +104,14 @@ public abstract class Node
     protected internal virtual void CollectBehaviorComponents(List<NodeComponentUse> into) { }
 
     /// <summary>
+    /// Appends the ECS components one hook of this node type reaches, <c>FixedUpdate</c> when
+    /// <paramref name="fixedStep"/> is true and <c>Update</c> otherwise, and returns true; returns
+    /// false, appending nothing, when that access is not known, and the caller then takes
+    /// <see cref="CollectBehaviorComponents"/>.
+    /// </summary>
+    protected internal virtual bool CollectHookComponents(List<NodeComponentUse> into, bool fixedStep) => false;
+
+    /// <summary>
     /// Creates <paramref name="child"/> as this node's child, under
     /// <paramref name="name"/>, which a <see cref="Borrow{T}"/> call can resolve against.
     /// </summary>

@@ -57,6 +57,49 @@ public sealed partial class ReadOnlyProbe : Node
 }
 
 /// <summary>
+/// A node whose two hooks reach its transform differently: the update writes the position, the
+/// fixed update only reads the scale through a helper of its own.
+/// </summary>
+public partial class HookProbe : Node3D
+{
+    void Update(in View view) => Position = Vector3.One;
+
+    void FixedUpdate(in View view) => Inspect();
+
+    private float Inspect() => Scale.X;
+
+    public List<NodeComponentUse>? Uses(bool fixedStep)
+    {
+        var into = new List<NodeComponentUse>();
+        return CollectHookComponents(into, fixedStep) ? into : null;
+    }
+}
+
+/// <summary>
+/// A subclass that cannot be generated for, so the hook access read on its base may not be its own.
+/// </summary>
+public sealed class HookProbeSubclass : HookProbe;
+
+/// <summary>
+/// A node whose update hands itself to code the generator does not read.
+/// </summary>
+public sealed partial class EscapingProbe : Node3D
+{
+    void Update(in View view) => Helper.Touch(this);
+
+    public bool Known()
+    {
+        var into = new List<NodeComponentUse>();
+        return CollectHookComponents(into, fixedStep: false);
+    }
+}
+
+static class Helper
+{
+    public static void Touch(Node3D node) => node.Position = Vector3.Zero;
+}
+
+/// <summary>
 /// A node built only through a constructor that takes an argument, as one depending on a
 /// service is.
 /// </summary>
@@ -191,5 +234,28 @@ public class NodeTests
 
         Assert.NotEmpty(uses);
         Assert.All(uses, u => Assert.False(u.Writes));
+    }
+
+    [Fact]
+    public void A_hook_declares_only_what_its_body_reaches_and_how()
+    {
+        var probe = new HookProbe();
+
+        var update = Assert.Single(probe.Uses(fixedStep: false)!);
+        Assert.Equal(("transform", true, true), (update.Name, update.Writes, update.Owned));
+        var fixedStep = Assert.Single(probe.Uses(fixedStep: true)!);
+        Assert.Equal(("transform", false), (fixedStep.Name, fixedStep.Writes));
+    }
+
+    [Fact]
+    public void A_subclass_the_generator_did_not_read_does_not_take_its_base_hook_access()
+    {
+        Assert.Null(new HookProbeSubclass().Uses(fixedStep: false));
+    }
+
+    [Fact]
+    public void A_hook_that_hands_its_node_away_leaves_its_access_unknown()
+    {
+        Assert.False(new EscapingProbe().Known());
     }
 }

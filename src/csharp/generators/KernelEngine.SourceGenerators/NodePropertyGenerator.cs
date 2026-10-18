@@ -155,13 +155,21 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         var borrowList = new List<IParameterSymbol>();
         var anyHook = false;
         var anyHandWritten = false;
+        var precise = new List<(Hook Hook, List<BehaviorAccess.Use> Uses, ImmutableArray<IParameterSymbol> Borrows)>();
         foreach (var hook in Hooks)
         {
             var hookBorrows = EmitHook(spc, sb, classSymbol, overrideModifier, hook, out var declared, out var handWritten);
             anyHook |= declared;
             anyHandWritten |= handWritten;
             borrowList.AddRange(hookBorrows);
+            if (!declared || handWritten) continue;
+            var method = classSymbol.GetMembers(hook.Method).OfType<IMethodSymbol>().FirstOrDefault(m =>
+                SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol)
+                && m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
+            if (method is null) continue;
+            if (BehaviorAccess.Analyze(compilation, classSymbol, method) is { } uses) precise.Add((hook, uses, hookBorrows));
         }
+        if (precise.Count > 0) EmitHookComponents(sb, className, overrideModifier, precise);
         var borrows = borrowList.ToImmutableArray();
 
         if (anyHook)
@@ -655,6 +663,37 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine();
 
         return method.Parameters.Skip(1).Where(pp => BorrowKindOf(pp.Type) is not null).ToImmutableArray();
+    }
+
+    /// <summary>
+    /// Emits <c>CollectHookComponents</c> for the hooks whose access <see cref="BehaviorAccess"/>
+    /// could read. It answers only for an instance of exactly this class, since a subclass that is
+    /// not <c>partial</c> may replace a hook's body.
+    /// </summary>
+    static void EmitHookComponents(StringBuilder sb, string className, string overrideModifier,
+        List<(Hook Hook, List<BehaviorAccess.Use> Uses, ImmutableArray<IParameterSymbol> Borrows)> precise)
+    {
+        sb.AppendLine($"    {overrideModifier} override bool CollectHookComponents(global::System.Collections.Generic.List<global::KernelEngine.Framework.NodeComponentUse> into, bool fixedStep)");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        if (GetType() != typeof({className})) return false;");
+        foreach (var (hook, uses, borrows) in precise)
+        {
+            sb.AppendLine($"        if ({(hook.Method == "FixedUpdate" ? "fixedStep" : "!fixedStep")})");
+            sb.AppendLine("        {");
+            foreach (var u in uses)
+                sb.AppendLine($"            into.Add(new({u.NameExpression}, {(u.Writes ? "true" : "false")}, true));");
+            foreach (var b in borrows)
+            {
+                if (BorrowKindOf(b.Type) == "Emit") continue;
+                foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
+                    sb.AppendLine($"            into.Add(new(\"{cn}\", true, false));");
+            }
+            sb.AppendLine("            return true;");
+            sb.AppendLine("        }");
+        }
+        sb.AppendLine("        return false;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
     }
 
     static readonly DiagnosticDescriptor UpdateNotDispatchedRule = new(
