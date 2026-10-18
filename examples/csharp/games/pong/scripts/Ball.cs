@@ -8,8 +8,8 @@ namespace Pong;
 /// <summary>
 /// The ball. Composes <see cref="Body2D"/>, so its pose and motion are the physics
 /// component itself and the physics plugin's own system advances them — this script
-/// owns launch and scoring only. Visual, collider and sounds are children declared
-/// in Ball.scene.
+/// owns launch and scoring only, reading input each frame and touching the body each
+/// fixed step. Visual, collider and sounds are children declared in Ball.scene.
 /// </summary>
 public sealed partial class Ball : Body2D
 {
@@ -27,6 +27,9 @@ public sealed partial class Ball : Body2D
     /// <summary>True while the ball waits at centre for the launch input.</summary>
     public partial bool AwaitingLaunch { get; set; }
 
+    /// <summary>True from the frame the launch input is pressed until the next fixed step serves.</summary>
+    public partial bool LaunchRequested { get; set; }
+
     /// <summary>How many times the ball has been served, which decides serve direction.</summary>
     public partial int Launches { get; set; }
 
@@ -40,15 +43,19 @@ public sealed partial class Ball : Body2D
         FixedRotation = true;
     }
 
-    void Update(in View view,
+    void Update(in View view)
+    {
+        if (_actions.IsJustPressed(PongAction.Quit)) _router.LoadScene<Scenes.Menu>();
+        if (_actions.IsJustPressed(PongAction.Launch) && AwaitingLaunch) LaunchRequested = true;
+    }
+
+    void FixedUpdate(in View view,
         [NodeName("HitSound")] Descendant<AudioPlayer> hit,
         [NodeName("ScoreSound")] Descendant<AudioPlayer> sfx,
         Emit<GoalScored> goal,
         Emit<BallLaunched> launched)
     {
-        if (_actions.IsJustPressed(PongAction.Quit)) _router.LoadScene<Scenes.Menu>();
-
-        if (_actions.IsJustPressed(PongAction.Launch) && AwaitingLaunch) Launch(launched);
+        if (LaunchRequested) Launch(launched);
         if (AwaitingLaunch) return;
 
         if (Math.Sign(Velocity.X) != Math.Sign(LastVelocity.X) && LastVelocity.X != 0)
@@ -62,6 +69,7 @@ public sealed partial class Ball : Body2D
     void Launch(Emit<BallLaunched> launched)
     {
         AwaitingLaunch = false;
+        LaunchRequested = false;
         launched.Send(new BallLaunched());
         float dirX = Launches % 2 == 0 ? 1f : -1f;
         Launches++;

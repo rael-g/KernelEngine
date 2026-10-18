@@ -7,7 +7,7 @@ namespace Pong;
 
 /// <summary>
 /// Kinematic paddle driven by input. Composes <see cref="Body2D"/>, so movement is a
-/// write to <c>Velocity</c> and the physics plugin advances it.
+/// write to <c>Velocity</c> each fixed step and the physics plugin advances it.
 /// </summary>
 public sealed partial class Paddle : Body2D
 {
@@ -25,7 +25,7 @@ public sealed partial class Paddle : Body2D
         Type = BodyType2D.Kinematic;
     }
 
-    void Update(in View view)
+    void FixedUpdate(in View view)
     {
         float vy = _actions.GetAxis1D(MoveAction) * Speed;
 

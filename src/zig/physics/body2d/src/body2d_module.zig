@@ -1,6 +1,6 @@
 //! Keeps the entity components of 2D bodies and colliders in agreement with a `ke_physics_2d`
-//! world, through two update-phase systems. It also exports the set of those components a scene
-//! file can author.
+//! world, through two fixed-update-phase systems. It also exports the set of those components a
+//! scene file can author.
 
 const std = @import("std");
 
@@ -56,8 +56,8 @@ fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anyt
     if (lg.log) |f| f(lg, &ev);
 }
 
-/// The update-phase system that reconciles every body with its component and transform, in this
-/// order: a component with no body gets one at its transform's position and rotation; a transform
+/// The fixed-update-phase system that reconciles every body with its component and transform, in
+/// this order: a component with no body gets one at its transform's position and rotation; a transform
 /// or a velocity that differs from the world's pushes it in; the world steps by `dt`; every body's
 /// state is then written back, its velocities into its component and its position and angle into
 /// its transform. A body created here is therefore simulated in the same update. The body type,
@@ -169,7 +169,7 @@ fn countColliders(ctx: ?*c.ke_system_ctx) struct { total: usize, unattached: usi
     return .{ .total = total, .unattached = unattached };
 }
 
-/// The update-phase system that attaches fixtures to colliders. It returns at once when every
+/// The fixed-update-phase system that attaches fixtures to colliders. It returns at once when every
 /// collider is attached, or when neither the tree's hierarchy generation, the module's body
 /// generation nor the number of colliders moved since its last attempt, so a collider that
 /// resolved to no body is retried, and its warning logged again, only once its ancestors or the
@@ -287,7 +287,7 @@ fn destroyHandle(self: ?*c.ke_physics_body2d_module) callconv(.c) void {
 }
 
 /// Registers the component ids with the ECS, then the body system and the collider system, both in
-/// the update phase. A missing argument or a failed allocation returns a null handle and sets
+/// the fixed-update phase. A missing argument or a failed allocation returns a null handle and sets
 /// nothing on the error output. A system the runtime refuses passes the runtime's error through
 /// the error output and returns a null handle. On success, the handle's `destroy` frees the module.
 export fn ke_physics_body2d_module_create(
@@ -317,7 +317,7 @@ export fn ke_physics_body2d_module_create(
 
     var sp = std.mem.zeroes(c.ke_runtime_system_params);
     sp.name = "physics.body2d";
-    sp.phase = c.KE_PHASE_UPDATE;
+    sp.phase = c.KE_PHASE_FIXED_UPDATE;
     sp.queries = &m.body_queries;
     sp.query_count = m.body_queries.len;
     sp.pinned_thread = 0;
@@ -333,7 +333,7 @@ export fn ke_physics_body2d_module_create(
 
     var cp = std.mem.zeroes(c.ke_runtime_system_params);
     cp.name = "physics.collider2d";
-    cp.phase = c.KE_PHASE_UPDATE;
+    cp.phase = c.KE_PHASE_FIXED_UPDATE;
     cp.queries = &m.collider_queries;
     cp.query_count = m.collider_queries.len;
     cp.pinned_thread = 0;
