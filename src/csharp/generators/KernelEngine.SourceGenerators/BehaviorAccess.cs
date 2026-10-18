@@ -214,11 +214,24 @@ static class BehaviorAccess
         {
             var markers = t.GetAttributes().Where(a => a.AttributeClass?.Name == "GeneratedNodeComponentAttribute" && a.ConstructorArguments.Length > 1).ToList();
             foreach (var m in markers) yield return $"\"{(string)m.ConstructorArguments[1].Value!}\"";
-            if (markers.Count > 0) continue;
-            var scripted = t.GetMembers().OfType<IPropertySymbol>().Any(p => p.DeclaringSyntaxReferences.Select(r => r.GetSyntax())
-                .OfType<PropertyDeclarationSyntax>().Any(d => d.Modifiers.Any(SyntaxKind.PartialKeyword)));
-            if (scripted)
-                yield return $"global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}).FullName!)";
+        }
+        foreach (var t in ScriptSlotTypes(type))
+            yield return $"global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}).FullName!)";
+    }
+
+    /// <summary>
+    /// The types of <paramref name="type"/>'s chain that carry a script slot: declared in source,
+    /// with no <c>GeneratedNodeComponent</c> attribute and with <c>partial</c> properties. Each
+    /// has a generated <c>GeneratedRegisterComponent</c>.
+    /// </summary>
+    internal static IEnumerable<INamedTypeSymbol> ScriptSlotTypes(INamedTypeSymbol type)
+    {
+        for (var t = type; t is not null; t = t.BaseType)
+        {
+            if (t.GetAttributes().Any(a => a.AttributeClass?.Name == "GeneratedNodeComponentAttribute")) continue;
+            if (t.GetMembers().OfType<IPropertySymbol>().Any(p => p.DeclaringSyntaxReferences.Select(r => r.GetSyntax())
+                .OfType<PropertyDeclarationSyntax>().Any(d => d.Modifiers.Any(SyntaxKind.PartialKeyword))))
+                yield return t;
         }
     }
 

@@ -361,6 +361,12 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("        base.GeneratedBind(scriptHost);");
         foreach (var t in signalTypes)
             sb.AppendLine($"        scriptHost.DeclareSignal<{t}>();");
+        var borrowedSlots = borrows.Where(b => BorrowKindOf(b.Type) != "Emit")
+            .SelectMany(b => BehaviorAccess.ScriptSlotTypes((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
+            .Select(t => t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+            .Distinct();
+        foreach (var t in borrowedSlots)
+            sb.AppendLine($"        {t}.GeneratedRegisterComponent(scriptHost);");
         foreach (var slot in slots)
         {
             var resolveCid = isNative
@@ -372,7 +378,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
 
         if (!isNative && !slots.IsEmpty)
+        {
+            sb.AppendLine();
+            sb.AppendLine("    /// <summary>Registers this node type's script component with <paramref name=\"scriptHost\"/>; a node");
+            sb.AppendLine("    /// that borrows this type calls it when it binds, before its behavior declares the component.</summary>");
+            sb.AppendLine("    public static void GeneratedRegisterComponent(global::KernelEngine.Framework.ScriptHost scriptHost) =>");
+            sb.AppendLine($"        scriptHost.RegisterComponent<{slots[0].TypeName}>({slots[0].NameExpression});");
             EmitSceneApply(sb, slots[0], properties);
+        }
 
         EmitSignalDispatch(sb, classSymbol, overrideModifier);
 
