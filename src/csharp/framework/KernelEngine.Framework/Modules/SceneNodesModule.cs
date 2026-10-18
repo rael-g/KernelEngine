@@ -130,7 +130,9 @@ public sealed class SceneNodesModule : IRuntimeModule
                 into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
             }
 
-            var terms = owned.Select(e => Touches(e.Key, e.Value)).ToArray();
+            var terms = owned.Select(e => Touches(e.Key, e.Value))
+                .Append(Touches(scriptHost.TagOf(type), writes: false))
+                .ToArray();
 
             var access = new List<ComponentAccess>
             {
@@ -141,8 +143,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                 if (!owned.ContainsKey(cid))
                     access.Add(Touches(cid, isWrite));
 
-            var queries = terms.Length > 0 ? new[] { new QueryDecl { Terms = terms } } : [];
-            var queried = queries.Length > 0;
+            var queries = new[] { new QueryDecl { Terms = terms } };
 
             void Register(string name, RuntimePhase phase, bool fixedStep) =>
                 runtime.RegisterSystem(name, phase, (ctx, dt) =>
@@ -150,15 +151,6 @@ public sealed class SceneNodesModule : IRuntimeModule
                     var view = new View(scriptHost, dt, _inputSnapshot, ctx);
                     using (scriptHost.EnterSystem(ctx))
                     {
-                        if (!queried)
-                        {
-                            var behaviors = scriptHost.BehaviorsOf(type);
-                            var (from, upto) = SliceOf(ctx, behaviors.Count);
-                            for (int i = from; i < upto; i++)
-                                Run(behaviors[i], in view, fixedStep);
-                            return;
-                        }
-
                         var segments = KernelEngine.Runtime.SystemCtx.Of(ctx).View(0);
                         var total = 0;
                         for (int s = 0; s < segments.Length; s++)
@@ -173,7 +165,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                             {
                                 if (seen < first) continue;
                                 if (seen >= last) break;
-                                if (scriptHost.NodeOf(entities[e]) is { } node && node.GetType() == type)
+                                if (scriptHost.NodeOf(entities[e]) is { } node)
                                     Run(node, in view, fixedStep);
                             }
                         }

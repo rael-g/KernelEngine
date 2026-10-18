@@ -201,6 +201,22 @@
           "receiver": "struct ke_script_host *"
         },
         {
+          "name": "type_tag",
+          "returns": "ke_component_id",
+          "tags": [],
+          "doc": "The tag component every bound instance of a registered type carries, so a query can match the instances of one type; 0 for an id that was never registered. No entity carries two of these tags, since an entity holds one instance at most.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
           "name": "bind",
           "returns": "_Bool",
           "tags": [],

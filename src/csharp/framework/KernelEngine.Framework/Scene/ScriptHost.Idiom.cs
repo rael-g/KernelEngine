@@ -303,6 +303,12 @@ public unsafe partial class ScriptHost
         return id;
     }
 
+    /// <summary>
+    /// The tag component every bound instance of <paramref name="type"/> carries, or 0 for a
+    /// node type no instance was bound under yet.
+    /// </summary>
+    internal uint TagOf(Type type) => _scriptTypes.TryGetValue(type, out var id) ? TypeTag(id) : 0;
+
     private void BindScript(Node node)
     {
         var type = ScriptTypeOf(node);

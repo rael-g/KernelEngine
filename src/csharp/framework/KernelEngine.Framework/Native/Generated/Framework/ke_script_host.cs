@@ -18,6 +18,9 @@ public unsafe partial struct ke_script_host
     [NativeTypeName("ke_script_reach (*)(struct ke_script_host *, ke_script_type_id)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, uint, ke_script_reach> type_reach;
 
+    [NativeTypeName("ke_component_id (*)(struct ke_script_host *, ke_script_type_id)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, uint, uint> type_tag;
+
     [NativeTypeName("bool (*)(struct ke_script_host *, ke_entity, ke_script_type_id, void *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, void*, KernelEngine.Common.Native.ke_error**, bool> bind;
 

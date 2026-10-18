@@ -99,6 +99,12 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         return (ScriptReach)Handle->type_reach(Handle, type);
     }
 
+    /// <summary>The tag component every bound instance of a registered type carries, so a query can match the instances of one type; 0 for an id that was never registered. No entity carries two of these tags, since an entity holds one instance at most.</summary>
+    public uint TypeTag(uint type)
+    {
+        return Handle->type_tag(Handle, type);
+    }
+
     /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Bind(ulong entity, uint type, object instance)
