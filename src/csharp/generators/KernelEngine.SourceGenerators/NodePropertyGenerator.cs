@@ -156,12 +156,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         var anyHook = false;
         var anyHandWritten = false;
         var precise = new List<(Hook Hook, List<BehaviorAccess.Use> Uses, ImmutableArray<IParameterSymbol> Borrows)>();
+        var selfOnly = new Dictionary<string, bool>();
         foreach (var hook in Hooks)
         {
             var hookBorrows = EmitHook(spc, sb, classSymbol, overrideModifier, hook, out var declared, out var handWritten);
             anyHook |= declared;
             anyHandWritten |= handWritten;
             borrowList.AddRange(hookBorrows);
+            selfOnly[hook.Method] = declared && !handWritten && hookBorrows.Length == 0;
             if (!declared) continue;
             if (handWritten)
             {
@@ -185,6 +187,15 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                     classSymbol.Name, hook.Method, unknown.Reason));
         }
         if (precise.Count > 0) EmitHookComponents(sb, className, overrideModifier, precise);
+        if (anyHook)
+        {
+            sb.AppendLine($"    {overrideModifier} override bool HookReachesOnlyItself(bool fixedStep)");
+            sb.AppendLine("    {");
+            sb.AppendLine($"        if (GetType() != typeof({className})) return base.HookReachesOnlyItself(fixedStep);");
+            sb.AppendLine($"        return fixedStep ? {(selfOnly["FixedUpdate"] ? "true" : "false")} : {(selfOnly["Update"] ? "true" : "false")};");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
         var borrows = borrowList.ToImmutableArray();
 
         if (anyHook)

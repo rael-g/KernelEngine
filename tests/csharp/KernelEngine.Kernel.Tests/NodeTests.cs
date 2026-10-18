@@ -68,11 +68,25 @@ public partial class HookProbe : Node3D
 
     private float Inspect() => Scale.X;
 
+    public bool SelfOnlyIn(bool fixedStep) => HookReachesOnlyItself(fixedStep);
+
     public List<NodeComponentUse>? Uses(bool fixedStep)
     {
         var into = new List<NodeComponentUse>();
         return CollectHookComponents(into, fixedStep) ? into : null;
     }
+}
+
+/// <summary>
+/// A node whose update touches only itself and whose fixed update borrows another node.
+/// </summary>
+public sealed partial class HalfBorrowingProbe : Node3D
+{
+    void Update(in View view) => Position = Vector3.One;
+
+    void FixedUpdate(in View view, Descendant<Node3D> target) => _ = target.Value.Position;
+
+    public bool SelfOnly(bool fixedStep) => HookReachesOnlyItself(fixedStep);
 }
 
 /// <summary>
@@ -86,6 +100,8 @@ public sealed class HookProbeSubclass : HookProbe;
 /// </summary>
 public sealed partial class BorrowingProbe : Node3D
 {
+    public bool SelfOnly(bool fixedStep) => HookReachesOnlyItself(fixedStep);
+
     void Update(in View view, Descendant<Node3D> target) => _ = target.Value.Position.X;
 
     void FixedUpdate(in View view, Descendant<Node3D> target) => target.Node?.GetHashCode();
@@ -312,5 +328,24 @@ public class NodeTests
     public void A_node_the_hook_creates_is_not_declared()
     {
         Assert.Empty(new CreatingProbe().Uses()!);
+    }
+
+    [Fact]
+    public void A_hook_without_borrows_reaches_only_itself_though_its_sibling_hook_borrows()
+    {
+        var probe = new HookProbe();
+        Assert.True(probe.SelfOnlyIn(fixedStep: false));
+
+        var borrowing = new BorrowingProbe();
+        Assert.False(borrowing.SelfOnly(fixedStep: false));
+        Assert.False(borrowing.SelfOnly(fixedStep: true));
+    }
+
+    [Fact]
+    public void Only_the_hook_that_borrows_loses_its_concurrency()
+    {
+        var probe = new HalfBorrowingProbe();
+        Assert.True(probe.SelfOnly(fixedStep: false));
+        Assert.False(probe.SelfOnly(fixedStep: true));
     }
 }

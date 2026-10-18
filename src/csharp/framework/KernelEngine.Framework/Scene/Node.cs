@@ -97,6 +97,13 @@ public abstract class Node
     protected internal virtual bool ReachesOnlyItself => false;
 
     /// <summary>
+    /// Whether one hook of this node type, <c>FixedUpdate</c> when <paramref name="fixedStep"/> is
+    /// true and <c>Update</c> otherwise, touches nothing beyond its own entity, so that its
+    /// instances may run concurrently in that hook's system. Base is <see cref="ReachesOnlyItself"/>.
+    /// </summary>
+    protected internal virtual bool HookReachesOnlyItself(bool fixedStep) => ReachesOnlyItself;
+
+    /// <summary>
     /// Appends the ECS components this node type reaches and how it reaches them. An override
     /// calls the base first and then adds its own, so an inherited set accumulates down the
     /// chain.

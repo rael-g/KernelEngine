@@ -19,7 +19,7 @@ namespace KernelEngine.Framework;
 /// <see cref="Node.CollectHookComponents"/>, or, when that access is not known, of the type's
 /// <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
 /// query and the reached ones its access list, with hierarchy and name always read, and it is
-/// sliced per entity when the type reaches only itself. Its query requires the type's tag, which
+/// sliced per entity when its hook reaches only itself. Its query requires the type's tag, which
 /// is declared a member of the host's exclusive group of type tags, so the
 /// systems of two types do not order each other through what they own. <c>OnLoad</c> runs the setup callback on the
 /// calling thread.
@@ -178,7 +178,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                             }
                         }
                     }
-                }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
+                }, queries: queries, accessList: access.ToArray(), perEntity: probe.HookReachesOnlyItself(fixedStep));
             }
 
             if (probe.HasBehavior) Register($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, fixedStep: false);
