@@ -101,7 +101,7 @@ ke_runtime_module_params size=32 align=8
   user_data 8
   on_load 16
   on_unload 24
-ke_runtime_system_params size=72 align=8
+ke_runtime_system_params size=104 align=8
   name 0
   phase 8
   user_data 16
@@ -112,18 +112,26 @@ ke_runtime_system_params size=72 align=8
   access_count 56
   pinned_thread 60
   per_entity 64
+  after 72
+  after_count 80
+  before 88
+  before_count 96
+  exclusive 100
 ke_runtime_params size=12 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
   max_systems_per_phase 8
-ke_runtime size=56 align=8
+ke_runtime size=80 align=8
   handle 0
   register_module 8
   register_system 16
   unregister_system 24
   last_system 32
-  tick 40
-  flush_render 48
+  declare_exclusive 40
+  declare_self_ordered 48
+  check_order 56
+  tick 64
+  flush_render 72
 ke_runtime_handle size=16 align=8
   ref 0
   destroy 8
@@ -217,15 +225,13 @@ ke_physics_2d_handle size=16 align=8
   destroy 8
 
 [physics_components]
-ke_body2d_component size=40 align=4
+ke_body2d_component size=28 align=4
   type 0
-  position 4
-  angle 12
-  velocity 16
-  angular_velocity 24
-  gravity_scale 28
-  fixed_rotation 32
-  body 36
+  velocity 4
+  angular_velocity 12
+  gravity_scale 16
+  fixed_rotation 20
+  body 24
 ke_collider2d_component size=40 align=4
   kind 0
   half_extents 4
@@ -297,14 +303,15 @@ ke_render_lighting size=48 align=4
   direction 0
   color 16
   ambient 32
-ke_render_pass_io size=40 align=8
+ke_render_pass_io size=48 align=8
   name 0
   reads 8
   reads_count 16
   writes 24
   writes_count 32
-  load 36
-ke_render_service size=368 align=8
+  chain 36
+  depth 40
+ke_render_service size=400 align=8
   handle 0
   declare 8
   import_texture 16
@@ -350,7 +357,11 @@ ke_render_service size=368 align=8
   lighting 336
   resource_binder 344
   backbuffer_format 352
-  resource_generation 360
+  resource_format 360
+  resource_generation 368
+  join_chain 376
+  leave_chain 384
+  chain_format 392
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8
@@ -407,7 +418,7 @@ ke_image_loader_handle size=16 align=8
   destroy 8
 
 [asset_resolver]
-ke_asset_resolver size=88 align=8
+ke_asset_resolver size=96 align=8
   handle 0
   resolve_texture 8
   free_texture 16
@@ -419,6 +430,7 @@ ke_asset_resolver size=88 align=8
   resolve_texture_into 64
   resolve_mesh_into 72
   resolve_material_into 80
+  resolve_path 88
 ke_asset_resolver_handle size=16 align=8
   ref 0
   destroy 8
@@ -459,7 +471,7 @@ ke_world_handle size=16 align=8
   destroy 8
 
 [scene_tree]
-ke_scene_tree size=96 align=8
+ke_scene_tree size=104 align=8
   handle 0
   root 8
   create_node 16
@@ -472,6 +484,7 @@ ke_scene_tree size=96 align=8
   first_child 72
   next_sibling 80
   propagate_transforms 88
+  hierarchy_generation 96
 ke_scene_tree_handle size=16 align=8
   ref 0
   destroy 8
@@ -508,20 +521,22 @@ ke_signal_bus_handle size=16 align=8
   destroy 8
 
 [script_host]
-ke_script_host size=104 align=8
+ke_script_host size=120 align=8
   handle 0
   register_type 8
   type_lookup 16
   type_components 24
   type_reach 32
-  bind 40
-  unbind 48
-  bind_deferred 56
-  unbind_deferred 64
-  instance_of 72
-  instance_count 80
-  instances 88
-  resolve 96
+  type_tag 40
+  type_tag_group 48
+  bind 56
+  unbind 64
+  bind_deferred 72
+  unbind_deferred 80
+  instance_of 88
+  instance_count 96
+  instances 104
+  resolve 112
 ke_script_host_handle size=16 align=8
   ref 0
   destroy 8
