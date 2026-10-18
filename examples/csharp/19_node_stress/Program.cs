@@ -11,6 +11,7 @@ int instances = ArgValue("--instances", 2000);
 int ticks = ArgValue("--ticks", 300);
 int churn = ArgValue("--churn", 0);
 string kind = ArgText("--type", "both");
+uint workers = (uint)ArgValue("--workers", 0);
 
 bool breakBorrow = Environment.GetCommandLineArgs().Contains("--break-borrow");
 
@@ -19,7 +20,7 @@ var coupled = new List<Coupled>();
 
 var services = new ServiceCollection()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .Add<IScheduler>(new EnkiScheduler(workers))
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new FrameworkModule(new SignalBusCapacities(
         MaxConnections: (uint)instances + 64,
