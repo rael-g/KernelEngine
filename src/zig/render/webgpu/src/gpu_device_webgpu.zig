@@ -733,7 +733,7 @@ fn shaderLanguage(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_shader_languag
 
 /// Answers depth zero to one, no y flip and a left-handed clip space.
 fn getNdcConvention(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_ndc_convention {
-    return .{ .z_zero_to_one = true, .y_flip = false, .clip_left_handed = true };
+    return .{ .z_zero_to_one = true, .y_flip = false };
 }
 
 const SPIRV_MAGIC: u32 = 0x07230203;

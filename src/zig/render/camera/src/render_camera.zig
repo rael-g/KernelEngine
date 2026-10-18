@@ -208,7 +208,7 @@ const Fixture = struct {
         self.view_space.orthographic = &fakeOrthographic;
         self.view_space.perspective = &fakePerspective;
         self.view_space.view_from_transform = &fakeViewFromTransform;
-        self.clip = .{ .z_zero_to_one = true, .y_flip = true, .clip_left_handed = false };
+        self.clip = .{ .z_zero_to_one = true, .y_flip = true };
         self.handle = ke_render_camera_create(&self.view_space, &self.clip, null);
     }
 

@@ -16,7 +16,7 @@ hands on. How a part works inside is on the generated page of its file. Contract
 ## What ties the parts together
 
 **Two questions, two contracts.** `ke_ndc_convention` answers what clip space the device expects:
-`z_zero_to_one`, `y_flip` and `clip_left_handed`. `ke_view_space` answers which way the engine's
+`z_zero_to_one` and `y_flip`. `ke_view_space` answers which way the engine's
 camera faces and what the matrices look like for that. Neither knows the other's choice; the
 projection slots of `ke_view_space` take the convention as an argument.
 
@@ -49,5 +49,3 @@ and reads `y_flip` for its own orthographic projection.
   built the view matrix.
 - A transform whose rotation terms are all near zero is not a rotation: the view space then aims
   the camera at the world origin.
-- Only `z_zero_to_one` and `y_flip` are read by a matrix builder; `clip_left_handed` is read by
-  none.
