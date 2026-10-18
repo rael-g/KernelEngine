@@ -1,6 +1,6 @@
 //! Keeps the entity components of 2D bodies and colliders in agreement with a `ke_physics_2d`
-//! world, through two fixed-update-phase systems. It also exports the set of those components a
-//! scene file can author.
+//! world, through two fixed-post-update-phase systems. It also exports the set of those components
+//! a scene file can author.
 
 const std = @import("std");
 
@@ -56,16 +56,16 @@ fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anyt
     if (lg.log) |f| f(lg, &ev);
 }
 
-/// The fixed-update-phase system that reconciles every body with its component and transform, in
-/// this order: a component with no body gets one at its transform's position and rotation; a transform
-/// or a velocity that differs from the world's pushes it in; the world steps by `dt`; every body's
-/// state is then written back, its velocities into its component and its position and angle into
-/// its transform. A body created here is therefore simulated in the same update. The body type,
-/// gravity scale and fixed rotation are read only when the body is created. A failed creation, or
-/// a body the module cannot record, leaves the component without a body, to be retried on the next
-/// update; nothing is written to the error output and the system still returns true. Before the
-/// step, a recorded body whose entity no longer holds it, destroyed or stripped of the component,
-/// is destroyed.
+/// The fixed-post-update-phase system that reconciles every body with its component and transform,
+/// in this order: a component with no body gets one at its transform's position and rotation; a
+/// transform or a velocity that differs from the world's pushes it in; the world steps by `dt`;
+/// every body's state is then written back, its velocities into its component and its position and
+/// angle into its transform. A body created here is therefore simulated in the same update. The
+/// body type, gravity scale and fixed rotation are read only when the body is created. A failed
+/// creation, or a body the module cannot record, leaves the component without a body, to be retried
+/// on the next update; nothing is written to the error output and the system still returns true.
+/// Before the step, a recorded body whose entity no longer holds it, destroyed or stripped of the
+/// component, is destroyed.
 fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
     const m = moduleOf(user);
     const p = m.physics;
@@ -169,16 +169,15 @@ fn countColliders(ctx: ?*c.ke_system_ctx) struct { total: usize, unattached: usi
     return .{ .total = total, .unattached = unattached };
 }
 
-/// The fixed-update-phase system that attaches fixtures to colliders. It returns at once when every
-/// collider is attached, or when neither the tree's hierarchy generation, the module's body
-/// generation nor the number of colliders moved since its last attempt, so a collider that
-/// resolved to no body is retried, and its warning logged again, only once its ancestors or the
-/// bodies may have changed. Otherwise each unattached collider is resolved to a body through
-/// `findBody` and gets a fixture whose offset is its own transform's position. Its entity indexes
-/// are complete before the first fixture is added, so an out-of-memory failure, reported through
-/// the error output, leaves every collider unattached. A shape that resolves to no body, or whose
-/// fixture the world refuses, is logged and stays unattached; neither is reported through the
-/// error output.
+/// The fixed-post-update-phase system that attaches fixtures to colliders. It returns at once when
+/// every collider is attached, or when neither the tree's hierarchy generation, the module's body
+/// generation nor the number of colliders moved since its last attempt, so a collider that resolved
+/// to no body is retried, and its warning logged again, only once its ancestors or the bodies may
+/// have changed. Otherwise each unattached collider is resolved to a body through `findBody` and
+/// gets a fixture whose offset is its own transform's position. Its entity indexes are complete
+/// before the first fixture is added, so an out-of-memory failure, reported through the error
+/// output, leaves every collider unattached. A shape that resolves to no body, or whose fixture the
+/// world refuses, is logged and stays unattached; neither is reported through the error output.
 fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     _ = dt;
     const m = moduleOf(user);
@@ -287,9 +286,10 @@ fn destroyHandle(self: ?*c.ke_physics_body2d_module) callconv(.c) void {
 }
 
 /// Registers the component ids with the ECS, then the body system and the collider system, both in
-/// the fixed-update phase. A missing argument or a failed allocation returns a null handle and sets
-/// nothing on the error output. A system the runtime refuses passes the runtime's error through
-/// the error output and returns a null handle. On success, the handle's `destroy` frees the module.
+/// the fixed post-update phase, after the fixed update where scripts write. A missing argument or a
+/// failed allocation returns a null handle and sets nothing on the error output. A system the
+/// runtime refuses passes the runtime's error through the error output and returns a null handle.
+/// On success, the handle's `destroy` frees the module.
 export fn ke_physics_body2d_module_create(
     params: ?*const c.ke_physics_body2d_module_params,
     out_error: ?*?*c.ke_error,
@@ -317,7 +317,7 @@ export fn ke_physics_body2d_module_create(
 
     var sp = std.mem.zeroes(c.ke_runtime_system_params);
     sp.name = "physics.body2d";
-    sp.phase = c.KE_PHASE_FIXED_UPDATE;
+    sp.phase = c.KE_PHASE_FIXED_POST_UPDATE;
     sp.queries = &m.body_queries;
     sp.query_count = m.body_queries.len;
     sp.pinned_thread = 0;
@@ -333,7 +333,7 @@ export fn ke_physics_body2d_module_create(
 
     var cp = std.mem.zeroes(c.ke_runtime_system_params);
     cp.name = "physics.collider2d";
-    cp.phase = c.KE_PHASE_FIXED_UPDATE;
+    cp.phase = c.KE_PHASE_FIXED_POST_UPDATE;
     cp.queries = &m.collider_queries;
     cp.query_count = m.collider_queries.len;
     cp.pinned_thread = 0;

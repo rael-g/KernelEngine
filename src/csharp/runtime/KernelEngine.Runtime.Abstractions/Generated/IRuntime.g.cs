@@ -17,7 +17,7 @@ public delegate void ModuleUnload(IRuntime runtime);
 
 /// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
 /// <param name="ctx">The body's only doorway to component memory for this call. Opaque; pass it to the entry points that take one.</param>
-/// <param name="dt">Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE.</param>
+/// <param name="dt">Seconds since the previous tick, or the fixed timestep in the three fixed phases.</param>
 public delegate void SystemExecute(nint ctx, float dt);
 
 /// <summary>The runtime contract game code depends on, so a caller names a capability rather than the <see cref="Runtime"/> that carries it.</summary>

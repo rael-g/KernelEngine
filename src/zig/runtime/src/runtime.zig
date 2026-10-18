@@ -51,7 +51,7 @@ const resolveInto = queries_mod.resolveInto;
 
 const E = @import("kerror").Errors(c);
 
-const KE_RUNTIME_PHASE_COUNT = 7;
+const KE_RUNTIME_PHASE_COUNT = 9;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
@@ -924,7 +924,9 @@ fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error)
         h.state.fixed_accumulator = h.state.fixed_dt_max_accum;
     }
     while (failure.type == null and h.state.fixed_accumulator >= h.state.fixed_dt) {
-        failure = runtimeRunPhase(h, c.KE_PHASE_FIXED_UPDATE, h.state.fixed_dt);
+        for ([_]c.ke_phase{ c.KE_PHASE_FIXED_PRE_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_POST_UPDATE }) |phase| {
+            if (failure.type == null) failure = runtimeRunPhase(h, phase, h.state.fixed_dt);
+        }
         h.state.fixed_accumulator -= h.state.fixed_dt;
     }
 
@@ -1669,6 +1671,28 @@ test "the startup phase runs once, before the first tick's other phases" {
         if (ph == c.KE_PHASE_STARTUP) startups += 1;
     }
     try testing.expectEqual(@as(usize, 1), startups);
+}
+
+test "each fixed step runs the fixed pre-update, update and post-update phases in that order" {
+    var r = InlineRuntime{};
+    try r.init();
+
+    var log = PhaseLog{};
+    const phases = [_]c_int{ c.KE_PHASE_FIXED_POST_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_PRE_UPDATE };
+    var entries: [phases.len]PhaseLogEntry = undefined;
+    for (phases, 0..) |ph, i| {
+        entries[i] = .{ .log = &log, .phase = ph };
+        var sys = systemParams("Logged", ph);
+        sys.execute = &phaseLogBody;
+        sys.user_data = &entries[i];
+        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    }
+
+    try testing.expect(r.rt().tick.?(r.rt(), 2.0 / 60.0, null));
+    r.bare.deinit();
+
+    const step = [_]c_int{ c.KE_PHASE_FIXED_PRE_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_POST_UPDATE };
+    try testing.expectEqualSlices(c_int, &(step ++ step), log.seen[0..log.count]);
 }
 
 test "the shutdown phase runs once when the runtime is destroyed, after every tick" {

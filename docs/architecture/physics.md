@@ -20,11 +20,11 @@ and a transform; a shape is its own entity, a descendant of the body's entity, w
 field of the component and is the only link between the two sides.
 
 **The module is two systems.** `ke_physics_body2d_module_create` registers "physics.body2d" and
-"physics.collider2d", both in `KE_PHASE_FIXED_UPDATE`, so the world steps by the runtime's fixed
-step whatever the frame time. The first reads and writes
-"body2d" and "transform2d"; the second writes "collider2d" and reads "body2d", "transform2d" and
-"hierarchy". They conflict on "body2d", so the runtime separates them into waves in registration
-order, body first.
+"physics.collider2d", both in `KE_PHASE_FIXED_POST_UPDATE`, after the scripts' fixed update, so the
+world steps by the runtime's fixed step whatever the frame time. The first reads and writes "body2d"
+and "transform2d"; the second writes "collider2d" and reads "body2d", "transform2d" and "hierarchy".
+They conflict on "body2d", so the runtime separates them into waves in registration order, body
+first.
 
 **The transform is the pose.** "body2d" holds motion only. For each body, "physics.body2d" creates
 the body at the position and rotation of "transform2d" when the component has none, pushes the

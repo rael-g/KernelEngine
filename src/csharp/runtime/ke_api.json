@@ -15,28 +15,38 @@
           "doc": "Runs once, before the other phases of the first tick."
         },
         {
-          "name": "KE_PHASE_FIXED_UPDATE",
+          "name": "KE_PHASE_FIXED_PRE_UPDATE",
           "value": 2,
-          "doc": "Runs once, before the other phases of the first tick."
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
+        },
+        {
+          "name": "KE_PHASE_FIXED_UPDATE",
+          "value": 3,
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
+        },
+        {
+          "name": "KE_PHASE_FIXED_POST_UPDATE",
+          "value": 4,
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
         },
         {
           "name": "KE_PHASE_UPDATE",
-          "value": 3,
-          "doc": "Runs once, before the other phases of the first tick."
+          "value": 5,
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
         },
         {
           "name": "KE_PHASE_POST_UPDATE",
-          "value": 4,
-          "doc": "Runs once, before the other phases of the first tick."
+          "value": 6,
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
         },
         {
           "name": "KE_PHASE_RENDER",
-          "value": 5,
+          "value": 7,
           "doc": "Runs asynchronously against the next tick\u0027s sim phases. Its systems read extracted query results, never live storage, and may not mutate structure."
         },
         {
           "name": "KE_PHASE_SHUTDOWN",
-          "value": 6,
+          "value": 8,
           "doc": "Runs once when the runtime is destroyed, if a tick ever ran. A failure of its bodies is not reported."
         }
       ]
@@ -606,7 +616,7 @@
           "name": "dt",
           "type": "float",
           "tags": [],
-          "doc": "Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE."
+          "doc": "Seconds since the previous tick, or the fixed timestep in the three fixed phases."
         },
         {
           "name": "out_error",

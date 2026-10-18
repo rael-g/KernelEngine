@@ -19,17 +19,21 @@ typedef uint64_t ke_system_id;
 
 typedef enum ke_phase {
     /// Runs once, before the other phases of the first tick.
-    KE_PHASE_STARTUP      = 0,
-    KE_PHASE_PRE_UPDATE   = 1,
-    KE_PHASE_FIXED_UPDATE = 2,
-    KE_PHASE_UPDATE       = 3,
-    KE_PHASE_POST_UPDATE  = 4,
+    KE_PHASE_STARTUP           = 0,
+    KE_PHASE_PRE_UPDATE        = 1,
+    /// The three fixed phases run in this order once per fixed step, as many steps as the
+    /// tick's time covers, with the step's duration as `dt`.
+    KE_PHASE_FIXED_PRE_UPDATE  = 2,
+    KE_PHASE_FIXED_UPDATE      = 3,
+    KE_PHASE_FIXED_POST_UPDATE = 4,
+    KE_PHASE_UPDATE            = 5,
+    KE_PHASE_POST_UPDATE       = 6,
     /// Runs asynchronously against the next tick's sim phases. Its systems read
     /// extracted query results, never live storage, and may not mutate structure.
-    KE_PHASE_RENDER       = 5,
+    KE_PHASE_RENDER            = 7,
     /// Runs once when the runtime is destroyed, if a tick ever ran. A failure of its
     /// bodies is not reported.
-    KE_PHASE_SHUTDOWN     = 6,
+    KE_PHASE_SHUTDOWN          = 8,
 } ke_phase;
 
 typedef enum ke_access {
@@ -95,7 +99,7 @@ typedef struct ke_runtime_module_params {
 ///                  call. Opaque; pass it to the entry points that take one.
 /// @param user_data [context] Opaque context forwarded from register_system.
 /// @param dt        Seconds since the previous tick, or the fixed timestep in
-///                  KE_PHASE_FIXED_UPDATE.
+///                  the three fixed phases.
 /// @param out_error Set when the body cannot finish its work; the tick fails with it.
 /// @return false when the body failed.
 typedef bool (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt, ke_error **out_error);
