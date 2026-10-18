@@ -64,6 +64,12 @@ public abstract class Node
     protected internal virtual void OnUpdate(in View view) { }
 
     /// <summary>
+    /// Called every fixed step on a bound node of a type that has fixed-step behavior, with the
+    /// step's duration in the view. Base implementation is a no-op.
+    /// </summary>
+    protected internal virtual void OnFixedUpdate(in View view) { }
+
+    /// <summary>
     /// Called once when the node is removed from the world, children first. Base implementation
     /// is a no-op.
     /// </summary>
@@ -77,9 +83,16 @@ public abstract class Node
     protected internal virtual bool HasBehavior => false;
 
     /// <summary>
+    /// True when the node type has fixed-step logic and so gets a fixed-step system. Overridden by
+    /// <c>NodePropertyGenerator</c> for a type that declares <c>FixedUpdate</c> or overrides
+    /// <see cref="OnFixedUpdate"/>; base is false.
+    /// </summary>
+    protected internal virtual bool HasFixedBehavior => false;
+
+    /// <summary>
     /// Whether this node type's behavior touches nothing beyond its own entity, so that its
     /// instances may run concurrently. False for a node that borrows another node, and for a
-    /// hand-written <see cref="OnUpdate"/>. Base is false.
+    /// hand-written <see cref="OnUpdate"/> or <see cref="OnFixedUpdate"/>. Base is false.
     /// </summary>
     protected internal virtual bool ReachesOnlyItself => false;
 

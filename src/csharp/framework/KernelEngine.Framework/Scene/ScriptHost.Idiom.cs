@@ -75,7 +75,7 @@ public unsafe partial class ScriptHost
 
     private void AnnounceBehavior(Node node)
     {
-        if (!node.HasBehavior) return;
+        if (!node.HasBehavior && !node.HasFixedBehavior) return;
         var type = node.GetType();
         bool first;
         lock (_announcedBehaviors) first = _announcedBehaviors.Add(type);

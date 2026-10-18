@@ -19,7 +19,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 {
     /// <summary>
     /// Registers the classes that have a <c>partial</c> auto-property or a method named
-    /// <c>Update</c> or <c>On</c> with at least one parameter, and generates one part for each
+    /// <c>Update</c>, <c>FixedUpdate</c> or <c>On</c> with at least one parameter, and generates one part for each
     /// that derives from <c>Node</c>.
     /// </summary>
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -30,7 +30,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         var behaviorOwners = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is MethodDeclarationSyntax { Parent: ClassDeclarationSyntax c } m
-                && (m.Identifier.ValueText == "Update" || m.Identifier.ValueText == "On")
+                && (m.Identifier.ValueText == "Update" || m.Identifier.ValueText == "FixedUpdate" || m.Identifier.ValueText == "On")
                 && m.ParameterList.Parameters.Count > 0
                 && c is not null,
             static (ctx, _) => (ClassDeclarationSyntax)ctx.Node.Parent!);
@@ -58,10 +58,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     /// from every <c>GeneratedNodeComponent</c> attribute on the class's own declaration, or, with
     /// none, from one slot backed by a struct written from the <c>partial</c> properties and
     /// named after the class in snake case. A property goes to the slot whose struct declares its
-    /// field. Behavior members are emitted only when the class has <c>Update</c> or overrides
-    /// <c>OnUpdate</c>. A class that is not <c>partial</c> emits nothing, and reports
-    /// <c>KESG005</c> if it declares <c>Update</c>. Property and field types must match, or
-    /// differ only by <c>bool</c> over <c>byte</c>, or <c>string</c> over a character array;
+    /// field. Behavior members are emitted for each hook the class declares, <c>Update</c> or
+    /// <c>FixedUpdate</c>, or whose <c>Node</c> override it writes. A class that is not
+    /// <c>partial</c> emits nothing, and reports <c>KESG005</c> for each hook it declares.
+    /// Property and field types must match, or differ only by <c>bool</c> over <c>byte</c>, or
+    /// <c>string</c> over a character array;
     /// otherwise <c>KESG001</c>. A property that no slot, or more than one slot, declares is
     /// <c>KESG002</c>, and <c>KESG003</c> is a pin naming a struct the class does not carry.
     /// </summary>
@@ -73,10 +74,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         if (!classDecl.Modifiers.Any(SyntaxKind.PartialKeyword))
         {
-            if (classSymbol.GetMembers("Update").OfType<IMethodSymbol>().Any(m =>
-                    SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.Parameters.Length > 0))
-                spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, classDecl.Identifier.GetLocation(),
-                    classSymbol.Name, "the class is not partial"));
+            foreach (var hook in Hooks)
+                if (classSymbol.GetMembers(hook.Method).OfType<IMethodSymbol>().Any(m =>
+                        SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.Parameters.Length > 0))
+                    spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, classDecl.Identifier.GetLocation(),
+                        classSymbol.Name, hook.Method, "the class is not partial"));
             return;
         }
 
@@ -150,67 +152,22 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         }
         sb.AppendLine();
 
-        var hasOnUpdate = classSymbol.GetMembers("OnUpdate").OfType<IMethodSymbol>()
-            .Any(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
-
-        var declaredUpdates = classSymbol.GetMembers("Update").OfType<IMethodSymbol>()
-            .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol))
-            .ToImmutableArray();
-
-        var updateMethod = declaredUpdates.FirstOrDefault(m =>
-            m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
-
-        foreach (var m in declaredUpdates)
+        var borrowList = new List<IParameterSymbol>();
+        var anyHook = false;
+        var anyHandWritten = false;
+        foreach (var hook in Hooks)
         {
-            if (SymbolEqualityComparer.Default.Equals(m, updateMethod)) continue;
-            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, m.Locations.FirstOrDefault(),
-                classSymbol.Name, "its first parameter is not a View"));
+            var hookBorrows = EmitHook(spc, sb, classSymbol, overrideModifier, hook, out var declared, out var handWritten);
+            anyHook |= declared;
+            anyHandWritten |= handWritten;
+            borrowList.AddRange(hookBorrows);
         }
+        var borrows = borrowList.ToImmutableArray();
 
-        if (updateMethod is not null && hasOnUpdate)
-            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, updateMethod.Locations.FirstOrDefault(),
-                classSymbol.Name, "it also overrides OnUpdate, which takes precedence"));
-
-        if (updateMethod is not null)
-            foreach (var pp in updateMethod.Parameters.Skip(1))
-                if (BorrowKindOf(pp.Type) is null)
-                    spc.ReportDiagnostic(Diagnostic.Create(UpdateParameterRule, pp.Locations.FirstOrDefault(),
-                        pp.Name, pp.Type.ToDisplayString()));
-
-        var borrows = updateMethod is null
-            ? ImmutableArray<IParameterSymbol>.Empty
-            : updateMethod.Parameters.Skip(1)
-                .Where(pp => BorrowKindOf(pp.Type) is not null)
-                .ToImmutableArray();
-
-        if (hasOnUpdate || updateMethod is not null)
+        if (anyHook)
         {
-            sb.AppendLine($"    {overrideModifier} override bool HasBehavior => true;");
-            sb.AppendLine();
-            var reachesOnlySelf = !hasOnUpdate && borrows.Length == 0;
+            var reachesOnlySelf = !anyHandWritten && borrows.Length == 0;
             sb.AppendLine($"    {overrideModifier} override bool ReachesOnlyItself => {(reachesOnlySelf ? "true" : "false")};");
-            sb.AppendLine();
-        }
-
-        if (updateMethod is not null && !hasOnUpdate)
-        {
-            sb.AppendLine($"    {overrideModifier} override void OnUpdate(in global::KernelEngine.Framework.View view)");
-            sb.AppendLine("    {");
-            var args = new List<string> { "in view" };
-            foreach (var pp in updateMethod.Parameters.Skip(1))
-            {
-                var kind = BorrowKindOf(pp.Type);
-                if (kind is null) continue;
-                var arg = ((INamedTypeSymbol)pp.Type).TypeArguments[0].ToDisplayString();
-                if (kind == "Emit") { args.Add($"BorrowEmit<{arg}>()"); continue; }
-                var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
-                var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : "";
-                var reach = ReachOf((INamedTypeSymbol)pp.Type)!;
-                args.Add($"new global::KernelEngine.Framework.{kind}<{arg}>("
-                    + $"Borrow<{arg}>(\"{nodeName}\", global::KernelEngine.Framework.ScriptBorrow.{reach}))");
-            }
-            sb.AppendLine($"        Update({string.Join(", ", args)});");
-            sb.AppendLine("    }");
             sb.AppendLine();
         }
 
@@ -616,10 +573,94 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// A behavior method a node may declare, the <c>Node</c> override its dispatch is written into
+    /// and the flag that tells the host the type has one.
+    /// </summary>
+    sealed class Hook(string method, string @override, string flag)
+    {
+        public string Method { get; } = method;
+        public string Override { get; } = @override;
+        public string Flag { get; } = flag;
+    }
+
+    static readonly Hook[] Hooks =
+    [
+        new("Update", "OnUpdate", "HasBehavior"),
+        new("FixedUpdate", "OnFixedUpdate", "HasFixedBehavior"),
+    ];
+
+    /// <summary>
+    /// Emits the flag and the dispatch of one behavior hook: a declared <c>Hook.Method</c> taking a
+    /// <c>View</c> and borrows is called from a generated <c>Hook.Override</c>, and a hand-written
+    /// override counts as the hook too. Reports <c>KESG005</c> for a method that cannot be
+    /// dispatched and <c>KESG006</c> for a parameter that is not a borrow, and returns the borrow
+    /// parameters of the dispatched method.
+    /// </summary>
+    static ImmutableArray<IParameterSymbol> EmitHook(SourceProductionContext spc, StringBuilder sb,
+        INamedTypeSymbol classSymbol, string overrideModifier, Hook hook, out bool declared, out bool handWritten)
+    {
+        handWritten = classSymbol.GetMembers(hook.Override).OfType<IMethodSymbol>()
+            .Any(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
+
+        var declaredMethods = classSymbol.GetMembers(hook.Method).OfType<IMethodSymbol>()
+            .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol))
+            .ToImmutableArray();
+
+        var method = declaredMethods.FirstOrDefault(m =>
+            m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
+
+        foreach (var m in declaredMethods)
+        {
+            if (SymbolEqualityComparer.Default.Equals(m, method)) continue;
+            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, m.Locations.FirstOrDefault(),
+                classSymbol.Name, hook.Method, "its first parameter is not a View"));
+        }
+
+        if (method is not null && handWritten)
+            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, method.Locations.FirstOrDefault(),
+                classSymbol.Name, hook.Method, $"it also overrides {hook.Override}, which takes precedence"));
+
+        if (method is not null)
+            foreach (var pp in method.Parameters.Skip(1))
+                if (BorrowKindOf(pp.Type) is null)
+                    spc.ReportDiagnostic(Diagnostic.Create(UpdateParameterRule, pp.Locations.FirstOrDefault(),
+                        pp.Name, hook.Method, pp.Type.ToDisplayString()));
+
+        declared = handWritten || method is not null;
+        if (!declared) return ImmutableArray<IParameterSymbol>.Empty;
+
+        sb.AppendLine($"    {overrideModifier} override bool {hook.Flag} => true;");
+        sb.AppendLine();
+
+        if (method is null || handWritten) return ImmutableArray<IParameterSymbol>.Empty;
+
+        sb.AppendLine($"    {overrideModifier} override void {hook.Override}(in global::KernelEngine.Framework.View view)");
+        sb.AppendLine("    {");
+        var args = new List<string> { "in view" };
+        foreach (var pp in method.Parameters.Skip(1))
+        {
+            var kind = BorrowKindOf(pp.Type);
+            if (kind is null) continue;
+            var arg = ((INamedTypeSymbol)pp.Type).TypeArguments[0].ToDisplayString();
+            if (kind == "Emit") { args.Add($"BorrowEmit<{arg}>()"); continue; }
+            var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
+            var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : "";
+            var reach = ReachOf((INamedTypeSymbol)pp.Type)!;
+            args.Add($"new global::KernelEngine.Framework.{kind}<{arg}>("
+                + $"Borrow<{arg}>(\"{nodeName}\", global::KernelEngine.Framework.ScriptBorrow.{reach}))");
+        }
+        sb.AppendLine($"        {hook.Method}({string.Join(", ", args)});");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+
+        return method.Parameters.Skip(1).Where(pp => BorrowKindOf(pp.Type) is not null).ToImmutableArray();
+    }
+
     static readonly DiagnosticDescriptor UpdateNotDispatchedRule = new(
         id: "KESG005",
         title: "Behavior method will never run",
-        messageFormat: "'{0}' declares Update but {1}, so no dispatch is generated and the method never runs",
+        messageFormat: "'{0}' declares {1} but {2}, so no dispatch is generated and the method never runs",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -627,7 +668,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     static readonly DiagnosticDescriptor UpdateParameterRule = new(
         id: "KESG006",
         title: "Behavior parameter is not a borrow",
-        messageFormat: "Parameter '{0}' of Update is {1}, which is not a borrow wrapper or Emit<T>; every access a behavior has must be a borrow parameter",
+        messageFormat: "Parameter '{0}' of {1} is {2}, which is not a borrow wrapper or Emit<T>; every access a behavior has must be a borrow parameter",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

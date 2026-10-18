@@ -144,44 +144,54 @@ public sealed class SceneNodesModule : IRuntimeModule
             var queries = terms.Length > 0 ? new[] { new QueryDecl { Terms = terms } } : [];
             var queried = queries.Length > 0;
 
-            runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (ctx, dt) =>
-            {
-                var view = new View(scriptHost, dt, _inputSnapshot, ctx);
-                using (scriptHost.EnterSystem(ctx))
+            void Register(string name, RuntimePhase phase, bool fixedStep) =>
+                runtime.RegisterSystem(name, phase, (ctx, dt) =>
                 {
-                    if (!queried)
+                    var view = new View(scriptHost, dt, _inputSnapshot, ctx);
+                    using (scriptHost.EnterSystem(ctx))
                     {
-                        var behaviors = scriptHost.BehaviorsOf(type);
-                        var (from, upto) = SliceOf(ctx, behaviors.Count);
-                        for (int i = from; i < upto; i++)
-                            behaviors[i].OnUpdate(in view);
-                        return;
-                    }
-
-                    var segments = KernelEngine.Runtime.SystemCtx.Of(ctx).View(0);
-                    var total = 0;
-                    for (int s = 0; s < segments.Length; s++)
-                        total += segments[s].Entities.Length;
-
-                    var (first, last) = SliceOf(ctx, total);
-                    var seen = 0;
-                    for (int s = 0; s < segments.Length && seen < last; s++)
-                    {
-                        var entities = segments[s].Entities;
-                        for (int e = 0; e < entities.Length; e++, seen++)
+                        if (!queried)
                         {
-                            if (seen < first) continue;
-                            if (seen >= last) break;
-                            if (scriptHost.NodeOf(entities[e]) is { } node && node.GetType() == type)
-                                node.OnUpdate(in view);
+                            var behaviors = scriptHost.BehaviorsOf(type);
+                            var (from, upto) = SliceOf(ctx, behaviors.Count);
+                            for (int i = from; i < upto; i++)
+                                Run(behaviors[i], in view, fixedStep);
+                            return;
+                        }
+
+                        var segments = KernelEngine.Runtime.SystemCtx.Of(ctx).View(0);
+                        var total = 0;
+                        for (int s = 0; s < segments.Length; s++)
+                            total += segments[s].Entities.Length;
+
+                        var (first, last) = SliceOf(ctx, total);
+                        var seen = 0;
+                        for (int s = 0; s < segments.Length && seen < last; s++)
+                        {
+                            var entities = segments[s].Entities;
+                            for (int e = 0; e < entities.Length; e++, seen++)
+                            {
+                                if (seen < first) continue;
+                                if (seen >= last) break;
+                                if (scriptHost.NodeOf(entities[e]) is { } node && node.GetType() == type)
+                                    Run(node, in view, fixedStep);
+                            }
                         }
                     }
-                }
-            }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
+                }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
+
+            if (probe.HasBehavior) Register($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, fixedStep: false);
+            if (probe.HasFixedBehavior) Register($"Scene.FixedBehaviors.{type.Name}", RuntimePhase.FixedUpdate, fixedStep: true);
         };
 
         try { _setup(scriptHost, services); }
         catch (Exception ex) { throw new InvalidOperationException("Scene setup failed", ex); }
+    }
+
+    private static void Run(Node node, in View view, bool fixedStep)
+    {
+        if (fixedStep) node.OnFixedUpdate(in view);
+        else node.OnUpdate(in view);
     }
 
     private static ComponentAccess Touches(uint cid, bool writes) =>

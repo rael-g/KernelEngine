@@ -65,8 +65,26 @@ public sealed partial class ConstructedProbe : Node2D
     public ConstructedProbe(float rotation) => Rotation = rotation;
 }
 
+/// <summary>
+/// A node that only has fixed-step behavior.
+/// </summary>
+public sealed partial class FixedProbe : Node
+{
+    public partial float Speed { get; set; }
+
+    void FixedUpdate(in View view) { }
+
+    public (bool PerFrame, bool FixedStep) Hooks() => (HasBehavior, HasFixedBehavior);
+}
+
 public class NodeTests
 {
+    [Fact]
+    public void A_node_declaring_only_FixedUpdate_has_fixed_step_behavior_and_no_per_frame_behavior()
+    {
+        Assert.Equal((false, true), new FixedProbe().Hooks());
+    }
+
     [Fact]
     public void A_node_built_through_its_own_constructor_starts_from_its_component_defaults()
     {
