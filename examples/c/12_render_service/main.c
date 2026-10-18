@@ -55,7 +55,8 @@ int main(void)
         &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &err);
     if (!binder.ref) die("resource binder", err);
 
-    ke_render_service_handle core = ke_render_service_create(gpu.ref, target.ref, ecs.ref, "shaders", binder.ref, &err);
+    ke_render_service_handle core = ke_render_service_create(&(ke_render_service_params){
+        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .binder = binder.ref }, &err);
     if (!core.ref) die("render core", err);
 
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
@@ -74,15 +75,16 @@ int main(void)
                          .src_alpha = KE_GPU_BLEND_FACTOR_ONE, .dst_alpha = KE_GPU_BLEND_FACTOR_ZERO,
                          .alpha_op = KE_GPU_BLEND_OP_ADD, .write_mask = 0x0F },
         .depth_stencil = { .depth_test_enabled = 0 },
-        .color_target_formats = { core.ref->backbuffer_format(core.ref) },
+        .color_target_formats = { core.ref->chain_format(core.ref, KE_RENDER_STAGE_OPAQUE) },
         .color_target_count = 1,
     };
     ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
     if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", err);
     gpu.ref->destroy_shader_module(gpu.ref, shader);
 
-    const char *writes[] = { "backbuffer" };
-    ke_render_pass_io io = { .name = "triangle", .reads = NULL, .reads_count = 0, .writes = writes, .writes_count = 1 };
+    ke_render_chain_link link = core.ref->join_chain(core.ref, KE_RENDER_STAGE_OPAQUE, KE_RENDER_CHAIN_DRAW_OVER, &err);
+    if (link == KE_RENDER_CHAIN_NONE) die("join chain", err);
+    ke_render_pass_io io = { .name = "triangle", .chain = link };
 
     printf("Triangle drawn through ke_render_service. Close the window to exit.\n");
     while (!win.ref->should_close(win.ref))
@@ -102,6 +104,7 @@ int main(void)
     }
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
+    core.ref->leave_chain(core.ref, link);
     core.destroy(core.ref);
     binder.destroy(binder.ref);
     ecs.destroy(ecs.ref);

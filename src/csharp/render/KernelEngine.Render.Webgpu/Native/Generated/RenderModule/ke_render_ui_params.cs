@@ -18,10 +18,4 @@ public unsafe partial struct ke_render_ui_params
 
     [NativeTypeName("ke_ndc_convention")]
     public KernelEngine.View.Native.ke_ndc_convention ndc;
-
-    [NativeTypeName("const char *")]
-    public sbyte* input;
-
-    [NativeTypeName("const char *")]
-    public sbyte* output;
 }

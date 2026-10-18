@@ -143,4 +143,13 @@ public unsafe partial struct ke_render_service
 
     [NativeTypeName("uint32_t (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, uint> resource_generation;
+
+    [NativeTypeName("ke_render_chain_link (*)(struct ke_render_service *, ke_render_stage, ke_render_chain_mode, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_stage, ke_render_chain_mode, KernelEngine.Common.Native.ke_error**, uint> join_chain;
+
+    [NativeTypeName("void (*)(struct ke_render_service *, ke_render_chain_link)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, uint, void> leave_chain;
+
+    [NativeTypeName("ke_gpu_texture_format (*)(struct ke_render_service *, ke_render_stage)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_stage, ke_gpu_texture_format> chain_format;
 }

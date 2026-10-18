@@ -12,6 +12,7 @@ pub const gpa = heap.gpa;
 
 const resource_table = @import("resource_table.zig");
 const blit_mod = @import("blit.zig");
+const frame_chain = @import("frame_chain.zig");
 const pass_recording = @import("pass_recording.zig");
 const frame_lifecycle = @import("frame_lifecycle.zig");
 const asset_upload = @import("asset_upload.zig");
@@ -192,6 +193,8 @@ pub const CoreState = struct {
 
     api: [*c]c.ke_render_service = null,
     blit: blit_mod.Blit = .{},
+    chain: frame_chain.Chain = .{},
+    clear_pass: ?c.ke_gpu_command_encoder_handle = null,
 
     /// Null when the handle is stale or was never issued.
     pub fn meshAt(self: *CoreState, h: c.ke_mesh_handle) ?*Mesh {
@@ -234,6 +237,7 @@ pub const PassState = struct {
 pub const EndedPass = struct {
     encoder: c.ke_gpu_command_encoder_handle,
     record: ?*ComputeRecord,
+    chain: c.ke_render_chain_link = c.KE_RENDER_CHAIN_NONE,
 };
 
 /// The state behind a render service vtable.
@@ -265,6 +269,7 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     const st = coreOf(self);
     if (st.device.flush_pipeline_compiles) |flush| flush(st.device);
     st.blit.release(st.binder);
+    st.chain.deinit();
     for (st.resources.items) |*r| {
         gpa.free(std.mem.span(r.name));
         if (r.is_transient) {
@@ -304,28 +309,24 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
 /// The factory of the render service. It builds in an order its steps depend on: the target's size
 /// and the device's queue and NDC convention, then the resource caches, each given its destroy
 /// function and the state as context, then the "backbuffer" entry of `resources`, then the vtable,
-/// then the shared globals, which it gives the binder. The default resources and the "blit" shaders
-/// come last because they go through the functions of the vtable just built. `destroyCore` undoes
-/// this in reverse and frees the vtable last. A null device or ecs returns a null ref without
-/// setting the error. A null target, shader directory or binder sets the invalid-argument error,
-/// and blit shaders that cannot be loaded set the loader's error. Any other failure returns a null
+/// then the shared globals, which it gives the binder. The default resources, the "blit" shaders and
+/// the frame's color and depth come last because they go through the functions of the vtable just
+/// built. `destroyCore` undoes this in reverse and frees the vtable last. Missing params, or a null
+/// device, target, ecs, shader directory or binder in them, set the invalid-argument error; blit
+/// shaders that cannot be loaded set the loader's error, and so does a frame target the device
+/// refuses. Any other failure returns a null
 /// ref with no error set. On success the ref is the new vtable and `destroy` is
 /// `destroyCore`.
-export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu_render_target, ecs: ?*c.ke_ecs, shader_dir: [*c]const u8, binder: ?*c.ke_render_resource_binder, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
-    const dev = device orelse return .{ .ref = null, .destroy = null };
-    const tgt = target orelse {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_service_create: target is required", @src().file, @intCast(@src().line), null);
-        return .{ .ref = null, .destroy = null };
-    };
-    const e = ecs orelse return .{ .ref = null, .destroy = null };
-    const shader_dir_span = if (shader_dir != null) std.mem.span(shader_dir) else {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_service_create: shader_dir is required", @src().file, @intCast(@src().line), null);
-        return .{ .ref = null, .destroy = null };
-    };
-    const bnd = binder orelse {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_service_create: binder is required", @src().file, @intCast(@src().line), null);
-        return .{ .ref = null, .destroy = null };
-    };
+export fn ke_render_service_create(params: ?*const c.ke_render_service_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
+    const p = params orelse return refused(out_error);
+    const dev: *c.ke_gpu_device = p.device orelse return refused(out_error);
+    const tgt: *c.ke_gpu_render_target = p.target orelse return refused(out_error);
+    const e: *c.ke_ecs = p.ecs orelse return refused(out_error);
+    if (p.shader_dir == null) return refused(out_error);
+    const shader_dir_span = std.mem.span(p.shader_dir);
+    const bnd: *c.ke_render_resource_binder = p.binder orelse return refused(out_error);
+    const color_format = if (p.color_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.color_format else c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    const depth_format = if (p.depth_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.depth_format else c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
 
     const st = gpa.create(CoreState) catch return .{ .ref = null, .destroy = null };
     const upload_arena = gpa.alloc(u8, first_upload_arena) catch {
@@ -504,6 +505,9 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
         .resource_binder = resourceBinder,
         .backbuffer_format = resource_table.backbufferFormat,
         .resource_generation = resource_table.resourceGeneration,
+        .join_chain = frame_chain.joinChain,
+        .leave_chain = frame_chain.leaveChain,
+        .chain_format = frame_chain.chainFormat,
     };
 
     if (!st.globals.create(dev, out_error) or !st.globals.provideTo(bnd, out_error)) {
@@ -520,12 +524,17 @@ export fn ke_render_service_create(device: ?*c.ke_gpu_device, target: ?*c.ke_gpu
     st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, null);
 
     st.api = core;
-    if (!st.blit.prepare(core, st.binder, out_error)) {
+    if (!st.blit.prepare(core, st.binder, out_error) or !frame_chain.prepare(st, core, color_format, depth_format, out_error)) {
         destroyCore(core);
         return .{ .ref = null, .destroy = null };
     }
 
     return .{ .ref = core, .destroy = destroyCore };
+}
+
+fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_service_handle {
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_service_create: params with a device, target, ecs, shader_dir and binder are required", @src().file, @intCast(@src().line), null);
+    return .{ .ref = null, .destroy = null };
 }
 
 const testing = std.testing;
@@ -592,7 +601,7 @@ test "creating and destroying the render service leaves no block allocated and n
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -611,7 +620,7 @@ test "a render service created without a render target is refused and leaves not
     var binder: Stubs.Binder = undefined;
     binder.init();
     var err: [*c]c.ke_error = null;
-    const h = ke_render_service_create(dev.api(), null, ecs.api(), sd.path(), binder.api(), &err);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = null, .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, &err);
     try testing.expect(h.ref == null);
     try testing.expect(err != null);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -630,7 +639,7 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
     try testing.expectEqual(@as(c.ke_gpu_texture_format, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
@@ -654,7 +663,7 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     var desc = std.mem.zeroes(c.ke_render_resource_params);
@@ -695,7 +704,7 @@ test "uploads beyond the first frame's records and arena are all written, and th
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const upload_count = first_upload_records + 100;
@@ -731,7 +740,7 @@ test "a declared resource's texture and view carry the name it was declared unde
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -759,28 +768,27 @@ test "a render pass is opened under the name its pass declared" {
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
     const writes = [_][*c]const u8{"backbuffer"};
     var io = std.mem.zeroes(c.ke_render_pass_io);
-    io.name = "render.clear";
+    io.name = "render.named";
     io.writes = &writes;
     io.writes_count = 1;
 
     try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
     const rp = pass.*.begin_render.?(pass);
+    try testing.expectEqualStrings("render.named", std.mem.span(dev.render_pass_label));
     rp.*.end.?(rp);
     svc.*.end_pass.?(svc, pass);
     try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
-
-    try testing.expectEqualStrings("render.clear", std.mem.span(dev.render_pass_label));
 }
 
-/// A service over the stubs with a source and a destination color resource and a depth resource
-/// declared, and a frame begun.
+/// A service over the stubs with a source and a destination color resource declared; `begin`
+/// begins a frame, which `deinit` ends.
 const PassHarness = struct {
     sd: ShaderDir,
     dev: Stubs.Device,
@@ -795,7 +803,7 @@ const PassHarness = struct {
         self.ecs.init();
         self.binder.init();
         self.target.init();
-        self.h = ke_render_service_create(self.dev.api(), self.target.api(), self.ecs.api(), self.sd.path(), self.binder.api(), null);
+        self.h = ke_render_service_create(&.{ .device = self.dev.api(), .target = self.target.api(), .ecs = self.ecs.api(), .shader_dir = self.sd.path(), .binder = self.binder.api(), .color_format = 0, .depth_format = 0 }, null);
         const svc = self.h.ref orelse return error.TestUnexpectedResult;
         for ([_][*:0]const u8{ "src", "dst" }) |name| {
             var desc = std.mem.zeroes(c.ke_render_resource_params);
@@ -806,13 +814,10 @@ const PassHarness = struct {
             desc.scale_y = 1.0;
             try testing.expect(svc.*.declare.?(svc, &desc, null) != c.KE_COMPONENT_INVALID);
         }
-        var depth = std.mem.zeroes(c.ke_render_resource_params);
-        depth.name = "depth";
-        depth.format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
-        depth.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
-        depth.scale_x = 1.0;
-        depth.scale_y = 1.0;
-        try testing.expect(svc.*.declare.?(svc, &depth, null) != c.KE_COMPONENT_INVALID);
+    }
+
+    fn begin(self: *PassHarness) !void {
+        const svc = self.h.ref.?;
         try testing.expect(svc.*.begin_frame.?(svc, null));
     }
 
@@ -833,59 +838,142 @@ const PassHarness = struct {
     }
 };
 
-test "a pass whose write starts as a resource it reads draws that resource first and then loads the write" {
+fn joined(ph: *PassHarness, stage: c.ke_render_stage, mode: c.ke_render_chain_mode) !c.ke_render_pass_io {
+    const svc = ph.h.ref.?;
+    var io = std.mem.zeroes(c.ke_render_pass_io);
+    io.name = "render.link";
+    io.chain = svc.*.join_chain.?(svc, stage, mode, null);
+    try testing.expect(io.chain != c.KE_RENDER_CHAIN_NONE);
+    return io;
+}
+
+test "a pass drawing over the frame's color loads it in a single render pass" {
     var ph: PassHarness = undefined;
     try ph.init();
     defer ph.deinit();
-
-    const writes = [_][*c]const u8{"dst"};
-    const reads = [_][*c]const u8{"src"};
-    var io = std.mem.zeroes(c.ke_render_pass_io);
-    io.name = "render.over";
-    io.writes = &writes;
-    io.writes_count = 1;
-    io.reads = &reads;
-    io.reads_count = 1;
-    io.load_from = "src";
+    const io = try joined(&ph, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER);
+    try ph.begin();
     try ph.run(&io);
 
-    try testing.expectEqual(@as(u32, 2), ph.dev.render_passes);
-    try testing.expectEqualStrings("render.over", std.mem.span(ph.dev.render_pass_label));
+    try testing.expectEqual(@as(u32, 1), ph.dev.render_passes);
     try testing.expectEqual(@as(c.ke_gpu_load_op, c.KE_GPU_LOAD_OP_LOAD), ph.dev.color_load);
 }
 
-test "a pass that names nothing to start from clears its write in a single render pass" {
+test "a pass that samples the frame's color draws over a copy of it, made first" {
     var ph: PassHarness = undefined;
     try ph.init();
     defer ph.deinit();
+    const io = try joined(&ph, c.KE_RENDER_STAGE_TRANSPARENT, c.KE_RENDER_CHAIN_SAMPLE_OVER);
+    try ph.begin();
+    try ph.run(&io);
+
+    try testing.expectEqual(@as(u32, 2), ph.dev.render_passes);
+    try testing.expectEqualStrings("render.link", std.mem.span(ph.dev.render_pass_label));
+    try testing.expectEqual(@as(c.ke_gpu_load_op, c.KE_GPU_LOAD_OP_LOAD), ph.dev.color_load);
+}
+
+test "a pass that replaces the frame's color clears the new one and samples the old" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+    const svc = ph.h.ref.?;
+    const io = try joined(&ph, c.KE_RENDER_STAGE_TONEMAP, c.KE_RENDER_CHAIN_REPLACE);
+    try ph.begin();
+    ph.dev.render_passes = 0;
+    const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
+    const source = pass.*.color_source.?(pass);
+    const rp = pass.*.begin_render.?(pass);
+    rp.*.end.?(rp);
+    svc.*.end_pass.?(svc, pass);
+
+    try testing.expect(source != c.KE_GPU_INVALID_HANDLE);
+    try testing.expectEqual(@as(u32, 1), ph.dev.render_passes);
+    try testing.expectEqual(@as(c.ke_gpu_load_op, c.KE_GPU_LOAD_OP_CLEAR), ph.dev.color_load);
+}
+
+test "a pass outside the chain clears its write and samples no color" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+    try ph.begin();
+    const svc = ph.h.ref.?;
 
     const writes = [_][*c]const u8{"dst"};
     var io = std.mem.zeroes(c.ke_render_pass_io);
     io.writes = &writes;
     io.writes_count = 1;
-    try ph.run(&io);
+    const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
+    try testing.expectEqual(@as(c.ke_gpu_texture_view, c.KE_GPU_INVALID_HANDLE), pass.*.color_source.?(pass));
+    ph.dev.render_passes = 0;
+    const rp = pass.*.begin_render.?(pass);
+    rp.*.end.?(rp);
+    svc.*.end_pass.?(svc, pass);
 
     try testing.expectEqual(@as(u32, 1), ph.dev.render_passes);
     try testing.expectEqual(@as(c.ke_gpu_load_op, c.KE_GPU_LOAD_OP_CLEAR), ph.dev.color_load);
     try testing.expectEqual(@as(?c.ke_gpu_load_op, null), ph.dev.depth_load);
 }
 
-test "a depth resource a pass tests against is attached loaded" {
+test "a pass asking for the frame's depth has it attached loaded" {
     var ph: PassHarness = undefined;
     try ph.init();
     defer ph.deinit();
+    try ph.begin();
 
     const writes = [_][*c]const u8{"dst"};
-    const reads = [_][*c]const u8{"depth"};
     var io = std.mem.zeroes(c.ke_render_pass_io);
     io.writes = &writes;
     io.writes_count = 1;
-    io.reads = &reads;
-    io.reads_count = 1;
-    io.depth_test = "depth";
+    io.depth = c.KE_RENDER_DEPTH_TEST;
     try ph.run(&io);
 
     try testing.expectEqual(@as(?c.ke_gpu_load_op, c.KE_GPU_LOAD_OP_LOAD), ph.dev.depth_load);
+}
+
+test "the chain runs by stage, and within a stage in the order the passes joined" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+    const svc = ph.h.ref.?;
+    const overlay = svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER, null);
+    const sky = svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_SKY, c.KE_RENDER_CHAIN_DRAW_OVER, null);
+    const opaque_first = svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER, null);
+    const opaque_second = svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER, null);
+    try ph.begin();
+
+    var order: [4]c.ke_render_chain_link = undefined;
+    for (coreOf(svc).chain.links.items, &order) |l, *o| o.* = l.id;
+    try testing.expectEqualSlices(c.ke_render_chain_link, &.{ opaque_first, opaque_second, sky, overlay }, &order);
+}
+
+test "a link whose pass recorded nothing still carries the color through it" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+    const svc = ph.h.ref.?;
+    ph.dev.render_passes = 0;
+    try ph.begin();
+    try testing.expect(svc.*.end_frame.?(svc, null));
+    const without = ph.dev.render_passes;
+
+    _ = try joined(&ph, c.KE_RENDER_STAGE_HDR_POST, c.KE_RENDER_CHAIN_REPLACE);
+    ph.dev.render_passes = 0;
+    try ph.begin();
+    try testing.expect(svc.*.end_frame.?(svc, null));
+
+    try testing.expectEqual(without + 1, ph.dev.render_passes);
+}
+
+test "joining the chain refuses a stage out of range" {
+    var ph: PassHarness = undefined;
+    try ph.init();
+    defer ph.deinit();
+    try ph.begin();
+    const svc = ph.h.ref.?;
+    var err: [*c]c.ke_error = null;
+
+    try testing.expectEqual(c.KE_RENDER_CHAIN_NONE, svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_COUNT, c.KE_RENDER_CHAIN_DRAW_OVER, &err));
+    try testing.expect(err != null);
 }
 
 test "declaring a name again with the same description answers the same resource, and another description is refused" {
@@ -917,7 +1005,7 @@ test "a compute pass replays at the end of the frame under its name and with the
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -950,7 +1038,7 @@ test "a render service created without a shader directory is refused and leaves 
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), null, binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = null, .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -984,7 +1072,7 @@ test "pipelines requested from several threads at once settle on one answer per 
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     try testing.expect(h.ref != null);
 
     var params: [stress_keys]c.ke_gpu_render_pipeline_params = undefined;
@@ -1023,7 +1111,7 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     try testing.expect(h.ref != null);
 
     var p = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
@@ -1054,7 +1142,7 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(dev.api(), target.api(), ecs.api(), sd.path(), binder.api(), null);
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
     try testing.expect(h.ref != null);
 
     const attrs = [_]c.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};

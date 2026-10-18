@@ -34,11 +34,13 @@ extern "C"
         void (*destroy)(ke_render_forward *self);
     } ke_render_forward_handle;
 
-    /// What the transparent forward pass draws over and into. The names are copied.
+    /// What the transparent forward pass needs. It joins the chain at KE_RENDER_STAGE_TRANSPARENT,
+    /// samples the frame's color and draws over a copy of it, tested against the frame's depth.
+    /// The group names are copied.
     typedef struct ke_render_forward_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
-        ke_render_service *service; ///< Holds the resources it reads and writes; borrowed.
+        ke_render_service *service; ///< Holds the frame's color and the groups; borrowed.
         ke_gpu_device     *device;  ///< Borrowed.
         ke_logger         *logger;  ///< Optional, borrowed.
         bool               ibl_enabled;
@@ -47,21 +49,14 @@ extern "C"
         ke_component_id    camera_cid;
         ke_component_id    skybox_cid;
         ke_component_id    frame_cid;
-        /// [utf8] The opaque scene: the output starts as it, and blended materials sample it.
-        const char *input;
-        /// [utf8] The depth resource the blended draws are tested against, unwritten.
-        const char *depth;
         /// [utf8] Optional shadow group; without one the shadow is the neutral one.
         const char *shadow;
         /// [utf8] Optional cluster group; without one no clustered light is bound.
         const char *clusters;
-        /// [utf8] The HDR resource it writes, declared the size of the backbuffer when the
-        /// service has none of that name.
-        const char *output;
     } ke_render_forward_params;
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device, input,
-    /// depth or output fails as an invalid argument; the handle's ref is NULL on failure.
+    /// Registers the pass's render-phase system. A missing runtime, service or device fails
+    /// as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_FORWARD_API ke_render_forward_handle ke_render_forward_create(
         const ke_render_forward_params *params, ke_error **out_error);
 

@@ -51,9 +51,6 @@ const UiState = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
     ndc: c.ke_ndc_convention = undefined,
-    input: ?[:0]u8 = null,
-    output: ?[:0]u8 = null,
-
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     binder: *c.ke_render_resource_binder = undefined,
     layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
@@ -68,11 +65,8 @@ const UiState = struct {
 
     fonts: std.ArrayList(UiFont) = .empty,
 
-    writes: [1][*c]const u8 = undefined,
-    io: c.ke_render_pass_io = undefined,
-    reads: [1][*c]const u8 = undefined,
-    access: [2]c.ke_component_access = undefined,
-    access_count: u32 = 0,
+    io: c.ke_render_pass_io = std.mem.zeroes(c.ke_render_pass_io),
+    access: [1]c.ke_component_access = undefined,
     queries_terms: [2]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
     quad_cid: c.ke_component_id = 0,
@@ -287,8 +281,7 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*
 
 /// Registered by `ke_render_ui_create` for the render phase, reading quads and labels. Quads with
 /// no area are skipped and glyphs are drawn in the premultiplied label color. With nothing emitted
-/// the render pass is opened and ended without drawing, so the output still starts as the input;
-/// otherwise the projection (flipped on Y when the ndc convention
+/// the pass ends without drawing; otherwise the projection (flipped on Y when the ndc convention
 /// asks) and the vertices are uploaded and each batch is drawn with its texture's set. It
 /// returns true on every path, including when the render service yields no pass to draw into.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
@@ -299,6 +292,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const quad_segs = ctx.?.view.?(ctx, 0, &quad_segc);
     var label_segc: usize = 0;
     const label_segs = ctx.?.view.?(ctx, 1, &label_segc);
+    if (quad_segc == 0 and label_segc == 0) return true;
 
     const pc = core.*.begin_pass.?(core, &ui.io);
     if (pc == null) return true;
@@ -350,8 +344,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         return false;
     }
     if (ui.vertices.items.len == 0) {
-        const empty_rp = pc.*.begin_render.?(pc);
-        empty_rp.*.end.?(empty_rp);
         core.*.end_pass.?(core, pc);
         return true;
     }
@@ -386,8 +378,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     return true;
 }
 
-/// Called once by `ke_render_ui_create`, before anything is registered. It copies the names and
-/// declares the output when the service has none of that name, then stops at the first step that
+/// Called once by `ke_render_ui_create`, before anything is registered. It joins the chain at the
+/// overlay stage and builds the pipeline in that stage's format, then stops at the first step that
 /// fails and returns false; what was built before that step stays in the state for `destroyState`
 /// to release. On success `io` and `access` describe the pass that `system` begins and the write it
 /// makes.
@@ -398,19 +390,10 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
     ui.device = dev;
     ui.ndc = p.ndc;
 
-    if (p.input != null) ui.input = gpa.dupeZ(u8, std.mem.span(p.input)) catch return outOfMemory(out_error);
-    ui.output = gpa.dupeZ(u8, std.mem.span(p.output)) catch return outOfMemory(out_error);
-    var format = core.*.resource_format.?(core, ui.output.?.ptr);
-    if (format == c.KE_GPU_TEXTURE_FORMAT_INVALID) {
-        format = core.*.backbuffer_format.?(core);
-        if (core.*.declare.?(core, &c.ke_render_resource_params{
-            .name = ui.output.?.ptr,
-            .type = c.KE_RENDER_RESOURCE_TEXTURE,
-            .format = format,
-            .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
-            .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
-        }, out_error) == c.KE_COMPONENT_INVALID) return false;
-    }
+    ui.io.name = "render.ui";
+    ui.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
+    if (ui.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
+    const format = core.*.chain_format.?(core, c.KE_RENDER_STAGE_OVERLAY);
 
     const vs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (vs == c.KE_GPU_INVALID_HANDLE) return false;
@@ -483,34 +466,14 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
     if (!ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex), out_error)) return false;
 
 
-    ui.writes = .{ui.output.?.ptr};
-    ui.io = std.mem.zeroes(c.ke_render_pass_io);
-    ui.io.name = "render.ui";
-    ui.io.writes = @ptrCast(&ui.writes);
-    ui.io.writes_count = 1;
-    ui.access[0] = .{ .cid = core.*.cid.?(core, ui.output.?.ptr), .access = c.KE_ACCESS_WRITE };
-    ui.access_count = 1;
-    if (ui.input != null) {
-        ui.reads = .{ui.input.?.ptr};
-        ui.io.reads = @ptrCast(&ui.reads);
-        ui.io.reads_count = 1;
-        ui.io.load_from = ui.input.?.ptr;
-        ui.access[1] = .{ .cid = core.*.cid.?(core, ui.input.?.ptr), .access = c.KE_ACCESS_READ };
-        ui.access_count = 2;
-    }
+    ui.access[0] = .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE };
     return true;
-}
-
-fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
-    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui pass: name allocation failed", @src().file, @intCast(@src().line), null);
-    return false;
 }
 
 /// Safe on a partly built state: each GPU object, set and layout is released only if `setup` had
 /// created it.
 fn destroyState(ui: *UiState) void {
-    if (ui.input) |name| gpa.free(name);
-    if (ui.output) |name| gpa.free(name);
+    if (ui.io.chain != c.KE_RENDER_CHAIN_NONE) ui.core.*.leave_chain.?(ui.core, ui.io.chain);
     const dev = ui.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
     if (ui.frame_uniform != invalid) dev.destroy_buffer.?(dev, ui.frame_uniform);
@@ -551,10 +514,10 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
     const p = params_in orelse return refused(out_error);
     const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
     const e: *c.ke_ecs = p.ecs orelse return refused(out_error);
-    if (p.service == null or p.device == null or p.output == null) return refused(out_error);
+    if (p.service == null or p.device == null) return refused(out_error);
 
     const ui = gpa.create(UiState) catch {
-        _ = outOfMemory(out_error);
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui pass: allocation failed", @src().file, @intCast(@src().line), null);
         return empty;
     };
     ui.* = .{};
@@ -577,7 +540,7 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
     params.queries = &ui.queries;
     params.query_count = ui.queries.len;
     params.access_list = &ui.access;
-    params.access_count = ui.access_count;
+    params.access_count = ui.access.len;
     params.pinned_thread = 0;
     params.user_data = ui;
     params.execute = system;
@@ -610,7 +573,7 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
 }
 
 fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_ui_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ui pass: runtime, ecs, service, device and output are required", @src().file, @intCast(@src().line), null);
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ui pass: runtime, ecs, service and device are required", @src().file, @intCast(@src().line), null);
     return .{ .ref = null, .destroy = null };
 }
 
@@ -627,7 +590,7 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
     rt.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .input = "ldr", .output = "backbuffer" }, null);
+    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention) }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -644,7 +607,7 @@ test "a ui pass whose shader fails to load releases what it had created" {
     rt.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .input = "ldr", .output = "backbuffer" }, null);
+    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention) }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -660,7 +623,7 @@ test "a ui pass the runtime refuses to register releases what it had created" {
     rt.limit = 0;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .input = "ldr", .output = "backbuffer" }, null);
+    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention) }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -676,7 +639,7 @@ test "a ui pass the runtime refuses its second system takes the first one back" 
     rt.limit = 1;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .input = "ldr", .output = "backbuffer" }, null);
+    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention) }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(u32, 0), rt.live_count);
     try testing.expectEqual(@as(i64, 0), dev.live);

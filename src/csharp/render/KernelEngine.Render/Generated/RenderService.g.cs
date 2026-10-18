@@ -107,7 +107,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         Handle->end_pass(Handle, ctx);
     }
 
-    /// <summary>Acquires the service's render target as the backbuffer (a built-in resource named "backbuffer") and clears the per-pass command slot table. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.</summary>
+    /// <summary>Acquires the service's render target as the backbuffer (a built-in resource named "backbuffer"), clears the per-pass command slot table, and clears the frame's color and depth. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BeginFrame()
     {
@@ -115,7 +115,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         NativeErrors.ThrowIfFailed(Handle->begin_frame(Handle, &err), err, "begin_frame");
     }
 
-    /// <summary>Submits the populated command slots in ascending slot order, then presents the render target. Returns false when no frame began, or with out_error set when presenting failed.</summary>
+    /// <summary>Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame's color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Returns false when no frame began, or with out_error set when presenting failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void EndFrame()
     {
@@ -423,6 +423,29 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     public uint ResourceGeneration()
     {
         return Handle->resource_generation(Handle);
+    }
+
+    /// <summary>Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.</summary>
+    /// <returns>The link, or KE_RENDER_CHAIN_NONE with KE_ERROR_INVALID_ARGUMENT for a stage or mode out of range.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public uint JoinChain(RenderStage stage, RenderChainMode mode)
+    {
+        ke_error* err = null;
+        var result = Handle->join_chain(Handle, (ke_render_stage)stage, (ke_render_chain_mode)mode, &err);
+        if (err != null) throw NativeErrors.FromNative(err, "join_chain");
+        return result;
+    }
+
+    /// <summary>Gives the place back. An unknown link is ignored.</summary>
+    public void LeaveChain(uint link)
+    {
+        Handle->leave_chain(Handle, link);
+    }
+
+    /// <summary>Texel format of the color a pass of stage draws into, the format its pipeline declares.</summary>
+    public ke_gpu_texture_format ChainFormat(RenderStage stage)
+    {
+        return Handle->chain_format(Handle, (ke_render_stage)stage);
     }
 
     /// <summary>Releases the native renderservice.</summary>

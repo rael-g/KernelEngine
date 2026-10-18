@@ -76,8 +76,57 @@ typedef struct ke_render_lighting
     float ambient[4];
 } ke_render_lighting;
 
-/// A pass's declared resource I/O by name. Every write is cleared when the pass's render pass
-/// opens, except the first color write when `load_from` names a resource.
+/// The tag a pass that joined the chain writes in its access list, and that the system ending the
+/// frame reads.
+#define KE_RENDER_FRAME_COLOR "frame.color"
+/// The frame's depth texture, cleared when the frame begins; a pass samples it by this name.
+#define KE_RENDER_FRAME_DEPTH "frame.depth"
+
+/// Where a pass that works on the frame's color runs. The stages run in this order, and the passes
+/// of one stage in the order they joined. Stages up to KE_RENDER_STAGE_HDR_POST draw in the
+/// service's color format, the later ones in the backbuffer's.
+typedef enum ke_render_stage
+{
+    KE_RENDER_STAGE_OPAQUE      = 0,
+    KE_RENDER_STAGE_SKY         = 1,
+    KE_RENDER_STAGE_TRANSPARENT = 2,
+    KE_RENDER_STAGE_HDR_POST    = 3,
+    KE_RENDER_STAGE_TONEMAP     = 4,
+    KE_RENDER_STAGE_LDR_POST    = 5,
+    KE_RENDER_STAGE_OVERLAY     = 6,
+    KE_RENDER_STAGE_COUNT       = 7,
+} ke_render_stage;
+
+/// What a pass in the chain does with the frame's color.
+typedef enum ke_render_chain_mode
+{
+    /// Draws over the current color.
+    KE_RENDER_CHAIN_DRAW_OVER   = 0,
+    /// Samples the current color, through the context's color_source, and draws over a copy of
+    /// it, which becomes the current color.
+    KE_RENDER_CHAIN_SAMPLE_OVER = 1,
+    /// Samples the current color and writes every texel of a new one, which becomes the current
+    /// color.
+    KE_RENDER_CHAIN_REPLACE     = 2,
+} ke_render_chain_mode;
+
+/// How a pass's render pass uses the frame's depth.
+typedef enum ke_render_depth_mode
+{
+    KE_RENDER_DEPTH_NONE  = 0,
+    /// Attached and tested against; the pass's pipeline does not write it.
+    KE_RENDER_DEPTH_TEST  = 1,
+    /// Attached, tested against and written.
+    KE_RENDER_DEPTH_WRITE = 2,
+} ke_render_depth_mode;
+
+/// A pass's place in the chain, from join_chain; KE_RENDER_CHAIN_NONE is no place.
+typedef uint32_t ke_render_chain_link;
+#define KE_RENDER_CHAIN_NONE 0u
+
+/// A pass's declared resource I/O. Every write is cleared when the pass's render pass opens. A
+/// pass in the chain draws into the frame's color as its first color attachment, before its
+/// writes.
 typedef struct ke_render_pass_io
 {
     /// Optional name the pass's render or compute pass is labeled with; copied when the pass
@@ -87,13 +136,10 @@ typedef struct ke_render_pass_io
     uint32_t           reads_count;
     const char *const *writes;
     uint32_t           writes_count;
-    /// Optional name of a resource the pass reads that its first color write starts as: the
-    /// service draws it into that write before the pass's render pass opens, converting the
-    /// format when the two differ.
-    const char        *load_from;
-    /// Optional name of a depth resource the pass reads that its render pass is depth-tested
-    /// against without writing it. Ignored when a write is already a depth resource.
-    const char        *depth_test;
+    /// The pass's link, or KE_RENDER_CHAIN_NONE for a pass outside the chain.
+    ke_render_chain_link chain;
+    /// How the frame's depth is attached; ignored when a write is already a depth resource.
+    ke_render_depth_mode depth;
 } ke_render_pass_io;
 
 struct ke_render_service
@@ -125,11 +171,13 @@ struct ke_render_service
     void (*end_pass)(struct ke_render_service *self, struct ke_render_pass_ctx *ctx);
 
     /// Acquires the service's render target as the backbuffer (a built-in resource named
-    /// "backbuffer") and clears the per-pass command slot table. Returns false when the target
+    /// "backbuffer"), clears the per-pass command slot table, and clears the frame's color and
+    /// depth. Returns false when the target
     /// has nothing to draw into this frame, with out_error set when acquiring it failed.
     bool (*begin_frame)(struct ke_render_service *self, ke_error **out_error);
-    /// Submits the populated command slots in ascending slot order, then presents the render
-    /// target. Returns false when no frame began, or with out_error set when presenting failed.
+    /// Submits the passes outside the chain in the order they ended, then the chain in its order,
+    /// then draws the frame's color into the backbuffer and presents the render target. A link
+    /// whose pass recorded nothing still carries the color through it. Returns false when no frame began, or with out_error set when presenting failed.
     bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
@@ -284,6 +332,17 @@ struct ke_render_service
     /// `begin_frame` does when the backbuffer changes size. A pass that keeps something made from
     /// a declared target's view, a bind group for instance, rebuilds it when the count changes.
     uint32_t (*resource_generation)(struct ke_render_service *self);
+
+    /// Gives a pass a place in the chain, after every pass that joined the same stage before it.
+    /// The place is kept until leave_chain.
+    /// @return The link, or KE_RENDER_CHAIN_NONE with KE_ERROR_INVALID_ARGUMENT for a stage or
+    ///         mode out of range.
+    ke_render_chain_link (*join_chain)(struct ke_render_service *self, ke_render_stage stage,
+                                       ke_render_chain_mode mode, ke_error **out_error);
+    /// Gives the place back. An unknown link is ignored.
+    void (*leave_chain)(struct ke_render_service *self, ke_render_chain_link link);
+    /// Texel format of the color a pass of @p stage draws into, the format its pipeline declares.
+    ke_gpu_texture_format (*chain_format)(struct ke_render_service *self, ke_render_stage stage);
 };
 
 typedef struct ke_render_service_handle

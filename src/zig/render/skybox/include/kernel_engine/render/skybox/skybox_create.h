@@ -33,28 +33,22 @@ extern "C"
         void (*destroy)(ke_render_skybox *self);
     } ke_render_skybox_handle;
 
-    /// What the skybox pass draws over and into. The names are copied.
+    /// What the skybox pass needs. It joins the chain at KE_RENDER_STAGE_SKY and draws over the
+    /// frame's color where the frame's depth is at the far plane.
     typedef struct ke_render_skybox_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
-        ke_render_service *service; ///< Holds the resources it reads and writes; borrowed.
+        ke_render_service *service; ///< Holds the frame's color and depth; borrowed.
         ke_gpu_device     *device;  ///< Borrowed.
         ke_render_camera  *camera;  ///< Gives the view and projection; borrowed.
         ke_component_id    camera_cid;
         ke_component_id    world_transform_cid;
         ke_component_id    skybox_cid;
         ke_component_id    frame_cid;
-        /// [utf8] The HDR resource the output starts as.
-        const char *input;
-        /// [utf8] The depth resource whose far plane the sky fills.
-        const char *depth;
-        /// [utf8] The HDR resource it writes, declared the size of the backbuffer when the
-        /// service has none of that name.
-        const char *output;
     } ke_render_skybox_params;
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device, camera,
-    /// input, depth or output fails as an invalid argument; the handle's ref is NULL on failure.
+    /// Registers the pass's render-phase system. A missing runtime, service, device or camera
+    /// fails as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_SKYBOX_API ke_render_skybox_handle ke_render_skybox_create(
         const ke_render_skybox_params *params, ke_error **out_error);
 

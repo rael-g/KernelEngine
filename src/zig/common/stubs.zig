@@ -391,9 +391,10 @@ pub fn Stubs(comptime c: type) type {
             shader_loads_fail: bool,
             device: *c.ke_gpu_device,
             binder: Binder,
+            links: i64,
 
             pub fn init(self: *Core, device: *c.ke_gpu_device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false, .device = device, .binder = undefined };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false, .device = device, .binder = undefined, .links = 0 };
                 self.binder.init();
                 self.vtable.handle = self;
                 self.vtable.resource_binder = &resourceBinder;
@@ -412,6 +413,25 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.white_texture = &whiteTexture;
                 self.vtable.resource_buffer = &resourceBuffer;
                 self.vtable.resource_buffer_size = &resourceBufferSize;
+                self.vtable.join_chain = &joinChain;
+                self.vtable.leave_chain = &leaveChain;
+                self.vtable.chain_format = &chainFormat;
+            }
+
+            /// Counts the links held in `links`.
+            fn joinChain(self: ?*c.ke_render_service, _: c.ke_render_stage, _: c.ke_render_chain_mode, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_chain_link {
+                const core: *Core = @ptrCast(@alignCast(self.?.handle));
+                core.links += 1;
+                return @intCast(mint(self));
+            }
+
+            fn leaveChain(self: ?*c.ke_render_service, _: c.ke_render_chain_link) callconv(.c) void {
+                const core: *Core = @ptrCast(@alignCast(self.?.handle));
+                core.links -= 1;
+            }
+
+            fn chainFormat(_: ?*c.ke_render_service, stage: c.ke_render_stage) callconv(.c) c.ke_gpu_texture_format {
+                return if (stage >= c.KE_RENDER_STAGE_TONEMAP) c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
             }
 
             fn backbufferFormat(_: ?*c.ke_render_service) callconv(.c) c.ke_gpu_texture_format {

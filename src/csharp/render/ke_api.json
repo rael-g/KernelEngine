@@ -31,6 +31,94 @@
           "doc": null
         }
       ]
+    },
+    {
+      "name": "ke_render_stage",
+      "doc": "Where a pass that works on the frame\u0027s color runs. The stages run in this order, and the passes of one stage in the order they joined. Stages up to KE_RENDER_STAGE_HDR_POST draw in the service\u0027s color format, the later ones in the backbuffer\u0027s.",
+      "values": [
+        {
+          "name": "KE_RENDER_STAGE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_SKY",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_TRANSPARENT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_HDR_POST",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_TONEMAP",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_LDR_POST",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_OVERLAY",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_COUNT",
+          "value": 7,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_chain_mode",
+      "doc": "What a pass in the chain does with the frame\u0027s color.",
+      "values": [
+        {
+          "name": "KE_RENDER_CHAIN_DRAW_OVER",
+          "value": 0,
+          "doc": "Draws over the current color."
+        },
+        {
+          "name": "KE_RENDER_CHAIN_SAMPLE_OVER",
+          "value": 1,
+          "doc": "Samples the current color, through the context\u0027s color_source, and draws over a copy of it, which becomes the current color."
+        },
+        {
+          "name": "KE_RENDER_CHAIN_REPLACE",
+          "value": 2,
+          "doc": "Samples the current color and writes every texel of a new one, which becomes the current color."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_depth_mode",
+      "doc": "How a pass\u0027s render pass uses the frame\u0027s depth.",
+      "values": [
+        {
+          "name": "KE_RENDER_DEPTH_NONE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_DEPTH_TEST",
+          "value": 1,
+          "doc": "Attached and tested against; the pass\u0027s pipeline does not write it."
+        },
+        {
+          "name": "KE_RENDER_DEPTH_WRITE",
+          "value": 2,
+          "doc": "Attached, tested against and written."
+        }
+      ]
     }
   ],
   "structs": [
@@ -195,7 +283,7 @@
     },
     {
       "name": "ke_render_pass_io",
-      "doc": "A pass\u0027s declared resource I/O by name. Every write is cleared when the pass\u0027s render pass opens, except the first color write when \u0060load_from\u0060 names a resource.",
+      "doc": "A pass\u0027s declared resource I/O. Every write is cleared when the pass\u0027s render pass opens. A pass in the chain draws into the frame\u0027s color as its first color attachment, before its writes.",
       "tags": [],
       "fields": [
         {
@@ -229,16 +317,16 @@
           "doc": null
         },
         {
-          "name": "load_from",
-          "type": "const char *",
+          "name": "chain",
+          "type": "ke_render_chain_link",
           "tags": [],
-          "doc": "Optional name of a resource the pass reads that its first color write starts as: the service draws it into that write before the pass\u0027s render pass opens, converting the format when the two differ."
+          "doc": "The pass\u0027s link, or KE_RENDER_CHAIN_NONE for a pass outside the chain."
         },
         {
-          "name": "depth_test",
-          "type": "const char *",
+          "name": "depth",
+          "type": "ke_render_depth_mode",
           "tags": [],
-          "doc": "Optional name of a depth resource the pass reads that its render pass is depth-tested against without writing it. Ignored when a write is already a depth resource."
+          "doc": "How the frame\u0027s depth is attached; ignored when a write is already a depth resource."
         }
       ]
     }
@@ -415,7 +503,7 @@
           "name": "begin_frame",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022) and clears the per-pass command slot table. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.",
+          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022), clears the per-pass command slot table, and clears the frame\u0027s color and depth. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.",
           "return_doc": null,
           "params": [
             {
@@ -431,7 +519,7 @@
           "name": "end_frame",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Submits the populated command slots in ascending slot order, then presents the render target. Returns false when no frame began, or with out_error set when presenting failed.",
+          "doc": "Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame\u0027s color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Returns false when no frame began, or with out_error set when presenting failed.",
           "return_doc": null,
           "params": [
             {
@@ -1261,6 +1349,66 @@
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "join_chain",
+          "returns": "ke_render_chain_link",
+          "tags": [],
+          "doc": "Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.",
+          "return_doc": "The link, or KE_RENDER_CHAIN_NONE with KE_ERROR_INVALID_ARGUMENT for a stage or mode out of range.",
+          "params": [
+            {
+              "name": "stage",
+              "type": "ke_render_stage",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "mode",
+              "type": "ke_render_chain_mode",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "leave_chain",
+          "returns": "void",
+          "tags": [],
+          "doc": "Gives the place back. An unknown link is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "link",
+              "type": "ke_render_chain_link",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "chain_format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of the color a pass of stage draws into, the format its pipeline declares.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "stage",
+              "type": "ke_render_stage",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
         }
       ]
     },
@@ -1311,6 +1459,7 @@
     "ke_gpu_fence": "uint64_t",
     "ke_render_shader_layout": "uint64_t",
     "ke_render_resource_set": "uint64_t",
-    "ke_render_material_binding": "uint64_t"
+    "ke_render_material_binding": "uint64_t",
+    "ke_render_chain_link": "uint32_t"
   }
 }

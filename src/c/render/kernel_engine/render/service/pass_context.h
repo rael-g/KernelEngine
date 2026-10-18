@@ -25,6 +25,10 @@ struct ke_render_pass_ctx
     const void *(*query_ext)(struct ke_render_pass_ctx *self, const char *ext_name);
 
     void (*backbuffer_size)(struct ke_render_pass_ctx *self, uint32_t *out_w, uint32_t *out_h);
+
+    /// The view of the color a pass in the chain samples: the current color before its link.
+    /// KE_GPU_INVALID_HANDLE for a pass drawing over it or outside the chain.
+    ke_gpu_texture_view (*color_source)(struct ke_render_pass_ctx *self);
 };
 
 #ifdef __cplusplus

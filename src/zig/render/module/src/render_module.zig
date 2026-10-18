@@ -201,7 +201,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
     const binder_h: c.ke_render_resource_binder_handle = if (binder) |b| .{ .ref = b, .destroy = null } else c.ke_render_resource_binder_grouped_create(&.{ .device = dev, .shader_dir = shader_dir }, out_error);
     const binder_ref = binder_h.ref orelse return empty;
-    const core_h = c.ke_render_service_create(dev, target, e, shader_dir, binder_ref, out_error);
+    const core_h = c.ke_render_service_create(&.{ .device = dev, .target = target, .ecs = e, .shader_dir = shader_dir, .binder = binder_ref, .color_format = 0, .depth_format = 0 }, out_error);
     if (core_h.ref == null) {
         if (binder_h.destroy) |d| d(binder_ref);
         return empty;
@@ -245,13 +245,13 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     const ibl_enabled = if (feature_params) |p| p.enable_ibl else true;
     st.logger = logger;
 
-    const bb_cid = core_h.ref.*.cid.?(core_h.ref, "backbuffer");
+    const color_cid = core_h.ref.*.cid.?(core_h.ref, c.KE_RENDER_FRAME_COLOR);
     st.frame_cid = e.component_register.?(e, "render.frame", 0, null, 0, null);
     st.begin_access = .{
         .{ .cid = st.frame_cid, .access = c.KE_ACCESS_WRITE },
     };
     st.end_access = .{
-        .{ .cid = bb_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = color_cid, .access = c.KE_ACCESS_READ },
     };
 
     if (default_passes) {
@@ -369,38 +369,37 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
 
         st.gbuffer = c.ke_render_gbuffer_create(&.{
             .runtime = rt, .service = st.core.ref, .device = dev, .mesh_cid = mesh_cid, .world_transform_cid = world_transform_cid,
-            .camera_cid = camera_cid, .frame_cid = st.frame_cid, .output = "gbuffer", .depth = "depth",
+            .camera_cid = camera_cid, .frame_cid = st.frame_cid, .output = "gbuffer",
         }, out_error);
         if (st.gbuffer.ref == null) return failCreate(rt, mark, st);
 
         st.deferred = c.ke_render_deferred_lighting_create(&.{
             .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger, .ibl_enabled = ibl_enabled,
             .camera_cid = camera_cid, .world_transform_cid = world_transform_cid, .skybox_cid = skybox_cid, .frame_cid = st.frame_cid,
-            .gbuffer = "gbuffer", .depth = "depth", .shadow = shadow_group, .clusters = "clusters", .output = "lit",
+            .gbuffer = "gbuffer", .shadow = shadow_group, .clusters = "clusters",
         }, out_error);
         if (st.deferred.ref == null) return failCreate(rt, mark, st);
 
         st.skybox = c.ke_render_skybox_create(&.{
             .runtime = rt, .service = st.core.ref, .device = dev, .camera = st.camera.ref,
             .camera_cid = camera_cid, .world_transform_cid = world_transform_cid, .skybox_cid = skybox_cid, .frame_cid = st.frame_cid,
-            .input = "lit", .depth = "depth", .output = "sky",
         }, out_error);
         if (st.skybox.ref == null) return failCreate(rt, mark, st);
 
         st.forward = c.ke_render_forward_create(&.{
             .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger, .ibl_enabled = ibl_enabled,
             .mesh_cid = mesh_cid, .world_transform_cid = world_transform_cid, .camera_cid = camera_cid, .skybox_cid = skybox_cid,
-            .frame_cid = st.frame_cid, .input = "sky", .depth = "depth", .shadow = shadow_group, .clusters = "clusters", .output = "scene",
+            .frame_cid = st.frame_cid, .shadow = shadow_group, .clusters = "clusters",
         }, out_error);
         if (st.forward.ref == null) return failCreate(rt, mark, st);
 
         st.tonemap = c.ke_render_tonemap_create(&.{
-            .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger, .input = "scene", .output = "ldr", .output_format = 0,
+            .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger,
         }, out_error);
         if (st.tonemap.ref == null) return failCreate(rt, mark, st);
 
         st.ui = c.ke_render_ui_create(&.{
-            .runtime = rt, .ecs = e, .service = st.core.ref, .device = dev, .ndc = ndc, .input = "ldr", .output = "backbuffer",
+            .runtime = rt, .ecs = e, .service = st.core.ref, .device = dev, .ndc = ndc,
         }, out_error);
         if (st.ui.ref == null) return failCreate(rt, mark, st);
 

@@ -34,7 +34,8 @@ extern "C"
         void (*destroy)(ke_render_deferred_lighting *self);
     } ke_render_deferred_lighting_handle;
 
-    /// What the deferred lighting pass reads and writes. The names are copied.
+    /// What the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
+    /// over the frame's color, sampling the frame's depth. The names are copied.
     typedef struct ke_render_deferred_lighting_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
@@ -48,19 +49,14 @@ extern "C"
         ke_component_id    frame_cid;
         /// [utf8] The gbuffer group it lights.
         const char *gbuffer;
-        /// [utf8] The depth resource the gbuffer was drawn with.
-        const char *depth;
         /// [utf8] Optional shadow group; without one the shadow is the neutral one.
         const char *shadow;
         /// [utf8] Optional cluster group; without one no clustered light is bound.
         const char *clusters;
-        /// [utf8] The HDR resource it writes, declared the size of the backbuffer when the
-        /// service has none of that name.
-        const char *output;
     } ke_render_deferred_lighting_params;
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device, gbuffer,
-    /// depth or output fails as an invalid argument; the handle's ref is NULL on failure.
+    /// Registers the pass's render-phase system. A missing runtime, service, device or
+    /// gbuffer fails as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_DEFERRED_LIGHTING_API ke_render_deferred_lighting_handle ke_render_deferred_lighting_create(
         const ke_render_deferred_lighting_params *params, ke_error **out_error);
 

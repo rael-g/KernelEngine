@@ -1,6 +1,6 @@
 //! The gbuffer pass: the render-phase system that rasterises the opaque meshes a camera sees into
-//! the albedo, normal and emissive targets of the group it is given and into its depth target, all
-//! of which it declares on the render service. It also owns
+//! the albedo, normal and emissive targets of the group it is given, which it declares on the
+//! render service, and into the frame's depth. It also owns
 //! the creation and teardown of that pass, behind the one factory it exports.
 
 const std = @import("std");
@@ -72,7 +72,7 @@ const GBufferModule = struct {
     world_transform_cid: c.ke_component_id = undefined,
     camera_cid: c.ke_component_id = undefined,
 
-    names: [4]?[:0]u8 = .{ null, null, null, null },
+    names: [3]?[:0]u8 = .{ null, null, null },
 
     pipeline_template: c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]c.ke_gpu_vertex_attribute = undefined,
@@ -82,7 +82,7 @@ const GBufferModule = struct {
     objects: ?Objects = null,
     draws: std.ArrayList(Draw) = .empty,
 
-    writes: [4][*c]const u8 = undefined,
+    writes: [3][*c]const u8 = undefined,
     io: c.ke_render_pass_io = undefined,
     access: [8]c.ke_component_access = undefined,
     access_count: u32 = 0,
@@ -208,10 +208,9 @@ fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params, out_error: [*
 
     const group = std.mem.span(p.output);
     const suffixes = [3][]const u8{ c.KE_RENDER_GBUFFER_ALBEDO, c.KE_RENDER_GBUFFER_NORMAL, c.KE_RENDER_GBUFFER_EMISSIVE };
-    for (suffixes, gb.names[0..3]) |suffix, *name| {
+    for (suffixes, &gb.names) |suffix, *name| {
         name.* = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, suffix }, 0) catch return outOfMemory(out_error);
     }
-    gb.names[3] = gpa.dupeZ(u8, std.mem.span(p.depth)) catch return outOfMemory(out_error);
 
     const binder: *c.ke_render_resource_binder = core.*.resource_binder.?(core);
     if (!gb.groups.init(binder, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
@@ -263,8 +262,8 @@ fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params, out_error: [*
     gb.objects = .{ .device = dev, .binder = binder, .layout = gb.groups.layout, .buffer_label = "gbuffer.obj_uniform", .set_label = "gbuffer.obj_set" };
     if (!gb.objects.?.ensure(1, out_error)) return false;
 
-    const formats = [4]c.ke_gpu_texture_format{ c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT };
-    var cids: [4]c.ke_component_id = undefined;
+    const formats = [3]c.ke_gpu_texture_format{ c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT };
+    var cids: [3]c.ke_component_id = undefined;
     for (gb.names, formats, &cids, 0..) |name, format, *cid, i| {
         cid.* = core.*.declare.?(core, &c.ke_render_resource_params{
             .name = name.?.ptr,
@@ -280,13 +279,14 @@ fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params, out_error: [*
     gb.io = std.mem.zeroes(c.ke_render_pass_io);
     gb.io.name = "render.gbuffer";
     gb.io.writes = @ptrCast(&gb.writes);
-    gb.io.writes_count = 4;
+    gb.io.writes_count = 3;
+    gb.io.depth = c.KE_RENDER_DEPTH_WRITE;
 
     gb.access = .{
         .{ .cid = cids[0], .access = c.KE_ACCESS_WRITE },
         .{ .cid = cids[1], .access = c.KE_ACCESS_WRITE },
         .{ .cid = cids[2], .access = c.KE_ACCESS_WRITE },
-        .{ .cid = cids[3], .access = c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_DEPTH), .access = c.KE_ACCESS_WRITE },
         .{ .cid = mesh_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = camera_cid, .access = c.KE_ACCESS_READ },
@@ -320,7 +320,7 @@ fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
 
 /// The factory the plugin exports, declared in the plugin's factory header. On success it returns
 /// the module as the handle's ref and `destroyHandle` as its destroy slot. A missing runtime,
-/// render service, device, output or depth fails as an invalid argument and a failed allocation as
+/// render service, device or output fails as an invalid argument and a failed allocation as
 /// out of memory. A failing setup, or a runtime that refuses the registration, writes the error and
 /// returns the empty handle after releasing the module.
 export fn ke_render_gbuffer_create(params_in: ?*const c.ke_render_gbuffer_params,
@@ -328,7 +328,7 @@ export fn ke_render_gbuffer_create(params_in: ?*const c.ke_render_gbuffer_params
     const empty = c.ke_render_gbuffer_handle{ .ref = null, .destroy = null };
     const p = params_in orelse return refused(out_error);
     const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
-    if (p.service == null or p.device == null or p.output == null or p.depth == null) return refused(out_error);
+    if (p.service == null or p.device == null or p.output == null) return refused(out_error);
 
     const gb = gpa.create(GBufferModule) catch {
         _ = outOfMemory(out_error);
@@ -366,7 +366,7 @@ fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
 }
 
 fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_gbuffer_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "gbuffer pass: runtime, service, device, output and depth are required", @src().file, @intCast(@src().line), null);
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "gbuffer pass: runtime, service, device and output are required", @src().file, @intCast(@src().line), null);
     return .{ .ref = null, .destroy = null };
 }
 
@@ -492,7 +492,7 @@ test "creating and destroying the gbuffer pass leaves no block allocated and no 
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer", .depth = "depth" }, null);
+    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -507,7 +507,7 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer", .depth = "depth" }, null);
+    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -521,7 +521,7 @@ test "a gbuffer pass the runtime refuses to register releases what it had create
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer", .depth = "depth" }, null);
+    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

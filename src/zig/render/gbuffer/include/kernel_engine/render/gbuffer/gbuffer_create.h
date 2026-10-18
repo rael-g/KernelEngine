@@ -32,7 +32,7 @@ extern "C"
         void (*destroy)(ke_render_gbuffer *self);
     } ke_render_gbuffer_handle;
 
-    /// What the gbuffer pass writes. The names are copied.
+    /// What the gbuffer pass writes, besides the frame's depth. The names are copied.
     typedef struct ke_render_gbuffer_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
@@ -45,12 +45,10 @@ extern "C"
         /// [utf8] The group it writes: albedo, normal and emissive under the suffixes of
         /// kernel_engine/render/resource_groups.h, each declared the size of the backbuffer.
         const char *output;
-        /// [utf8] The depth resource it writes, declared the size of the backbuffer.
-        const char *depth;
     } ke_render_gbuffer_params;
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device, output or
-    /// depth fails as an invalid argument; the handle's ref is NULL on failure.
+    /// Registers the pass's render-phase system. A missing runtime, service, device or output
+    /// fails as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_GBUFFER_API ke_render_gbuffer_handle ke_render_gbuffer_create(
         const ke_render_gbuffer_params *params, ke_error **out_error);
 

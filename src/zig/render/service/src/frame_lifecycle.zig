@@ -4,15 +4,18 @@ const std = @import("std");
 const heap = @import("heap");
 const rc = @import("render_service.zig");
 const resource_table = @import("resource_table.zig");
+const frame_chain = @import("frame_chain.zig");
 const c = rc.c;
 
 /// Opens a frame. The previous frame's ended passes, compute records and upload counters are
 /// cleared before the target is acquired, so a failed acquire leaves the frame closed and
 /// returns zero with the target's error. Once it has returned one, the backbuffer size is read
-/// from the target, the "backbuffer" entry holds the acquired view and the frame is live.
+/// from the target, the "backbuffer" entry holds the acquired view, the chain's links are given
+/// their textures, the clear of the frame's color and depth is recorded and the frame is live.
 pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = rc.coreOf(self);
     st.frame_live = false;
+    dropClear(st);
     st.blit.releaseSets(st.binder);
     st.ended_count.store(0, .monotonic);
     st.compute_count.store(0, .monotonic);
@@ -28,16 +31,64 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
     resource_table.resizeRelative(st);
     if (st.find("backbuffer")) |bb| bb.view = view;
+    frame_chain.assign(st);
+    st.clear_pass = frame_chain.recordClear(st);
     st.frame_live = true;
     return true;
 }
 
+fn dropClear(st: *rc.CoreState) void {
+    const enc = st.clear_pass orelse return;
+    enc.destroy.?(enc.ref);
+    st.clear_pass = null;
+}
+
+/// The encoders of one frame in the order they are submitted. An encoder added here is finished
+/// and destroyed by `submit`, whether its finish succeeds or not.
+const Submission = struct {
+    encoders: [rc.MAX_CMD_BUFFERS * 2 + 2]c.ke_gpu_command_encoder_handle = undefined,
+    records: [rc.MAX_CMD_BUFFERS * 2 + 2]?*rc.ComputeRecord = undefined,
+    count: usize = 0,
+
+    fn add(self: *Submission, enc: ?c.ke_gpu_command_encoder_handle, rec: ?*rc.ComputeRecord) void {
+        const e = enc orelse return;
+        if (self.count == self.encoders.len) {
+            e.destroy.?(e.ref);
+            return;
+        }
+        self.encoders[self.count] = e;
+        self.records[self.count] = rec;
+        self.count += 1;
+    }
+
+    fn submit(self: *Submission, st: *rc.CoreState) void {
+        var finished: [rc.MAX_CMD_BUFFERS * 2 + 2]c.ke_gpu_command_buffer_handle = undefined;
+        var cmds: [rc.MAX_CMD_BUFFERS * 2 + 2][*c]c.ke_gpu_command_buffer = undefined;
+        var n: u32 = 0;
+        for (self.encoders[0..self.count], self.records[0..self.count]) |enc, rec| {
+            if (rec) |r| replay(enc.ref, r);
+            const cmd = enc.ref.*.finish.?(enc.ref, null);
+            if (cmd.ref == null) continue;
+            finished[n] = cmd;
+            cmds[n] = cmd.ref;
+            n += 1;
+        }
+        if (n > 0) st.device.queue_submit.?(st.device, st.queue, &cmds, n);
+        for (finished[0..n]) |cmd| cmd.destroy.?(cmd.ref);
+        for (self.encoders[0..self.count]) |enc| enc.destroy.?(enc.ref);
+    }
+};
+
 /// Closes the frame. The queued uploads are written to their buffers before any command buffer
-/// is finished. Each pass that ended has its encoder finished in the order the passes ended, a
-/// compute record replayed on it first; one whose finish fails is left out. The command buffers
-/// are submitted in one call and destroyed with their encoders, and the frame stops being live. Returns the result of the
-/// present, with the target's error on failure; the queue is polled whatever it returned. Returns
-/// zero and does nothing when no frame is live.
+/// is finished. The clear of the frame goes first, then each pass outside the chain in the order
+/// the passes ended, then the chain in its order: each link's passes in the order they ended, or,
+/// for a link whose pass recorded nothing and whose target starts from a source, a draw of the
+/// source into the target. Last comes the draw of the frame's color into the backbuffer. A compute
+/// record is replayed on its pass's encoder before it is finished; an encoder whose finish fails
+/// is left out. The command buffers are submitted in one call and destroyed with their encoders,
+/// and the frame stops being live. Returns the result of the present, with the target's error on
+/// failure; the queue is polled whatever it returned. Returns zero and does nothing when no frame
+/// is live.
 pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = rc.coreOf(self);
     if (!st.frame_live) return false;
@@ -45,21 +96,28 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
     flushUploads(st);
 
     const ended = st.ended[0..@min(st.ended_count.load(.monotonic), rc.MAX_CMD_BUFFERS)];
-    var finished: [rc.MAX_CMD_BUFFERS]c.ke_gpu_command_buffer_handle = undefined;
-    var submit: [rc.MAX_CMD_BUFFERS][*c]c.ke_gpu_command_buffer = undefined;
-    var count: u32 = 0;
+    var sub: Submission = .{};
+    sub.add(st.clear_pass, null);
+    st.clear_pass = null;
     for (ended) |pass| {
-        const enc = pass.encoder.ref;
-        if (pass.record) |rec| replay(enc, rec);
-        const cmd = enc.*.finish.?(enc, null);
-        if (cmd.ref == null) continue;
-        finished[count] = cmd;
-        submit[count] = cmd.ref;
-        count += 1;
+        if (pass.chain == c.KE_RENDER_CHAIN_NONE) sub.add(pass.encoder, pass.record);
     }
-    if (count > 0) st.device.queue_submit.?(st.device, st.queue, &submit, count);
-    for (finished[0..count]) |cmd| cmd.destroy.?(cmd.ref);
-    for (ended) |pass| pass.encoder.destroy.?(pass.encoder.ref);
+    for (st.chain.links.items) |*link| {
+        var any = false;
+        for (ended) |pass| {
+            if (pass.chain != link.id) continue;
+            sub.add(pass.encoder, pass.record);
+            any = true;
+        }
+        if (!any and link.source != c.KE_GPU_INVALID_HANDLE)
+            sub.add(frame_chain.recordBlit(st, link.source, link.target, link.target_format), null);
+    }
+    for (ended) |pass| {
+        if (pass.chain != c.KE_RENDER_CHAIN_NONE and st.chain.find(pass.chain) == null) sub.add(pass.encoder, pass.record);
+    }
+    if (st.find("backbuffer")) |bb| sub.add(frame_chain.recordBlit(st, st.chain.final, bb.view, bb.format), null);
+    sub.submit(st);
+
     st.ended_count.store(0, .monotonic);
     st.frame_live = false;
     if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;

@@ -1,5 +1,5 @@
 //! The deferred lighting pass: the render-phase system that turns the gbuffer targets into lit
-//! colour with one full-screen draw and writes the "hdr" target. It also owns the creation and
+//! colour with one full-screen draw over the frame's color, at the chain's opaque stage. It also owns the creation and
 //! teardown of that pass, behind the one factory it exports.
 
 const std = @import("std");
@@ -37,10 +37,8 @@ const DeferredLightingModule = struct {
     albedo: ?[:0]u8 = null,
     normal: ?[:0]u8 = null,
     emissive: ?[:0]u8 = null,
-    depth: ?[:0]u8 = null,
     shadow: ?[:0]u8 = null,
     clusters: ?[:0]u8 = null,
-    output: ?[:0]u8 = null,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     binder: *c.ke_render_resource_binder = undefined,
@@ -49,9 +47,7 @@ const DeferredLightingModule = struct {
     gbuffer_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
     env_cubemap: c.ke_texture_handle = .{ .bits = c.KE_HANDLE_NONE },
 
-    reads: [6][*c]const u8 = undefined,
-    writes: [1][*c]const u8 = undefined,
-    io: c.ke_render_pass_io = undefined,
+    io: c.ke_render_pass_io = std.mem.zeroes(c.ke_render_pass_io),
     access: [13]c.ke_component_access = undefined,
     queries_terms: [3]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
@@ -132,7 +128,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const albedo_view = pc.*.read.?(pc, dl.albedo.?.ptr);
     const normal_view = pc.*.read.?(pc, dl.normal.?.ptr);
     const emissive_view = pc.*.read.?(pc, dl.emissive.?.ptr);
-    const depth_view = pc.*.read.?(pc, dl.depth.?.ptr);
+    const depth_view = pc.*.read.?(pc, c.KE_RENDER_FRAME_DEPTH);
     const gbuffer_bindings = [4]c.ke_render_shader_binding{
         .{ .name = "g_albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = albedo_view, .sampler = 0 },
         .{ .name = "g_normal", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = normal_view, .sampler = 0 },
@@ -182,8 +178,9 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
     dl.albedo = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_ALBEDO }, 0) catch return outOfMemory(out_error);
     dl.normal = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_NORMAL }, 0) catch return outOfMemory(out_error);
     dl.emissive = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_EMISSIVE }, 0) catch return outOfMemory(out_error);
-    dl.depth = gpa.dupeZ(u8, std.mem.span(p.depth)) catch return outOfMemory(out_error);
-    dl.output = gpa.dupeZ(u8, std.mem.span(p.output)) catch return outOfMemory(out_error);
+    dl.io.name = "render.deferred_lighting";
+    dl.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
+    if (dl.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
     if (p.shadow != null) dl.shadow = gpa.dupeZ(u8, std.mem.span(p.shadow)) catch return outOfMemory(out_error);
     if (p.clusters != null) dl.clusters = gpa.dupeZ(u8, std.mem.span(p.clusters)) catch return outOfMemory(out_error);
 
@@ -210,7 +207,7 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
     pp.depth_stencil.depth_write_enabled = false;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
     if (!dl.binder.pipeline_layouts.?(dl.binder, dl.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) return false;
-    pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    pp.color_target_formats[0] = core.*.chain_format.?(core, c.KE_RENDER_STAGE_OPAQUE);
     pp.color_target_count = 1;
     dl.pipeline_params = pp;
     if (core.*.get_or_create_pipeline.?(core, &dl.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
@@ -220,43 +217,16 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
 
     rebuildFrameSet(dl);
 
-    if (core.*.resource_format.?(core, dl.output.?.ptr) == c.KE_GPU_TEXTURE_FORMAT_INVALID and
-        core.*.declare.?(core, &c.ke_render_resource_params{
-        .name = dl.output.?.ptr,
-        .type = c.KE_RENDER_RESOURCE_TEXTURE,
-        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
-        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
-        .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
-    }, out_error) == c.KE_COMPONENT_INVALID) return false;
-
-    dl.writes = .{dl.output.?.ptr};
-    dl.reads[0] = dl.albedo.?.ptr;
-    dl.reads[1] = dl.normal.?.ptr;
-    dl.reads[2] = dl.emissive.?.ptr;
-    dl.reads[3] = dl.depth.?.ptr;
-    var rc: u32 = 4;
-    if (dl.shadow) |g| {
-        dl.reads[rc] = g.ptr;
-        rc += 1;
-    }
-    dl.io = std.mem.zeroes(c.ke_render_pass_io);
-    dl.io.name = "render.deferred_lighting";
-    dl.io.writes = @ptrCast(&dl.writes);
-    dl.io.writes_count = 1;
-    dl.io.reads = @ptrCast(&dl.reads);
-    dl.io.reads_count = rc;
-
     var ac: u32 = 0;
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, dl.output.?.ptr), .access = c.KE_ACCESS_WRITE };
+    dl.access[ac] = .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE };
     ac += 1;
-    for (dl.reads[0..rc]) |name| {
-        dl.access[ac] = .{ .cid = core.*.cid.?(core, name), .access = c.KE_ACCESS_READ };
+    for ([_]?[:0]u8{ dl.albedo, dl.normal, dl.emissive, dl.shadow, dl.clusters }) |name| {
+        const n = name orelse continue;
+        dl.access[ac] = .{ .cid = core.*.cid.?(core, n.ptr), .access = c.KE_ACCESS_READ };
         ac += 1;
     }
-    if (dl.clusters) |g| {
-        dl.access[ac] = .{ .cid = core.*.cid.?(core, g.ptr), .access = c.KE_ACCESS_READ };
-        ac += 1;
-    }
+    dl.access[ac] = .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_DEPTH), .access = c.KE_ACCESS_READ };
+    ac += 1;
     dl.access[ac] = .{ .cid = camera_cid, .access = c.KE_ACCESS_READ };
     ac += 1;
     dl.access[ac] = .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ };
@@ -273,11 +243,12 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
     return true;
 }
 
-/// Releases the names, the sets and the layout the block holds, those still absent skipped. It
-/// leaves the pipeline, the shader modules and the output resource alone, and does not free the
+/// Gives the link back and releases the names, the sets and the layout the block holds, those still
+/// absent skipped. It leaves the pipeline and the shader modules alone, and does not free the
 /// block, so it can release a partly built one.
 fn destroyModule(dl: *const DeferredLightingModule) void {
-    for ([_]?[:0]u8{ dl.albedo, dl.normal, dl.emissive, dl.depth, dl.shadow, dl.clusters, dl.output }) |name| if (name) |n| gpa.free(n);
+    if (dl.io.chain != c.KE_RENDER_CHAIN_NONE) dl.core.*.leave_chain.?(dl.core, dl.io.chain);
+    for ([_]?[:0]u8{ dl.albedo, dl.normal, dl.emissive, dl.shadow, dl.clusters }) |name| if (name) |n| gpa.free(n);
     if (dl.layout == c.KE_RENDER_BINDING_INVALID) return;
     dl.binder.destroy_set.?(dl.binder, dl.gbuffer_set);
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
@@ -294,7 +265,7 @@ fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
 
 /// Builds the pass and registers its system in the render phase, with `pinned_thread` set to zero.
 /// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A missing
-/// runtime, service, device, gbuffer, depth or output fails as an invalid argument. A failed setup
+/// runtime, service, device or gbuffer fails as an invalid argument. A failed setup
 /// or a refused registration also returns an empty handle, after the block is released; errors
 /// those steps report go to the error out-parameter.
 export fn ke_render_deferred_lighting_create(params_in: ?*const c.ke_render_deferred_lighting_params,
@@ -302,7 +273,7 @@ export fn ke_render_deferred_lighting_create(params_in: ?*const c.ke_render_defe
     const empty = c.ke_render_deferred_lighting_handle{ .ref = null, .destroy = null };
     const p = params_in orelse return refused(out_error);
     const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
-    if (p.service == null or p.device == null or p.gbuffer == null or p.depth == null or p.output == null)
+    if (p.service == null or p.device == null or p.gbuffer == null)
         return refused(out_error);
 
     const dl = gpa.create(DeferredLightingModule) catch {
@@ -345,7 +316,7 @@ fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
 }
 
 fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_deferred_lighting_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "deferred lighting pass: runtime, service, device, gbuffer, depth and output are required", @src().file, @intCast(@src().line), null);
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "deferred lighting pass: runtime, service, device and gbuffer are required", @src().file, @intCast(@src().line), null);
     return .{ .ref = null, .destroy = null };
 }
 
@@ -360,7 +331,7 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "lit" }, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -375,7 +346,7 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "lit" }, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -389,7 +360,7 @@ test "a deferred lighting pass the runtime refuses to register releases what it 
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .depth = "depth", .shadow = "shadow", .clusters = "clusters", .output = "lit" }, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

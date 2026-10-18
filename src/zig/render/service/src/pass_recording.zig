@@ -1,6 +1,7 @@
 //! Hands out and takes back the pass contexts through which a pass draws or records compute work.
 
 const rc = @import("render_service.zig");
+const frame_chain = @import("frame_chain.zig");
 const c = rc.c;
 const gpa = rc.gpa;
 
@@ -36,7 +37,9 @@ pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_i
         .encoder = ctxEncoder,
         .query_ext = ctxQueryExt,
         .backbuffer_size = ctxBackbufferSize,
+        .color_source = ctxColorSource,
     };
+    if (st.chain.find(io.*.chain)) |link| link.recorded.store(true, .monotonic);
     return ctx;
 }
 
@@ -50,7 +53,7 @@ pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) cal
     const ps = rc.passOf(ctx);
     const at = st.ended_count.fetchAdd(1, .monotonic);
     if (at < rc.MAX_CMD_BUFFERS) {
-        st.ended[at] = .{ .encoder = ps.encoder, .record = ps.record };
+        st.ended[at] = .{ .encoder = ps.encoder, .record = ps.record, .chain = ps.io.chain };
     } else {
         ps.encoder.destroy.?(ps.encoder.ref);
     }
@@ -66,14 +69,14 @@ fn ctxRead(self: [*c]c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) c.ke
     return c.KE_GPU_INVALID_HANDLE;
 }
 
-/// Attachments follow the order of the pass's writes at the moment of this call; its reads never
-/// become attachments, except the depth resource named by `depth_test`, loaded and never cleared
-/// when no write is a depth resource. A write that names no resource is skipped, and so is a color write
-/// past the attachment limit. Every write is cleared, a color write to its resource's clear value
-/// when that value's alpha is not zero and to the service's clear color otherwise, except the first
-/// color write when `load_from` names a resource: that one is first drawn over with it through the
-/// service's blit and then loaded. When that draw cannot be recorded, or `load_from` names nothing,
-/// the write is cleared instead. The render pass it opens belongs to the caller, which ends it.
+/// A pass in the chain gets its link's target as its first color attachment: loaded, after the
+/// link's source is drawn into it when the link starts from one, or cleared when the link
+/// replaces the color. The writes follow, in the order of the pass's writes at the moment of this
+/// call; its reads never become attachments. A write that names no resource is skipped, and so is
+/// a color write past the attachment limit. Every write is cleared, a color write to its
+/// resource's clear value when that value's alpha is not zero and to the service's clear color
+/// otherwise. When no write is a depth resource and the pass asks for the frame's depth, that depth
+/// is attached loaded and stored. The render pass it opens belongs to the caller, which ends it.
 fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_render_pass {
     const ps = rc.passOf(self);
     var colors: [rc.MAX_COLOR_ATTACH]c.ke_gpu_color_attachment = undefined;
@@ -81,6 +84,17 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     var depth: c.ke_gpu_depth_stencil_attachment = undefined;
     var has_depth = false;
     const enc = ps.encoder.ref;
+
+    if (ps.core.chain.find(ps.io.chain)) |link| {
+        if (link.startsAsSource()) _ = ps.core.blit.draw(ps.core.api, ps.core.binder, enc, link.source, link.target, link.target_format);
+        colors[0] = .{
+            .view = link.target,
+            .load_op = if (link.mode == c.KE_RENDER_CHAIN_REPLACE) c.KE_GPU_LOAD_OP_CLEAR else c.KE_GPU_LOAD_OP_LOAD,
+            .store_op = c.KE_GPU_STORE_OP_STORE,
+            .clear_value = .{ .color = ps.core.clear_color },
+        };
+        color_count = 1;
+    }
 
     var i: u32 = 0;
     while (i < ps.io.writes_count) : (i += 1) {
@@ -102,10 +116,9 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
                 r.clear_value
             else
                 ps.core.clear_color;
-            const loaded = color_count == 0 and loadFrom(ps, enc, r);
             colors[color_count] = .{
                 .view = r.view,
-                .load_op = if (loaded) c.KE_GPU_LOAD_OP_LOAD else c.KE_GPU_LOAD_OP_CLEAR,
+                .load_op = c.KE_GPU_LOAD_OP_CLEAR,
                 .store_op = c.KE_GPU_STORE_OP_STORE,
                 .clear_value = .{ .color = cv },
             };
@@ -113,22 +126,18 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
         }
     }
 
-    if (!has_depth and ps.io.depth_test != null) {
-        if (ps.core.find(ps.io.depth_test)) |r| {
-            if (rc.isDepthFormat(r.format)) {
-                depth = .{
-                    .view = r.view,
-                    .depth_load_op = c.KE_GPU_LOAD_OP_LOAD,
-                    .depth_store_op = c.KE_GPU_STORE_OP_STORE,
-                    .stencil_store_op = c.KE_GPU_STORE_OP_DONT_CARE,
-                    .clear_depth = 1.0,
-                    .clear_stencil = 0,
-                    .depth_read_only = false,
-                    .stencil_read_only = false,
-                };
-                has_depth = true;
-            }
-        }
+    if (!has_depth and ps.io.depth != c.KE_RENDER_DEPTH_NONE) {
+        depth = .{
+            .view = frame_chain.depthView(ps.core),
+            .depth_load_op = c.KE_GPU_LOAD_OP_LOAD,
+            .depth_store_op = c.KE_GPU_STORE_OP_STORE,
+            .stencil_store_op = c.KE_GPU_STORE_OP_DONT_CARE,
+            .clear_depth = 1.0,
+            .clear_stencil = 0,
+            .depth_read_only = false,
+            .stencil_read_only = false,
+        };
+        has_depth = true;
     }
 
     const params = c.ke_gpu_render_pass_params{
@@ -140,13 +149,12 @@ fn ctxBeginRender(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_rend
     return enc.*.begin_render_pass.?(enc, &params);
 }
 
-/// Draws the resource named by the pass's `load_from` over `dst`, on the pass's encoder. False when
-/// the pass names none, the name is unknown or has no view, or the draw cannot be recorded.
-fn loadFrom(ps: *rc.PassState, enc: *c.ke_gpu_command_encoder, dst: *const rc.Resource) bool {
-    if (ps.io.load_from == null) return false;
-    const src = ps.core.find(ps.io.load_from) orelse return false;
-    if (src.view == c.KE_GPU_INVALID_HANDLE) return false;
-    return ps.core.blit.draw(ps.core.api, ps.core.binder, enc, src.view, dst.view, dst.format);
+/// The source of the pass's link when the link samples the color; the invalid view otherwise.
+fn ctxColorSource(self: [*c]c.ke_render_pass_ctx) callconv(.c) c.ke_gpu_texture_view {
+    const ps = rc.passOf(self);
+    const link = ps.core.chain.find(ps.io.chain) orelse return c.KE_GPU_INVALID_HANDLE;
+    if (link.mode == c.KE_RENDER_CHAIN_DRAW_OVER) return c.KE_GPU_INVALID_HANDLE;
+    return link.source;
 }
 
 /// Takes the frame's next free record, empties it and returns a compute pass that records into it;
