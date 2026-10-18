@@ -4,7 +4,9 @@ using KernelEngine.Framework;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler;
 using KernelEngine.Scheduler.Enki;
+
 using Microsoft.Extensions.DependencyInjection;
+
 using NodeStress;
 
 int instances = ArgValue("--instances", 2000);
@@ -24,8 +26,8 @@ var services = new ServiceCollection()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new FrameworkModule(new SignalBusCapacities(
         MaxConnections: (uint)instances + 64,
-        MaxEvents:      (uint)instances + 64,
-        MaxDeliveries:  (uint)instances + 64)))
+        MaxEvents: (uint)instances + 64,
+        MaxDeliveries: (uint)instances + 64)))
     .Add<IRuntimeModule>(new SceneNodesModule(world =>
     {
         churnWorld = world;
