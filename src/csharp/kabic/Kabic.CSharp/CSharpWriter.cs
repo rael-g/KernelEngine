@@ -36,7 +36,7 @@ public static class CSharpWriter
     {
         var lines = new List<string>();
         var depth = 0;
-        foreach (var p in ps.Where(x => x.Has("utf8")))
+        foreach (var p in ps.Where(x => x.Has("utf8") && !x.Has("array_of")))
         {
             var n = Idioms.Ident(p.Name!);
             lines.Add($"{indent}var {n}Bytes = System.Text.Encoding.UTF8.GetBytes({n} + '\\0');");
@@ -64,6 +64,18 @@ public static class CSharpWriter
         {
             var n = Idioms.Ident(s.Seq.Name!);
             var at = indent + new string(' ', depth * 4);
+            if (s.Seq.Has("utf8"))
+            {
+                lines.Add($"{at}var {n}Strings = new nint[{n}.Length];");
+                lines.Add($"{at}try");
+                lines.Add($"{at}{{");
+                lines.Add($"{at}    for (var {n}At = 0; {n}At < {n}.Length; {n}At++)");
+                lines.Add($"{at}        {n}Strings[{n}At] = Marshal.StringToCoTaskMemUTF8({n}[{n}At]);");
+                lines.Add($"{at}    fixed (nint* {n}Ptr = {n}Strings)");
+                lines.Add($"{at}    {{");
+                depth += 2;
+                continue;
+            }
             if (BorrowedOf(model, s.Seq) is { } borrowed)
             {
                 var native = CsType(model, CTypes.Deref(s.Seq.Type), convention);
@@ -95,6 +107,16 @@ public static class CSharpWriter
         var closers = new List<string[]>();
         foreach (var s in seqs)
         {
+            if (s.Seq.Has("utf8"))
+            {
+                var u = Idioms.Ident(s.Seq.Name!);
+                closers.Add([
+                    "}", "finally", "{",
+                    $"    for (var {u}At = 0; {u}At < {u}Strings.Length; {u}At++) Marshal.FreeCoTaskMem({u}Strings[{u}At]);",
+                    "}"]);
+                closers.Add(["}"]);
+                continue;
+            }
             if (BorrowedOf(model, s.Seq) is null) { closers.Add(["}"]); continue; }
 
             var n = Idioms.Ident(s.Seq.Name!);
@@ -173,6 +195,7 @@ public static class CSharpWriter
     static string SequenceArg(ApiModel model, SequencePair s, Convention convention)
     {
         var n = Idioms.Ident(s.Seq.Name!);
+        if (s.Seq.Has("utf8")) return $"(sbyte**){n}Ptr";
         if (BorrowedOf(model, s.Seq) is not null) return $"{n}Ptr";
         var native = CsType(model, CTypes.Deref(s.Seq.Type), convention);
         return SequenceElement(model, s, convention) == native ? $"{n}Ptr" : $"({native}*){n}Ptr";
@@ -2359,7 +2382,8 @@ public static class CSharpWriter
                     : callbacks.FirstOrDefault(c => c.Fn == p) is { } cb
                         ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
                     : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
-                        ? $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}"
+                        ? (p.Has("utf8") ? $"ReadOnlySpan<string> {Idioms.Ident(p.Name!)}"
+                            : $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}")
                     : cs.Blobs.Any(b => b.Blob == p)
                         ? $"in {BlobTypeParam(p)} {Idioms.Ident(p.Name!)}"
                     : cs.TrailingOuts.Contains(p)
