@@ -2,7 +2,7 @@
 
 using System.Runtime.CompilerServices;
 
-const int Ceiling = 126;
+const int Ceiling = 124;
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
@@ -13,6 +13,7 @@ var files = Directory.EnumerateFiles(managedDir, "*.cs", SearchOption.AllDirecto
     .Where(p => !Segments(p).Any(s => s is "obj" or "bin" or "Generated" or "generated"))
     .Where(p => !p.EndsWith(".g.cs", StringComparison.Ordinal))
     .Where(p => !p.Contains("/kabic/", StringComparison.Ordinal))
+    .Where(p => !p.Contains("/generators/", StringComparison.Ordinal))
     .OrderBy(p => p, StringComparer.Ordinal)
     .ToList();
 
@@ -55,8 +56,6 @@ static string Bucket(string path)
         return "module -- a second encarnation of a native module";
     if (path.Contains("/KernelEngine.Cli/", StringComparison.Ordinal))
         return "cli -- project tooling, not a projection";
-    if (path.Contains("/KernelEngine.SourceGenerators/", StringComparison.Ordinal))
-        return "source generator -- generates, is not generated";
     if (path.Contains(".Abstractions/", StringComparison.Ordinal))
         return "abstraction -- the interface a projection should satisfy";
     return "other -- unclassified, read it and decide";
