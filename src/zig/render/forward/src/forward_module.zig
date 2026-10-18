@@ -255,6 +255,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 /// it, creates the uniform buffers, and fills the pass io, the access list and the queries. On
 /// failure it returns false with `out_error` set, and leaves the handles it had already made in the
 /// module, where `destroyModule` finds and releases them.
+/// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
+/// frame's color.
 fn setup(fwd: *ForwardModule, p: *const c.ke_render_forward_params, out_error: [*c][*c]c.ke_error) bool {
     const core: *c.ke_render_service = p.service;
     const dev: *c.ke_gpu_device = p.device;
@@ -279,6 +281,7 @@ fn setup(fwd: *ForwardModule, p: *const c.ke_render_forward_params, out_error: [
     fwd.io.depth = c.KE_RENDER_DEPTH_TEST;
     fwd.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_TRANSPARENT, c.KE_RENDER_CHAIN_SAMPLE_OVER, out_error);
     if (fwd.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
+    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
 
     if (!fwd.groups.init(core.*.resource_binder.?(core), DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
 

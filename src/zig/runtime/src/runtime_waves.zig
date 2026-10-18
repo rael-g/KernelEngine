@@ -1,17 +1,13 @@
-//! Cuts the systems of a phase into waves: consecutive systems that share no component one of them
-//! writes run together, in registration order.
+//! Orders the systems of a phase and cuts them into waves. Order comes from the names a system runs
+//! after or before, from a writer running before a system that only reads what it writes, and,
+//! between two writers with neither, from registration, reported as an ambiguity. Each system
+//! lands in the wave after the last of those it follows.
 
 const std = @import("std");
 
 const c = @import("c");
 const heap = @import("heap");
-const alloc = @import("runtime_alloc.zig");
-const cAlloc = alloc.cAlloc;
-const cFree = alloc.cFree;
-const cAllocBytes = alloc.cAllocBytes;
-const cFreeBytes = alloc.cFreeBytes;
-
-const E = @import("kerror").Errors(c);
+const QueryDecl = @import("runtime_queries.zig").QueryDecl;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
@@ -19,100 +15,229 @@ pub fn termWrites(a: c.ke_component_access) bool {
     return (@as(c_uint, @intCast(a.access)) & ACCESS_WRITE) != 0;
 }
 
+/// Whether the access list of `p` names `cid`, with `out_writes` set when one of its entries
+/// writes it.
 pub fn paramsAccesses(p: *const c.ke_runtime_system_params, cid: c.ke_component_id, out_writes: *bool) bool {
     var any = false;
     var writes = false;
-    if (p.queries) |queries| {
-        for (0..p.query_count) |q| {
-            const terms = queries[q].terms orelse continue;
-            for (0..queries[q].term_count) |t| {
-                if (terms[t].cid == cid) {
-                    any = true;
-                    if (termWrites(terms[t])) writes = true;
-                }
-            }
-        }
-    }
     if (p.access_list) |list| {
         for (0..p.access_count) |i| {
-            if (list[i].cid == cid) {
-                any = true;
-                if (termWrites(list[i])) writes = true;
-            }
+            if (list[i].cid != cid) continue;
+            any = true;
+            if (termWrites(list[i])) writes = true;
         }
     }
     out_writes.* = writes;
     return any;
 }
 
-pub fn conflictOnTerm(b: *const c.ke_runtime_system_params, cid: c.ke_component_id, a_writes: bool) bool {
-    var b_writes = false;
-    return paramsAccesses(b, cid, &b_writes) and (a_writes or b_writes);
+/// A member of an exclusive group, as `declare_exclusive` stored it.
+pub const Exclusive = struct { group: c.ke_component_id, member: c.ke_component_id };
+
+/// What the runtime was told beyond the systems: the exclusive groups and the components whose
+/// writers their owner orders.
+pub const Rules = struct {
+    exclusive: []const Exclusive = &.{},
+    self_ordered: []const c.ke_component_id = &.{},
+
+    fn selfOrdered(self: Rules, cid: c.ke_component_id) bool {
+        return std.mem.indexOfScalar(c.ke_component_id, self.self_ordered, cid) != null;
+    }
+
+    fn memberOf(self: Rules, cid: c.ke_component_id) ?Exclusive {
+        for (self.exclusive) |e| if (e.member == cid) return e;
+        return null;
+    }
+};
+
+/// One system of the phase. `params` carries its name, its `after` and `before` and an access list
+/// that already holds its query terms; `explicit` is the access list it declared beside its
+/// queries, and `queries` the queries themselves.
+pub const Node = struct {
+    params: *const c.ke_runtime_system_params,
+    explicit: []const c.ke_component_access = &.{},
+    queries: []const QueryDecl = &.{},
+};
+
+/// What stopped or troubled the order of a phase.
+pub const Problem = union(enum) {
+    none,
+    out_of_memory,
+    unknown_name: struct { system: [*c]const u8, name: [*c]const u8 },
+    cycle: struct { system: [*c]const u8 },
+    ambiguity: struct { first: [*c]const u8, second: [*c]const u8, cid: c.ke_component_id },
+};
+
+/// The result of `order`: the number of waves, the first problem that stops the order, and the
+/// first ambiguity, which does not.
+pub const Order = struct {
+    wave_count: u32 = 0,
+    failure: Problem = .none,
+    ambiguity: Problem = .none,
+};
+
+fn nameEql(a: [*c]const u8, b: [*c]const u8) bool {
+    if (a == null or b == null) return false;
+    return std.mem.eql(u8, std.mem.span(a), std.mem.span(b));
 }
 
-/// Reports whether two systems must not share a wave: they name a common component and at least
-/// one of them writes it. Both arguments are registered parameters, whose queries `buildSystem`
-/// has already folded into the access list.
-pub fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_system_params) bool {
-    if (a.queries) |queries| {
-        for (0..a.query_count) |q| {
-            const terms = queries[q].terms orelse continue;
-            for (0..queries[q].term_count) |t| {
-                const a_writes = termWrites(terms[t]);
-                if (conflictOnTerm(b, terms[t].cid, a_writes)) return true;
-            }
-        }
-    }
-    if (a.access_list) |list| {
-        for (0..a.access_count) |i| {
-            const a_writes = termWrites(list[i]);
-            if (conflictOnTerm(b, list[i].cid, a_writes)) return true;
-        }
-    }
+fn names(list: [*c]const [*c]const u8, count: u32) []const [*c]const u8 {
+    if (list == null or count == 0) return &.{};
+    return list[0..count];
+}
+
+fn listsName(list: []const [*c]const u8, name: [*c]const u8) bool {
+    for (list) |n| if (nameEql(n, name)) return true;
     return false;
 }
 
-/// Assigns the systems of one phase, given in registration order, to waves. A system joins the
-/// current wave unless it conflicts with a system already in it, in which case it opens the next
-/// wave; a closed wave is never reopened, so registration order is never overtaken. The count
-/// stays zero, with nothing reported, when there are no systems or a pointer is null.
-pub fn debugComputeWaves(
-    systems: [*c]const c.ke_runtime_system_params,
-    system_count: u32,
-    out_wave_assignments: [*c]u32,
-    out_wave_count: [*c]u32,
-) callconv(.c) void {
-    if (out_wave_count == null) return;
-    out_wave_count.* = 0;
-    if (system_count == 0) return;
-    if (systems == null or out_wave_assignments == null) return;
-
-    var current_wave: u32 = 0;
-    out_wave_assignments[0] = 0;
-    var wave_start: u32 = 0;
-
-    var i: u32 = 0;
-    while (i < system_count) : (i += 1) {
-        if (i == 0) {
-            out_wave_assignments[0] = 0;
-            continue;
+/// The member of an exclusive group that every query of the system requires; null when it has no
+/// query, a query requires none, or two queries require different ones.
+fn confinement(n: Node, rules: Rules) ?Exclusive {
+    var found: ?Exclusive = null;
+    for (n.queries) |q| {
+        var in_query: ?Exclusive = null;
+        for (q.terms[0..q.term_count]) |t| {
+            if (rules.memberOf(t.cid)) |e| in_query = e;
         }
-        var open_new = false;
-        var j: u32 = wave_start;
-        const si_ptr: *const c.ke_runtime_system_params = @ptrCast(&systems[i]);
-        while (j < i) : (j += 1) {
-            if (out_wave_assignments[j] != current_wave) continue;
-            const sj_ptr: *const c.ke_runtime_system_params = @ptrCast(&systems[j]);
-            if (systemsConflict(si_ptr, sj_ptr)) {
-                open_new = true;
-                break;
+        const e = in_query orelse return null;
+        if (found) |f| {
+            if (f.member != e.member) return null;
+        } else found = e;
+    }
+    return found;
+}
+
+fn inExplicit(n: Node, cid: c.ke_component_id) bool {
+    for (n.explicit) |a| if (a.cid == cid) return true;
+    return false;
+}
+
+const Relation = struct { forward: bool = false, backward: bool = false, ambiguous: ?c.ke_component_id = null };
+
+/// How the data of `a`, registered before `b`, orders the two.
+fn relate(a: Node, b: Node, rules: Rules) Relation {
+    var r = Relation{};
+    const ca = confinement(a, rules);
+    const cb = confinement(b, rules);
+    const disjoint = ca != null and cb != null and ca.?.group == cb.?.group and ca.?.member != cb.?.member;
+    const list = a.params.access_list orelse return r;
+    for (list[0..a.params.access_count]) |entry| {
+        var b_writes = false;
+        if (!paramsAccesses(b.params, entry.cid, &b_writes)) continue;
+        const a_writes = termWrites(entry);
+        if (!a_writes and !b_writes) continue;
+        if (disjoint and !inExplicit(a, entry.cid) and !inExplicit(b, entry.cid)) continue;
+        if (a_writes and b_writes) {
+            if (rules.selfOrdered(entry.cid)) continue;
+            if (r.ambiguous == null) r.ambiguous = entry.cid;
+        } else if (a_writes) {
+            r.forward = true;
+        } else {
+            r.backward = true;
+        }
+    }
+    return r;
+}
+
+/// Orders the systems of one phase, given in registration order, and writes the wave of each into
+/// `out_waves`. An `after` or `before` naming no system of the phase, and a cycle, fail the order;
+/// the waves are then left unwritten.
+pub fn order(nodes: []const Node, rules: Rules, out_waves: []u32) Order {
+    var result = Order{};
+    const n = nodes.len;
+    if (n == 0) return result;
+
+    for (nodes) |node| {
+        const p = node.params;
+        for ([_][]const [*c]const u8{ names(p.after, p.after_count), names(p.before, p.before_count) }) |list| {
+            for (list) |wanted| {
+                var known = false;
+                for (nodes) |other| {
+                    if (nameEql(other.params.name, wanted)) known = true;
+                }
+                if (!known) {
+                    result.failure = .{ .unknown_name = .{ .system = p.name, .name = wanted } };
+                    return result;
+                }
             }
         }
-        if (open_new) {
-            current_wave += 1;
-            wave_start = i;
-        }
-        out_wave_assignments[i] = current_wave;
     }
-    out_wave_count.* = current_wave + 1;
+
+    const edges = heap.gpa.alloc(bool, n * n) catch {
+        result.failure = .out_of_memory;
+        return result;
+    };
+    defer heap.gpa.free(edges);
+    @memset(edges, false);
+
+    for (0..n) |i| {
+        for (i + 1..n) |j| {
+            const a = nodes[i].params;
+            const b = nodes[j].params;
+            const b_after_a = listsName(names(b.after, b.after_count), a.name) or listsName(names(a.before, a.before_count), b.name);
+            const a_after_b = listsName(names(a.after, a.after_count), b.name) or listsName(names(b.before, b.before_count), a.name);
+            if (b_after_a or a_after_b) {
+                if (b_after_a) edges[i * n + j] = true;
+                if (a_after_b) edges[j * n + i] = true;
+                continue;
+            }
+            const r = relate(nodes[i], nodes[j], rules);
+            if (r.forward) edges[i * n + j] = true;
+            if (r.backward) edges[j * n + i] = true;
+            if (!r.forward and !r.backward) {
+                if (r.ambiguous) |cid| {
+                    edges[i * n + j] = true;
+                    if (result.ambiguity == .none)
+                        result.ambiguity = .{ .ambiguity = .{ .first = a.name, .second = b.name, .cid = cid } };
+                }
+            }
+        }
+    }
+
+    const pending = heap.gpa.alloc(u32, n) catch {
+        result.failure = .out_of_memory;
+        return result;
+    };
+    defer heap.gpa.free(pending);
+    for (0..n) |v| {
+        var count: u32 = 0;
+        for (0..n) |u| {
+            if (edges[u * n + v]) count += 1;
+        }
+        pending[v] = count;
+        out_waves[v] = 0;
+    }
+
+    var placed: usize = 0;
+    const done = heap.gpa.alloc(bool, n) catch {
+        result.failure = .out_of_memory;
+        return result;
+    };
+    defer heap.gpa.free(done);
+    @memset(done, false);
+    while (placed < n) {
+        var progressed = false;
+        for (0..n) |u| {
+            if (done[u] or pending[u] != 0) continue;
+            done[u] = true;
+            placed += 1;
+            progressed = true;
+            result.wave_count = @max(result.wave_count, out_waves[u] + 1);
+            for (0..n) |v| {
+                if (!edges[u * n + v]) continue;
+                pending[v] -= 1;
+                out_waves[v] = @max(out_waves[v], out_waves[u] + 1);
+            }
+        }
+        if (!progressed) {
+            for (0..n) |u| {
+                if (!done[u]) {
+                    result.failure = .{ .cycle = .{ .system = nodes[u].params.name } };
+                    return result;
+                }
+            }
+        }
+    }
+    return result;
 }

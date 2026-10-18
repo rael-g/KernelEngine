@@ -534,6 +534,11 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.register_system = &registerSystem;
                 self.vtable.unregister_system = &unregisterSystem;
                 self.vtable.last_system = &lastSystem;
+                self.vtable.declare_self_ordered = &declareSelfOrdered;
+            }
+
+            fn declareSelfOrdered(_: ?*c.ke_runtime, _: c.ke_component_id, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                return true;
             }
 
             pub fn api(self: *Runtime) *c.ke_runtime {

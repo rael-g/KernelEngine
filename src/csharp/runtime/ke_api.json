@@ -236,6 +236,38 @@
             "default:false"
           ],
           "doc": "The body\u0027s work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. What breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set."
+        },
+        {
+          "name": "after",
+          "type": "const char *const *",
+          "tags": [
+            "array_of:after_count",
+            "default:empty",
+            "utf8"
+          ],
+          "doc": "Names of systems of the same phase this one runs after, whatever they access. A name is resolved when the phase is built, so it may name a system registered later; a name no system of the phase carries fails the tick."
+        },
+        {
+          "name": "after_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "before",
+          "type": "const char *const *",
+          "tags": [
+            "array_of:before_count",
+            "default:empty",
+            "utf8"
+          ],
+          "doc": "Names of systems of the same phase this one runs before, resolved like \u0060after\u0060."
+        },
+        {
+          "name": "before_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
         }
       ]
     },
@@ -358,6 +390,78 @@
           "doc": "The id of the system registered last and still registered, or 0 when there is none.",
           "return_doc": null,
           "params": [],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "declare_exclusive",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Declares member one of the members of the exclusive group group: no entity holds two members of one group. Two systems whose every query requires a different member of the same group touch disjoint entities, so what they access through their queries puts no order between them; what their access lists name still does.",
+          "return_doc": "false when group equals member or the declaration cannot be stored.",
+          "params": [
+            {
+              "name": "group",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "member",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "declare_self_ordered",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Declares that whoever owns cid orders the systems writing it, so the runtime puts no order between two writers of cid. A writer still runs before a system that only reads it.",
+          "return_doc": "false when the declaration cannot be stored.",
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "check_order",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Builds the order of every phase as the next tick would. Within a phase, a system runs after the systems it names in \u0060after\u0060 and before those it names in \u0060before\u0060, a writer of a component before a system that only reads it, and of two writers with neither order, the one registered first runs first: an ambiguity.",
+          "return_doc": "false with the error naming the systems when an \u0060after\u0060 or a \u0060before\u0060 names no system of its phase, the order has a cycle, or, when refused, two writers are ambiguous.",
+          "params": [
+            {
+              "name": "refuse_ambiguity",
+              "type": "_Bool",
+              "tags": [],
+              "doc": "When true, an ambiguity fails the check too."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
           "receiver": "ke_runtime *"
         },
         {

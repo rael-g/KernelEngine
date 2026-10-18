@@ -30,4 +30,16 @@ public unsafe partial struct ke_runtime_system_params
     public uint pinned_thread;
 
     public bool per_entity;
+
+    [NativeTypeName("const char *const *")]
+    public sbyte** after;
+
+    [NativeTypeName("uint32_t")]
+    public uint after_count;
+
+    [NativeTypeName("const char *const *")]
+    public sbyte** before;
+
+    [NativeTypeName("uint32_t")]
+    public uint before_count;
 }

@@ -36,6 +36,7 @@ const Binding = extern struct {
 
 const binding_component = "script_instance";
 const tag_prefix = "script_type:";
+const tag_group_component = "script_type";
 
 /// Allocated by `ke_script_host_create` and freed by `destroy`. Only the first `type_count`
 /// elements of `types` hold records; the rest of the table is uninitialised.
@@ -54,6 +55,7 @@ const State = struct {
     name_cid: c.ke_component_id,
 
     binding_cid: c.ke_component_id,
+    tag_group_cid: c.ke_component_id,
 
     types: []ScriptType,
     type_count: u32,
@@ -236,6 +238,12 @@ fn typeTag(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) callconv(.
     const self = self_in orelse return 0;
     const t = typeAt(stateOf(self), type_id) orelse return 0;
     return t.tag;
+}
+
+/// Slot `type_tag_group`. The component registered at creation for the group, 0 for a null host.
+fn typeTagGroup(self_in: ?*c.ke_script_host) callconv(.c) c.ke_component_id {
+    const self = self_in orelse return 0;
+    return stateOf(self).tag_group_cid;
 }
 
 /// Slot `bind`. Attaches the instance to the entity at once, so it belongs to code that no system
@@ -601,8 +609,9 @@ pub export fn ke_script_host_create(
     s.hierarchy_cid = hierarchy_meta.cid;
     s.name_cid = name_meta.cid;
     s.binding_cid = ecs.component_register.?(ecs, binding_component, @sizeOf(Binding), null, 0, null);
-    if (s.binding_cid == 0) {
-        E.fail(out_error, .invalid_argument, "could not register the script instance component", @src());
+    s.tag_group_cid = ecs.component_register.?(ecs, tag_group_component, 0, null, 0, null);
+    if (s.binding_cid == 0 or s.tag_group_cid == 0) {
+        E.fail(out_error, .invalid_argument, "could not register the script instance or type group component", @src());
         heap.gpa.free(s.types);
         heap.gpa.destroy(s);
         return null_handle;
@@ -616,6 +625,7 @@ pub export fn ke_script_host_create(
         .type_components = &typeComponents,
         .type_reach = &typeReach,
         .type_tag = &typeTag,
+        .type_tag_group = &typeTagGroup,
         .bind = &bind,
         .unbind = &unbind,
         .bind_deferred = &bindDeferred,
@@ -732,7 +742,7 @@ test "an entity carries the instance it was bound to" {
     try testing.expectEqual(@as(?*anyopaque, &marker), out_instance);
 }
 
-test "each type has its own tag, carried by a bound instance until it is unbound" {
+test "each type has its own tag, apart from the group of tags, carried by a bound instance until it is unbound" {
     var h: Harness = undefined;
     try h.init();
     defer h.deinit();
@@ -743,6 +753,8 @@ test "each type has its own tag, carried by a bound instance until it is unbound
     try testing.expect(tag != 0);
     try testing.expect(tag != h.host().type_tag.?(h.host(), ball));
     try testing.expectEqual(@as(c.ke_component_id, 0), h.host().type_tag.?(h.host(), 9999));
+    const group = h.host().type_tag_group.?(h.host());
+    try testing.expect(group != 0 and group != tag);
 
     const e = h.tree.create("Left", 0);
     var marker: u32 = 7;

@@ -66,7 +66,7 @@ const UiState = struct {
     fonts: std.ArrayList(UiFont) = .empty,
 
     io: c.ke_render_pass_io = std.mem.zeroes(c.ke_render_pass_io),
-    access: [1]c.ke_component_access = undefined,
+    access: [2]c.ke_component_access = undefined,
     queries_terms: [2]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
     quad_cid: c.ke_component_id = 0,
@@ -383,6 +383,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 /// fails and returns false; what was built before that step stays in the state for `destroyState`
 /// to release. On success `io` and `access` describe the pass that `system` begins and the write it
 /// makes.
+/// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
+/// frame's color.
 fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_error) bool {
     const core: *c.ke_render_service = p.service;
     const dev: *c.ke_gpu_device = p.device;
@@ -393,6 +395,7 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
     ui.io.name = "render.ui";
     ui.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
     if (ui.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
+    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
     const format = core.*.chain_format.?(core, c.KE_RENDER_STAGE_OVERLAY);
 
     const vs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
@@ -466,7 +469,10 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
     if (!ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex), out_error)) return false;
 
 
-    ui.access[0] = .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE };
+    ui.access = .{
+        .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE },
+        .{ .cid = p.frame_cid, .access = c.KE_ACCESS_READ },
+    };
     return true;
 }
 
@@ -590,7 +596,7 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
     rt.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention) }, null);
+    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -607,7 +613,7 @@ test "a ui pass whose shader fails to load releases what it had created" {
     rt.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention) }, null);
+    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -623,7 +629,7 @@ test "a ui pass the runtime refuses to register releases what it had created" {
     rt.limit = 0;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention) }, null);
+    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -639,7 +645,7 @@ test "a ui pass the runtime refuses its second system takes the first one back" 
     rt.limit = 1;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention) }, null);
+    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(u32, 0), rt.live_count);
     try testing.expectEqual(@as(i64, 0), dev.live);

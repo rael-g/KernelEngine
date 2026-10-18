@@ -217,6 +217,15 @@
           "receiver": "struct ke_script_host *"
         },
         {
+          "name": "type_tag_group",
+          "returns": "ke_component_id",
+          "tags": [],
+          "doc": "The component no entity carries that names the group the type tags form: every tag of this host is a member of it, and no entity holds two members. A runtime is told so with declare_exclusive(group, tag).",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_script_host *"
+        },
+        {
           "name": "bind",
           "returns": "_Bool",
           "tags": [],

@@ -40,6 +40,9 @@ extern "C"
         ke_render_service *service; ///< Holds the frame's color; borrowed, must outlive it.
         ke_gpu_device     *device;  ///< Borrowed.
         ke_logger         *logger;  ///< Optional, borrowed.
+        /// The tag the system that begins the frame writes; the pass reads it, so it runs once
+        /// the frame has begun.
+        ke_component_id    frame_cid;
     } ke_render_tonemap_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service or device fails as an

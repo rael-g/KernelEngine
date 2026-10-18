@@ -126,6 +126,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 /// the queries. On false it has
 /// stopped at a failing step, and the objects made before that step stay in the module for
 /// `destroyModule` to release.
+/// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
+/// frame's color.
 fn setup(sm: *SkyboxModule, p: *const c.ke_render_skybox_params, out_error: [*c][*c]c.ke_error) bool {
     const core: *c.ke_render_service = p.service;
     const dev: *c.ke_gpu_device = p.device;
@@ -143,6 +145,7 @@ fn setup(sm: *SkyboxModule, p: *const c.ke_render_skybox_params, out_error: [*c]
     sm.io.name = "render.skybox";
     sm.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_SKY, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
     if (sm.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
+    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
 
     sm.binder = core.*.resource_binder.?(core);
     sm.layout = sm.binder.create_shader_layout.?(sm.binder, &shader_layout, out_error);

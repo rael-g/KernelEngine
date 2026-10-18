@@ -31,7 +31,7 @@ pub const TonemapModule = struct {
     set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
 
     io: c.ke_render_pass_io = std.mem.zeroes(c.ke_render_pass_io),
-    access: [1]c.ke_component_access = undefined,
+    access: [2]c.ke_component_access = undefined,
 };
 
 /// Writes one error line to the logger, for a failure `system` has to report while it draws. Does
@@ -93,6 +93,8 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
 /// returns false with the layout left for the caller's release. The caller releases the module
 /// after any false return. A successful call has asked the service for the pipeline once, so a
 /// failure surfaces at creation.
+/// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
+/// frame's color.
 fn setup(tm: *TonemapModule, p: *const c.ke_render_tonemap_params, out_error: [*c][*c]c.ke_error) bool {
     const core: *c.ke_render_service = p.service;
     tm.core = core;
@@ -102,6 +104,7 @@ fn setup(tm: *TonemapModule, p: *const c.ke_render_tonemap_params, out_error: [*
     tm.io.name = "render.tonemap";
     tm.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_TONEMAP, c.KE_RENDER_CHAIN_REPLACE, out_error);
     if (tm.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
+    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
     const format = core.*.chain_format.?(core, c.KE_RENDER_STAGE_TONEMAP);
 
     const vs = core.*.load_shader.?(core, "tonemap", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
@@ -130,6 +133,7 @@ fn setup(tm: *TonemapModule, p: *const c.ke_render_tonemap_params, out_error: [*
 
     tm.access = .{
         .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE },
+        .{ .cid = p.frame_cid, .access = c.KE_ACCESS_READ },
     };
     return true;
 }
@@ -200,7 +204,7 @@ const testing = std.testing;
 const Stubs = @import("stubs").Stubs(c);
 
 fn testParams(rt: *Stubs.Runtime, core: *Stubs.Core, dev: *Stubs.Device) c.ke_render_tonemap_params {
-    return .{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null };
+    return .{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .frame_cid = 1 };
 }
 
 test "creating and destroying the tonemap pass leaves no block allocated and no GPU resource live" {

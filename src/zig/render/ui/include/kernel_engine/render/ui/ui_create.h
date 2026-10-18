@@ -60,6 +60,9 @@ extern "C"
         ke_render_service *service;
         ke_gpu_device     *device;  ///< Borrowed.
         ke_ndc_convention  ndc;
+        /// The tag the system that begins the frame writes; the pass reads it, so it runs once
+        /// the frame has begun.
+        ke_component_id    frame_cid;
     } ke_render_ui_params;
 
     /// Registers the pass's update-phase label system and render-phase system. A missing

@@ -17,7 +17,9 @@ namespace KernelEngine.Framework;
 /// registered when the first node of that type binds. That system declares the component access
 /// of the type's <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
 /// query and the reached ones its access list, with hierarchy and name always read, and it is
-/// sliced per entity when the type reaches only itself. <c>OnLoad</c> runs the setup callback on the
+/// sliced per entity when the type reaches only itself. Its query requires the type's tag, which
+/// is declared a member of the host's exclusive group of type tags, so the
+/// systems of two types do not order each other through what they own. <c>OnLoad</c> runs the setup callback on the
 /// calling thread.
 /// </summary>
 public sealed class SceneNodesModule : IRuntimeModule
@@ -130,8 +132,10 @@ public sealed class SceneNodesModule : IRuntimeModule
                 into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
             }
 
+            var tag = scriptHost.TagOf(type);
+            runtime.DeclareExclusive(scriptHost.TypeTagGroup(), tag);
             var terms = owned.Select(e => Touches(e.Key, e.Value))
-                .Append(Touches(scriptHost.TagOf(type), writes: false))
+                .Append(Touches(tag, writes: false))
                 .ToArray();
 
             var access = new List<ComponentAccess>

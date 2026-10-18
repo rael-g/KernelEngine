@@ -105,6 +105,12 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         return Handle->type_tag(Handle, type);
     }
 
+    /// <summary>The component no entity carries that names the group the type tags form: every tag of this host is a member of it, and no entity holds two members. A runtime is told so with declare_exclusive(group, tag).</summary>
+    public uint TypeTagGroup()
+    {
+        return Handle->type_tag_group(Handle);
+    }
+
     /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Bind(ulong entity, uint type, object instance)

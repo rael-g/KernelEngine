@@ -38,7 +38,7 @@ const ModuleState = struct {
     frame_state: frame_producer.State,
     frame_queries_terms: [4]c.ke_component_access,
     frame_queries: [3]c.ke_query_decl,
-    end_access: [1]c.ke_component_access,
+    end_access: [2]c.ke_component_access,
     mesh_resolve_queries_terms: [1]c.ke_component_access,
     mesh_resolve_queries: [1]c.ke_query_decl,
     sprite_resolve_queries_terms: [3]c.ke_component_access,
@@ -172,6 +172,9 @@ fn failCreate(rt: *c.ke_runtime, mark: c.ke_system_id, st: *ModuleState) c.ke_re
     return empty;
 }
 
+const mesh_resolve_after = [_][*c]const u8{"render.sprite2d.resolve"};
+const label_resolve_before = [_][*c]const u8{"render.ui.labels"};
+
 /// Creates the resource binder when none is given, the render service on it, and a `ModuleState`
 /// that holds them. With `default_passes` zero the handle wraps the service alone. With it non-zero, the module builds the camera on the view
 /// space, which is the one supplied or a new one it owns, registers the component types, and
@@ -252,6 +255,7 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
     };
     st.end_access = .{
         .{ .cid = color_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = st.frame_cid, .access = c.KE_ACCESS_READ },
     };
 
     if (default_passes) {
@@ -299,6 +303,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         mesh_resolve_params.pinned_thread = 0;
         mesh_resolve_params.user_data = st.core.ref;
         mesh_resolve_params.execute = mesh_resolve.system;
+        mesh_resolve_params.after = &mesh_resolve_after;
+        mesh_resolve_params.after_count = mesh_resolve_after.len;
         if (rt.register_system.?(rt, &mesh_resolve_params, out_error) == 0) {
             return failCreate(rt, mark, st);
         }
@@ -394,12 +400,12 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         if (st.forward.ref == null) return failCreate(rt, mark, st);
 
         st.tonemap = c.ke_render_tonemap_create(&.{
-            .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger,
+            .runtime = rt, .service = st.core.ref, .device = dev, .logger = logger, .frame_cid = st.frame_cid,
         }, out_error);
         if (st.tonemap.ref == null) return failCreate(rt, mark, st);
 
         st.ui = c.ke_render_ui_create(&.{
-            .runtime = rt, .ecs = e, .service = st.core.ref, .device = dev, .ndc = ndc,
+            .runtime = rt, .ecs = e, .service = st.core.ref, .device = dev, .ndc = ndc, .frame_cid = st.frame_cid,
         }, out_error);
         if (st.ui.ref == null) return failCreate(rt, mark, st);
 
@@ -415,6 +421,8 @@ export fn ke_render_module_create(runtime: ?*c.ke_runtime, ecs: ?*c.ke_ecs, devi
         label_resolve_params.pinned_thread = 0;
         label_resolve_params.user_data = &st.label_resolve_state;
         label_resolve_params.execute = label_resolve.system;
+        label_resolve_params.before = &label_resolve_before;
+        label_resolve_params.before_count = label_resolve_before.len;
         if (rt.register_system.?(rt, &label_resolve_params, out_error) == 0) {
             return failCreate(rt, mark, st);
         }

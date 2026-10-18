@@ -159,6 +159,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
 /// only when every object it creates exists, the pipeline included, and the io, access list and
 /// queries are filled. On false, the objects already created stay in the block for the caller to
 /// release through `destroyModule`.
+/// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
+/// frame's color.
 fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_params, out_error: [*c][*c]c.ke_error) bool {
     const core: *c.ke_render_service = p.service;
     const camera_cid = p.camera_cid;
@@ -181,6 +183,7 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
     dl.io.name = "render.deferred_lighting";
     dl.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
     if (dl.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
+    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
     if (p.shadow != null) dl.shadow = gpa.dupeZ(u8, std.mem.span(p.shadow)) catch return outOfMemory(out_error);
     if (p.clusters != null) dl.clusters = gpa.dupeZ(u8, std.mem.span(p.clusters)) catch return outOfMemory(out_error);
 

@@ -37,14 +37,26 @@ public interface IRuntime : IDisposable
     /// <param name="accessList">Cids the system touches that no query term covers, such as ordering-only tags and component access made without a query. Declaring nothing is not "no opinion" -- it says the system conflicts with nobody, so it may run concurrently with every other system in its phase. Anything touching component storage declares it here.</param>
     /// <param name="pinnedThread">The worker the body must run on, or 0 to let any wave thread take it.</param>
     /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. What breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
+    /// <param name="after">Names of systems of the same phase this one runs after, whatever they access. A name is resolved when the phase is built, so it may name a system registered later; a name no system of the phase carries fails the tick.</param>
+    /// <param name="before">Names of systems of the same phase this one runs before, resolved like `after`.</param>
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false);
+    ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false, ReadOnlySpan<string> after = default, ReadOnlySpan<string> before = default);
     /// <summary>Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void UnregisterSystem(ulong id);
     /// <summary>The id of the system registered last and still registered, or 0 when there is none.</summary>
     ulong LastSystem();
+    /// <summary>Declares member one of the members of the exclusive group group: no entity holds two members of one group. Two systems whose every query requires a different member of the same group touch disjoint entities, so what they access through their queries puts no order between them; what their access lists name still does.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void DeclareExclusive(uint group, uint member);
+    /// <summary>Declares that whoever owns cid orders the systems writing it, so the runtime puts no order between two writers of cid. A writer still runs before a system that only reads it.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void DeclareSelfOrdered(uint cid);
+    /// <summary>Builds the order of every phase as the next tick would. Within a phase, a system runs after the systems it names in `after` and before those it names in `before`, a writer of a component before a system that only reads it, and of two writers with neither order, the one registered first runs first: an ambiguity.</summary>
+    /// <param name="refuseAmbiguity">When true, an ambiguity fails the check too.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void CheckOrder(bool refuseAmbiguity);
     /// <summary>Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Tick(float dt);

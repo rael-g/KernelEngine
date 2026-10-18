@@ -18,4 +18,7 @@ public unsafe partial struct ke_render_ui_params
 
     [NativeTypeName("ke_ndc_convention")]
     public KernelEngine.View.Native.ke_ndc_convention ndc;
+
+    [NativeTypeName("ke_component_id")]
+    public uint frame_cid;
 }

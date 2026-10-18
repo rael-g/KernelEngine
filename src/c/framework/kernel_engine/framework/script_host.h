@@ -106,6 +106,11 @@ extern "C"
         /// entity carries two of these tags, since an entity holds one instance at most.
         ke_component_id (*type_tag)(struct ke_script_host *self, ke_script_type_id type);
 
+        /// The component no entity carries that names the group the type tags form: every tag
+        /// of this host is a member of it, and no entity holds two members. A runtime is told
+        /// so with declare_exclusive(group, tag).
+        ke_component_id (*type_tag_group)(struct ke_script_host *self);
+
         /// Binds `instance` to `entity` as an instance of `type`. The pointer is
         /// stored and never dereferenced. Binding an entity that already carries an
         /// instance fails rather than replacing it.

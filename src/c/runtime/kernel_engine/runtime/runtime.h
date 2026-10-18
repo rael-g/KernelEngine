@@ -141,6 +141,17 @@ typedef struct ke_runtime_system_params {
     /// What breaks the promise is a body reaching an entity other than the one it is
     /// visiting, or touching state shared across the set.
     bool per_entity;
+
+    /// [array_of:after_count, default:empty, utf8] Names of systems of the same phase this one runs
+    /// after, whatever they access. A name is resolved when the phase is built, so it may name a
+    /// system registered later; a name no system of the phase carries fails the tick.
+    const char *const *after;
+    uint32_t           after_count;
+
+    /// [array_of:before_count, default:empty, utf8] Names of systems of the same phase this one runs
+    /// before, resolved like `after`.
+    const char *const *before;
+    uint32_t           before_count;
 } ke_runtime_system_params;
 
 /// [interface] Owns the simulation world, dispatches systems across the worker pool and
@@ -163,6 +174,26 @@ typedef struct ke_runtime {
     bool (*unregister_system)(ke_runtime *self, ke_system_id id, ke_error **out_error);
     /// The id of the system registered last and still registered, or 0 when there is none.
     ke_system_id (*last_system)(ke_runtime *self);
+
+    /// Declares @p member one of the members of the exclusive group @p group: no entity holds
+    /// two members of one group. Two systems whose every query requires a different member of
+    /// the same group touch disjoint entities, so what they access through their queries puts
+    /// no order between them; what their access lists name still does.
+    /// @return false when @p group equals @p member or the declaration cannot be stored.
+    bool (*declare_exclusive)(ke_runtime *self, ke_component_id group, ke_component_id member, ke_error **out_error);
+    /// Declares that whoever owns @p cid orders the systems writing it, so the runtime puts no
+    /// order between two writers of @p cid. A writer still runs before a system that only
+    /// reads it.
+    /// @return false when the declaration cannot be stored.
+    bool (*declare_self_ordered)(ke_runtime *self, ke_component_id cid, ke_error **out_error);
+    /// Builds the order of every phase as the next tick would. Within a phase, a system runs
+    /// after the systems it names in `after` and before those it names in `before`, a writer of a component before a system that only
+    /// reads it, and of two writers with neither order, the one registered first runs first: an
+    /// ambiguity.
+    /// @param refuse_ambiguity When true, an ambiguity fails the check too.
+    /// @return false with the error naming the systems when an `after` or a `before` names no
+    ///         system of its phase, the order has a cycle, or, when refused, two writers are ambiguous.
+    bool (*check_order)(ke_runtime *self, bool refuse_ambiguity, ke_error **out_error);
 
     /// [drains] Runs one tick: every sim phase in order, then the render phase.
     ///
