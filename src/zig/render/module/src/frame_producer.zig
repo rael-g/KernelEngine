@@ -3,8 +3,7 @@
 
 const std = @import("std");
 const zm = @import("zmath");
-const cimport = @import("cimport.zig");
-const c = cimport.c;
+const c = @import("c");
 
 /// What the system reads besides its queries: the service it publishes to, the camera that turns
 /// a camera entity into matrices, and the seconds elapsed since the first frame.

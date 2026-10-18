@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("cimport.zig").c;
+const c = @import("c");
 const E = @import("kerror").Errors(c);
 
 

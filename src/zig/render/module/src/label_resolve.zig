@@ -1,7 +1,6 @@
 //! Gives each label component the font it names, making one attempt per label.
 
-const cimport = @import("cimport.zig");
-const c = cimport.c;
+const c = @import("c");
 
 const std = @import("std");
 

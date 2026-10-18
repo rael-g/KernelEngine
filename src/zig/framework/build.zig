@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -48,6 +49,7 @@ pub fn build(b: *std.Build) void {
 
     mod.addCMacro("KE_FRAMEWORK_EXPORT", "");
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_framework",
         .root_module = mod,
@@ -85,6 +87,8 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }));
 
+        test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
+        test_mod.addImport("test_c", ke_common_build.cImports(b, test_mod, b.path("src/test_c.h")));
         const unit_tests = b.addTest(.{ .root_module = test_mod });
         test_step.dependOn(&b.addRunArtifact(unit_tests).step);
     }

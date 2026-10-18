@@ -9,13 +9,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-const c = @cImport({
-    @cInclude("kernel_engine/logger/logger.h");
-    @cInclude("kernel_engine/logger/log_level.h");
-    @cInclude("kernel_engine/logger/simple/logger_simple_create.h");
-    @cInclude("kernel_engine/logger/simple/console_sink_create.h");
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 const E = @import("kerror").Errors(c);
 

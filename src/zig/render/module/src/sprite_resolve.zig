@@ -1,7 +1,6 @@
 //! Gives each 2D sprite a mesh component carrying a quad and a material that match its fields.
 
-const cimport = @import("cimport.zig");
-const c = cimport.c;
+const c = @import("c");
 
 const std = @import("std");
 

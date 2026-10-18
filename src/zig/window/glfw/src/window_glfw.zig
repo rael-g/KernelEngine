@@ -8,7 +8,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
-const c = @import("c.zig").c;
+const c = @import("c");
 
 const core_mod = @import("core.zig");
 const glfw = @import("glfw_device.zig");

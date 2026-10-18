@@ -5,7 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const c = @import("runtime_c.zig").c;
+const c = @import("c");
 const alloc = @import("runtime_alloc.zig");
 const wave_mod = @import("runtime_waves.zig");
 const context = @import("runtime_context.zig");

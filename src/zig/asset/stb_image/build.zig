@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -35,6 +36,7 @@ pub fn build(b: *std.Build) void {
     mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_ASSET_STB_IMAGE_EXPORT", "");
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_asset_stb_image",
         .root_module = mod,
@@ -66,6 +68,7 @@ pub fn build(b: *std.Build) void {
     }));
     test_mod.addCMacro("KE_ASSET_STB_IMAGE_EXPORT", "");
 
+    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     b.step("test", "Run the stb_image loader unit tests").dependOn(&run_tests.step);

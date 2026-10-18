@@ -8,10 +8,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-const c = @cImport({
-    @cInclude("kernel_engine/resource_cache/resource_cache.h");
-    @cInclude("kernel_engine/resource_cache/default/resource_cache_default_create.h");
-});
+const c = @import("c");
 
 const E = @import("kerror").Errors(c);
 

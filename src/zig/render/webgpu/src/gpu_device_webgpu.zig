@@ -9,19 +9,8 @@ comptime {
     _ = @import("window_target.zig");
 }
 const builtin = @import("builtin");
-pub const wgpu = @cImport({
-    @cInclude("webgpu/webgpu.h");
-    @cInclude("webgpu/wgpu.h");
-});
-pub const ke = @cImport({
-    @cInclude("kernel_engine/common/error.h");
-    @cInclude("kernel_engine/render/gpu/gpu_device.h");
-    @cInclude("kernel_engine/render/gpu/gpu_commands.h");
-    @cInclude("kernel_engine/render/gpu/gpu_render_target.h");
-    @cInclude("kernel_engine/window/window.h");
-    @cInclude("kernel_engine/scheduler/scheduler.h");
-    @cInclude("kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h");
-});
+pub const wgpu = @import("c");
+pub const ke = @import("c");
 
 /// Read once by `ke_gpu_device_webgpu_create`. The `scheduler` it carries is borrowed: the state
 /// keeps the pointer, and this file never frees it.

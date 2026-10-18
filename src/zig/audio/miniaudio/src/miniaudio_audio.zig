@@ -10,16 +10,9 @@ pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-const ma = @cImport({
-    @cInclude("miniaudio.h");
-});
+const ma = @import("c");
 
-const c = @cImport({
-    @cInclude("kernel_engine/audio/miniaudio/miniaudio_audio.h");
-    @cInclude("kernel_engine/logger/logger.h");
-    @cInclude("kernel_engine/resource_cache/resource_cache.h");
-    @cInclude("kernel_engine/resource_cache/default/resource_cache_default_create.h");
-});
+const c = @import("c");
 
 const E = @import("kerror").Errors(c);
 

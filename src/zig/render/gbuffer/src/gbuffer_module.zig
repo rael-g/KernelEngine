@@ -6,8 +6,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
-const cimport = @import("cimport.zig");
-const c = cimport.c;
+const c = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;

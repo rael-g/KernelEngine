@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("runtime_c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 const alloc = @import("runtime_alloc.zig");
 const cAlloc = alloc.cAlloc;

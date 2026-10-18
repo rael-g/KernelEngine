@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 
 const pi: f32 = 3.14159265358979323846;

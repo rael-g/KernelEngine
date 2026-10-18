@@ -2,7 +2,7 @@
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const c = @import("cimport.zig").c;
+const c = @import("c");
 const scene_components = @import("scene_components");
 
 const Components = scene_components.Set(c, &.{

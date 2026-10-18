@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 const values = @import("scene_values.zig");
 

@@ -3,6 +3,8 @@
     .version = "0.1.0",
     .fingerprint = 0x41557bab77c4044e,
     .minimum_zig_version = "0.14.0",
-    .dependencies = .{},
+    .dependencies = .{
+        .ke_common = .{ .path = "../../common" },
+    },
     .paths = .{"."},
 }

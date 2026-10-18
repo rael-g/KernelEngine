@@ -2,7 +2,7 @@
 //! as bind group layout entries and as bind group entries matched by name.
 
 const std = @import("std");
-const c = @import("cimport.zig").c;
+const c = @import("c");
 const gpa = @import("heap").gpa;
 
 const JBinding = struct {

@@ -10,18 +10,11 @@ pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-const stb = @cImport({
-    @cInclude("stb_truetype.h");
-});
+const stb = @import("c");
 
-const libc = @cImport({
-    @cInclude("stdio.h");
-});
+const libc = @import("c");
 
-const c = @cImport({
-    @cInclude("kernel_engine/text/stb_truetype/stb_font.h");
-    @cInclude("kernel_engine/logger/logger.h");
-});
+const c = @import("c");
 
 const E = @import("kerror").Errors(c);
 

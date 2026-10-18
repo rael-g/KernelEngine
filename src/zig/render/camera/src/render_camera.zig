@@ -5,7 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const c = @import("cimport.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);

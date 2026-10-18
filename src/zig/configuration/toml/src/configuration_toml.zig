@@ -4,14 +4,8 @@
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
-const toml = @cImport({
-    @cInclude("stdio.h");
-    @cInclude("toml.h");
-});
-const ke = @cImport({
-    @cInclude("kernel_engine/common/error.h");
-    @cInclude("kernel_engine/configuration/configuration_source.h");
-});
+const toml = @import("c");
+const ke = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;

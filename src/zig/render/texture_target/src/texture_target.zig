@@ -5,12 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const c = @cImport({
-    @cInclude("kernel_engine/render/gpu/gpu_device.h");
-    @cInclude("kernel_engine/render/gpu/gpu_commands.h");
-    @cInclude("kernel_engine/render/gpu/gpu_render_target.h");
-    @cInclude("kernel_engine/render/texture_target/gpu_render_target_texture_create.h");
-});
+const c = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;

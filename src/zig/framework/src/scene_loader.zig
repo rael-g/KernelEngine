@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 const world_impl = @import("world.zig");
 const fields_apply = @import("component_fields_apply.zig");
@@ -685,12 +685,7 @@ const testing = std.testing;
 
 const signal_bus_impl = @import("signal_bus.zig");
 
-const rc = @cImport({
-    @cInclude("kernel_engine/render/component_fields.h");
-    @cInclude("kernel_engine/render/ui/component_fields.h");
-    @cInclude("kernel_engine/audio/component_fields.h");
-    @cInclude("kernel_engine/physics/component_fields.h");
-});
+const rc = @import("test_c");
 
 const fake_max_components = 32;
 const fake_max_entities = 128;

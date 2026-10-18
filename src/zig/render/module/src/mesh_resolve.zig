@@ -1,7 +1,6 @@
 //! Gives each mesh component a built-in mesh and a material while its handles are still empty.
 
-const cimport = @import("cimport.zig");
-const c = cimport.c;
+const c = @import("c");
 
 const std = @import("std");
 

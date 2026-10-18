@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -30,6 +31,7 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(b.path("include"));
     mod.addCMacro("KE_INPUT_DEFAULT_EXPORT", "");
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_input_default",
         .root_module = mod,
@@ -61,6 +63,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addIncludePath(b.path("include"));
     test_mod.addCMacro("KE_INPUT_DEFAULT_EXPORT", "");
 
+    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     b.step("test", "Run the default input unit tests").dependOn(&run_tests.step);

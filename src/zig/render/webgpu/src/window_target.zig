@@ -29,7 +29,7 @@ const WindowTarget = struct {
     view: wgpu.WGPUTextureView,
 };
 
-const x11 = if (builtin.os.tag == .linux) @cImport(@cInclude("X11/Xlib.h")) else struct {};
+const x11 = @import("c");
 
 /// What `createSurface` returns: the surface and, on Linux, the display opened to create it. Once
 /// the surface is released, the display is closed with `closeDisplay`.

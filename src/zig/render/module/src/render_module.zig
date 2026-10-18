@@ -4,14 +4,13 @@
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 const std = @import("std");
-const cimport = @import("cimport.zig");
 const component_apply = @import("component_apply.zig");
 const mesh_resolve = @import("mesh_resolve.zig");
 const sprite_resolve = @import("sprite_resolve.zig");
 const label_resolve = @import("label_resolve.zig");
 const frame_producer = @import("frame_producer.zig");
 
-pub const c = cimport.c;
+pub const c = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
