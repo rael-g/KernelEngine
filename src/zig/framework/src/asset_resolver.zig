@@ -83,7 +83,7 @@ fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8, out_error: [*c][
 }
 
 /// Slot `resolve_path`. Resolves through `resolvePath` into the caller's buffer.
-fn vtResolvePath(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8, out_size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn vtResolvePath(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8, capacity: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const self = self_in orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
@@ -92,7 +92,7 @@ fn vtResolvePath(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return false;
     }
-    return resolvePath(stateOf(self), path, out[0..out_size], out_error);
+    return resolvePath(stateOf(self), path, out[0..capacity], out_error);
 }
 
 fn tomlNumberIn(tab: ?*c.toml_table_t, key: [*c]const u8) ?f32 {

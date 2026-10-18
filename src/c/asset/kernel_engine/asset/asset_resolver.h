@@ -121,15 +121,15 @@ extern "C"
          * "res://" is joined to the project root the resolver was created with, or stands as
          * its remainder when none was given; any other path is copied as written. Nothing
          * checks that the file exists. Fails as an invalid argument when the result and its
-         * terminator do not fit in `out_size` bytes.
+         * terminator do not fit in `capacity` bytes.
          * @param path [utf8]
-         * @param out [out,array_of:out_size] Receives the resolved path.
-         * @param out_size Bytes `out` holds.
+         * @param out [out,array_of:capacity] Receives the resolved path.
+         * @param capacity Bytes `out` holds.
          */
         bool (*resolve_path)(struct ke_asset_resolver *self,
                              const char               *path,
                              char                     *out,
-                             size_t                    out_size,
+                             size_t                    capacity,
                              ke_error                **out_error);
     } ke_asset_resolver;
 

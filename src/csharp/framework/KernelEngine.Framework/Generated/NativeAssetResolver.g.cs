@@ -170,7 +170,7 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
         }
     }
 
-    /// <summary>Writes the file path `path` names into `out`, terminated: a path that begins with "res://" is joined to the project root the resolver was created with, or stands as its remainder when none was given; any other path is copied as written. Nothing checks that the file exists. Fails as an invalid argument when the result and its terminator do not fit in `out_size` bytes.</summary>
+    /// <summary>Writes the file path `path` names into `out`, terminated: a path that begins with "res://" is joined to the project root the resolver was created with, or stands as its remainder when none was given; any other path is copied as written. Nothing checks that the file exists. Fails as an invalid argument when the result and its terminator do not fit in `capacity` bytes.</summary>
     /// <param name="@out">Receives the resolved path.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void ResolvePath(string path, Span<sbyte> @out)
