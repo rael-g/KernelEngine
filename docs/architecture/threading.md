@@ -29,7 +29,7 @@ the one that may be called from any wave thread.
 
 **Nothing is pinned.** Index `0` is "any" for the runtime, and every system registers with it;
 an order between two systems is a component they both access. State that is not a component is
-named by a component no entity carries, such as `ScriptHost.StateCid`.
+named by a component no entity carries, such as the tag `KE_RENDER_FRAME_COLOR`.
 
 **The window is not on the pool.** The host calls `IWindow.PollEvents` on the thread that created
 the window, before each `Tick`.
