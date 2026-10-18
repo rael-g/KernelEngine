@@ -892,7 +892,7 @@ fn spanOr(text: [*c]const u8) []const u8 {
 /// only when the scheduler reports more than one worker, which is read here.
 fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: u32) u32 {
     if (room == 0) return 0;
-    if (!p.per_entity or p.pinned_thread != 0) return 1;
+    if (!p.per_entity or p.pinned_thread != 0 or p.exclusive) return 1;
     const sched = h.state.scheduler;
     const workers: u32 = if (sched.get_num_workers) |f| f(sched) else 0;
     if (workers <= 1) return 1;
@@ -2665,6 +2665,21 @@ test "independent chains of writers and readers run side by side" {
     try testing.expectEqual(@as(u32, 2), orderOf(&sys, .{}, &waves).wave_count);
     try testing.expectEqual(waves[0], waves[2]);
     try testing.expectEqual(waves[1], waves[3]);
+}
+
+test "an exclusive system runs alone before the systems of its phase, whatever it declares" {
+    const r = [_]c.ke_component_access{access(1, c.KE_ACCESS_READ)};
+    const w = [_]c.ke_component_access{access(2, c.KE_ACCESS_WRITE)};
+    var flush = waveSystem("flush", &.{});
+    flush.exclusive = true;
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("reader", &r), waveSystem("writer", &w), flush };
+    var waves: [3]u32 = undefined;
+    const o = orderOf(&sys, .{}, &waves);
+
+    try testing.expectEqual(@as(u32, 0), waves[2]);
+    try testing.expectEqual(@as(u32, 1), waves[0]);
+    try testing.expectEqual(@as(u32, 1), waves[1]);
+    try testing.expectEqual(wave_mod.Problem.none, o.ambiguity);
 }
 
 test "check_order reports two unordered writers only when asked to refuse them" {

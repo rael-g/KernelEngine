@@ -152,6 +152,12 @@ typedef struct ke_runtime_system_params {
     /// before, resolved like `after`.
     const char *const *before;
     uint32_t           before_count;
+
+    /// [default:false] The body runs alone at the start of its phase, before every system of the
+    /// phase that is not exclusive, and what it records is applied before they run. Two
+    /// exclusive systems are ordered like two writers of one component. Neither its access nor
+    /// per_entity orders or splits it.
+    bool exclusive;
 } ke_runtime_system_params;
 
 /// [interface] Owns the simulation world, dispatches systems across the worker pool and

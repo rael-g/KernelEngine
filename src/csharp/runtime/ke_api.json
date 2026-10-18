@@ -268,6 +268,14 @@
           "type": "uint32_t",
           "tags": [],
           "doc": null
+        },
+        {
+          "name": "exclusive",
+          "type": "_Bool",
+          "tags": [
+            "default:false"
+          ],
+          "doc": "The body runs alone at the start of its phase, before every system of the phase that is not exclusive, and what it records is applied before they run. Two exclusive systems are ordered like two writers of one component. Neither its access nor per_entity orders or splits it."
         }
       ]
     },

@@ -10,7 +10,7 @@ namespace KernelEngine.Framework;
 /// <summary>
 /// Runtime module "SceneNodes", depending on <see cref="FrameworkModule"/>. It registers the
 /// <see cref="ScriptHost"/> and the spatial node types, and registers these systems: "Scene.Input"
-/// (pre-update, writing <see cref="ScriptHost.StateCid"/>: releases retired handles, updates and snapshots input and
+/// (pre-update, touching no component: releases retired handles, updates and snapshots input and
 /// evaluates actions), "Scene.Signals.Clear" (pre-update) and "Scene.Signals.Deliver"
 /// (post-update) when a <see cref="SignalBus"/> is registered, and one system
 /// "Scene.Behaviors.&lt;type&gt;" in the update phase for each node type with behavior,
@@ -99,7 +99,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             input?.Update();
             _inputSnapshot = input?.CaptureSnapshot();
             evaluator?.Evaluate(_inputSnapshot);
-        }, accessList: [Touches(scriptHost.StateCid, writes: true)]);
+        }, accessList: []);
 
         var signals = services.GetService<SignalBus>();
         if (signals is not null)

@@ -11,7 +11,8 @@ namespace KernelEngine.Framework;
 /// factory of the native scene loader (it resolves the type name through
 /// <see cref="NodeTypeRegistry"/>, constructs the node with the service provider and binds it to
 /// the entity), loads the initial scene on the calling thread during <c>OnLoad</c>, and registers
-/// the system "Scene.Router.Flush" in the pre-update phase, writing <see cref="ScriptHost.StateCid"/>. The initial scene is the
+/// the system "Scene.Router.Flush" in the pre-update phase, exclusive, so a scene change runs alone before the
+/// other systems of the phase. The initial scene is the
 /// constructor override, else the "default_scene" key of the "project" configuration section
 /// with its <c>res://</c>, <c>scenes/</c> and scene extension removed, else "Main".
 /// </summary>
@@ -73,7 +74,7 @@ public sealed class SceneRouterModule : IRuntimeModule
         {
             using (scriptHost.EnterSystem(ctx))
                 router.Flush();
-        }, accessList: [new ComponentAccess { Cid = scriptHost.StateCid, Access = RuntimeAccess.Write }]);
+        }, exclusive: true);
     }
 
     private string ResolveInitialScene(IServiceProvider services)

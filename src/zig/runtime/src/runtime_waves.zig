@@ -1,7 +1,8 @@
 //! Orders the systems of a phase and cuts them into waves. Order comes from the names a system runs
 //! after or before, from a writer running before a system that only reads what it writes, and,
-//! between two writers with neither, from registration, reported as an ambiguity. Each system
-//! lands in the wave after the last of those it follows.
+//! between two writers with neither, from registration, reported as an ambiguity. An exclusive
+//! system runs before every system that is not. Each system lands in the wave after the last of
+//! those it follows.
 
 const std = @import("std");
 
@@ -180,6 +181,16 @@ pub fn order(nodes: []const Node, rules: Rules, out_waves: []u32) Order {
             if (b_after_a or a_after_b) {
                 if (b_after_a) edges[i * n + j] = true;
                 if (a_after_b) edges[j * n + i] = true;
+                continue;
+            }
+            if (a.exclusive != b.exclusive) {
+                if (a.exclusive) edges[i * n + j] = true else edges[j * n + i] = true;
+                continue;
+            }
+            if (a.exclusive) {
+                edges[i * n + j] = true;
+                if (result.ambiguity == .none)
+                    result.ambiguity = .{ .ambiguity = .{ .first = a.name, .second = b.name, .cid = 0 } };
                 continue;
             }
             const r = relate(nodes[i], nodes[j], rules);

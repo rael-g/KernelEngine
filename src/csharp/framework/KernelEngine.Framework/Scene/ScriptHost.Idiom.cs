@@ -200,20 +200,7 @@ public unsafe partial class ScriptHost
         _nameCid = CidOfName("name");
         _nativeTransformCid = CidOfName("transform");
         _ = CidOfName("hierarchy");
-        StateCid = ecs.RegisterComponent<ScriptHostState>("scene.script_host");
         return this;
-    }
-
-    /// <summary>
-    /// The component no entity carries that stands for this host's own state. A system that
-    /// changes the host outside a node's components names it as written, so the runtime never runs
-    /// two such systems in one wave.
-    /// </summary>
-    public uint StateCid { get; private set; }
-
-    private struct ScriptHostState : IComponentLayout
-    {
-        public static ReadOnlySpan<ComponentField> Fields => [];
     }
 
     /// <summary>

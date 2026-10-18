@@ -189,9 +189,10 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <param name="perEntity">The body's work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. What breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set.</param>
     /// <param name="after">Names of systems of the same phase this one runs after, whatever they access. A name is resolved when the phase is built, so it may name a system registered later; a name no system of the phase carries fails the tick.</param>
     /// <param name="before">Names of systems of the same phase this one runs before, resolved like `after`.</param>
+    /// <param name="exclusive">The body runs alone at the start of its phase, before every system of the phase that is not exclusive, and what it records is applied before they run. Two exclusive systems are ordered like two writers of one component. Neither its access nor per_entity orders or splits it.</param>
     /// <returns>0 when the system was refused.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false, ReadOnlySpan<string> after = default, ReadOnlySpan<string> before = default)
+    public ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false, ReadOnlySpan<string> after = default, ReadOnlySpan<string> before = default, bool exclusive = false)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
@@ -242,6 +243,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
                                         p.after_count = (uint)after.Length;
                                         p.before = (sbyte**)beforePtr;
                                         p.before_count = (uint)before.Length;
+                                        p.exclusive = exclusive;
                                         ke_error* err = null;
                                         ulong result;
                                         try
