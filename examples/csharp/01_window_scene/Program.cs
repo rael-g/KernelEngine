@@ -84,13 +84,11 @@ runtime.Dispose();
 Console.WriteLine("[01_window_scene] Exited cleanly.");
 
 #region behavior
-sealed class SpinningQuad : MeshRenderer
+sealed partial class SpinningQuad : MeshRenderer
 {
     private float _angle;
 
-    protected override bool HasBehavior => true;
-
-    protected override void OnUpdate(in View view)
+    void Update(in View view)
     {
         _angle += 90f * view.DeltaTime;
         if (_angle >= 360f) _angle -= 360f;
