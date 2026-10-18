@@ -162,12 +162,24 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             anyHook |= declared;
             anyHandWritten |= handWritten;
             borrowList.AddRange(hookBorrows);
-            if (!declared || handWritten) continue;
+            if (!declared) continue;
+            if (handWritten)
+            {
+                var written = classSymbol.GetMembers(hook.Override).OfType<IMethodSymbol>().First(m =>
+                    SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
+                spc.ReportDiagnostic(Diagnostic.Create(WholeTypeAccessRule, written.Locations.FirstOrDefault(),
+                    classSymbol.Name, hook.Override, $"it overrides {hook.Override} by hand instead of declaring {hook.Method}"));
+                continue;
+            }
             var method = classSymbol.GetMembers(hook.Method).OfType<IMethodSymbol>().FirstOrDefault(m =>
                 SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol)
                 && m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
             if (method is null) continue;
-            if (BehaviorAccess.Analyze(compilation, classSymbol, method) is { } uses) precise.Add((hook, uses, hookBorrows));
+            if (BehaviorAccess.Analyze(compilation, classSymbol, method, out var unknown) is { } uses)
+                precise.Add((hook, uses, hookBorrows));
+            else
+                spc.ReportDiagnostic(Diagnostic.Create(WholeTypeAccessRule, unknown!.Location,
+                    classSymbol.Name, hook.Method, unknown.Reason));
         }
         if (precise.Count > 0) EmitHookComponents(sb, className, overrideModifier, precise);
         var borrows = borrowList.ToImmutableArray();
@@ -695,6 +707,14 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
     }
+
+    static readonly DiagnosticDescriptor WholeTypeAccessRule = new(
+        id: "KESG008",
+        title: "Behavior hook declares every component of its type",
+        messageFormat: "'{0}.{1}' declares every component of '{0}' because {2}; the scheduler cannot run it beside other writers of those components",
+        category: "KernelEngine.SourceGenerators",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
 
     static readonly DiagnosticDescriptor UpdateNotDispatchedRule = new(
         id: "KESG005",

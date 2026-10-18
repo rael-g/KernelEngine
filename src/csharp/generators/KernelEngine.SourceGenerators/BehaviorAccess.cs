@@ -24,45 +24,82 @@ static class BehaviorAccess
         public bool Writes { get; } = writes;
     }
 
-    /// <summary>
-    /// The components <paramref name="hook"/>, declared on <paramref name="owner"/>, reaches on its
-    /// own node, or null when its body cannot be followed: <c>this</c> used other than as the
-    /// receiver of a member, a call on <c>this</c> to a method with no source or one a subclass
-    /// may override, or a property of the node that is neither generated nor plain state.
-    /// </summary>
-    internal static List<Use>? Analyze(Compilation compilation, INamedTypeSymbol owner, IMethodSymbol hook)
+    /// <summary>Why a hook's access could not be read, and where.</summary>
+    internal sealed class Unknown(string reason, Location location)
     {
-        var uses = new Dictionary<string, bool>();
-        var visited = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
-        if (!Visit(compilation, owner, hook, uses, visited)) return null;
-        return uses.Select(u => new Use(u.Key, u.Value)).ToList();
+        public string Reason { get; } = reason;
+        public Location Location { get; } = location;
     }
 
-    static bool Visit(Compilation compilation, INamedTypeSymbol owner, IMethodSymbol method,
-        Dictionary<string, bool> uses, HashSet<IMethodSymbol> visited)
+    /// <summary>
+    /// The components <paramref name="hook"/>, declared on <paramref name="owner"/>, reaches on its
+    /// own node, or null when its body cannot be followed, with <paramref name="unknown"/> saying
+    /// why: <c>this</c> used other than as the receiver of a member, a call on <c>this</c> to a
+    /// method with no source or one a subclass may override, or a property of the node that is
+    /// neither generated nor plain state.
+    /// </summary>
+    internal static List<Use>? Analyze(Compilation compilation, INamedTypeSymbol owner, IMethodSymbol hook, out Unknown? unknown)
     {
-        if (!visited.Add(method.OriginalDefinition)) return true;
-        var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-        if (syntax is null) return false;
-        var operation = compilation.GetSemanticModel(syntax.SyntaxTree).GetOperation(syntax);
-        if (operation is null) return false;
+        var walk = new Walk(compilation, owner);
+        unknown = walk.Visit(hook, hook.Locations.FirstOrDefault() ?? Location.None);
+        return unknown is null ? walk.Uses.Select(u => new Use(u.Key, u.Value)).ToList() : null;
+    }
 
-        foreach (var op in operation.DescendantsAndSelf())
+    sealed class Walk(Compilation compilation, INamedTypeSymbol owner)
+    {
+        public readonly Dictionary<string, bool> Uses = new();
+        readonly HashSet<IMethodSymbol> visited = new(SymbolEqualityComparer.Default);
+
+        public Unknown? Visit(IMethodSymbol method, Location at)
         {
-            switch (op)
+            if (!visited.Add(method.OriginalDefinition)) return null;
+            var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            var operation = syntax is null ? null : compilation.GetSemanticModel(syntax.SyntaxTree).GetOperation(syntax);
+            if (operation is null) return new($"it calls '{method.Name}', whose body the generator cannot read", at);
+
+            foreach (var op in operation.DescendantsAndSelf())
             {
-                case IInstanceReferenceOperation self when self.ReferenceKind == InstanceReferenceKind.ContainingTypeInstance:
-                    if (!IsReceiver(self)) return false;
-                    break;
-                case IPropertyReferenceOperation pr when pr.Instance is IInstanceReferenceOperation:
-                    if (!Record(compilation, owner, pr, uses, visited)) return false;
-                    break;
-                case IInvocationOperation call when call.Instance is IInstanceReferenceOperation:
-                    if (!Follow(compilation, owner, call.TargetMethod, uses, visited)) return false;
-                    break;
+                var found = op switch
+                {
+                    IInstanceReferenceOperation self when self.ReferenceKind == InstanceReferenceKind.ContainingTypeInstance && !IsReceiver(self)
+                        => new Unknown("it hands 'this' to code the generator does not follow", self.Syntax.GetLocation()),
+                    IPropertyReferenceOperation pr when pr.Instance is IInstanceReferenceOperation => Record(pr),
+                    IInvocationOperation call when call.Instance is IInstanceReferenceOperation => Follow(call.TargetMethod, call.Syntax.GetLocation()),
+                    _ => null,
+                };
+                if (found is not null) return found;
             }
+            return null;
         }
-        return true;
+
+        Unknown? Follow(IMethodSymbol target, Location at)
+        {
+            if (IsNodeMember(target)) return null;
+            if (target.IsVirtual || target.IsAbstract || (target.IsOverride && !target.IsSealed && !owner.IsSealed))
+                return new($"it calls '{target.Name}', which a subclass may override", at);
+            return Visit(target, at);
+        }
+
+        Unknown? Record(IPropertyReferenceOperation pr)
+        {
+            var property = pr.Property.OriginalDefinition;
+            var at = pr.Syntax.GetLocation();
+            var (reads, writes) = AccessOf(pr);
+            var name = ComponentOf(property, owner);
+            if (name is not null)
+            {
+                Uses[name] = (Uses.TryGetValue(name, out var w) && w) || writes;
+                return null;
+            }
+            if (IsNodeMember(property))
+                return writes ? new($"it writes '{property.Name}', which the scheduler cannot see", at) : null;
+            if (!property.DeclaringSyntaxReferences.Any())
+                return new($"it uses '{property.Name}', which is not a generated component property", at);
+            if (IsAutoProperty(property)) return null;
+            if (reads && property.GetMethod is { } get && Follow(get, at) is { } r) return r;
+            if (writes && property.SetMethod is { } set && Follow(set, at) is { } w2) return w2;
+            return null;
+        }
     }
 
     static bool IsReceiver(IInstanceReferenceOperation self) => self.Parent switch
@@ -71,34 +108,6 @@ static class BehaviorAccess
         IInvocationOperation call => call.Instance == self,
         _ => false,
     };
-
-    static bool Follow(Compilation compilation, INamedTypeSymbol owner, IMethodSymbol target,
-        Dictionary<string, bool> uses, HashSet<IMethodSymbol> visited)
-    {
-        if (IsNodeMember(target)) return true;
-        if (target.IsVirtual || target.IsAbstract || (target.IsOverride && !target.IsSealed && !owner.IsSealed))
-            return false;
-        return Visit(compilation, owner, target, uses, visited);
-    }
-
-    static bool Record(Compilation compilation, INamedTypeSymbol owner, IPropertyReferenceOperation pr,
-        Dictionary<string, bool> uses, HashSet<IMethodSymbol> visited)
-    {
-        var property = pr.Property.OriginalDefinition;
-        var (reads, writes) = AccessOf(pr);
-        var name = ComponentOf(property, owner);
-        if (name is not null)
-        {
-            uses[name] = (uses.TryGetValue(name, out var w) && w) || writes;
-            return true;
-        }
-        if (IsNodeMember(property)) return !writes;
-        if (!property.DeclaringSyntaxReferences.Any()) return false;
-        if (IsAutoProperty(property)) return true;
-        if (reads && property.GetMethod is { } get && !Follow(compilation, owner, get, uses, visited)) return false;
-        if (writes && property.SetMethod is { } set && !Follow(compilation, owner, set, uses, visited)) return false;
-        return true;
-    }
 
     static (bool Reads, bool Writes) AccessOf(IPropertyReferenceOperation pr) => pr.Parent switch
     {
