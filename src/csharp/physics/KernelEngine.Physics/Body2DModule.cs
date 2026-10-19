@@ -2,15 +2,18 @@ using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Physics.Native;
 using KernelEngine.Runtime;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Physics;
 
 /// <summary>
 /// Registers the native system that turns a <c>Body2D</c> node into a simulated body:
-/// it creates the body the component describes, steps the world, and writes the pose
-/// back into the component and the transform it composes. Without this module a
-/// <c>Body2D</c> is storage that nothing advances.
+/// it creates the body at the node's transform, steps the world, and writes the pose
+/// back into the transform and the motion into the component. Without this module a
+/// <c>Body2D</c> is storage that nothing advances. It requires a
+/// <see cref="KernelEngine.Framework.World"/>, whose scene tree tells it when a collider's
+/// ancestors may have changed.
 /// </summary>
 public sealed unsafe class Body2DModule : IRuntimeModule
 {
@@ -27,28 +30,37 @@ public sealed unsafe class Body2DModule : IRuntimeModule
     /// <inheritdoc />
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var ecs     = services.GetRequiredService<INativeEcs>();
+        var ecs = services.GetRequiredService<INativeEcs>();
         var physics = services.GetRequiredService<IPhysics2D>();
 
         var logger = services.GetService<KernelEngine.Logger.INativeLogger>();
+        var world = services.GetRequiredService<KernelEngine.Framework.World>();
 
         var @params = new ke_physics_body2d_module_params
         {
             runtime = ((INativeRuntime)runtime).Native,
-            ecs     = ((INativeEcs)ecs).Native,
+            ecs = ((INativeEcs)ecs).Native,
             physics = ((INativePhysics2d)physics).Native,
-            logger  = logger is not null ? logger.Native : null,
+            scene_tree = ((KernelEngine.Framework.INativeSceneTree)world.SceneTree).Native,
+            logger = logger is not null ? logger.Native : null,
         };
 
         ke_error* err = null;
         _handle = KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(&@params, &err);
         if (_handle.@ref == null) throw NativeErrors.FromNative(err, "physics_body2d_module_create");
 
-        var world = services.GetService<KernelEngine.Framework.World>();
-        if (world is not null)
-            KernelEngine.Physics.Native.NativeMethods.physics_register_scene_apply(
-                ((INativeEcs)ecs).Native,
-                ((KernelEngine.Framework.INativeWorld)world).Native);
+        var set = KernelEngine.Physics.Native.NativeMethods.physics_scene_components_create();
+        try
+        {
+            err = null;
+            if (!set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native,
+                    ((KernelEngine.Framework.INativeWorld)world).Native, &err))
+                throw NativeErrors.FromNative(err, "register_into");
+        }
+        finally
+        {
+            set.destroy(set.@ref);
+        }
     }
 
     /// <inheritdoc />

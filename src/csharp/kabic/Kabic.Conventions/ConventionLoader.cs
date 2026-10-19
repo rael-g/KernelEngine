@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+
 using Kabic.Numerics;
 
 namespace Kabic.Conventions;

@@ -1,21 +1,23 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Asset;
 using KernelEngine.Asset.Assimp;
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
-using KernelEngine.Asset;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
 
-string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
+using Microsoft.Extensions.DependencyInjection;
+
+string modelPath = Path.Combine(AppContext.BaseDirectory, "assets", "Box.gltf");
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -36,8 +38,8 @@ var services = new ServiceCollection()
 
         tree.AddNode(new AmbientLight { Color = new(0.02f, 0.02f, 0.02f) }, "Ambient");
 
-        var cam    = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "MainCamera");
-        var eye    = new Vector3(8f, 8f, 15f);
+        var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "MainCamera");
+        var eye = new Vector3(8f, 8f, 15f);
         var target = new Vector3(0f, 2f, 0f);
         var lookRot = Quaternion.CreateFromRotationMatrix(
             Matrix4x4.CreateWorld(eye, Vector3.Normalize(target - eye), Vector3.UnitY));
@@ -47,13 +49,13 @@ var services = new ServiceCollection()
         tree.AddNode(new DirectionalLight
         {
             Direction = Vector3.Normalize(new Vector3(0.3f, -1.0f, -0.5f)),
-            Color     = new Vector3(1f, 0.95f, 0.8f),
+            Color = new Vector3(1f, 0.95f, 0.8f),
             Intensity = 4f,
         }, "Sun");
 
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
-        var floorMat  = resources.CreateMaterial("floor", new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
-        var floor     = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
+        var floorMat = resources.CreateMaterial("floor", new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
+        var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Scale = new Vector3(50f, 1f, 50f);
 
         try
@@ -66,7 +68,7 @@ var services = new ServiceCollection()
             for (int i = 0; i < meshNodes.Count; i++)
             {
                 meshNodes[i].Position = new Vector3(0f, 2f, 0f);
-                meshNodes[i].Scale    = new Vector3(2f);
+                meshNodes[i].Scale = new Vector3(2f);
             }
         }
         catch (Exception ex)
@@ -78,18 +80,18 @@ var services = new ServiceCollection()
         {
             tree.AddNode(new OrbitingLight
             {
-                Color       = i % 2 == 0 ? new Vector3(1f, 0.2f, 0.2f) : new Vector3(0.2f, 0.4f, 1f),
-                Intensity   = 8f,
-                Radius      = 18f,
+                Color = i % 2 == 0 ? new Vector3(1f, 0.2f, 0.2f) : new Vector3(0.2f, 0.4f, 1f),
+                Intensity = 8f,
+                Radius = 18f,
                 OrbitRadius = 5f,
-                Speed       = 0.5f + i * 0.1f,
-                Phase       = i * (MathF.PI / 4f),
+                Speed = 0.5f + i * 0.1f,
+                Phase = i * (MathF.PI / 4f),
             }, $"OrbitLight_{i}");
         }
     }));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
@@ -113,7 +115,7 @@ while (!window.ShouldClose())
     {
         double fps = frameCount / (now - fpsWindowStart);
         Console.WriteLine($"[13_full_scene] FPS: {fps:F2}  Lights: 8p 1d");
-        frameCount     = 0;
+        frameCount = 0;
         fpsWindowStart = now;
     }
 }
@@ -125,8 +127,8 @@ Console.WriteLine("[13_full_scene] Exited cleanly.");
 sealed class OrbitingLight : PointLight
 {
     public float OrbitRadius { get; init; } = 5f;
-    public float Speed       { get; init; } = 1f;
-    public float Phase       { get; init; }
+    public float Speed { get; init; } = 1f;
+    public float Phase { get; init; }
 
     private float _time;
 

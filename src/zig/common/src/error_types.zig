@@ -1,8 +1,5 @@
 //! The names of the generic error types, in one place.
 
-/// The position of each name is the position of its kind in the enum of kinds declared in the file
-/// kerror.zig, which indexes this array with `@intFromEnum`. Moving an entry changes which kind it
-/// names, so the two lists must stay in the same order.
 pub const generic = [_][*:0]const u8{
     "ke.error",
     "ke.error.not_found",

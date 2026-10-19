@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_GPU_ENUMS_H_
 #define KERNEL_ENGINE_RENDER_GPU_ENUMS_H_
 
-#include <kernel_engine/common/types.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -231,9 +231,9 @@ typedef struct ke_gpu_capabilities
     uint32_t max_compute_workgroup_size_x;
     uint32_t max_compute_workgroup_size_y;
     uint32_t max_compute_workgroup_size_z;
-    ke_bool  supports_bindless;
-    ke_bool  supports_mesh_shaders;
-    ke_bool  supports_ray_tracing;
+    bool     supports_bindless;
+    bool     supports_mesh_shaders;
+    bool     supports_ray_tracing;
     /// Byte multiple a texture/buffer copy's bytes_per_row must be a multiple of; 1 when
     /// the backend imposes none.
     uint32_t copy_bytes_per_row_alignment;

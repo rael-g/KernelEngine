@@ -1,7 +1,8 @@
 ﻿using System.Numerics;
+
 using KernelEngine.Framework;
-using KernelEngine.Text;
 using KernelEngine.Render;
+using KernelEngine.Text;
 
 namespace Pong;
 
@@ -12,10 +13,10 @@ namespace Pong;
 /// </summary>
 public sealed partial class Scoreboard : Node
 {
-    private readonly IFontLoader     _fontLoader;
+    private readonly IFontLoader _fontLoader;
     private readonly IRenderResources _resources;
 
-    private Font?  _font;
+    private Font? _font;
     private Label? _left;
     private Label? _right;
     private Label? _hint;
@@ -27,15 +28,15 @@ public sealed partial class Scoreboard : Node
     /// <summary>Size in pixels the font is rasterized at.</summary>
     public partial float FontSize { get; set; }
 
-    public int Left  { get; private set; }
+    public int Left { get; private set; }
     public int Right { get; private set; }
     public int Total => Left + Right;
 
     public Scoreboard(IFontLoader fontLoader, IRenderResources resources)
     {
         _fontLoader = fontLoader;
-        _resources  = resources;
-        FontSize    = 48f;
+        _resources = resources;
+        FontSize = 48f;
     }
 
     protected override void OnBind(ScriptHost scriptHost)
@@ -43,32 +44,32 @@ public sealed partial class Scoreboard : Node
         var path = string.IsNullOrEmpty(FontPath) ? ExamplePaths.SystemFont : FontPath;
         _font = Font.Load(_resources, _fontLoader, path, pixelSize: FontSize);
 
-        _left  = AddChild(new Label
+        _left = AddChild(new Label
         {
-            Text   = "0",
-            Font     = path,
+            Text = "0",
+            Font = path,
             FontSize = FontSize,
-            Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
+            Color = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.30f, 0f),
             Offset = new Vector2(0f, 60f),
         }, "ScoreLeft");
 
         _right = AddChild(new Label
         {
-            Text   = "0",
-            Font     = path,
+            Text = "0",
+            Font = path,
             FontSize = FontSize,
-            Color  = new Vector4(0.95f, 0.95f, 0.95f, 1f),
+            Color = new Vector4(0.95f, 0.95f, 0.95f, 1f),
             Anchor = new Vector2(0.70f, 0f),
             Offset = new Vector2(0f, 60f),
         }, "ScoreRight");
 
-        _hint  = AddChild(new Label
+        _hint = AddChild(new Label
         {
-            Text   = "",
-            Font     = path,
+            Text = "",
+            Font = path,
             FontSize = FontSize,
-            Color  = new Vector4(0.7f, 0.7f, 0.7f, 1f),
+            Color = new Vector4(0.7f, 0.7f, 0.7f, 1f),
             Anchor = new Vector2(0.5f, 1f),
             Offset = new Vector2(0f, -80f),
         }, "ScoreHint");
@@ -87,10 +88,10 @@ public sealed partial class Scoreboard : Node
     public void RecordGoal(bool leftScored)
     {
         if (leftScored) Left++; else Right++;
-        if (_left  is not null) _left.Text  = Left.ToString();
+        if (_left is not null) _left.Text = Left.ToString();
         if (_right is not null) _right.Text = Right.ToString();
     }
 
     public void ShowHint(string text) { if (_hint is not null) _hint.Text = text; }
-    public void HideHint()             { if (_hint is not null) _hint.Text = ""; }
+    public void HideHint() { if (_hint is not null) _hint.Text = ""; }
 }

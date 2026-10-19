@@ -3,6 +3,7 @@ const std = @import("std");
 const docir = @import("docir");
 
 const abi_stamp = @import("scripts/abi_stamp.zig");
+const ToolTree = @import("scripts/tool_tree.zig").ToolTree;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -12,11 +13,10 @@ pub fn build(b: *std.Build) void {
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
 
     const host_windows = b.graph.host.result.os.tag == .windows;
-    const triplet = switch (target.result.os.tag) {
-        .windows => "x64-windows-zig",
-        else => "x64-linux-zig",
-    };
-    const host_triplet = if (host_windows) "x64-windows-zig" else "x64-linux-zig";
+    const triplet = b.option([]const u8, "vcpkg-triplet", "vcpkg triplet of the target; default: the one vcpkg-triplets/ holds for the platform, else vcpkg's own") orelse
+        defaultTriplet(b, root, target.result);
+    const host_triplet = b.option([]const u8, "vcpkg-host-triplet", "vcpkg triplet of the host, chosen as -Dvcpkg-triplet is") orelse
+        defaultTriplet(b, root, b.graph.host.result);
 
     const tools_dir = b.pathJoin(&.{ root, "build", "tools" });
     const zig_cache_dir = b.pathJoin(&.{ root, ".zig-cache" });
@@ -27,22 +27,45 @@ pub fn build(b: *std.Build) void {
         b.graph.environ_map.get("VCPKG_ROOT") orelse
         vcpkg_dir_default;
     const vcpkg_exe = b.pathJoin(&.{ vcpkg_root, if (host_windows) "vcpkg.exe" else "vcpkg" });
-    const vcpkg_bundle_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/vcpkg-standalone-bundle.tar.gz", .{vcpkg_tool_version});
-    const vcpkg_bin_asset = if (host_windows) "vcpkg.exe" else "vcpkg-glibc";
-    const vcpkg_bin_url = b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_bin_asset });
-    const vcpkg_name = if (host_windows) "vcpkg.exe" else "vcpkg";
     const vcpkg_archives = b.pathJoin(&.{ root, "build", "vcpkg-archives" });
     const vcpkg_registries = b.pathJoin(&.{ root, "build", "vcpkg-registries" });
     const zig_global_cache_dir = b.pathJoin(&.{ root, "build", "zig-global" });
-    const vcpkg_fetch = b.addSystemCommand(&.{
-        "sh", "-c",
-        b.fmt(
-            "mkdir -p '{s}' '{s}' '{s}' && ([ -f '{s}' ] || (cd '{s}' && curl -fsSL -o bundle.tar.gz '{s}' && tar -xzf bundle.tar.gz && curl -fsSL -o '{s}' '{s}' && chmod +x '{s}'))",
-            .{ vcpkg_root, vcpkg_archives, vcpkg_registries, vcpkg_exe, vcpkg_root, vcpkg_bundle_url, vcpkg_name, vcpkg_bin_url, vcpkg_name },
-        ),
-    });
+    createDirs(b, &.{ vcpkg_archives, vcpkg_registries });
 
-    const vcpkg_installed = if (target.result.os.tag == b.graph.host.result.os.tag)
+    const slang_version = "2026.19";
+    const slangc_given = b.option([]const u8, "slangc", "a slangc of your own, for a host the build carries no slang package for");
+    const wgpu_given = b.option([]const u8, "wgpu-native", "a wgpu-native directory of your own, holding include/ and lib/, for a target the build carries no package for");
+    const slang_package_name = slang_package_name: {
+        if (slangc_given != null) break :slang_package_name null;
+        break :slang_package_name packageFor(b.graph.host.result, "slang_linux", "slang_windows") orelse
+            std.process.fatal("no slang package for the host {s}; pass -Dslangc=<path to slangc>", .{hostName(b, b.graph.host.result)});
+    };
+    const wgpu_package_name = wgpu_package_name: {
+        if (wgpu_given != null) break :wgpu_package_name null;
+        break :wgpu_package_name packageFor(target.result, "wgpu_linux", "wgpu_windows") orelse
+            std.process.fatal("no wgpu-native package for the target {s}; pass -Dwgpu-native=<directory with include/ and lib/>", .{hostName(b, target.result)});
+    };
+    const slang_package = if (slang_package_name) |name| b.lazyDependency(name, .{}) else null;
+    const wgpu_package = if (wgpu_package_name) |name| b.lazyDependency(name, .{}) else null;
+    const renderdoc_package = b.lazyDependency(if (host_windows) "renderdoc_windows" else "renderdoc_linux", .{});
+    const fetches_vcpkg = std.mem.eql(u8, vcpkg_root, vcpkg_dir_default);
+    if (fetches_vcpkg and packageFor(b.graph.host.result, "vcpkg", "vcpkg") == null)
+        std.process.fatal("no vcpkg binary is fetched for the host {s}; pass -Dvcpkg-root=<vcpkg checkout> or set VCPKG_ROOT", .{hostName(b, b.graph.host.result)});
+    const vcpkg_package = if (fetches_vcpkg) b.lazyDependency("vcpkg_bundle", .{}) else null;
+    if ((slang_package_name != null and slang_package == null) or (wgpu_package_name != null and wgpu_package == null) or
+        renderdoc_package == null or (fetches_vcpkg and vcpkg_package == null)) return;
+
+    const vcpkg_name = if (host_windows) "vcpkg.exe" else "vcpkg";
+    const vcpkg_asset = if (host_windows) "vcpkg.exe" else "vcpkg-glibc";
+    const vcpkg_sha256 = if (host_windows) "67958c6a13a35130ff8035bef33097ffe3376a6708577a826cfa41fa592db611" else "9f68d6f2158c8a1ae4800260fad2972a21a48f2d43c02d40e79049650b5260c9";
+    const vcpkg_ready: *std.Build.Step = if (vcpkg_package) |package| &ToolTree.create(b, "lay out vcpkg", .{
+        .package = package.path(""),
+        .dest = vcpkg_root,
+        .stamp = vcpkg_tool_version,
+        .added = &.{.{ .path = vcpkg_name, .source = fetchFile(b, b.fmt("https://github.com/microsoft/vcpkg-tool/releases/download/{s}/{s}", .{ vcpkg_tool_version, vcpkg_asset }), vcpkg_sha256, vcpkg_name) }},
+    }).step else b.step("vcpkg-given", "the vcpkg checkout given by -Dvcpkg-root or VCPKG_ROOT");
+
+    const vcpkg_installed = if (std.mem.eql(u8, triplet, host_triplet))
         b.pathJoin(&.{ root, "build", "vcpkg-installed" })
     else
         b.pathJoin(&.{ root, "build", b.fmt("vcpkg-installed-{s}", .{triplet}) });
@@ -62,14 +85,15 @@ pub fn build(b: *std.Build) void {
     vcpkg_install.setEnvironmentVariable("ZIG_GLOBAL_CACHE_DIR", zig_global_cache_dir);
     vcpkg_install.setEnvironmentVariable("VCPKG_DEFAULT_BINARY_CACHE", vcpkg_archives);
     vcpkg_install.setEnvironmentVariable("X_VCPKG_REGISTRIES_CACHE", vcpkg_registries);
-    vcpkg_install.step.dependOn(&vcpkg_fetch.step);
+    vcpkg_install.step.dependOn(vcpkg_ready);
 
     const ports_digest = portsDigest(b, root, &.{ vcpkg_tool_version, @import("builtin").zig_version_string, triplet, host_triplet });
     const ports_stamp = b.pathJoin(&.{ vcpkg_installed, "ke-ports.stamp" });
     const ports_step: *std.Build.Step = if (portsCurrent(b, ports_stamp, ports_digest, b.pathJoin(&.{ vcpkg_installed, triplet, "lib" })))
         b.step("vcpkg-current", "the installed ports match the manifest, the triplets and the toolchain")
     else blk: {
-        const write_stamp = b.addSystemCommand(&.{ "sh", "-c", b.fmt("printf '%s' '{s}' > '{s}'", .{ ports_digest, ports_stamp }) });
+        const write_stamp = b.addUpdateSourceFiles();
+        write_stamp.addBytesToSource(b.dupe(&ports_digest), ports_stamp[root.len + 1 ..]);
         write_stamp.step.dependOn(&vcpkg_install.step);
         break :blk &write_stamp.step;
     };
@@ -83,39 +107,38 @@ pub fn build(b: *std.Build) void {
     const kerror_src = b.pathJoin(&.{ src_zig, "common/kerror.zig" });
     const heap_src = b.pathJoin(&.{ src_zig, "common/heap.zig" });
     const component_fields_src = b.pathJoin(&.{ src_zig, "common/component_fields.zig" });
+    const scene_components_src = b.pathJoin(&.{ src_zig, "common/scene_components.zig" });
     const handle_src = b.pathJoin(&.{ src_zig, "render/common/handle.zig" });
+    const object_uniforms_src = b.pathJoin(&.{ src_zig, "render/common/object_uniforms.zig" });
+    const feature_bindings_src = b.pathJoin(&.{ src_zig, "render/common/feature_bindings.zig" });
+    const material_pass_groups_src = b.pathJoin(&.{ src_zig, "render/common/material_pass_groups.zig" });
     const stubs_src = b.pathJoin(&.{ src_zig, "common/stubs.zig" });
-    const tomlc99_dir = b.pathJoin(&.{ src_zig, "common/third_party/tomlc99" });
+    const shader_files_src = b.pathJoin(&.{ src_zig, "render/common/shader_files.zig" });
+    const tomlc99_dir = b.dependency("tomlc99", .{}).path("").getPath(b);
     const absolute_prefix = if (std.fs.path.isAbsolute(b.install_prefix))
         b.install_prefix
     else
         b.pathJoin(&.{ root, b.install_prefix });
 
-    const slang_version = "2025.17.2";
-    const slang_url_name = switch (b.graph.host.result.os.tag) {
-        .windows => b.fmt("slang-{s}-windows-x86_64", .{slang_version}),
-        else => b.fmt("slang-{s}-linux-x86_64", .{slang_version}),
-    };
-    const slang_dir = b.pathJoin(&.{ tools_dir, slang_url_name });
-    const slang_zip = b.pathJoin(&.{ slang_dir, "slang.zip" });
-    const slang_url = b.fmt("https://github.com/shader-slang/slang/releases/download/v{s}/{s}.zip", .{ slang_version, slang_url_name });
-    const slangc_exe = b.pathJoin(&.{ slang_dir, "bin", if (host_windows) "slangc.exe" else "slangc" });
-    const slang_fetch = b.addSystemCommand(&.{
-        "sh", "-c",
-        b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
-            slang_dir, slangc_exe, slang_zip, slang_url, slang_zip, slang_dir,
-        }),
-    });
+    const slang_dir = b.pathJoin(&.{ tools_dir, b.fmt("slang-{s}", .{slang_version}) });
+    const slangc: std.Build.LazyPath = if (slang_package) |package| ToolTree.create(b, "lay out slang", .{
+        .package = package.path(""),
+        .dest = slang_dir,
+        .stamp = slang_version,
+        .executable_dirs = &.{"bin"},
+    }).path(if (host_windows) "bin/slangc.exe" else "bin/slangc") else .{ .cwd_relative = slangc_given.? };
 
+    const libraries_step = b.allocator.create(std.Build.Step) catch @panic("OOM");
+    libraries_step.* = std.Build.Step.init(.{ .id = .custom, .name = "plugin libraries", .owner = b });
     var ctx = Ctx{
         .b = b,
         .root = root,
         .prefix = absolute_prefix,
         .vcpkg_step = ports_step,
         .exe_suffix = if (target.result.os.tag == .windows) ".exe" else "",
-        .slangc_exe = slangc_exe,
-        .slang_step = &slang_fetch.step,
+        .slangc = slangc,
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
+        .libraries_step = libraries_step,
         .test_step = b.step("test", "Run every plugin's own Zig tests"),
         .docs_step = b.step("docs", "Write the documentation of the native sources and of kabic"),
     };
@@ -146,7 +169,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const ecs_flecs = ctx.member("ke_ecs_flecs", .{
         .target = target,
@@ -159,16 +183,18 @@ pub fn build(b: *std.Build) void {
         .@"flecs-include" = vcpkg_include,
         .@"flecs-lib" = b.pathJoin(&.{ vcpkg_lib, "libflecs_static.a" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
-    const input_default = ctx.member("ke_input_default", .{
+    _ = ctx.member("ke_input_default", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-input-include" = b.pathJoin(&.{ src_c, "input" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const resource_cache_default = ctx.member("ke_resource_cache_default", .{
         .target = target,
@@ -177,7 +203,8 @@ pub fn build(b: *std.Build) void {
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-resource-cache-include" = b.pathJoin(&.{ src_c, "resource_cache" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const scheduler_enki = ctx.member("ke_scheduler_enki", .{
         .target = target,
@@ -188,7 +215,8 @@ pub fn build(b: *std.Build) void {
         .@"enki-include" = b.pathJoin(&.{ vcpkg_include, "enkiTS" }),
         .@"enki-lib" = vcpkg_lib,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const runtime = ctx.member("ke_runtime", .{
         .target = target,
@@ -203,7 +231,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const framework = ctx.member("ke_framework", .{
+    _ = ctx.member("ke_framework", .{
         .target = target,
         .optimize = optimize,
         .@"component-fields-src" = component_fields_src,
@@ -239,9 +267,10 @@ pub fn build(b: *std.Build) void {
         .@"glfw-include" = vcpkg_include,
         .@"glfw-lib" = vcpkg_lib,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
-    const asset_stb_image = ctx.member("ke_asset_stb_image", .{
+    _ = ctx.member("ke_asset_stb_image", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -252,9 +281,10 @@ pub fn build(b: *std.Build) void {
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "asset/stb_image/include" }),
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
-    const audio_miniaudio = ctx.member("ke_audio_miniaudio", .{
+    _ = ctx.member("ke_audio_miniaudio", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -267,9 +297,10 @@ pub fn build(b: *std.Build) void {
         .@"miniaudio-include" = vcpkg_include,
         .@"ke-resource-cache-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
         .@"kerror-src" = kerror_src,
-    }, &.{&resource_cache_default.step}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&resource_cache_default.step, &common.step}, .has_tests);
 
-    const text_stb_truetype = ctx.member("ke_text_stb_truetype", .{
+    _ = ctx.member("ke_text_stb_truetype", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -279,9 +310,10 @@ pub fn build(b: *std.Build) void {
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "text/stb_truetype/include" }),
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
-    const physics_box2d = ctx.member("ke_physics_2d_box2d", .{
+    _ = ctx.member("ke_physics_2d_box2d", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -291,7 +323,8 @@ pub fn build(b: *std.Build) void {
         .@"box2d-include" = vcpkg_include,
         .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, if (debug) "libbox2dd.a" else "libbox2d.a" }),
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
     const is_windows = target.result.os.tag == .windows;
     const assimp_libs = b.fmt("{s}|{s}|{s}|{s}|{s}|{s}", .{
@@ -305,7 +338,7 @@ pub fn build(b: *std.Build) void {
         else
             "libminizip.a" }),
     });
-    const asset_assimp = ctx.member("ke_asset_assimp", .{
+    _ = ctx.member("ke_asset_assimp", .{
         .target = target,
         .optimize = optimize,
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -317,9 +350,10 @@ pub fn build(b: *std.Build) void {
         .@"assimp-libs" = assimp_libs,
         .@"stb-include" = vcpkg_include,
         .@"kerror-src" = kerror_src,
-    }, &.{}, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step}, .has_tests);
 
-    const configuration = ctx.member("ke_configuration", .{
+    _ = ctx.member("ke_configuration", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -328,7 +362,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    const configuration_toml = ctx.member("ke_configuration_toml", .{
+    _ = ctx.member("ke_configuration_toml", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -338,28 +372,10 @@ pub fn build(b: *std.Build) void {
         .@"tomlc99-dir" = tomlc99_dir,
     }, &.{&common.step}, .has_tests);
 
-    const wgpu_version = "v24.0.3.1";
-    const wgpu_url_name = switch (target.result.os.tag) {
-        .windows => "wgpu-windows-x86_64-msvc-release",
-        else => "wgpu-linux-x86_64-release",
-    };
-    const wgpu_dir = b.pathJoin(&.{ tools_dir, wgpu_url_name });
-    const wgpu_zip = b.pathJoin(&.{ wgpu_dir, "wgpu.zip" });
-    const wgpu_url = b.fmt("https://github.com/gfx-rs/wgpu-native/releases/download/{s}/{s}.zip", .{ wgpu_version, wgpu_url_name });
-    const wgpu_native_filename = switch (target.result.os.tag) {
-        .windows => "wgpu_native.dll",
-        else => "libwgpu_native.so",
-    };
-    const wgpu_marker = b.pathJoin(&.{ wgpu_dir, "lib", wgpu_native_filename });
-    const wgpu_fetch = b.addSystemCommand(&.{
-        "sh", "-c",
-        b.fmt("mkdir -p '{s}' && ([ -f '{s}' ] || (curl -fsSL -o '{s}' '{s}' && unzip -oq '{s}' -d '{s}'))", .{
-            wgpu_dir, wgpu_marker, wgpu_zip, wgpu_url, wgpu_zip, wgpu_dir,
-        }),
-    });
-
-    const wgpu_include = b.pathJoin(&.{ wgpu_dir, "include" });
-    const wgpu_lib_dir = b.pathJoin(&.{ wgpu_dir, "lib" });
+    const wgpu_native_filename = b.fmt("{s}wgpu_native{s}", .{ target.result.libPrefix(), target.result.dynamicLibSuffix() });
+    const wgpu_root: std.Build.LazyPath = if (wgpu_package) |package| package.path("") else .{ .cwd_relative = wgpu_given.? };
+    const wgpu_include = wgpu_root.path(b, "include").getPath(b);
+    const wgpu_lib_dir = wgpu_root.path(b, "lib").getPath(b);
     const gpu_device_webgpu = ctx.member("ke_gpu_device_webgpu", .{
         .target = target,
         .optimize = optimize,
@@ -371,12 +387,9 @@ pub fn build(b: *std.Build) void {
         .@"ke-scheduler-include" = b.pathJoin(&.{ src_c, "scheduler" }),
         .@"wgpu-include" = wgpu_include,
         .@"wgpu-lib" = wgpu_lib_dir,
-    }, &.{ &common.step, &wgpu_fetch.step }, .has_tests);
+    }, &.{&common.step}, .has_tests);
 
-    const wgpu_copy = b.addSystemCommand(&.{
-        "cp",                                                 "-f",
-        b.pathJoin(&.{ wgpu_lib_dir, wgpu_native_filename }), b.pathJoin(&.{ ctx.prefix, "lib", wgpu_native_filename }),
-    });
+    const wgpu_copy = b.addInstallLibFile(wgpu_root.path(b, b.pathJoin(&.{ "lib", wgpu_native_filename })), wgpu_native_filename);
     wgpu_copy.step.dependOn(&gpu_device_webgpu.step);
 
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
@@ -404,6 +417,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-spatial-include" = b.pathJoin(&.{ src_c, "spatial" }),
         .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
         .@"kerror-src" = kerror_src,
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
     const gpu_render_target_texture = ctx.member("ke_gpu_render_target_texture", .{
@@ -414,25 +428,24 @@ pub fn build(b: *std.Build) void {
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
         .@"kerror-src" = kerror_src,
         .@"stubs-src" = stubs_src,
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
     const renderdoc_version = "1.46";
     const renderdoc_dir = b.pathJoin(&.{ tools_dir, b.fmt("renderdoc-{s}", .{renderdoc_version}) });
-    const renderdoc_include = b.pathJoin(&.{ renderdoc_dir, if (host_windows) b.fmt("RenderDoc_{s}_64", .{renderdoc_version}) else "include" });
-    const renderdoc_marker = if (host_windows)
-        b.pathJoin(&.{ renderdoc_include, "renderdoc_app.h" })
-    else
-        b.pathJoin(&.{ renderdoc_dir, "share/vulkan/implicit_layer.d/renderdoc_capture.json" });
-    const renderdoc_fetch = b.addSystemCommand(&.{
-        "sh", "-c",
-        if (host_windows)
-            b.fmt("mkdir -p '{0s}' && ([ -f '{1s}' ] || (curl -fsSL -o '{0s}/renderdoc.zip' 'https://renderdoc.org/stable/{2s}/RenderDoc_{2s}_64.zip' && echo '9ca4d09ecaba2cc791168660d6fc2a7e3d70fe67146e87ec05c5f8dea70772f7  {0s}/renderdoc.zip' | sha256sum -c - && unzip -oq '{0s}/renderdoc.zip' -d '{0s}'))", .{
-                renderdoc_dir, renderdoc_marker, renderdoc_version,
-            })
-        else
-            b.fmt("mkdir -p '{0s}/share/vulkan/implicit_layer.d' && ([ -f '{1s}' ] || (curl -fsSL -o '{0s}/renderdoc.tar.gz' 'https://renderdoc.org/stable/{2s}/renderdoc_{2s}.tar.gz' && echo '6fedf15eab1288d9a81889ba8a4452dca53f5c10de8162be32a0f8972f62dc09  {0s}/renderdoc.tar.gz' | sha256sum -c - && tar -xzf '{0s}/renderdoc.tar.gz' -C '{0s}' --strip-components=1 && sed 's|\"library_path\": *\"[^\"]*\"|\"library_path\": \"../../../lib/librenderdoc.so\"|' '{0s}/etc/vulkan/implicit_layer.d/renderdoc_capture.json' > '{1s}'))", .{
-                renderdoc_dir, renderdoc_marker, renderdoc_version,
-            }),
+    const renderdoc_include = b.pathJoin(&.{ renderdoc_dir, if (host_windows) "" else "include" });
+    const renderdoc_layer = "implicit_layer.d/renderdoc_capture.json";
+    const renderdoc_fetch = ToolTree.create(b, "lay out RenderDoc", .{
+        .package = renderdoc_package.?.path(""),
+        .dest = renderdoc_dir,
+        .stamp = renderdoc_version,
+        .executable_dirs = &.{"bin"},
+        .patched = if (host_windows) &.{} else &.{.{
+            .from = "etc/vulkan/" ++ renderdoc_layer,
+            .to = "share/vulkan/" ++ renderdoc_layer,
+            .find = "\"library_path\": \"/io/dist/lib/librenderdoc.so\"",
+            .replace = "\"library_path\": \"../../../lib/librenderdoc.so\"",
+        }},
     });
 
     const gpu_render_target_renderdoc = ctx.member("ke_gpu_render_target_renderdoc", .{
@@ -443,13 +456,15 @@ pub fn build(b: *std.Build) void {
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
         .@"kerror-src" = kerror_src,
         .@"renderdoc-include" = renderdoc_include,
-    }, &.{ &common.step, &renderdoc_fetch.step }, .has_tests);
+        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
+    }, &.{&common.step, &renderdoc_fetch.step}, .has_tests);
 
     const shaders_out = b.pathJoin(&.{ ctx.prefix, "bin", "shaders" });
     const shader_lib_dir = b.pathJoin(&.{ root, "src/shaders" });
+    const binder_shader_dir = b.pathJoin(&.{ src_zig, "render/binder_grouped/shaders" });
 
-    const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{}, null);
-    const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{}, null);
+    const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{shader_lib_dir}, null);
+    const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const tonemap = ctx.member("ke_render_tonemap", .{
         .target = target,
         .optimize = optimize,
@@ -465,9 +480,10 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step, &tonemap_vs.step, &tonemap_fs.step }, .has_tests);
 
-    const physics_body2d = ctx.member("ke_physics_body2d", .{
+    _ = ctx.member("ke_physics_body2d", .{
         .target = target,
         .optimize = optimize,
+        .@"scene-components-src" = scene_components_src,
         .@"heap-src" = heap_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
@@ -482,9 +498,10 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step }, .has_tests);
 
-    const audio_module = ctx.member("ke_audio_module", .{
+    _ = ctx.member("ke_audio_module", .{
         .target = target,
         .optimize = optimize,
+        .@"scene-components-src" = scene_components_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
         .@"ke-ecs-include" = b.pathJoin(&.{ src_c, "ecs" }),
@@ -494,11 +511,12 @@ pub fn build(b: *std.Build) void {
         .@"ke-framework-include" = b.pathJoin(&.{ src_c, "framework" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "audio/module/include" }),
         .@"ke-lib-dir" = lib_dir,
-    }, &.{ &common.step }, .no_tests);
+        .@"stubs-src" = stubs_src,
+    }, &.{ &common.step }, .has_tests);
 
-    const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
-    const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{}, null);
-    const skybox = ctx.member("ke_render_skybox", .{
+    const skybox_vs = ctx.shader("skybox", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{shader_lib_dir}, null);
+    const skybox_fs = ctx.shader("skybox", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/skybox/shaders/skybox.slang" }), shaders_out, &.{shader_lib_dir}, null);
+    _ = ctx.member("ke_render_skybox", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -514,9 +532,9 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step, &skybox_vs.step, &skybox_fs.step }, .has_tests);
 
-    const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{}, null);
-    const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{}, null);
-    const ui = ctx.member("ke_render_ui", .{
+    const ui_vs = ctx.shader("ui", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{shader_lib_dir}, null);
+    const ui_fs = ctx.shader("ui", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/ui/shaders/ui.slang" }), shaders_out, &.{shader_lib_dir}, null);
+    _ = ctx.member("ke_render_ui", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -536,6 +554,7 @@ pub fn build(b: *std.Build) void {
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
     const shadow = ctx.member("ke_render_shadow", .{
+        .@"object-uniforms-src" = object_uniforms_src,
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -551,11 +570,12 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step, &shadow_vs.step, &shadow_fs.step }, .has_tests);
 
-    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{}, null);
+    const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const cluster = ctx.member("ke_render_cluster", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"feature-bindings-src" = feature_bindings_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -576,6 +596,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"feature-bindings-src" = feature_bindings_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -589,23 +610,31 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = lib_dir,
     }, &.{ &common.step, &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .has_tests);
 
-    const materials_dirs = [_][]const u8{
-        b.pathJoin(&.{ shader_lib_dir, "materials" }),
-        b.pathJoin(&.{ root, "examples/csharp/03_pbr_directional/materials" }),
-    };
+    var materials_dir_list: std.ArrayList([]const u8) = .empty;
+    materials_dir_list.append(b.allocator, b.pathJoin(&.{ shader_lib_dir, "materials" })) catch @panic("OOM");
+    materials_dir_list.append(b.allocator, b.pathJoin(&.{ root, "examples/csharp/03_pbr_directional/materials" })) catch @panic("OOM");
+    if (b.option([]const u8, "material-dirs", "'|'-separated directories of authored materials to compile beside the engine's")) |extra| {
+        var it = std.mem.splitScalar(u8, extra, '|');
+        while (it.next()) |dir| {
+            if (dir.len != 0) materials_dir_list.append(b.allocator, dir) catch @panic("OOM");
+        }
+    }
+    const materials_dirs = materials_dir_list.items;
 
-    const gbuffer_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/gbuffer/shaders" }) };
+    const gbuffer_includes = [_][]const u8{ shader_lib_dir, binder_shader_dir, b.pathJoin(&.{ src_zig, "render/gbuffer/shaders" }) };
     const gbuffer_material_shaders = ctx.materialShaders(
         "gbuffer",
         b.pathJoin(&.{ src_zig, "render/gbuffer/shaders/gbuffer_material.slang.in" }),
         &gbuffer_includes,
         shaders_out,
-        &materials_dirs,
+        materials_dirs,
     );
     const gbuffer = ctx.member("ke_render_gbuffer", .{
+        .@"object-uniforms-src" = object_uniforms_src,
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"material-pass-groups-src" = material_pass_groups_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -619,18 +648,21 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step }, .has_tests);
     for (gbuffer_material_shaders) |s| gbuffer.step.dependOn(&s.step);
 
-    const forward_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };
+    const forward_includes = [_][]const u8{ shader_lib_dir, binder_shader_dir, b.pathJoin(&.{ src_zig, "render/forward/shaders" }) };
     const forward_material_shaders = ctx.materialShaders(
         "forward",
         b.pathJoin(&.{ src_zig, "render/forward/shaders/forward_material.slang.in" }),
         &forward_includes,
         shaders_out,
-        &materials_dirs,
+        materials_dirs,
     );
     const forward = ctx.member("ke_render_forward", .{
+        .@"object-uniforms-src" = object_uniforms_src,
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
+        .@"material-pass-groups-src" = material_pass_groups_src,
+        .@"feature-bindings-src" = feature_bindings_src,
         .@"stubs-src" = stubs_src,
         .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
@@ -645,13 +677,24 @@ pub fn build(b: *std.Build) void {
     }, &.{ &common.step }, .has_tests);
     for (forward_material_shaders) |s| forward.step.dependOn(&s.step);
 
-    const service_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_service" });
-    const magenta_slang = b.pathJoin(&.{ src_zig, "render/service/shaders/magenta.slang" });
-    const magenta_vs = ctx.shader("magenta", "vertex", "vs_main", magenta_slang, service_gen_dir, &.{}, null);
-    const magenta_fs = ctx.shader("magenta", "fragment", "fs_main", magenta_slang, service_gen_dir, &.{}, null);
-    const magenta_vs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.vs.wgsl" });
-    const magenta_fs_wgsl = b.pathJoin(&.{ service_gen_dir, "magenta.fs.wgsl" });
+    const binder_gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", "render_binder_grouped" });
+    const material_params = ctx.reflection("material_params", b.pathJoin(&.{ binder_shader_dir, "material_params.slang" }), binder_gen_dir, &.{shader_lib_dir});
+    const material_params_json = b.pathJoin(&.{ binder_gen_dir, "material_params.json" });
 
+    const binder_grouped = ctx.member("ke_render_binder_grouped", .{
+        .target = target,
+        .optimize = optimize,
+        .@"heap-src" = heap_src,
+        .@"stubs-src" = stubs_src,
+        .@"shader-files-src" = shader_files_src,
+        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
+        .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
+        .@"ke-lib-dir" = lib_dir,
+        .@"material-params-json" = material_params_json,
+    }, &.{ &common.step, &material_params.step }, .has_tests);
+
+    const blit_vs = ctx.shader("blit", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/service/shaders/blit.slang" }), shaders_out, &.{shader_lib_dir}, null);
+    const blit_fs = ctx.shader("blit", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/service/shaders/blit.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const render_service = ctx.member("ke_render_service", .{
         .target = target,
         .optimize = optimize,
@@ -671,61 +714,47 @@ pub fn build(b: *std.Build) void {
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/service/include" }),
         .@"ke-lib-dir" = lib_dir,
-        .@"magenta-vs-wgsl" = magenta_vs_wgsl,
-        .@"magenta-fs-wgsl" = magenta_fs_wgsl,
-    }, &.{
-        &common.step,     &resource_cache_default.step,
-        &magenta_vs.step, &magenta_fs.step,
-    }, .has_tests);
+        .@"shader-files-src" = shader_files_src,
+    }, &.{ &common.step, &resource_cache_default.step, &blit_vs.step, &blit_fs.step }, .has_tests);
 
-    const render_module = ctx.member("ke_render_module", .{
+    const render_frame = ctx.member("ke_render_frame", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
         .@"stubs-src" = stubs_src,
-        .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
+        .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
+        .@"ke-runtime-include" = b.pathJoin(&.{ src_c, "runtime" }),
+        .@"ke-ecs-include" = b.pathJoin(&.{ src_c, "ecs" }),
+        .@"ke-spatial-include" = b.pathJoin(&.{ src_c, "spatial" }),
+        .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
+        .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/frame/include" }),
+        .@"ke-lib-dir" = lib_dir,
+    }, &.{&common.step}, .has_tests);
+
+    const render_scene = ctx.member("ke_render_scene", .{
+        .target = target,
+        .optimize = optimize,
+        .@"scene-components-src" = scene_components_src,
+        .@"kerror-src" = kerror_src,
+        .@"heap-src" = heap_src,
+        .@"stubs-src" = stubs_src,
+        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
+        .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
         .@"ke-ecs-include" = b.pathJoin(&.{ src_c, "ecs" }),
         .@"ke-runtime-include" = b.pathJoin(&.{ src_c, "runtime" }),
         .@"ke-spatial-include" = b.pathJoin(&.{ src_c, "spatial" }),
         .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
-        .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
         .@"ke-framework-include" = b.pathJoin(&.{ src_c, "framework" }),
         .@"ke-text-include" = b.pathJoin(&.{ src_c, "text" }),
         .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"ke-asset-include" = b.pathJoin(&.{ src_c, "asset" }),
-        .@"ke-service-include" = b.pathJoin(&.{ src_zig, "render/service/include" }),
-        .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/module/include" }),
-        .@"ke-view-space-include" = b.pathJoin(&.{ src_zig, "view/space/include" }),
-        .@"ke-camera-include" = b.pathJoin(&.{ src_zig, "render/camera/include" }),
-        .@"ke-tonemap-include" = b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
-        .@"ke-skybox-include" = b.pathJoin(&.{ src_zig, "render/skybox/include" }),
         .@"ke-ui-include" = b.pathJoin(&.{ src_zig, "render/ui/include" }),
-        .@"ke-gbuffer-include" = b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
-        .@"ke-shadow-include" = b.pathJoin(&.{ src_zig, "render/shadow/include" }),
-        .@"ke-cluster-include" = b.pathJoin(&.{ src_zig, "render/cluster/include" }),
-        .@"ke-deferred-lighting-include" = b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
-        .@"ke-forward-include" = b.pathJoin(&.{ src_zig, "render/forward/include" }),
+        .@"ke-self-include" = b.pathJoin(&.{ src_zig, "render/scene/include" }),
         .@"ke-lib-dir" = lib_dir,
-        .@"kerror-src" = kerror_src,
-    }, &.{
-        &common.step,            &render_service.step, &view_space.step,
-        &tonemap.step,           &skybox.step,  &ui.step,
-        &gbuffer.step,           &shadow.step,  &cluster.step,
-        &deferred_lighting.step, &forward.step, &render_camera.step,
-    }, .has_tests);
+    }, &.{&common.step}, .has_tests);
 
-    const all_plugins = [_]*std.Build.Step.InstallArtifact{
-        render_module,     common,                 logger_simple,      ecs_flecs,
-        input_default,     resource_cache_default, scheduler_enki,     runtime,
-        framework,         window_glfw,            asset_stb_image,    audio_miniaudio,
-        text_stb_truetype, physics_box2d,          physics_body2d,     asset_assimp,
-        configuration,     audio_module,           configuration_toml, tonemap,
-        skybox,            ui,                     shadow,             cluster,
-        deferred_lighting, gpu_device_webgpu,      gbuffer,            forward,
-        render_service,    render_camera,
-    };
-    for (all_plugins) |p| b.getInstallStep().dependOn(&p.step);
+    ctx.plugins_step.dependOn(ctx.libraries_step);
     b.getInstallStep().dependOn(&wgpu_copy.step);
     b.getInstallStep().dependOn(ctx.plugins_step);
     ctx.plugins_step.dependOn(&wgpu_copy.step);
@@ -735,19 +764,20 @@ pub fn build(b: *std.Build) void {
     const stamp_text = abi_stamp.compute(b.allocator, stamp_threaded.io(), root) catch |err|
         std.debug.panic("cannot stamp the contract headers: {s}", .{@errorName(err)});
     const stamp_install = b.addInstallFileWithDir(b.addWriteFiles().add("abi.stamp", stamp_text), .prefix, "abi.stamp");
-    for (all_plugins) |p| stamp_install.step.dependOn(&p.step);
+    stamp_install.step.dependOn(ctx.libraries_step);
     stamp_install.step.dependOn(&wgpu_copy.step);
     b.getInstallStep().dependOn(&stamp_install.step);
     ctx.plugins_step.dependOn(&stamp_install.step);
 
     if (target.result.os.tag == .windows) {
-        const copy_dlls_to_bin = b.addSystemCommand(&.{
-            "sh",                                                                                 "-c",
-            b.fmt("cp -f '{s}'/*.dll '{s}'/", .{ lib_dir, b.pathJoin(&.{ ctx.prefix, "bin" }) }),
+        const copy_dlls_to_bin = b.addInstallDirectory(.{
+            .source_dir = .{ .cwd_relative = lib_dir },
+            .install_dir = .bin,
+            .install_subdir = "",
+            .include_extensions = &.{".dll"},
         });
-        for (all_plugins) |p| copy_dlls_to_bin.step.dependOn(&p.step);
+        copy_dlls_to_bin.step.dependOn(ctx.libraries_step);
         copy_dlls_to_bin.step.dependOn(&wgpu_copy.step);
-        copy_dlls_to_bin.setName("copy plugin DLLs into bin/");
         b.getInstallStep().dependOn(&copy_dlls_to_bin.step);
     }
 
@@ -766,7 +796,6 @@ pub fn build(b: *std.Build) void {
     const demo_step = b.step("demo01", "Build examples/c/01_minimal_log");
     demo_step.dependOn(&demo01.step);
 
-    const examples_gen = b.pathJoin(&.{ ctx.prefix, "gen", "examples" });
 
     const demo05 = ctx.example("c_demo_05", .{
         .target = target,
@@ -781,19 +810,12 @@ pub fn build(b: *std.Build) void {
         .@"libs" = b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
     }, &.{&gpu_device_webgpu.step});
 
-    const compile_slang_dir = b.pathJoin(&.{ root, "build", "tools", "compile_slang" });
-    const compile_slang_dll = b.pathJoin(&.{ compile_slang_dir, "compile_slang.dll" });
-    const compile_slang_build = b.addSystemCommand(&.{ "dotnet", "build", b.pathJoin(&.{ root, "scripts/compile_slang.cs" }), "-o", compile_slang_dir, "--nologo", "-v", "q" });
-    compile_slang_build.expectExitCode(0);
-    compile_slang_build.has_side_effects = true;
 
     const demo06 = ctx.example("c_demo_06", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "triangle",
-        .@"compile-slang" = compile_slang_dll,
-        .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "06_triangle" }),
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -808,15 +830,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo15 = ctx.example("c_demo_15", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "triangle",
-        .@"compile-slang" = compile_slang_dll,
-        .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "15_offscreen_capture" }),
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -832,15 +852,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &gpu_render_target_texture.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &gpu_render_target_texture.step, &gpu_device_webgpu.step });
 
     const demo07 = ctx.example("c_demo_07", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "rotate",
-        .@"compile-slang" = compile_slang_dll,
-        .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "07_uniform" }),
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -856,15 +874,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
         .@"link-m" = true,
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo08 = ctx.example("c_demo_08", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "mesh",
-        .@"compile-slang" = compile_slang_dll,
-        .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "08_vertex_buffer" }),
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -879,15 +895,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo09 = ctx.example("c_demo_09", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "tex",
-        .@"compile-slang" = compile_slang_dll,
-        .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "09_texture" }),
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -902,15 +916,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo10 = ctx.example("c_demo_10", .{
         .target = target,
         .optimize = optimize,
         .@"shader-name" = "depth",
-        .@"compile-slang" = compile_slang_dll,
-        .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "10_depth" }),
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -925,14 +937,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step });
 
     const demo12 = ctx.example("c_demo_12", .{
         .target = target,
         .optimize = optimize,
-        .@"compile-slang" = compile_slang_dll,
-        .@"slangc" = ctx.slangc_exe,
-        .@"shader-out-dir" = b.pathJoin(&.{ examples_gen, "12_render_service" }),
+        .@"slangc" = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
@@ -943,6 +953,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
         }),
         .@"libs" = joinPaths(b, &.{
@@ -950,10 +961,10 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
         }),
-    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &render_module.step, &ecs_flecs.step, ctx.slang_step, &compile_slang_build.step });
+    }, &.{ &common.step, &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &ecs_flecs.step });
 
     const demo13 = ctx.example("c_demo_13", .{
         .target = target,
@@ -970,7 +981,15 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
+            b.pathJoin(&.{ src_zig, "view/space/include" }),
+            b.pathJoin(&.{ src_zig, "render/camera/include" }),
+            b.pathJoin(&.{ src_zig, "render/scene/include" }),
+            b.pathJoin(&.{ src_zig, "render/frame/include" }),
+            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
+            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
+            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
+            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
             b.pathJoin(&.{ src_zig, "render/shadow/include" }),
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
             b.pathJoin(&.{ src_c, "text" }),
@@ -987,13 +1006,17 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
     }, &.{
-        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step,
         &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 
@@ -1012,10 +1035,19 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
+            b.pathJoin(&.{ src_zig, "view/space/include" }),
+            b.pathJoin(&.{ src_zig, "render/camera/include" }),
+            b.pathJoin(&.{ src_zig, "render/scene/include" }),
+            b.pathJoin(&.{ src_zig, "render/frame/include" }),
+            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
+            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
+            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
+            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
             b.pathJoin(&.{ src_zig, "render/shadow/include" }),
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
             b.pathJoin(&.{ src_c, "text" }),
+            b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
@@ -1029,14 +1061,23 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_shadow") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_cluster") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_gbuffer") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
         .@"link-m" = true,
     }, &.{
-        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &common.step,    &window_glfw.step,    &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
         &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 
@@ -1056,10 +1097,19 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/renderdoc_target/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/module/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
+            b.pathJoin(&.{ src_zig, "view/space/include" }),
+            b.pathJoin(&.{ src_zig, "render/camera/include" }),
+            b.pathJoin(&.{ src_zig, "render/scene/include" }),
+            b.pathJoin(&.{ src_zig, "render/frame/include" }),
+            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
+            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
+            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
+            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
             b.pathJoin(&.{ src_zig, "render/shadow/include" }),
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
             b.pathJoin(&.{ src_c, "text" }),
+            b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
@@ -1075,14 +1125,23 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_renderdoc") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_shadow") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_cluster") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_gbuffer") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
         .@"link-m" = true,
     }, &.{
-        &common.step,    &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &render_module.step,
+        &common.step,    &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
         &ecs_flecs.step, &scheduler_enki.step, &runtime.step,
     });
 
@@ -1099,18 +1158,12 @@ const Ctx = struct {
     root: []const u8,
     prefix: []const u8,
     vcpkg_step: *std.Build.Step,
-    slangc_exe: []const u8,
-    slang_step: *std.Build.Step,
+    slangc: std.Build.LazyPath,
     plugins_step: *std.Build.Step,
+    libraries_step: *std.Build.Step,
     test_step: *std.Build.Step,
     docs_step: *std.Build.Step,
     exe_suffix: []const u8,
-    dotnet_tail: ?*std.Build.Step = null,
-
-    fn serializeDotnet(ctx: *Ctx, step: *std.Build.Step) void {
-        if (ctx.dotnet_tail) |tail| step.dependOn(tail);
-        ctx.dotnet_tail = step;
-    }
 
     fn addSlangInputs(ctx: *Ctx, run: *std.Build.Step.Run, dir_path: []const u8) void {
         const b = ctx.b;
@@ -1127,14 +1180,18 @@ const Ctx = struct {
         }
     }
 
-    /// Compiles one Slang entry point to WGSL via scripts/compile_slang.cs.
-    /// Every render pass loads its shaders at runtime by logical name via
-    /// ke_render_service::load_shader, so the output always lands in the one
-    /// shared runtime shaders directory, never embedded in a plugin's own .so
-    /// (render/service's own embedded fallback shader is the one exception —
-    /// handled separately, since @embedFile needs the file before that
-    /// module's own `zig build` even starts).
+    /// Compiles one Slang entry point of the file at `input` to WGSL with `slangc`, writing its
+    /// reflection beside it, both installed in `out_dir`, which a pass loads them from by logical
+    /// name.
     fn shader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8, after: ?*std.Build.Step) *std.Build.Step.InstallFile {
+        const run = ctx.compileShader(name, stage, entry, .{ .cwd_relative = input }, out_dir, includes, after);
+        ctx.addSlangInputs(run.run, std.fs.path.dirname(input) orelse ".");
+        return run.install;
+    }
+
+    /// The compile of one entry point of `input`, which may be a file the build generates, and
+    /// the install of its output; `shader` is the form for a file of the tree.
+    fn compileShader(ctx: *Ctx, name: []const u8, stage: []const u8, entry: []const u8, input: std.Build.LazyPath, out_dir: []const u8, includes: []const []const u8, after: ?*std.Build.Step) struct { run: *std.Build.Step.Run, install: *std.Build.Step.InstallFile } {
         const b = ctx.b;
         const suffix = if (std.mem.eql(u8, stage, "vertex"))
             "vs"
@@ -1143,20 +1200,47 @@ const Ctx = struct {
         else
             "cs";
         const file_name = b.fmt("{s}.{s}.wgsl", .{ name, suffix });
-        const run = b.addSystemCommand(&.{ ctx.slangc_exe, "-target", "wgsl", "-entry", entry, "-stage", stage });
-        run.step.dependOn(ctx.slang_step);
+        const run = std.Build.Step.Run.create(b, "slangc");
+        run.addFileArg(ctx.slangc);
+        run.addArgs(&.{ "-target", "wgsl", "-entry", entry, "-stage", stage });
         if (after) |a| run.step.dependOn(a);
         for (includes) |inc| run.addArgs(&.{ "-I", inc });
-        run.addFileArg(.{ .cwd_relative = input });
+        run.addFileArg(input);
         run.addArg("-o");
         const compiled = run.addOutputFileArg(file_name);
-        ctx.addSlangInputs(run, std.fs.path.dirname(input) orelse ".");
+        const reflection_name = b.fmt("{s}.{s}.json", .{ name, suffix });
+        run.addArg("-reflection-json");
+        const reflected = run.addOutputFileArg(reflection_name);
         for (includes) |inc| ctx.addSlangInputs(run, inc);
         run.setName(b.fmt("compile {s}.{s}.wgsl", .{ name, suffix }));
 
         if (!std.mem.startsWith(u8, out_dir, ctx.prefix)) @panic("shader output directory is outside the install prefix");
         const relative = std.mem.trimStart(u8, out_dir[ctx.prefix.len..], "/\\");
-        return b.addInstallFileWithDir(compiled, .{ .custom = relative }, file_name);
+        const install_reflection = b.addInstallFileWithDir(reflected, .{ .custom = relative }, reflection_name);
+        const install = b.addInstallFileWithDir(compiled, .{ .custom = relative }, file_name);
+        install.step.dependOn(&install_reflection.step);
+        return .{ .run = run, .install = install };
+    }
+
+    /// Writes the reflection of a Slang module that declares parameters and no entry point, as
+    /// `<name>.json` in `out_dir`.
+    fn reflection(ctx: *Ctx, name: []const u8, input: []const u8, out_dir: []const u8, includes: []const []const u8) *std.Build.Step.InstallFile {
+        const b = ctx.b;
+        const file_name = b.fmt("{s}.json", .{name});
+        const run = std.Build.Step.Run.create(b, "slangc");
+        run.addFileArg(ctx.slangc);
+        run.addArgs(&.{ "-target", "wgsl" });
+        for (includes) |inc| run.addArgs(&.{ "-I", inc });
+        run.addFileArg(.{ .cwd_relative = input });
+        run.addArg("-reflection-json");
+        const reflected = run.addOutputFileArg(file_name);
+        ctx.addSlangInputs(run, std.fs.path.dirname(input) orelse ".");
+        for (includes) |inc| ctx.addSlangInputs(run, inc);
+        run.setName(b.fmt("reflect {s}", .{name}));
+
+        if (!std.mem.startsWith(u8, out_dir, ctx.prefix)) @panic("reflection output directory is outside the install prefix");
+        const relative = std.mem.trimStart(u8, out_dir[ctx.prefix.len..], "/\\");
+        return b.addInstallFileWithDir(reflected, .{ .custom = relative }, file_name);
     }
 
     /// Compiles every authored material × `pass`: glob every materials
@@ -1175,7 +1259,7 @@ const Ctx = struct {
     ) []const *std.Build.Step.InstallFile {
         const b = ctx.b;
         var steps: std.ArrayList(*std.Build.Step.InstallFile) = .empty;
-        const gen_dir = b.pathJoin(&.{ ctx.prefix, "gen", pass });
+        const wrappers = b.addWriteFiles();
 
         var wrapper_includes: std.ArrayList([]const u8) = .empty;
         wrapper_includes.appendSlice(b.allocator, includes) catch @panic("OOM");
@@ -1184,6 +1268,8 @@ const Ctx = struct {
         var threaded: std.Io.Threaded = .init(b.allocator, .{});
         defer threaded.deinit();
         const io = threaded.io();
+        const template_text = std.Io.Dir.cwd().readFileAlloc(io, template, b.allocator, .limited(1024 * 1024)) catch |err|
+            std.debug.panic("cannot read {s}: {s}", .{ template, @errorName(err) });
 
         for (materials_dirs) |mdir| {
             var dir = std.Io.Dir.openDirAbsolute(io, mdir, .{ .iterate = true }) catch continue;
@@ -1194,20 +1280,14 @@ const Ctx = struct {
                 const material_name = entry.name[0 .. entry.name.len - ".slang".len];
                 const material_path = b.pathJoin(&.{ mdir, entry.name });
                 const combined_name = b.fmt("{s}.{s}", .{ material_name, pass });
-                const wrapper = b.pathJoin(&.{ gen_dir, b.fmt("{s}.slang", .{combined_name}) });
+                const material_source = std.Io.Dir.cwd().readFileAlloc(io, material_path, b.allocator, .limited(1024 * 1024)) catch |err|
+                    std.debug.panic("cannot read {s}: {s}", .{ material_path, @errorName(err) });
+                const wrapper_text = std.mem.replaceOwned(u8, b.allocator, template_text, "@MATERIAL_MODULE@", material_name) catch @panic("OOM");
+                const wrapper_source = std.mem.replaceOwned(u8, b.allocator, wrapper_text, "@MATERIAL_STRUCT@", materialStruct(material_path, material_source)) catch @panic("OOM");
+                const wrapper = wrappers.add(b.fmt("{s}.slang", .{combined_name}), wrapper_source);
 
-                const gen_wrapper = b.addSystemCommand(&.{
-                    "dotnet",     "run",         b.pathJoin(&.{ ctx.root, "scripts/generate_material_wrapper.cs" }),
-                    "--material", material_path, "--template",
-                    template,     "--output",    wrapper,
-                });
-                gen_wrapper.setName(b.fmt("generate {s} wrapper", .{combined_name}));
-                ctx.serializeDotnet(&gen_wrapper.step);
-
-                const vs = ctx.shader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
-                vs.step.dependOn(&gen_wrapper.step);
-                const fs = ctx.shader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items, &gen_wrapper.step);
-                fs.step.dependOn(&gen_wrapper.step);
+                const vs = ctx.compileShader(combined_name, "vertex", "vs_main", wrapper, out_dir, wrapper_includes.items, null).install;
+                const fs = ctx.compileShader(combined_name, "fragment", "fs_main", wrapper, out_dir, wrapper_includes.items, null).install;
 
                 steps.append(b.allocator, vs) catch @panic("OOM");
                 steps.append(b.allocator, fs) catch @panic("OOM");
@@ -1227,7 +1307,7 @@ const Ctx = struct {
         artifact.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| artifact.step.dependOn(d);
         const install = b.addInstallArtifact(artifact, .{ .dest_dir = .{ .override = .{ .custom = "lib" } } });
-        ctx.plugins_step.dependOn(&install.step);
+        ctx.libraries_step.dependOn(&install.step);
 
         switch (tests) {
             .no_tests => {},
@@ -1304,6 +1384,85 @@ fn portsCurrent(b: *std.Build, stamp_path: []const u8, digest: [64]u8, lib_dir: 
     if (!std.mem.eql(u8, recorded, &digest)) return false;
     cwd.access(io, lib_dir, .{}) catch return false;
     return true;
+}
+
+/// The file at `url`, downloaded by `scripts/fetch_file.zig` built for the host and kept only when
+/// its SHA-256 is `sha256`; the run is cached on its arguments, so it downloads once.
+fn fetchFile(b: *std.Build, url: []const u8, sha256: []const u8, basename: []const u8) std.Build.LazyPath {
+    const exe = b.addExecutable(.{
+        .name = "fetch_file",
+        .root_module = b.createModule(.{ .root_source_file = b.path("scripts/fetch_file.zig"), .target = b.graph.host, .optimize = .ReleaseSafe }),
+    });
+    const run = b.addRunArtifact(exe);
+    run.addArgs(&.{ url, sha256 });
+    return run.addOutputFileArg(basename);
+}
+
+/// The name of the one struct the material file declares as `struct <Name> : IMaterial`; the build
+/// stops when the file declares none or more than one, since the file name identifies the material.
+fn materialStruct(path: []const u8, source: []const u8) []const u8 {
+    var found: ?[]const u8 = null;
+    var lines = std.mem.splitScalar(u8, source, '\n');
+    while (lines.next()) |raw| {
+        const line = std.mem.trimStart(u8, raw, " \t");
+        if (!std.mem.startsWith(u8, line, "struct ")) continue;
+        const rest = std.mem.trimStart(u8, line["struct ".len..], " \t");
+        const name_end = std.mem.indexOfNone(u8, rest, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") orelse rest.len;
+        const after = std.mem.trimStart(u8, rest[name_end..], " \t");
+        if (name_end == 0 or after.len == 0 or after[0] != ':') continue;
+        const base = std.mem.trimStart(u8, after[1..], " \t");
+        if (!std.mem.startsWith(u8, base, "IMaterial")) continue;
+        if (base.len > "IMaterial".len and (std.ascii.isAlphanumeric(base["IMaterial".len]) or base["IMaterial".len] == '_')) continue;
+        if (found != null) std.debug.panic("{s}: more than one IMaterial struct; one material per file, so the file name identifies it", .{path});
+        found = rest[0..name_end];
+    }
+    return found orelse std.debug.panic("{s}: no `struct <Name> : IMaterial`; an authored material must declare its IMaterial conformance", .{path});
+}
+
+/// The triplet `vcpkg-triplets/` holds for the platform of `t`, `<arch>-<os>-zig`, when there is
+/// one; vcpkg's own `<arch>-<os>` otherwise.
+fn defaultTriplet(b: *std.Build, root: []const u8, t: std.Target) []const u8 {
+    const arch = switch (t.cpu.arch) {
+        .x86_64 => "x64",
+        .x86 => "x86",
+        .aarch64 => "arm64",
+        .arm => "arm",
+        else => @tagName(t.cpu.arch),
+    };
+    const os = if (t.abi.isAndroid()) "android" else switch (t.os.tag) {
+        .macos => "osx",
+        else => @tagName(t.os.tag),
+    };
+    const standard = b.fmt("{s}-{s}", .{ arch, os });
+    const ours = b.fmt("{s}-zig", .{standard});
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    std.Io.Dir.cwd().access(threaded.io(), b.pathJoin(&.{ root, "vcpkg-triplets", b.fmt("{s}.cmake", .{ours}) }), .{}) catch return standard;
+    return ours;
+}
+
+/// The package of `linux` or `windows` when `t` is x86_64 on that system, the only ones the build
+/// manifest carries; null for any other.
+fn packageFor(t: std.Target, linux: []const u8, windows: []const u8) ?[]const u8 {
+    if (t.cpu.arch != .x86_64) return null;
+    return switch (t.os.tag) {
+        .linux => linux,
+        .windows => windows,
+        else => null,
+    };
+}
+
+fn hostName(b: *std.Build, t: std.Target) []const u8 {
+    return b.fmt("{s}-{s}", .{ @tagName(t.cpu.arch), @tagName(t.os.tag) });
+}
+
+/// Creates each directory with its parents, for a tool that writes into one it does not create.
+fn createDirs(b: *std.Build, dirs: []const []const u8) void {
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    for (dirs) |dir| std.Io.Dir.cwd().createDirPath(io, dir) catch |err|
+        std.debug.panic("cannot create {s}: {s}", .{ dir, @errorName(err) });
 }
 
 fn joinPaths(b: *std.Build, paths: []const []const u8) []const u8 {

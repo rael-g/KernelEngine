@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -12,6 +13,7 @@ pub fn build(b: *std.Build) void {
     const flecs_include = b.option([]const u8, "flecs-include", "flecs headers dir") orelse @panic("-Dflecs-include required");
     const flecs_lib = b.option([]const u8, "flecs-lib", "absolute path to the flecs static library") orelse @panic("-Dflecs-lib required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/ecs_flecs.zig"),
@@ -38,10 +40,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
     mod.addCMacro("flecs_STATIC", "");
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_ecs_flecs",
         .root_module = mod,
@@ -70,6 +76,8 @@ pub fn build(b: *std.Build) void {
         test_mod.linkSystemLibrary("ws2_32", .{});
         test_mod.linkSystemLibrary("dbghelp", .{});
     }
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,
@@ -78,6 +86,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
     test_mod.addCMacro("flecs_STATIC", "");
 
+    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
 
@@ -98,6 +107,8 @@ pub fn build(b: *std.Build) void {
         probe_mod.linkSystemLibrary("ws2_32", .{});
         probe_mod.linkSystemLibrary("dbghelp", .{});
     }
+    probe_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    probe_mod.linkSystemLibrary("ke_common", .{});
     probe_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,
@@ -105,6 +116,7 @@ pub fn build(b: *std.Build) void {
     }));
     probe_mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
     probe_mod.addCMacro("flecs_STATIC", "");
+    probe_mod.addImport("c", ke_common_build.cImports(b, probe_mod, b.path("src/c.h")));
 
     const probe_exe = b.addExecutable(.{
         .name = "ecs_flecs_abort_probe",

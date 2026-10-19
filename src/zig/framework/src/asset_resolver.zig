@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const handles = @import("handle").Handles(c);
 const heap = @import("heap");
 
@@ -61,45 +61,38 @@ fn copyStringClamped(dst: []u8, src: []const u8) void {
     dst[n] = 0;
 }
 
-fn joinPath(out: []u8, root: []const u8, remainder: []const u8) void {
-    if (out.len == 0) return;
-    const need_sep = root.len > 0 and
-        root[root.len - 1] != '/' and root[root.len - 1] != '\\' and
-        (remainder.len == 0 or (remainder[0] != '/' and remainder[0] != '\\'));
-
-    var i: usize = 0;
-    for (root) |ch| {
-        if (i >= out.len - 1) break;
-        out[i] = ch;
-        i += 1;
-    }
-    if (need_sep and i < out.len - 1) {
-        out[i] = '/';
-        i += 1;
-    }
-    for (remainder) |ch| {
-        if (i >= out.len - 1) break;
-        out[i] = ch;
-        i += 1;
-    }
-    out[i] = 0;
+/// Writes the file path `path` names into `out`, terminated: a path that begins with "res://" is
+/// joined to the project root, or stands as its remainder when there is none, and any other path
+/// is copied as written. Fails as an invalid argument, leaving `out` unspecified, when the result
+/// and its terminator do not fit.
+fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8, out_error: [*c][*c]c.ke_error) bool {
+    const p = std.mem.span(path);
+    const written = if (!std.mem.startsWith(u8, p, res_prefix))
+        std.fmt.bufPrintZ(out, "{s}", .{p})
+    else if (s.project_root) |root| blk: {
+        const remainder = p[res_prefix.len..];
+        const sep: []const u8 = if (root.len > 0 and root[root.len - 1] != '/' and root[root.len - 1] != '\\' and
+            (remainder.len == 0 or (remainder[0] != '/' and remainder[0] != '\\'))) "/" else "";
+        break :blk std.fmt.bufPrintZ(out, "{s}{s}{s}", .{ root, sep, remainder });
+    } else std.fmt.bufPrintZ(out, "{s}", .{p[res_prefix.len..]});
+    _ = written catch {
+        E.fail(out_error, .invalid_argument, "resolved path does not fit", @src());
+        return false;
+    };
+    return true;
 }
 
-/// Called by the texture, font and material slots before they open a file. A path that begins
-/// with "res://" is rewritten against the project root, and any other path is used as written.
-/// The buffer it writes is always terminated, so the path can be passed on as a C string.
-fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) void {
-    const p = std.mem.span(path);
-    if (std.mem.startsWith(u8, p, res_prefix)) {
-        const remainder = p[res_prefix.len..];
-        if (s.project_root) |root| {
-            joinPath(out, root, remainder);
-        } else {
-            copyStringClamped(out, remainder);
-        }
-        return;
+/// Slot `resolve_path`. Resolves through `resolvePath` into the caller's buffer.
+fn vtResolvePath(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8, capacity: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    };
+    if (self.handle == null or path == null or out == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
     }
-    copyStringClamped(out, p);
+    return resolvePath(stateOf(self), path, out[0..capacity], out_error);
 }
 
 fn tomlNumberIn(tab: ?*c.toml_table_t, key: [*c]const u8) ?f32 {
@@ -121,7 +114,7 @@ fn tomlNumberAt(arr: ?*c.toml_array_t, idx: c_int) ?f32 {
 /// The only reader of material files, called by vtResolveMaterial with the path it resolved. Every
 /// field it sets is first written with its default, so a key the file leaves out keeps that
 /// default. On failure the spec holds only those defaults.
-fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
+fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) error{ NotFound, Malformed }!void {
     out.base_color[0] = 1.0;
     out.base_color[1] = 1.0;
     out.base_color[2] = 1.0;
@@ -135,14 +128,14 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
     out.ior = 1.5;
     out.distortion_strength = 0.05;
 
-    const fp = std.c.fopen(path, "rb") orelse return false;
+    const fp = std.c.fopen(path, "rb") orelse return error.NotFound;
     var errbuf: [200]u8 = undefined;
     const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
-    if (root == null) return false;
+    if (root == null) return error.Malformed;
     defer c.toml_free(root);
 
-    const mat = c.toml_table_in(root, "material") orelse return false;
+    const mat = c.toml_table_in(root, "material") orelse return error.Malformed;
 
     if (c.toml_array_in(mat, "base_color")) |bc| {
         for (0..4) |i| {
@@ -177,8 +170,6 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) bool {
         }
         std.c.free(am.u.s);
     }
-
-    return true;
 }
 
 /// Slot `resolve_texture`, and the decode step of `vtResolveTextureInto` on a cache miss. A
@@ -206,7 +197,7 @@ fn vtResolveTexture(
     };
 
     var buf: [path_buf_max]u8 = undefined;
-    resolvePath(s, path, &buf);
+    if (!resolvePath(s, path, &buf, out_error)) return false;
     const resolved: [*:0]const u8 = @ptrCast(&buf);
     if (!fileExists(resolved)) {
         E.fail(out_error, .not_found, "texture file not found", @src());
@@ -276,7 +267,8 @@ fn vtFreeMesh(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_mesh_shape_data) call
 
 /// Slot `resolve_material`, and the first step of `vtResolveMaterialInto` on a cache miss. The
 /// file is TOML read by `parseMaterialFile`, so a key it omits keeps its default. A file that
-/// cannot be opened or parsed reports io and returns false.
+/// cannot be opened reports not found, one that is not TOML or has no material table reports io;
+/// both return false.
 fn vtResolveMaterial(
     self_in: ?*c.ke_asset_resolver,
     path: [*c]const u8,
@@ -293,11 +285,14 @@ fn vtResolveMaterial(
     }
     const s = stateOf(self);
     var buf: [path_buf_max]u8 = undefined;
-    resolvePath(s, path, &buf);
-    if (!parseMaterialFile(@ptrCast(&buf), out.?)) {
-        E.fail(out_error, .io, "failed to parse material file", @src());
+    if (!resolvePath(s, path, &buf, out_error)) return false;
+    parseMaterialFile(@ptrCast(&buf), out.?) catch |err| {
+        switch (err) {
+            error.NotFound => E.fail(out_error, .not_found, "material file not found", @src()),
+            error.Malformed => E.fail(out_error, .io, "failed to parse material file", @src()),
+        }
         return false;
-    }
+    };
     return true;
 }
 
@@ -328,7 +323,7 @@ fn vtResolveFont(
     };
 
     var buf: [path_buf_max]u8 = undefined;
-    resolvePath(s, path, &buf);
+    if (!resolvePath(s, path, &buf, out_error)) return false;
     const resolved: [*:0]const u8 = @ptrCast(&buf);
     if (!fileExists(resolved)) {
         E.fail(out_error, .not_found, "font file not found", @src());
@@ -381,7 +376,7 @@ fn vtResolveTextureInto(
     }
 
     var cached: c.ke_texture_handle = undefined;
-    if (core.try_get_texture.?(core, path, &cached) != 0) return cached;
+    if (core.try_get_texture.?(core, path, &cached)) return cached;
 
     var data: ?*c.ke_texture_data = null;
     if (!vtResolveTexture(self, path, &data, out_error)) return c.KE_TEXTURE_NONE;
@@ -419,7 +414,7 @@ fn vtResolveMeshInto(
     }
 
     var cached: c.ke_mesh_handle = undefined;
-    if (core.try_get_mesh.?(core, path, &cached) != 0) return cached;
+    if (core.try_get_mesh.?(core, path, &cached)) return cached;
 
     var shape: c.ke_mesh_shape_data = undefined;
     if (!vtResolveMesh(self, path, &shape, out_error)) return c.KE_MESH_NONE;
@@ -486,7 +481,7 @@ fn vtResolveMaterialInto(
     }
 
     var cached: c.ke_material_handle = undefined;
-    if (core.try_get_material.?(core, path, &cached) != 0) return cached;
+    if (core.try_get_material.?(core, path, &cached)) return cached;
 
     var spec: c.ke_material_spec = undefined;
     if (!vtResolveMaterial(self, path, &spec, out_error)) return c.KE_MATERIAL_NONE;
@@ -567,6 +562,7 @@ export fn ke_asset_resolver_create(
     s.api.resolve_texture_into = vtResolveTextureInto;
     s.api.resolve_mesh_into = vtResolveMeshInto;
     s.api.resolve_material_into = vtResolveMaterialInto;
+    s.api.resolve_path = vtResolvePath;
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
@@ -605,7 +601,7 @@ const MaterialFile = struct {
 
 test "a material file that is not there fails instead of yielding a blank material" {
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(!parseMaterialFile("/this/does/not/exist.material", &spec));
+    try testing.expectError(error.NotFound, parseMaterialFile("/this/does/not/exist.material", &spec));
 }
 
 test "a file without a material section is not a material" {
@@ -613,7 +609,7 @@ test "a file without a material section is not a material" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(!parseMaterialFile(file.cPath(), &spec));
+    try testing.expectError(error.Malformed, parseMaterialFile(file.cPath(), &spec));
 }
 
 test "every authored key reaches the spec it was written for" {
@@ -629,7 +625,7 @@ test "every authored key reaches the spec it was written for" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(parseMaterialFile(file.cPath(), &spec));
+    try parseMaterialFile(file.cPath(), &spec);
 
     try testing.expectApproxEqAbs(@as(f32, 0.8), spec.base_color[0], material_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 0.2), spec.base_color[1], material_tolerance);
@@ -646,7 +642,7 @@ test "a key the author left out falls back to the default rather than to zero" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(parseMaterialFile(file.cPath(), &spec));
+    try parseMaterialFile(file.cPath(), &spec);
 
     try testing.expectApproxEqAbs(@as(f32, 1.0), spec.metallic, material_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 1.0), spec.base_color[0], material_tolerance);
@@ -1155,6 +1151,29 @@ test "a live handle is never zero, not even at index zero" {
             handles.generation(h.bits),
         );
     }
+}
+
+test "a res:// path joins the project root and any other path stands as written" {
+    const h = ke_asset_resolver_create(null, null, "/game", null);
+    defer h.destroy.?(h.ref);
+    const r = h.ref.?;
+    var out: [64]u8 = undefined;
+
+    try testing.expect(r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len, null));
+    try testing.expectEqualStrings("/game/scenes/a.toml", std.mem.sliceTo(&out, 0));
+    try testing.expect(r.*.resolve_path.?(r, "other/b.toml", &out, out.len, null));
+    try testing.expectEqualStrings("other/b.toml", std.mem.sliceTo(&out, 0));
+}
+
+test "a resolved path that does not fit is refused rather than cut" {
+    const h = ke_asset_resolver_create(null, null, "/game", null);
+    defer h.destroy.?(h.ref);
+    const r = h.ref.?;
+    var out: [8]u8 = undefined;
+    var err: [*c]c.ke_error = null;
+
+    try testing.expect(!r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len, &err));
+    try testing.expectEqual(E.typeOf(.invalid_argument), err.*.type);
 }
 
 test "creating and destroying a resolver leaves no block allocated" {

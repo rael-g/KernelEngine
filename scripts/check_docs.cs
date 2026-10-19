@@ -3,7 +3,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
-const int LineCitationCeiling = 103;
+const int LineCitationCeiling = 87;
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));

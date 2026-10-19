@@ -38,8 +38,7 @@ dotnet build
 dotnet test KernelEngine.slnx
 ```
 
-Every native test is a Zig test inside the implementation file it covers. Running an example or
-`dotnet test` needs `build/native/lib` on `LD_LIBRARY_PATH`.
+Every native test is a Zig test inside the implementation file it covers.
 
 After a native rebuild, run examples with `dotnet run` or `dotnet build`. Never pass `--no-build`:
 it keeps the stale native library.
@@ -57,7 +56,6 @@ It registers a logger, the ECS, the scheduler, the runtime and a window module, 
 and ticks the loop.
 
 ```bash
-export LD_LIBRARY_PATH="$PWD/build/native/lib:$LD_LIBRARY_PATH"
 dotnet run --project examples/csharp/00_runtime_minimal
 ```
 
@@ -70,7 +68,6 @@ More examples are under `examples/c` and `examples/csharp`.
 - Guides: [Guides](docs/guides), starting with
   [how to start the engine from your own program](docs/guides/minimal-host.md).
 - Maps of each domain: [Architecture](docs/architecture).
-- Why a structural choice was made: [Decisions](docs/decisions).
 - Reference pages are generated from the doc comments of the sources.
 
 Build the site locally:

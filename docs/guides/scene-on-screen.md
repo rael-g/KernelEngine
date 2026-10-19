@@ -31,5 +31,5 @@ arrives in the view it is given.
 
 ```bash
 zig build --prefix build/native --global-cache-dir build/zig-global
-LD_LIBRARY_PATH=build/native/lib dotnet run --project examples/csharp/01_window_scene
+dotnet run --project examples/csharp/01_window_scene
 ```

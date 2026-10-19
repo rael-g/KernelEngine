@@ -44,7 +44,7 @@ public static class MeshPrimitives
     {
         const float h = 0.5f;
         Span<MeshVertex> verts = stackalloc MeshVertex[24];
-        Span<ushort> idx       = stackalloc ushort[36];
+        Span<ushort> idx = stackalloc ushort[36];
 
         static void Face(Span<MeshVertex> verts, Span<ushort> idx, int f, Vector3 n,
                          Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
@@ -60,12 +60,12 @@ public static class MeshPrimitives
             idx[i + 3] = (ushort)(v + 0); idx[i + 4] = (ushort)(v + 2); idx[i + 5] = (ushort)(v + 3);
         }
 
-        Face(verts, idx, 0, new( 1, 0, 0), new(+h, -h, +h), new(+h, -h, -h), new(+h, +h, -h), new(+h, +h, +h));
+        Face(verts, idx, 0, new(1, 0, 0), new(+h, -h, +h), new(+h, -h, -h), new(+h, +h, -h), new(+h, +h, +h));
         Face(verts, idx, 1, new(-1, 0, 0), new(-h, -h, -h), new(-h, -h, +h), new(-h, +h, +h), new(-h, +h, -h));
-        Face(verts, idx, 2, new( 0, 1, 0), new(-h, +h, +h), new(+h, +h, +h), new(+h, +h, -h), new(-h, +h, -h));
-        Face(verts, idx, 3, new( 0,-1, 0), new(-h, -h, -h), new(+h, -h, -h), new(+h, -h, +h), new(-h, -h, +h));
-        Face(verts, idx, 4, new( 0, 0, 1), new(-h, -h, +h), new(+h, -h, +h), new(+h, +h, +h), new(-h, +h, +h));
-        Face(verts, idx, 5, new( 0, 0,-1), new(+h, -h, -h), new(-h, -h, -h), new(-h, +h, -h), new(+h, +h, -h));
+        Face(verts, idx, 2, new(0, 1, 0), new(-h, +h, +h), new(+h, +h, +h), new(+h, +h, -h), new(-h, +h, -h));
+        Face(verts, idx, 3, new(0, -1, 0), new(-h, -h, -h), new(+h, -h, -h), new(+h, -h, +h), new(-h, -h, +h));
+        Face(verts, idx, 4, new(0, 0, 1), new(-h, -h, +h), new(+h, -h, +h), new(+h, +h, +h), new(-h, +h, +h));
+        Face(verts, idx, 5, new(0, 0, -1), new(+h, -h, -h), new(-h, -h, -h), new(-h, +h, -h), new(+h, +h, -h));
 
         return resources.UploadMesh("primitive:cube", verts, idx);
     }
@@ -74,15 +74,15 @@ public static class MeshPrimitives
     public static MeshHandle UvSphere(IRenderResources resources, float radius = 0.5f, int rings = 24, int segments = 32)
     {
         int vertCount = (rings + 1) * (segments + 1);
-        int idxCount  = rings * segments * 6;
+        int idxCount = rings * segments * 6;
         Span<MeshVertex> verts = vertCount <= 2048 ? stackalloc MeshVertex[vertCount] : new MeshVertex[vertCount];
-        Span<ushort>     idx   = idxCount  <= 8192 ? stackalloc ushort[idxCount]      : new ushort[idxCount];
+        Span<ushort> idx = idxCount <= 8192 ? stackalloc ushort[idxCount] : new ushort[idxCount];
 
         int vi = 0;
         for (int r = 0; r <= rings; r++)
         {
             float phi = MathF.PI * r / rings;
-            float y   = MathF.Cos(phi);
+            float y = MathF.Cos(phi);
             float sinP = MathF.Sin(phi);
             for (int s = 0; s <= segments; s++)
             {

@@ -45,9 +45,9 @@ public readonly ref struct View
 
     internal View(ScriptHost scriptHost, float deltaTime, IInputReader? input, nint systemCtx = default)
     {
-        ScriptHost     = scriptHost;
-        DeltaTime     = deltaTime;
-        _input        = input;
-        _commands     = systemCtx == 0 ? null : KernelEngine.Runtime.SystemCtx.Of(systemCtx).Commands;
+        ScriptHost = scriptHost;
+        DeltaTime = deltaTime;
+        _input = input;
+        _commands = systemCtx == 0 ? null : KernelEngine.Runtime.SystemCtx.Of(systemCtx).Commands;
     }
 }

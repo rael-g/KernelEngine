@@ -1,10 +1,11 @@
 
-#pragma once
+#ifndef KERNEL_ENGINE_PHYSICS_BODY2D_BODY2D_MODULE_H_
+#define KERNEL_ENGINE_PHYSICS_BODY2D_BODY2D_MODULE_H_
 
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/logger/logger.h>
 #include <kernel_engine/physics/physics_2d.h>
-#include <kernel_engine/framework/world.h>
 #include <kernel_engine/runtime/runtime.h>
 
 #ifndef KE_PHYSICS_BODY2D_API
@@ -31,6 +32,7 @@ typedef struct ke_physics_body2d_module_params
     ke_runtime    *runtime;      ///< Registers the system; borrowed, must outlive the module.
     ke_ecs        *ecs;          ///< Resolves the component ids; borrowed.
     ke_physics_2d *physics;      ///< The world to drive; borrowed.
+    ke_scene_tree *scene_tree;   ///< Tells when a collider's ancestors may have changed; borrowed, must outlive the module.
     ke_logger     *logger;       ///< Reports shapes that resolve to no body; optional, borrowed.
 } ke_physics_body2d_module_params;
 
@@ -48,11 +50,9 @@ KE_PHYSICS_BODY2D_API ke_physics_body2d_module_handle ke_physics_body2d_module_c
     const ke_physics_body2d_module_params *params,
     ke_error **out_error);
 
-/// @brief Registers physics's component ids and their scene-file field tables against
-///        @p world, so an [entity.body2d] or [entity.collider2d] block applies.
-/// @return false if either argument is NULL.
-KE_PHYSICS_BODY2D_API bool ke_physics_register_scene_apply(ke_ecs *ecs, ke_world *world);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

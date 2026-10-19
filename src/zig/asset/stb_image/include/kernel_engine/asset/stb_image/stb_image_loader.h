@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_ASSET_STB_IMAGE_STB_IMAGE_LOADER_H_
+#define KERNEL_ENGINE_ASSET_STB_IMAGE_STB_IMAGE_LOADER_H_
 
 #include <kernel_engine/asset/image_loader.h>
 
@@ -33,4 +34,6 @@ KE_ASSET_STB_IMAGE_API ke_image_loader_handle ke_image_loader_stb_create(
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

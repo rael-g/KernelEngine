@@ -15,28 +15,38 @@
           "doc": "Runs once, before the other phases of the first tick."
         },
         {
-          "name": "KE_PHASE_FIXED_UPDATE",
+          "name": "KE_PHASE_FIXED_PRE_UPDATE",
           "value": 2,
-          "doc": "Runs once, before the other phases of the first tick."
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
+        },
+        {
+          "name": "KE_PHASE_FIXED_UPDATE",
+          "value": 3,
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
+        },
+        {
+          "name": "KE_PHASE_FIXED_POST_UPDATE",
+          "value": 4,
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
         },
         {
           "name": "KE_PHASE_UPDATE",
-          "value": 3,
-          "doc": "Runs once, before the other phases of the first tick."
+          "value": 5,
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
         },
         {
           "name": "KE_PHASE_POST_UPDATE",
-          "value": 4,
-          "doc": "Runs once, before the other phases of the first tick."
+          "value": 6,
+          "doc": "The three fixed phases run in this order once per fixed step, as many steps as the tick\u0027s time covers, with the step\u0027s duration as \u0060dt\u0060."
         },
         {
           "name": "KE_PHASE_RENDER",
-          "value": 5,
+          "value": 7,
           "doc": "Runs asynchronously against the next tick\u0027s sim phases. Its systems read extracted query results, never live storage, and may not mutate structure."
         },
         {
           "name": "KE_PHASE_SHUTDOWN",
-          "value": 6,
+          "value": 8,
           "doc": "Runs once when the runtime is destroyed, if a tick ever ran. A failure of its bodies is not reported."
         }
       ]
@@ -226,6 +236,46 @@
             "default:false"
           ],
           "doc": "The body\u0027s work on one entity is independent of every other entity it visits. The runtime may then run it as several concurrent slices of the same entity set, each body call handling the share ke_system_ctx_slice reports. False keeps the body one call over the whole set. What breaks the promise is a body reaching an entity other than the one it is visiting, or touching state shared across the set."
+        },
+        {
+          "name": "after",
+          "type": "const char *const *",
+          "tags": [
+            "array_of:after_count",
+            "default:empty",
+            "utf8"
+          ],
+          "doc": "Names of systems of the same phase this one runs after, whatever they access. A name is resolved when the phase is built, so it may name a system registered later; a name no system of the phase carries fails the tick."
+        },
+        {
+          "name": "after_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "before",
+          "type": "const char *const *",
+          "tags": [
+            "array_of:before_count",
+            "default:empty",
+            "utf8"
+          ],
+          "doc": "Names of systems of the same phase this one runs before, resolved like \u0060after\u0060."
+        },
+        {
+          "name": "before_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "exclusive",
+          "type": "_Bool",
+          "tags": [
+            "default:false"
+          ],
+          "doc": "The body runs alone at the start of its phase, before every system of the phase that is not exclusive, and what it records is applied before they run. Two exclusive systems are ordered like two writers of one component. Neither its access nor per_entity orders or splits it."
         }
       ]
     },
@@ -348,6 +398,78 @@
           "doc": "The id of the system registered last and still registered, or 0 when there is none.",
           "return_doc": null,
           "params": [],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "declare_exclusive",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Declares member one of the members of the exclusive group group: no entity holds two members of one group. Two systems whose every query requires a different member of the same group touch disjoint entities, so what they access through their queries puts no order between them; what their access lists name still does.",
+          "return_doc": "false when group equals member or the declaration cannot be stored.",
+          "params": [
+            {
+              "name": "group",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "member",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "declare_self_ordered",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Declares that whoever owns cid orders the systems writing it, so the runtime puts no order between two writers of cid. A writer still runs before a system that only reads it.",
+          "return_doc": "false when the declaration cannot be stored.",
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "check_order",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Builds the order of every phase as the next tick would. Within a phase, a system runs after the systems it names in \u0060after\u0060 and before those it names in \u0060before\u0060, a writer of a component before a system that only reads it, and of two writers with neither order, the one registered first runs first: an ambiguity.",
+          "return_doc": "false with the error naming the systems when an \u0060after\u0060 or a \u0060before\u0060 names no system of its phase, the order has a cycle, or, when refused, two writers are ambiguous.",
+          "params": [
+            {
+              "name": "refuse_ambiguity",
+              "type": "_Bool",
+              "tags": [],
+              "doc": "When true, an ambiguity fails the check too."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
           "receiver": "ke_runtime *"
         },
         {
@@ -606,7 +728,7 @@
           "name": "dt",
           "type": "float",
           "tags": [],
-          "doc": "Seconds since the previous tick, or the fixed timestep in KE_PHASE_FIXED_UPDATE."
+          "doc": "Seconds since the previous tick, or the fixed timestep in the three fixed phases."
         },
         {
           "name": "out_error",

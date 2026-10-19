@@ -1,10 +1,12 @@
 using System.Runtime.InteropServices;
-using KernelEngine.Configuration;
-using KernelEngine.Window.Glfw.Native;
+
 using KernelEngine.Common.Native;
-using Microsoft.Extensions.DependencyInjection;
+using KernelEngine.Configuration;
 using KernelEngine.Input;
 using KernelEngine.Logger;
+using KernelEngine.Window.Glfw.Native;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Window.Glfw;
 
@@ -21,9 +23,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWindow>(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
-            var width      = (int)cfg.GetInt("runtime.window", "width", 1280);
-            var height     = (int)cfg.GetInt("runtime.window", "height", 720);
-            var title      = cfg.GetString("runtime.window", "title", "KernelEngine");
+            var width = (int)cfg.GetInt("runtime.window", "width", 1280);
+            var height = (int)cfg.GetInt("runtime.window", "height", 720);
+            var title = cfg.GetString("runtime.window", "title", "KernelEngine");
             var fullscreen = cfg.GetBool("runtime.window", "fullscreen", false);
             return CreateWindow(sp, width, height, title, fullscreen);
         });
@@ -48,15 +50,15 @@ public static class ServiceCollectionExtensions
         try
         {
             var logger = sp.GetService<INativeLogger>();
-            var input  = sp.GetService<INativeInput>();
+            var input = sp.GetService<INativeInput>();
 
             var @params = new ke_window_glfw_params
             {
                 logger = logger != null ? logger.Native : null,
-                input      = input  != null ? input.Native  : null,
-                title      = (sbyte*)titlePtr,
-                width      = width,
-                height     = height,
+                input = input != null ? input.Native : null,
+                title = (sbyte*)titlePtr,
+                width = width,
+                height = height,
                 fullscreen = fullscreen,
             };
 

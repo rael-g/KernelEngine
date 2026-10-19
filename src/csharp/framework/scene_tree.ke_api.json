@@ -98,7 +98,7 @@
           "name": "destroy_node",
           "returns": "_Bool",
           "tags": [],
-          "doc": "Destroys a node and all its descendants, firing each on_destroy hook in post-order so a child is torn down before its parent. The node is gone when the call returns.",
+          "doc": "Destroys a node and all its descendants, each child before its parent. The node is gone when the call returns.",
           "return_doc": null,
           "params": [
             {
@@ -232,6 +232,15 @@
           "returns": "void",
           "tags": [],
           "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
+          "name": "hierarchy_generation",
+          "returns": "uint64_t",
+          "tags": [],
+          "doc": "A count that changes whenever a node is linked into or unlinked from the tree, including when deferred commands apply. Two equal readings mean no parent link changed between them.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_scene_tree *"

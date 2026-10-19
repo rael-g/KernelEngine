@@ -15,6 +15,7 @@ ke_input_snapshot size=232 align=8
   mouse_buttons_down 216
   mouse_buttons_pressed 220
   mouse_buttons_released 224
+  events_dropped 228
 ke_input_event size=16 align=4
   kind 0
   code 4
@@ -100,7 +101,7 @@ ke_runtime_module_params size=32 align=8
   user_data 8
   on_load 16
   on_unload 24
-ke_runtime_system_params size=72 align=8
+ke_runtime_system_params size=104 align=8
   name 0
   phase 8
   user_data 16
@@ -111,18 +112,26 @@ ke_runtime_system_params size=72 align=8
   access_count 56
   pinned_thread 60
   per_entity 64
+  after 72
+  after_count 80
+  before 88
+  before_count 96
+  exclusive 100
 ke_runtime_params size=12 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
   max_systems_per_phase 8
-ke_runtime size=56 align=8
+ke_runtime size=80 align=8
   handle 0
   register_module 8
   register_system 16
   unregister_system 24
   last_system 32
-  tick 40
-  flush_render 48
+  declare_exclusive 40
+  declare_self_ordered 48
+  check_order 56
+  tick 64
+  flush_render 72
 ke_runtime_handle size=16 align=8
   ref 0
   destroy 8
@@ -216,15 +225,13 @@ ke_physics_2d_handle size=16 align=8
   destroy 8
 
 [physics_components]
-ke_body2d_component size=40 align=4
+ke_body2d_component size=28 align=4
   type 0
-  position 4
-  angle 12
-  velocity 16
-  angular_velocity 24
-  gravity_scale 28
-  fixed_rotation 32
-  body 36
+  velocity 4
+  angular_velocity 12
+  gravity_scale 16
+  fixed_rotation 20
+  body 24
 ke_collider2d_component size=40 align=4
   kind 0
   half_extents 4
@@ -270,7 +277,7 @@ ke_font_loader_handle size=16 align=8
   destroy 8
 
 [render]
-ke_render_resource_desc size=56 align=8
+ke_render_resource_params size=56 align=8
   name 0
   type 8
   format 12
@@ -280,60 +287,81 @@ ke_render_resource_desc size=56 align=8
   scale_x 28
   scale_y 32
   clear_value 36
+ke_render_frame_globals size=368 align=4
+  view 0
+  proj 64
+  view_proj 128
+  inv_view_proj 192
+  inv_proj 256
+  camera_pos 320
+  viewport 336
+  time 352
+  dt 356
+  near_plane 360
+  far_plane 364
+ke_render_lighting size=48 align=4
+  direction 0
+  color 16
+  ambient 32
 ke_render_pass_io size=48 align=8
   name 0
   reads 8
   reads_count 16
   writes 24
   writes_count 32
-  cmd_slot 36
-  load 40
-ke_render_service size=360 align=8
+  chain 36
+  depth 40
+ke_render_service size=400 align=8
   handle 0
   declare 8
   import_texture 16
   import_tag 24
   import_buffer 32
-  import_bind_group 40
-  cid 48
-  begin_pass 56
-  end_pass 64
-  begin_frame 72
-  end_frame 80
-  upload_mesh 88
-  mesh_buffers 96
-  set_clear_color 104
-  upload_texture 112
-  create_material 120
-  material_layout 128
-  material_bind_group 136
-  material_alpha_mode 144
-  material_alpha_cutoff 152
-  upload_cubemap 160
-  texture_view 168
-  sampler 176
-  resource_view 184
-  resource_texture 192
-  resource_buffer 200
-  resource_buffer_size 208
-  resource_bind_group 216
-  resource_bind_group_layout 224
-  backbuffer_size 232
-  upload 240
-  get_or_create_pipeline 248
-  material_shader 256
-  retain_mesh 264
-  release_mesh 272
-  retain_texture 280
-  release_texture 288
-  retain_material 296
-  release_material 304
-  try_get_mesh 312
-  try_get_texture 320
-  try_get_material 328
-  white_texture 336
-  load_shader 344
+  cid 40
+  begin_pass 48
+  end_pass 56
+  begin_frame 64
+  end_frame 72
+  upload_mesh 80
+  mesh_buffers 88
+  set_clear_color 96
+  upload_texture 104
+  create_material 112
+  material_binding 120
+  material_alpha_mode 128
+  material_alpha_cutoff 136
+  upload_cubemap 144
+  texture_view 152
+  resource_view 160
+  resource_texture 168
+  resource_buffer 176
+  resource_buffer_size 184
+  backbuffer_size 192
+  upload 200
+  get_or_create_pipeline 208
+  material_shader 216
+  retain_mesh 224
+  release_mesh 232
+  retain_texture 240
+  release_texture 248
+  retain_material 256
+  release_material 264
+  try_get_mesh 272
+  try_get_texture 280
+  try_get_material 288
+  white_texture 296
+  load_shader 304
+  set_frame_globals 312
+  frame_globals 320
+  set_lighting 328
+  lighting 336
+  resource_binder 344
   backbuffer_format 352
+  resource_format 360
+  resource_generation 368
+  join_chain 376
+  leave_chain 384
+  chain_format 392
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8
@@ -390,7 +418,7 @@ ke_image_loader_handle size=16 align=8
   destroy 8
 
 [asset_resolver]
-ke_asset_resolver size=88 align=8
+ke_asset_resolver size=96 align=8
   handle 0
   resolve_texture 8
   free_texture 16
@@ -402,6 +430,7 @@ ke_asset_resolver size=88 align=8
   resolve_texture_into 64
   resolve_mesh_into 72
   resolve_material_into 80
+  resolve_path 88
 ke_asset_resolver_handle size=16 align=8
   ref 0
   destroy 8
@@ -420,15 +449,13 @@ ke_world_transform_component size=64 align=4
   matrix 0
 
 [world]
-ke_world_params size=56 align=8
-  scheduler 0
-  ecs 8
-  runtime 16
-  scene_tree 24
-  project_root 32
-  logger 40
-  signal_bus 48
-ke_world size=64 align=8
+ke_world_params size=40 align=8
+  ecs 0
+  runtime 8
+  scene_tree 16
+  logger 24
+  signal_bus 32
+ke_world size=80 align=8
   handle 0
   ecs 8
   runtime 16
@@ -437,12 +464,14 @@ ke_world size=64 align=8
   get_component_fields 40
   register_component_apply 48
   get_component_apply 56
+  register_component_alias 64
+  resolve_component 72
 ke_world_handle size=16 align=8
   ref 0
   destroy 8
 
 [scene_tree]
-ke_scene_tree size=96 align=8
+ke_scene_tree size=104 align=8
   handle 0
   root 8
   create_node 16
@@ -455,6 +484,7 @@ ke_scene_tree size=96 align=8
   first_child 72
   next_sibling 80
   propagate_transforms 88
+  hierarchy_generation 96
 ke_scene_tree_handle size=16 align=8
   ref 0
   destroy 8
@@ -491,20 +521,22 @@ ke_signal_bus_handle size=16 align=8
   destroy 8
 
 [script_host]
-ke_script_host size=104 align=8
+ke_script_host size=120 align=8
   handle 0
   register_type 8
   type_lookup 16
   type_components 24
   type_reach 32
-  bind 40
-  unbind 48
-  bind_deferred 56
-  unbind_deferred 64
-  instance_of 72
-  instance_count 80
-  instances 88
-  resolve 96
+  type_tag 40
+  type_tag_group 48
+  bind 56
+  unbind 64
+  bind_deferred 72
+  unbind_deferred 80
+  instance_of 88
+  instance_count 96
+  instances 104
+  resolve 112
 ke_script_host_handle size=16 align=8
   ref 0
   destroy 8

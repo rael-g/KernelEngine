@@ -1,8 +1,9 @@
-using Kabic.Pipeline;
 using System.Text.Json.Nodes;
+
 using Kabic;
-using Kabic.Zig;
 using Kabic.Conventions;
+using Kabic.Pipeline;
+using Kabic.Zig;
 
 namespace Kabic.Cli;
 
@@ -51,7 +52,7 @@ internal static class WriteZigCommand
             return 1;
         }
 
-        ApiModel ReadModel(string path) => ApiReader.Read(JsonNode.Parse(File.ReadAllText(path))!.AsObject());
+        static ApiModel ReadModel(string path) => ApiReader.Read(JsonNode.Parse(File.ReadAllText(path))!.AsObject());
 
         var foreign = new Dictionary<string, ForeignType>();
         foreach (var (name, api) in domains)

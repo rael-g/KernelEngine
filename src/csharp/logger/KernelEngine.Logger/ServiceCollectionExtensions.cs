@@ -1,5 +1,6 @@
-using KernelEngine.Configuration;
+﻿using KernelEngine.Configuration;
 using KernelEngine.Logger.Native;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Logger;
@@ -9,7 +10,7 @@ public static class LoggerServiceCollectionExtensions
     /// <summary>
     /// Registers the <see cref="Logger"/> singleton and exposes it as <see cref="ILogger"/> and
     /// <see cref="INativeLogger"/>. When the logger is first resolved it adds every
-    /// <see cref="ILoggerSink"/> registered by then, each with the default minimum level.
+    /// <see cref="ILoggerSink"/> registered by then, each at its own minimum level.
     /// </summary>
     public static IServiceCollection AddLogger(this IServiceCollection services)
     {

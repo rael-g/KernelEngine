@@ -9,19 +9,19 @@ plugins under `src/zig/configuration/`, the managed side under `src/csharp/confi
 | part | declared as | receives | hands on |
 |---|---|---|---|
 | store | `ke_configuration`, made by `ke_configuration_create` | typed writes by section and key | typed reads, and a call to each subscriber of a written section |
-| loader | `ke_configuration_toml_load` | a store and a file path | writes into the store through its setter slots |
+| source | `ke_configuration_source`, made for TOML by `ke_configuration_toml_create` | a store and a file path | writes into the store through its setter slots |
 | managed store | `Configuration`, `IConfiguration` | a path through `LoadToml`, and typed writes | typed reads |
 | registration | `AddProjectConfig`, `TryAddConfigurationSingleton` | an optional path | the `IConfiguration` singleton |
 
-The store is in the plugin `ke_configuration`, the loader in `ke_configuration_toml`; the loader
-knows the store only through its contract.
+The store is in the plugin `ke_configuration`, the TOML source in `ke_configuration_toml`; a
+source knows the store only through its contract, and another source fits beside it.
 
 ## What ties the parts together
 
 **Reads take a fallback.** A getter returns the fallback its caller passes when the key is
 missing or holds a value of another type; an integer read as a double is converted.
 
-**The loader flattens a file.** A table becomes a section, a nested table a section named by the
+**The TOML source flattens a file.** A table becomes a section, a nested table a section named by the
 path joined with dots, and a key directly under the root has the empty section. An array is
 skipped, which is why `GetFloatArray` and `SetFloatArray` use the keys `key_0`, `key_1`, and so on.
 

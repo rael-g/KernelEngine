@@ -1,5 +1,7 @@
+using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Runtime;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Audio;
@@ -21,9 +23,18 @@ public sealed unsafe class AudioModule : IRuntimeModule
         if (world is null) return;
 
         var ecs = services.GetRequiredService<INativeEcs>();
-        KernelEngine.Audio.Native.NativeMethods.audio_register_scene_apply(
-            ((INativeEcs)ecs).Native,
-            ((KernelEngine.Framework.INativeWorld)world).Native);
+        var set = KernelEngine.Audio.Native.NativeMethods.audio_scene_components_create();
+        try
+        {
+            ke_error* err = null;
+            if (!set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native,
+                    ((KernelEngine.Framework.INativeWorld)world).Native, &err))
+                throw NativeErrors.FromNative(err, "register_into");
+        }
+        finally
+        {
+            set.destroy(set.@ref);
+        }
     }
 }
 

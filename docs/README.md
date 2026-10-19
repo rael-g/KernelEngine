@@ -7,7 +7,6 @@ The documentation is built into a site, https://rael-g.github.io/KernelEngine/ ,
   example the build compiles.
 - [Architecture](architecture/index.md): one map per domain: its parts, what each receives and what
   it hands on.
-- [Decisions](decisions/index.md): why a structural choice was made, one record per decision.
 - [Conventions](conventions/index.md): the rules the code and the documents are written to.
 - [Formats](formats/index.md): the files the engine reads, and what it does with each key.
 

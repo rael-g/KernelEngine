@@ -30,6 +30,7 @@ written once and a path or binary name never differs by runner. The Windows leg 
 | vcpkg build logs | on failure, the tail of every vcpkg build log | both |
 | native tests | `dotnet run scripts/verify.cs -- test-native` | both |
 | managed tests | `dotnet run scripts/verify.cs -- test-managed` | both |
+| smoke test | `dotnet run scripts/verify.cs -- smoke` | both |
 | gates | `dotnet run scripts/verify.cs -- gates` | Linux only |
 
 All three caches are for speed and never for correctness: a miss costs the vcpkg ports' build time or
@@ -39,8 +40,8 @@ are. A vcpkg cache that is restored but whose ports are rebuilt anyway means a p
 changed; the triplets pass `PATH` through as untracked for that reason, so a runner-specific `PATH`
 does not enter the hash.
 
-`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, `gates` runs every `scripts/check_*.cs` it finds, `docs` generates the reference pages and builds the site with DocFX into `build/docs-site`, failing on
-a warning such as a link to a section that does not exist, and `visual` is described below. With no stage it runs those six in that order and prints each step's time. `--keep-going` does not stop at the first failing step. Each stage runs alone when it is the only one named.
+`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, `smoke` runs `examples/csharp/19_node_stress`, which needs no display and fails when its nodes lose a borrow or a signal, `gates` runs the `kabic check` commands, every `scripts/check_*.cs` it finds and `dotnet format --verify-no-changes`, which holds the C# to `.editorconfig`, generated files included, `docs` generates the reference pages and builds the site with DocFX into `build/docs-site`, failing on
+a warning such as a link to a section that does not exist, and `visual` is described below. With no stage it runs those seven in that order and prints each step's time. `--keep-going` does not stop at the first failing step. Each stage runs alone when it is the only one named.
 
 Three more stages exist for the Windows target and are run only when named: `cross-windows` builds it, `test-windows` runs its Zig tests under Wine, and `test-managed-windows` builds each project under `tests/csharp/` against the Windows libraries and runs its assembly under Wine with the Windows .NET SDK. `scripts/ci_local.cs -- --windows` runs the three inside the image `scripts/ci/Dockerfile.wine` describes, which is where Wine and that SDK come from.
 
@@ -63,7 +64,7 @@ read no compiler or linker output, so the answer cannot differ by runner.
 The job builds the image `scripts/ci/Dockerfile` describes, a base pinned by digest with packages from
 one apt snapshot, and runs `verify.cs -- build visual` inside it. `scripts/visual.cs` runs each capture
 example with the image's lavapipe software Vulkan driver, and compares the PNG it writes, texel by texel
-and with no tolerance, against the one of the same name under `golden/linux-lavapipe/`. The pinned driver
+and with no tolerance, against the one of the same name under `tests/visual/golden/linux-lavapipe/`. The pinned driver
 is what makes an exact comparison hold: another driver rounds differently, so the script
 refuses to run where lavapipe is not installed. A failure uploads `build/visual` as an artifact, with the images that were drawn.
 `scripts/ci_local.cs -- --update-golden` records the goldens from the same image.
@@ -75,7 +76,7 @@ starts `c_demo_16 --renderdoc` through the `renderdoccmd` the native build fetch
 on the same lavapipe driver, with the Vulkan layer manifest the build wrote beside it. The example then
 draws into a render target that has RenderDoc capture its last frame. The script converts the capture
 to XML with `renderdoccmd convert`, collects the debug labels the frame's passes were recorded under,
-sorts them, and compares the list against `golden/linux-lavapipe/c_demo_16.passes`. The list is sorted
+sorts them, and compares the list against `tests/visual/golden/linux-lavapipe/c_demo_16.passes`. The list is sorted
 because passes record on several workers at once, so their order in the capture file varies between
 runs. The capture stays in `build/capture/linux-lavapipe/`, where RenderDoc opens it; `--update` records
 the list.

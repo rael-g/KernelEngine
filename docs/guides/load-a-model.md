@@ -22,5 +22,5 @@ name and its mesh. The loaded data is disposed once the nodes exist.
 
 ```bash
 zig build --prefix build/native --global-cache-dir build/zig-global
-LD_LIBRARY_PATH=build/native/lib dotnet run --project examples/csharp/12_asset_loading
+dotnet run --project examples/csharp/12_asset_loading
 ```

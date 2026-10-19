@@ -1,16 +1,11 @@
-//! Loads a TOML file into a configuration through the setter slots of its contract.
+//! A configuration source that loads a TOML file into a configuration through the setter slots of
+//! its contract.
 
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
-const toml = @cImport({
-    @cInclude("stdio.h");
-    @cInclude("toml.h");
-});
-const ke = @cImport({
-    @cInclude("kernel_engine/common/error.h");
-    @cInclude("kernel_engine/configuration/configuration.h");
-});
+const toml = @import("c");
+const ke = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -38,7 +33,7 @@ fn setScalar(cfg: [*c]ke.ke_configuration, section: [:0]const u8, key: [*c]const
     return true;
 }
 
-/// Recursive; `ke_configuration_toml_load` makes the first call. A failed write or a failed section
+/// Recursive; `load` makes the first call. A failed write or a failed section
 /// allocation returns false at once, and writes already made are not undone. The section path of
 /// a sub-table is freed when its recursive call returns.
 fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:0]const u8, out_error: ?*?*ke.ke_error) bool {
@@ -70,14 +65,18 @@ fn walkTable(cfg: [*c]ke.ke_configuration, tab: ?*toml.toml_table_t, section: [:
     return true;
 }
 
-/// The only export of this plugin. A file that cannot be opened returns true with nothing written.
-/// A parse error returns false before any write, so the configuration is left unchanged. Each
-/// table becomes a section named by its path joined with dots, arrays are skipped, and every other
-/// key is written through the setter slots as an integer, a double, a boolean or a string, tried in
-/// that order. The first failed write stops the walk and the writes before it stay. A null
-/// configuration or path is an invalid-argument error. Nothing is kept between calls.
-export fn ke_configuration_toml_load(cfg: [*c]ke.ke_configuration, path: [*c]const u8, out_error: ?*?*ke.ke_error) bool {
-    if (cfg == null or path == null) {
+/// The state behind the source the factory returns; it holds nothing but the vtable, since a load
+/// keeps nothing between calls.
+const State = struct {
+    api: ke.ke_configuration_source,
+};
+
+/// Slot `load`. A file that cannot be opened returns true with nothing written. A parse error
+/// returns false before any write, so the configuration is left unchanged. The first failed write
+/// stops the walk and the writes before it stay. A null source, configuration or path is an
+/// invalid-argument error.
+fn load(self: [*c]ke.ke_configuration_source, cfg: [*c]ke.ke_configuration, path: [*c]const u8, out_error: ?*?*ke.ke_error) callconv(.c) bool {
+    if (self == null or cfg == null or path == null) {
         setErr(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "invalid argument", @src());
         return false;
     }
@@ -94,6 +93,28 @@ export fn ke_configuration_toml_load(cfg: [*c]ke.ke_configuration, path: [*c]con
     defer toml.toml_free(root);
 
     return walkTable(cfg, root, "", out_error);
+}
+
+fn stateOf(self: [*c]ke.ke_configuration_source) *State {
+    return @fieldParentPtr("api", @as(*ke.ke_configuration_source, @ptrCast(self)));
+}
+
+fn destroy(self: [*c]ke.ke_configuration_source) callconv(.c) void {
+    if (self == null) return;
+    gpa.destroy(stateOf(self));
+}
+
+/// The factory. Fails with out of memory, returning the zeroed handle, when the state cannot be
+/// allocated.
+export fn ke_configuration_toml_create(out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_configuration_source_handle {
+    const s = gpa.create(State) catch {
+        setErr(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "configuration toml: state allocation failed", @src());
+        return std.mem.zeroes(ke.ke_configuration_source_handle);
+    };
+    s.* = .{ .api = std.mem.zeroes(ke.ke_configuration_source) };
+    s.api.handle = s;
+    s.api.load = load;
+    return .{ .ref = &s.api, .destroy = destroy };
 }
 
 const RecVal = union(enum) { int: i64, double: f64, boolean: bool, string: [:0]u8 };
@@ -132,6 +153,12 @@ fn mockSetBool(_: [*c]ke.ke_configuration, s: [*c]const u8, k: [*c]const u8, v: 
 fn mockSetString(_: [*c]ke.ke_configuration, s: [*c]const u8, k: [*c]const u8, v: [*c]const u8, _: ?*?*ke.ke_error) callconv(.c) bool {
     recPush(s, k, RecVal{ .string = gpa.dupeZ(u8, std.mem.span(v)) catch unreachable });
     return true;
+}
+
+fn testLoad(cfg: *ke.ke_configuration, path: [*c]const u8, out_error: ?*?*ke.ke_error) bool {
+    const h = ke_configuration_toml_create(null);
+    defer h.destroy.?(h.ref);
+    return h.ref.*.load.?(h.ref, cfg, path, out_error);
 }
 
 fn mockConfig() ke.ke_configuration {
@@ -189,7 +216,7 @@ test "loads typed scalars per section" {
     defer _ = toml.remove(path);
 
     var cfg = mockConfig();
-    try std.testing.expect(ke_configuration_toml_load(&cfg, path, null));
+    try std.testing.expect(testLoad(&cfg, path, null));
 
     try std.testing.expectEqual(@as(?i64, 2048), findInt("shadow", "resolution"));
 
@@ -224,14 +251,14 @@ test "dotted sub-tables flatten to dotted section names" {
     defer _ = toml.remove(path);
 
     var cfg = mockConfig();
-    try std.testing.expect(ke_configuration_toml_load(&cfg, path, null));
+    try std.testing.expect(testLoad(&cfg, path, null));
     try std.testing.expectEqual(@as(?i64, 4), findInt("shadow.cascade", "count"));
 }
 
 test "missing file is not an error and writes nothing" {
     defer clearRecs();
     var cfg = mockConfig();
-    try std.testing.expect(ke_configuration_toml_load(&cfg, "does/not/exist/Project.toml", null));
+    try std.testing.expect(testLoad(&cfg, "does/not/exist/Project.toml", null));
     try std.testing.expectEqual(@as(usize, 0), g_recs.items.len);
 }
 
@@ -242,14 +269,17 @@ test "parse error returns false" {
     defer _ = toml.remove(path);
 
     var cfg = mockConfig();
-    try std.testing.expect(!ke_configuration_toml_load(&cfg, path, null));
+    try std.testing.expect(!testLoad(&cfg, path, null));
 }
 
 test "null args rejected" {
     defer clearRecs();
     var cfg = mockConfig();
-    try std.testing.expect(!ke_configuration_toml_load(null, "x", null));
-    try std.testing.expect(!ke_configuration_toml_load(&cfg, null, null));
+    const h = ke_configuration_toml_create(null);
+    defer h.destroy.?(h.ref);
+    try std.testing.expect(!h.ref.*.load.?(null, &cfg, "x", null));
+    try std.testing.expect(!h.ref.*.load.?(h.ref, null, "x", null));
+    try std.testing.expect(!h.ref.*.load.?(h.ref, &cfg, null, null));
 }
 
 test "loading a file and clearing the recorded values leaves no block allocated" {
@@ -264,7 +294,7 @@ test "loading a file and clearing the recorded values leaves no block allocated"
     defer _ = toml.remove(path);
 
     var cfg = mockConfig();
-    try std.testing.expect(ke_configuration_toml_load(&cfg, path, null));
+    try std.testing.expect(testLoad(&cfg, path, null));
     clearRecs();
     try heap.expectNoLeaks();
 }

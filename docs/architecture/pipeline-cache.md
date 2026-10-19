@@ -35,8 +35,7 @@ outstanding; the callback has then already run when the request returns.
 
 ## What the parts agree on without a contract
 
-- The vertex layout is part of the key by the address of its array, not by what it holds. A
-  pass that wants its requests to share an entry keeps its layout in storage that outlives the
-  requests.
+- The vertex layout is part of the key by what its array holds, not by where it lives, so two
+  requests with equal layouts share an entry wherever each keeps its array.
 - The fallback replaces the fragment stage with a generated shader whose entry point is
   "fs_main" and which writes magenta to every colour target of the request.

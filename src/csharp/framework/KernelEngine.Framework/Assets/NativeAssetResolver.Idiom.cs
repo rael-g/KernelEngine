@@ -1,4 +1,5 @@
 using System.Text;
+
 using KernelEngine.Asset;
 using KernelEngine.Asset.Native;
 using KernelEngine.Common;
@@ -40,7 +41,7 @@ public unsafe partial class NativeAssetResolver
     {
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
         ke_image_loader* imagePtr = imageLoader is not null ? imageLoader.Native : null;
-        ke_font_loader*  fontPtr  = fontLoader  is not null ? fontLoader.Native  : null;
+        ke_font_loader* fontPtr = fontLoader is not null ? fontLoader.Native : null;
         fixed (byte* rootPtr = rootBytes)
         {
             ke_error* err = null;

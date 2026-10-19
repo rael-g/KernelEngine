@@ -5,7 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const c = @import("cimport.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
@@ -208,7 +208,7 @@ const Fixture = struct {
         self.view_space.orthographic = &fakeOrthographic;
         self.view_space.perspective = &fakePerspective;
         self.view_space.view_from_transform = &fakeViewFromTransform;
-        self.clip = .{ .z_zero_to_one = 1, .y_flip = 1, .clip_left_handed = 0 };
+        self.clip = .{ .z_zero_to_one = true, .y_flip = true };
         self.handle = ke_render_camera_create(&self.view_space, &self.clip, null);
     }
 
@@ -277,12 +277,12 @@ test "projections are built in the clip convention the camera was created with" 
     var f: Fixture = undefined;
     f.init();
     defer f.deinit();
-    f.clip.y_flip = 0;
+    f.clip.y_flip = false;
     var cam = makeCamera(60, false, 5);
     var proj: c.ke_mat4 = undefined;
     f.api().projection.?(f.api(), &cam, 1, &proj);
 
-    try testing.expectEqual(@as(u8, 1), perspective_call.clip_seen.y_flip);
+    try testing.expect(perspective_call.clip_seen.y_flip);
 }
 
 test "the view is the view space's view of the camera's world transform" {

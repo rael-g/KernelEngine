@@ -1,17 +1,18 @@
-﻿using KernelEngine.Audio.MiniAudio;
+﻿using KernelEngine.Audio;
+using KernelEngine.Audio.MiniAudio;
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
+using KernelEngine.Input;
+using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
 using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window;
-using KernelEngine.Logger;
-using KernelEngine.Audio;
-using KernelEngine.Input;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var beepPath = WriteSineWav(440, durationMs: 150);
 var bassPath = WriteSineWav(220, durationMs: 500);
@@ -33,15 +34,15 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Features: miniaudio, sine_synth, edge_keys");
 
         var audio = sp.GetRequiredService<IAudio>();
-        var beep  = audio.LoadSound(beepPath);
-        var bass  = audio.LoadSound(bassPath);
+        var beep = audio.LoadSound(beepPath);
+        var bass = audio.LoadSound(bassPath);
         Console.WriteLine($"[Audio] beep={beep.Value} bass={bass.Value}");
 
         tree.AddNode(new AudioController(audio, beep, bass), "AudioController");
     }));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
@@ -67,11 +68,11 @@ static string WriteSineWav(int frequency, int durationMs)
 {
     const int sampleRate = 44100;
     int numSamples = sampleRate * durationMs / 1000;
-    int dataSize   = numSamples * 2;
+    int dataSize = numSamples * 2;
 
     var path = Path.Combine(Path.GetTempPath(), $"ke_audio_{frequency}hz_{durationMs}ms.wav");
     using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
-    using var w  = new BinaryWriter(fs);
+    using var w = new BinaryWriter(fs);
     w.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
     w.Write(36 + dataSize);
     w.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
@@ -88,9 +89,9 @@ static string WriteSineWav(int frequency, int durationMs)
     double envSamples = sampleRate * 0.010;
     for (int i = 0; i < numSamples; i++)
     {
-        double t   = (double)i / sampleRate;
+        double t = (double)i / sampleRate;
         double env = Math.Min(1.0, Math.Min(i / envSamples, (numSamples - i) / envSamples));
-        short  s   = (short)(env * 8000 * Math.Sin(2 * Math.PI * frequency * t));
+        short s = (short)(env * 8000 * Math.Sin(2 * Math.PI * frequency * t));
         w.Write(s);
     }
     return path;
@@ -98,11 +99,11 @@ static string WriteSineWav(int frequency, int durationMs)
 
 sealed class AudioController : Node
 {
-    private const int KeySpace  = 32;
-    private const int KeyL      = 76;
+    private const int KeySpace = 32;
+    private const int KeyL = 76;
     private const int KeyEscape = 256;
 
-    private readonly IAudio      _audio;
+    private readonly IAudio _audio;
     private readonly SoundHandle _beep;
     private readonly SoundHandle _bass;
 
@@ -114,8 +115,8 @@ sealed class AudioController : Node
     public AudioController(IAudio audio, SoundHandle beep, SoundHandle bass)
     {
         _audio = audio;
-        _beep  = beep;
-        _bass  = bass;
+        _beep = beep;
+        _bass = bass;
     }
 
     protected override bool HasBehavior => true;
@@ -123,8 +124,8 @@ sealed class AudioController : Node
     protected override void OnUpdate(in View view)
     {
         bool space = view.IsKeyDown(KeySpace);
-        bool l     = view.IsKeyDown(KeyL);
-        bool esc   = view.IsKeyDown(KeyEscape);
+        bool l = view.IsKeyDown(KeyL);
+        bool esc = view.IsKeyDown(KeyEscape);
 
         if (space && !_prevSpace)
         {
@@ -148,7 +149,7 @@ sealed class AudioController : Node
         if (esc && !_prevEsc) Environment.Exit(0);
 
         _prevSpace = space;
-        _prevL     = l;
-        _prevEsc   = esc;
+        _prevL = l;
+        _prevEsc = esc;
     }
 }

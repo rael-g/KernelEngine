@@ -16,19 +16,21 @@ public static class Serialization
     public static JsonObject ToJson(this ApiModel m)
     {
         var json = new JsonObject
-    {
-        ["enums"] = new JsonArray(m.Enums.Select(e => (JsonNode)e.ToJson()).ToArray()),
-        ["structs"] = new JsonArray(m.Structs.Where(s => !s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
-        ["vtables"] = new JsonArray(m.Structs.Where(s => s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
-        ["functions"] = new JsonArray(m.Functions.Select(f => (JsonNode)f.ToJson()).ToArray()),
-        ["callbacks"] = new JsonArray(m.Callbacks.Select(c => (JsonNode)c.ToJson()).ToArray()),
-        ["type_aliases"] = m.TypeAliases.Aggregate(new JsonObject(),
+        {
+            ["enums"] = new JsonArray(m.Enums.Select(e => (JsonNode)e.ToJson()).ToArray()),
+            ["structs"] = new JsonArray(m.Structs.Where(s => !s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
+            ["vtables"] = new JsonArray(m.Structs.Where(s => s.IsVtable).Select(s => (JsonNode)s.ToJson()).ToArray()),
+            ["functions"] = new JsonArray(m.Functions.Select(f => (JsonNode)f.ToJson()).ToArray()),
+            ["callbacks"] = new JsonArray(m.Callbacks.Select(c => (JsonNode)c.ToJson()).ToArray()),
+            ["type_aliases"] = m.TypeAliases.Aggregate(new JsonObject(),
             (o, kv) => { o[kv.Key] = kv.Value; return o; }),
-    };
+        };
         if (m.Variables.Count > 0)
             json["variables"] = new JsonArray(m.Variables.Select(v => (JsonNode)new JsonObject
             {
-                ["name"] = v.Name, ["type"] = v.Type, ["doc"] = v.Doc,
+                ["name"] = v.Name,
+                ["type"] = v.Type,
+                ["doc"] = v.Doc,
             }).ToArray());
         return json;
     }

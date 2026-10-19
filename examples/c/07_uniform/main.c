@@ -7,8 +7,12 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 
-#include "rotate_vs_wgsl.h"
-#include "rotate_fs_wgsl.h"
+static const char rotate_vs_wgsl[] = {
+#embed "rotate_vs.wgsl"
+    , 0};
+static const char rotate_fs_wgsl[] = {
+#embed "rotate_fs.wgsl"
+    , 0};
 
 #include <math.h>
 #include <stdio.h>
@@ -58,7 +62,7 @@ int main(void)
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device create failed", err);
 
-    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, &err);
+    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &err);
     if (!target.ref) die("render target create failed", err);
 
     float uniform_data[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -81,8 +85,8 @@ int main(void)
         .entry_count = 1,
         .entries     = &bgl_entry,
     };
-    ke_gpu_bind_group_layout bgl = gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params);
-    if (bgl == KE_GPU_INVALID_HANDLE) die("bind group layout creation failed", NULL);
+    ke_gpu_bind_group_layout bgl = gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params, &err);
+    if (bgl == KE_GPU_INVALID_HANDLE) die("bind group layout creation failed", err);
 
     ke_gpu_bind_group_entry bg_entry = {
         .binding      = 0,
@@ -144,8 +148,8 @@ int main(void)
         .bind_group_layout_count = 1,
         .alpha_to_coverage_enabled = 0,
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline creation failed", NULL);
+    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
+    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline creation failed", err);
 
     gpu.ref->destroy_shader_module(gpu.ref, vs);
     gpu.ref->destroy_shader_module(gpu.ref, fs);
@@ -182,19 +186,25 @@ int main(void)
             .depth_stencil_attachment = NULL,
         };
 
-        ke_gpu_command_encoder *enc = gpu.ref->create_command_encoder(gpu.ref, NULL);
+        ke_gpu_command_encoder_handle enc_handle = gpu.ref->create_command_encoder(gpu.ref, NULL, &err);
+
+        if (!enc_handle.ref) die("command encoder creation failed", err);
+
+        ke_gpu_command_encoder *enc = enc_handle.ref;
         ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
         rp->set_pipeline(rp, pipeline);
         rp->set_bind_group(rp, 0, bg, NULL, 0);
         rp->draw(rp, 3, 1, 0, 0);
         rp->end(rp);
 
-        ke_gpu_command_buffer *cmd = enc->finish(enc);
-        enc->destroy(enc);
+        ke_gpu_command_buffer_handle cmd = enc->finish(enc, &err);
 
-        ke_gpu_command_buffer *cmds[] = { cmd };
+        if (!cmd.ref) die("command encoder finish failed", err);
+        enc_handle.destroy(enc);
+
+        ke_gpu_command_buffer *cmds[] = { cmd.ref };
         gpu.ref->queue_submit(gpu.ref, q, cmds, 1);
-        cmd->destroy(cmd);
+        cmd.destroy(cmd.ref);
         if (!target.ref->present(target.ref, &err)) die("present failed", err);
         gpu.ref->queue_poll(gpu.ref, q);
     }

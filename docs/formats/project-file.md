@@ -66,10 +66,11 @@ It finds the file by walking up from the current directory (or `--project`) for 
 
 Pong's and the shadow-map example's Project files (`examples/csharp/games/pong/Project`,
 `examples/csharp/06_shadow_map/Project`) carry keys no code reads: `project.name`,
-`runtime.renderer.shader_path`, `runtime.renderer.vsync`, `render.ambient_light` (an array, which
+`runtime.renderer.shader_path`, `render.ambient_light` (an array, which
 the loader skips in any case), and Pong's `input.actions` (read only by the `ke` tool above;
 `AddInputActions` takes its path as an argument and defaults to `actions.input` next to the
 executable, `src/csharp/framework/KernelEngine.Framework/Input/InputActionsServiceCollectionExtensions.cs:13-21`).
-Grep for a section or key string under `src/` before assuming a key has an effect:
-`grep -rn '"runtime.renderer"\|"vsync"\|"shader_path"' src --include='*.cs' --include='*.zig'`
-finds no reader.
+Grep for a section or key string under `src/` before assuming a key has an effect.
+
+`[runtime.renderer] vsync`, true when absent, is read by `WebgpuRenderModule.OnLoad`: false creates
+the window target with `KE_GPU_PRESENT_MODE_IMMEDIATE`, true with `KE_GPU_PRESENT_MODE_FIFO`.

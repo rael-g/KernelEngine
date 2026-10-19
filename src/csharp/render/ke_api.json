@@ -31,11 +31,99 @@
           "doc": null
         }
       ]
+    },
+    {
+      "name": "ke_render_stage",
+      "doc": "Where a pass that works on the frame\u0027s color runs. The stages run in this order, and the passes of one stage in the order they joined. Stages up to KE_RENDER_STAGE_HDR_POST draw in the service\u0027s color format, the later ones in the backbuffer\u0027s.",
+      "values": [
+        {
+          "name": "KE_RENDER_STAGE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_SKY",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_TRANSPARENT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_HDR_POST",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_TONEMAP",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_LDR_POST",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_OVERLAY",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_COUNT",
+          "value": 7,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_chain_mode",
+      "doc": "What a pass in the chain does with the frame\u0027s color.",
+      "values": [
+        {
+          "name": "KE_RENDER_CHAIN_DRAW_OVER",
+          "value": 0,
+          "doc": "Draws over the current color."
+        },
+        {
+          "name": "KE_RENDER_CHAIN_SAMPLE_OVER",
+          "value": 1,
+          "doc": "Samples the current color, through the context\u0027s color_source, and draws over a copy of it, which becomes the current color."
+        },
+        {
+          "name": "KE_RENDER_CHAIN_REPLACE",
+          "value": 2,
+          "doc": "Samples the current color and writes every texel of a new one, which becomes the current color."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_depth_mode",
+      "doc": "How a pass\u0027s render pass uses the frame\u0027s depth.",
+      "values": [
+        {
+          "name": "KE_RENDER_DEPTH_NONE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_DEPTH_TEST",
+          "value": 1,
+          "doc": "Attached and tested against; the pass\u0027s pipeline does not write it."
+        },
+        {
+          "name": "KE_RENDER_DEPTH_WRITE",
+          "value": 2,
+          "doc": "Attached, tested against and written."
+        }
+      ]
     }
   ],
   "structs": [
     {
-      "name": "ke_render_resource_desc",
+      "name": "ke_render_resource_params",
       "doc": null,
       "tags": [],
       "fields": [
@@ -96,8 +184,106 @@
       ]
     },
     {
+      "name": "ke_render_frame_globals",
+      "doc": "What every shader reads about the frame being drawn, under the parameter \u0060ke_frame\u0060. Matrices are stored the way the math library stores them.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "view",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "view_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "inv_view_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "inv_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "camera_pos",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "World position of the camera in xyz; w is 1."
+        },
+        {
+          "name": "viewport",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Backbuffer width and height in pixels in xy; zw are 0."
+        },
+        {
+          "name": "time",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the first frame."
+        },
+        {
+          "name": "dt",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the previous frame."
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_lighting",
+      "doc": "The scene\u0027s light that every lit shader reads, under the parameter \u0060ke_lighting\u0060.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Direction the directional light travels in xyz; w is 1 when the scene has one, else 0."
+        },
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Color of the directional light in rgb; a is its intensity."
+        },
+        {
+          "name": "ambient",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Ambient color in rgb; a is 0."
+        }
+      ]
+    },
+    {
       "name": "ke_render_pass_io",
-      "doc": "A pass\u0027s declared resource I/O by name.",
+      "doc": "A pass\u0027s declared resource I/O. Every write is cleared when the pass\u0027s render pass opens. A pass in the chain draws into the frame\u0027s color as its first color attachment, before its writes.",
       "tags": [],
       "fields": [
         {
@@ -131,16 +317,16 @@
           "doc": null
         },
         {
-          "name": "cmd_slot",
-          "type": "uint32_t",
+          "name": "chain",
+          "type": "ke_render_chain_link",
           "tags": [],
-          "doc": "The frame command-buffer slot this pass records into."
+          "doc": "The pass\u0027s link, or KE_RENDER_CHAIN_NONE for a pass outside the chain."
         },
         {
-          "name": "load",
-          "type": "uint32_t",
+          "name": "depth",
+          "type": "ke_render_depth_mode",
           "tags": [],
-          "doc": "When non-zero, color attachments load their existing contents instead of clearing."
+          "doc": "How the frame\u0027s depth is attached; ignored when a write is already a depth resource."
         }
       ]
     }
@@ -167,8 +353,8 @@
           "return_doc": "The tag-component cid to place in a pass\u0027s access_list.",
           "params": [
             {
-              "name": "desc",
-              "type": "const ke_render_resource_desc *",
+              "name": "params",
+              "type": "const ke_render_resource_params *",
               "tags": [],
               "doc": null
             },
@@ -266,40 +452,6 @@
           "receiver": "struct ke_render_service *"
         },
         {
-          "name": "import_bind_group",
-          "returns": "ke_component_id",
-          "tags": [],
-          "doc": "Publishes an externally-owned GPU bind group and its layout under \u0060name\u0060. The layout is available at setup; the instance is fetched at draw time via resource_bind_group.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "bg",
-              "type": "ke_gpu_bind_group",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "layout",
-              "type": "ke_gpu_bind_group_layout",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
           "name": "cid",
           "returns": "ke_component_id",
           "tags": [],
@@ -349,9 +501,9 @@
         },
         {
           "name": "begin_frame",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
-          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022) and clears the per-pass command slot table. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.",
+          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022), clears the per-pass command slot table, and clears the frame\u0027s color and depth. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.",
           "return_doc": null,
           "params": [
             {
@@ -365,9 +517,9 @@
         },
         {
           "name": "end_frame",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
-          "doc": "Submits the populated command slots in ascending slot order, then presents the render target. Returns false when no frame began, or with out_error set when presenting failed.",
+          "doc": "Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame\u0027s color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Returns false when no frame began, or with out_error set when presenting failed.",
           "return_doc": null,
           "params": [
             {
@@ -429,7 +581,7 @@
         },
         {
           "name": "mesh_buffers",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [
             "try"
           ],
@@ -633,19 +785,10 @@
           "receiver": "struct ke_render_service *"
         },
         {
-          "name": "material_layout",
-          "returns": "ke_gpu_bind_group_layout",
+          "name": "material_binding",
+          "returns": "ke_render_material_binding",
           "tags": [],
-          "doc": "The per-material bind-group layout (descriptor set 1) a pipeline must declare so its set-1 bind groups (from material_bind_group) are valid.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "material_bind_group",
-          "returns": "ke_gpu_bind_group",
-          "tags": [],
-          "doc": "The set-1 bind group for a material handle; an unknown handle resolves to the built-in white material (handle 0).",
+          "doc": "What the service\u0027s resource binder holds for a material handle, the argument a pass gives its bind_material; an unknown handle resolves to the built-in white material.",
           "return_doc": null,
           "params": [
             {
@@ -742,15 +885,6 @@
           "receiver": "struct ke_render_service *"
         },
         {
-          "name": "sampler",
-          "returns": "ke_gpu_sampler",
-          "tags": [],
-          "doc": "The shared filtering sampler the core creates (linear, repeat).",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_render_service *"
-        },
-        {
           "name": "resource_view",
           "returns": "ke_gpu_texture_view",
           "tags": [],
@@ -803,38 +937,6 @@
           "returns": "uint64_t",
           "tags": [],
           "doc": "The size (bytes) of the buffer published under \u0060name\u0060.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_bind_group",
-          "returns": "ke_gpu_bind_group",
-          "tags": [],
-          "doc": "The GPU bind group published under \u0060name\u0060 via import_bind_group.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_bind_group_layout",
-          "returns": "ke_gpu_bind_group_layout",
-          "tags": [],
-          "doc": "The layout the named bind group was built from (for a consumer\u0027s own pipeline creation).",
           "return_doc": null,
           "params": [
             {
@@ -1036,7 +1138,7 @@
         },
         {
           "name": "try_get_mesh",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [
             "try"
           ],
@@ -1064,7 +1166,7 @@
         },
         {
           "name": "try_get_texture",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [
             "try"
           ],
@@ -1092,7 +1194,7 @@
         },
         {
           "name": "try_get_material",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [
             "try"
           ],
@@ -1156,12 +1258,156 @@
           "receiver": "struct ke_render_service *"
         },
         {
+          "name": "set_frame_globals",
+          "returns": "void",
+          "tags": [],
+          "doc": "Replaces the frame globals and records their upload; a shader reads them as \u0060ke_frame\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "globals",
+              "type": "const ke_render_frame_globals *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "frame_globals",
+          "returns": "const ke_render_frame_globals *",
+          "tags": [],
+          "doc": "The frame globals last set, zero before the first.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "set_lighting",
+          "returns": "void",
+          "tags": [],
+          "doc": "Replaces the scene\u0027s light and records its upload; a shader reads it as \u0060ke_lighting\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "lighting",
+              "type": "const ke_render_lighting *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "lighting",
+          "returns": "const ke_render_lighting *",
+          "tags": [],
+          "doc": "The scene\u0027s light last set, zero before the first.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_binder",
+          "returns": "ke_render_resource_binder *",
+          "tags": [],
+          "doc": "The resource binder the service was created with, through which a pass brings its resources to its shaders; the service has given it \u0060ke_frame\u0060, \u0060ke_lighting\u0060 and the \u0060ke_samp_*\u0060 samplers.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
           "name": "backbuffer_format",
           "returns": "ke_gpu_texture_format",
           "tags": [],
           "doc": "Texel format of the backbuffer, the format a pipeline drawing into it declares.",
           "return_doc": null,
           "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of the named texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_generation",
+          "returns": "uint32_t",
+          "tags": [],
+          "doc": "Counts the times the targets declared relative to the backbuffer were recreated, which \u0060begin_frame\u0060 does when the backbuffer changes size. A pass that keeps something made from a declared target\u0027s view, a bind group for instance, rebuilds it when the count changes.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "join_chain",
+          "returns": "ke_render_chain_link",
+          "tags": [],
+          "doc": "Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.",
+          "return_doc": "The link, or KE_RENDER_CHAIN_NONE with KE_ERROR_INVALID_ARGUMENT for a stage or mode out of range.",
+          "params": [
+            {
+              "name": "stage",
+              "type": "ke_render_stage",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "mode",
+              "type": "ke_render_chain_mode",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "leave_chain",
+          "returns": "void",
+          "tags": [],
+          "doc": "Gives the place back. An unknown link is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "link",
+              "type": "ke_render_chain_link",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "chain_format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of the color a pass of stage draws into, the format its pipeline declares.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "stage",
+              "type": "ke_render_stage",
+              "tags": [],
+              "doc": null
+            }
+          ],
           "receiver": "struct ke_render_service *"
         }
       ]
@@ -1210,6 +1456,10 @@
     "ke_gpu_bind_group_layout": "uint64_t",
     "ke_gpu_bind_group": "uint64_t",
     "ke_gpu_queue": "uint64_t",
-    "ke_gpu_fence": "uint64_t"
+    "ke_gpu_fence": "uint64_t",
+    "ke_render_shader_layout": "uint64_t",
+    "ke_render_resource_set": "uint64_t",
+    "ke_render_material_binding": "uint64_t",
+    "ke_render_chain_link": "uint32_t"
   }
 }

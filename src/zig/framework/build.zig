@@ -1,11 +1,11 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
 
-    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "path to the shared vendored tomlc99 dir") orelse
-        b.pathJoin(&.{ b.build_root.path.?, "..", "common", "third_party", "tomlc99" });
+    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "dir holding toml.c and toml.h, fetched by the root build.zig.zon") orelse @panic("-Dtomlc99-dir required");
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
     const component_fields_src = b.option([]const u8, "component-fields-src", "path to the shared Zig component_fields.zig") orelse @panic("-Dcomponent-fields-src required");
@@ -41,12 +41,15 @@ pub fn build(b: *std.Build) void {
     }
     mod.addIncludePath(b.path("include"));
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     addTomlc99(b, mod, tomlc99_dir);
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
     mod.addImport("kerror", kerror_mod);
 
     mod.addCMacro("KE_FRAMEWORK_EXPORT", "");
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_framework",
         .root_module = mod,
@@ -84,6 +87,8 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }));
 
+        test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
+        test_mod.addImport("test_c", ke_common_build.cImports(b, test_mod, b.path("src/test_c.h")));
         const unit_tests = b.addTest(.{ .root_module = test_mod });
         test_step.dependOn(&b.addRunArtifact(unit_tests).step);
     }
@@ -93,6 +98,6 @@ pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
     mod.addIncludePath(.{ .cwd_relative = dir });
     mod.addCSourceFile(.{
         .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "toml.c" }) },
-        .flags = &.{"-fno-sanitize=undefined"},
+        .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" },
     });
 }

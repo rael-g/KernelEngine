@@ -1,5 +1,3 @@
-// ke.math.slang — utility math for shader authors.
-
 float remap(float v, float a, float b, float c, float d) {
     return c + (v - a) / (b - a) * (d - c);
 }

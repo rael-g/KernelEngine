@@ -1,9 +1,8 @@
 #ifndef KERNEL_ENGINE_INPUT_SNAPSHOT_H_
 #define KERNEL_ENGINE_INPUT_SNAPSHOT_H_
 
-#include <kernel_engine/common/types.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -47,6 +46,9 @@ extern "C"
         uint32_t mouse_buttons_down;
         uint32_t mouse_buttons_pressed;
         uint32_t mouse_buttons_released;
+
+        /** Events lost this frame because the event queue could not grow to hold them. */
+        uint32_t events_dropped;
 
     } ke_input_snapshot;
 

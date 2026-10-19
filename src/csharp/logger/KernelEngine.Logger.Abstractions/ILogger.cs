@@ -3,7 +3,11 @@
 /// <summary>Managed logger interface. Implementations dispatch to one or more <see cref="ILoggerSink"/>s.</summary>
 public interface ILogger
 {
-    void AddSink(ILoggerSink sink, LogLevel minLevel = LogLevel.Trace);
+    /// <summary>
+    /// Registers a sink to receive every subsequent event at or above its
+    /// <see cref="ILoggerSink.MinLevel"/>.
+    /// </summary>
+    void AddSink(ILoggerSink sink);
     void Log(LogLevel level, string tag, string message);
     void Trace(string tag, string message);
     void Debug(string tag, string message);

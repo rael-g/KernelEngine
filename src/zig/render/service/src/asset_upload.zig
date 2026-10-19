@@ -45,7 +45,7 @@ pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*
         .initial_data = vertices,
         .size = vertices_size,
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (vbo == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
@@ -54,7 +54,7 @@ pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*
         .initial_data = @ptrCast(indices),
         .size = index_count * @sizeOf(u16),
         .usage = c.KE_GPU_BUFFER_USAGE_INDEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (ibo == c.KE_GPU_INVALID_HANDLE) {
         st.device.destroy_buffer.?(st.device, vbo);
@@ -73,13 +73,13 @@ pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*
 
 /// Writes the buffers and the index count of the mesh through the out-parameters. Returns zero and
 /// writes nothing when the handle no longer names a stored mesh.
-pub fn meshBuffers(self: [*c]c.ke_render_service, h: c.ke_mesh_handle, out_vbo: [*c]c.ke_gpu_buffer, out_ibo: [*c]c.ke_gpu_buffer, out_index_count: [*c]u32) callconv(.c) c.ke_bool {
+pub fn meshBuffers(self: [*c]c.ke_render_service, h: c.ke_mesh_handle, out_vbo: [*c]c.ke_gpu_buffer, out_ibo: [*c]c.ke_gpu_buffer, out_index_count: [*c]u32) callconv(.c) bool {
     const st = rc.coreOf(self);
-    const m = st.meshAt(h) orelse return 0;
+    const m = st.meshAt(h) orelse return false;
     out_vbo.* = m.vbo;
     out_ibo.* = m.ibo;
     out_index_count.* = m.index_count;
-    return 1;
+    return true;
 }
 
 /// Sets the color a color attachment is cleared to when its resource carries no clear value of
@@ -114,7 +114,7 @@ pub fn uploadTexture(self: [*c]c.ke_render_service, key: [*c]const u8, width: u3
         .sample_count = 1,
         .initial_data = rgba,
         .initial_data_size = width * height * 4,
-    });
+    }, out_error);
     if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
@@ -126,7 +126,11 @@ pub fn uploadTexture(self: [*c]c.ke_render_service, key: [*c]const u8, width: u3
         .mip_level_count = 1,
         .base_array_layer = 0,
         .array_layer_count = 1,
-    });
+    }, out_error);
+    if (view == c.KE_GPU_INVALID_HANDLE) {
+        st.device.destroy_texture.?(st.device, tex);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
 
     const bits = st.texture_store.insert(.{ .tex = tex, .view = view });
     if (bits == c.KE_HANDLE_NONE) {
@@ -163,7 +167,7 @@ pub fn uploadCubemap(self: [*c]c.ke_render_service, key: [*c]const u8, face_size
         .sample_count = 1,
         .initial_data = faces,
         .initial_data_size = face_size * face_size * 4 * 6,
-    });
+    }, out_error);
     if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
 
     const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
@@ -175,7 +179,11 @@ pub fn uploadCubemap(self: [*c]c.ke_render_service, key: [*c]const u8, face_size
         .mip_level_count = 1,
         .base_array_layer = 0,
         .array_layer_count = 6,
-    });
+    }, out_error);
+    if (view == c.KE_GPU_INVALID_HANDLE) {
+        st.device.destroy_texture.?(st.device, tex);
+        return .{ .bits = c.KE_HANDLE_NONE };
+    }
 
     const bits = st.texture_store.insert(.{ .tex = tex, .view = view });
     if (bits == c.KE_HANDLE_NONE) {
@@ -197,11 +205,6 @@ pub fn textureView(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callco
     return (st.textureAt(fallback) orelse return c.KE_GPU_INVALID_HANDLE).view;
 }
 
-/// Returns the sampler the material bind groups use.
-pub fn samplerOf(self: [*c]c.ke_render_service) callconv(.c) c.ke_gpu_sampler {
-    return rc.coreOf(self).sampler;
-}
-
 /// Returns the handle of the 1x1 white texture the service created at start.
 pub fn whiteTexture(self: [*c]c.ke_render_service) callconv(.c) c.ke_texture_handle {
     return rc.coreOf(self).white_texture_h;
@@ -211,16 +214,14 @@ fn srgbToLinear(cs: f32) f32 {
     return if (cs <= 0.04045) cs / 12.92 else std.math.pow(f32, (cs + 0.055) / 1.055, 2.4);
 }
 
-/// Packs the uniform from the arguments and builds the bind group against the material layout. The
-/// base color is converted from sRGB to linear. The alpha cutoff reaches the uniform only in the
-/// mask mode, while the stored record keeps the value as given. A shader name is copied into the
-/// record's fixed buffer: an empty name takes the default shader. An albedo or normal that names
-/// no stored texture is replaced by `white_texture_h` or `default_normal`, and the texture
-/// actually used is retained. A cache hit returns the cached handle. An empty or null key, or a
+/// Hands the material's data to the binder. The base color is converted from sRGB to linear. The
+/// alpha cutoff reaches the binder only in the mask mode, while the stored record keeps the value
+/// as given. A shader name is copied into the record's fixed buffer: an empty name takes the
+/// default shader. An albedo or normal that names no stored texture is replaced by
+/// `white_texture_h` or `default_normal`, and the texture actually used is retained. A cache hit returns the cached handle. An empty or null key, or a
 /// shader name that does not fit the buffer, fills the error with an invalid-argument error and
-/// returns the none handle. A buffer or bind group the device cannot create returns the none
-/// handle with the device's error, and a full store returns it without one; both destroy what was
-/// already made.
+/// returns the none handle. A material the binder cannot keep returns the none handle with the
+/// binder's error, and a full store returns it without one, giving the binder's back.
 pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_color: [*c]const f32, metallic: f32, roughness: f32, albedo: c.ke_texture_handle, normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
     const st = rc.coreOf(self);
     if (!keyValid(key)) {
@@ -239,46 +240,23 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
     const cached = tryCached(st.material_cache, key);
     if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
 
-    const gpu_alpha_cutoff: f32 = if (alpha_mode == c.KE_ALPHA_MODE_MASK) alpha_cutoff else 0.0;
-    const mat_data = [12]f32{
-        srgbToLinear(base_color[0]), srgbToLinear(base_color[1]), srgbToLinear(base_color[2]), base_color[3],
-        metallic,                    roughness,                   gpu_alpha_cutoff,            ior,
-        distortion_strength,         0.0,                         0.0,                         0.0,
-    };
-    const ubo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
-        .label = "material.uniform",
-        .initial_data = &mat_data,
-        .size = 48,
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
-    }, out_error);
-    if (ubo == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
-
     const alb: c.ke_texture_handle = if (st.textureAt(albedo) != null) albedo else st.white_texture_h;
     const nrm: c.ke_texture_handle = if (st.textureAt(normal) != null) normal else st.default_normal;
-    const alb_view = st.textureAt(alb).?.view;
-    const nrm_view = st.textureAt(nrm).?.view;
-
-    const entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = ubo, .buffer_offset = 0, .buffer_size = 48, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = alb_view, .sampler = 0 },
-        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = st.sampler },
-        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = nrm_view, .sampler = 0 },
+    const data = c.ke_render_material_data{
+        .base_color = .{ srgbToLinear(base_color[0]), srgbToLinear(base_color[1]), srgbToLinear(base_color[2]), base_color[3] },
+        .metallic = metallic,
+        .roughness = roughness,
+        .alpha_cutoff = if (alpha_mode == c.KE_ALPHA_MODE_MASK) alpha_cutoff else 0.0,
+        .ior = ior,
+        .distortion_strength = distortion_strength,
+        .albedo = st.textureAt(alb).?.view,
+        .normal_map = st.textureAt(nrm).?.view,
     };
-    const bg = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
-        .label = "material.bind_group",
-        .layout = st.material_bgl,
-        .entry_count = 4,
-        .entries = &entries,
-    }, out_error);
-    if (bg == c.KE_GPU_INVALID_HANDLE) {
-        st.device.destroy_buffer.?(st.device, ubo);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
+    const binding = st.binder.create_material.?(st.binder, &data, out_error);
+    if (binding == c.KE_RENDER_BINDING_INVALID) return .{ .bits = c.KE_HANDLE_NONE };
 
     const bits = st.material_store.insert(.{
-        .ubo = ubo,
-        .bind_group = bg,
+        .binding = binding,
         .alpha_mode = alpha_mode,
         .alpha_cutoff = alpha_cutoff,
         .shader = shader_buf,
@@ -286,8 +264,7 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
         .normal = nrm,
     });
     if (bits == c.KE_HANDLE_NONE) {
-        st.device.destroy_bind_group.?(st.device, bg);
-        st.device.destroy_buffer.?(st.device, ubo);
+        st.binder.destroy_material.?(st.binder, binding);
         return .{ .bits = c.KE_HANDLE_NONE };
     }
     _ = st.texture_cache.retain.?(st.texture_cache, alb.bits, null);
@@ -314,15 +291,10 @@ pub fn materialShader(self: [*c]c.ke_render_service, h: c.ke_material_handle) ca
     return @ptrCast(&rc.coreOf(self).materialAt(h).shader);
 }
 
-/// Returns the layout every material bind group is built against.
-pub fn materialLayout(self: [*c]c.ke_render_service) callconv(.c) c.ke_gpu_bind_group_layout {
-    return rc.coreOf(self).material_bgl;
-}
-
-/// Returns the bind group of the material; a handle that names no material answers with the
-/// default white material's.
-pub fn materialBindGroup(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) c.ke_gpu_bind_group {
-    return rc.coreOf(self).materialAt(h).bind_group;
+/// Returns what the binder holds for the material; a handle that names no material answers with
+/// the default white material's.
+pub fn materialBinding(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) c.ke_render_material_binding {
+    return rc.coreOf(self).materialAt(h).binding;
 }
 
 /// Adds a reference to the mesh in the mesh cache.
@@ -358,30 +330,30 @@ pub fn releaseMaterial(self: [*c]c.ke_render_service, h: c.ke_material_handle) c
 
 /// Looks the key up in the mesh cache without creating anything. Returns zero and leaves the
 /// out-parameter alone on a miss.
-pub fn tryGetMesh(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_mesh_handle) callconv(.c) c.ke_bool {
+pub fn tryGetMesh(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_mesh_handle) callconv(.c) bool {
     const st = rc.coreOf(self);
     var bits: c.ke_resource_handle = c.KE_HANDLE_NONE;
-    if (!st.mesh_cache.try_get_cached.?(st.mesh_cache, key, &bits)) return 0;
+    if (!st.mesh_cache.try_get_cached.?(st.mesh_cache, key, &bits)) return false;
     out.* = .{ .bits = bits };
-    return 1;
+    return true;
 }
 /// Looks the key up in the texture cache without creating anything. Returns zero and leaves the
 /// out-parameter alone on a miss.
-pub fn tryGetTexture(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_texture_handle) callconv(.c) c.ke_bool {
+pub fn tryGetTexture(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_texture_handle) callconv(.c) bool {
     const st = rc.coreOf(self);
     var bits: c.ke_resource_handle = c.KE_HANDLE_NONE;
-    if (!st.texture_cache.try_get_cached.?(st.texture_cache, key, &bits)) return 0;
+    if (!st.texture_cache.try_get_cached.?(st.texture_cache, key, &bits)) return false;
     out.* = .{ .bits = bits };
-    return 1;
+    return true;
 }
 /// Looks the key up in the material cache without creating anything. Returns zero and leaves
 /// the out-parameter alone on a miss.
-pub fn tryGetMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_material_handle) callconv(.c) c.ke_bool {
+pub fn tryGetMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, out: [*c]c.ke_material_handle) callconv(.c) bool {
     const st = rc.coreOf(self);
     var bits: c.ke_resource_handle = c.KE_HANDLE_NONE;
-    if (!st.material_cache.try_get_cached.?(st.material_cache, key, &bits)) return 0;
+    if (!st.material_cache.try_get_cached.?(st.material_cache, key, &bits)) return false;
     out.* = .{ .bits = bits };
-    return 1;
+    return true;
 }
 
 /// Runs from the mesh cache when the last reference goes. Removes the slot and destroys both
@@ -409,8 +381,7 @@ pub fn destroyTextureResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) ca
 pub fn destroyMaterialResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     const st: *rc.CoreState = @alignCast(@ptrCast(ctx));
     if (st.material_store.remove(handle)) |m| {
-        st.device.destroy_bind_group.?(st.device, m.bind_group);
-        st.device.destroy_buffer.?(st.device, m.ubo);
+        st.binder.destroy_material.?(st.binder, m.binding);
         _ = st.texture_cache.release.?(st.texture_cache, m.albedo.bits, null);
         _ = st.texture_cache.release.?(st.texture_cache, m.normal.bits, null);
     }

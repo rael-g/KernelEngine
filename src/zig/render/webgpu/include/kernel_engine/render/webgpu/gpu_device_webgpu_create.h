@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
+#define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -39,14 +40,14 @@ typedef struct ke_gpu_device_webgpu_params
     struct ke_logger    *logger;
     /// When non-zero, asks the underlying graphics API to validate every call, which takes
     /// effect only where that API's validation layers are installed.
-    ke_bool              enable_validation;
+    bool                 enable_validation;
     /// Optional, borrowed. When non-NULL, this device dispatches the compile of
     /// create_render_pipeline_async onto this scheduler's worker pool. When NULL,
     /// the compile runs synchronously and the callback is invoked before returning.
     struct ke_scheduler *scheduler;
     /// When non-zero, the labels and debug groups given through ke_gpu_device reach the
     /// underlying graphics API, where capture tools read them.
-    ke_bool              debug_labels;
+    bool                 debug_labels;
 } ke_gpu_device_webgpu_params;
 
 /**
@@ -60,4 +61,6 @@ ke_gpu_device_webgpu_create(const ke_gpu_device_webgpu_params *params,
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

@@ -4,9 +4,7 @@ const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
 
-const libc = @cImport({
-    @cInclude("stdio.h");
-});
+const shader_files = @import("shader_files").ShaderFiles(c);
 
 /// Any language the file does not list falls back to the WGSL extension.
 fn extForLanguage(lang: c.ke_gpu_shader_language) []const u8 {
@@ -59,28 +57,8 @@ pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke
         return st.shader_store.get(cached).?.*;
     }
 
-    const fp = libc.fopen(path.ptr, "rb") orelse {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_FOUND, "load_shader: shader file not found", @src().file, @intCast(@src().line), null);
-        return c.KE_GPU_INVALID_HANDLE;
-    };
-    defer _ = libc.fclose(fp);
-    _ = libc.fseek(fp, 0, libc.SEEK_END);
-    const size_signed = libc.ftell(fp);
-    _ = libc.fseek(fp, 0, libc.SEEK_SET);
-    if (size_signed < 0) {
-        c.ke_error_set(out_error, &c.KE_ERROR_IO, "load_shader: failed to size shader file", @src().file, @intCast(@src().line), null);
-        return c.KE_GPU_INVALID_HANDLE;
-    }
-    const size: usize = @intCast(size_signed);
-    const bytes = rc.gpa.alloc(u8, size) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "load_shader: shader buffer allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_GPU_INVALID_HANDLE;
-    };
+    const bytes = shader_files.read(rc.gpa, path, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
     defer rc.gpa.free(bytes);
-    if (libc.fread(bytes.ptr, 1, size, fp) != size) {
-        c.ke_error_set(out_error, &c.KE_ERROR_IO, "load_shader: failed to read shader file", @src().file, @intCast(@src().line), null);
-        return c.KE_GPU_INVALID_HANDLE;
-    }
 
     const module = st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
         .code = bytes.ptr,

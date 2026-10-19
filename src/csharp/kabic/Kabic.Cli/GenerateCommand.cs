@@ -1,5 +1,5 @@
-using Kabic.Pipeline;
 using Kabic.Conventions;
+using Kabic.Pipeline;
 
 namespace Kabic.Cli;
 
@@ -57,6 +57,17 @@ internal static class GenerateCommand
             Directory.CreateDirectory(Path.GetDirectoryName(kindsFile)!);
             File.WriteAllText(kindsFile, Generation.ErrorKinds(convention));
             Console.WriteLine("error kinds: regenerated");
+
+            if (convention.FieldTable is { ManagedOut: { } managedOut, NativeOut: { } nativeOut })
+            {
+                foreach (var (path, text) in new[] { (managedOut, Generation.ComponentLayout(convention)), (nativeOut, Generation.NativeFieldTable(convention)) })
+                {
+                    var file = Place(path);
+                    Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                    File.WriteAllText(file, text);
+                }
+                Console.WriteLine("component layout: regenerated");
+            }
         }
 
         return 0;

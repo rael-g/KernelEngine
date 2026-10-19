@@ -1,5 +1,6 @@
 ﻿
 using NSubstitute;
+
 using Xunit;
 
 namespace EngineTests;

@@ -34,14 +34,11 @@ public partial struct ke_gpu_capabilities
     [NativeTypeName("uint32_t")]
     public uint max_compute_workgroup_size_z;
 
-    [NativeTypeName("ke_bool")]
-    public byte supports_bindless;
+    public bool supports_bindless;
 
-    [NativeTypeName("ke_bool")]
-    public byte supports_mesh_shaders;
+    public bool supports_mesh_shaders;
 
-    [NativeTypeName("ke_bool")]
-    public byte supports_ray_tracing;
+    public bool supports_ray_tracing;
 
     [NativeTypeName("uint32_t")]
     public uint copy_bytes_per_row_alignment;

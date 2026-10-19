@@ -1,17 +1,19 @@
 using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -30,25 +32,25 @@ var services = new ServiceCollection()
         Console.WriteLine("[KernelEngine] Example: 01_window_scene");
         Console.WriteLine("[KernelEngine] Features: window, renderer, single_quad, spinner_behavior");
 
-#region scene
+        #region scene
         tree.AddNode(new DirectionalLight
         {
             Direction = Vector3.Normalize(new Vector3(0.5f, 1f, 0.5f)),
-            Color     = Vector3.One,
+            Color = Vector3.One,
             Intensity = 2f,
         }, "Sun");
 
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 0f, 5f);
 
-        var quad   = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
         var orange = resources.CreateMaterial("orange", new Vector4(1f, 0.5f, 0f, 1f));
         tree.AddNode(new SpinningQuad { MeshHandle = quad, MaterialHandle = orange }, "Spinner");
-#endregion
+        #endregion
     }));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
@@ -72,7 +74,7 @@ while (!window.ShouldClose())
     {
         double fps = frameCount / (now - fpsWindowStart);
         Console.WriteLine($"[Example 01] FPS: {fps:F2}");
-        frameCount     = 0;
+        frameCount = 0;
         fpsWindowStart = now;
     }
 }
@@ -82,13 +84,11 @@ runtime.Dispose();
 Console.WriteLine("[01_window_scene] Exited cleanly.");
 
 #region behavior
-sealed class SpinningQuad : MeshRenderer
+sealed partial class SpinningQuad : MeshRenderer
 {
     private float _angle;
 
-    protected override bool HasBehavior => true;
-
-    protected override void OnUpdate(in View view)
+    void Update(in View view)
     {
         _angle += 90f * view.DeltaTime;
         if (_angle >= 360f) _angle -= 360f;

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_SKYBOX_SKYBOX_CREATE_H_
+#define KERNEL_ENGINE_RENDER_SKYBOX_SKYBOX_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
@@ -32,13 +33,27 @@ extern "C"
         void (*destroy)(ke_render_skybox *self);
     } ke_render_skybox_handle;
 
+    /// What the skybox pass needs. It joins the chain at KE_RENDER_STAGE_SKY and draws over the
+    /// frame's color where the frame's depth is at the far plane.
+    typedef struct ke_render_skybox_params
+    {
+        ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
+        ke_render_service *service; ///< Holds the frame's color and depth; borrowed.
+        ke_gpu_device     *device;  ///< Borrowed.
+        ke_render_camera  *camera;  ///< Gives the view and projection; borrowed.
+        ke_component_id    camera_cid;
+        ke_component_id    world_transform_cid;
+        ke_component_id    skybox_cid;
+        ke_component_id    frame_cid;
+    } ke_render_skybox_params;
+
+    /// Registers the pass's render-phase system. A missing runtime, service, device or camera
+    /// fails as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_SKYBOX_API ke_render_skybox_handle ke_render_skybox_create(
-        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_render_camera *camera,
-        ke_component_id camera_cid, ke_component_id world_transform_cid,
-        ke_component_id skybox_cid, ke_component_id frame_cid,
-        ke_error **out_error);
+        const ke_render_skybox_params *params, ke_error **out_error);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

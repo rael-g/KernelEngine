@@ -4,16 +4,13 @@ namespace KernelEngine.Render.Native;
 
 public partial struct ke_gpu_depth_stencil_state
 {
-    [NativeTypeName("ke_bool")]
-    public byte depth_test_enabled;
+    public bool depth_test_enabled;
 
-    [NativeTypeName("ke_bool")]
-    public byte depth_write_enabled;
+    public bool depth_write_enabled;
 
     public ke_gpu_compare_function depth_compare;
 
-    [NativeTypeName("ke_bool")]
-    public byte stencil_test_enabled;
+    public bool stencil_test_enabled;
 
     public ke_gpu_stencil_op stencil_front_fail;
 

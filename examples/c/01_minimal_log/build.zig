@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    mod.addCSourceFile(.{ .file = b.path("main.c"), .flags = &.{} });
+    mod.addCSourceFile(.{ .file = b.path("main.c"), .flags = &.{ "-Wall", "-Wextra", "-Werror", "-Wno-unused-command-line-argument" } });
 
     var inc_it = std.mem.splitScalar(u8, include_dirs, '|');
     while (inc_it.next()) |inc| {
@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
         mod.addObjectFile(.{ .cwd_relative = lib });
         mod.addRPath(.{ .cwd_relative = std.fs.path.dirname(lib).? });
     }
+    mod.addRPathSpecial("$ORIGIN/../lib");
 
     if (link_m) mod.linkSystemLibrary("m", .{});
 

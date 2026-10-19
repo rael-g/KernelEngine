@@ -7,40 +7,28 @@
       "tags": [],
       "fields": [
         {
-          "name": "scheduler",
-          "type": "struct ke_scheduler *",
-          "tags": [],
-          "doc": null
-        },
-        {
           "name": "ecs",
           "type": "ke_ecs *",
           "tags": [],
-          "doc": null
+          "doc": "The ecs the world registers scene components on; required, borrowed."
         },
         {
           "name": "runtime",
           "type": "ke_runtime *",
           "tags": [],
-          "doc": null
+          "doc": "The runtime the world hands out; required, borrowed."
         },
         {
           "name": "scene_tree",
           "type": "struct ke_scene_tree *",
           "tags": [],
-          "doc": null
-        },
-        {
-          "name": "project_root",
-          "type": "const char *",
-          "tags": [],
-          "doc": null
+          "doc": "The scene tree the world hands out; optional, borrowed."
         },
         {
           "name": "logger",
           "type": "struct ke_logger *",
           "tags": [],
-          "doc": null
+          "doc": "The logger the scene loader writes to while loading into this world; optional, borrowed."
         },
         {
           "name": "signal_bus",
@@ -219,6 +207,73 @@
               "tags": [
                 "out"
               ],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_world *"
+        },
+        {
+          "name": "register_component_alias",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Lets a scene name the component registered as \u0060name\u0060 by \u0060alias\u0060 as well. The alias answers only while it is unambiguous: a second name registered under the same alias, or a component registered under the alias itself, makes it ambiguous, and a scene must then write the full name. Registering the same pair twice changes nothing.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "alias",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The short name."
+            },
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The name the component is registered under."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_world *"
+        },
+        {
+          "name": "resolve_component",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Resolves the component name a scene wrote: the component registered under it, else the one its alias stands for. Fails as not found when neither exists, and as an invalid argument naming the candidates when the alias is ambiguous.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The name the scene wrote."
+            },
+            {
+              "name": "out_meta",
+              "type": "ke_component_meta *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id, size and field metadata."
+            },
+            {
+              "name": "out_error",
+              "type": "ke_error **",
+              "tags": [],
               "doc": null
             }
           ],

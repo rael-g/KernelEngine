@@ -12,14 +12,24 @@ public static class Idioms
 {
     static readonly Dictionary<string, string> Prim = new()
     {
-        ["_Bool"] = "bool", ["bool"] = "bool",
-        ["uint8_t"] = "u8", ["int8_t"] = "i8",
-        ["uint16_t"] = "u16", ["int16_t"] = "i16",
-        ["uint32_t"] = "u32", ["int32_t"] = "i32",
-        ["uint64_t"] = "u64", ["int64_t"] = "i64",
-        ["float"] = "f32", ["double"] = "f64",
-        ["size_t"] = "usize", ["void"] = "void", ["char"] = "u8",
-        ["int"] = "c_int", ["unsigned"] = "c_uint", ["unsigned int"] = "c_uint",
+        ["_Bool"] = "bool",
+        ["bool"] = "bool",
+        ["uint8_t"] = "u8",
+        ["int8_t"] = "i8",
+        ["uint16_t"] = "u16",
+        ["int16_t"] = "i16",
+        ["uint32_t"] = "u32",
+        ["int32_t"] = "i32",
+        ["uint64_t"] = "u64",
+        ["int64_t"] = "i64",
+        ["float"] = "f32",
+        ["double"] = "f64",
+        ["size_t"] = "usize",
+        ["void"] = "void",
+        ["char"] = "u8",
+        ["int"] = "c_int",
+        ["unsigned"] = "c_uint",
+        ["unsigned int"] = "c_uint",
     };
 
     /// <summary>
@@ -88,7 +98,7 @@ public static class Idioms
     /// boolean.
     /// </summary>
     public static string? Primitive(string cType, Convention convention) =>
-        Base(cType) == convention.ByteBoolType ? "bool" : Prim.GetValueOrDefault(Base(cType));
+        Prim.GetValueOrDefault(Base(cType));
 
     /// <summary>
     /// The C type spelling <paramref name="cType"/> with its <c>const</c>, <c>struct</c> and

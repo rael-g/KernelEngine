@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -13,6 +14,8 @@ pub fn build(b: *std.Build) void {
 
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
+
     const mod = b.createModule(.{
         .root_source_file = b.path("src/stb_font.zig"),
         .target = target,
@@ -23,11 +26,16 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_text, ke_self, stb_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    mod.addCSourceFile(.{ .file = b.path("src/stb_font_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    const implementation = b.addWriteFiles().add("stb_font_impl.c", "#define STB_TRUETYPE_IMPLEMENTATION\n#include <stb_truetype.h>\n");
+    mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
     const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
+    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_TEXT_STB_TRUETYPE_EXPORT", "");
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_text_stb_truetype",
         .root_module = mod,
@@ -49,7 +57,9 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_logger, ke_text, ke_self, stb_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    test_mod.addCSourceFile(.{ .file = b.path("src/stb_font_impl.c"), .flags = &.{"-fno-sanitize=undefined"} });
+    test_mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addImport("kerror", b.createModule(.{
         .root_source_file = .{ .cwd_relative = kerror_src },
         .target = target,
@@ -57,6 +67,7 @@ pub fn build(b: *std.Build) void {
     }));
     test_mod.addCMacro("KE_TEXT_STB_TRUETYPE_EXPORT", "");
 
+    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     b.step("test", "Run the stb_truetype font loader unit tests").dependOn(&run_tests.step);

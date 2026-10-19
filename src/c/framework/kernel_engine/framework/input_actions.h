@@ -44,7 +44,11 @@ extern "C"
     {
         void *handle;
 
-        /** @param path [utf8] */
+        /** Replaces every action with those of a TOML input file. An action type other than
+         * Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a
+         * field, and a key or mouse button name the engine does not know each fail the load,
+         * with a message naming the action and the binding; a load that fails leaves no actions.
+         * @param path [utf8] */
         bool (*load)(struct ke_input_actions *self, const char *path, ke_error **out_error);
 
         /** @param name [utf8] */
@@ -75,9 +79,9 @@ extern "C"
                          void                       *event_ctx,
                          ke_error                  **out_error);
 
-        bool  (*is_action_down)(struct ke_input_actions *self, int32_t action_id);
-        bool  (*was_action_pressed)(struct ke_input_actions *self, int32_t action_id);
-        bool  (*was_action_released)(struct ke_input_actions *self, int32_t action_id);
+        bool (*is_action_down)(struct ke_input_actions *self, int32_t action_id);
+        bool (*was_action_pressed)(struct ke_input_actions *self, int32_t action_id);
+        bool (*was_action_released)(struct ke_input_actions *self, int32_t action_id);
         float (*get_axis1d)(struct ke_input_actions *self, int32_t action_id);
         /** @param out_x [out] @param out_y [out] */
         void  (*get_axis2d)(struct ke_input_actions *self, int32_t action_id,

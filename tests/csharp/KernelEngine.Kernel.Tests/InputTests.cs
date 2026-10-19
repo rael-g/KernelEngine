@@ -8,13 +8,15 @@ public class InputTests
 {
     [Fact]
     public void Input_CanBeCreated()
-    {        using var input = new Input(null);
+    {
+        using var input = new Input(null);
         Assert.NotNull(input);
     }
 
     [Fact]
     public void IsKeyDown_ReturnsFalse_ByDefault()
-    {        using var input = new Input(null);
+    {
+        using var input = new Input(null);
         Assert.False(input.IsKeyDown(Key.A));
     }
 
@@ -37,7 +39,7 @@ public class InputTests
     public void InputReaderExtensions_WorkCorrectly()
     {
         using var input = new Input(null);
-        
+
         var reader = input.CaptureSnapshot();
         Assert.False(reader.IsKeyDown(Key.W));
         Assert.False(reader.IsMouseButtonDown(MouseButton.Left));

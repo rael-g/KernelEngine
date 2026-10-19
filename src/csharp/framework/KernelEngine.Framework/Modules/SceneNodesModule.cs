@@ -1,28 +1,31 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
+﻿using KernelEngine.Ecs;
 using KernelEngine.Input;
 using KernelEngine.Runtime;
 using KernelEngine.Scheduler;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
 
 /// <summary>
 /// Runtime module "SceneNodes", depending on <see cref="FrameworkModule"/>. It registers the
 /// <see cref="ScriptHost"/> and the spatial node types, and registers these systems: "Scene.Input"
-/// (pre-update, on the pinned worker: releases retired handles, updates and snapshots input and
+/// (pre-update, touching no component: releases retired handles, updates and snapshots input and
 /// evaluates actions), "Scene.Signals.Clear" (pre-update) and "Scene.Signals.Deliver"
 /// (post-update) when a <see cref="SignalBus"/> is registered, and one system
 /// "Scene.Behaviors.&lt;type&gt;" in the update phase for each node type with behavior,
-/// registered when the first node of that type binds. That system declares the component access
-/// of the type's <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
+/// registered when the first node of that type binds, and likewise "Scene.FixedBehaviors.&lt;type&gt;"
+/// in the fixed update phase. Each system declares the component access of its hook from
+/// <see cref="Node.CollectHookComponents"/>, or, when that access is not known, of the type's
+/// <see cref="Node.CollectBehaviorComponents"/>: the owned components form its
 /// query and the reached ones its access list, with hierarchy and name always read, and it is
-/// sliced per entity when the type reaches only itself. <c>OnLoad</c> declares the signals of
-/// every registered node type and then runs the setup callback on the pinned worker.
+/// sliced per entity when its hook reaches only itself. Its query requires the type's tag, which
+/// is declared a member of the host's exclusive group of type tags, so the
+/// systems of two types do not order each other through what they own. <c>OnLoad</c> runs the setup callback on the
+/// calling thread.
 /// </summary>
 public sealed class SceneNodesModule : IRuntimeModule
 {
-    private const uint SetupWorker = 1;
-
     private readonly Action<ScriptHost, IServiceProvider> _setup;
 
     private KernelEngine.Input.IInputReader? _inputSnapshot;
@@ -48,7 +51,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         var (index, slices) = KernelEngine.Runtime.SystemCtx.Of(ctx).Slice();
         if (slices <= 1) return (0, count);
 
-        var per   = count / (int)slices;
+        var per = count / (int)slices;
         var first = (int)index * per;
         return (first, index == slices - 1 ? count : first + per);
     }
@@ -77,21 +80,20 @@ public sealed class SceneNodesModule : IRuntimeModule
     }
 
     /// <summary>
-    /// Registers the systems, declares the signals, and runs the setup callback on the pinned
-    /// worker.
+    /// Registers the systems and runs the setup callback on the calling
+    /// thread.
     /// </summary>
     /// <exception cref="InvalidOperationException">The setup callback throws.</exception>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var scriptHost = services.GetRequiredService<ScriptHost>();
-        var world     = services.GetRequiredService<World>();
+        var world = services.GetRequiredService<World>();
         var sceneTree = world.SceneTree;
-        var input     = services.GetService<IInput>();
-        var scheduler = services.GetRequiredService<IScheduler>();
+        var input = services.GetService<IInput>();
         var evaluator = services.GetService<IActionEvaluator>();
 
         var hierarchyCid = scriptHost.CidOfName("hierarchy");
-        var nameCid      = scriptHost.CidOfName("name");
+        var nameCid = scriptHost.CidOfName("name");
 
         runtime.RegisterSystem("Scene.Input", RuntimePhase.PreUpdate, (_, _) =>
         {
@@ -99,9 +101,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             input?.Update();
             _inputSnapshot = input?.CaptureSnapshot();
             evaluator?.Evaluate(_inputSnapshot);
-        }, accessList: [], pinnedThread: 1);
-
-        DeclareSignals(scriptHost, services);
+        }, accessList: []);
 
         var signals = services.GetService<SignalBus>();
         if (signals is not null)
@@ -121,97 +121,80 @@ public sealed class SceneNodesModule : IRuntimeModule
 
         scriptHost.BehaviorTypeAdded += (type, probe) =>
         {
-            var uses = new List<NodeComponentUse>();
-            probe.CollectBehaviorComponents(uses);
+            var tag = scriptHost.TagOf(type);
+            runtime.DeclareExclusive(scriptHost.TypeTagGroup(), tag);
 
-            var owned  = new Dictionary<uint, bool>();
-            var reached = new Dictionary<uint, bool>();
-            foreach (var use in uses)
+            void Register(string name, RuntimePhase phase, bool fixedStep)
             {
-                var cid = scriptHost.CidOfName(use.Name);
-                if (cid == hierarchyCid || cid == nameCid) continue;
-                var into = use.Owned ? owned : reached;
-                into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
-            }
+                var uses = new List<NodeComponentUse>();
+                if (!probe.CollectHookComponents(uses, fixedStep)) probe.CollectBehaviorComponents(uses);
 
-            var terms = owned.Select(e => Touches(e.Key, e.Value)).ToArray();
-
-            var access = new List<ComponentAccess>
-            {
-                Touches(hierarchyCid, writes: false),
-                Touches(nameCid, writes: false),
-            };
-            foreach (var (cid, isWrite) in reached)
-                if (!owned.ContainsKey(cid))
-                    access.Add(Touches(cid, isWrite));
-
-            var queries = terms.Length > 0 ? new[] { new QueryDecl { Terms = terms } } : [];
-            var queried = queries.Length > 0;
-
-            runtime.RegisterSystem($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, (ctx, dt) =>
-            {
-                var view = new View(scriptHost, dt, _inputSnapshot, ctx);
-                using (scriptHost.EnterSystem(ctx))
+                var owned = new Dictionary<uint, bool>();
+                var reached = new Dictionary<uint, bool>();
+                foreach (var use in uses)
                 {
-                    if (!queried)
-                    {
-                        var behaviors = scriptHost.BehaviorsOf(type);
-                        var (from, upto) = SliceOf(ctx, behaviors.Count);
-                        for (int i = from; i < upto; i++)
-                            behaviors[i].OnUpdate(in view);
-                        return;
-                    }
+                    var cid = scriptHost.CidOfName(use.Name);
+                    if (cid == hierarchyCid || cid == nameCid) continue;
+                    var into = use.Owned ? owned : reached;
+                    into[cid] = into.TryGetValue(cid, out var w) ? w || use.Writes : use.Writes;
+                }
 
-                    var segments = KernelEngine.Runtime.SystemCtx.Of(ctx).View(0);
-                    var total = 0;
-                    for (int s = 0; s < segments.Length; s++)
-                        total += segments[s].Entities.Length;
+                var terms = owned.Select(e => Touches(e.Key, e.Value))
+                    .Append(Touches(tag, writes: false))
+                    .ToArray();
 
-                    var (first, last) = SliceOf(ctx, total);
-                    var seen = 0;
-                    for (int s = 0; s < segments.Length && seen < last; s++)
+                var access = new List<ComponentAccess>
+                {
+                    Touches(hierarchyCid, writes: false),
+                    Touches(nameCid, writes: false),
+                };
+                foreach (var (cid, isWrite) in reached)
+                    if (!owned.ContainsKey(cid))
+                        access.Add(Touches(cid, isWrite));
+
+                var queries = new[] { new QueryDecl { Terms = terms } };
+
+                runtime.RegisterSystem(name, phase, (ctx, dt) =>
+                {
+                    var view = new View(scriptHost, dt, _inputSnapshot, ctx);
+                    using (scriptHost.EnterSystem(ctx))
                     {
-                        var entities = segments[s].Entities;
-                        for (int e = 0; e < entities.Length; e++, seen++)
+                        var segments = KernelEngine.Runtime.SystemCtx.Of(ctx).View(0);
+                        var total = 0;
+                        for (int s = 0; s < segments.Length; s++)
+                            total += segments[s].Entities.Length;
+
+                        var (first, last) = SliceOf(ctx, total);
+                        var seen = 0;
+                        for (int s = 0; s < segments.Length && seen < last; s++)
                         {
-                            if (seen < first) continue;
-                            if (seen >= last) break;
-                            if (scriptHost.NodeOf(entities[e]) is { } node && node.GetType() == type)
-                                node.OnUpdate(in view);
+                            var entities = segments[s].Entities;
+                            for (int e = 0; e < entities.Length; e++, seen++)
+                            {
+                                if (seen < first) continue;
+                                if (seen >= last) break;
+                                if (scriptHost.NodeOf(entities[e]) is { } node)
+                                    Run(node, in view, fixedStep);
+                            }
                         }
                     }
-                }
-            }, queries: queries, accessList: access.ToArray(), perEntity: probe.ReachesOnlyItself);
+                }, queries: queries, accessList: access.ToArray(), perEntity: probe.HookReachesOnlyItself(fixedStep));
+            }
+
+            if (probe.HasBehavior) Register($"Scene.Behaviors.{type.Name}", RuntimePhase.Update, fixedStep: false);
+            if (probe.HasFixedBehavior) Register($"Scene.FixedBehaviors.{type.Name}", RuntimePhase.FixedUpdate, fixedStep: true);
         };
 
-        var done = new System.Threading.ManualResetEventSlim(false);
-        Exception? err = null;
-        scheduler.DispatchPinned(SetupWorker, () =>
-        {
-            try   { _setup(scriptHost, services); }
-            catch (Exception ex) { err = ex; }
-            finally { done.Set(); }
-        });
-        done.Wait();
-        if (err != null) throw new InvalidOperationException("Scene setup failed", err);
+        try { _setup(scriptHost, services); }
+        catch (Exception ex) { throw new InvalidOperationException("Scene setup failed", ex); }
+    }
+
+    private static void Run(Node node, in View view, bool fixedStep)
+    {
+        if (fixedStep) node.OnFixedUpdate(in view);
+        else node.OnUpdate(in view);
     }
 
     private static ComponentAccess Touches(uint cid, bool writes) =>
         new() { Cid = cid, Access = writes ? RuntimeAccess.Write : RuntimeAccess.Read };
-
-    /// <summary>
-    /// Registers every signal any registered node type emits or handles, by constructing one
-    /// unbound instance of each type. It runs before the first scene is read.
-    /// </summary>
-    private static void DeclareSignals(ScriptHost scriptHost, IServiceProvider services)
-    {
-        var registry = services.GetService<NodeTypeRegistry>();
-        if (registry is null) return;
-
-        foreach (var type in registry.RegisteredTypes)
-        {
-            var probe = (Node)ActivatorUtilities.CreateInstance(services, type);
-            probe.CollectSignalTypes(scriptHost);
-        }
-    }
 }

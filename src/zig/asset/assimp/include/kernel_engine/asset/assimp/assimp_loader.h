@@ -1,5 +1,6 @@
 
-#pragma once
+#ifndef KERNEL_ENGINE_ASSET_ASSIMP_ASSIMP_LOADER_H_
+#define KERNEL_ENGINE_ASSET_ASSIMP_ASSIMP_LOADER_H_
 
 #include <kernel_engine/asset/asset_loader.h>
 
@@ -36,4 +37,6 @@ KE_ASSET_ASSIMP_API ke_asset_loader_handle ke_asset_loader_assimp_create(
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

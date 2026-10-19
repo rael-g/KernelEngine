@@ -9,6 +9,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Authors>Kernel Engine Team</Authors>
     <Company>Kernel Engine</Company>
@@ -25,5 +26,7 @@
   <ItemGroup Condition="$(MSBuildProjectName.Contains('.Native'))">
     <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
   </ItemGroup>
+
+  <Import Project="DisableRuntimeMarshalling.props" Condition="!$(MSBuildProjectDirectory.Contains('kabic'))" />
 
 </Project>

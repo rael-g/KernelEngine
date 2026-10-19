@@ -19,10 +19,10 @@ namespace KernelEngine.Input;
 public struct InputEvent
 {
     public InputEventKind Kind;
-    public Key            Key;
-    public MouseButton    Button;
-    public Vector2        Scroll;
-    public Vector2        Position;
+    public Key Key;
+    public MouseButton Button;
+    public Vector2 Scroll;
+    public Vector2 Position;
 
     /// <summary>When true, the event is not propagated further.</summary>
     public bool Handled;

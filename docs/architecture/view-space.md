@@ -16,7 +16,7 @@ hands on. How a part works inside is on the generated page of its file. Contract
 ## What ties the parts together
 
 **Two questions, two contracts.** `ke_ndc_convention` answers what clip space the device expects:
-`z_zero_to_one`, `y_flip` and `clip_left_handed`. `ke_view_space` answers which way the engine's
+`z_zero_to_one` and `y_flip`. `ke_view_space` answers which way the engine's
 camera faces and what the matrices look like for that. Neither knows the other's choice; the
 projection slots of `ke_view_space` take the convention as an argument.
 
@@ -24,10 +24,9 @@ projection slots of `ke_view_space` take the convention as an argument.
 one differ in the handedness stored in the state, and `depth_from_view_z` reports it as a sign, so
 a consumer turns a view-space z into a positive depth without knowing which space it holds.
 
-**The module chooses the view space.** `ke_render_module_create` takes an optional
-`ke_view_space` and creates and owns a right-handed one when none is given. It refuses to be
-created when the device reports `clip_left_handed` as 0. It then creates the `ke_render_camera`
-over the view space and the device's convention and owns it.
+**The host chooses the view space.** It creates the view space it wants and the
+`ke_render_camera` over it and the device's convention, and hands both to the frame and the passes
+that build matrices.
 
 **Passes take the camera; two also take the view space.** Gbuffer, deferred lighting and forward ask the camera
 for `view` and `projection`. Skybox asks for `view_rotation` and `perspective_projection`.
@@ -50,5 +49,3 @@ and reads `y_flip` for its own orthographic projection.
   built the view matrix.
 - A transform whose rotation terms are all near zero is not a rotation: the view space then aims
   the camera at the world origin.
-- Only `z_zero_to_one` and `y_flip` are read by a matrix builder; `clip_left_handed` is read in
-  one place, the check of `ke_render_module_create`.

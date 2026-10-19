@@ -3,25 +3,22 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
 
-const name_max = 96;
-
-const components_max = 16;
-
 const default_max_types = 64;
 
 /// One record per registered name, kept in `State.types` for the life of the host. `entities` lists
-/// the bound entities of this type, and a binding's `slot` is an index into that list.
+/// the bound entities of this type, and a binding's `slot` is an index into that list. `tag` is the
+/// component every bound entity of the type carries beside its binding, so a query can match the
+/// instances of one type.
 const ScriptType = struct {
-    name: [name_max]u8,
-    name_len: usize,
-    components: [components_max]c.ke_component_id,
-    component_count: u32,
+    name: []u8,
+    components: []c.ke_component_id,
     reach: c.ke_script_reach,
+    tag: c.ke_component_id,
 
     entities: std.ArrayList(c.ke_entity),
 };
@@ -38,6 +35,8 @@ const Binding = extern struct {
 };
 
 const binding_component = "script_instance";
+const tag_prefix = "script_type:";
+const tag_group_component = "script_type";
 
 /// Allocated by `ke_script_host_create` and freed by `destroy`. Only the first `type_count`
 /// elements of `types` hold records; the rest of the table is uninitialised.
@@ -56,6 +55,7 @@ const State = struct {
     name_cid: c.ke_component_id,
 
     binding_cid: c.ke_component_id,
+    tag_group_cid: c.ke_component_id,
 
     types: []ScriptType,
     type_count: u32,
@@ -100,8 +100,8 @@ fn matches(s: *State, entity: c.ke_entity, type_id: c.ke_script_type_id, wanted:
 /// Slot `register_type`. Registering a name again with the same reach and components returns the
 /// id the first registration got. The same name with any other description fails with
 /// already-exists and leaves the table unchanged. A new name fails with out-of-memory when the
-/// table is full. A null host, name or `out_id`, an empty or too long name, more components than
-/// a type may carry, or a component count without components fails as an invalid argument. Each
+/// table is full. A null host, name or `out_id`, an empty name, or a component count without
+/// components fails as an invalid argument. Each
 /// failure returns false.
 fn registerType(
     self_in: ?*c.ke_script_host,
@@ -122,12 +122,8 @@ fn registerType(
     }
     const s = stateOf(self);
     const name = std.mem.span(name_in);
-    if (name.len == 0 or name.len >= name_max) {
-        E.fail(out_error, .invalid_argument, "script type name is empty or too long", @src());
-        return false;
-    }
-    if (component_count > components_max) {
-        E.fail(out_error, .invalid_argument, "script type declares more components than a type may carry", @src());
+    if (name.len == 0) {
+        E.fail(out_error, .invalid_argument, "script type name is empty", @src());
         return false;
     }
     if (component_count > 0 and components_in == null) {
@@ -136,8 +132,8 @@ fn registerType(
     }
 
     for (s.types[0..s.type_count], 0..) |*t, i| {
-        if (!std.mem.eql(u8, t.name[0..t.name_len], name)) continue;
-        if (t.component_count != component_count or t.reach != reach) {
+        if (!std.mem.eql(u8, t.name, name)) continue;
+        if (t.components.len != component_count or t.reach != reach) {
             E.fail(out_error, .already_exists, "script type already registered with a different description", @src());
             return false;
         }
@@ -155,16 +151,35 @@ fn registerType(
         return false;
     }
 
-    var t = ScriptType{
-        .name = undefined,
-        .name_len = name.len,
-        .components = undefined,
-        .component_count = component_count,
+    const owned_name = heap.gpa.dupe(u8, name) catch {
+        E.fail(out_error, .out_of_memory, "script type name allocation failed", @src());
+        return false;
+    };
+    const owned_components = heap.gpa.dupe(c.ke_component_id, if (component_count > 0) components_in[0..component_count] else &.{}) catch {
+        heap.gpa.free(owned_name);
+        E.fail(out_error, .out_of_memory, "script type component list allocation failed", @src());
+        return false;
+    };
+    const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "{s}{s}", .{ tag_prefix, name }, 0) catch {
+        heap.gpa.free(owned_name);
+        heap.gpa.free(owned_components);
+        E.fail(out_error, .out_of_memory, "script type tag name allocation failed", @src());
+        return false;
+    };
+    defer heap.gpa.free(tag_name);
+    const tag = s.ecs.component_register.?(s.ecs, tag_name.ptr, 0, null, 0, out_error);
+    if (tag == 0) {
+        heap.gpa.free(owned_name);
+        heap.gpa.free(owned_components);
+        return false;
+    }
+    const t = ScriptType{
+        .name = owned_name,
+        .components = owned_components,
         .reach = reach,
+        .tag = tag,
         .entities = .empty,
     };
-    @memcpy(t.name[0..name.len], name);
-    for (0..component_count) |k| t.components[k] = components_in[k];
 
     s.types[s.type_count] = t;
     s.type_count += 1;
@@ -184,7 +199,7 @@ fn typeLookup(
     const s = stateOf(self);
     const name = std.mem.span(name_in);
     for (s.types[0..s.type_count], 0..) |*t, i| {
-        if (!std.mem.eql(u8, t.name[0..t.name_len], name)) continue;
+        if (!std.mem.eql(u8, t.name, name)) continue;
         out_id.* = @intCast(i + 1);
         return true;
     }
@@ -204,8 +219,8 @@ fn typeComponents(
         if (out_count != null) out_count.* = 0;
         return null;
     };
-    if (out_count != null) out_count.* = t.component_count;
-    return &t.components;
+    if (out_count != null) out_count.* = @intCast(t.components.len);
+    return t.components.ptr;
 }
 
 /// Slot `type_reach`. An id that is not registered answers the widest reach, so a type the host
@@ -215,6 +230,20 @@ fn typeReach(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) callconv
     const s = stateOf(self);
     const t = typeAt(s, type_id) orelse return c.KE_SCRIPT_REACH_ANY;
     return t.reach;
+}
+
+/// Slot `type_tag`. Answers the tag `registerType` registered for the type, or 0 for an id that is
+/// not registered.
+fn typeTag(self_in: ?*c.ke_script_host, type_id: c.ke_script_type_id) callconv(.c) c.ke_component_id {
+    const self = self_in orelse return 0;
+    const t = typeAt(stateOf(self), type_id) orelse return 0;
+    return t.tag;
+}
+
+/// Slot `type_tag_group`. The component registered at creation for the group, 0 for a null host.
+fn typeTagGroup(self_in: ?*c.ke_script_host) callconv(.c) c.ke_component_id {
+    const self = self_in orelse return 0;
+    return stateOf(self).tag_group_cid;
 }
 
 /// Slot `bind`. Attaches the instance to the entity at once, so it belongs to code that no system
@@ -258,7 +287,7 @@ fn bindNow(
         return false;
     }
 
-    const raw = s.ecs.component_add.?(s.ecs, entity, s.binding_cid) orelse {
+    _ = s.ecs.component_add.?(s.ecs, entity, s.binding_cid) orelse {
         E.fail(out_error, .out_of_memory, "could not attach the script instance component", @src());
         return false;
     };
@@ -268,7 +297,16 @@ fn bindNow(
         return false;
     };
 
-    const b: *Binding = @ptrCast(@alignCast(raw));
+    _ = s.ecs.component_add.?(s.ecs, entity, t.tag);
+
+    const moved = s.ecs.component_get.?(s.ecs, entity, s.binding_cid) orelse {
+        _ = t.entities.pop();
+        s.ecs.component_remove.?(s.ecs, entity, t.tag);
+        _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
+        E.fail(out_error, .out_of_memory, "could not read back the script instance component", @src());
+        return false;
+    };
+    const b: *Binding = @ptrCast(@alignCast(moved));
     b.type_id = type_id;
     b.instance = instance;
     b.slot = @intCast(t.entities.items.len - 1);
@@ -365,23 +403,23 @@ fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) void {
     unbindNow(stateOf(self), entity);
 }
 
-/// Removes by swap, taking the last entity of the type into the vacated slot and rewriting its
-/// binding's index, so every index keeps naming its entity and `instances` is no longer in
-/// binding order. An entity with no binding is left untouched.
+/// Removes the entity from its type's list keeping the others in binding order, and rewrites the
+/// index of every binding that moved down, so each index keeps naming its entity. An entity with
+/// no binding is left untouched.
 fn unbindNow(s: *State, entity: c.ke_entity) void {
     const b = bindingOf(s, entity) orelse return;
+    const tag = if (typeAt(s, b.type_id)) |t| t.tag else 0;
     if (typeAt(s, b.type_id)) |t| {
         if (b.slot < t.entities.items.len) {
-            const moved = t.entities.swapRemove(b.slot);
-            _ = moved;
-            if (b.slot < t.entities.items.len)
-                if (bindingOf(s, t.entities.items[b.slot])) |other| {
-                    other.slot = b.slot;
-                };
+            _ = t.entities.orderedRemove(b.slot);
+            for (t.entities.items[b.slot..], b.slot..) |moved, i| {
+                if (bindingOf(s, moved)) |other| other.slot = @intCast(i);
+            }
         }
     }
     b.type_id = c.KE_SCRIPT_TYPE_NONE;
     b.instance = null;
+    if (tag != 0) s.ecs.component_remove.?(s.ecs, entity, tag);
     _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
 }
 
@@ -513,7 +551,11 @@ fn resolve(
 fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
-    for (s.types[0..s.type_count]) |*t| t.entities.deinit(heap.gpa);
+    for (s.types[0..s.type_count]) |*t| {
+        t.entities.deinit(heap.gpa);
+        heap.gpa.free(t.name);
+        heap.gpa.free(t.components);
+    }
     heap.gpa.free(s.types);
     heap.gpa.destroy(s);
 }
@@ -567,8 +609,9 @@ pub export fn ke_script_host_create(
     s.hierarchy_cid = hierarchy_meta.cid;
     s.name_cid = name_meta.cid;
     s.binding_cid = ecs.component_register.?(ecs, binding_component, @sizeOf(Binding), null, 0, null);
-    if (s.binding_cid == 0) {
-        E.fail(out_error, .invalid_argument, "could not register the script instance component", @src());
+    s.tag_group_cid = ecs.component_register.?(ecs, tag_group_component, 0, null, 0, null);
+    if (s.binding_cid == 0 or s.tag_group_cid == 0) {
+        E.fail(out_error, .invalid_argument, "could not register the script instance or type group component", @src());
         heap.gpa.free(s.types);
         heap.gpa.destroy(s);
         return null_handle;
@@ -581,6 +624,8 @@ pub export fn ke_script_host_create(
         .type_lookup = &typeLookup,
         .type_components = &typeComponents,
         .type_reach = &typeReach,
+        .type_tag = &typeTag,
+        .type_tag_group = &typeTagGroup,
         .bind = &bind,
         .unbind = &unbind,
         .bind_deferred = &bindDeferred,
@@ -697,6 +742,30 @@ test "an entity carries the instance it was bound to" {
     try testing.expectEqual(@as(?*anyopaque, &marker), out_instance);
 }
 
+test "each type has its own tag, apart from the group of tags, carried by a bound instance until it is unbound" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const paddle = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    const ball = try h.declare("pong.ball", c.KE_SCRIPT_REACH_SELF);
+    const tag = h.host().type_tag.?(h.host(), paddle);
+    try testing.expect(tag != 0);
+    try testing.expect(tag != h.host().type_tag.?(h.host(), ball));
+    try testing.expectEqual(@as(c.ke_component_id, 0), h.host().type_tag.?(h.host(), 9999));
+    const group = h.host().type_tag_group.?(h.host());
+    try testing.expect(group != 0 and group != tag);
+
+    const e = h.tree.create("Left", 0);
+    var marker: u32 = 7;
+    try testing.expect(h.host().bind.?(h.host(), e, paddle, &marker, null));
+    const ecs = &h.tree.ecs.vtable;
+    try testing.expect(ecs.component_get.?(ecs, e, tag) != null);
+
+    h.host().unbind.?(h.host(), e);
+    try testing.expect(ecs.component_get.?(ecs, e, tag) == null);
+}
+
 test "binding over an existing instance is refused rather than dropping it silently" {
     var h: Harness = undefined;
     try h.init();
@@ -743,6 +812,29 @@ test "instance count follows bind and unbind" {
     h.host().unbind.?(h.host(), a);
     try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
     try testing.expect(!h.host().instance_of.?(h.host(), a, null, null));
+}
+
+test "unbinding an entity keeps the others in binding order" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
+    var marks = [_]u32{ 1, 2, 3, 4 };
+    var entities: [4]c.ke_entity = undefined;
+    for (&entities, &marks, 0..) |*e, *m, i| {
+        e.* = h.tree.create(if (i == 0) "A" else if (i == 1) "B" else if (i == 2) "C" else "D", 0);
+        try testing.expect(h.host().bind.?(h.host(), e.*, id, m, null));
+    }
+
+    h.host().unbind.?(h.host(), entities[1]);
+    var count: u32 = 0;
+    const listed = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqualSlices(c.ke_entity, &.{ entities[0], entities[2], entities[3] }, listed[0..count]);
+
+    h.host().unbind.?(h.host(), entities[2]);
+    const after = h.host().instances.?(h.host(), id, &count);
+    try testing.expectEqualSlices(c.ke_entity, &.{ entities[0], entities[3] }, after[0..count]);
 }
 
 test "a deferred bind and unbind take effect only once the recorded commands are applied" {

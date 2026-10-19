@@ -1,13 +1,13 @@
 //! The cluster pass: the render-phase system "render.cull" that gathers the point and spot lights
-//! of a frame into GPU buffers and bins them into a view-space grid of clusters. It publishes the
-//! result to the render service as the bind group "cluster_lights".
+//! of a frame into GPU buffers and bins them into a view-space grid of clusters. It publishes each
+//! buffer of the result to the render service under its own name.
 
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
-const zm = @import("zmath");
-const cimport = @import("cimport.zig");
-const c = cimport.c;
+const feature_bindings = @import("feature_bindings");
+const cluster_buffers = feature_bindings.FeatureBindings(c).cluster_buffers;
+const c = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -47,8 +47,14 @@ const ClusterGridUniform = extern struct {
 const ClusterParams = extern struct {
     grid: [4]f32,
     counts: [4]f32,
-    proj: [4]f32,
-    view: [16]f32,
+    depth: [4]f32,
+};
+
+const cull_layout_params = c.ke_render_shader_layout_params{
+    .shader = "cluster_cull",
+    .stages = c.KE_GPU_SHADER_STAGE_COMPUTE,
+    .hints = null,
+    .hint_count = 0,
 };
 
 /// State of one cluster pass, allocated by `ke_render_cluster_create` and freed by `destroyHandle`.
@@ -74,8 +80,6 @@ const ClusterModule = struct {
     num_clusters: u32 = undefined,
     max_lights_per_cluster: u32 = undefined,
 
-    light_set_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
-    fwd_light_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
     cluster_grid_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
     point_lights_sb: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
@@ -87,8 +91,9 @@ const ClusterModule = struct {
 
     cull_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
     cull_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    cull_bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
-    cull_bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
+    binder: *c.ke_render_resource_binder = undefined,
+    cull_layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
+    cull_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
     cull_io: c.ke_render_pass_io = undefined,
     cull_access: [6]c.ke_component_access = undefined,
     cull_queries_terms: [6]c.ke_component_access = undefined,
@@ -198,7 +203,6 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const cam_segs = ctx.?.view.?(ctx, 2, &cam_segc);
     if (cam_segc == 0 or cam_segs[0].count == 0) return true;
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
-    const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, &cm.cull_io);
     if (pc == null) return true;
@@ -211,13 +215,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     const depth_from_view_z = cm.view_space.params.?(cm.view_space).depth_from_view_z;
     var frustum: c.ke_camera_frustum = undefined;
     cm.camera.perspective_frustum.?(cm.camera, cam, aspect, &frustum);
-    var view_m: c.ke_mat4 = undefined;
-    cm.camera.view.?(cm.camera, &cam_wt.matrix, &view_m);
     var params: ClusterParams = .{
         .grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
         .counts = .{ @floatFromInt(pn), @floatFromInt(sn), depth_from_view_z, 0.0 },
-        .proj = .{ frustum.tan_half_fov_y, frustum.aspect, frustum.near_plane, frustum.far_plane },
-        .view = view_m.m,
+        .depth = .{ frustum.near_plane, frustum.far_plane, 0.0, 0.0 },
     };
     core.*.upload.?(core, cm.cull_uniform, 0, &params, @sizeOf(ClusterParams));
 
@@ -225,14 +226,14 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 
     const cp = pc.*.begin_compute.?(pc);
     cp.*.set_pipeline.?(cp, cm.cull_pipeline);
-    cp.*.set_bind_group.?(cp, 0, cm.cull_bind_group, null, 0);
+    cm.binder.bind_compute_set.?(cm.binder, cp, cm.cull_set, null, 0);
     cp.*.dispatch.?(cp, (cm.num_clusters + 63) / 64, 1, 1);
     cp.*.end.?(cp);
     core.*.end_pass.?(core, pc);
     return true;
 }
 
-/// Writes the grid uniform that the shading passes read through "cluster_lights": the grid
+/// Writes the grid uniform that the shading passes read as "cluster_grid": the grid
 /// dimensions, the viewport and depth range, and the view space depth conversion.
 fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) void {
     const core = cm.core;
@@ -250,36 +251,33 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, ou
         .initial_data = null,
         .size = size,
         .usage = c.KE_GPU_BUFFER_USAGE_STORAGE | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
 }
 
 /// Runs once, from `ke_render_cluster_create`, before the module is registered. It creates the GPU
-/// objects in a fixed order, imports the light bind group into the render service as
-/// "cluster_lights", and fills the access list, which writes the tag imported as "light_clusters",
-/// and the queries. A failed step returns false with the error placed in the out-error parameter,
-/// and the objects created before it stay set for `destroyModule` to release.
-fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-             logger: ?*c.ke_logger, grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
-             point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
-             world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
-             frame_cid: c.ke_component_id, view_space: *c.ke_view_space, render_camera: *c.ke_render_camera,
-             out_error: [*c][*c]c.ke_error) bool {
+/// objects in a fixed order, publishes the light lists and the grid to the render service under
+/// its group's names, and fills the access list, which writes the group's tag, and the queries. A
+/// failed step returns false with the error placed in the out-error parameter, and the objects
+/// created before it stay set for `destroyModule` to release.
+fn setup(cm: *ClusterModule, p: *const c.ke_render_cluster_params, out_error: [*c][*c]c.ke_error) bool {
+    const core: *c.ke_render_service = p.service;
+    const dev: *c.ke_gpu_device = p.device;
     cm.core = core;
     cm.device = dev;
-    cm.logger = logger;
-    cm.view_space = view_space;
-    cm.camera = render_camera;
-    cm.point_light_cid = point_light_cid;
-    cm.spot_light_cid = spot_light_cid;
-    cm.world_transform_cid = world_transform_cid;
-    cm.camera_cid = camera_cid;
-    cm.frame_cid = frame_cid;
-    cm.grid_x = grid_x;
-    cm.grid_y = grid_y;
-    cm.grid_z = grid_z;
-    cm.max_lights_per_cluster = max_lights_per_cluster;
-    cm.num_clusters = grid_x * grid_y * grid_z;
+    cm.logger = p.logger;
+    cm.view_space = p.view_space;
+    cm.camera = p.camera;
+    cm.point_light_cid = p.point_light_cid;
+    cm.spot_light_cid = p.spot_light_cid;
+    cm.world_transform_cid = p.world_transform_cid;
+    cm.camera_cid = p.camera_cid;
+    cm.frame_cid = p.frame_cid;
+    cm.grid_x = if (p.grid_x != 0) p.grid_x else default_grid_x;
+    cm.grid_y = if (p.grid_y != 0) p.grid_y else default_grid_y;
+    cm.grid_z = if (p.grid_z != 0) p.grid_z else default_grid_z;
+    cm.max_lights_per_cluster = if (p.max_lights_per_cluster != 0) p.max_lights_per_cluster else default_max_lights_per_cluster;
+    cm.num_clusters = cm.grid_x * cm.grid_y * cm.grid_z;
 
     const point_lights_bytes = MAX_LIGHTS * @sizeOf(PointLightGpu);
     const spot_lights_bytes = MAX_LIGHTS * @sizeOf(SpotLightGpu);
@@ -299,111 +297,71 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     cm.spot_counts_sb = makeStorageBuffer(dev, "cluster.spot_counts_sb", counts_bytes, out_error);
     if (cm.spot_counts_sb == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const ro = c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
-    const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
-    const light_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 2, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 4, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 5, .visibility = frag, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 6, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    cm.light_set_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "cluster.light_set_bgl",
-        .entry_count = 7,
-        .entries = &light_bgl_entries,
-    });
     cm.cluster_grid_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .label = "cluster.cluster_grid_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterGridUniform),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (cm.cluster_grid_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const light_bg_entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = ro, .buffer = cm.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = ro, .buffer = cm.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 2, .type = ro, .buffer = cm.point_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 3, .type = ro, .buffer = cm.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 4, .type = ro, .buffer = cm.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 5, .type = ro, .buffer = cm.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 6, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = cm.cluster_grid_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterGridUniform), .texture_view = 0, .sampler = 0 },
+    const published = [_]struct { buffer: c.ke_gpu_buffer, size: usize }{
+        .{ .buffer = cm.point_lights_sb, .size = point_lights_bytes },
+        .{ .buffer = cm.spot_lights_sb, .size = spot_lights_bytes },
+        .{ .buffer = cm.point_indices_sb, .size = indices_bytes },
+        .{ .buffer = cm.point_counts_sb, .size = counts_bytes },
+        .{ .buffer = cm.spot_indices_sb, .size = indices_bytes },
+        .{ .buffer = cm.spot_counts_sb, .size = counts_bytes },
+        .{ .buffer = cm.cluster_grid_uniform, .size = @sizeOf(ClusterGridUniform) },
     };
-    cm.fwd_light_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .label = "cluster.fwd_light_bind_group",
-        .layout = cm.light_set_bgl,
-        .entry_count = 7,
-        .entries = &light_bg_entries,
-    }, out_error);
-    if (cm.fwd_light_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
-    _ = core.*.import_bind_group.?(core, "cluster_lights", cm.fwd_light_bind_group, cm.light_set_bgl, null);
+    for (cluster_buffers, published) |entry, buffer| {
+        var buf: [feature_bindings.name_capacity]u8 = undefined;
+        const name = feature_bindings.subName(&buf, p.output, entry.suffix) orelse return outOfMemory(out_error);
+        if (core.*.import_buffer.?(core, name, buffer.buffer, buffer.size, out_error) == c.KE_COMPONENT_INVALID) return false;
+    }
 
-    const rw = c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER;
-    const comp = c.KE_GPU_SHADER_STAGE_COMPUTE;
-    const cull_bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = comp, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = comp, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 2, .visibility = comp, .type = ro, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 4, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 5, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 6, .visibility = comp, .type = rw, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    const cull_bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "cluster.cull_bgl",
-        .entry_count = 7,
-        .entries = &cull_bgl_entries,
-    });
-    cm.cull_bgl = cull_bgl;
+    cm.binder = core.*.resource_binder.?(core);
+    cm.cull_layout = cm.binder.create_shader_layout.?(cm.binder, &cull_layout_params, out_error);
+    if (cm.cull_layout == c.KE_RENDER_BINDING_INVALID) return false;
 
     cm.cull_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .label = "cluster.cull_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterParams),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (cm.cull_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    const cull_bg_entries = [_]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = cm.cull_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterParams), .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = ro, .buffer = cm.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 2, .type = ro, .buffer = cm.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 3, .type = rw, .buffer = cm.point_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 4, .type = rw, .buffer = cm.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 5, .type = rw, .buffer = cm.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
-        .{ .binding = 6, .type = rw, .buffer = cm.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
+    const cull_bindings = [_]c.ke_render_shader_binding{
+        .{ .name = "params", .buffer = cm.cull_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterParams), .texture_view = 0, .sampler = 0 },
+        .{ .name = "point_lights", .buffer = cm.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .name = "spot_lights", .buffer = cm.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .name = "point_indices", .buffer = cm.point_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .name = "point_counts", .buffer = cm.point_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .name = "spot_indices", .buffer = cm.spot_indices_sb, .buffer_offset = 0, .buffer_size = indices_bytes, .texture_view = 0, .sampler = 0 },
+        .{ .name = "spot_counts", .buffer = cm.spot_counts_sb, .buffer_offset = 0, .buffer_size = counts_bytes, .texture_view = 0, .sampler = 0 },
     };
-    cm.cull_bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .label = "cluster.cull_bind_group",
-        .layout = cull_bgl,
-        .entry_count = 7,
-        .entries = &cull_bg_entries,
-    }, out_error);
-    if (cm.cull_bind_group == c.KE_GPU_INVALID_HANDLE) return false;
+    cm.cull_set = cm.binder.create_set.?(cm.binder, cm.cull_layout, null, "cluster.cull_set", &cull_bindings, cull_bindings.len, out_error);
+    if (cm.cull_set == c.KE_RENDER_BINDING_INVALID) return false;
 
     const cs = core.*.load_shader.?(core, "cluster_cull", c.KE_GPU_SHADER_STAGE_COMPUTE, out_error);
     if (cs == c.KE_GPU_INVALID_HANDLE) return false;
 
-    const cull_layouts = [_]c.ke_gpu_bind_group_layout{ cull_bgl, 0, 0, 0 };
-    cm.cull_pipeline = dev.create_compute_pipeline.?(dev, &c.ke_gpu_compute_pipeline_params{
+    var cull_pipeline_params = c.ke_gpu_compute_pipeline_params{
         .label = "cluster.cull_pipeline",
         .compute_module = cs,
         .compute_entry = "cs_main",
-        .bind_group_layouts = cull_layouts,
-        .bind_group_layout_count = 1,
-    });
-    if (cm.cull_pipeline == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "cull pass: compute pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
-    }
+        .bind_group_layouts = .{ 0, 0, 0, 0 },
+        .bind_group_layout_count = 0,
+    };
+    if (!cm.binder.pipeline_layouts.?(cm.binder, cm.cull_layout, &cull_pipeline_params.bind_group_layouts, cull_pipeline_params.bind_group_layouts.len, &cull_pipeline_params.bind_group_layout_count, out_error)) return false;
+    cm.cull_pipeline = dev.create_compute_pipeline.?(dev, &cull_pipeline_params, out_error);
+    if (cm.cull_pipeline == c.KE_GPU_INVALID_HANDLE) return false;
 
-    cm.clusters_cid = core.*.import_tag.?(core, "light_clusters", null);
+    cm.clusters_cid = core.*.import_tag.?(core, p.output, out_error);
+    if (cm.clusters_cid == c.KE_COMPONENT_INVALID) return false;
     cm.cull_io = std.mem.zeroes(c.ke_render_pass_io);
     cm.cull_io.name = "render.cull";
-    cm.cull_io.cmd_slot = 2;
     cm.cull_access = .{
         .{ .cid = cm.clusters_cid, .access = c.KE_ACCESS_WRITE },
         .{ .cid = cm.point_light_cid, .access = c.KE_ACCESS_READ },
@@ -419,17 +377,17 @@ fn setup(cm: *ClusterModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
-/// Releases every GPU object whose handle is not the invalid handle, so it is safe on a module that
+/// Releases every GPU object, set and layout whose handle is not the invalid one, so it is safe on a module that
 /// `setup` did not finish. The device and the borrowed pointers are not released.
 fn destroyModule(cm: *const ClusterModule) void {
     const dev = cm.device;
     const invalid = c.KE_GPU_INVALID_HANDLE;
     if (cm.cull_pipeline != invalid) dev.destroy_compute_pipeline.?(dev, cm.cull_pipeline);
-    if (cm.cull_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.cull_bind_group);
-    if (cm.cull_bgl != invalid) dev.destroy_bind_group_layout.?(dev, cm.cull_bgl);
+    if (cm.cull_layout != c.KE_RENDER_BINDING_INVALID) {
+        cm.binder.destroy_set.?(cm.binder, cm.cull_set);
+        cm.binder.destroy_shader_layout.?(cm.binder, cm.cull_layout);
+    }
     if (cm.cull_uniform != invalid) dev.destroy_buffer.?(dev, cm.cull_uniform);
-    if (cm.fwd_light_bind_group != invalid) dev.destroy_bind_group.?(dev, cm.fwd_light_bind_group);
-    if (cm.light_set_bgl != invalid) dev.destroy_bind_group_layout.?(dev, cm.light_set_bgl);
     if (cm.cluster_grid_uniform != invalid) dev.destroy_buffer.?(dev, cm.cluster_grid_uniform);
     const storage = [_]c.ke_gpu_buffer{
         cm.point_lights_sb,  cm.spot_lights_sb,
@@ -450,28 +408,24 @@ fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
 }
 
 /// Builds a cluster pass on the render service and device given, and registers its system with the
-/// runtime given. The handle's `ref` is null when a required pointer is null, when `setup` fails,
-/// or when the runtime refuses the registration; in the last two cases the objects created so far
-/// are released. Only failures that `setup` checks reach the out-error parameter.
-export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                    device: ?*c.ke_gpu_device, logger: ?*c.ke_logger,
-                                    grid_x: u32, grid_y: u32, grid_z: u32, max_lights_per_cluster: u32,
-                                    point_light_cid: c.ke_component_id, spot_light_cid: c.ke_component_id,
-                                    world_transform_cid: c.ke_component_id, camera_cid: c.ke_component_id,
-                                    frame_cid: c.ke_component_id, view_space: ?*c.ke_view_space,
-                                    render_camera: ?*c.ke_render_camera,
+/// runtime given. A missing runtime, service, device, view space, camera or output fails as an
+/// invalid argument and a module that cannot be allocated as out of memory. The handle's `ref` is
+/// null when `setup` fails or the runtime refuses the registration, and the objects created so far
+/// are released then.
+export fn ke_render_cluster_create(params_in: ?*const c.ke_render_cluster_params,
                                     out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_cluster_handle {
     const empty = c.ke_render_cluster_handle{ .ref = null, .destroy = null };
-    const rt = runtime orelse return empty;
-    const core_ref = core orelse return empty;
-    const dev = device orelse return empty;
-    const vs = view_space orelse return empty;
-    const camera_api = render_camera orelse return empty;
+    const p = params_in orelse return refused(out_error);
+    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
+    if (p.service == null or p.device == null or p.view_space == null or p.camera == null or p.output == null)
+        return refused(out_error);
 
-    const cm = gpa.create(ClusterModule) catch return empty;
+    const cm = gpa.create(ClusterModule) catch {
+        _ = outOfMemory(out_error);
+        return empty;
+    };
     cm.* = .{};
-    if (!setup(cm, dev, core_ref, logger, grid_x, grid_y, grid_z, max_lights_per_cluster,
-               point_light_cid, spot_light_cid, world_transform_cid, camera_cid, frame_cid, vs, camera_api, out_error)) {
+    if (!setup(cm, p, out_error)) {
         destroyModule(cm);
         gpa.destroy(cm);
         return empty;
@@ -496,6 +450,21 @@ export fn ke_render_cluster_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_
     return .{ .ref = @ptrCast(cm), .destroy = destroyHandle };
 }
 
+const default_grid_x = 16;
+const default_grid_y = 9;
+const default_grid_z = 24;
+const default_max_lights_per_cluster = 64;
+
+fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
+    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "cluster pass: allocation failed", @src().file, @intCast(@src().line), null);
+    return false;
+}
+
+fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_cluster_handle {
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "cluster pass: runtime, service, device, view space, camera and output are required", @src().file, @intCast(@src().line), null);
+    return .{ .ref = null, .destroy = null };
+}
+
 const testing = std.testing;
 
 const Stubs = @import("stubs").Stubs(c);
@@ -504,12 +473,12 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var camera = std.mem.zeroes(c.ke_render_camera);
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
+    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -521,13 +490,13 @@ test "a cluster pass whose shader fails to load releases what it had created" {
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var camera = std.mem.zeroes(c.ke_render_camera);
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
+    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try testing.expectEqual(@as(i64, 0), dev.compute_live);
@@ -538,13 +507,13 @@ test "a cluster pass the runtime refuses to register releases what it had create
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
     var camera = std.mem.zeroes(c.ke_render_camera);
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_cluster_create(rt.api(), core.api(), dev.api(), null, 16, 9, 24, 64, 1, 2, 3, 4, 5, &view_space, &camera, null);
+    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try testing.expectEqual(@as(i64, 0), dev.compute_live);

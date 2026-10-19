@@ -19,9 +19,8 @@ public unsafe partial struct ke_render_pass_io
     [NativeTypeName("uint32_t")]
     public uint writes_count;
 
-    [NativeTypeName("uint32_t")]
-    public uint cmd_slot;
+    [NativeTypeName("ke_render_chain_link")]
+    public uint chain;
 
-    [NativeTypeName("uint32_t")]
-    public uint load;
+    public ke_render_depth_mode depth;
 }

@@ -8,24 +8,24 @@ const c = rc.c;
 
 const MAX_COLOR_TARGETS = 8;
 
-/// The fields of a render pipeline params that decide which pipeline it is, copied so the key
-/// outlives the params. The entry names are copied, but the vertex buffer array is kept only by
-/// its address, so an identical array at another address makes another key.
+/// The fields of a render pipeline params that decide which pipeline it is, kept by value so the
+/// key outlives the params. The entry names and the vertex buffer layouts are kept as digests of
+/// their content, so equal content at any address makes the same key.
 const PsoKey = struct {
     vertex_module: c.ke_gpu_shader_module,
     fragment_module: c.ke_gpu_shader_module,
-    vertex_entry: [64]u8,
-    fragment_entry: [64]u8,
+    vertex_entry: u64,
+    fragment_entry: u64,
     primitive_topology: c.ke_gpu_primitive_topology,
     cull_mode: c.ke_gpu_cull_mode,
     front_face: c.ke_gpu_front_face,
     vertex_buffer_count: u32,
-    vertex_buffers_ptr: usize,
+    vertex_buffers: u64,
     blend_state: c.ke_gpu_blend_state,
     depth_stencil: c.ke_gpu_depth_stencil_state,
     bind_group_layouts: [4]c.ke_gpu_bind_group_layout,
     bind_group_layout_count: u32,
-    alpha_to_coverage_enabled: c.ke_bool,
+    alpha_to_coverage_enabled: bool,
     color_target_formats: [MAX_COLOR_TARGETS]c.ke_gpu_texture_format,
     color_target_count: u32,
 
@@ -33,13 +33,13 @@ const PsoKey = struct {
         var key: PsoKey = std.mem.zeroes(PsoKey);
         key.vertex_module = p.vertex_module;
         key.fragment_module = p.fragment_module;
-        copyEntry(&key.vertex_entry, p.vertex_entry);
-        copyEntry(&key.fragment_entry, p.fragment_entry);
+        key.vertex_entry = entryDigest(p.vertex_entry);
+        key.fragment_entry = entryDigest(p.fragment_entry);
         key.primitive_topology = p.primitive_topology;
         key.cull_mode = p.cull_mode;
         key.front_face = p.front_face;
         key.vertex_buffer_count = p.vertex_buffer_count;
-        key.vertex_buffers_ptr = @intFromPtr(p.vertex_buffers);
+        key.vertex_buffers = layoutDigest(p.vertex_buffers, p.vertex_buffer_count);
         key.blend_state = p.blend_state;
         key.depth_stencil = p.depth_stencil;
         key.bind_group_layouts = p.bind_group_layouts;
@@ -51,11 +51,26 @@ const PsoKey = struct {
     }
 };
 
-fn copyEntry(dst: *[64]u8, src: [*c]const u8) void {
-    if (src == null) return;
-    const span = std.mem.span(src);
-    const n = @min(span.len, dst.len - 1);
-    @memcpy(dst[0..n], span[0..n]);
+fn entryDigest(name: [*c]const u8) u64 {
+    if (name == null) return 0;
+    return std.hash.Wyhash.hash(0, std.mem.span(name));
+}
+
+fn layoutDigest(layouts: [*c]const c.ke_gpu_vertex_buffer_layout, count: u32) u64 {
+    var h = std.hash.Wyhash.init(0);
+    if (layouts == null) return h.final();
+    for (layouts[0..count]) |layout| {
+        std.hash.autoHash(&h, layout.stride);
+        std.hash.autoHash(&h, layout.step_mode);
+        std.hash.autoHash(&h, layout.attribute_count);
+        if (layout.attributes == null) continue;
+        for (layout.attributes[0..layout.attribute_count]) |a| {
+            std.hash.autoHash(&h, a.shader_location);
+            std.hash.autoHash(&h, a.format);
+            std.hash.autoHash(&h, a.offset);
+        }
+    }
+    return h.final();
 }
 
 const PipelineState = enum(u8) { pending, ready };
@@ -277,7 +292,7 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_p
     var fallback_params = p.*;
     fallback_params.fragment_module = magentaFragmentModule(st, p.color_target_count);
     fallback_params.fragment_entry = "fs_main";
-    return st.device.create_render_pipeline.?(st.device, &fallback_params);
+    return st.device.create_render_pipeline.?(st.device, &fallback_params, null);
 }
 
 /// Answers the render service's pipeline request. A key already in the table returns its current
@@ -287,8 +302,7 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_p
 /// Callable from several workers at once without a lock: a request that loses the publication of
 /// its entry destroys the fallback it built, never starts its compile, and answers with the
 /// entry that won. A pipeline the device fails to compile leaves the entry on its fallback for
-/// good. The vertex layout array of `params` is part of the key by address, so it has to live as
-/// long as the requests that must share an entry.
+/// good.
 pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
     const st = rc.coreOf(self);
     const key = PsoKey.fromParams(params);
@@ -297,7 +311,7 @@ pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke
     if (st.pipeline_cache.find(hash, &key)) |entry| return entry.current();
 
     const entry = heap.gpa.create(Entry) catch {
-        return st.device.create_render_pipeline.?(st.device, params);
+        return st.device.create_render_pipeline.?(st.device, params, null);
     };
     entry.* = .{
         .key = key,
@@ -320,7 +334,7 @@ pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke
         .failed => {
             st.device.destroy_pipeline.?(st.device, entry.fallback_pso);
             heap.gpa.destroy(entry);
-            return st.device.create_render_pipeline.?(st.device, params);
+            return st.device.create_render_pipeline.?(st.device, params, null);
         },
     }
 }

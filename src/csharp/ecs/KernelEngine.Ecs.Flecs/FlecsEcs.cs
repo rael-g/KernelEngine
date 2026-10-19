@@ -1,5 +1,5 @@
-﻿using KernelEngine.Ecs.Flecs.Native;
-using KernelEngine.Common.Native;
+﻿using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Flecs.Native;
 
 namespace KernelEngine.Ecs.Flecs;
 

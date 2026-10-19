@@ -10,14 +10,9 @@ pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-const stb = @cImport({
-    @cInclude("stb_image.h");
-});
+const stb = @import("c");
 
-const c = @cImport({
-    @cInclude("kernel_engine/asset/stb_image/stb_image_loader.h");
-    @cInclude("kernel_engine/logger/logger.h");
-});
+const c = @import("c");
 
 const E = @import("kerror").Errors(c);
 
@@ -141,9 +136,7 @@ export fn ke_image_loader_stb_create(
 
 const testing = std.testing;
 
-const testing_libc = @cImport({
-    @cInclude("stdio.h");
-});
+const testing_libc = @import("c");
 
 fn createLoader() c.ke_image_loader_handle {
     var params = std.mem.zeroes(c.ke_image_loader_stb_params);

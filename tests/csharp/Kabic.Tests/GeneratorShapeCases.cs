@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+
 using Kabic;
 using Kabic.CSharp;
 
@@ -167,9 +168,9 @@ internal static class GeneratorShapeCases
                 Param("body", "uint32_t"),
                 Param("impulse_x", "float", "vector2:impulse"),
                 Param("impulse_y", "float"),
-                Param("wake", "ke_bool"))),
+                Param("wake", "bool"))),
             contains: ["public void ApplyImpulse(uint body, Vector2 impulse, bool wake)",
-                       "body, impulse.X, impulse.Y, wake ? (byte)1 : (byte)0"],
+                       "body, impulse.X, impulse.Y, wake"],
             absent: ["float impulseX"]);
 
         Expect("a callback and its context become one delegate parameter",
@@ -231,8 +232,11 @@ internal static class GeneratorShapeCases
                        "foreach (var retained in _retainedUserData.Values) retained.Free();",
                        "throw parked;"],
             absent: ["ke_probe_module_params* p", "void* userData", "onLoadHandle", "onUnloadHandle"],
-            aliases: new() { ["ke_probe_load_fn"] = "bool (*)(void *, ke_error **)",
-                             ["ke_probe_unload_fn"] = "void (*)(void *)" },
+            aliases: new()
+            {
+                ["ke_probe_load_fn"] = "bool (*)(void *, ke_error **)",
+                ["ke_probe_unload_fn"] = "void (*)(void *)"
+            },
             callbacks: [Callback("ke_probe_load_fn", "bool",
                             Param("ctx", "void *", "context"), Param("out_error", "ke_error **")),
                         Callback("ke_probe_unload_fn", "void",
@@ -419,16 +423,15 @@ internal static class GeneratorShapeCases
                 ("layers", "uint32_t", ["default:1"])),
             contains: ["[GeneratedNodeComponent(typeof(ProbeComponent), \"probe\")]",
                        "public partial class Probe3D : Node",
-                       "_generatedState0 = ProbeComponent.Default;",
                        "[NativeField(\"Position\", Component = typeof(ProbeComponent))]",
                        "public partial Vector3 Position { get; set; }",
                        "[NativeField(\"Layers\", Component = typeof(ProbeComponent))]"],
             absent: ["typeof(ke_probe_component)", "ke_vec3", "_generatedState0.position"]);
 
-        ExpectNodeType("a node type with no stated default seeds nothing",
-            NodeStruct("ke_bare_component", "Bare", ("value", "float", [])),
-            contains: ["public Bare()"],
-            absent: ["Default;"]);
+        ExpectNodeType("a node type declares no constructor, so one written beside it is its only one",
+            NodeStruct("ke_probe_component", "Probe3D", ("layers", "uint32_t", ["default:1"])),
+            contains: ["public partial class Probe3D : Node"],
+            absent: ["public Probe3D()", "Default;"]);
 
         ExpectValueStruct("a node component is projected without saying [value] as well",
             NodeStruct("ke_probe_component", "Probe3D", ("position", "ke_vec3", [])),
@@ -633,65 +636,65 @@ internal static class GeneratorShapeCases
             Register(what, failures =>
             {
                 var api = new JsonObject
-            {
-                ["enums"] = new JsonArray(new JsonObject
                 {
-                    ["name"] = "ke_probe_verdict",
-                    ["doc"] = null,
-                    ["values"] = new JsonArray(new JsonObject
+                    ["enums"] = new JsonArray(new JsonObject
+                    {
+                        ["name"] = "ke_probe_verdict",
+                        ["doc"] = null,
+                        ["values"] = new JsonArray(new JsonObject
                         { ["name"] = "KE_PROBE_VERDICT_NONE", ["rawValue"] = "0", ["isInt"] = true, ["doc"] = null }),
-                }),
-                ["structs"] = new JsonArray(new JsonObject
-                {
-                    ["name"] = "ke_probe_handle",
-                    ["doc"] = null,
-                    ["tags"] = new JsonArray(),
-                    ["fields"] = new JsonArray(
+                    }),
+                    ["structs"] = new JsonArray(new JsonObject
+                    {
+                        ["name"] = "ke_probe_handle",
+                        ["doc"] = null,
+                        ["tags"] = new JsonArray(),
+                        ["fields"] = new JsonArray(
                         new JsonObject { ["name"] = "ref", ["type"] = "ke_probe *", ["tags"] = new JsonArray(), ["doc"] = null },
                         new JsonObject { ["name"] = "destroy", ["type"] = "void (*)(ke_probe *)", ["tags"] = new JsonArray(), ["doc"] = null }),
-                    ["slots"] = new JsonArray(),
-                }),
-                ["vtables"] = new JsonArray(vtable),
-                ["callbacks"] = new JsonArray((callbacks ?? []).Cast<JsonNode>().ToArray()),
-                ["functions"] = new JsonArray(),
-                ["type_aliases"] = new JsonObject { ["ke_entity"] = "uint64_t" },
-            };
-            foreach (var extra in structs ?? [])
-                api["structs"]!.AsArray().Add(extra);
-            foreach (var (alias, target) in aliases ?? [])
-                api["type_aliases"]!.AsObject()[alias] = target;
+                        ["slots"] = new JsonArray(),
+                    }),
+                    ["vtables"] = new JsonArray(vtable),
+                    ["callbacks"] = new JsonArray((callbacks ?? []).Cast<JsonNode>().ToArray()),
+                    ["functions"] = new JsonArray(),
+                    ["type_aliases"] = new JsonObject { ["ke_entity"] = "uint64_t" },
+                };
+                foreach (var extra in structs ?? [])
+                    api["structs"]!.AsArray().Add(extra);
+                foreach (var (alias, target) in aliases ?? [])
+                    api["type_aliases"]!.AsObject()[alias] = target;
 
-            string emitted;
-            try
-            {
-                var model = ApiReader.Read(api);
-                var convention = ProbeConvention.Value;
-                var classified = Classifier.Classify(model, [], [], convention);
-                var provider = classified.Providers.Single();
-                var source = CSharpWriter.RenderProvider(model, provider, classified, "Probe", "Probe.Native", [], convention);
-                emitted = source.Class + (source.Contract ?? "");
-            }
-            catch (Exception ex)
-            {
-                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
-                else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
-                    failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
-                return;
-            }
-            if (throws is not null)
-            {
-                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
-                return;
-            }
-            if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                string emitted;
+                try
+                {
+                    var model = ApiReader.Read(api);
+                    var convention = ProbeConvention.Value;
+                    var classified = Classifier.Classify(model, [], [], convention);
+                    var provider = classified.Providers.Single();
+                    var source = CSharpWriter.RenderProvider(model, provider, classified, "Probe", "Probe.Native", [], convention);
+                    emitted = source.Class + (source.Contract ?? "");
+                }
+                catch (Exception ex)
+                {
+                    if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
+                    else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+                        failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+                    return;
+                }
+                if (throws is not null)
+                {
+                    failures.Add($"{what}: expected the writer to refuse, it emitted instead");
+                    return;
+                }
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 
@@ -702,19 +705,19 @@ internal static class GeneratorShapeCases
             Register(what, failures =>
             {
                 var model = NewModel();
-            model.Structs.Add(component);
-            foreach (var other in alongside ?? []) model.Structs.Add(other);
+                model.Structs.Add(component);
+                foreach (var other in alongside ?? []) model.Structs.Add(other);
 
-            var emitted = CSharpWriter.RenderNodeType(model, component, "Probe", [], ProbeConvention.Value);
-            if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                var emitted = CSharpWriter.RenderNodeType(model, component, "Probe", [], ProbeConvention.Value);
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 
@@ -725,35 +728,35 @@ internal static class GeneratorShapeCases
             Register(what, failures =>
             {
                 var model = NewModel();
-            model.Structs.Add(s);
-            foreach (var other in alongside ?? []) model.Structs.Add(other);
+                model.Structs.Add(s);
+                foreach (var other in alongside ?? []) model.Structs.Add(other);
 
-            string emitted;
-            try
-            {
-                emitted = CSharpWriter.RenderStruct(model, s, "Probe", [], ProbeConvention.Value);
-            }
-            catch (Exception ex)
-            {
-                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
-                else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
-                    failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
-                return;
-            }
-            if (throws is not null)
-            {
-                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
-                return;
-            }
-            if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                string emitted;
+                try
+                {
+                    emitted = CSharpWriter.RenderStruct(model, s, "Probe", [], ProbeConvention.Value);
+                }
+                catch (Exception ex)
+                {
+                    if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
+                    else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+                        failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+                    return;
+                }
+                if (throws is not null)
+                {
+                    failures.Add($"{what}: expected the writer to refuse, it emitted instead");
+                    return;
+                }
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 
@@ -763,47 +766,47 @@ internal static class GeneratorShapeCases
             Register(what, failures =>
             {
                 var api = new JsonObject
-            {
-                ["enums"] = new JsonArray(),
-                ["structs"] = new JsonArray(new JsonObject
                 {
-                    ["name"] = "ke_probe_ctx",
-                    ["doc"] = null,
-                    ["tags"] = new JsonArray(),
-                    ["fields"] = new JsonArray(
+                    ["enums"] = new JsonArray(),
+                    ["structs"] = new JsonArray(new JsonObject
+                    {
+                        ["name"] = "ke_probe_ctx",
+                        ["doc"] = null,
+                        ["tags"] = new JsonArray(),
+                        ["fields"] = new JsonArray(
                         new JsonObject { ["name"] = "handle", ["type"] = "void *", ["tags"] = new JsonArray(), ["doc"] = null }),
-                    ["slots"] = new JsonArray(),
-                }),
-                ["vtables"] = new JsonArray(),
-                ["callbacks"] = new JsonArray(),
-                ["functions"] = new JsonArray(functions.Cast<JsonNode>().ToArray()),
-                ["type_aliases"] = new JsonObject(),
-            };
+                        ["slots"] = new JsonArray(),
+                    }),
+                    ["vtables"] = new JsonArray(),
+                    ["callbacks"] = new JsonArray(),
+                    ["functions"] = new JsonArray(functions.Cast<JsonNode>().ToArray()),
+                    ["type_aliases"] = new JsonObject(),
+                };
 
-            string emitted;
-            try
-            {
-                var model = ApiReader.Read(api);
-                var convention = ProbeConvention.Value;
-                var classified = Classifier.Classify(model, [], [], convention);
-                var (owner, group) = classified.FreeFunctionGroups.Single();
-                emitted = CSharpWriter.RenderFreeFunctions(model, owner, group, "Probe", "Probe.Native",
-                    [], "ke_probe", convention);
-            }
-            catch (Exception ex)
-            {
-                failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
-                return;
-            }
-            if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                string emitted;
+                try
+                {
+                    var model = ApiReader.Read(api);
+                    var convention = ProbeConvention.Value;
+                    var classified = Classifier.Classify(model, [], [], convention);
+                    var (owner, group) = classified.FreeFunctionGroups.Single();
+                    emitted = CSharpWriter.RenderFreeFunctions(model, owner, group, "Probe", "Probe.Native",
+                        [], "ke_probe", convention);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
+                    return;
+                }
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 
@@ -859,34 +862,34 @@ internal static class GeneratorShapeCases
             Register(what, failures =>
             {
                 var model = NewModel();
-            model.Structs.Add(s);
+                model.Structs.Add(s);
 
-            string emitted;
-            try
-            {
-                emitted = CSharpWriter.RenderStructSpans(model, s, "Probe.Native", ProbeConvention.Value);
-            }
-            catch (Exception ex)
-            {
-                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
-                else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
-                    failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
-                return;
-            }
-            if (throws is not null)
-            {
-                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
-                return;
-            }
-            if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                string emitted;
+                try
+                {
+                    emitted = CSharpWriter.RenderStructSpans(model, s, "Probe.Native", ProbeConvention.Value);
+                }
+                catch (Exception ex)
+                {
+                    if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
+                    else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+                        failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+                    return;
+                }
+                if (throws is not null)
+                {
+                    failures.Add($"{what}: expected the writer to refuse, it emitted instead");
+                    return;
+                }
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 
@@ -896,37 +899,38 @@ internal static class GeneratorShapeCases
             Register(what, failures =>
             {
                 var model = NewModel();
-            model.Structs.Add(s);
-            model.Structs.Add(new ApiStruct("ke_vertex", null, ["value"],
-                [new ApiField("x", "float", [], null)], []) { External = true });
+                model.Structs.Add(s);
+                model.Structs.Add(new ApiStruct("ke_vertex", null, ["value"],
+                    [new ApiField("x", "float", [], null)], [])
+                { External = true });
 
-            string emitted;
-            try
-            {
-                emitted = CSharpWriter.RenderView(model, s, "Probe", ["Probe.Common"],
-                    ProbeConvention.Value);
-            }
-            catch (Exception ex)
-            {
-                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
-                else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
-                    failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
-                return;
-            }
-            if (throws is not null)
-            {
-                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
-                return;
-            }
-            if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                string emitted;
+                try
+                {
+                    emitted = CSharpWriter.RenderView(model, s, "Probe", ["Probe.Common"],
+                        ProbeConvention.Value);
+                }
+                catch (Exception ex)
+                {
+                    if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
+                    else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+                        failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+                    return;
+                }
+                if (throws is not null)
+                {
+                    failures.Add($"{what}: expected the writer to refuse, it emitted instead");
+                    return;
+                }
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 
@@ -942,35 +946,35 @@ internal static class GeneratorShapeCases
             Register(what, failures =>
             {
                 var model = NewModel();
-            model.Structs.Add(s);
-            foreach (var other in alongside ?? []) model.Structs.Add(other);
+                model.Structs.Add(s);
+                foreach (var other in alongside ?? []) model.Structs.Add(other);
 
-            string emitted;
-            try
-            {
-                emitted = CSharpWriter.RenderBorrowed(model, s, "Probe", [], ProbeConvention.Value);
-            }
-            catch (Exception ex)
-            {
-                if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
-                else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
-                    failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
-                return;
-            }
-            if (throws is not null)
-            {
-                failures.Add($"{what}: expected the writer to refuse, it emitted instead");
-                return;
-            }
-            if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                string emitted;
+                try
+                {
+                    emitted = CSharpWriter.RenderBorrowed(model, s, "Probe", [], ProbeConvention.Value);
+                }
+                catch (Exception ex)
+                {
+                    if (throws is null) failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
+                    else if (!ex.Message.Contains(throws, StringComparison.Ordinal))
+                        failures.Add($"{what}: refused for the wrong reason: {ex.Message}");
+                    return;
+                }
+                if (throws is not null)
+                {
+                    failures.Add($"{what}: expected the writer to refuse, it emitted instead");
+                    return;
+                }
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 
@@ -994,27 +998,27 @@ internal static class GeneratorShapeCases
                 new ApiEnumValue("KE_PROBE_REACH_KIND_NEAR", "0", true, "Close by."),
                 new ApiEnumValue("KE_PROBE_REACH_KIND_FAR", "1", true, "Further off."),
             ])
-            { Tags = ["borrow_kinds"] };
+                { Tags = ["borrow_kinds"] };
 
-            string emitted;
-            try
-            {
-                emitted = CSharpWriter.RenderBorrowWrappers(kinds, "Probe", ProbeConvention.Value);
-            }
-            catch (Exception ex)
-            {
-                failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
-                return;
-            }
-            if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+                string emitted;
+                try
+                {
+                    emitted = CSharpWriter.RenderBorrowWrappers(kinds, "Probe", ProbeConvention.Value);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
+                    return;
+                }
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
-            foreach (var needle in contains)
-                if (!emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected to find \"{needle}\"");
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
 
-            foreach (var needle in absent)
-                if (emitted.Contains(needle, StringComparison.Ordinal))
-                    failures.Add($"{what}: expected NOT to find \"{needle}\"");
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
             });
         }
 
@@ -1043,7 +1047,7 @@ internal static class GeneratorShapeCases
             ["doc"] = null,
             ["tags"] = new JsonArray((JsonNode)"view"),
             ["fields"] = new JsonArray(new JsonObject
-                { ["name"] = "count", ["type"] = "uint32_t", ["tags"] = new JsonArray(), ["doc"] = null }),
+            { ["name"] = "count", ["type"] = "uint32_t", ["tags"] = new JsonArray(), ["doc"] = null }),
             ["slots"] = new JsonArray(),
         };
 

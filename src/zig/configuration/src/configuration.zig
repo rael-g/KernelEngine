@@ -6,10 +6,7 @@ const std = @import("std");
 /// Sets the standard library's signal stack size option to null, so no alternate signal stack is
 /// set up.
 pub const std_options: std.Options = .{ .signal_stack_size = null };
-const ke = @cImport({
-    @cInclude("kernel_engine/common/error.h");
-    @cInclude("kernel_engine/configuration/configuration.h");
-});
+const ke = @import("c");
 
 const heap = @import("heap");
 /// The allocator every allocation in this file goes through, taken from the heap module.

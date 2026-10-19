@@ -18,9 +18,7 @@ public partial struct ke_gpu_depth_stencil_attachment
     [NativeTypeName("uint8_t")]
     public byte clear_stencil;
 
-    [NativeTypeName("ke_bool")]
-    public byte depth_read_only;
+    public bool depth_read_only;
 
-    [NativeTypeName("ke_bool")]
-    public byte stencil_read_only;
+    public bool stencil_read_only;
 }

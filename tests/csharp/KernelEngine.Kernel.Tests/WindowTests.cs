@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+
 using Xunit;
 
 namespace EngineTests;
@@ -32,10 +33,10 @@ public unsafe class WindowTests
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static byte MockShouldClose(ke_window* window)
+    private static bool MockShouldClose(ke_window* window)
     {
         _shouldCloseCalled++;
-        return 1;
+        return true;
     }
 
     private static ke_window_handle MakeHandle(ke_window* ptr) =>

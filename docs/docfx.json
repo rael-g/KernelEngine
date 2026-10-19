@@ -8,7 +8,6 @@
           "*/toc.yml",
           "guides/**.md",
           "architecture/**.md",
-          "decisions/**.md",
           "conventions/**.md",
           "formats/**.md"
         ]

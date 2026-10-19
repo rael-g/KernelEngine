@@ -6,11 +6,7 @@ const builtin = @import("builtin");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const c = @cImport({
-    @cInclude("kernel_engine/render/gpu/gpu_render_target.h");
-    @cInclude("kernel_engine/render/renderdoc_target/gpu_render_target_renderdoc_create.h");
-    @cInclude("renderdoc_app.h");
-});
+const c = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;

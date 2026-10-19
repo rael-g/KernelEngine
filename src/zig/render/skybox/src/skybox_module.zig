@@ -1,13 +1,12 @@
 //! The skybox pass: the render-phase system "render.skybox" that draws the environment cubemap of
-//! the skybox component into the "hdr" target. It also owns the creation and teardown of that
-//! pass, behind the one factory it exports.
+//! the skybox component over the frame's color, where the frame's depth is at the far plane. It also owns the
+//! creation and teardown of that pass, behind the one factory it exports.
 
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 const zm = @import("zmath");
-const cimport = @import("cimport.zig");
-const c = cimport.c;
+const c = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -17,8 +16,17 @@ const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
 /// The state of one skybox pass. `ke_render_skybox_create` allocates it, and `destroyHandle` frees
 /// it, or `ke_render_skybox_create` does when creation fails. The runtime keeps its address as the
-/// user data of the system, so it must not be moved. `io` and the query terms point into its own
-/// arrays. After `setup`, only `bind_group` changes.
+/// user data of the system, so it must not be moved. The query terms point into its own arrays, and
+/// `io` carries the link the pass holds in the chain. After `setup`, only `set` changes.
+const depth_hint = [_]c.ke_render_binding_hint{.{ .name = "g_depth", .flags = c.KE_RENDER_BINDING_HINT_DEPTH }};
+
+const shader_layout = c.ke_render_shader_layout_params{
+    .shader = "skybox",
+    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .hints = &depth_hint,
+    .hint_count = depth_hint.len,
+};
+
 const SkyboxModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
@@ -28,14 +36,14 @@ const SkyboxModule = struct {
     world_transform_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
 
+
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    bgl: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE,
-    bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE,
+    binder: *c.ke_render_resource_binder = undefined,
+    layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
+    set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
     frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
 
-    writes: [1][*c]const u8 = undefined,
-    reads: [1][*c]const u8 = undefined,
-    io: c.ke_render_pass_io = undefined,
+    io: c.ke_render_pass_io = std.mem.zeroes(c.ke_render_pass_io),
     access: [6]c.ke_component_access = undefined,
     queries_terms: [3]c.ke_component_access = undefined,
     queries: [2]c.ke_query_decl = undefined,
@@ -47,17 +55,15 @@ inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
 
 /// The body of the "render.skybox" system, which the runtime calls as its `execute` in the render
 /// phase. Returns true with no pass when the first query has no camera, or when the render service
-/// gives no pass; no error is set in either case. A bind group that cannot be created ends the
-/// pass, puts the error into the error output, returns false, and leaves `bind_group` invalid
-/// until the next call. Each frame it draws one full-screen triangle into "hdr", keeping what is
-/// there, after rewriting the uniform with the inverse of the camera rotation and projection
-/// product. It recreates the bind group every call, because the environment texture and the
+/// gives no pass; no error is set in either case. A set that cannot be created ends the pass,
+/// puts the error into the error output, returns false, and leaves `set` invalid
+/// until the next call. Each frame it draws one full-screen triangle over the frame's color, after rewriting the uniform with the inverse of the camera rotation and projection
+/// product. It recreates the set every call, because the environment texture and the
 /// depth view can change between frames, and a frame whose skybox query has no row passes the
 /// "none" texture handle as the environment.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const sm = moduleOf(user);
     const core = sm.core;
-    const dev = sm.device;
 
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
@@ -90,66 +96,60 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     else
         .{ .bits = c.KE_HANDLE_NONE };
     const env_view = core.*.texture_view.?(core, env);
-    const depth_view = pc.*.read.?(pc, "depth");
-    const smp = core.*.sampler.?(core);
+    const depth_view = pc.*.read.?(pc, c.KE_RENDER_FRAME_DEPTH);
 
-    const entries = [4]c.ke_gpu_bind_group_entry{
-        .{ .binding = 0, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .buffer = sm.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(SkyFrame), .texture_view = 0, .sampler = 0 },
-        .{ .binding = 1, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
-        .{ .binding = 2, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = smp },
-        .{ .binding = 3, .type = c.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = depth_view, .sampler = 0 },
+    const bindings = [3]c.ke_render_shader_binding{
+        .{ .name = "sky", .buffer = sm.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(SkyFrame), .texture_view = 0, .sampler = 0 },
+        .{ .name = "env", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = env_view, .sampler = 0 },
+        .{ .name = "g_depth", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = depth_view, .sampler = 0 },
     };
-    if (sm.bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, sm.bind_group);
+    sm.binder.destroy_set.?(sm.binder, sm.set);
     var err: ?*c.ke_error = null;
-    sm.bind_group = dev.create_bind_group.?(dev, &c.ke_gpu_bind_group_params{
-        .label = "skybox.bind_group",
-        .layout = sm.bgl,
-        .entry_count = 4,
-        .entries = &entries,
-    }, &err);
-    if (sm.bind_group == c.KE_GPU_INVALID_HANDLE) {
+    sm.set = sm.binder.create_set.?(sm.binder, sm.layout, null, "skybox.set", &bindings, bindings.len, &err);
+    if (sm.set == c.KE_RENDER_BINDING_INVALID) {
         core.*.end_pass.?(core, pc);
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox pass: bind group creation failed", @src().file, @intCast(@src().line), err);
+        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox pass: set creation failed", @src().file, @intCast(@src().line), err);
         return false;
     }
 
     const rp = pc.*.begin_render.?(pc);
     rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &sm.pipeline_params));
-    rp.*.set_bind_group.?(rp, 0, sm.bind_group, null, 0);
+    sm.binder.bind_render_set.?(sm.binder, rp, sm.set, null, 0);
     rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
     return true;
 }
 
-/// Called once by `ke_render_skybox_create`, before the system is registered. It creates the
-/// layout, pipeline and uniform buffer and fills the pass description, the access list and the
-/// queries. On false it has
+/// Called once by `ke_render_skybox_create`, before the system is registered. It joins the chain
+/// at the sky stage, creates the layout, pipeline and uniform buffer and fills the access list and
+/// the queries. On false it has
 /// stopped at a failing step, and the objects made before that step stay in the module for
 /// `destroyModule` to release.
-fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
-         render_camera: *c.ke_render_camera, camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
-         skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) bool {
+/// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
+/// frame's color.
+fn setup(sm: *SkyboxModule, p: *const c.ke_render_skybox_params, out_error: [*c][*c]c.ke_error) bool {
+    const core: *c.ke_render_service = p.service;
+    const dev: *c.ke_gpu_device = p.device;
     sm.core = core;
     sm.device = dev;
-    sm.camera = render_camera;
-    sm.camera_cid = camera_cid;
-    sm.world_transform_cid = world_transform_cid;
-    sm.skybox_cid = skybox_cid;
+    sm.camera = p.camera;
+    sm.camera_cid = p.camera_cid;
+    sm.world_transform_cid = p.world_transform_cid;
+    sm.skybox_cid = p.skybox_cid;
+    const camera_cid = p.camera_cid;
+    const world_transform_cid = p.world_transform_cid;
+    const skybox_cid = p.skybox_cid;
+    const frame_cid = p.frame_cid;
 
-    const frag = c.KE_GPU_SHADER_STAGE_FRAGMENT;
-    const bgl_entries = [_]c.ke_gpu_bind_group_layout_entry{
-        .{ .binding = 0, .visibility = c.KE_GPU_SHADER_STAGE_VERTEX | frag, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 1, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_TEXTURE, .has_dynamic_offset = 0, .view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE },
-        .{ .binding = 2, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_SAMPLER, .has_dynamic_offset = 0, .view_dimension = 0 },
-        .{ .binding = 3, .visibility = frag, .type = c.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE, .has_dynamic_offset = 0, .view_dimension = 0 },
-    };
-    sm.bgl = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
-        .label = "skybox.bgl",
-        .entry_count = 4,
-        .entries = &bgl_entries,
-    });
+    sm.io.name = "render.skybox";
+    sm.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_SKY, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
+    if (sm.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
+    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
+
+    sm.binder = core.*.resource_binder.?(core);
+    sm.layout = sm.binder.create_shader_layout.?(sm.binder, &shader_layout, out_error);
+    if (sm.layout == c.KE_RENDER_BINDING_INVALID) return false;
 
     const sky_vs = core.*.load_shader.?(core, "skybox", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
     if (sky_vs == c.KE_GPU_INVALID_HANDLE) return false;
@@ -166,12 +166,11 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     skp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
     skp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     skp.blend_state.write_mask = 0x0F;
-    skp.depth_stencil.depth_test_enabled = 0;
-    skp.depth_stencil.depth_write_enabled = 0;
+    skp.depth_stencil.depth_test_enabled = false;
+    skp.depth_stencil.depth_write_enabled = false;
     skp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    skp.bind_group_layouts[0] = sm.bgl;
-    skp.bind_group_layout_count = 1;
-    skp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    if (!sm.binder.pipeline_layouts.?(sm.binder, sm.layout, &skp.bind_group_layouts, skp.bind_group_layouts.len, &skp.bind_group_layout_count, out_error)) return false;
+    skp.color_target_formats[0] = core.*.chain_format.?(core, c.KE_RENDER_STAGE_SKY);
     skp.color_target_count = 1;
     sm.pipeline_params = skp;
     if (core.*.get_or_create_pipeline.?(core, &sm.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
@@ -184,24 +183,14 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
         .initial_data = null,
         .size = @sizeOf(SkyFrame),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, out_error);
     if (sm.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
 
-    sm.writes = .{"hdr"};
-    sm.reads = .{"depth"};
-    sm.io = std.mem.zeroes(c.ke_render_pass_io);
-    sm.io.name = "render.skybox";
-    sm.io.writes = @ptrCast(&sm.writes);
-    sm.io.writes_count = 1;
-    sm.io.reads = @ptrCast(&sm.reads);
-    sm.io.reads_count = 1;
-    sm.io.load = 1;
-    sm.io.cmd_slot = 5;
 
     sm.access = .{
-        .{ .cid = core.*.cid.?(core, "hdr"), .access = c.KE_ACCESS_WRITE },
-        .{ .cid = core.*.cid.?(core, "depth"), .access = c.KE_ACCESS_READ },
+        .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_DEPTH), .access = c.KE_ACCESS_READ },
         .{ .cid = camera_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = world_transform_cid, .access = c.KE_ACCESS_READ },
         .{ .cid = skybox_cid, .access = c.KE_ACCESS_READ },
@@ -214,15 +203,16 @@ fn setup(sm: *SkyboxModule, dev: *c.ke_gpu_device, core: *c.ke_render_service,
     return true;
 }
 
-/// Releases each handle that is valid, so it also releases a module that `setup` left half built.
+/// Gives the link back and releases each handle that is valid, so it also releases a module that
+/// `setup` left half built.
 fn destroyModule(sm: *const SkyboxModule) void {
+    if (sm.io.chain != c.KE_RENDER_CHAIN_NONE) sm.core.*.leave_chain.?(sm.core, sm.io.chain);
     const dev = sm.device;
-    if (sm.bind_group != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group.?(dev, sm.bind_group);
     if (sm.frame_uniform != c.KE_GPU_INVALID_HANDLE)
         dev.destroy_buffer.?(dev, sm.frame_uniform);
-    if (sm.bgl != c.KE_GPU_INVALID_HANDLE)
-        dev.destroy_bind_group_layout.?(dev, sm.bgl);
+    if (sm.layout == c.KE_RENDER_BINDING_INVALID) return;
+    sm.binder.destroy_set.?(sm.binder, sm.set);
+    sm.binder.destroy_shader_layout.?(sm.binder, sm.layout);
 }
 
 /// The `destroy` slot of the handle `ke_render_skybox_create` returns. Releases the GPU objects,
@@ -233,25 +223,24 @@ fn destroyHandle(self: ?*c.ke_render_skybox) callconv(.c) void {
     gpa.destroy(sm);
 }
 
-/// Creates the skybox pass as a render phase system of `runtime`, using `core` for render service
-/// calls, `device` for GPU objects and `render_camera` for the view and projection. Returns an
-/// empty handle, with the error output untouched, when one of those pointers is null or the
-/// module cannot be allocated. When `setup` or the registration fails, it returns an empty
-/// handle, and the error output holds whatever that step set.
-export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_service,
-                                   device: ?*c.ke_gpu_device, render_camera: ?*c.ke_render_camera,
-                                   camera_cid: c.ke_component_id, world_transform_cid: c.ke_component_id,
-                                   skybox_cid: c.ke_component_id, frame_cid: c.ke_component_id,
+/// Creates the skybox pass as a render phase system of the params' runtime. A missing runtime,
+/// service, device or camera fails as an invalid argument, and a module that
+/// cannot be allocated as out of memory. When `setup` or the registration fails, it returns an
+/// empty handle, and the error output holds whatever that step set.
+export fn ke_render_skybox_create(params_in: ?*const c.ke_render_skybox_params,
                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_skybox_handle {
     const empty = c.ke_render_skybox_handle{ .ref = null, .destroy = null };
-    const rt = runtime orelse return empty;
-    const core_ref = core orelse return empty;
-    const dev = device orelse return empty;
-    const camera_api = render_camera orelse return empty;
+    const p = params_in orelse return refused(out_error);
+    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
+    if (p.service == null or p.device == null or p.camera == null)
+        return refused(out_error);
 
-    const sm = gpa.create(SkyboxModule) catch return empty;
+    const sm = gpa.create(SkyboxModule) catch {
+        _ = outOfMemory(out_error);
+        return empty;
+    };
     sm.* = .{};
-    if (!setup(sm, dev, core_ref, camera_api, camera_cid, world_transform_cid, skybox_cid, frame_cid, out_error)) {
+    if (!setup(sm, p, out_error)) {
         destroyModule(sm);
         gpa.destroy(sm);
         return empty;
@@ -276,6 +265,16 @@ export fn ke_render_skybox_create(runtime: ?*c.ke_runtime, core: ?*c.ke_render_s
     return .{ .ref = @ptrCast(sm), .destroy = destroyHandle };
 }
 
+fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
+    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "skybox pass: allocation failed", @src().file, @intCast(@src().line), null);
+    return false;
+}
+
+fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_skybox_handle {
+    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "skybox pass: runtime, service, device and camera are required", @src().file, @intCast(@src().line), null);
+    return .{ .ref = null, .destroy = null };
+}
+
 const testing = std.testing;
 
 const Stubs = @import("stubs").Stubs(c);
@@ -284,11 +283,11 @@ test "creating and destroying the skybox pass leaves no block allocated and no G
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var camera = std.mem.zeroes(c.ke_render_camera);
-    const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    const h = ke_render_skybox_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -299,12 +298,12 @@ test "a skybox pass whose shader fails to load releases what it had created" {
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var camera = std.mem.zeroes(c.ke_render_camera);
-    const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    const h = ke_render_skybox_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -314,12 +313,12 @@ test "a skybox pass the runtime refuses to register releases what it had created
     var dev: Stubs.Device = undefined;
     dev.init();
     var core: Stubs.Core = undefined;
-    core.init();
+    core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
     var camera = std.mem.zeroes(c.ke_render_camera);
-    const h = ke_render_skybox_create(rt.api(), core.api(), dev.api(), &camera, 1, 2, 3, 4, null);
+    const h = ke_render_skybox_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

@@ -79,13 +79,13 @@ public static class Extractor
                     break;
 
                 case "TypedefDecl" when name is not null:
-                {
-                    var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
-                    if (!target.StartsWith("struct ") && !target.StartsWith("enum ") && target != name)
-                        api.TypeAliases[name] = target;
-                    if (ExtractCallback(node, name) is { } callback) api.Callbacks.Add(callback);
-                    break;
-                }
+                    {
+                        var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
+                        if (!target.StartsWith("struct ") && !target.StartsWith("enum ") && target != name)
+                            api.TypeAliases[name] = target;
+                        if (ExtractCallback(node, name) is { } callback) api.Callbacks.Add(callback);
+                        break;
+                    }
             }
         }
 
@@ -277,7 +277,8 @@ public static class Extractor
         }).ToList();
 
         return new ApiFunction(name, returns, summary.Length > 0 ? summary : null,
-            retDoc.Length > 0 ? retDoc : null, parameters) { ReturnTags = retTags };
+            retDoc.Length > 0 ? retDoc : null, parameters)
+        { ReturnTags = retTags };
     }
 
     static string SliceRange(byte[] bytes, JsonObject node)

@@ -5,4 +5,6 @@
     <ArtifactsPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../build/artifacts'))</ArtifactsPath>
   </PropertyGroup>
 
+  <Import Project="../../src/csharp/DisableRuntimeMarshalling.props" />
+
 </Project>

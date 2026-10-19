@@ -24,10 +24,10 @@ public enum ActionPhase
 {
     /// <summary>Action transitioned from inactive to active (button down, axis crossed
     /// deadzone).</summary>
-    Started   = 1,
+    Started = 1,
     /// <summary>Action continues to be active; value may have changed. </summary>
     Performed = 2,
     /// <summary>Action transitioned from active to inactive (button up, axis returned to
     /// zero).</summary>
-    Canceled  = 3,
+    Canceled = 3,
 }

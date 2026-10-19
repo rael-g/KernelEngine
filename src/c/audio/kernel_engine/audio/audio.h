@@ -3,7 +3,7 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/common/export.h>
-#include <kernel_engine/common/types.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -38,7 +38,7 @@ extern "C"
          * @param volume Playback volume in 0..1.
          * @param loop Non-zero to restart the sound when it ends.
          */
-        bool (*play)(struct ke_audio *self, ke_audio_sound sound, float volume, ke_bool loop, ke_error **out_error);
+        bool (*play)(struct ke_audio *self, ke_audio_sound sound, float volume, bool loop, ke_error **out_error);
 
         /** Stops a playing sound; no-op when it is not playing. */
         void (*stop)(struct ke_audio *self, ke_audio_sound sound);

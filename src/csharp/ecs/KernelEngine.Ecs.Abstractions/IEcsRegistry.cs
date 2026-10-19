@@ -12,8 +12,13 @@ public interface IEcsRegistry
     /// <summary>Destroys an entity and all its components.</summary>
     void DestroyEntity(ulong entity);
 
-    /// <summary>Registers a component type and returns its stable component ID.</summary>
-    uint RegisterComponent<T>(string name) where T : unmanaged;
+    /// <summary>
+    /// Registers a component type with the field table <typeparamref name="T"/> states, and returns
+    /// its stable component ID. A name registered before with a table that disagrees in a field's
+    /// name, kind, offset or size is refused.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The native registry refused the registration.</exception>
+    uint RegisterComponent<T>(string name) where T : unmanaged, IComponentLayout;
 
     /// <summary>
     /// Resolves a previously-registered component by name. Returns <c>true</c> and writes the
@@ -23,10 +28,10 @@ public interface IEcsRegistry
     /// </summary>
     bool TryLookupComponent(string name, out uint componentId);
 
-    /// <summary>Adds (or returns existing) a component to <paramref name="entity"/>; the returned span has length 1.</summary>
+    /// <summary>Adds (or returns existing) a component to <paramref name="entity"/>; the returned span has length 1 and is valid until the next structural change on this registry.</summary>
     Span<T> AddComponent<T>(ulong entity, uint componentId) where T : unmanaged;
 
-    /// <summary>Returns a span of length 1 over the component data, or empty when absent.</summary>
+    /// <summary>Returns a span of length 1 over the component data, or empty when absent; valid until the next structural change on this registry.</summary>
     Span<T> GetComponent<T>(ulong entity, uint componentId) where T : unmanaged;
 
     /// <summary>Removes a component from an entity. No-op if absent.</summary>

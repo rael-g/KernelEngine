@@ -20,13 +20,13 @@ public sealed class NodeNameAttribute : Attribute
 public readonly ref struct Emit<T> where T : unmanaged
 {
     private readonly SignalBus? _bus;
-    private readonly ulong      _source;
-    private readonly uint       _signalId;
+    private readonly ulong _source;
+    private readonly uint _signalId;
 
     internal Emit(SignalBus? bus, ulong source, uint signalId)
     {
-        _bus      = bus;
-        _source   = source;
+        _bus = bus;
+        _source = source;
         _signalId = signalId;
     }
 

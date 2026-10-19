@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const fields_rt = @import("component_fields").Fields(c);
 
 fn writeField(base: [*]u8, field: *const c.ke_component_field, v: *const c.ke_variant) bool {

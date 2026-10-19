@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -18,7 +19,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 {
     /// <summary>
     /// Registers the classes that have a <c>partial</c> auto-property or a method named
-    /// <c>Update</c> or <c>On</c> with at least one parameter, and generates one part for each
+    /// <c>Update</c>, <c>FixedUpdate</c> or <c>On</c> with at least one parameter, and generates one part for each
     /// that derives from <c>Node</c>.
     /// </summary>
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -29,7 +30,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         var behaviorOwners = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is MethodDeclarationSyntax { Parent: ClassDeclarationSyntax c } m
-                && (m.Identifier.ValueText == "Update" || m.Identifier.ValueText == "On")
+                && (m.Identifier.ValueText == "Update" || m.Identifier.ValueText == "FixedUpdate" || m.Identifier.ValueText == "On")
                 && m.ParameterList.Parameters.Count > 0
                 && c is not null,
             static (ctx, _) => (ClassDeclarationSyntax)ctx.Node.Parent!);
@@ -57,10 +58,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     /// from every <c>GeneratedNodeComponent</c> attribute on the class's own declaration, or, with
     /// none, from one slot backed by a struct written from the <c>partial</c> properties and
     /// named after the class in snake case. A property goes to the slot whose struct declares its
-    /// field. Behavior members are emitted only when the class has <c>Update</c> or overrides
-    /// <c>OnUpdate</c>. A class that is not <c>partial</c> emits nothing, and reports
-    /// <c>KESG005</c> if it declares <c>Update</c>. Property and field types must match, or
-    /// differ only by <c>bool</c> over <c>byte</c>, or <c>string</c> over a character array;
+    /// field. Behavior members are emitted for each hook the class declares, <c>Update</c> or
+    /// <c>FixedUpdate</c>, or whose <c>Node</c> override it writes. A class that is not
+    /// <c>partial</c> emits nothing, and reports <c>KESG005</c> for each hook it declares.
+    /// Property and field types must match, or differ only by <c>bool</c> over <c>byte</c>, or
+    /// <c>string</c> over a character array;
     /// otherwise <c>KESG001</c>. A property that no slot, or more than one slot, declares is
     /// <c>KESG002</c>, and <c>KESG003</c> is a pin naming a struct the class does not carry.
     /// </summary>
@@ -72,10 +74,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         if (!classDecl.Modifiers.Any(SyntaxKind.PartialKeyword))
         {
-            if (classSymbol.GetMembers("Update").OfType<IMethodSymbol>().Any(m =>
-                    SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.Parameters.Length > 0))
-                spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, classDecl.Identifier.GetLocation(),
-                    classSymbol.Name, "the class is not partial"));
+            foreach (var hook in Hooks)
+                if (classSymbol.GetMembers(hook.Method).OfType<IMethodSymbol>().Any(m =>
+                        SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.Parameters.Length > 0))
+                    spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, classDecl.Identifier.GetLocation(),
+                        classSymbol.Name, hook.Method, "the class is not partial"));
             return;
         }
 
@@ -117,6 +120,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         if (!isNative && !slots.IsEmpty)
         {
+            sb.AppendLine("    private static readonly string GeneratedComponentName =");
+            sb.AppendLine($"        global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({className}).FullName!);");
+            sb.AppendLine("    private static readonly string GeneratedComponentAlias =");
+            sb.AppendLine($"        global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({className}).Name);");
+            sb.AppendLine();
             foreach (var p in properties.Where(p => p.Type.SpecialType == SpecialType.System_String))
             {
                 sb.AppendLine($"    [global::System.Runtime.CompilerServices.InlineArray({TextCapacityOf(p)})]");
@@ -124,90 +132,82 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
                 sb.AppendLine();
             }
 
-            sb.AppendLine($"    private struct {slots[0].TypeName}");
+            sb.AppendLine($"    private struct {slots[0].TypeName} : global::KernelEngine.Ecs.IComponentLayout");
             sb.AppendLine("    {");
             foreach (var p in properties)
                 sb.AppendLine(p.Type.SpecialType == SpecialType.System_String
                     ? $"        public {p.Name}Buffer {p.Name};"
                     : $"        public {p.Type.ToDisplayString()} {p.Name};");
+            EmitLayout(sb, slots[0].TypeName, properties);
             sb.AppendLine("    }");
             sb.AppendLine();
         }
 
         foreach (var slot in slots)
         {
-            sb.AppendLine($"    private {slot.TypeName} {slot.State};");
+            sb.AppendLine(HasDefault(slot.Symbol)
+                ? $"    private {slot.TypeName} {slot.State} = {slot.TypeName}.Default;"
+                : $"    private {slot.TypeName} {slot.State};");
             sb.AppendLine($"    private uint {slot.Cid};");
         }
         sb.AppendLine();
 
-        var hasOnUpdate = classSymbol.GetMembers("OnUpdate").OfType<IMethodSymbol>()
-            .Any(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
-
-        var declaredUpdates = classSymbol.GetMembers("Update").OfType<IMethodSymbol>()
-            .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol))
-            .ToImmutableArray();
-
-        var updateMethod = declaredUpdates.FirstOrDefault(m =>
-            m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
-
-        foreach (var m in declaredUpdates)
+        var borrowList = new List<IParameterSymbol>();
+        var anyHook = false;
+        var anyHandWritten = false;
+        var precise = new List<(Hook Hook, List<BehaviorAccess.Use> Uses, ImmutableArray<IParameterSymbol> Borrows)>();
+        var selfOnly = new Dictionary<string, bool>();
+        foreach (var hook in Hooks)
         {
-            if (SymbolEqualityComparer.Default.Equals(m, updateMethod)) continue;
-            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, m.Locations.FirstOrDefault(),
-                classSymbol.Name, "its first parameter is not a View"));
-        }
-
-        if (updateMethod is not null && hasOnUpdate)
-            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, updateMethod.Locations.FirstOrDefault(),
-                classSymbol.Name, "it also overrides OnUpdate, which takes precedence"));
-
-        if (updateMethod is not null)
-            foreach (var pp in updateMethod.Parameters.Skip(1))
-                if (BorrowKindOf(pp.Type) is null)
-                    spc.ReportDiagnostic(Diagnostic.Create(UpdateParameterRule, pp.Locations.FirstOrDefault(),
-                        pp.Name, pp.Type.ToDisplayString()));
-
-        var borrows = updateMethod is null
-            ? ImmutableArray<IParameterSymbol>.Empty
-            : updateMethod.Parameters.Skip(1)
-                .Where(pp => BorrowKindOf(pp.Type) is not null)
-                .ToImmutableArray();
-
-        if (hasOnUpdate || updateMethod is not null)
-        {
-            sb.AppendLine($"    {overrideModifier} override bool HasBehavior => true;");
-            sb.AppendLine();
-            var reachesOnlySelf = !hasOnUpdate && borrows.Length == 0;
-            sb.AppendLine($"    {overrideModifier} override bool ReachesOnlyItself => {(reachesOnlySelf ? "true" : "false")};");
-            sb.AppendLine();
-        }
-
-        if (updateMethod is not null && !hasOnUpdate)
-        {
-            sb.AppendLine($"    {overrideModifier} override void OnUpdate(in global::KernelEngine.Framework.View view)");
-            sb.AppendLine("    {");
-            var args = new List<string> { "in view" };
-            foreach (var pp in updateMethod.Parameters.Skip(1))
+            var hookBorrows = EmitHook(spc, sb, classSymbol, overrideModifier, hook, out var declared, out var handWritten);
+            anyHook |= declared;
+            anyHandWritten |= handWritten;
+            borrowList.AddRange(hookBorrows);
+            selfOnly[hook.Method] = declared && !handWritten && hookBorrows.Length == 0;
+            if (!declared) continue;
+            if (handWritten)
             {
-                var kind = BorrowKindOf(pp.Type);
-                if (kind is null) continue;
-                var arg = ((INamedTypeSymbol)pp.Type).TypeArguments[0].ToDisplayString();
-                if (kind == "Emit") { args.Add($"BorrowEmit<{arg}>()"); continue; }
-                var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
-                var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : "";
-                var reach = ReachOf((INamedTypeSymbol)pp.Type)!;
-                args.Add($"new global::KernelEngine.Framework.{kind}<{arg}>("
-                    + $"Borrow<{arg}>(\"{nodeName}\", global::KernelEngine.Framework.ScriptBorrow.{reach}))");
+                var written = classSymbol.GetMembers(hook.Override).OfType<IMethodSymbol>().First(m =>
+                    SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
+                spc.ReportDiagnostic(Diagnostic.Create(WholeTypeAccessRule, written.Locations.FirstOrDefault(),
+                    classSymbol.Name, hook.Override, $"it overrides {hook.Override} by hand instead of declaring {hook.Method}"));
+                continue;
             }
-            sb.AppendLine($"        Update({string.Join(", ", args)});");
+            var method = classSymbol.GetMembers(hook.Method).OfType<IMethodSymbol>().FirstOrDefault(m =>
+                SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol)
+                && m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
+            if (method is null) continue;
+            if (BehaviorAccess.Analyze(compilation, classSymbol, method, out var unknown) is { } uses)
+                precise.Add((hook, uses, hookBorrows));
+            else if (unknown!.Foreign)
+                spc.ReportDiagnostic(Diagnostic.Create(ForeignNodeRule, unknown.Location,
+                    classSymbol.Name, hook.Method, unknown.Reason));
+            else
+                spc.ReportDiagnostic(Diagnostic.Create(WholeTypeAccessRule, unknown.Location,
+                    classSymbol.Name, hook.Method, unknown.Reason));
+        }
+        if (precise.Count > 0) EmitHookComponents(sb, className, overrideModifier, precise);
+        if (anyHook)
+        {
+            sb.AppendLine($"    {overrideModifier} override bool HookReachesOnlyItself(bool fixedStep)");
+            sb.AppendLine("    {");
+            sb.AppendLine($"        if (GetType() != typeof({className})) return base.HookReachesOnlyItself(fixedStep);");
+            sb.AppendLine($"        return fixedStep ? {(selfOnly["FixedUpdate"] ? "true" : "false")} : {(selfOnly["Update"] ? "true" : "false")};");
             sb.AppendLine("    }");
+            sb.AppendLine();
+        }
+        var borrows = borrowList.ToImmutableArray();
+
+        if (anyHook)
+        {
+            var reachesOnlySelf = !anyHandWritten && borrows.Length == 0;
+            sb.AppendLine($"    {overrideModifier} override bool ReachesOnlyItself => {(reachesOnlySelf ? "true" : "false")};");
             sb.AppendLine();
         }
 
         var writtenSlots = new HashSet<string>();
 
-        EmitSignalTypeCollection(sb, classSymbol, borrows, overrideModifier);
+        var signalTypes = SignalTypesOf(classSymbol, borrows);
 
         var needsUtf8Helpers = false;
 
@@ -313,12 +313,12 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    {");
         sb.AppendLine("        base.CollectBehaviorComponents(into);");
         foreach (var slot in slots)
-            sb.AppendLine($"        into.Add(new(\"{slot.ComponentName}\", {(writtenSlots.Contains(slot.ComponentName) ? "true" : "false")}, true));");
+            sb.AppendLine($"        into.Add(new({slot.NameExpression}, {(writtenSlots.Contains(slot.ComponentName) ? "true" : "false")}, true));");
         foreach (var b in borrows)
         {
             if (BorrowKindOf(b.Type) == "Emit") continue;
-            foreach (var cn in ComponentNamesOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
-                sb.AppendLine($"        into.Add(new(\"{cn}\", true, false));");
+            foreach (var cn in BehaviorAccess.AllComponentsOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
+                sb.AppendLine($"        into.Add(new({cn}, true, false));");
         }
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -359,24 +359,84 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine($"    {overrideModifier} override void GeneratedBind(global::KernelEngine.Framework.ScriptHost scriptHost)");
         sb.AppendLine("    {");
         sb.AppendLine("        base.GeneratedBind(scriptHost);");
+        foreach (var t in signalTypes)
+            sb.AppendLine($"        scriptHost.DeclareSignal<{t}>();");
+        var borrowedSlots = borrows.Where(b => BorrowKindOf(b.Type) != "Emit")
+            .SelectMany(b => BehaviorAccess.ScriptSlotTypes((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
+            .Select(t => t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+            .Distinct();
+        foreach (var t in borrowedSlots)
+            sb.AppendLine($"        {t}.GeneratedRegisterComponent(scriptHost);");
         foreach (var slot in slots)
         {
             var resolveCid = isNative
                 ? $"scriptHost.CidOfName(\"{slot.ComponentName}\")"
-                : $"scriptHost.RegisterComponent<{slot.TypeName}>(\"{slot.ComponentName}\")";
+                : $"scriptHost.RegisterComponent<{slot.TypeName}>({slot.NameExpression})";
             sb.AppendLine($"        {slot.Cid} = {resolveCid};");
             sb.AppendLine($"        GeneratedSeed({slot.Cid}, in {slot.State});");
         }
         sb.AppendLine("    }");
 
         if (!isNative && !slots.IsEmpty)
+        {
+            sb.AppendLine();
+            sb.AppendLine("    /// <summary>Registers this node type's script component with <paramref name=\"scriptHost\"/>; a node");
+            sb.AppendLine("    /// that borrows this type calls it when it binds, before its behavior declares the component.</summary>");
+            sb.AppendLine("    public static void GeneratedRegisterComponent(global::KernelEngine.Framework.ScriptHost scriptHost) =>");
+            sb.AppendLine($"        scriptHost.RegisterComponent<{slots[0].TypeName}>({slots[0].NameExpression});");
             EmitSceneApply(sb, slots[0], properties);
+        }
 
         EmitSignalDispatch(sb, classSymbol, overrideModifier);
 
         sb.AppendLine("}");
 
         spc.AddSource($"{className}.NodeProperties.g.cs", sb.ToString());
+    }
+
+    /// <summary>
+    /// Emits the field table the slot struct states: one row per property a scene can write, under
+    /// the key <c>EmitSceneApply</c> reads it by, with no default, since a game node's defaults are
+    /// the initial values of its properties.
+    /// </summary>
+    static void EmitLayout(StringBuilder sb, string typeName, ImmutableArray<IPropertySymbol> properties)
+    {
+        const string ns = "global::KernelEngine.Ecs";
+        sb.AppendLine();
+        sb.AppendLine($"        private static readonly {ns}.ComponentField[] s_fields = DescribeFields();");
+        sb.AppendLine();
+        sb.AppendLine($"        public static global::System.ReadOnlySpan<{ns}.ComponentField> Fields => s_fields;");
+        sb.AppendLine();
+        sb.AppendLine($"        private static {ns}.ComponentField[] DescribeFields()");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            var v = default({typeName});");
+        sb.AppendLine("            return");
+        sb.AppendLine("            [");
+        foreach (var p in properties)
+        {
+            if (KindOf(p.Type) is not { } kind) continue;
+            sb.AppendLine($"                {ns}.ComponentFields.Row(ref v, ref v.{p.Name}, \"{SnakeCase(p.Name)}\", {ns}.ComponentFieldKind.{kind}, {ns}.ComponentFieldValue.None),");
+        }
+        sb.AppendLine("            ];");
+        sb.AppendLine("        }");
+    }
+
+    /// <summary>The field kind a property is addressed as, or null for a type a scene cannot write.</summary>
+    static string? KindOf(ITypeSymbol t)
+    {
+        if (t.TypeKind == TypeKind.Enum) return "Int";
+        if (t.SpecialType == SpecialType.System_String) return "String";
+        return t.ToDisplayString() switch
+        {
+            "float" or "double" => "Float",
+            "bool" => "Bool",
+            "int" or "uint" or "long" or "short" or "byte" => "Int",
+            "System.Numerics.Vector2" => "Vec2",
+            "System.Numerics.Vector3" => "Vec3",
+            "System.Numerics.Vector4" => "Vec4",
+            "System.Numerics.Quaternion" => "Quat",
+            _ => null,
+        };
     }
 
     const int DefaultTextCapacity = 128;
@@ -414,8 +474,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Emits the static <c>RegisterSceneApply</c> of a game node: it registers the component under
-    /// the slot's name and an apply callback that reads each property of a supported type from
-    /// the block by its snake case key. A property of any other type has no scene key.
+    /// the node type's qualified name, the type's short name as an alias a scene may write while
+    /// no other component answers to it, and an apply callback that reads each property of a
+    /// supported type from the block by its snake case key. A property of any other type has no scene key.
     /// </summary>
     static void EmitSceneApply(StringBuilder sb, Slot slot, ImmutableArray<IPropertySymbol> properties)
     {
@@ -424,7 +485,8 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    internal static void RegisterSceneApply(global::KernelEngine.Framework.World world,"
             + " global::KernelEngine.Ecs.IEcsRegistry ecs)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        var cid = ecs.RegisterComponent<{slot.TypeName}>(\"{slot.ComponentName}\");");
+        sb.AppendLine($"        var cid = ecs.RegisterComponent<{slot.TypeName}>({slot.NameExpression});");
+        sb.AppendLine("        world.RegisterComponentAlias(GeneratedComponentAlias, GeneratedComponentName);");
         sb.AppendLine($"        world.RegisterComponentApply(cid, static (ref {slot.TypeName} comp,"
             + " in global::KernelEngine.Ecs.VariantReader reader) =>");
         sb.AppendLine("        {");
@@ -482,10 +544,20 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         public string ComponentName { get; } = componentName;
         public int Index { get; } = index;
 
+        public string NameExpression => Symbol is null ? "GeneratedComponentName" : $"\"{ComponentName}\"";
+
         public string State => $"_generatedState{Index}";
         public string Cid => $"_generatedCid{Index}";
         public string Current => $"GeneratedCurrent{Index}";
     }
+
+    /// <summary>
+    /// Whether the component declares a static <c>Default</c> of its own type, the neutral value
+    /// its <c>[default:]</c> fields hold, which every constructor of the node then starts from.
+    /// </summary>
+    static bool HasDefault(INamedTypeSymbol? component) =>
+        component is not null && component.GetMembers("Default").OfType<IPropertySymbol>()
+            .Any(d => d.IsStatic && SymbolEqualityComparer.Default.Equals(d.Type, component));
 
     static INamedTypeSymbol? NamedComponentOf(AttributeData? attr) =>
         attr?.NamedArguments.FirstOrDefault(kv => kv.Key == "Component").Value.Value as INamedTypeSymbol;
@@ -548,10 +620,135 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// A behavior method a node may declare, the <c>Node</c> override its dispatch is written into
+    /// and the flag that tells the host the type has one.
+    /// </summary>
+    sealed class Hook(string method, string @override, string flag)
+    {
+        public string Method { get; } = method;
+        public string Override { get; } = @override;
+        public string Flag { get; } = flag;
+    }
+
+    static readonly Hook[] Hooks =
+    [
+        new("Update", "OnUpdate", "HasBehavior"),
+        new("FixedUpdate", "OnFixedUpdate", "HasFixedBehavior"),
+    ];
+
+    /// <summary>
+    /// Emits the flag and the dispatch of one behavior hook: a declared <c>Hook.Method</c> taking a
+    /// <c>View</c> and borrows is called from a generated <c>Hook.Override</c>, and a hand-written
+    /// override counts as the hook too. Reports <c>KESG005</c> for a method that cannot be
+    /// dispatched and <c>KESG006</c> for a parameter that is not a borrow, and returns the borrow
+    /// parameters of the dispatched method.
+    /// </summary>
+    static ImmutableArray<IParameterSymbol> EmitHook(SourceProductionContext spc, StringBuilder sb,
+        INamedTypeSymbol classSymbol, string overrideModifier, Hook hook, out bool declared, out bool handWritten)
+    {
+        handWritten = classSymbol.GetMembers(hook.Override).OfType<IMethodSymbol>()
+            .Any(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol) && m.IsOverride);
+
+        var declaredMethods = classSymbol.GetMembers(hook.Method).OfType<IMethodSymbol>()
+            .Where(m => SymbolEqualityComparer.Default.Equals(m.ContainingType, classSymbol))
+            .ToImmutableArray();
+
+        var method = declaredMethods.FirstOrDefault(m =>
+            m.Parameters.Length > 0 && m.Parameters[0].Type.Name == "View");
+
+        foreach (var m in declaredMethods)
+        {
+            if (SymbolEqualityComparer.Default.Equals(m, method)) continue;
+            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, m.Locations.FirstOrDefault(),
+                classSymbol.Name, hook.Method, "its first parameter is not a View"));
+        }
+
+        if (method is not null && handWritten)
+            spc.ReportDiagnostic(Diagnostic.Create(UpdateNotDispatchedRule, method.Locations.FirstOrDefault(),
+                classSymbol.Name, hook.Method, $"it also overrides {hook.Override}, which takes precedence"));
+
+        if (method is not null)
+            foreach (var pp in method.Parameters.Skip(1))
+                if (BorrowKindOf(pp.Type) is null)
+                    spc.ReportDiagnostic(Diagnostic.Create(UpdateParameterRule, pp.Locations.FirstOrDefault(),
+                        pp.Name, hook.Method, pp.Type.ToDisplayString()));
+
+        declared = handWritten || method is not null;
+        if (!declared) return ImmutableArray<IParameterSymbol>.Empty;
+
+        sb.AppendLine($"    {overrideModifier} override bool {hook.Flag} => true;");
+        sb.AppendLine();
+
+        if (method is null || handWritten) return ImmutableArray<IParameterSymbol>.Empty;
+
+        sb.AppendLine($"    {overrideModifier} override void {hook.Override}(in global::KernelEngine.Framework.View view)");
+        sb.AppendLine("    {");
+        var args = new List<string> { "in view" };
+        foreach (var pp in method.Parameters.Skip(1))
+        {
+            var kind = BorrowKindOf(pp.Type);
+            if (kind is null) continue;
+            var arg = ((INamedTypeSymbol)pp.Type).TypeArguments[0].ToDisplayString();
+            if (kind == "Emit") { args.Add($"BorrowEmit<{arg}>()"); continue; }
+            var nameAttr = pp.GetAttributes().FirstOrDefault(a => a.AttributeClass?.Name == "NodeNameAttribute");
+            var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : "";
+            var reach = ReachOf((INamedTypeSymbol)pp.Type)!;
+            args.Add($"new global::KernelEngine.Framework.{kind}<{arg}>("
+                + $"Borrow<{arg}>(\"{nodeName}\", global::KernelEngine.Framework.ScriptBorrow.{reach}))");
+        }
+        sb.AppendLine($"        {hook.Method}({string.Join(", ", args)});");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+
+        return method.Parameters.Skip(1).Where(pp => BorrowKindOf(pp.Type) is not null).ToImmutableArray();
+    }
+
+    /// <summary>
+    /// Emits <c>CollectHookComponents</c> for the hooks whose access <see cref="BehaviorAccess"/>
+    /// could read. It answers only for an instance of exactly this class, since a subclass that is
+    /// not <c>partial</c> may replace a hook's body.
+    /// </summary>
+    static void EmitHookComponents(StringBuilder sb, string className, string overrideModifier,
+        List<(Hook Hook, List<BehaviorAccess.Use> Uses, ImmutableArray<IParameterSymbol> Borrows)> precise)
+    {
+        sb.AppendLine($"    {overrideModifier} override bool CollectHookComponents(global::System.Collections.Generic.List<global::KernelEngine.Framework.NodeComponentUse> into, bool fixedStep)");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        if (GetType() != typeof({className})) return false;");
+        foreach (var (hook, uses, borrows) in precise)
+        {
+            sb.AppendLine($"        if ({(hook.Method == "FixedUpdate" ? "fixedStep" : "!fixedStep")})");
+            sb.AppendLine("        {");
+            foreach (var u in uses)
+                sb.AppendLine($"            into.Add(new({u.NameExpression}, {(u.Writes ? "true" : "false")}, {(u.Owned ? "true" : "false")}));");
+            sb.AppendLine("            return true;");
+            sb.AppendLine("        }");
+        }
+        sb.AppendLine("        return false;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+    }
+
+    static readonly DiagnosticDescriptor ForeignNodeRule = new(
+        id: "KESG009",
+        title: "Behavior hook reaches a node the scheduler cannot see",
+        messageFormat: "'{0}.{1}': {2}",
+        category: "KernelEngine.SourceGenerators",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    static readonly DiagnosticDescriptor WholeTypeAccessRule = new(
+        id: "KESG008",
+        title: "Behavior hook declares every component of its type",
+        messageFormat: "'{0}.{1}' declares every component of '{0}' because {2}; the scheduler cannot run it beside other writers of those components",
+        category: "KernelEngine.SourceGenerators",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
+
     static readonly DiagnosticDescriptor UpdateNotDispatchedRule = new(
         id: "KESG005",
         title: "Behavior method will never run",
-        messageFormat: "'{0}' declares Update but {1}, so no dispatch is generated and the method never runs",
+        messageFormat: "'{0}' declares {1} but {2}, so no dispatch is generated and the method never runs",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -559,7 +756,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     static readonly DiagnosticDescriptor UpdateParameterRule = new(
         id: "KESG006",
         title: "Behavior parameter is not a borrow",
-        messageFormat: "Parameter '{0}' of Update is {1}, which is not a borrow wrapper or Emit<T>; every access a behavior has must be a borrow parameter",
+        messageFormat: "Parameter '{0}' of {1} is {2}, which is not a borrow wrapper or Emit<T>; every access a behavior has must be a borrow parameter",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -573,32 +770,17 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         isEnabledByDefault: true);
 
     /// <summary>
-    /// Emits <c>CollectSignalTypes</c>, declaring every payload type the class handles through
-    /// <c>On</c> and emits through an <c>Emit</c> parameter. Emits nothing when there is none.
+    /// Every payload type the class handles through <c>On</c> or emits through an <c>Emit</c>
+    /// parameter, declared by <c>GeneratedBind</c> so a scene may connect it.
     /// </summary>
-    static void EmitSignalTypeCollection(
-        StringBuilder sb,
-        INamedTypeSymbol classSymbol,
-        ImmutableArray<IParameterSymbol> borrows,
-        string overrideModifier)
-    {
-        var types = SignalHandlersOf(classSymbol)
+    static string[] SignalTypesOf(INamedTypeSymbol classSymbol, ImmutableArray<IParameterSymbol> borrows) =>
+        SignalHandlersOf(classSymbol)
             .Select(m => m.Parameters[0].Type.ToDisplayString())
             .Concat(borrows
                 .Where(b => BorrowKindOf(b.Type) == "Emit")
                 .Select(b => ((INamedTypeSymbol)b.Type).TypeArguments[0].ToDisplayString()))
             .Distinct()
             .ToArray();
-        if (types.Length == 0) return;
-
-        sb.AppendLine($"    {overrideModifier} override void CollectSignalTypes(global::KernelEngine.Framework.ISignalDeclarer into)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        base.CollectSignalTypes(into);");
-        foreach (var t in types)
-            sb.AppendLine($"        into.Declare<{t}>();");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-    }
 
     /// <summary>Every <c>On(in T)</c> this type declares itself.</summary>
     static IMethodSymbol[] SignalHandlersOf(INamedTypeSymbol classSymbol) =>
@@ -656,17 +838,5 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         var arg = marker.ConstructorArguments[0];
         return (arg.Type as INamedTypeSymbol)?.GetMembers().OfType<IFieldSymbol>()
             .FirstOrDefault(f => f.HasConstantValue && Equals(f.ConstantValue, arg.Value))?.Name;
-    }
-
-    /// <summary>
-    /// The component names a node type declares through <c>GeneratedNodeComponent</c> on itself
-    /// and its bases. A type carrying no such attribute contributes nothing.
-    /// </summary>
-    static IEnumerable<string> ComponentNamesOf(INamedTypeSymbol type)
-    {
-        for (var t = type; t is not null; t = t.BaseType)
-            foreach (var a in t.GetAttributes())
-                if (a.AttributeClass?.Name == "GeneratedNodeComponentAttribute" && a.ConstructorArguments.Length > 1)
-                    yield return (string)a.ConstructorArguments[1].Value!;
     }
 }

@@ -101,6 +101,16 @@ extern "C"
         /// an unknown id.
         ke_script_reach (*type_reach)(struct ke_script_host *self, ke_script_type_id type);
 
+        /// The tag component every bound instance of a registered type carries, so a query
+        /// can match the instances of one type; 0 for an id that was never registered. No
+        /// entity carries two of these tags, since an entity holds one instance at most.
+        ke_component_id (*type_tag)(struct ke_script_host *self, ke_script_type_id type);
+
+        /// The component no entity carries that names the group the type tags form: every tag
+        /// of this host is a member of it, and no entity holds two members. A runtime is told
+        /// so with declare_exclusive(group, tag).
+        ke_component_id (*type_tag_group)(struct ke_script_host *self);
+
         /// Binds `instance` to `entity` as an instance of `type`. The pointer is
         /// stored and never dereferenced. Binding an entity that already carries an
         /// instance fails rather than replacing it.

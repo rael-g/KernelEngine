@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
@@ -109,13 +109,13 @@ fn lookupMouseButton(name: [*c]const u8) c_int {
     return -1;
 }
 
-fn parseActionType(s: [*c]const u8) c.ke_action_type {
-    if (s == null) return c.KE_ACTION_TYPE_BUTTON;
+fn parseActionType(s: [*c]const u8) ?c.ke_action_type {
     const t = std.mem.span(s);
+    if (std.mem.eql(u8, t, "Button")) return c.KE_ACTION_TYPE_BUTTON;
     if (std.mem.eql(u8, t, "Axis1D")) return c.KE_ACTION_TYPE_AXIS1D;
     if (std.mem.eql(u8, t, "Axis2D")) return c.KE_ACTION_TYPE_AXIS2D;
     if (std.mem.eql(u8, t, "Axis3D")) return c.KE_ACTION_TYPE_AXIS3D;
-    return c.KE_ACTION_TYPE_BUTTON;
+    return null;
 }
 
 const BindingKind = enum(u8) { key, key_pair, key_quad, mouse_button };
@@ -311,18 +311,53 @@ fn freeDatumStr(d: c.toml_datum_t) void {
 
 /// Writes `out` only when it returns true. It returns false when the table has no "kind" string,
 /// when the kind is not one it knows, or when a field that kind needs is missing.
-fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding) bool {
-    const kind = c.toml_string_in(bt, "kind");
-    if (kind.ok == 0) return false;
-    defer freeDatumStr(kind);
+/// Why a binding table could not be read, written by `parseBindingTable`.
+const Reason = struct {
+    buf: [160]u8 = undefined,
+    len: usize = 0,
 
+    fn set(self: *Reason, comptime fmt: []const u8, args: anytype) void {
+        self.len = if (std.fmt.bufPrint(&self.buf, fmt, args)) |m| m.len else |_| self.buf.len;
+    }
+
+    fn text(self: *const Reason) []const u8 {
+        return self.buf[0..self.len];
+    }
+};
+
+fn keyCode(name: [*c]const u8, reason: *Reason) ?c_int {
+    const code = lookupKey(name);
+    if (code >= 0) return code;
+    reason.set("'{s}' is not a key name", .{std.mem.span(name)});
+    return null;
+}
+
+fn mouseCode(name: [*c]const u8, reason: *Reason) ?c_int {
+    const code = lookupMouseButton(name);
+    if (code >= 0) return code;
+    reason.set("'{s}' is not a mouse button name", .{std.mem.span(name)});
+    return null;
+}
+
+/// Reads one binding table into `out`. A missing field, an unknown kind, or a name that is no key
+/// or mouse button returns false with the reason in `reason`.
+fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding, reason: *Reason) bool {
+    const kind = c.toml_string_in(bt, "kind");
+    if (kind.ok == 0) {
+        reason.set("it has no kind", .{});
+        return false;
+    }
+    defer freeDatumStr(kind);
     const kind_str = std.mem.span(kind.u.s);
 
     if (std.mem.eql(u8, kind_str, "key")) {
         const k = c.toml_string_in(bt, "key");
         defer freeDatumStr(k);
-        if (k.ok == 0) return false;
-        out.* = .{ .kind = .key, .k0 = lookupKey(k.u.s) };
+        if (k.ok == 0) {
+            reason.set("a key binding has no key", .{});
+            return false;
+        }
+        out.* = .{ .kind = .key, .k0 = keyCode(k.u.s, reason) orelse return false };
         return true;
     }
     if (std.mem.eql(u8, kind_str, "key_pair")) {
@@ -330,8 +365,15 @@ fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding) bool {
         const pos = c.toml_string_in(bt, "positive");
         defer freeDatumStr(neg);
         defer freeDatumStr(pos);
-        if (neg.ok == 0 or pos.ok == 0) return false;
-        out.* = .{ .kind = .key_pair, .k0 = lookupKey(neg.u.s), .k1 = lookupKey(pos.u.s) };
+        if (neg.ok == 0 or pos.ok == 0) {
+            reason.set("a key_pair binding needs negative and positive", .{});
+            return false;
+        }
+        out.* = .{
+            .kind = .key_pair,
+            .k0 = keyCode(neg.u.s, reason) orelse return false,
+            .k1 = keyCode(pos.u.s, reason) orelse return false,
+        };
         return true;
     }
     if (std.mem.eql(u8, kind_str, "key_quad")) {
@@ -343,32 +385,48 @@ fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding) bool {
         defer freeDatumStr(down);
         defer freeDatumStr(left);
         defer freeDatumStr(right);
-        if (up.ok == 0 or down.ok == 0 or left.ok == 0 or right.ok == 0) return false;
+        if (up.ok == 0 or down.ok == 0 or left.ok == 0 or right.ok == 0) {
+            reason.set("a key_quad binding needs up, down, left and right", .{});
+            return false;
+        }
         out.* = .{
             .kind = .key_quad,
-            .k0 = lookupKey(up.u.s),
-            .k1 = lookupKey(down.u.s),
-            .k2 = lookupKey(left.u.s),
-            .k3 = lookupKey(right.u.s),
+            .k0 = keyCode(up.u.s, reason) orelse return false,
+            .k1 = keyCode(down.u.s, reason) orelse return false,
+            .k2 = keyCode(left.u.s, reason) orelse return false,
+            .k3 = keyCode(right.u.s, reason) orelse return false,
         };
         return true;
     }
     if (std.mem.eql(u8, kind_str, "mouse")) {
         const btn = c.toml_string_in(bt, "button");
         defer freeDatumStr(btn);
-        if (btn.ok == 0) return false;
-        out.* = .{ .kind = .mouse_button, .k0 = lookupMouseButton(btn.u.s) };
+        if (btn.ok == 0) {
+            reason.set("a mouse binding has no button", .{});
+            return false;
+        }
+        out.* = .{ .kind = .mouse_button, .k0 = mouseCode(btn.u.s, reason) orelse return false };
         return true;
     }
+    reason.set("'{s}' is not a binding kind", .{kind_str});
+    return false;
+}
+
+/// Drops every action, the one being read included, so a load that fails leaves none. Returns
+/// false for the caller to return.
+fn abandonLoad(s: *State) bool {
+    s.action_count += 1;
+    clearActions(s);
     return false;
 }
 
 /// Slot `load`. Replaces the whole set of actions from a TOML file, reading each binding table
-/// with `parseBindingTable` and skipping one that does not parse. It clears all actions before
-/// reading, so a failure leaves the earlier set gone and keeps only the actions read before the
-/// failure. Ids handed out before a load are not valid after it. It reports not found when the
+/// with `parseBindingTable`. It clears all actions before
+/// reading, and a load that fails leaves no actions. Ids handed out before a load are not valid after it. It reports not found when the
 /// file cannot be opened, an I/O error when the text does not parse, and out of memory when an
-/// action or a binding cannot be allocated, and an invalid argument for a null handle or path.
+/// action or a binding cannot be allocated, and an invalid argument for a null handle or path, for
+/// an action type that is not Button, Axis1D, Axis2D or Axis3D, and for a binding that cannot be
+/// read, naming the action, the binding and why.
 /// A file without an "action" table succeeds with no actions.
 fn vtLoad(
     self_in: ?*c.ke_input_actions,
@@ -416,8 +474,13 @@ fn vtLoad(
 
         const type_node = c.toml_string_in(action_tbl, "type");
         if (type_node.ok != 0) {
-            act.type = parseActionType(type_node.u.s);
-            freeDatumStr(type_node);
+            defer freeDatumStr(type_node);
+            act.type = parseActionType(type_node.u.s) orelse {
+                var msg: [200]u8 = undefined;
+                const text = std.fmt.bufPrintZ(&msg, "action '{s}': '{s}' is not an action type", .{ std.mem.span(action_name), std.mem.span(type_node.u.s) }) catch "unknown action type";
+                E.fail(out_error, .invalid_argument, text, @src());
+                return abandonLoad(s);
+            };
         }
 
         if (c.toml_array_in(action_tbl, "bindings")) |bindings_arr| {
@@ -426,10 +489,16 @@ fn vtLoad(
             while (j < n) : (j += 1) {
                 const bt = c.toml_table_at(bindings_arr, j) orelse continue;
                 var b: Binding = undefined;
-                if (!parseBindingTable(bt, &b)) continue;
+                var reason: Reason = .{};
+                if (!parseBindingTable(bt, &b, &reason)) {
+                    var msg: [256]u8 = undefined;
+                    const text = std.fmt.bufPrintZ(&msg, "action '{s}', binding {d}: {s}", .{ std.mem.span(action_name), j + 1, reason.text() }) catch "invalid binding";
+                    E.fail(out_error, .invalid_argument, text, @src());
+                    return abandonLoad(s);
+                }
                 if (!ensureBindingCapacity(act, act.binding_count + 1)) {
                     E.fail(out_error, .out_of_memory, "binding capacity exceeded", @src());
-                    return false;
+                    return abandonLoad(s);
                 }
                 act.bindings.?[act.binding_count] = b;
                 act.binding_count += 1;
@@ -1028,6 +1097,50 @@ test "an action starts once on the edge and cancels when the key goes up" {
     snapshot = std.mem.zeroes(c.ke_input_snapshot);
     _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter, null);
     try testing.expectEqual(@as(i32, 1), counter.canceled);
+}
+
+fn expectLoadRefused(text: []const u8, expected: []const u8) !void {
+    var file = try TempInput.init(text);
+    defer file.deinit();
+    var a = try Actions.init();
+    defer a.deinit();
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!a.api().load.?(a.api(), file.cPath(), &err));
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), expected) != null);
+}
+
+test "a misspelt key name fails the load and names the action, the binding and the key" {
+    try expectLoadRefused(
+        \\[action.Jump]
+        \\bindings = [ { kind = "key", key = "Space" }, { kind = "key", key = "Spcae" } ]
+        \\
+    , "action 'Jump', binding 2: 'Spcae' is not a key name");
+}
+
+test "an unknown mouse button, binding kind or action type fails the load" {
+    try expectLoadRefused(
+        \\[action.Fire]
+        \\bindings = [ { kind = "mouse", button = "Thumb" } ]
+        \\
+    , "'Thumb' is not a mouse button name");
+    try expectLoadRefused(
+        \\[action.Fire]
+        \\bindings = [ { kind = "pad", button = "A" } ]
+        \\
+    , "'pad' is not a binding kind");
+    try expectLoadRefused(
+        \\[action.Move]
+        \\type = "Axis1d"
+        \\
+    , "'Axis1d' is not an action type");
+}
+
+test "a binding missing a field fails the load" {
+    try expectLoadRefused(
+        \\[action.Move]
+        \\bindings = [ { kind = "key_pair", negative = "A" } ]
+        \\
+    , "a key_pair binding needs negative and positive");
 }
 
 test "actions added by hand are numbered in the order they arrive" {

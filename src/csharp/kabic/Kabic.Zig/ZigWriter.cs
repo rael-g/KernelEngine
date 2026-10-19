@@ -1,7 +1,8 @@
 namespace Kabic.Zig;
 
-using Kabic;
 using System.Text;
+
+using Kabic;
 
 /// <summary>
 /// kabic's Zig writer: renders a domain as a Zig module — the ABI declared in Zig

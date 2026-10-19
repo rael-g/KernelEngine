@@ -1,5 +1,4 @@
 [scene]
-name    = "Paddle"
 version = 2
 
 [[entity]]

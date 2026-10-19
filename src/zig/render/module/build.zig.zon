@@ -1,8 +1,0 @@
-.{
-    .name = .ke_render_module,
-    .version = "0.1.0",
-    .fingerprint = 0xaf0aee5c2298c370,
-    .minimum_zig_version = "0.16.0",
-    .dependencies = .{},
-    .paths = .{"."},
-}

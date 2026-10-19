@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_AUDIO_MINIAUDIO_MINIAUDIO_AUDIO_H_
+#define KERNEL_ENGINE_AUDIO_MINIAUDIO_MINIAUDIO_AUDIO_H_
 
 #include <kernel_engine/audio/audio.h>
 
@@ -32,4 +33,6 @@ KE_AUDIO_MINIAUDIO_API ke_audio_handle ke_audio_miniaudio_create(
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

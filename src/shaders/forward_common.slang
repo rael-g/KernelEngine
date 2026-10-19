@@ -1,12 +1,5 @@
-// Shared mesh vertex stage + fixed engine material set (set 1) + the
-// surface-build prologue. Imported by transparent_forward.slang (inline
-// shading) and gbuffer.slang (deferred encode): the vertex transform, the
-// per-material binding, and populating a SurfaceState via the author's
-// material.fragment() are byte-identical whether the fragment then shades
-// inline or encodes to a G-buffer — only what happens *after* the
-// SurfaceState is built differs.
-
-import ke;   // VertexInfo, SurfaceState, IMaterial
+import ke;
+__exported import material_params;
 
 struct VsIn {
     float3 position : POSITION;
@@ -23,35 +16,12 @@ struct VsOut {
     [[vk::location(3)]] float3 world_tangent : TANGENT;
 };
 
-// Set 1 — per material: the fixed engine material set. Standard and the other
-// built-in materials source their surface fields from this UBO + textures.
-struct Material {
-    float4 base_color;
-    float  metallic;
-    float  roughness;
-    // 0.0 for every OPAQUE/BLEND material — the gbuffer encode wrapper's MASK
-    // discard test never fires on a negative alpha. The real cutoff only for MASK.
-    float  alpha_cutoff;
-    // Index of refraction, read only by BLEND materials' refraction_contribution
-    // (1.0 = no bend, 1.33 = water, 1.5 = glass). Author-facing via create_material.
-    float  ior;
-    // Lateral distortion strength for refraction_contribution, in normalized
-    // screen space (glass vs. thick water). Author-facing via create_material.
-    float  distortion_strength;
-};
-[[vk::binding(0, 1)]] ConstantBuffer<Material> mat;
-[[vk::binding(1, 1)]] Texture2D    albedo;
-[[vk::binding(2, 1)]] SamplerState tex_sampler;
-[[vk::binding(3, 1)]] Texture2D    normal_map;
-
-// Set 2 — per object: transform.
 struct PerObject {
     float4x4 mvp;
     float4x4 model;
 };
-[[vk::binding(0, 2)]] ConstantBuffer<PerObject> obj;
+ParameterBlock<PerObject> object;
 
-// Vertex stage: object → clip + world-space normal/tangent/pos for the fragment.
 VsOut ke_forward_vs<T : IMaterial>(T material, VsIn input) {
     VertexInfo v;
     v.position = input.position;
@@ -59,20 +29,17 @@ VsOut ke_forward_vs<T : IMaterial>(T material, VsIn input) {
     v.uv       = input.uv;
     v.tangent  = float4(input.tangent, 1.0);
     v.color    = float3(1.0, 1.0, 1.0);
-    material.vertex(v);   // author perturbation (object space)
+    material.vertex(v);
 
     VsOut o;
-    o.clip          = mul(obj.mvp, float4(v.position, 1.0));
-    o.world_normal  = mul((float3x3)obj.model, v.normal);
-    o.world_tangent = mul((float3x3)obj.model, v.tangent.xyz);
-    o.world_pos     = mul(obj.model, float4(v.position, 1.0)).xyz;
+    o.clip          = mul(object.mvp, float4(v.position, 1.0));
+    o.world_normal  = mul((float3x3)object.model, v.normal);
+    o.world_tangent = mul((float3x3)object.model, v.tangent.xyz);
+    o.world_pos     = mul(object.model, float4(v.position, 1.0)).xyz;
     o.uv            = v.uv;
     return o;
 }
 
-// Builds the tangent→world basis, seeds a default SurfaceState, and lets the
-// material populate it. The common prologue of both inline forward shading and
-// deferred G-buffer encode.
 SurfaceState ke_surface_from_vertex<T : IMaterial>(T material, VsOut input) {
     float3 ng = normalize(input.world_normal);
     float3 t  = normalize(input.world_tangent - ng * dot(ng, input.world_tangent));
@@ -86,7 +53,7 @@ SurfaceState ke_surface_from_vertex<T : IMaterial>(T material, VsOut input) {
     s.albedo    = float3(1.0, 1.0, 1.0);
     s.metallic  = 0.0;
     s.roughness = 0.5;
-    s.normal    = ng;   // default geometric normal
+    s.normal    = ng;
     s.emissive  = float3(0.0, 0.0, 0.0);
     s.ao        = 1.0;
     s.alpha     = 1.0;

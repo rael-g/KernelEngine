@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const log = @import("log.zig");
 
 /// The leading part of a path up to and including its last separator, either kind, or an empty

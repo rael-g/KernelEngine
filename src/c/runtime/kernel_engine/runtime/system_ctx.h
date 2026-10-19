@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RUNTIME_SYSTEM_CTX_H_
+#define KERNEL_ENGINE_RUNTIME_SYSTEM_CTX_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -43,4 +44,6 @@ struct ke_system_ctx {
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

@@ -24,12 +24,15 @@ var cppFixture = "src/zig/common/test/cpp_static_init_probe.cpp";
 var abort = new Regex(@"std\.debug\.assert|\bassert\(|@panic\(|process\.abort|std\.debug\.panic|\babort\(");
 var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
 var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
+var pinning = new Regex(@"pinnedThread:|\.DispatchPinned\(|dispatch_pinned\.\?\(|\.pinned_thread = [1-9]");
 var exportMacro = new Regex(@"\bKE_[A-Z_]*API\b");
 var plainFunction = new Regex(@"^(?!typedef)[A-Za-z_][A-Za-z0-9_ \*]*\bke_[a-z0-9_]+\s*\(.*\)\s*;");
 var bagName = new Regex(@"\bke_[a-z0-9_]*_(desc|descriptor|info|config)\b");
 var implName = new Regex(@"(?<![A-Za-z0-9])impl_[a-z]|[a-z0-9]Impl\b|[a-z0-9]_impl\b");
 var slashComment = new Regex(@"^\s*//(?![/!])");
 var hashComment = new Regex(@"^\s*#(?!!)");
+var shaderBindingNumber = new Regex(@"vk::binding\s*\(|:\s*register\s*\(");
+var bindingNumber = new Regex(@"\.binding\s*=\s*[0-9]");
 var blockComment = new Regex(@"/\*(?![*!])");
 var exportFn = new Regex(@"^\s*(?:pub )?export fn (\w+)");
 var declared = new Regex(@"^\s*KE_\w*API\s[^;{#]*?\b(\w+)\s*\(", RegexOptions.Multiline);
@@ -63,20 +66,32 @@ var rules = new List<Rule>
         Lines(zig, l => crashOnFailure.IsMatch(l), outsideTests: true)),
     new("no mutex, condition variable or raw thread in a plugin; the scheduler synchronises", 0,
         Lines(zig, l => threading.IsMatch(l), outsideTests: true)),
+    new("no system or task is pinned to a worker", 0,
+        Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(zig|cs)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)
+            && !s.Key.Contains("/scheduler/", StringComparison.Ordinal) && s.Key != "src/zig/runtime/src/runtime.zig"),
+            l => pinning.IsMatch(l), outsideTests: true)),
+    new("a plugin's root file turns off the per-thread signal stack with std_options", 0,
+        tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p))
+            .Where(p => sources[p].Any(l => l.Contains(".linkage = .dynamic", StringComparison.Ordinal)))
+            .Select(p => (Build: p, Root: LibraryRoot(p, sources[p])))
+            .Where(x => x.Root is not null && !(sources.TryGetValue(x.Root, out var root) && root.Any(l => l.Contains("signal_stack_size = null", StringComparison.Ordinal))))
+            .Select(x => $"{x.Root}: no std_options with signal_stack_size = null")),
+    new("a header has an #ifndef guard, never #pragma once", 0,
+        Lines(headers, l => l.TrimStart().StartsWith("#pragma once", StringComparison.Ordinal))),
     new("a contract header declares no export macro", 0,
         Lines(contracts, l => exportMacro.IsMatch(l))),
     new("a contract header declares no plain function", 0,
         Lines(contracts, l => plainFunction.IsMatch(l))),
-    new("a plugin exports only what a factory header declares", 7,
+    new("a plugin exports only what a factory header declares", 0,
         zig.Where(s => !s.Key.StartsWith("src/zig/common/", StringComparison.Ordinal))
             .SelectMany(s => s.Value.Select((l, i) => (s.Key, Line: i + 1, Match: exportFn.Match(l))))
             .Where(x => x.Match.Success && !declaredNames.Contains(x.Match.Groups[1].Value))
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),
-    new("a factory header declares one function", 4,
+    new("a factory header declares one function", 0,
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
-    new("a parameter bag is named _params, never _desc, _descriptor, _info or _config", 1,
+    new("a parameter bag is named _params, never _desc, _descriptor, _info or _config", 0,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
-    new("no file named after impl", 3,
+    new("no file named after impl", 0,
         tracked.Where(p => p.StartsWith("src/", StringComparison.Ordinal) && implName.IsMatch(Path.GetFileNameWithoutExtension(p)))),
     new("no identifier named after impl", 13,
         Lines(zig.Concat(headers), l => !slashComment.IsMatch(l) && !l.TrimStart().StartsWith("//", StringComparison.Ordinal) && implName.IsMatch(l))),
@@ -86,11 +101,15 @@ var rules = new List<Rule>
         Lines(native, l => slashComment.IsMatch(l) || blockComment.IsMatch(l))),
     new("no comment in C# besides a doc comment", 6,
         Lines(managed, l => slashComment.IsMatch(l))),
-    new("no comment in a shader", 272,
+    new("a shader in the engine leaves its binding numbers to the compiler", 0,
+        Lines(sources.Where(s => s.Key.StartsWith("src/", StringComparison.Ordinal) && s.Key.EndsWith(".slang", StringComparison.Ordinal)), l => shaderBindingNumber.IsMatch(l))),
+    new("a plugin binds a shader's parameters by name, never by number", 0,
+        Lines(sources.Where(s => s.Key.StartsWith("src/zig/", StringComparison.Ordinal) && s.Key.EndsWith(".zig", StringComparison.Ordinal)), l => bindingNumber.IsMatch(l))),
+    new("no comment in a shader", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".slang", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),
-    new("no comment in a build manifest or a workflow", 2,
+    new("no comment in a build manifest, a workflow or the editor config", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".zon", StringComparison.Ordinal)), l => slashComment.IsMatch(l))
-            .Concat(Lines(sources.Where(s => s.Key.EndsWith(".yml", StringComparison.Ordinal)), l => hashComment.IsMatch(l)))),
+            .Concat(Lines(sources.Where(s => s.Key.EndsWith(".yml", StringComparison.Ordinal) || s.Key == ".editorconfig"), l => hashComment.IsMatch(l)))),
 };
 
 var failed = 0;
@@ -116,9 +135,16 @@ static IEnumerable<string> Segments(string path) => path.Split('/');
 
 static bool IsBuildFile(string path) => Path.GetFileName(path) == "build.zig";
 
+static string? LibraryRoot(string buildFile, string[] lines)
+{
+    var dir = Path.GetDirectoryName(buildFile)!.Replace('\\', '/');
+    var root = lines.Select(l => Regex.Match(l, @"\.root_source_file = b\.path\(""([^""]+)""\)")).FirstOrDefault(m => m.Success);
+    return root is null ? null : $"{dir}/{root.Groups[1].Value}";
+}
+
 static IEnumerable<string> Tracked(string rootDir)
 {
-    string[] roots = ["src", "scripts", "examples", "tests", "build.zig", "build.zig.zon", ".github"];
+    string[] roots = ["src", "scripts", "examples", "tests", "build.zig", "build.zig.zon", ".github", ".editorconfig"];
     string[] skipped = ["obj", "bin", "third_party", ".zig-cache", "zig-out", "zig-pkg", "node_modules"];
     foreach (var root in roots)
     {

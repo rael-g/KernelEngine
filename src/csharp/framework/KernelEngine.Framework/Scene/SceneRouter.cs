@@ -10,8 +10,8 @@ namespace KernelEngine.Framework;
 /// </summary>
 internal sealed class SceneRouter : ISceneRouter
 {
-    private readonly ScriptHost          _scriptHost;
-    private readonly SceneLoader  _loader;
+    private readonly ScriptHost _scriptHost;
+    private readonly SceneLoader _loader;
 
     private string? _pendingLoad;
 
@@ -20,7 +20,7 @@ internal sealed class SceneRouter : ISceneRouter
     public SceneRouter(ScriptHost scriptHost, SceneLoader loader)
     {
         _scriptHost = scriptHost;
-        _loader    = loader;
+        _loader = loader;
     }
 
     public void LoadScene(string name) => _pendingLoad = name;

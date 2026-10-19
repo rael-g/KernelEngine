@@ -9,18 +9,18 @@ namespace KernelEngine.Cli;
 public sealed class ProjectContext
 {
     public string ProjectDirectory { get; }
-    public string ProjectFilePath  { get; }
-    public string CsprojPath        { get; }
-    public string ProgramCsPath     { get; }
-    public string EngineRoot        { get; }
+    public string ProjectFilePath { get; }
+    public string CsprojPath { get; }
+    public string ProgramCsPath { get; }
+    public string EngineRoot { get; }
 
     private ProjectContext(string projectDir, string projectFile, string csproj, string programCs, string engineRoot)
     {
         ProjectDirectory = projectDir;
-        ProjectFilePath  = projectFile;
-        CsprojPath       = csproj;
-        ProgramCsPath    = programCs;
-        EngineRoot       = engineRoot;
+        ProjectFilePath = projectFile;
+        CsprojPath = csproj;
+        ProgramCsPath = programCs;
+        EngineRoot = engineRoot;
     }
 
     public static ProjectContext Discover(string? explicitProjectDir = null)

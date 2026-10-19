@@ -4,8 +4,7 @@ namespace KernelEngine.Render.Native;
 
 public partial struct ke_gpu_blend_state
 {
-    [NativeTypeName("ke_bool")]
-    public byte blend_enabled;
+    public bool blend_enabled;
 
     public ke_gpu_blend_factor src_color;
 

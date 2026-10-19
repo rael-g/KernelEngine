@@ -1,7 +1,7 @@
 //! Row-major 4x4 matrix arithmetic for the framework's transforms: composing two matrices and
 //! building one from a 3D or 2D pose.
 
-const c = @import("c.zig").c;
+const c = @import("c");
 
 /// Writes `a` times `b` to `out`. Vectors are row vectors, so the first factor applies first. The
 /// product is finished in a temporary before the output is written, so the output may be the same

@@ -7,11 +7,6 @@ public partial struct ke_body2d_component
     public ke_body_type_2d type;
 
     [NativeTypeName("ke_vec2")]
-    public KernelEngine.Common.Native.ke_vec2 position;
-
-    public float angle;
-
-    [NativeTypeName("ke_vec2")]
     public KernelEngine.Common.Native.ke_vec2 velocity;
 
     public float angular_velocity;

@@ -7,13 +7,24 @@ public sealed record FieldVariant(string Constant, string Member);
 /// How a component struct is described to the runtime that applies a scene file to it: the entry
 /// type of the table, the header declaring it, and the spelling of every kind of field, by the
 /// kind's name: <c>null</c>, <c>bool</c>, <c>int</c>, <c>float</c> and <c>string</c> are C's own,
-/// and a pack names the others. A convention without one has no field tables.
+/// and a pack names the others. <c>ManagedNamespace</c> is where kabic emits the layout a C#
+/// component struct states (<c>IComponentLayout</c> and the types its rows are made of), into the
+/// file <c>ManagedOut</c>; <c>NativeOut</c> receives the conversion of such a layout into the native
+/// entry type, declared in <c>BindingsNamespace</c> with its default as a <c>VariantType</c> whose
+/// kind is a <c>VariantKindType</c>. Without <c>ManagedNamespace</c> the C# structs
+/// state none. A convention without a field table has no field tables.
 /// </summary>
 public sealed record FieldTableConvention(
     string EntryType,
     string Include,
     string NameMacroPrefix,
-    IReadOnlyDictionary<string, FieldVariant> Variants);
+    IReadOnlyDictionary<string, FieldVariant> Variants,
+    string? ManagedNamespace = null,
+    string? ManagedOut = null,
+    string? BindingsNamespace = null,
+    string? NativeOut = null,
+    string VariantType = "",
+    string VariantKindType = "");
 
 /// <summary>
 /// One kind of failure the ABI names: the singleton a failure of that kind is reached by, the
@@ -91,7 +102,7 @@ public sealed class Convention
     /// Boolean return-type spellings that mean "succeeded", paired with <see
     /// cref="ErrorOutParamType"/>.
     /// </summary>
-    public IReadOnlyList<string> BooleanReturnTypes => ["_Bool", "bool", ByteBoolType];
+    public IReadOnlyList<string> BooleanReturnTypes => ["_Bool", "bool"];
 
     /// <summary>
     /// True if <paramref name="structName"/> names an owner-wrapper rather than a real vtable.
@@ -171,11 +182,6 @@ public sealed class Convention
     /// <summary>Class that holds the raw P/Invoke methods of a binding assembly.</summary>
     public string BindingsMethodsClass { get; init; } = "NativeMethods";
 
-    /// <summary>
-    /// The C typedef for a boolean that crosses the ABI as one byte (<c>ke_bool</c>), which the
-    /// managed side widens to <c>bool</c>.
-    /// </summary>
-    public string ByteBoolType { get; init; } = "";
 
     /// <summary>The C struct a failed call reports through (<c>ke_error</c>).</summary>
     public string ErrorType { get; init; } = "";
@@ -304,7 +310,6 @@ public sealed class Convention
         var builder = new ConventionBuilder()
             .Symbols(Text(json, "symbolPrefix"), Text(json, "handleSuffix"), Text(json, "factorySuffix"),
                 Text(json, "componentSuffix"), Text(json, "paramsSuffix"))
-            .Booleans(Text(json, "byteBoolType"))
             .OutParams(Or(json, "outParamPrefix", "out_"), Or(json, "errorLaneName", "out_error"))
             .Bindings(Or(json, "includeDirectoryName", "kernel_engine"), Or(json, "commonBindingsNamespace", ""),
                 Or(json, "bindingsMethodsClass", "NativeMethods"))
@@ -340,6 +345,12 @@ public sealed class Convention
             table["nameMacroPrefix"]!.GetValue<string>(),
             table["variants"]!.AsObject().ToDictionary(
                 kv => kv.Key,
-                kv => new FieldVariant(kv.Value!["constant"]!.GetValue<string>(), kv.Value["member"]?.GetValue<string>() ?? "")));
+                kv => new FieldVariant(kv.Value!["constant"]!.GetValue<string>(), kv.Value["member"]?.GetValue<string>() ?? "")),
+            table["managedNamespace"]?.GetValue<string>(),
+            table["managedOut"]?.GetValue<string>(),
+            table["bindingsNamespace"]?.GetValue<string>(),
+            table["nativeOut"]?.GetValue<string>(),
+            table["variantType"]?.GetValue<string>() ?? "",
+            table["variantKindType"]?.GetValue<string>() ?? "");
     }
 }

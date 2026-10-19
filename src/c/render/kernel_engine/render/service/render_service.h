@@ -3,6 +3,7 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/handles.h>
 #include <stdint.h>
@@ -29,7 +30,7 @@ typedef enum ke_render_size_mode
     KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER = 1,
 } ke_render_size_mode;
 
-typedef struct ke_render_resource_desc
+typedef struct ke_render_resource_params
 {
     const char             *name;
     ke_render_resource_type type;
@@ -41,9 +42,91 @@ typedef struct ke_render_resource_desc
     float                   scale_y;
     /// Per-resource clear color.
     float                   clear_value[4];
-} ke_render_resource_desc;
+} ke_render_resource_params;
 
-/// A pass's declared resource I/O by name.
+/// What every shader reads about the frame being drawn, under the parameter `ke_frame`. Matrices are
+/// stored the way the math library stores them.
+typedef struct ke_render_frame_globals
+{
+    float view[16];
+    float proj[16];
+    float view_proj[16];
+    float inv_view_proj[16];
+    float inv_proj[16];
+    /// World position of the camera in xyz; w is 1.
+    float camera_pos[4];
+    /// Backbuffer width and height in pixels in xy; zw are 0.
+    float viewport[4];
+    /// Seconds since the first frame.
+    float time;
+    /// Seconds since the previous frame.
+    float dt;
+    float near_plane;
+    float far_plane;
+} ke_render_frame_globals;
+
+/// The scene's light that every lit shader reads, under the parameter `ke_lighting`.
+typedef struct ke_render_lighting
+{
+    /// Direction the directional light travels in xyz; w is 1 when the scene has one, else 0.
+    float direction[4];
+    /// Color of the directional light in rgb; a is its intensity.
+    float color[4];
+    /// Ambient color in rgb; a is 0.
+    float ambient[4];
+} ke_render_lighting;
+
+/// The tag a pass that joined the chain writes in its access list, and that the system ending the
+/// frame reads.
+#define KE_RENDER_FRAME_COLOR "frame.color"
+/// The frame's depth texture, cleared when the frame begins; a pass samples it by this name.
+#define KE_RENDER_FRAME_DEPTH "frame.depth"
+
+/// Where a pass that works on the frame's color runs. The stages run in this order, and the passes
+/// of one stage in the order they joined. Stages up to KE_RENDER_STAGE_HDR_POST draw in the
+/// service's color format, the later ones in the backbuffer's.
+typedef enum ke_render_stage
+{
+    KE_RENDER_STAGE_OPAQUE      = 0,
+    KE_RENDER_STAGE_SKY         = 1,
+    KE_RENDER_STAGE_TRANSPARENT = 2,
+    KE_RENDER_STAGE_HDR_POST    = 3,
+    KE_RENDER_STAGE_TONEMAP     = 4,
+    KE_RENDER_STAGE_LDR_POST    = 5,
+    KE_RENDER_STAGE_OVERLAY     = 6,
+    KE_RENDER_STAGE_COUNT       = 7,
+} ke_render_stage;
+
+/// What a pass in the chain does with the frame's color.
+typedef enum ke_render_chain_mode
+{
+    /// Draws over the current color.
+    KE_RENDER_CHAIN_DRAW_OVER   = 0,
+    /// Samples the current color, through the context's color_source, and draws over a copy of
+    /// it, which becomes the current color.
+    KE_RENDER_CHAIN_SAMPLE_OVER = 1,
+    /// Samples the current color and writes every texel of a new one, which becomes the current
+    /// color.
+    KE_RENDER_CHAIN_REPLACE     = 2,
+} ke_render_chain_mode;
+
+/// How a pass's render pass uses the frame's depth.
+typedef enum ke_render_depth_mode
+{
+    KE_RENDER_DEPTH_NONE  = 0,
+    /// Attached and tested against; the pass's pipeline does not write it.
+    KE_RENDER_DEPTH_TEST  = 1,
+    /// Attached, tested against and written.
+    KE_RENDER_DEPTH_WRITE = 2,
+} ke_render_depth_mode;
+
+/// A pass's place in the chain, from join_chain; KE_RENDER_CHAIN_NONE is no place.
+typedef uint32_t ke_render_chain_link;
+#define KE_RENDER_CHAIN_NONE 0u
+
+/// A pass's declared resource I/O. Every write is cleared when the pass's render pass opens. A
+/// pass in the chain draws into the frame's color as its first color attachment, before its
+/// writes.
 typedef struct ke_render_pass_io
 {
     /// Optional name the pass's render or compute pass is labeled with; copied when the pass
@@ -53,11 +136,10 @@ typedef struct ke_render_pass_io
     uint32_t           reads_count;
     const char *const *writes;
     uint32_t           writes_count;
-    /// The frame command-buffer slot this pass records into.
-    uint32_t           cmd_slot;
-    /// When non-zero, color attachments load their existing contents instead of
-    /// clearing.
-    uint32_t           load;
+    /// The pass's link, or KE_RENDER_CHAIN_NONE for a pass outside the chain.
+    ke_render_chain_link chain;
+    /// How the frame's depth is attached; ignored when a write is already a depth resource.
+    ke_render_depth_mode depth;
 } ke_render_pass_io;
 
 struct ke_render_service
@@ -67,7 +149,7 @@ struct ke_render_service
     /// Declares a transient resource the service allocates and recycles.
     /// @return The tag-component cid to place in a pass's access_list.
     ke_component_id (*declare)(struct ke_render_service *self,
-                               const ke_render_resource_desc *desc, ke_error **out_error);
+                               const ke_render_resource_params *params, ke_error **out_error);
     /// Imports an externally-owned texture under `name`.
     /// @return Its tag-component cid.
     ke_component_id (*import_texture)(struct ke_render_service *self, const char *name,
@@ -79,12 +161,6 @@ struct ke_render_service
     /// bind by name.
     ke_component_id (*import_buffer)(struct ke_render_service *self, const char *name,
                                      ke_gpu_buffer buffer, uint64_t size, ke_error **out_error);
-    /// Publishes an externally-owned GPU bind group and its layout under `name`.
-    /// The layout is available at setup; the instance is fetched at draw time
-    /// via resource_bind_group.
-    ke_component_id (*import_bind_group)(struct ke_render_service *self, const char *name,
-                                         ke_gpu_bind_group bg, ke_gpu_bind_group_layout layout,
-                                         ke_error **out_error);
     /// @return The tag cid minted for `name`, or KE_COMPONENT_INVALID.
     ke_component_id (*cid)(struct ke_render_service *self, const char *name);
 
@@ -95,12 +171,14 @@ struct ke_render_service
     void (*end_pass)(struct ke_render_service *self, struct ke_render_pass_ctx *ctx);
 
     /// Acquires the service's render target as the backbuffer (a built-in resource named
-    /// "backbuffer") and clears the per-pass command slot table. Returns false when the target
+    /// "backbuffer"), clears the per-pass command slot table, and clears the frame's color and
+    /// depth. Returns false when the target
     /// has nothing to draw into this frame, with out_error set when acquiring it failed.
-    ke_bool (*begin_frame)(struct ke_render_service *self, ke_error **out_error);
-    /// Submits the populated command slots in ascending slot order, then presents the render
-    /// target. Returns false when no frame began, or with out_error set when presenting failed.
-    ke_bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
+    bool (*begin_frame)(struct ke_render_service *self, ke_error **out_error);
+    /// Submits the passes outside the chain in the order they ended, then the chain in its order,
+    /// then draws the frame's color into the backbuffer and presents the render target. A link
+    /// whose pass recorded nothing still carries the color through it. Returns false when no frame began, or with out_error set when presenting failed.
+    bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
     /// @return The handle of the uploaded mesh.
@@ -114,7 +192,7 @@ struct ke_render_service
     /// @param out_vbo [out]
     /// @param out_ibo [out]
     /// @param out_index_count [out]
-    ke_bool (*mesh_buffers)(struct ke_render_service *self, ke_mesh_handle h,
+    bool (*mesh_buffers)(struct ke_render_service *self, ke_mesh_handle h,
                             ke_gpu_buffer *out_vbo, ke_gpu_buffer *out_ibo,
                             uint32_t *out_index_count);
 
@@ -141,13 +219,9 @@ struct ke_render_service
                                           float distortion_strength,
                                           const char *shader,
                                           ke_error **out_error);
-    /// The per-material bind-group layout (descriptor set 1) a pipeline
-    /// must declare so its set-1 bind groups (from material_bind_group) are
-    /// valid.
-    ke_gpu_bind_group_layout (*material_layout)(struct ke_render_service *self);
-    /// The set-1 bind group for a material handle; an unknown handle resolves
-    /// to the built-in white material (handle 0).
-    ke_gpu_bind_group (*material_bind_group)(struct ke_render_service *self, ke_material_handle h);
+    /// What the service's resource binder holds for a material handle, the argument a pass gives
+    /// its bind_material; an unknown handle resolves to the built-in white material.
+    ke_render_material_binding (*material_binding)(struct ke_render_service *self, ke_material_handle h);
     /// The pass bucket for a material handle, resolved from CPU-side storage —
     /// no GPU state touched.
     ke_alpha_mode (*material_alpha_mode)(struct ke_render_service *self, ke_material_handle h);
@@ -160,8 +234,6 @@ struct ke_render_service
                                         ke_error **out_error);
     /// The GPU view for a texture/cubemap handle.
     ke_gpu_texture_view (*texture_view)(struct ke_render_service *self, ke_texture_handle h);
-    /// The shared filtering sampler the core creates (linear, repeat).
-    ke_gpu_sampler (*sampler)(struct ke_render_service *self);
 
     /// The GPU view of a declared transient resource, by name.
     ke_gpu_texture_view (*resource_view)(struct ke_render_service *self, const char *name);
@@ -172,11 +244,6 @@ struct ke_render_service
     ke_gpu_buffer (*resource_buffer)(struct ke_render_service *self, const char *name);
     /// The size (bytes) of the buffer published under `name`.
     uint64_t (*resource_buffer_size)(struct ke_render_service *self, const char *name);
-    /// The GPU bind group published under `name` via import_bind_group.
-    ke_gpu_bind_group (*resource_bind_group)(struct ke_render_service *self, const char *name);
-    /// The layout the named bind group was built from (for a consumer's own
-    /// pipeline creation).
-    ke_gpu_bind_group_layout (*resource_bind_group_layout)(struct ke_render_service *self, const char *name);
 
     /// The backbuffer's pixel size, callable from any phase. Refreshed once per
     /// frame at begin_frame, so a caller earlier in the tick reads the previous
@@ -219,19 +286,19 @@ struct ke_render_service
      * @param key [utf8] Dedup cache key.
      * @param out [out] Receives the resident handle on a cache hit.
      */
-    ke_bool (*try_get_mesh)(struct ke_render_service *self, const char *key, ke_mesh_handle *out);
+    bool (*try_get_mesh)(struct ke_render_service *self, const char *key, ke_mesh_handle *out);
     /**
      * [try] Path-keyed probe for a resident texture upload.
      * @param key [utf8] Dedup cache key.
      * @param out [out] Receives the resident handle on a cache hit.
      */
-    ke_bool (*try_get_texture)(struct ke_render_service *self, const char *key, ke_texture_handle *out);
+    bool (*try_get_texture)(struct ke_render_service *self, const char *key, ke_texture_handle *out);
     /**
      * [try] Path-keyed probe for a resident material.
      * @param key [utf8] Dedup cache key.
      * @param out [out] Receives the resident handle on a cache hit.
      */
-    ke_bool (*try_get_material)(struct ke_render_service *self, const char *key, ke_material_handle *out);
+    bool (*try_get_material)(struct ke_render_service *self, const char *key, ke_material_handle *out);
 
     /// The built-in 1×1 white texture, resolvable everywhere a neutral albedo
     /// is wanted.
@@ -241,8 +308,41 @@ struct ke_render_service
     ke_gpu_shader_module (*load_shader)(struct ke_render_service *self, const char *name,
                                         ke_gpu_shader_stage stage, ke_error **out_error);
 
+    /// Replaces the frame globals and records their upload; a shader reads them as `ke_frame`.
+    void (*set_frame_globals)(struct ke_render_service *self, const ke_render_frame_globals *globals);
+    /// The frame globals last set, zero before the first.
+    const ke_render_frame_globals *(*frame_globals)(struct ke_render_service *self);
+    /// Replaces the scene's light and records its upload; a shader reads it as `ke_lighting`.
+    void (*set_lighting)(struct ke_render_service *self, const ke_render_lighting *lighting);
+    /// The scene's light last set, zero before the first.
+    const ke_render_lighting *(*lighting)(struct ke_render_service *self);
+
+    /// The resource binder the service was created with, through which a pass brings its resources
+    /// to its shaders; the service has given it `ke_frame`, `ke_lighting` and the `ke_samp_*` samplers.
+    ke_render_resource_binder *(*resource_binder)(struct ke_render_service *self);
+
     /// Texel format of the backbuffer, the format a pipeline drawing into it declares.
     ke_gpu_texture_format (*backbuffer_format)(struct ke_render_service *self);
+
+    /// Texel format of the named texture resource, the format a pipeline drawing into it
+    /// declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.
+    ke_gpu_texture_format (*resource_format)(struct ke_render_service *self, const char *name);
+
+    /// Counts the times the targets declared relative to the backbuffer were recreated, which
+    /// `begin_frame` does when the backbuffer changes size. A pass that keeps something made from
+    /// a declared target's view, a bind group for instance, rebuilds it when the count changes.
+    uint32_t (*resource_generation)(struct ke_render_service *self);
+
+    /// Gives a pass a place in the chain, after every pass that joined the same stage before it.
+    /// The place is kept until leave_chain.
+    /// @return The link, or KE_RENDER_CHAIN_NONE with KE_ERROR_INVALID_ARGUMENT for a stage or
+    ///         mode out of range.
+    ke_render_chain_link (*join_chain)(struct ke_render_service *self, ke_render_stage stage,
+                                       ke_render_chain_mode mode, ke_error **out_error);
+    /// Gives the place back. An unknown link is ignored.
+    void (*leave_chain)(struct ke_render_service *self, ke_render_chain_link link);
+    /// Texel format of the color a pass of @p stage draws into, the format its pipeline declares.
+    ke_gpu_texture_format (*chain_format)(struct ke_render_service *self, ke_render_stage stage);
 };
 
 typedef struct ke_render_service_handle

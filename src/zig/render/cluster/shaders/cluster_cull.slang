@@ -1,31 +1,35 @@
-// Cluster light culling — one thread per cluster builds the cluster's froxel AABB
-// (inline, from the froxel index + projection) and tests each light's bounding
-// sphere against it, writing the per-cluster light index list the forward pass
-// reads. Froxel grid: numX×numY screen tiles × numZ exponential depth slices
-// (Olsson 2012).
-//
-// The froxel is built in depth: a visible point sits at [near, far], positive.
-// A view-space z becomes that depth through params.counts.z, which the engine's
-// view space supplies, so this shader never assumes which way the camera faces.
+import ke;
 
 struct ClusterParams {
-    float4   grid;   // x=numX, y=numY, z=numZ, w=maxLightsPerCluster
-    float4   counts; // x=pointCount, y=spotCount, z=depthFromViewZ
-    float4   proj;   // x=tan(fovY/2), y=aspect, z=near, w=far
-    float4x4 view;   // world → view
+    float4 grid;
+    float4 counts;
+    float4 depth;
 };
-[[vk::binding(0, 0)]] ConstantBuffer<ClusterParams> params;
+ConstantBuffer<ClusterParams> params;
 
 struct PointLight { float4 pos_radius; float4 color_intensity; };
-[[vk::binding(1, 0)]] StructuredBuffer<PointLight> point_lights;
+StructuredBuffer<PointLight> point_lights;
 
 struct SpotLight { float4 pos_range; float4 dir_cos_inner; float4 color_intensity; float4 cone; };
-[[vk::binding(2, 0)]] StructuredBuffer<SpotLight> spot_lights;
+StructuredBuffer<SpotLight> spot_lights;
 
-[[vk::binding(3, 0)]] RWStructuredBuffer<uint> point_indices;
-[[vk::binding(4, 0)]] RWStructuredBuffer<uint> point_counts;
-[[vk::binding(5, 0)]] RWStructuredBuffer<uint> spot_indices;
-[[vk::binding(6, 0)]] RWStructuredBuffer<uint> spot_counts;
+RWStructuredBuffer<uint> point_indices;
+RWStructuredBuffer<uint> point_counts;
+RWStructuredBuffer<uint> spot_indices;
+RWStructuredBuffer<uint> spot_counts;
+
+float3 unproject(float2 ndc, float ndc_z) {
+    float4 v = mul(ke_frame.inv_proj, float4(ndc, ndc_z, 1.0));
+    float3 p = v.xyz / v.w;
+    p.z *= params.counts.z;
+    return p;
+}
+
+float3 at_depth(float2 ndc, float z) {
+    float3 a = unproject(ndc, 0.25);
+    float3 b = unproject(ndc, 0.75);
+    return lerp(a, b, (z - a.z) / (b.z - a.z));
+}
 
 bool sphere_hits_aabb(float3 center, float radius, float3 amin, float3 amax) {
     float3 closest = max(amin, min(center, amax));
@@ -45,18 +49,13 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
 
     uint max_lights = (uint)params.grid.w;
 
-    // Froxel coords from the flat cluster index.
     uint iz = ci / (numX * numY);
     uint iy = (ci % (numX * numY)) / numX;
     uint ix = ci % numX;
 
-    float tan_half = params.proj.x;
-    float aspect   = params.proj.y;
-    float near     = params.proj.z;
-    float far      = params.proj.w;
+    float near = params.depth.x;
+    float far  = params.depth.y;
 
-    // Exponential depth slice + screen tile → NDC. NDC y: +1 = top (framebuffer
-    // row 0), matching the forward's tile from SV_Position.y.
     float z_near = near * pow(far / near, (float)iz / (float)numZ);
     float z_far  = near * pow(far / near, (float)(iz + 1u) / (float)numZ);
     float nx0 = (float)ix / (float)numX * 2.0 - 1.0;
@@ -72,8 +71,7 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
     for (int a = 0; a < 2; a++)
     for (int b = 0; b < 2; b++)
     for (int c = 0; c < 2; c++) {
-        float z = zs[a];
-        float3 v = float3(nxs[b] * z * tan_half * aspect, nys[c] * z * tan_half, z);
+        float3 v = at_depth(float2(nxs[b], nys[c]), zs[a]);
         amin = min(amin, v);
         amax = max(amax, v);
     }
@@ -84,7 +82,7 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
     uint pc = 0u;
     for (uint pi = 0u; pi < point_total && pc < max_lights; pi++) {
         float4 pr = point_lights[pi].pos_radius;
-        float3 vp = mul(params.view, float4(pr.xyz, 1.0)).xyz;
+        float3 vp = mul(ke_frame.view, float4(pr.xyz, 1.0)).xyz;
         vp.z *= depth_from_view_z;
         if (sphere_hits_aabb(vp, pr.w, amin, amax)) {
             point_indices[ci * max_lights + pc] = pi;
@@ -96,8 +94,8 @@ void cs_main(uint3 gid : SV_DispatchThreadID) {
     uint spot_total = (uint)params.counts.y;
     uint sc = 0u;
     for (uint si = 0u; si < spot_total && sc < max_lights; si++) {
-        float4 pr = spot_lights[si].pos_range; // xyz = pos, w = range
-        float3 vp = mul(params.view, float4(pr.xyz, 1.0)).xyz;
+        float4 pr = spot_lights[si].pos_range;
+        float3 vp = mul(ke_frame.view, float4(pr.xyz, 1.0)).xyz;
         vp.z *= depth_from_view_z;
         if (sphere_hits_aabb(vp, pr.w, amin, amax)) {
             spot_indices[ci * max_lights + sc] = si;

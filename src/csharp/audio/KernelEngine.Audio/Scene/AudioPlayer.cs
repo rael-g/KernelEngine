@@ -13,7 +13,8 @@ public partial class AudioPlayer
 
     private SoundHandle _handle = SoundHandle.None;
 
-    public AudioPlayer(IAudio audio) : this() => _audio = audio;
+    /// <summary>Creates a player that loads and plays its clip through <paramref name="audio"/>.</summary>
+    public AudioPlayer(IAudio audio) => _audio = audio;
 
     protected override void OnReady()
     {

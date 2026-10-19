@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
@@ -22,21 +22,28 @@ const ApplyEntry = struct {
     field_count: u32,
 };
 
+/// One short name a scene may write for a component, and the full name it stands for. Both are
+/// copies the world owns.
+const Alias = struct {
+    alias: [:0]u8,
+    name: [:0]u8,
+};
+
 /// The state of one world, held by `Block`. The pointers it holds are borrowed from the creation
 /// params and never freed. `apply_registry` stays null until the first registration, and
 /// `apply_capacity` is the length of the buffer it points to, which is what `worldDestroy` frees.
 const State = struct {
-    scheduler: ?*c.ke_scheduler,
     ecs: ?*c.ke_ecs,
     runtime: ?*c.ke_runtime,
     scene_tree: ?*c.ke_scene_tree,
-    project_root: [*c]const u8,
     logger: ?*c.ke_logger,
     signal_bus: ?*c.ke_signal_bus,
 
     apply_registry: ?[*]ApplyEntry,
     apply_count: u32,
     apply_capacity: u32,
+
+    aliases: std.ArrayList(Alias),
 };
 
 /// The single allocation of a world: the state and the vtable. The `ref` of the handle returned by
@@ -201,6 +208,100 @@ fn worldGetComponentApply(
     return null;
 }
 
+/// Slot `register_component_alias`. Records the pair unless it is already recorded; two pairs
+/// with one alias are kept both, which is what makes the alias ambiguous. Fails as an invalid
+/// argument for a null world, alias or name, and as out of memory when a copy cannot be made.
+fn worldRegisterComponentAlias(
+    self_in: ?*c.ke_world,
+    alias: [*c]const u8,
+    name: [*c]const u8,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    };
+    if (self.handle == null or alias == null or name == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const s = stateOf(self);
+    const alias_s = std.mem.span(alias);
+    const name_s = std.mem.span(name);
+    for (s.aliases.items) |a| {
+        if (std.mem.eql(u8, a.alias, alias_s) and std.mem.eql(u8, a.name, name_s)) return true;
+    }
+    const alias_copy = heap.gpa.dupeZ(u8, alias_s) catch {
+        E.fail(out_error, .out_of_memory, "alias allocation failed", @src());
+        return false;
+    };
+    const name_copy = heap.gpa.dupeZ(u8, name_s) catch {
+        heap.gpa.free(alias_copy);
+        E.fail(out_error, .out_of_memory, "alias allocation failed", @src());
+        return false;
+    };
+    s.aliases.append(heap.gpa, .{ .alias = alias_copy, .name = name_copy }) catch {
+        heap.gpa.free(alias_copy);
+        heap.gpa.free(name_copy);
+        E.fail(out_error, .out_of_memory, "alias allocation failed", @src());
+        return false;
+    };
+    return true;
+}
+
+/// Slot `resolve_component`. A name the ecs knows wins when no alias shares it; an alias with a
+/// single full name, and no component registered under the alias itself, resolves to that name.
+fn worldResolveComponent(
+    self_in: ?*c.ke_world,
+    name: [*c]const u8,
+    out_meta: [*c]c.ke_component_meta,
+    out_error: [*c][*c]c.ke_error,
+) callconv(.c) bool {
+    const self = self_in orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    };
+    if (self.handle == null or name == null or out_meta == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const s = stateOf(self);
+    const e = s.ecs orelse {
+        E.fail(out_error, .invalid_argument, "world has no ecs", @src());
+        return false;
+    };
+    const name_s = std.mem.span(name);
+
+    var target: ?[:0]const u8 = null;
+    var candidates: u32 = 0;
+    var buf: [256]u8 = undefined;
+    var list = std.Io.Writer.fixed(&buf);
+    for (s.aliases.items) |a| {
+        if (!std.mem.eql(u8, a.alias, name_s)) continue;
+        candidates += 1;
+        target = a.name;
+        list.print("{s}'{s}'", .{ if (candidates > 1) " and " else "", a.name }) catch {};
+    }
+
+    const direct = e.component_lookup.?(e, name, out_meta, null);
+    if (candidates == 0) {
+        if (direct) return true;
+        var msg: [256]u8 = undefined;
+        const text = std.fmt.bufPrintZ(&msg, "no component is registered as '{s}'", .{name_s}) catch "no component is registered under that name";
+        E.fail(out_error, .not_found, text, @src());
+        return false;
+    }
+    if (candidates == 1 and !direct) {
+        if (e.component_lookup.?(e, target.?.ptr, out_meta, out_error)) return true;
+        return false;
+    }
+    if (direct) list.print(" and '{s}'", .{name_s}) catch {};
+    var msg: [512]u8 = undefined;
+    const text = std.fmt.bufPrintZ(&msg, "component name '{s}' is ambiguous between {s}; write the full name", .{ name_s, list.buffered() }) catch "component name is ambiguous; write the full name";
+    E.fail(out_error, .invalid_argument, text, @src());
+    return false;
+}
+
 /// The destroy function of the handle. After it returns the registry buffer and the block are
 /// freed; the ecs, runtime and other borrowed objects are untouched.
 fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
@@ -208,6 +309,11 @@ fn worldDestroy(self_in: ?*c.ke_world) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     if (s.apply_registry) |reg| heap.gpa.free(reg[0..s.apply_capacity]);
+    for (s.aliases.items) |a| {
+        heap.gpa.free(a.alias);
+        heap.gpa.free(a.name);
+    }
+    s.aliases.deinit(heap.gpa);
     heap.gpa.destroy(@as(*Block, @fieldParentPtr("state", s)));
 }
 
@@ -255,15 +361,14 @@ export fn ke_world_create(
         return null_handle;
     };
     block.* = std.mem.zeroes(Block);
+    block.state.aliases = .empty;
 
     const state = &block.state;
     const world = &block.world;
 
-    state.scheduler = params.scheduler;
     state.ecs = params.ecs;
     state.runtime = params.runtime;
     state.scene_tree = params.scene_tree;
-    state.project_root = params.project_root;
     state.logger = params.logger;
     state.signal_bus = params.signal_bus;
 
@@ -275,6 +380,8 @@ export fn ke_world_create(
     world.get_component_fields = worldGetComponentFields;
     world.register_component_apply = worldRegisterComponentApply;
     world.get_component_apply = worldGetComponentApply;
+    world.register_component_alias = worldRegisterComponentAlias;
+    world.resolve_component = worldResolveComponent;
 
     const e = params.ecs.?;
     const registered =
@@ -295,6 +402,7 @@ const StubEcs = struct {
     vtable: c.ke_ecs,
     next_cid: c.ke_component_id,
     next_entity: c.ke_entity,
+    names: [16][32]u8,
 };
 
 fn stubEcsOf(self: ?*c.ke_ecs) *StubEcs {
@@ -307,10 +415,14 @@ fn stubComponentLookup(
     out_meta: [*c]c.ke_component_meta,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
-    _ = self;
-    _ = name;
-    _ = out_meta;
     _ = out_error;
+    const s = stubEcsOf(self);
+    for (s.names[0..s.next_cid], 1..) |*n, cid| {
+        if (!std.mem.eql(u8, std.mem.sliceTo(n, 0), std.mem.span(name))) continue;
+        out_meta.* = std.mem.zeroes(c.ke_component_meta);
+        out_meta.*.cid = @intCast(cid);
+        return true;
+    }
     return false;
 }
 
@@ -324,10 +436,11 @@ fn stubComponentRegister(
 ) callconv(.c) c.ke_component_id {
     _ = fields;
     _ = field_count;
-    _ = name;
     _ = element_size;
     _ = out_error;
     const s = stubEcsOf(self);
+    const span = std.mem.span(name);
+    @memcpy(s.names[s.next_cid][0..span.len], span);
     s.next_cid += 1;
     return s.next_cid;
 }
@@ -354,13 +467,12 @@ test "a world hands back the ecs and runtime it was built with, and no tree it n
     var params = std.mem.zeroes(c.ke_world_params);
     params.ecs = &ecs.vtable;
     params.runtime = &runtime;
-    params.project_root = "res/";
 
     const h = ke_world_create(&params, null);
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
-    const w = h.ref.?;
+    const w: *c.ke_world = h.ref;
     try testing.expectEqual(@as(?*c.ke_ecs, &ecs.vtable), w.*.ecs.?(w));
     try testing.expectEqual(@as(?*c.ke_runtime, &runtime), w.*.runtime.?(w));
     try testing.expect(w.*.scene_tree.?(w) == null);
@@ -416,9 +528,74 @@ test "creating and destroying a world leaves no block allocated" {
     var params = std.mem.zeroes(c.ke_world_params);
     params.ecs = &ecs.vtable;
     params.runtime = &runtime;
-    params.project_root = "res/";
 
     const h = ke_world_create(&params, null);
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}
+
+fn aliasWorld(ecs: *StubEcs, runtime: *c.ke_runtime) c.ke_world_handle {
+    stubEcsInit(ecs);
+    runtime.* = std.mem.zeroes(c.ke_runtime);
+    var params = std.mem.zeroes(c.ke_world_params);
+    params.ecs = &ecs.vtable;
+    params.runtime = runtime;
+    return ke_world_create(&params, null);
+}
+
+test "a short name a single component answers to resolves to it, and the full name still does" {
+    var ecs: StubEcs = undefined;
+    var runtime: c.ke_runtime = undefined;
+    const h = aliasWorld(&ecs, &runtime);
+    const w: *c.ke_world = h.ref;
+    const paddle = ecs.vtable.component_register.?(&ecs.vtable, "pong.paddle", 4, null, 0, null);
+    try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
+    try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
+
+    var meta: c.ke_component_meta = undefined;
+    try testing.expect(w.resolve_component.?(w, "paddle", &meta, null));
+    try testing.expectEqual(paddle, meta.cid);
+    try testing.expect(w.resolve_component.?(w, "pong.paddle", &meta, null));
+    try testing.expectEqual(paddle, meta.cid);
+
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}
+
+test "a short name two components answer to is refused, naming both" {
+    var ecs: StubEcs = undefined;
+    var runtime: c.ke_runtime = undefined;
+    const h = aliasWorld(&ecs, &runtime);
+    const w: *c.ke_world = h.ref;
+    _ = ecs.vtable.component_register.?(&ecs.vtable, "pong.paddle", 4, null, 0, null);
+    _ = ecs.vtable.component_register.?(&ecs.vtable, "tennis.paddle", 4, null, 0, null);
+    try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
+    try testing.expect(w.register_component_alias.?(w, "paddle", "tennis.paddle", null));
+
+    var meta: c.ke_component_meta = undefined;
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!w.resolve_component.?(w, "paddle", &meta, &err));
+    const message = std.mem.span(err.*.message);
+    try testing.expect(std.mem.indexOf(u8, message, "pong.paddle") != null);
+    try testing.expect(std.mem.indexOf(u8, message, "tennis.paddle") != null);
+
+    h.destroy.?(h.ref);
+    try heap.expectNoLeaks();
+}
+
+test "a short name that is also a registered component name is refused" {
+    var ecs: StubEcs = undefined;
+    var runtime: c.ke_runtime = undefined;
+    const h = aliasWorld(&ecs, &runtime);
+    const w: *c.ke_world = h.ref;
+    _ = ecs.vtable.component_register.?(&ecs.vtable, "marker", 4, null, 0, null);
+    _ = ecs.vtable.component_register.?(&ecs.vtable, "game.marker", 4, null, 0, null);
+    try testing.expect(w.register_component_alias.?(w, "marker", "game.marker", null));
+
+    var meta: c.ke_component_meta = undefined;
+    try testing.expect(!w.resolve_component.?(w, "marker", &meta, null));
+    try testing.expect(!w.resolve_component.?(w, "absent", &meta, null));
+
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
 }

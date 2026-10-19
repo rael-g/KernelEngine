@@ -807,6 +807,12 @@
           "type": "uint32_t",
           "tags": [],
           "doc": null
+        },
+        {
+          "name": "events_dropped",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Events lost this frame because the event queue could not grow to hold them."
         }
       ]
     },
@@ -874,7 +880,7 @@
         },
         {
           "name": "is_key_pressed",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to down during this tick.",
           "return_doc": null,
@@ -892,7 +898,7 @@
         },
         {
           "name": "is_key_released",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to up during this tick.",
           "return_doc": null,
@@ -910,7 +916,7 @@
         },
         {
           "name": "is_key_down",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true while the key is held down.",
           "return_doc": null,
@@ -946,7 +952,7 @@
         },
         {
           "name": "snapshot_is_key_down",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true while the key is held down in a snapshot.",
           "return_doc": null,
@@ -972,7 +978,7 @@
         },
         {
           "name": "snapshot_is_key_pressed",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to down during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -998,7 +1004,7 @@
         },
         {
           "name": "snapshot_is_key_released",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to up during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -1024,7 +1030,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_down",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true while the mouse button is held down in a snapshot.",
           "return_doc": null,
@@ -1050,7 +1056,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_pressed",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the mouse button transitioned to down during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -1076,7 +1082,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_released",
-          "returns": "ke_bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": "Returns true if the mouse button transitioned to up during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -1106,7 +1112,7 @@
           "tags": [
             "raw"
           ],
-          "doc": "Drains pending discrete events and clears the queue. Events beyond the buffer capacity are dropped. Must run on the same thread as the sinks below.",
+          "doc": "Moves the oldest pending discrete events, as many as the buffer holds, out of the queue; the rest stay queued for the next call. Must run on the same thread as the sinks below.",
           "return_doc": "Number of events written.",
           "params": [
             {

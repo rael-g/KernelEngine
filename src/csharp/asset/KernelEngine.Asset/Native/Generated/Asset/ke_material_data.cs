@@ -1,5 +1,6 @@
-using KernelEngine.Common.Native;
 using System.Runtime.CompilerServices;
+
+using KernelEngine.Common.Native;
 
 namespace KernelEngine.Asset.Native;
 

@@ -29,12 +29,18 @@ pub fn Stubs(comptime c: type) type {
             texture_label: [*c]const u8,
             texture_view_label: [*c]const u8,
             render_pass_label: [*c]const u8,
+            render_passes: u32,
+            submitted: u32,
+            color_load: c.ke_gpu_load_op,
+            depth_load: ?c.ke_gpu_load_op,
             compute_pass_label: [*c]const u8,
             debug_group_label: [*c]const u8,
             debug_groups_open: i32,
+            buffer_writes: u32,
+            bytes_written: usize,
 
             pub fn init(self: *Device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .render_passes = 0, .submitted = 0, .color_load = 0, .depth_load = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0, .buffer_writes = 0, .bytes_written = 0 };
                 self.vtable.handle = self;
                 self.vtable.create_buffer = &createBuffer;
                 self.vtable.create_bind_group_layout = &createBindGroupLayout;
@@ -65,19 +71,19 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.queue_poll = &queuePoll;
                 self.encoder = std.mem.zeroes(c.ke_gpu_command_encoder);
                 self.encoder.handle = self;
-                self.encoder.destroy = &destroyEncoder;
                 self.encoder.begin_render_pass = &beginRenderPass;
                 self.encoder.begin_compute_pass = &beginComputePass;
                 self.encoder.finish = &finishEncoder;
                 self.render_pass = std.mem.zeroes(c.ke_gpu_render_pass);
                 self.render_pass.end = &endRenderPass;
+                self.render_pass.set_pipeline = &setRenderPipeline;
+                self.render_pass.draw = &drawRenderPass;
                 self.compute_pass = std.mem.zeroes(c.ke_gpu_compute_pass);
                 self.compute_pass.handle = self;
                 self.compute_pass.end = &endComputePass;
                 self.compute_pass.push_debug_group = &pushDebugGroup;
                 self.compute_pass.pop_debug_group = &popDebugGroup;
                 self.command_buffer = std.mem.zeroes(c.ke_gpu_command_buffer);
-                self.command_buffer.destroy = &destroyCommandBuffer;
             }
 
             fn encoderOwner(enc: ?*c.ke_gpu_command_encoder) *Device {
@@ -88,11 +94,15 @@ pub fn Stubs(comptime c: type) type {
                 return @ptrCast(@alignCast(pass.?.handle.?));
             }
 
-            /// Every begin returns the same render pass record, so the label of the latest begin
-            /// replaces the one before it.
+            /// Every begin returns the same render pass record, so the label, the first color
+            /// load and the depth's read-only flag of the latest begin replace the ones before it;
+            /// `render_passes` counts the begins.
             fn beginRenderPass(enc: ?*c.ke_gpu_command_encoder, p: [*c]const c.ke_gpu_render_pass_params) callconv(.c) [*c]c.ke_gpu_render_pass {
                 const self = encoderOwner(enc);
                 self.render_pass_label = p.*.label;
+                self.render_passes += 1;
+                self.color_load = if (p.*.color_attachment_count > 0) p.*.color_attachments[0].load_op else 0;
+                self.depth_load = if (p.*.depth_stencil_attachment != null) p.*.depth_stencil_attachment.*.depth_load_op else null;
                 return &self.render_pass;
             }
 
@@ -105,6 +115,8 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn endRenderPass(_: ?*c.ke_gpu_render_pass) callconv(.c) void {}
+            fn setRenderPipeline(_: ?*c.ke_gpu_render_pass, _: c.ke_gpu_pipeline) callconv(.c) void {}
+            fn drawRenderPass(_: ?*c.ke_gpu_render_pass, _: u32, _: u32, _: u32, _: u32) callconv(.c) void {}
 
             fn endComputePass(_: ?*c.ke_gpu_compute_pass) callconv(.c) void {}
 
@@ -119,19 +131,23 @@ pub fn Stubs(comptime c: type) type {
                 passOwner(pass).debug_groups_open -= 1;
             }
 
-            fn finishEncoder(enc: ?*c.ke_gpu_command_encoder) callconv(.c) [*c]c.ke_gpu_command_buffer {
-                return &encoderOwner(enc).command_buffer;
+            fn finishEncoder(enc: ?*c.ke_gpu_command_encoder, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_command_buffer_handle {
+                return .{ .ref = &encoderOwner(enc).command_buffer, .destroy = &destroyCommandBuffer };
             }
 
             fn destroyCommandBuffer(_: ?*c.ke_gpu_command_buffer) callconv(.c) void {}
 
-            fn createCommandEncoder(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_command_encoder_params) callconv(.c) [*c]c.ke_gpu_command_encoder {
-                return &of(self).encoder;
+            fn createCommandEncoder(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_command_encoder_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_command_encoder_handle {
+                return .{ .ref = &of(self).encoder, .destroy = &destroyEncoder };
             }
 
             fn destroyEncoder(_: ?*c.ke_gpu_command_encoder) callconv(.c) void {}
 
-            fn queueSubmit(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue, _: [*c]const [*c]c.ke_gpu_command_buffer, _: u32) callconv(.c) void {}
+            /// `submitted` counts the command buffers submitted.
+            fn queueSubmit(self: ?*c.ke_gpu_device, _: c.ke_gpu_queue, _: [*c]const [*c]c.ke_gpu_command_buffer, count: u32) callconv(.c) void {
+                const d: *Device = @ptrCast(@alignCast(self.?.handle));
+                d.submitted += count;
+            }
 
             fn queuePoll(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue) callconv(.c) void {}
 
@@ -167,7 +183,7 @@ pub fn Stubs(comptime c: type) type {
                 return mint(self);
             }
 
-            fn createBindGroupLayout(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_layout_params) callconv(.c) c.ke_gpu_bind_group_layout {
+            fn createBindGroupLayout(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_layout_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group_layout {
                 return mint(self);
             }
 
@@ -179,7 +195,7 @@ pub fn Stubs(comptime c: type) type {
             }
 
             /// Also counts toward `compute_live`, which `destroyComputePipeline` releases.
-            fn createComputePipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_compute_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
+            fn createComputePipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_compute_pipeline_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_pipeline {
                 _ = @atomicRmw(i64, &of(self).compute_live, .Add, 1, .monotonic);
                 return mint(self);
             }
@@ -189,11 +205,11 @@ pub fn Stubs(comptime c: type) type {
                 destroyHandle(self, h);
             }
 
-            fn createRenderPipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
+            fn createRenderPipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_pipeline {
                 return mint(self);
             }
 
-            fn createSampler(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_sampler_params) callconv(.c) c.ke_gpu_sampler {
+            fn createSampler(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_sampler_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_sampler {
                 return mint(self);
             }
 
@@ -214,17 +230,21 @@ pub fn Stubs(comptime c: type) type {
                 if (on_ready) |ready| ready(mint(self), user);
             }
 
-            fn createTexture(self: ?*c.ke_gpu_device, p: [*c]const c.ke_gpu_texture_params) callconv(.c) c.ke_gpu_texture {
+            fn createTexture(self: ?*c.ke_gpu_device, p: [*c]const c.ke_gpu_texture_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture {
                 of(self).texture_label = p.*.label;
                 return mint(self);
             }
 
-            fn createTextureView(self: ?*c.ke_gpu_device, _: c.ke_gpu_texture, p: [*c]const c.ke_gpu_texture_view_params) callconv(.c) c.ke_gpu_texture_view {
+            fn createTextureView(self: ?*c.ke_gpu_device, _: c.ke_gpu_texture, p: [*c]const c.ke_gpu_texture_view_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
                 of(self).texture_view_label = p.*.label;
                 return mint(self);
             }
 
-            fn writeBuffer(_: ?*c.ke_gpu_device, _: c.ke_gpu_buffer, _: u64, _: ?*const anyopaque, _: usize) callconv(.c) void {}
+            fn writeBuffer(self: ?*c.ke_gpu_device, _: c.ke_gpu_buffer, _: u64, _: ?*const anyopaque, size: usize) callconv(.c) void {
+                const d = of(self);
+                d.buffer_writes += 1;
+                d.bytes_written += size;
+            }
 
             fn defaultQueue(_: ?*c.ke_gpu_device) callconv(.c) c.ke_gpu_queue {
                 return 1;
@@ -235,7 +255,7 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn ndcConvention(_: ?*c.ke_gpu_device) callconv(.c) c.ke_ndc_convention {
-                return .{ .z_zero_to_one = 1, .y_flip = 1, .clip_left_handed = 1 };
+                return .{ .z_zero_to_one = true, .y_flip = true };
             }
 
             /// The handle is not checked: each call gives back one count, so releasing the same
@@ -251,9 +271,11 @@ pub fn Stubs(comptime c: type) type {
             vtable: c.ke_gpu_render_target,
             acquired: bool,
             presented: u32,
+            width: u32,
+            height: u32,
 
             pub fn init(self: *Target) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_render_target), .acquired = false, .presented = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_render_target), .acquired = false, .presented = 0, .width = 1, .height = 1 };
                 self.vtable.handle = self;
                 self.vtable.acquire = &acquire;
                 self.vtable.present = &present;
@@ -284,9 +306,9 @@ pub fn Stubs(comptime c: type) type {
                 return true;
             }
 
-            fn size(_: ?*c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
-                if (out_w != null) out_w.* = 1;
-                if (out_h != null) out_h.* = 1;
+            fn size(self: ?*c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+                if (out_w != null) out_w.* = of(self).width;
+                if (out_h != null) out_h.* = of(self).height;
             }
 
             fn format(_: ?*c.ke_gpu_render_target) callconv(.c) c.ke_gpu_texture_format {
@@ -294,37 +316,140 @@ pub fn Stubs(comptime c: type) type {
             }
         };
 
+        /// Fake resource binder. `live` counts the layouts, sets and materials handed out and not
+        /// destroyed; every handle is read from and advanced in `next`.
+        pub const Binder = struct {
+            vtable: c.ke_render_resource_binder,
+            next: u64,
+            live: i64,
+
+            pub fn init(self: *Binder) void {
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_resource_binder), .next = 1, .live = 0 };
+                self.vtable.handle = self;
+                self.vtable.provide = &provide;
+                self.vtable.create_shader_layout = &createShaderLayout;
+                self.vtable.destroy_shader_layout = &destroyHandle;
+                self.vtable.pipeline_layouts = &pipelineLayouts;
+                self.vtable.create_set = &createSet;
+                self.vtable.destroy_set = &destroyHandle;
+                self.vtable.bind_render_set = &bindRenderSet;
+                self.vtable.bind_compute_set = &bindComputeSet;
+                self.vtable.create_material = &createMaterial;
+                self.vtable.destroy_material = &destroyHandle;
+                self.vtable.bind_material = &bindMaterial;
+            }
+
+            pub fn api(self: *Binder) *c.ke_render_resource_binder {
+                return &self.vtable;
+            }
+
+            fn of(self: [*c]c.ke_render_resource_binder) *Binder {
+                return @ptrCast(@alignCast(self.*.handle));
+            }
+
+            fn mint(self: [*c]c.ke_render_resource_binder) u64 {
+                const b = of(self);
+                b.live += 1;
+                const h = b.next;
+                b.next += 1;
+                return h;
+            }
+
+            fn destroyHandle(self: [*c]c.ke_render_resource_binder, h: u64) callconv(.c) void {
+                if (h != 0) of(self).live -= 1;
+            }
+
+            fn provide(_: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_shader_binding, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                return true;
+            }
+
+            fn createShaderLayout(self: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_shader_layout_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_shader_layout {
+                return mint(self);
+            }
+
+            /// Writes no layout.
+            fn pipelineLayouts(_: [*c]c.ke_render_resource_binder, _: c.ke_render_shader_layout, _: [*c]c.ke_gpu_bind_group_layout, _: u32, out_count: [*c]u32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                out_count.* = 0;
+                return true;
+            }
+
+            fn createSet(self: [*c]c.ke_render_resource_binder, _: c.ke_render_shader_layout, _: [*c]const u8, _: [*c]const u8, _: [*c]const c.ke_render_shader_binding, _: u32, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_resource_set {
+                return mint(self);
+            }
+
+            fn bindRenderSet(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_render_pass, _: c.ke_render_resource_set, _: [*c]const u32, _: u32) callconv(.c) void {}
+
+            fn bindComputeSet(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_compute_pass, _: c.ke_render_resource_set, _: [*c]const u32, _: u32) callconv(.c) void {}
+
+            fn createMaterial(self: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_material_data, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_material_binding {
+                return mint(self);
+            }
+
+            fn bindMaterial(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_render_pass, _: c.ke_render_shader_layout, _: c.ke_render_material_binding) callconv(.c) void {}
+        };
+
         /// Fake render service. Every id it hands out is read from and advanced in `next`, one
-        /// sequence shared by all its methods.
+        /// sequence shared by all its methods. It answers `resource_binder` with `binder`.
         pub const Core = struct {
             vtable: c.ke_render_service,
             next: u64,
             shader_loads_fail: bool,
+            device: *c.ke_gpu_device,
+            binder: Binder,
+            links: i64,
 
-            pub fn init(self: *Core) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false };
+            pub fn init(self: *Core, device: *c.ke_gpu_device) void {
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_render_service), .next = 1, .shader_loads_fail = false, .device = device, .binder = undefined, .links = 0 };
+                self.binder.init();
                 self.vtable.handle = self;
+                self.vtable.resource_binder = &resourceBinder;
+                self.vtable.material_binding = &materialBinding;
                 self.vtable.load_shader = &loadShader;
                 self.vtable.backbuffer_format = &backbufferFormat;
+                self.vtable.resource_format = &resourceFormat;
+                self.vtable.resource_generation = &resourceGeneration;
                 self.vtable.get_or_create_pipeline = &getOrCreatePipeline;
                 self.vtable.cid = &cid;
                 self.vtable.declare = &declare;
                 self.vtable.import_buffer = &importBuffer;
-                self.vtable.import_bind_group = &importBindGroup;
                 self.vtable.import_tag = &importTag;
                 self.vtable.resource_view = &resourceView;
-                self.vtable.material_layout = &materialLayout;
-                self.vtable.resource_bind_group_layout = &resourceBindGroupLayout;
-                self.vtable.resource_bind_group = &resourceBindGroup;
-                self.vtable.sampler = &sampler;
                 self.vtable.texture_view = &textureView;
                 self.vtable.white_texture = &whiteTexture;
                 self.vtable.resource_buffer = &resourceBuffer;
                 self.vtable.resource_buffer_size = &resourceBufferSize;
+                self.vtable.join_chain = &joinChain;
+                self.vtable.leave_chain = &leaveChain;
+                self.vtable.chain_format = &chainFormat;
+            }
+
+            /// Counts the links held in `links`.
+            fn joinChain(self: ?*c.ke_render_service, _: c.ke_render_stage, _: c.ke_render_chain_mode, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_chain_link {
+                const core: *Core = @ptrCast(@alignCast(self.?.handle));
+                core.links += 1;
+                return @intCast(mint(self));
+            }
+
+            fn leaveChain(self: ?*c.ke_render_service, _: c.ke_render_chain_link) callconv(.c) void {
+                const core: *Core = @ptrCast(@alignCast(self.?.handle));
+                core.links -= 1;
+            }
+
+            fn chainFormat(_: ?*c.ke_render_service, stage: c.ke_render_stage) callconv(.c) c.ke_gpu_texture_format {
+                return if (stage >= c.KE_RENDER_STAGE_TONEMAP) c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
             }
 
             fn backbufferFormat(_: ?*c.ke_render_service) callconv(.c) c.ke_gpu_texture_format {
                 return c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+            }
+
+            /// Knows no resource, so a pass declares every one it writes.
+            fn resourceFormat(_: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_texture_format {
+                return c.KE_GPU_TEXTURE_FORMAT_INVALID;
+            }
+
+            fn resourceGeneration(_: [*c]c.ke_render_service) callconv(.c) u32 {
+                return 0;
             }
 
             pub fn api(self: *Core) *c.ke_render_service {
@@ -348,6 +473,15 @@ pub fn Stubs(comptime c: type) type {
                 return mint(self);
             }
 
+            fn resourceBinder(self: [*c]c.ke_render_service) callconv(.c) [*c]c.ke_render_resource_binder {
+                const core: *Core = @ptrCast(@alignCast(self.*.handle));
+                return core.binder.api();
+            }
+
+            fn materialBinding(self: [*c]c.ke_render_service, _: c.ke_material_handle) callconv(.c) c.ke_render_material_binding {
+                return mint(self);
+            }
+
             fn getOrCreatePipeline(self: ?*c.ke_render_service, _: [*c]const c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
                 return mint(self);
             }
@@ -357,15 +491,11 @@ pub fn Stubs(comptime c: type) type {
                 return @intCast(mint(self));
             }
 
-            fn declare(self: ?*c.ke_render_service, _: [*c]const c.ke_render_resource_desc, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+            fn declare(self: ?*c.ke_render_service, _: [*c]const c.ke_render_resource_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
                 return @intCast(mint(self));
             }
 
             fn importBuffer(self: ?*c.ke_render_service, _: [*c]const u8, _: c.ke_gpu_buffer, _: u64, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-                return @intCast(mint(self));
-            }
-
-            fn importBindGroup(self: ?*c.ke_render_service, _: [*c]const u8, _: c.ke_gpu_bind_group, _: c.ke_gpu_bind_group_layout, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
                 return @intCast(mint(self));
             }
 
@@ -374,22 +504,6 @@ pub fn Stubs(comptime c: type) type {
             }
 
             fn resourceView(self: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {
-                return mint(self);
-            }
-
-            fn materialLayout(self: ?*c.ke_render_service) callconv(.c) c.ke_gpu_bind_group_layout {
-                return mint(self);
-            }
-
-            fn resourceBindGroupLayout(self: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_bind_group_layout {
-                return mint(self);
-            }
-
-            fn resourceBindGroup(self: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_bind_group {
-                return mint(self);
-            }
-
-            fn sampler(self: ?*c.ke_render_service) callconv(.c) c.ke_gpu_sampler {
                 return mint(self);
             }
 
@@ -425,6 +539,11 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.register_system = &registerSystem;
                 self.vtable.unregister_system = &unregisterSystem;
                 self.vtable.last_system = &lastSystem;
+                self.vtable.declare_self_ordered = &declareSelfOrdered;
+            }
+
+            fn declareSelfOrdered(_: ?*c.ke_runtime, _: c.ke_component_id, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                return true;
             }
 
             pub fn api(self: *Runtime) *c.ke_runtime {
@@ -459,6 +578,28 @@ pub fn Stubs(comptime c: type) type {
             fn lastSystem(self: ?*c.ke_runtime) callconv(.c) c.ke_system_id {
                 const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
                 return if (rt.live_count == 0) 0 else rt.live[rt.live_count - 1];
+            }
+        };
+
+        /// Fake scene tree. Answers `generation` as its hierarchy generation, which a test moves by
+        /// hand.
+        pub const Tree = struct {
+            vtable: c.ke_scene_tree,
+            generation: u64,
+
+            pub fn init(self: *Tree) void {
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_scene_tree), .generation = 0 };
+                self.vtable.handle = self;
+                self.vtable.hierarchy_generation = &hierarchyGeneration;
+            }
+
+            pub fn api(self: *Tree) *c.ke_scene_tree {
+                return &self.vtable;
+            }
+
+            fn hierarchyGeneration(self: ?*c.ke_scene_tree) callconv(.c) u64 {
+                const t: *Tree = @ptrCast(@alignCast(self.?.handle));
+                return t.generation;
             }
         };
 

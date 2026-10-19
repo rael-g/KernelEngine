@@ -18,6 +18,15 @@ public unsafe partial struct ke_runtime
     [NativeTypeName("ke_system_id (*)(ke_runtime *)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, ulong> last_system;
 
+    [NativeTypeName("bool (*)(ke_runtime *, ke_component_id, ke_component_id, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, uint, uint, KernelEngine.Common.Native.ke_error**, bool> declare_exclusive;
+
+    [NativeTypeName("bool (*)(ke_runtime *, ke_component_id, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, uint, KernelEngine.Common.Native.ke_error**, bool> declare_self_ordered;
+
+    [NativeTypeName("bool (*)(ke_runtime *, bool, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, bool, KernelEngine.Common.Native.ke_error**, bool> check_order;
+
     [NativeTypeName("bool (*)(ke_runtime *, float, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, float, KernelEngine.Common.Native.ke_error**, bool> tick;
 

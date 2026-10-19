@@ -3,44 +3,21 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 const world_impl = @import("world.zig");
 const fields_apply = @import("component_fields_apply.zig");
+const values = @import("scene_values.zig");
+const names_mod = @import("scene_names.zig");
+const Arena = values.Arena;
+const NameMap = names_mod.NameMap;
+const type_name_max = names_mod.type_name_max;
+const normalizeTypeName = names_mod.normalizeTypeName;
 
 const E = @import("kerror").Errors(c);
 
-const path_max = 512;
-const resolved_path_max = 1024;
 
 const res_prefix = "res://";
-
-/// Owns the strings and variant tables read from scene files. Nothing frees an allocation on its
-/// own; `deinit` releases all of them together, so a pointer handed out stays valid until the
-/// loader that owns this arena is destroyed.
-const Arena = struct {
-    inner: std.heap.ArenaAllocator,
-
-    fn init() Arena {
-        return .{ .inner = .init(heap.gpa) };
-    }
-
-    fn allocArray(self: *Arena, comptime T: type, n: usize) ?[]T {
-        if (n == 0) return &.{};
-        return self.inner.allocator().alloc(T, n) catch null;
-    }
-
-    /// The copy lives until the arena is deinitialized, so the caller may free its source at once.
-    fn dupeZ(self: *Arena, src: [*c]const u8) ?[*:0]u8 {
-        if (src == null) return null;
-        const owned = self.inner.allocator().dupeZ(u8, std.mem.span(src)) catch return null;
-        return owned.ptr;
-    }
-
-    fn deinit(self: *Arena) void {
-        self.inner.deinit();
-    }
-};
 
 /// Private state of one loader, allocated by `ke_scene_loader_create` and freed by the handle's
 /// destroy. `api.handle` points back here. `created` is cleared when a load starts and emptied by
@@ -49,13 +26,13 @@ const Arena = struct {
 /// The loader keeps no scene data: nodes come from the `ke_scene_tree` of `world`, components
 /// from its `ke_ecs`, connections from its signal bus. What it owns is `arena`, which holds every
 /// string and table read from a scene and lives as long as the loader, so what a load read stays
-/// valid until `vtDestroy`, and `created`. `project_root` is a copy cut to the buffer. Every
-/// failure fills the out error and returns false; faults in what a scene says go through
+/// valid until `vtDestroy`, and `created`. `assets` is borrowed and resolves every "res://"
+/// reference. Every failure fills the out error and returns false; faults in what a scene says go through
 /// `structural`, which also logs them. A load runs on its caller's thread.
 const State = struct {
     api: c.ke_scene_loader,
     world: *c.ke_world,
-    project_root: [path_max]u8,
+    assets: *c.ke_asset_resolver,
 
     script_factory: c.ke_script_factory_func,
     script_ctx: ?*anyopaque,
@@ -78,186 +55,26 @@ fn treeOf(world: *c.ke_world) ?*c.ke_scene_tree {
     return if (t == null) null else t;
 }
 
-fn variantNull() c.ke_variant {
-    return .{ .type = c.KE_VARIANT_NULL, .unnamed_0 = .{ .i = 0 } };
-}
-fn variantBool(b: bool) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_BOOL, .unnamed_0 = .{ .b = b } };
-}
-fn variantInt(i: i64) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_INT, .unnamed_0 = .{ .i = i } };
-}
-fn variantFloat(f: f64) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = f } };
-}
-fn variantString(s: ?[*:0]const u8) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = s } };
-}
-fn variantVec2(x: f32, y: f32) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = x, .y = y } } };
-}
-fn variantVec3(x: f32, y: f32, z: f32) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = x, .y = y, .z = z } } };
-}
-fn variantVec4(x: f32, y: f32, z: f32, w: f32) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = x, .y = y, .z = z, .w = w } } };
-}
-fn variantTable(t: *const c.ke_variant_table) c.ke_variant {
-    return .{ .type = c.KE_VARIANT_TABLE, .unnamed_0 = .{ .t = t } };
+fn pathDirname(path: []const u8) []const u8 {
+    const idx = std.mem.lastIndexOfAny(u8, path, "/\\") orelse return ".";
+    return path[0..idx];
 }
 
-/// A one-element or empty array becomes null. A longer one becomes a vector variant sized by its
-/// length, up to the widest vector, so elements beyond that are dropped. An element that is not a
-/// number stays zero, and nothing reports it.
-fn variantFromArray(arr: *c.toml_array_t) c.ke_variant {
-    const n = c.toml_array_nelem(arr);
-    var comps = [_]f32{ 0, 0, 0, 0 };
-    const len = @min(n, @as(c_int, comps.len));
-    var k: c_int = 0;
-    while (k < len) : (k += 1) {
-        const d = c.toml_double_at(arr, k);
-        if (d.ok != 0) {
-            comps[@intCast(k)] = @floatCast(d.u.d);
-            continue;
-        }
-        const i = c.toml_int_at(arr, k);
-        if (i.ok != 0) comps[@intCast(k)] = @floatFromInt(i.u.i);
-    }
-    if (n == 2) return variantVec2(comps[0], comps[1]);
-    if (n == 3) return variantVec3(comps[0], comps[1], comps[2]);
-    if (n >= 4) return variantVec4(comps[0], comps[1], comps[2], comps[3]);
-    return variantNull();
-}
-
-fn variantFromTable(s: *State, tbl: *c.toml_table_t) c.ke_variant {
-    const n: usize = @intCast(c.toml_table_nkval(tbl) + c.toml_table_ntab(tbl) + c.toml_table_narr(tbl));
-    const entries = s.arena.allocArray(c.ke_variant_table_entry, n) orelse return variantNull();
-    const vtbl_mem = s.arena.allocArray(c.ke_variant_table, 1) orelse return variantNull();
-
-    var count: usize = 0;
-    var k: c_int = 0;
-    while (count < n) : (k += 1) {
-        const key = c.toml_key_in(tbl, k) orelse break;
-        entries[count] = .{
-            .key = s.arena.dupeZ(key),
-            .value = readVarIn(s, tbl, key),
-        };
-        count += 1;
-    }
-
-    vtbl_mem[0] = .{ .count = @intCast(count), .entries = entries.ptr };
-    return variantTable(&vtbl_mem[0]);
-}
-
-/// Reads the value of `key` in `tbl` by trying the TOML kinds in turn: string, integer, float,
-/// boolean, array, table. A string is copied into the arena and its TOML buffer freed here. A value
-/// of any other kind, such as a date, reads as null, and nothing reports it.
-fn readVarIn(s: *State, tbl: *c.toml_table_t, key: [*c]const u8) c.ke_variant {
-    const ds = c.toml_string_in(tbl, key);
-    if (ds.ok != 0) {
-        const v = variantString(s.arena.dupeZ(ds.u.s));
-        std.c.free(ds.u.s);
-        return v;
-    }
-    const di = c.toml_int_in(tbl, key);
-    if (di.ok != 0) return variantInt(di.u.i);
-    const dd = c.toml_double_in(tbl, key);
-    if (dd.ok != 0) return variantFloat(dd.u.d);
-    const db = c.toml_bool_in(tbl, key);
-    if (db.ok != 0) return variantBool(db.u.b != 0);
-    if (c.toml_array_in(tbl, key)) |arr| return variantFromArray(arr);
-    if (c.toml_table_in(tbl, key)) |sub| return variantFromTable(s, sub);
-    return variantNull();
-}
-
-fn pathDirname(path: []const u8, out: []u8) []const u8 {
-    const idx = std.mem.lastIndexOfAny(u8, path, "/\\") orelse {
-        out[0] = '.';
-        out[1] = 0;
-        return out[0..1];
+/// Writes the path a scene reference names into `out`, terminated. A "res://" reference is the asset
+/// resolver's to resolve; an absolute path stands as written; any other joins the directory of the
+/// file making the reference. A result that does not fit fails as an invalid argument. Nothing here
+/// checks that the file exists.
+fn resolvePath(s: *const State, base_dir: []const u8, ref: [*:0]const u8, out: []u8, out_error: [*c][*c]c.ke_error) bool {
+    const r = std.mem.span(ref);
+    if (std.mem.startsWith(u8, r, res_prefix))
+        return s.assets.resolve_path.?(s.assets, ref, out.ptr, out.len, out_error);
+    const absolute = r.len > 0 and (r[0] == '/' or (r.len > 1 and r[1] == ':'));
+    const written = if (absolute) std.fmt.bufPrintZ(out, "{s}", .{r}) else std.fmt.bufPrintZ(out, "{s}/{s}", .{ base_dir, r });
+    _ = written catch {
+        E.fail(out_error, .invalid_argument, "scene path does not fit", @src());
+        return false;
     };
-    const n = @min(idx, out.len - 1);
-    @memcpy(out[0..n], path[0..n]);
-    out[n] = 0;
-    return out[0..n];
-}
-
-/// Copies the parts into out one after another and terminates the result. It stops at the buffer's
-/// capacity without an error, so a longer path is opened in its truncated form.
-fn writeJoined(out: []u8, parts: []const []const u8) void {
-    var i: usize = 0;
-    for (parts) |part| {
-        for (part) |ch| {
-            if (i >= out.len - 1) break;
-            out[i] = ch;
-            i += 1;
-        }
-    }
-    out[i] = 0;
-}
-
-/// Writes the path a scene reference names into out. A "res://" reference joins the project root,
-/// or stands alone when no root was given; an absolute path stands as written; any other joins the
-/// directory of the file making the reference. Nothing here checks that the file exists.
-fn resolvePath(s: *const State, base_dir: []const u8, ref: []const u8, out: []u8) void {
-    if (std.mem.startsWith(u8, ref, res_prefix)) {
-        const rest = ref[res_prefix.len..];
-        const root = std.mem.sliceTo(&s.project_root, 0);
-        if (root.len != 0) {
-            writeJoined(out, &.{ root, "/", rest });
-        } else {
-            writeJoined(out, &.{rest});
-        }
-        return;
-    }
-    const is_absolute = ref.len > 0 and (ref[0] == '/' or (ref.len > 1 and ref[1] == ':'));
-    if (is_absolute) {
-        writeJoined(out, &.{ref});
-        return;
-    }
-    writeJoined(out, &.{ base_dir, "/", ref });
-}
-
-const type_name_max = 128;
-
-/// Returns the type name spelled the way the script factory receives it, or null when the result
-/// would not fit the buffer; a longer name is refused, never truncated. Applying it to its own
-/// result returns the same name.
-fn normalizeTypeName(name: [*c]const u8, out: *[type_name_max]u8) ?[*:0]const u8 {
-    if (name == null) return null;
-    const src = std.mem.sliceTo(name, 0);
-    var len: usize = 0;
-
-    for (src, 0..) |ch, i| {
-        if (ch == '+') {
-            if (len + 1 >= out.len) return null;
-            out[len] = '.';
-            len += 1;
-            continue;
-        }
-        if (std.ascii.isUpper(ch)) {
-            const raw_prev: u8 = if (i > 0) src[i - 1] else '.';
-            const prev: u8 = if (raw_prev == '+') '.' else raw_prev;
-            const next_is_lower = i + 1 < src.len and std.ascii.isLower(src[i + 1]);
-            const starts_word = prev != '.' and prev != '_' and !std.ascii.isDigit(prev) and
-                (!std.ascii.isUpper(prev) or next_is_lower);
-            if (starts_word) {
-                if (len + 1 >= out.len) return null;
-                out[len] = '_';
-                len += 1;
-            }
-            if (len + 1 >= out.len) return null;
-            out[len] = std.ascii.toLower(ch);
-            len += 1;
-            continue;
-        }
-        if (len + 1 >= out.len) return null;
-        out[len] = ch;
-        len += 1;
-    }
-
-    out[len] = 0;
-    return @ptrCast(out);
+    return true;
 }
 
 /// Passes the entity's type name, normalized, to the script factory and returns its verdict. With
@@ -286,30 +103,6 @@ fn dispatchScript(
         E.fail(out_error, .general, "script factory rejected the entity type", @src());
     }
     return false;
-}
-
-fn tableEntryCount(tbl: *c.toml_table_t) usize {
-    return @intCast(c.toml_table_nkval(tbl) + c.toml_table_narr(tbl) + c.toml_table_ntab(tbl));
-}
-
-/// Reads every entry of a component table into arena memory and returns them, or null when the
-/// table has no entries or the arena cannot hold them. The caller treats both as an unreadable
-/// block.
-fn buildEntries(s: *State, tbl: *c.toml_table_t) ?[]c.ke_variant_table_entry {
-    const n = tableEntryCount(tbl);
-    if (n == 0) return null;
-    const entries = s.arena.allocArray(c.ke_variant_table_entry, n) orelse return null;
-    var count: usize = 0;
-    var k: c_int = 0;
-    while (count < n) : (k += 1) {
-        const key = c.toml_key_in(tbl, k) orelse break;
-        entries[count] = .{
-            .key = s.arena.dupeZ(key),
-            .value = readVarIn(s, tbl, key),
-        };
-        count += 1;
-    }
-    return entries[0..count];
 }
 
 /// Logs at the given level under the loader's own tag. The text is formatted into a fixed buffer,
@@ -357,8 +150,10 @@ fn applyComponentBlock(
     };
 
     var meta: c.ke_component_meta = undefined;
-    if (!e.component_lookup.?(e, comp_name, &meta, null)) {
-        structural(world, out_error, "scene names component '{s}', which no module registered", .{comp_name});
+    var resolve_error: [*c]c.ke_error = null;
+    if (!world.resolve_component.?(world, comp_name, &meta, &resolve_error)) {
+        const reason: [*c]const u8 = if (resolve_error != null and resolve_error.*.message != null) resolve_error.*.message else "unknown component";
+        structural(world, out_error, "scene names component '{s}': {s}", .{ comp_name, reason });
         return false;
     }
 
@@ -382,7 +177,7 @@ fn applyComponentBlock(
         if (fields) |f| fields_apply.seedDefaults(comp, f, field_count);
     }
 
-    const entries = buildEntries(s, comp_tbl) orelse {
+    const entries = values.buildEntries(&s.arena, comp_tbl) orelse {
         structural(world, out_error, "component '{s}' block could not be read", .{comp_name});
         return false;
     };
@@ -432,6 +227,42 @@ fn internalComponent(key: [*c]const u8) bool {
 
 /// Walks the component tables of one entity table in file order and stops at the first one refused,
 /// so the tables after it are never read.
+fn entityKey(key: [*c]const u8) bool {
+    const k = std.mem.span(key);
+    for ([_][]const u8{ "name", "parent", "scene", "type", "connect" }) |known| {
+        if (std.mem.eql(u8, k, known)) return true;
+    }
+    return false;
+}
+
+/// The format version this loader reads. A file may state it in its `[scene]` table.
+const format_version: i64 = 2;
+
+/// Accepts a file whose top level holds only the `[[entity]]` array and an optional `[scene]`
+/// table, and whose `[scene]` table holds only `version`, equal to `format_version`.
+fn checkHeader(s: *State, root: *c.toml_table_t, out_error: [*c][*c]c.ke_error) bool {
+    var i: c_int = 0;
+    while (c.toml_key_in(root, i)) |key| : (i += 1) {
+        const k = std.mem.span(key);
+        if (std.mem.eql(u8, k, "entity") or std.mem.eql(u8, k, "scene")) continue;
+        structural(s.world, out_error, "top-level key '{s}' is not entity or scene", .{k});
+        return false;
+    }
+    const header = c.toml_table_in(root, "scene") orelse return true;
+    var j: c_int = 0;
+    while (c.toml_key_in(header, j)) |key| : (j += 1) {
+        if (std.mem.eql(u8, std.mem.span(key), "version")) continue;
+        structural(s.world, out_error, "[scene] key '{s}' is not version", .{key});
+        return false;
+    }
+    const version = c.toml_int_in(header, "version");
+    if (version.ok != 0 and version.u.i != format_version) {
+        structural(s.world, out_error, "scene format version {d} is not {d}, the one this loader reads", .{ version.u.i, format_version });
+        return false;
+    }
+    return true;
+}
+
 fn applyComponentBlocks(
     s: *State,
     entity: c.ke_entity,
@@ -441,7 +272,11 @@ fn applyComponentBlocks(
     var i: c_int = 0;
     while (true) : (i += 1) {
         const key = c.toml_key_in(tbl, i) orelse break;
-        const block = c.toml_table_in(tbl, key) orelse continue;
+        const block = c.toml_table_in(tbl, key) orelse {
+            if (entityKey(key)) continue;
+            structural(s.world, out_error, "entity key '{s}' is not name, parent, scene, type, connect or a component block", .{key});
+            return false;
+        };
         if (retiredBlock(key)) |advice| {
             structural(s.world, out_error, "[entity.{s}] is no longer read; {s}", .{ key, advice });
             return false;
@@ -492,14 +327,26 @@ fn applyConnections(
             return false;
         }
 
-        const target = names.get(std.mem.span(target_d.u.s)) orelse {
-            structural(world, out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
-            return false;
+        const target = switch (names.find(std.mem.span(target_d.u.s))) {
+            .one => |e| e,
+            .none => {
+                structural(world, out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
+                return false;
+            },
+            .ambiguous => {
+                structural(world, out_error, "connect targets '{s}', which more than one entity of this scene is named", .{target_d.u.s});
+                return false;
+            },
         };
 
         var handler: u32 = 0;
         const handler_d = c.toml_int_in(t, "handler");
-        if (handler_d.ok != 0) handler = @intCast(handler_d.u.i);
+        if (handler_d.ok != 0) {
+            handler = std.math.cast(u32, handler_d.u.i) orelse {
+                structural(world, out_error, "connect handler {d} is not between 0 and {d}", .{ handler_d.u.i, std.math.maxInt(u32) });
+                return false;
+            };
+        }
 
         var signal_id: u32 = 0;
         if (!bus.signal_lookup.?(bus, signal_d.u.s, &signal_id)) {
@@ -514,52 +361,6 @@ fn applyConnections(
     }
     return true;
 }
-
-/// Maps the names one scene file declares to their entities, so a later entity can name one as its
-/// parent and a connection can name one as its target. The name copies live in the arena; the item
-/// array is heap memory that `deinit` frees. A map belongs to one file's load.
-const NameMap = struct {
-    const Entry = struct { name: [*:0]u8, entity: c.ke_entity };
-
-    items: ?[*]Entry = null,
-    count: u32 = 0,
-    capacity: u32 = 0,
-    arena: *Arena,
-
-    const initial_capacity: u32 = 16;
-
-    /// Records a name and its entity, growing the item array when it is full. When the array cannot
-    /// grow or the name cannot be copied, the name is dropped without an error, and a later
-    /// reference to it fails.
-    fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity) void {
-        if (self.count == self.capacity) {
-            const cap = if (self.capacity != 0) self.capacity * 2 else initial_capacity;
-            const buf = heap.gpa.alloc(Entry, cap) catch return;
-            if (self.items) |old| {
-                @memcpy(buf[0..self.count], old[0..self.count]);
-                heap.gpa.free(old[0..self.capacity]);
-            }
-            self.items = buf.ptr;
-            self.capacity = cap;
-        }
-        const owned = self.arena.dupeZ(name) orelse return;
-        self.items.?[self.count] = .{ .name = owned, .entity = entity };
-        self.count += 1;
-    }
-
-    fn get(self: *const NameMap, name: []const u8) ?c.ke_entity {
-        const items = self.items orelse return null;
-        for (items[0..self.count]) |entry| {
-            if (std.mem.eql(u8, std.mem.span(entry.name), name)) return entry.entity;
-        }
-        return null;
-    }
-
-    fn deinit(self: *NameMap) void {
-        if (self.items) |items| heap.gpa.free(items[0..self.capacity]);
-        self.items = null;
-    }
-};
 
 /// The inputs to `processEntity` for one entity. The three override fields are set only for the
 /// first entity of a spliced subscene, which takes its name, its attach parent and the outer table
@@ -610,24 +411,32 @@ fn processEntity(
 
     const pn = c.toml_string_in(args.entity_tbl, "parent");
     if (pn.ok != 0) {
-        const found = args.names.get(std.mem.span(pn.u.s));
-        std.c.free(pn.u.s);
-        parent = found orelse {
-            E.fail(out_error, .not_found, "parent entity not found", @src());
-            return false;
+        defer std.c.free(pn.u.s);
+        parent = switch (args.names.find(std.mem.span(pn.u.s))) {
+            .one => |e| e,
+            .none => {
+                structural(s.world, out_error, "parent '{s}' is not an entity declared before it in this scene", .{pn.u.s});
+                return false;
+            },
+            .ambiguous => {
+                structural(s.world, out_error, "parent '{s}' names more than one entity of this scene", .{pn.u.s});
+                return false;
+            },
         };
     }
 
     const scene_ref = c.toml_string_in(args.entity_tbl, "scene");
     if (scene_ref.ok != 0) {
-        var resolved: [resolved_path_max]u8 = undefined;
-        resolvePath(s, args.base_dir, std.mem.span(scene_ref.u.s), &resolved);
+        var resolved_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const resolved = resolvePath(s, args.base_dir, scene_ref.u.s, &resolved_buf, out_error);
         std.c.free(scene_ref.u.s);
+        if (!resolved) return false;
+        const resolved_path: [*:0]const u8 = @ptrCast(&resolved_buf);
 
         var nested_root: c.ke_entity = c.KE_ENTITY_INVALID;
         if (!loadSceneRecursive(
             s,
-            @ptrCast(&resolved),
+            resolved_path,
             parent,
             effective_name,
             args.entity_tbl,
@@ -635,7 +444,7 @@ fn processEntity(
             out_error,
         )) return false;
 
-        if (name_d.ok != 0) args.names.put(name_d.u.s, nested_root);
+        if (name_d.ok != 0 and !args.names.put(name_d.u.s, nested_root, out_error)) return false;
         out_entity.* = nested_root;
         return true;
     }
@@ -672,7 +481,7 @@ fn processEntity(
         }
     }
 
-    if (name_d.ok != 0) args.names.put(name_d.u.s, entity);
+    if (name_d.ok != 0 and !args.names.put(name_d.u.s, entity, out_error)) return false;
     out_entity.* = entity;
     return true;
 }
@@ -705,8 +514,9 @@ fn loadSceneRecursive(
     }
     defer c.toml_free(root);
 
-    var base_buf: [path_max]u8 = undefined;
-    const base_dir = pathDirname(std.mem.span(path), &base_buf);
+    if (!checkHeader(s, root.?, out_error)) return false;
+
+    const base_dir = pathDirname(std.mem.span(path));
 
     const entities = c.toml_array_in(root, "entity") orelse {
         if (out_root) |r| r.* = c.KE_ENTITY_INVALID;
@@ -832,16 +642,20 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Factory. Builds a loader over the given world, copying the project root into its state. A root
-/// longer than the buffer is cut short, and nothing reports it. A null world fails as an invalid
-/// argument and a failed state allocation as out of memory; each returns a null handle.
+/// Factory. Builds a loader over the given world, resolving "res://" references through the given
+/// asset resolver. A null world or resolver fails as an invalid argument and a failed allocation as
+/// out of memory; each returns a null handle.
 export fn ke_scene_loader_create(
     world_in: ?*c.ke_world,
-    project_root: [*c]const u8,
+    assets_in: ?*c.ke_asset_resolver,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_scene_loader_handle {
     const null_handle = std.mem.zeroes(c.ke_scene_loader_handle);
     const world = world_in orelse {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return null_handle;
+    };
+    const assets = assets_in orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return null_handle;
     };
@@ -853,19 +667,12 @@ export fn ke_scene_loader_create(
     s.* = .{
         .api = std.mem.zeroes(c.ke_scene_loader),
         .world = world,
-        .project_root = [_]u8{0} ** path_max,
+        .assets = assets,
         .script_factory = null,
         .script_ctx = null,
         .arena = .init(),
         .created = .empty,
     };
-
-    if (project_root != null) {
-        const root = std.mem.span(project_root);
-        const n = @min(root.len, s.project_root.len - 1);
-        @memcpy(s.project_root[0..n], root[0..n]);
-        s.project_root[n] = 0;
-    }
 
     s.api.handle = s;
     s.api.load = vtLoad;
@@ -878,12 +685,7 @@ const testing = std.testing;
 
 const signal_bus_impl = @import("signal_bus.zig");
 
-const rc = @cImport({
-    @cInclude("kernel_engine/render/component_fields.h");
-    @cInclude("kernel_engine/render/ui/component_fields.h");
-    @cInclude("kernel_engine/audio/component_fields.h");
-    @cInclude("kernel_engine/physics/component_fields.h");
-});
+const rc = @import("test_c");
 
 const fake_max_components = 32;
 const fake_max_entities = 128;
@@ -1107,6 +909,7 @@ const Fixture = struct {
     tree_h: c.ke_scene_tree_handle,
     bus_h: c.ke_signal_bus_handle,
     world_h: c.ke_world_handle,
+    assets_h: c.ke_asset_resolver_handle,
     loader_h: c.ke_scene_loader_handle,
 
     fn init(self: *Fixture) !void {
@@ -1159,7 +962,17 @@ const Fixture = struct {
         self.describe(rc.KE_COMPONENT_NAME_AUDIO_PLAYER, @sizeOf(rc.ke_audio_player_component), generatedFields(&rc.ke_audio_player_component_fields), rc.ke_audio_player_component_fields.len);
         self.describe(rc.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(rc.ke_collider2d_component), generatedFields(&rc.ke_collider2d_component_fields), rc.ke_collider2d_component_fields.len);
 
-        self.loader_h = ke_scene_loader_create(self.world_h.ref, null, null);
+        self.assets_h = std.mem.zeroes(c.ke_asset_resolver_handle);
+        self.loader_h = std.mem.zeroes(c.ke_scene_loader_handle);
+        try self.rootAt(null);
+    }
+
+    fn rootAt(self: *Fixture, root: [*c]const u8) !void {
+        if (self.loader_h.destroy) |d| d(self.loader_h.ref);
+        if (self.assets_h.destroy) |d| d(self.assets_h.ref);
+        self.assets_h = c.ke_asset_resolver_create(null, null, root, null);
+        try testing.expect(self.assets_h.ref != null);
+        self.loader_h = ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, null);
         try testing.expect(self.loader_h.ref != null);
     }
 
@@ -1178,6 +991,7 @@ const Fixture = struct {
 
     fn deinit(self: *Fixture) void {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
+        if (self.assets_h.destroy) |d| d(self.assets_h.ref);
         if (self.world_h.destroy) |d| d(self.world_h.ref);
         if (self.bus_h.destroy) |d| d(self.bus_h.ref);
         if (self.tree_h.destroy) |d| d(self.tree_h.ref);
@@ -1241,9 +1055,24 @@ test "a scene that declares no entity still loads" {
 
     var scene = TempScene.init();
     defer scene.deinit();
-    try scene.put("main.scene.toml", "[scene]\nname = \"empty\"\n");
+    try scene.put("main.scene.toml", "[scene]\nversion = 2\n");
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a misspelt key on an entity fails the load" {
+    try expectSceneRefused(
+        \\[[entity]]
+        \\name = "Player"
+        \\tpye = "camera"
+        \\
+    , "entity key 'tpye' is not name, parent, scene, type, connect or a component block");
+}
+
+test "a scene header with another version, another key, or a stray top-level key fails the load" {
+    try expectSceneRefused("[scene]\nversion = 3\n", "scene format version 3 is not 2");
+    try expectSceneRefused("[scene]\nname = \"Main\"\n", "[scene] key 'name' is not version");
+    try expectSceneRefused("[level]\nversion = 2\n", "top-level key 'level' is not entity or scene");
 }
 
 test "a scene file that is not there fails the load" {
@@ -1727,6 +1556,36 @@ test "a referenced scene is spliced under the name that referenced it" {
     try testing.expectApproxEqAbs(@as(f32, 1.8), vt.scale.y, 1e-6);
 }
 
+test "a res:// subscene is found under the root its asset resolver was given" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("sub.scene.toml",
+        \\[[entity]]
+        \\name = "Root"
+        \\
+        \\[[entity]]
+        \\name   = "Inner"
+        \\parent = "Root"
+        \\
+    );
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name  = "Outer"
+        \\scene = "res://sub.scene.toml"
+        \\
+    );
+    var root_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const root = try std.fmt.bufPrintZ(&root_buf, ".zig-cache/tmp/{s}", .{scene.tmp.sub_path});
+    try f.rootAt(root.ptr);
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    try testing.expect(f.find("Inner") != c.KE_ENTITY_INVALID);
+}
+
 test "two instances of one subscene keep their own outer transform and overrides" {
     var f: Fixture = undefined;
     try f.init();
@@ -1968,47 +1827,6 @@ test "a factory's own error reaches the caller rather than being replaced" {
     try testing.expectEqual(E.typeOf(.not_found), @as(*const c.ke_error_type, @ptrCast(err.*.type)));
 }
 
-fn normalizedName(name: [*c]const u8) []const u8 {
-    const buf = struct {
-        var storage: [type_name_max]u8 = undefined;
-    };
-    const out = normalizeTypeName(name, &buf.storage) orelse return "";
-    return std.mem.sliceTo(out, 0);
-}
-
-test "a type name is spelled the same way whichever casing a scene authored" {
-    try testing.expectEqualStrings("pong.ball", normalizedName("Pong.Ball"));
-    try testing.expectEqualStrings("pong.ball", normalizedName("Pong+Ball"));
-    try testing.expectEqualStrings("pong.ball", normalizedName("pong.ball"));
-}
-
-test "a run of capitals stays one word until a lowercase starts the next" {
-    try testing.expectEqualStrings("http_server", normalizedName("HTTPServer"));
-    try testing.expectEqualStrings("ui_label", normalizedName("UILabel"));
-    try testing.expectEqualStrings("id", normalizedName("ID"));
-}
-
-test "a digit does not split the word it belongs to" {
-    try testing.expectEqualStrings("sprite2d", normalizedName("Sprite2D"));
-    try testing.expectEqualStrings("node3d", normalizedName("Node3D"));
-    try testing.expectEqualStrings("collider2d", normalizedName("Collider2D"));
-}
-
-test "normalizing is idempotent, so a binding may apply it twice" {
-    try testing.expectEqualStrings("paddle_controller", normalizedName("paddle_controller"));
-    try testing.expectEqualStrings("pong.ball", normalizedName("pong.ball"));
-    try testing.expectEqualStrings("sprite2d", normalizedName("sprite2d"));
-}
-
-test "a type name too long to normalize is refused rather than truncated" {
-    var long: [type_name_max + 8]u8 = undefined;
-    @memset(&long, 'A');
-    long[long.len - 1] = 0;
-
-    var buf: [type_name_max]u8 = undefined;
-    try testing.expect(normalizeTypeName(@ptrCast(&long), &buf) == null);
-}
-
 test "a scene authoring a dotted type reaches the factory in snake case" {
     var f: Fixture = undefined;
     try f.init();
@@ -2207,8 +2025,12 @@ test "a scene that fails to load leaves none of the entities it had already crea
     try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Third"));
 }
 
-test "a loader is never created without a world" {
+test "a loader is never created without a world or an asset resolver" {
     try testing.expect(ke_scene_loader_create(null, null, null).ref == null);
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    try testing.expect(ke_scene_loader_create(f.world_h.ref, null, null).ref == null);
 }
 
 test "destroying a null loader is safe" {
@@ -2308,6 +2130,80 @@ test "a connection between two entities in the same scene reaches the bus" {
     try testing.expectEqual(listener, list[0].target);
     try testing.expectEqual(emitter, list[0].source);
     try testing.expectEqual(@as(u32, 7), list[0].handler_id);
+}
+
+fn expectSceneRefused(text: [:0]const u8, expected: []const u8) !void {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml", text);
+    _ = try f.declaredSignal("Poke");
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), expected) != null);
+}
+
+test "two entities may share a name that nothing refers to" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Shape"
+        \\
+        \\[[entity]]
+        \\name = "Shape"
+        \\
+    );
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+}
+
+test "a parent or a connect target that names two entities is refused" {
+    try expectSceneRefused(
+        \\[[entity]]
+        \\name = "Twin"
+        \\
+        \\[[entity]]
+        \\name = "Twin"
+        \\
+        \\[[entity]]
+        \\name = "Child"
+        \\parent = "Twin"
+        \\
+    , "parent 'Twin' names more than one entity");
+    try expectSceneRefused(
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Twin"
+        \\
+        \\[[entity]]
+        \\name = "Twin"
+        \\
+        \\[[entity]]
+        \\name = "Twin"
+        \\
+    , "connect targets 'Twin', which more than one entity");
+}
+
+test "a connect handler outside the range of a u32 is refused" {
+    try expectSceneRefused(
+        \\[[entity]]
+        \\name = "Emitter"
+        \\[[entity.connect]]
+        \\signal = "Poke"
+        \\target = "Listener"
+        \\handler = -1
+        \\
+        \\[[entity]]
+        \\name = "Listener"
+        \\
+    , "connect handler -1 is not between 0 and");
 }
 
 test "a connect block that names no handler wires handler zero" {

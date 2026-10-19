@@ -1,4 +1,5 @@
-using System.Text;
+﻿using System.Text;
+
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
@@ -13,11 +14,11 @@ namespace KernelEngine.Framework;
 /// <see cref="DestroyNode"/> to its command queue, so structural changes made there apply at the
 /// wave barrier.
 /// </summary>
-public unsafe partial class ScriptHost : ISignalDeclarer
+public unsafe partial class ScriptHost
 {
-    private World              _world = null!;
-    private IEcsRegistry       _ecs = null!;
-    private uint                       _nameCid;
+    private World _world = null!;
+    private IEcsRegistry _ecs = null!;
+    private uint _nameCid;
 
     private readonly HashSet<Type> _announcedBehaviors = new();
 
@@ -74,7 +75,7 @@ public unsafe partial class ScriptHost : ISignalDeclarer
 
     private void AnnounceBehavior(Node node)
     {
-        if (!node.HasBehavior) return;
+        if (!node.HasBehavior && !node.HasFixedBehavior) return;
         var type = node.GetType();
         bool first;
         lock (_announcedBehaviors) first = _announcedBehaviors.Add(type);
@@ -144,9 +145,13 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     internal unsafe uint SignalIdOf<T>() where T : unmanaged => _signals!.SignalIdOf<T>();
 
     /// <summary>
-    /// Registers the signal of a payload type, so that a scene can connect it by name.
+    /// Registers the signal of a payload type, so that a scene can connect it by name. A bound node
+    /// declares every signal it handles or emits; nothing happens when no signal bus is registered.
     /// </summary>
-    void ISignalDeclarer.Declare<T>() => _ = SignalIdOf<T>();
+    public void DeclareSignal<T>() where T : unmanaged
+    {
+        if (_signals is not null) _ = SignalIdOf<T>();
+    }
 
     /// <summary>
     /// Hands one delivery to the node it names. A delivery whose target is no longer bound, or
@@ -182,18 +187,19 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
     /// <summary>
-    /// Gives the host the world, the ECS registry and the optional signal bus, and registers the
-    /// name, transform and hierarchy components.
+    /// Gives the host the world, the ECS registry and the optional signal bus, looks up the name,
+    /// transform and hierarchy components the scene tree registered, and registers the host's own
+    /// state component.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
     internal ScriptHost Compose(World world, IEcsRegistry ecs, SignalBus? signals = null)
     {
-        _signals    = signals;
-        _world      = world;
-        _ecs        = ecs;
-        _nameCid            = ecs.RegisterComponent<Native.ke_name_component>("name");
-        _nativeTransformCid = ecs.RegisterComponent<Common.Native.ke_transform_component>("transform");
-        _ = ecs.RegisterComponent<Native.ke_hierarchy_component>("hierarchy");
+        _signals = signals;
+        _world = world;
+        _ecs = ecs;
+        _nameCid = CidOfName("name");
+        _nativeTransformCid = CidOfName("transform");
+        _ = CidOfName("hierarchy");
         return this;
     }
 
@@ -283,6 +289,12 @@ public unsafe partial class ScriptHost : ISignalDeclarer
         _scriptTypes[clr] = id;
         return id;
     }
+
+    /// <summary>
+    /// The tag component every bound instance of <paramref name="type"/> carries, or 0 for a
+    /// node type no instance was bound under yet.
+    /// </summary>
+    internal uint TagOf(Type type) => _scriptTypes.TryGetValue(type, out var id) ? TypeTag(id) : 0;
 
     private void BindScript(Node node)
     {
@@ -463,10 +475,10 @@ public unsafe partial class ScriptHost : ISignalDeclarer
     }
 
     /// <summary>
-    /// Registers <typeparamref name="T"/> under <paramref name="name"/>, or returns the existing
-    /// cid if that name is already registered.
+    /// Registers <typeparamref name="T"/> under <paramref name="name"/> with the field table it
+    /// states, or returns the existing cid if that name is already registered with an agreeing one.
     /// </summary>
-    public uint RegisterComponent<T>(string name) where T : unmanaged => _ecs.RegisterComponent<T>(name);
+    public uint RegisterComponent<T>(string name) where T : unmanaged, IComponentLayout => _ecs.RegisterComponent<T>(name);
 
     /// <summary>
     /// Attaches component <paramref name="cid"/> to <paramref name="entity"/> with

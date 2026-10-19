@@ -1,4 +1,4 @@
-using KernelEngine.Ecs;
+﻿using KernelEngine.Ecs;
 
 
 namespace KernelEngine.Framework;
@@ -64,6 +64,12 @@ public abstract class Node
     protected internal virtual void OnUpdate(in View view) { }
 
     /// <summary>
+    /// Called every fixed step on a bound node of a type that has fixed-step behavior, with the
+    /// step's duration in the view. Base implementation is a no-op.
+    /// </summary>
+    protected internal virtual void OnFixedUpdate(in View view) { }
+
+    /// <summary>
     /// Called once when the node is removed from the world, children first. Base implementation
     /// is a no-op.
     /// </summary>
@@ -77,11 +83,25 @@ public abstract class Node
     protected internal virtual bool HasBehavior => false;
 
     /// <summary>
+    /// True when the node type has fixed-step logic and so gets a fixed-step system. Overridden by
+    /// <c>NodePropertyGenerator</c> for a type that declares <c>FixedUpdate</c> or overrides
+    /// <see cref="OnFixedUpdate"/>; base is false.
+    /// </summary>
+    protected internal virtual bool HasFixedBehavior => false;
+
+    /// <summary>
     /// Whether this node type's behavior touches nothing beyond its own entity, so that its
     /// instances may run concurrently. False for a node that borrows another node, and for a
-    /// hand-written <see cref="OnUpdate"/>. Base is false.
+    /// hand-written <see cref="OnUpdate"/> or <see cref="OnFixedUpdate"/>. Base is false.
     /// </summary>
     protected internal virtual bool ReachesOnlyItself => false;
+
+    /// <summary>
+    /// Whether one hook of this node type, <c>FixedUpdate</c> when <paramref name="fixedStep"/> is
+    /// true and <c>Update</c> otherwise, touches nothing beyond its own entity, so that its
+    /// instances may run concurrently in that hook's system. Base is <see cref="ReachesOnlyItself"/>.
+    /// </summary>
+    protected internal virtual bool HookReachesOnlyItself(bool fixedStep) => ReachesOnlyItself;
 
     /// <summary>
     /// Appends the ECS components this node type reaches and how it reaches them. An override
@@ -91,10 +111,12 @@ public abstract class Node
     protected internal virtual void CollectBehaviorComponents(List<NodeComponentUse> into) { }
 
     /// <summary>
-    /// Declares every payload type this node type emits or handles. An override calls the base
-    /// first, as <see cref="CollectBehaviorComponents"/> does.
+    /// Appends the ECS components one hook of this node type reaches, <c>FixedUpdate</c> when
+    /// <paramref name="fixedStep"/> is true and <c>Update</c> otherwise, and returns true; returns
+    /// false, appending nothing, when that access is not known, and the caller then takes
+    /// <see cref="CollectBehaviorComponents"/>.
     /// </summary>
-    protected internal virtual void CollectSignalTypes(ISignalDeclarer into) { }
+    protected internal virtual bool CollectHookComponents(List<NodeComponentUse> into, bool fixedStep) => false;
 
     /// <summary>
     /// Creates <paramref name="child"/> as this node's child, under
@@ -156,7 +178,7 @@ public abstract class Node
     internal void UnbindFromScene()
     {
         ScriptHost = null;
-        Entity    = 0;
+        Entity = 0;
     }
 
     /// <summary>Whether this node is bound to <paramref name="world"/>.</summary>
@@ -171,7 +193,7 @@ public abstract class Node
     internal void PreBind(ScriptHost scriptHost, ulong entity)
     {
         ScriptHost = scriptHost;
-        Entity    = entity;
+        Entity = entity;
     }
 
     /// <summary>

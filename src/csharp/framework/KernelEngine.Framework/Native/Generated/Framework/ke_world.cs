@@ -26,4 +26,10 @@ public unsafe partial struct ke_world
 
     [NativeTypeName("ke_component_apply_fn (*)(struct ke_world *, ke_component_id, void **)")]
     public delegate* unmanaged[Cdecl]<ke_world*, uint, void**, delegate* unmanaged[Cdecl]<void*, void*, KernelEngine.Ecs.Native.ke_variant_table_entry*, uint, KernelEngine.Common.Native.ke_error**, bool>> get_component_apply;
+
+    [NativeTypeName("bool (*)(struct ke_world *, const char *, const char *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, sbyte*, sbyte*, KernelEngine.Common.Native.ke_error**, bool> register_component_alias;
+
+    [NativeTypeName("bool (*)(struct ke_world *, const char *, ke_component_meta *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_world*, sbyte*, KernelEngine.Ecs.Native.ke_component_meta*, KernelEngine.Common.Native.ke_error**, bool> resolve_component;
 }

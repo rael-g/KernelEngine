@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -9,8 +10,7 @@ pub fn build(b: *std.Build) void {
     const ke_config = b.option([]const u8, "ke-config-include", "Path to kernel_engine/configuration include dir") orelse @panic("-Dke-config-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "Dir containing ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
-    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "path to the shared vendored tomlc99 dir") orelse
-        b.pathJoin(&.{ b.build_root.path.?, "..", "..", "common", "third_party", "tomlc99" });
+    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "dir holding toml.c and toml.h, fetched by the root build.zig.zon") orelse @panic("-Dtomlc99-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/configuration_toml.zig"),
@@ -24,8 +24,10 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(.{ .cwd_relative = ke_config });
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_CONFIGURATION_TOML_EXPORT", "");
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_configuration_toml",
         .root_module = mod,
@@ -50,6 +52,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.linkSystemLibrary("ke_common", .{});
 
+    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run unit tests");
@@ -60,6 +63,6 @@ pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
     mod.addIncludePath(.{ .cwd_relative = dir });
     mod.addCSourceFile(.{
         .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "toml.c" }) },
-        .flags = &.{"-fno-sanitize=undefined"},
+        .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" },
     });
 }

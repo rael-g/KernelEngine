@@ -21,6 +21,7 @@
     <Project Path="examples/csharp/16_physics_test/16_physics_test.csproj" />
     <Project Path="examples/csharp/17_webgpu_clear/17_webgpu_clear.csproj" />
     <Project Path="examples/csharp/18_webgpu_mesh/18_webgpu_mesh.csproj" />
+    <Project Path="examples/csharp/19_node_stress/node_stress.csproj" />
     <Project Path="examples/csharp/19_transparency/19_transparency.csproj" />
   </Folder>
   <Folder Name="/examples/csharp/games/">
@@ -62,6 +63,19 @@
     <Project Path="src/csharp/text/KernelEngine.Text/KernelEngine.Text.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window/KernelEngine.Window.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
+    <Project Path="src/csharp/audio/KernelEngine.Audio.Abstractions/KernelEngine.Audio.Abstractions.csproj" />
+    <Project Path="src/csharp/common/KernelEngine.Common/KernelEngine.Common.csproj" />
+    <Project Path="src/csharp/ecs/KernelEngine.Ecs.Abstractions/KernelEngine.Ecs.Abstractions.csproj" />
+    <Project Path="src/csharp/generators/KernelEngine.SourceGenerators/KernelEngine.SourceGenerators.csproj" />
+    <Project Path="src/csharp/input/KernelEngine.Input.Abstractions/KernelEngine.Input.Abstractions.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.C/Kabic.C.csproj" />
+    <Project Path="src/csharp/kabic/Kabic.Zig/Kabic.Zig.csproj" />
+    <Project Path="src/csharp/logger/KernelEngine.Logger.Abstractions/KernelEngine.Logger.Abstractions.csproj" />
+    <Project Path="src/csharp/physics/KernelEngine.Physics.Abstractions/KernelEngine.Physics.Abstractions.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.Render.Abstractions/KernelEngine.Render.Abstractions.csproj" />
+    <Project Path="src/csharp/runtime/KernelEngine.Runtime.Abstractions/KernelEngine.Runtime.Abstractions.csproj" />
+    <Project Path="src/csharp/text/KernelEngine.Text.Abstractions/KernelEngine.Text.Abstractions.csproj" />
+    <Project Path="src/csharp/text/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />

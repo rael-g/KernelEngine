@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_TEXTURE_TARGET_GPU_RENDER_TARGET_TEXTURE_CREATE_H_
+#define KERNEL_ENGINE_RENDER_TEXTURE_TARGET_GPU_RENDER_TARGET_TEXTURE_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -45,4 +46,6 @@ ke_gpu_render_target_texture_create(ke_gpu_device *device,
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

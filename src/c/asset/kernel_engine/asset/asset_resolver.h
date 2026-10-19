@@ -57,6 +57,8 @@ extern "C"
          * resolve_texture to materialise.
          * @param path [utf8]
          * @param out [out] Receives the parsed material spec on success.
+         * @return false with a not-found error when the file cannot be opened, and with an
+         *         io error when it is not TOML or holds no material table.
          */
         bool (*resolve_material)(struct ke_asset_resolver *self,
                                       const char               *path,
@@ -114,6 +116,21 @@ extern "C"
                                                     ke_render_service *core, const char *path,
                                                     ke_error **out_error);
 
+        /**
+         * Writes the file path `path` names into `out`, terminated: a path that begins with
+         * "res://" is joined to the project root the resolver was created with, or stands as
+         * its remainder when none was given; any other path is copied as written. Nothing
+         * checks that the file exists. Fails as an invalid argument when the result and its
+         * terminator do not fit in `capacity` bytes.
+         * @param path [utf8]
+         * @param out [out,array_of:capacity] Receives the resolved path.
+         * @param capacity Bytes `out` holds.
+         */
+        bool (*resolve_path)(struct ke_asset_resolver *self,
+                             const char               *path,
+                             char                     *out,
+                             size_t                    capacity,
+                             ke_error                **out_error);
     } ke_asset_resolver;
 
     typedef struct ke_asset_resolver_handle

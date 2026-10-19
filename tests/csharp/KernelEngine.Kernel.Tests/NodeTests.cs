@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+
 using KernelEngine.Framework;
+
 using Xunit;
 
 namespace EngineTests;
@@ -54,8 +56,137 @@ public sealed partial class ReadOnlyProbe : Node
     }
 }
 
+/// <summary>
+/// A node whose two hooks reach its transform differently: the update writes the position, the
+/// fixed update only reads the scale through a helper of its own.
+/// </summary>
+public partial class HookProbe : Node3D
+{
+    void Update(in View view) => Position = Vector3.One;
+
+    void FixedUpdate(in View view) => Inspect();
+
+    private float Inspect() => Scale.X;
+
+    public bool SelfOnlyIn(bool fixedStep) => HookReachesOnlyItself(fixedStep);
+
+    public List<NodeComponentUse>? Uses(bool fixedStep)
+    {
+        var into = new List<NodeComponentUse>();
+        return CollectHookComponents(into, fixedStep) ? into : null;
+    }
+}
+
+/// <summary>
+/// A node whose update touches only itself and whose fixed update borrows another node.
+/// </summary>
+public sealed partial class HalfBorrowingProbe : Node3D
+{
+    void Update(in View view) => Position = Vector3.One;
+
+    void FixedUpdate(in View view, Descendant<Node3D> target) => _ = target.Value.Position;
+
+    public bool SelfOnly(bool fixedStep) => HookReachesOnlyItself(fixedStep);
+}
+
+/// <summary>
+/// A subclass that cannot be generated for, so the hook access read on its base may not be its own.
+/// </summary>
+public sealed class HookProbeSubclass : HookProbe;
+
+/// <summary>
+/// A node whose update reads the position of a node it borrows and whose fixed update calls a
+/// method on it, which the generator cannot read.
+/// </summary>
+public sealed partial class BorrowingProbe : Node3D
+{
+    public bool SelfOnly(bool fixedStep) => HookReachesOnlyItself(fixedStep);
+
+    void Update(in View view, Descendant<Node3D> target) => _ = target.Value.Position.X;
+
+    void FixedUpdate(in View view, Descendant<Node3D> target) => target.Node?.GetHashCode();
+
+    public List<NodeComponentUse>? Uses(bool fixedStep)
+    {
+        var into = new List<NodeComponentUse>();
+        return CollectHookComponents(into, fixedStep) ? into : null;
+    }
+}
+
+/// <summary>
+/// A node whose update configures a node it creates, which is not in the world before the wave ends.
+/// </summary>
+public sealed partial class CreatingProbe : Node3D
+{
+    void Update(in View view)
+    {
+        var made = new Node3D { Position = Vector3.One };
+        made.Scale = Vector3.One;
+    }
+
+    public List<NodeComponentUse>? Uses()
+    {
+        var into = new List<NodeComponentUse>();
+        return CollectHookComponents(into, fixedStep: false) ? into : null;
+    }
+}
+
+/// <summary>
+/// A node whose update hands itself to code the generator does not read.
+/// </summary>
+public sealed partial class EscapingProbe : Node3D
+{
+    void Update(in View view) => Helper.Touch(this);
+
+    public bool Known()
+    {
+        var into = new List<NodeComponentUse>();
+        return CollectHookComponents(into, fixedStep: false);
+    }
+}
+
+static class Helper
+{
+    public static void Touch(Node3D node) => node.Position = Vector3.Zero;
+}
+
+/// <summary>
+/// A node built only through a constructor that takes an argument, as one depending on a
+/// service is.
+/// </summary>
+public sealed partial class ConstructedProbe : Node2D
+{
+    public ConstructedProbe(float rotation) => Rotation = rotation;
+}
+
+/// <summary>
+/// A node that only has fixed-step behavior.
+/// </summary>
+public sealed partial class FixedProbe : Node
+{
+    public partial float Speed { get; set; }
+
+    void FixedUpdate(in View view) { }
+
+    public (bool PerFrame, bool FixedStep) Hooks() => (HasBehavior, HasFixedBehavior);
+}
+
 public class NodeTests
 {
+    [Fact]
+    public void A_node_declaring_only_FixedUpdate_has_fixed_step_behavior_and_no_per_frame_behavior()
+    {
+        Assert.Equal((false, true), new FixedProbe().Hooks());
+    }
+
+    [Fact]
+    public void A_node_built_through_its_own_constructor_starts_from_its_component_defaults()
+    {
+        var node = new ConstructedProbe(0.5f);
+        Assert.Equal(Vector2.One, node.Scale);
+        Assert.Equal(0.5f, node.Rotation);
+    }
+
     [Fact]
     public void Transform_ValueTypeBehavior()
     {
@@ -154,5 +285,67 @@ public class NodeTests
 
         Assert.NotEmpty(uses);
         Assert.All(uses, u => Assert.False(u.Writes));
+    }
+
+    [Fact]
+    public void A_hook_declares_only_what_its_body_reaches_and_how()
+    {
+        var probe = new HookProbe();
+
+        var update = Assert.Single(probe.Uses(fixedStep: false)!);
+        Assert.Equal(("transform", true, true), (update.Name, update.Writes, update.Owned));
+        var fixedStep = Assert.Single(probe.Uses(fixedStep: true)!);
+        Assert.Equal(("transform", false), (fixedStep.Name, fixedStep.Writes));
+    }
+
+    [Fact]
+    public void A_subclass_the_generator_did_not_read_does_not_take_its_base_hook_access()
+    {
+        Assert.Null(new HookProbeSubclass().Uses(fixedStep: false));
+    }
+
+    [Fact]
+    public void A_hook_that_hands_its_node_away_leaves_its_access_unknown()
+    {
+        Assert.False(new EscapingProbe().Known());
+    }
+
+    [Fact]
+    public void A_borrowed_node_property_is_declared_as_reached_and_only_as_read()
+    {
+        var use = Assert.Single(new BorrowingProbe().Uses(fixedStep: false)!);
+        Assert.Equal(("transform", false, false), (use.Name, use.Writes, use.Owned));
+    }
+
+    [Fact]
+    public void A_method_called_on_a_borrowed_node_declares_every_component_of_its_type_as_written()
+    {
+        var use = Assert.Single(new BorrowingProbe().Uses(fixedStep: true)!);
+        Assert.Equal(("transform", true, false), (use.Name, use.Writes, use.Owned));
+    }
+
+    [Fact]
+    public void A_node_the_hook_creates_is_not_declared()
+    {
+        Assert.Empty(new CreatingProbe().Uses()!);
+    }
+
+    [Fact]
+    public void A_hook_without_borrows_reaches_only_itself_though_its_sibling_hook_borrows()
+    {
+        var probe = new HookProbe();
+        Assert.True(probe.SelfOnlyIn(fixedStep: false));
+
+        var borrowing = new BorrowingProbe();
+        Assert.False(borrowing.SelfOnly(fixedStep: false));
+        Assert.False(borrowing.SelfOnly(fixedStep: true));
+    }
+
+    [Fact]
+    public void Only_the_hook_that_borrows_loses_its_concurrency()
+    {
+        var probe = new HalfBorrowingProbe();
+        Assert.True(probe.SelfOnly(fixedStep: false));
+        Assert.False(probe.SelfOnly(fixedStep: true));
     }
 }

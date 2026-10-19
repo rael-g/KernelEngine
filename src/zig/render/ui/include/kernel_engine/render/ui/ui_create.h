@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_UI_UI_CREATE_H_
+#define KERNEL_ENGINE_RENDER_UI_UI_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
@@ -50,11 +51,28 @@ extern "C"
         void (*destroy)(ke_render_ui *self);
     } ke_render_ui_handle;
 
-    KE_RENDER_UI_API ke_render_ui_handle ke_render_ui_create(
-        ke_runtime *runtime, ke_ecs *ecs, ke_render_service *core, ke_gpu_device *device,
-        ke_ndc_convention ndc, ke_component_id bb_cid, uint32_t cmd_slot,
-        ke_error **out_error);
+    /// What the ui pass needs to draw its quads and labels over the frame's color.
+    typedef struct ke_render_ui_params
+    {
+        ke_runtime        *runtime; ///< Registers the pass's systems; borrowed, must outlive it.
+        ke_ecs            *ecs;     ///< Registers the quad and label components; borrowed.
+        /// Holds the frame's color, over which the pass draws at KE_RENDER_STAGE_OVERLAY; borrowed.
+        ke_render_service *service;
+        ke_gpu_device     *device;  ///< Borrowed.
+        ke_ndc_convention  ndc;
+        /// The tag the system that begins the frame writes; the pass reads it, so it runs once
+        /// the frame has begun.
+        ke_component_id    frame_cid;
+    } ke_render_ui_params;
+
+    /// Registers the pass's update-phase label system and render-phase system. A missing
+    /// runtime, ecs, service or device fails as an invalid argument; the handle's ref is
+    /// NULL on failure.
+    KE_RENDER_UI_API ke_render_ui_handle ke_render_ui_create(const ke_render_ui_params *params,
+                                                             ke_error **out_error);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

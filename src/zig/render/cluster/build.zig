@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});
@@ -6,6 +7,7 @@ pub fn build(b: *std.Build) void {
 
     const ke_common    = b.option([]const u8, "ke-common-include",    "kernel_engine/common include dir")    orelse @panic("-Dke-common-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
+    const feature_bindings_src = b.option([]const u8, "feature-bindings-src", "path to the shared Zig feature_bindings.zig") orelse @panic("-Dfeature-bindings-src required");
     const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
     const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
     const ke_ecs       = b.option([]const u8, "ke-ecs-include",       "kernel_engine/ecs include dir")       orelse @panic("-Dke-ecs-include required");
@@ -24,16 +26,17 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    mod.addImport("feature_bindings", b.createModule(.{ .root_source_file = .{ .cwd_relative = feature_bindings_src }, .target = target, .optimize = optimize }));
     inline for (.{ ke_common, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_view, ke_logger, ke_self }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_RENDER_CLUSTER_EXPORT", "");
 
-    const zmath = b.dependency("zmath", .{});
-    mod.addImport("zmath", zmath.module("root"));
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_render_cluster",
         .root_module = mod,
@@ -52,6 +55,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    test_mod.addImport("feature_bindings", b.createModule(.{ .root_source_file = .{ .cwd_relative = feature_bindings_src }, .target = target, .optimize = optimize }));
     inline for (.{ ke_common, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_view, ke_logger, ke_self }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
@@ -59,9 +63,9 @@ pub fn build(b: *std.Build) void {
     test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addCMacro("KE_RENDER_CLUSTER_EXPORT", "");
 
-    test_mod.addImport("zmath", zmath.module("root"));
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
 
+    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     b.step("test", "Run the cluster pass unit tests").dependOn(&run_tests.step);

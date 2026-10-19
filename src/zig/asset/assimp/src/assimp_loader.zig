@@ -7,7 +7,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const log = @import("log.zig");
 const converter = @import("converter.zig");
 const textures = @import("texture_decoder.zig");
@@ -468,7 +468,7 @@ const climb_prefixes = [_][]const u8{
 fn boxGltfPath() ?[:0]const u8 {
     const cwd = std.Io.Dir.cwd();
     for (climb_prefixes) |prefix| {
-        const candidate = std.fmt.bufPrintZ(&box_gltf_buffer, "{s}assets/Box.gltf", .{prefix}) catch return null;
+        const candidate = std.fmt.bufPrintZ(&box_gltf_buffer, "{s}examples/assets/Box.gltf", .{prefix}) catch return null;
         cwd.access(testing.io, candidate, .{ .read = true }) catch continue;
         return candidate;
     }

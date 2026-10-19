@@ -5,516 +5,53 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const c = @cImport({
-    @cInclude("kernel_engine/runtime/runtime_create.h");
-    @cInclude("kernel_engine/runtime/system_ctx.h");
-});
+const c = @import("c");
+const alloc = @import("runtime_alloc.zig");
+const wave_mod = @import("runtime_waves.zig");
+const context = @import("runtime_context.zig");
+const queries_mod = @import("runtime_queries.zig");
+const cAlloc = alloc.cAlloc;
+const cFree = alloc.cFree;
+const cAllocBytes = alloc.cAllocBytes;
+const cFreeBytes = alloc.cFreeBytes;
+
+const DeferKind = context.DeferKind;
+const DeferCommand = context.DeferCommand;
+const DeferQueue = context.DeferQueue;
+const CtxState = context.CtxState;
+const ctxOf = context.ctxOf;
+const commandsOf = context.commandsOf;
+const bindCtx = context.bindCtx;
+const ctxView = context.ctxView;
+const deferReserve = context.deferReserve;
+const defer_arena_align = context.defer_arena_align;
+const deferArenaPush = context.deferArenaPush;
+const ctxSlice = context.ctxSlice;
+const recordTarget = context.recordTarget;
+const recordCommand = context.recordCommand;
+const commandsSpawn = context.commandsSpawn;
+const commandsAttach = context.commandsAttach;
+const commandsDetach = context.commandsDetach;
+const commandsDespawn = context.commandsDespawn;
+const commandsDefer = context.commandsDefer;
+const s_defer_applied_total = context.s_defer_applied_total;
+const deferFlush = context.deferFlush;
+const deferAppliedCount = context.deferAppliedCount;
+const resetDeferApplied = context.resetDeferApplied;
+const initial_segments_per_query = queries_mod.initial_segments_per_query;
+const resolve_attempts = queries_mod.resolve_attempts;
+const QueryDecl = queries_mod.QueryDecl;
+const ExtractedQuery = queries_mod.ExtractedQuery;
+const SegBuf = queries_mod.SegBuf;
+const resolveInto = queries_mod.resolveInto;
 
 const E = @import("kerror").Errors(c);
 
-const initial_segments_per_query = 4;
-const resolve_attempts = 3;
-const KE_RUNTIME_PHASE_COUNT = 7;
+const KE_RUNTIME_PHASE_COUNT = 9;
 
 const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
 
 const heap = @import("heap");
-
-fn cAlloc(comptime T: type, n: usize) ?[*]T {
-    if (n == 0) return null;
-    const slice = heap.gpa.alloc(T, n) catch return null;
-    return slice.ptr;
-}
-
-/// Frees a block that `cAlloc` returned. The count must be the one it was allocated with, because
-/// the allocator frees by length.
-fn cFree(comptime T: type, p: ?[*]T, n: usize) void {
-    if (p) |pp| heap.gpa.free(pp[0..n]);
-}
-
-fn cAllocBytes(n: usize) ?*anyopaque {
-    if (n == 0) return null;
-    const slice = heap.gpa.alloc(u8, n) catch return null;
-    return slice.ptr;
-}
-
-fn cFreeBytes(p: ?*anyopaque, n: usize) void {
-    if (p) |pp| heap.gpa.free(@as([*]u8, @ptrCast(pp))[0..n]);
-}
-
-const DeferKind = enum(c_int) {
-    spawn = 1,
-    attach = 2,
-    detach = 3,
-    despawn = 4,
-    callback = 5,
-};
-
-/// One recorded structural change. `kind` decides which other fields mean something: `cid` names
-/// the component for attach and detach, `attach_offset` and `attach_size` locate the payload in the
-/// queue's arena for attach and callback, and `fn_` is set only for callback.
-const DeferCommand = struct {
-    kind: DeferKind,
-    entity: c.ke_entity,
-    cid: c.ke_component_id,
-    attach_offset: usize,
-    attach_size: usize,
-    fn_: c.ke_defer_fn,
-};
-
-/// The structural changes one package records during its body. A body never changes the world
-/// directly: its commands append here, a spawn reserving its entity id at once so later commands
-/// can name it, and `deferFlush` applies them in recorded order after the whole wave has
-/// returned. So no body of a wave sees storage move under it, and the next wave sees every change
-/// of the previous one. The queue starts empty for each package and grows as commands are
-/// recorded; `runtimeRunPhase` frees its buffers after the flush, so arena offsets are meaningful
-/// only within the wave that recorded them.
-const DeferQueue = struct {
-    cmds: ?[*]DeferCommand = null,
-    count: usize = 0,
-    capacity: usize = 0,
-    arena: ?[*]u8 = null,
-    arena_used: usize = 0,
-    arena_capacity: usize = 0,
-};
-
-/// The state behind both the `ke_system_ctx` and the `ke_ecs_commands` of one package, which share
-/// it. `runtimeRunPhase` sets it for each package: `defer_q` is null in the render phase, where no
-/// body may record a change, and the segment arrays point at what the wave resolved for the system.
-const CtxState = struct {
-    ecs: ?*c.ke_ecs,
-    access_list: ?[*]const c.ke_component_access,
-    access_count: u32,
-    system_name: [*c]const u8,
-    defer_q: ?*DeferQueue,
-    seg_ptrs: ?[*]const ?[*]const c.ke_ecs_segment,
-    seg_counts: ?[*]const usize,
-    view_query_count: u32,
-    slice_index: u32,
-    slice_count: u32,
-};
-
-fn ctxOf(ptr: ?*c.ke_system_ctx) ?*CtxState {
-    const ctx = ptr orelse return null;
-    return @ptrCast(@alignCast(ctx.handle));
-}
-
-fn commandsOf(ptr: ?*c.ke_ecs_commands) ?*CtxState {
-    const cmds = ptr orelse return null;
-    return @ptrCast(@alignCast(cmds.handle));
-}
-
-/// Binds the context and the commands of one package to its `CtxState`. The package must not move
-/// until its wave has been waited for.
-fn bindCtx(ctx: *c.ke_system_ctx, commands: *c.ke_ecs_commands, state: *CtxState) void {
-    commands.* = .{
-        .handle = state,
-        .spawn = &commandsSpawn,
-        .attach = &commandsAttach,
-        .detach = &commandsDetach,
-        .despawn = &commandsDespawn,
-        .@"defer" = &commandsDefer,
-    };
-    ctx.commands = commands;
-    ctx.handle = state;
-    ctx.view = &ctxView;
-    ctx.slice = &ctxSlice;
-}
-
-fn termWrites(a: c.ke_component_access) bool {
-    return (@as(c_uint, @intCast(a.access)) & ACCESS_WRITE) != 0;
-}
-
-fn paramsAccesses(p: *const c.ke_runtime_system_params, cid: c.ke_component_id, out_writes: *bool) bool {
-    var any = false;
-    var writes = false;
-    if (p.queries) |queries| {
-        for (0..p.query_count) |q| {
-            const terms = queries[q].terms orelse continue;
-            for (0..queries[q].term_count) |t| {
-                if (terms[t].cid == cid) {
-                    any = true;
-                    if (termWrites(terms[t])) writes = true;
-                }
-            }
-        }
-    }
-    if (p.access_list) |list| {
-        for (0..p.access_count) |i| {
-            if (list[i].cid == cid) {
-                any = true;
-                if (termWrites(list[i])) writes = true;
-            }
-        }
-    }
-    out_writes.* = writes;
-    return any;
-}
-
-fn conflictOnTerm(b: *const c.ke_runtime_system_params, cid: c.ke_component_id, a_writes: bool) bool {
-    var b_writes = false;
-    return paramsAccesses(b, cid, &b_writes) and (a_writes or b_writes);
-}
-
-/// Reports whether two systems must not share a wave: they name a common component and at least
-/// one of them writes it. Both arguments are registered parameters, whose queries `buildSystem`
-/// has already folded into the access list.
-fn systemsConflict(a: *const c.ke_runtime_system_params, b: *const c.ke_runtime_system_params) bool {
-    if (a.queries) |queries| {
-        for (0..a.query_count) |q| {
-            const terms = queries[q].terms orelse continue;
-            for (0..queries[q].term_count) |t| {
-                const a_writes = termWrites(terms[t]);
-                if (conflictOnTerm(b, terms[t].cid, a_writes)) return true;
-            }
-        }
-    }
-    if (a.access_list) |list| {
-        for (0..a.access_count) |i| {
-            const a_writes = termWrites(list[i]);
-            if (conflictOnTerm(b, list[i].cid, a_writes)) return true;
-        }
-    }
-    return false;
-}
-
-/// Assigns the systems of one phase, given in registration order, to waves. A system joins the
-/// current wave unless it conflicts with a system already in it, in which case it opens the next
-/// wave; a closed wave is never reopened, so registration order is never overtaken. The count
-/// stays zero, with nothing reported, when there are no systems or a pointer is null.
-fn debugComputeWaves(
-    systems: [*c]const c.ke_runtime_system_params,
-    system_count: u32,
-    out_wave_assignments: [*c]u32,
-    out_wave_count: [*c]u32,
-) callconv(.c) void {
-    if (out_wave_count == null) return;
-    out_wave_count.* = 0;
-    if (system_count == 0) return;
-    if (systems == null or out_wave_assignments == null) return;
-
-    var current_wave: u32 = 0;
-    out_wave_assignments[0] = 0;
-    var wave_start: u32 = 0;
-
-    var i: u32 = 0;
-    while (i < system_count) : (i += 1) {
-        if (i == 0) {
-            out_wave_assignments[0] = 0;
-            continue;
-        }
-        var open_new = false;
-        var j: u32 = wave_start;
-        const si_ptr: *const c.ke_runtime_system_params = @ptrCast(&systems[i]);
-        while (j < i) : (j += 1) {
-            if (out_wave_assignments[j] != current_wave) continue;
-            const sj_ptr: *const c.ke_runtime_system_params = @ptrCast(&systems[j]);
-            if (systemsConflict(si_ptr, sj_ptr)) {
-                open_new = true;
-                break;
-            }
-        }
-        if (open_new) {
-            current_wave += 1;
-            wave_start = i;
-        }
-        out_wave_assignments[i] = current_wave;
-    }
-    out_wave_count.* = current_wave + 1;
-}
-
-/// Slot `view` of every system context. Returns the segments resolved for the query before the
-/// wave was dispatched, or the copies made by `runtimeExtractRenderState` for a render system, and
-/// their number through the count pointer. A null context, an index past the system's queries or a
-/// system with no queries returns null and a count of zero; no error is reported.
-fn ctxView(ctx: ?*c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const c.ke_ecs_segment {
-    if (out_count != null) out_count.* = 0;
-    const s = ctxOf(ctx) orelse return null;
-    if (s.seg_ptrs == null or query_index >= s.view_query_count) return null;
-    if (out_count != null) out_count.* = s.seg_counts.?[query_index];
-    return s.seg_ptrs.?[query_index];
-}
-
-/// Grows the command array of a queue by doubling until it holds the needed count, keeping the
-/// recorded commands. Returns false when the allocation fails, leaving the queue as it was.
-fn deferReserve(q: *DeferQueue, needed: usize) bool {
-    if (needed <= q.capacity) return true;
-    var new_cap: usize = if (q.capacity != 0) q.capacity * 2 else 16;
-    while (new_cap < needed) new_cap *= 2;
-    const buf = cAlloc(DeferCommand, new_cap) orelse return false;
-    if (q.cmds) |old| {
-        @memcpy(buf[0..q.count], old[0..q.count]);
-        cFree(DeferCommand, old, q.capacity);
-    }
-    q.cmds = buf;
-    q.capacity = new_cap;
-    return true;
-}
-
-const defer_arena_align: usize = 16;
-
-/// Appends the bytes at the data pointer to the arena of a queue and returns their offset, which
-/// the recorded command keeps, since the arena moves when it grows. A null data pointer only
-/// reserves the space. A size of zero records nothing and returns zero. The maximum usize value is
-/// returned when the arena cannot grow.
-fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usize {
-    if (size == 0) return 0;
-    q.arena_used = std.mem.alignForward(usize, q.arena_used, defer_arena_align);
-    if (q.arena_used + size > q.arena_capacity) {
-        var new_cap: usize = if (q.arena_capacity != 0) q.arena_capacity * 2 else 256;
-        while (new_cap < q.arena_used + size) new_cap *= 2;
-        const buf = cAlloc(u8, new_cap) orelse return std.math.maxInt(usize);
-        if (q.arena) |old| {
-            @memcpy(buf[0..q.arena_used], old[0..q.arena_used]);
-            cFree(u8, old, q.arena_capacity);
-        }
-        q.arena = buf;
-        q.arena_capacity = new_cap;
-    }
-    const offset = q.arena_used;
-    if (data) |d| {
-        const src: [*]const u8 = @ptrCast(d);
-        @memcpy(q.arena.?[offset .. offset + size], src[0..size]);
-    }
-    q.arena_used += size;
-    return offset;
-}
-
-/// Slot `slice` of every system context. Reports which share of its entity set the body has, as an
-/// index and a count; a null context reports index 0 of 1.
-fn ctxSlice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
-    const s = ctxOf(ctx);
-    if (out_index != null) out_index.* = if (s) |st| st.slice_index else 0;
-    if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
-}
-
-/// Finds the queue a recording call writes to. It fails with `invalid_argument` for a null or
-/// unbound commands table, and with `not_supported` when the package has no queue, which is the
-/// case in the render phase.
-fn recordTarget(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferQueue {
-    const s = commandsOf(self) orelse {
-        E.fail(out_error, .invalid_argument, "invalid command queue", src);
-        return null;
-    };
-    return s.defer_q orelse {
-        E.fail(out_error, .not_supported, "this phase may not change structure", src);
-        return null;
-    };
-}
-
-/// Appends an empty command to the queue and returns it for the caller to fill. It fails with
-/// `out_of_memory` when the command array cannot grow.
-fn recordCommand(q: *DeferQueue, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferCommand {
-    if (!deferReserve(q, q.count + 1)) {
-        E.fail(out_error, .out_of_memory, "command queue is full", src);
-        return null;
-    }
-    const cmd = &q.cmds.?[q.count];
-    q.count += 1;
-    return cmd;
-}
-
-/// Slot `spawn` of the commands of a body. The id is reserved at once, so the body can attach to
-/// it in the same queue; the entity enters the world when `deferFlush` reaches the spawn. Fails
-/// with `invalid_argument` for an unbound table, `not_supported` in the render phase,
-/// `not_initialized` without a world, and `out_of_memory` when the id pool is spent or the queue
-/// cannot grow; each returns the invalid entity.
-fn commandsSpawn(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_entity {
-    const q = recordTarget(self, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
-    const ecs = commandsOf(self).?.ecs orelse {
-        E.fail(out_error, .not_initialized, "no world", @src());
-        return c.KE_ENTITY_INVALID;
-    };
-    const entity = ecs.entity_reserve.?(ecs);
-    if (entity == c.KE_ENTITY_INVALID) {
-        E.fail(out_error, .out_of_memory, "entity id could not be reserved", @src());
-        return c.KE_ENTITY_INVALID;
-    }
-    const cmd = recordCommand(q, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
-    cmd.kind = .spawn;
-    cmd.entity = entity;
-    return entity;
-}
-
-/// Slot `attach` of the commands of a body. The payload is copied into the arena now, so the
-/// caller's buffer may be reused after the call. A non-zero size is checked against the component
-/// size here, and the copy into the component happens in `deferFlush`. Fails, returning false,
-/// with `invalid_argument` for an unbound table or a size that differs from the component's,
-/// `not_supported` in the render phase, `not_initialized` without a world, and `out_of_memory`
-/// when the queue or its arena cannot grow.
-fn commandsAttach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const q = recordTarget(self, out_error, @src()) orelse return false;
-    if (size != 0) {
-        const ecs = commandsOf(self).?.ecs orelse {
-            E.fail(out_error, .not_initialized, "no world", @src());
-            return false;
-        };
-        if (size != ecs.component_size.?(ecs, cid)) {
-            E.fail(out_error, .invalid_argument, "payload size differs from the component size", @src());
-            return false;
-        }
-    }
-    const offset = deferArenaPush(q, data, size);
-    if (offset == std.math.maxInt(usize)) {
-        E.fail(out_error, .out_of_memory, "command payload does not fit", @src());
-        return false;
-    }
-    const cmd = recordCommand(q, out_error, @src()) orelse return false;
-    cmd.kind = .attach;
-    cmd.entity = entity;
-    cmd.cid = cid;
-    cmd.attach_offset = offset;
-    cmd.attach_size = size;
-    return true;
-}
-
-/// Slot `detach` of the commands of a body. Records the removal for `deferFlush`. Fails,
-/// returning false, with `invalid_argument` for an unbound table, `not_supported` in the render
-/// phase, and `out_of_memory` when the queue cannot grow.
-fn commandsDetach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const q = recordTarget(self, out_error, @src()) orelse return false;
-    const cmd = recordCommand(q, out_error, @src()) orelse return false;
-    cmd.kind = .detach;
-    cmd.entity = entity;
-    cmd.cid = cid;
-    return true;
-}
-
-/// Slot `despawn` of the commands of a body. Records the destruction for `deferFlush`. Fails in
-/// the same ways as `commandsDetach`.
-fn commandsDespawn(self: ?*c.ke_ecs_commands, entity: c.ke_entity, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const q = recordTarget(self, out_error, @src()) orelse return false;
-    const cmd = recordCommand(q, out_error, @src()) orelse return false;
-    cmd.kind = .despawn;
-    cmd.entity = entity;
-    return true;
-}
-
-/// Slot `defer` of the commands of a body. `deferFlush` later calls the function with the world
-/// and a pointer to a copy of the user bytes taken here, so the caller's bytes need not outlive
-/// the call. Fails, returning false, with `invalid_argument` for an unbound table or a null
-/// function, `not_supported` in the render phase, and `out_of_memory` when the queue or its arena
-/// cannot grow.
-fn commandsDefer(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const q = recordTarget(self, out_error, @src()) orelse return false;
-    if (func == null) {
-        E.fail(out_error, .invalid_argument, "no function to defer", @src());
-        return false;
-    }
-    const offset = deferArenaPush(q, user, user_size);
-    if (offset == std.math.maxInt(usize)) {
-        E.fail(out_error, .out_of_memory, "command payload does not fit", @src());
-        return false;
-    }
-    const cmd = recordCommand(q, out_error, @src()) orelse return false;
-    cmd.kind = .callback;
-    cmd.fn_ = func;
-    cmd.attach_offset = offset;
-    cmd.attach_size = user_size;
-    return true;
-}
-
-/// Process-wide count of the commands `deferFlush` has applied, across every runtime.
-var s_defer_applied_total: u32 = 0;
-
-/// Applies the recorded commands in recorded order, then empties the queue. It must run only once
-/// every task of the wave has returned; the caller frees the queue's buffers afterwards.
-fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) void {
-    for (0..q.count) |i| {
-        const cmd = &q.cmds.?[i];
-        switch (cmd.kind) {
-            .spawn => {
-                if (ecs.entity_materialize) |materialize| materialize(ecs, cmd.entity);
-            },
-            .attach => {
-                const slot = ecs.component_add.?(ecs, cmd.entity, cmd.cid);
-                if (slot != null and cmd.attach_size > 0) {
-                    const dst: [*]u8 = @ptrCast(slot.?);
-                    @memcpy(dst[0..cmd.attach_size], q.arena.?[cmd.attach_offset .. cmd.attach_offset + cmd.attach_size]);
-                }
-            },
-            .detach => ecs.component_remove.?(ecs, cmd.entity, cmd.cid),
-            .despawn => ecs.entity_destroy.?(ecs, cmd.entity),
-            .callback => {
-                if (cmd.fn_) |f| f(ecs, q.arena.? + cmd.attach_offset);
-            },
-        }
-        s_defer_applied_total += 1;
-    }
-    q.count = 0;
-    q.arena_used = 0;
-}
-
-fn deferAppliedCount() u32 {
-    return s_defer_applied_total;
-}
-fn resetDeferApplied() void {
-    s_defer_applied_total = 0;
-}
-
-/// A query of a registered system. Its `terms` point into the system's own term storage, not into
-/// the array the caller passed.
-const QueryDecl = struct {
-    terms: [*]const c.ke_component_access,
-    term_count: u32,
-};
-
-/// The render copy of one query: the matched entities and one column buffer per term, all sized to
-/// `capacity`. The buffers are kept across ticks and grown by `runtimeExtractRenderState`, which
-/// points `seg` at them.
-const ExtractedQuery = struct {
-    seg: c.ke_ecs_segment,
-    entities_buf: ?[*]c.ke_entity,
-    col_bufs: []?*anyopaque,
-    col_elem_size: []usize,
-    col_ptrs: []?*anyopaque,
-    capacity: usize,
-    elem_sizes_cached: bool,
-};
-
-/// Storage for the segments one query resolves into, with one column pointer per term for each
-/// segment. A `RegisteredSystem` owns one per query.
-const SegBuf = struct {
-    ptr: ?[*]c.ke_ecs_segment = null,
-    cap: usize = 0,
-    cols: ?[*]?*anyopaque = null,
-    cols_cap: usize = 0,
-
-    fn free(self: *SegBuf) void {
-        cFree(c.ke_ecs_segment, self.ptr, self.cap);
-        cFree(?*anyopaque, self.cols, self.cols_cap);
-        self.* = .{};
-    }
-
-    /// Replaces both arrays when either is too small for the requested number of segments and
-    /// columns. The old contents are not carried over.
-    fn reserve(self: *SegBuf, needed: usize, terms: usize) bool {
-        if (needed <= self.cap and needed * terms <= self.cols_cap) return true;
-        const segments = cAlloc(c.ke_ecs_segment, needed) orelse return false;
-        const columns = cAlloc(?*anyopaque, needed * terms) orelse {
-            cFree(c.ke_ecs_segment, segments, needed);
-            return false;
-        };
-        cFree(c.ke_ecs_segment, self.ptr, self.cap);
-        cFree(?*anyopaque, self.cols, self.cols_cap);
-        self.* = .{ .ptr = segments, .cap = needed, .cols = columns, .cols_cap = needed * terms };
-        return true;
-    }
-};
-
-/// Resolves a query into the buffer, growing it to the match count the ecs reports and asking
-/// again. Returns the number of matched segments, or null when the buffer cannot grow or the
-/// count does not settle within the attempts allowed.
-fn resolveInto(ecs: *c.ke_ecs, query: c.ke_query_id, buf: *SegBuf, terms: usize) ?usize {
-    if (!buf.reserve(initial_segments_per_query, terms)) return null;
-    for (0..resolve_attempts) |_| {
-        var matched: usize = 0;
-        ecs.query_resolve.?(ecs, query, buf.ptr, buf.cap, buf.cols, &matched);
-        if (matched <= buf.cap) return matched;
-        if (!buf.reserve(matched, terms)) return null;
-    }
-    return null;
-}
 
 /// A system as the runtime holds it: its own copy of the declaration, the storage of its queries,
 /// and the access list that the conflict rule reads. It is linked through `pending_next` while it
@@ -535,6 +72,9 @@ const RegisteredSystem = struct {
     derived_access_count: u32,
     name_storage: ?[]u8,
     access_storage: ?[]c.ke_component_access,
+    explicit_access: []c.ke_component_access,
+    order_names: [][:0]u8,
+    order_ptrs: [][*c]const u8,
 };
 
 fn freeSlice(comptime T: type, slice: []T) void {
@@ -583,6 +123,10 @@ fn releaseSystem(rs: *RegisteredSystem) void {
     freeSlice(c.ke_component_access, rs.term_storage);
     if (rs.name_storage) |n| heap.gpa.free(n);
     if (rs.access_storage) |a| heap.gpa.free(a);
+    freeSlice(c.ke_component_access, rs.explicit_access);
+    for (rs.order_names) |n| heap.gpa.free(n);
+    freeSlice([:0]u8, rs.order_names);
+    freeSlice([*c]const u8, rs.order_ptrs);
     for (rs.segs) |*buf| buf.free();
     freeSlice(QueryDecl, rs.query_decls);
     freeSlice(c.ke_query_id, rs.query_ids);
@@ -657,6 +201,12 @@ const RuntimeState = struct {
     systems_prepared: usize,
     pending_render_task: ?*c.ke_task,
     render_job: ?*RenderJob,
+    exclusive: std.ArrayList(wave_mod.Exclusive),
+    self_ordered: std.ArrayList(c.ke_component_id),
+
+    fn rules(self: *const RuntimeState) wave_mod.Rules {
+        return .{ .exclusive = self.exclusive.items, .self_ordered = self.self_ordered.items };
+    }
 };
 
 /// What the `ke_runtime` handle points to. `ke_runtime_create` fills the `api` table with this
@@ -765,6 +315,22 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
     rs.derived_access_count = 0;
     rs.name_storage = null;
     rs.access_storage = null;
+    rs.explicit_access = &.{};
+    rs.order_names = &.{};
+    rs.order_ptrs = &.{};
+
+    if (!copyOrderNames(rs, p)) {
+        releaseSystem(rs);
+        E.fail(out_error, .out_of_memory, "system order names allocation failed", @src());
+        return null;
+    }
+    if (p.*.access_count > 0 and p.*.access_list != null) {
+        rs.explicit_access = heap.gpa.dupe(c.ke_component_access, p.*.access_list[0..p.*.access_count]) catch {
+            releaseSystem(rs);
+            E.fail(out_error, .out_of_memory, "system access list allocation failed", @src());
+            return null;
+        };
+    }
 
     if (p.*.name != null) {
         const text = std.mem.span(p.*.name);
@@ -826,6 +392,37 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
     }
 
     return rs;
+}
+
+/// Copies the names of `after` and `before` into the system, whose `params` then point at the
+/// copies: `after` first in `order_ptrs`, `before` after it. False when an allocation fails, with
+/// what was copied left for `releaseSystem`.
+fn copyOrderNames(rs: *RegisteredSystem, p: [*c]const c.ke_runtime_system_params) bool {
+    const after: usize = if (p.*.after != null) p.*.after_count else 0;
+    const before: usize = if (p.*.before != null) p.*.before_count else 0;
+    rs.params.after = null;
+    rs.params.after_count = 0;
+    rs.params.before = null;
+    rs.params.before_count = 0;
+    if (after + before == 0) return true;
+    rs.order_ptrs = allocZeroed([*c]const u8, after + before) orelse return false;
+    rs.order_names = allocZeroed([:0]u8, after + before) orelse return false;
+    var made: usize = 0;
+    for (0..after + before) |k| {
+        const src = if (k < after) p.*.after[k] else p.*.before[k - after];
+        const copy = heap.gpa.dupeZ(u8, if (src != null) std.mem.span(src) else "") catch {
+            rs.order_names = rs.order_names[0..made];
+            return false;
+        };
+        rs.order_names[k] = copy;
+        rs.order_ptrs[k] = copy.ptr;
+        made += 1;
+    }
+    rs.params.after = rs.order_ptrs.ptr;
+    rs.params.after_count = @intCast(after);
+    rs.params.before = rs.order_ptrs.ptr + after;
+    rs.params.before_count = @intCast(before);
+    return true;
 }
 
 /// Appends a system to the list in registration order. It refuses, with the error set, a system
@@ -1115,8 +712,9 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
     if (phase_count == 0) return .{};
 
     const wave_assignments = (h.state.wave_assignments orelse return .{}) + base;
-    var wave_count: u32 = 0;
-    debugComputeWaves(phase_params, phase_count, wave_assignments, &wave_count);
+    const ordered = orderPhase(h, phase_indices[0..phase_count], wave_assignments[0..phase_count]);
+    if (orderFailure(ordered.failure)) |f| return f;
+    const wave_count = ordered.wave_count;
 
     const pkgs = (h.state.phase_pkgs orelse return .{}) + base;
     const tasks = (h.state.phase_tasks orelse return .{}) + base;
@@ -1185,12 +783,116 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
     return failure;
 }
 
+/// Orders the systems at `indices`, a phase's systems in registration order, into `out_waves`.
+fn orderPhase(h: *RuntimeHandle, indices: []const u32, out_waves: []u32) wave_mod.Order {
+    const nodes = heap.gpa.alloc(wave_mod.Node, indices.len) catch return .{ .failure = .out_of_memory };
+    defer heap.gpa.free(nodes);
+    for (indices, nodes) |si, *node| {
+        const rs = h.state.systems.?[si].?;
+        node.* = .{ .params = &rs.params, .explicit = rs.explicit_access, .queries = rs.query_decls[0..rs.query_count] };
+    }
+    return wave_mod.order(nodes, h.state.rules(), out_waves);
+}
+
+/// The failure a tick reports for a phase whose order could not be built: invalid argument for an
+/// unknown name or a cycle, naming the system.
+fn orderFailure(problem: wave_mod.Problem) ?PhaseFailure {
+    return switch (problem) {
+        .none, .ambiguity => null,
+        .out_of_memory => .{ .type = E.typeOf(.out_of_memory), .system = "phase order" },
+        .unknown_name => |u| .{ .type = E.typeOf(.invalid_argument), .system = u.system },
+        .cycle => |cy| .{ .type = E.typeOf(.invalid_argument), .system = cy.system },
+    };
+}
+
+/// Slot `declare_exclusive`.
+fn runtimeDeclareExclusive(self: ?*c.ke_runtime, group: c.ke_component_id, member: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (self == null or self.?.handle == null or group == member) {
+        E.fail(out_error, .invalid_argument, "declare_exclusive: a group and a different member are required", @src());
+        return false;
+    }
+    const st = &handleOf(self.?).state;
+    for (st.exclusive.items) |e| {
+        if (e.group == group and e.member == member) return true;
+    }
+    st.exclusive.append(heap.gpa, .{ .group = group, .member = member }) catch {
+        E.fail(out_error, .out_of_memory, "declare_exclusive: allocation failed", @src());
+        return false;
+    };
+    return true;
+}
+
+/// Slot `declare_self_ordered`.
+fn runtimeDeclareSelfOrdered(self: ?*c.ke_runtime, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (self == null or self.?.handle == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const st = &handleOf(self.?).state;
+    if (std.mem.indexOfScalar(c.ke_component_id, st.self_ordered.items, cid) != null) return true;
+    st.self_ordered.append(heap.gpa, cid) catch {
+        E.fail(out_error, .out_of_memory, "declare_self_ordered: allocation failed", @src());
+        return false;
+    };
+    return true;
+}
+
+/// Slot `check_order`. Builds the order of each phase over the systems registered so far,
+/// including those still pending, and fails on the first problem found, phase by phase, with a
+/// message naming the systems.
+fn runtimeCheckOrder(self: ?*c.ke_runtime, refuse_ambiguity: bool, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+    if (self == null or self.?.handle == null) {
+        E.fail(out_error, .invalid_argument, "invalid argument", @src());
+        return false;
+    }
+    const h = handleOf(self.?);
+    applyPendingSystems(h);
+    const indices = heap.gpa.alloc(u32, h.state.system_count) catch {
+        E.fail(out_error, .out_of_memory, "check_order: allocation failed", @src());
+        return false;
+    };
+    defer heap.gpa.free(indices);
+    const waves = heap.gpa.alloc(u32, h.state.system_count) catch {
+        E.fail(out_error, .out_of_memory, "check_order: allocation failed", @src());
+        return false;
+    };
+    defer heap.gpa.free(waves);
+    var phase: u32 = 0;
+    while (phase < KE_RUNTIME_PHASE_COUNT) : (phase += 1) {
+        var count: usize = 0;
+        for (0..h.state.system_count) |si| {
+            if (h.state.systems.?[si].?.params.phase != phase) continue;
+            indices[count] = @intCast(si);
+            count += 1;
+        }
+        const ordered = orderPhase(h, indices[0..count], waves[0..count]);
+        const problem = if (ordered.failure != .none) ordered.failure else if (refuse_ambiguity) ordered.ambiguity else .none;
+        var buf: [512]u8 = undefined;
+        const msg: ?[:0]const u8 = switch (problem) {
+            .none => null,
+            .out_of_memory => "check_order: allocation failed",
+            .unknown_name => |u| std.fmt.bufPrintZ(&buf, "system '{s}' names '{s}', which no system of its phase carries", .{ spanOr(u.system), spanOr(u.name) }) catch "check_order: unknown name",
+            .cycle => |cy| std.fmt.bufPrintZ(&buf, "system '{s}' is in a cycle of its phase's order", .{spanOr(cy.system)}) catch "check_order: cycle",
+            .ambiguity => |a| std.fmt.bufPrintZ(&buf, "systems '{s}' and '{s}' both write component {d} with no order between them", .{ spanOr(a.first), spanOr(a.second), a.cid }) catch "check_order: ambiguity",
+        };
+        if (msg) |m| {
+            E.fail(out_error, if (problem == .out_of_memory) .out_of_memory else .invalid_argument, m, @src());
+            return false;
+        }
+    }
+    return true;
+}
+
+fn spanOr(text: [*c]const u8) []const u8 {
+    return if (text != null) std.mem.span(text) else "(unnamed)";
+}
+
 /// Returns how many packages a system gets in the wave being built, never more than the room left
 /// in it. A system is split only when it declared per-entity work and has no pinned thread, and
 /// only when the scheduler reports more than one worker, which is read here.
 fn sliceCountFor(h: *RuntimeHandle, p: *const c.ke_runtime_system_params, room: u32) u32 {
     if (room == 0) return 0;
-    if (!p.per_entity or p.pinned_thread != 0) return 1;
+    if (!p.per_entity or p.pinned_thread != 0 or p.exclusive) return 1;
     const sched = h.state.scheduler;
     const workers: u32 = if (sched.get_num_workers) |f| f(sched) else 0;
     if (workers <= 1) return 1;
@@ -1383,7 +1085,9 @@ fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error)
         h.state.fixed_accumulator = h.state.fixed_dt_max_accum;
     }
     while (failure.type == null and h.state.fixed_accumulator >= h.state.fixed_dt) {
-        failure = runtimeRunPhase(h, c.KE_PHASE_FIXED_UPDATE, h.state.fixed_dt);
+        for ([_]c.ke_phase{ c.KE_PHASE_FIXED_PRE_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_POST_UPDATE }) |phase| {
+            if (failure.type == null) failure = runtimeRunPhase(h, phase, h.state.fixed_dt);
+        }
         h.state.fixed_accumulator -= h.state.fixed_dt;
     }
 
@@ -1479,6 +1183,8 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
         cFree(?*RegisteredSystem, systems, h.state.system_capacity);
     }
     freePhaseScratch(h);
+    h.state.exclusive.deinit(heap.gpa);
+    h.state.self_ordered.deinit(heap.gpa);
     cFree(RuntimeHandle, @ptrCast(h), 1);
 }
 
@@ -1504,6 +1210,8 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 
     h.state.ecs = ecs.?;
     h.state.scheduler = scheduler.?;
+    h.state.exclusive = .empty;
+    h.state.self_ordered = .empty;
 
     h.state.fixed_dt = if (params != null and params.*.fixed_dt > 0.0) params.*.fixed_dt else (1.0 / 60.0);
     h.state.fixed_dt_max_accum = if (params != null and params.*.fixed_dt_max_accum > 0.0) params.*.fixed_dt_max_accum else 0.25;
@@ -1532,6 +1240,9 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
     h.api.register_system = &runtimeRegisterSystem;
     h.api.unregister_system = &runtimeUnregisterSystem;
     h.api.last_system = &runtimeLastSystem;
+    h.api.declare_exclusive = &runtimeDeclareExclusive;
+    h.api.declare_self_ordered = &runtimeDeclareSelfOrdered;
+    h.api.check_order = &runtimeCheckOrder;
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
 
@@ -1541,7 +1252,7 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 const testing = std.testing;
 
 extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ecs_handle;
-extern fn ke_scheduler_enki_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle;
+extern fn ke_scheduler_enki_create(params: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle;
 
 const Fixture = struct {
     scheduler_h: c.ke_scheduler_handle,
@@ -1549,7 +1260,7 @@ const Fixture = struct {
     runtime_h: c.ke_runtime_handle,
 
     fn init() !Fixture {
-        const sh = ke_scheduler_enki_create(null);
+        const sh = ke_scheduler_enki_create(null, null);
         try testing.expect(sh.ref != null);
 
         const eh = ke_ecs_flecs_create(null, null);
@@ -2128,6 +1839,28 @@ test "the startup phase runs once, before the first tick's other phases" {
         if (ph == c.KE_PHASE_STARTUP) startups += 1;
     }
     try testing.expectEqual(@as(usize, 1), startups);
+}
+
+test "each fixed step runs the fixed pre-update, update and post-update phases in that order" {
+    var r = InlineRuntime{};
+    try r.init();
+
+    var log = PhaseLog{};
+    const phases = [_]c_int{ c.KE_PHASE_FIXED_POST_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_PRE_UPDATE };
+    var entries: [phases.len]PhaseLogEntry = undefined;
+    for (phases, 0..) |ph, i| {
+        entries[i] = .{ .log = &log, .phase = ph };
+        var sys = systemParams("Logged", ph);
+        sys.execute = &phaseLogBody;
+        sys.user_data = &entries[i];
+        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    }
+
+    try testing.expect(r.rt().tick.?(r.rt(), 2.0 / 60.0, null));
+    r.bare.deinit();
+
+    const step = [_]c_int{ c.KE_PHASE_FIXED_PRE_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_POST_UPDATE };
+    try testing.expectEqualSlices(c_int, &(step ++ step), log.seen[0..log.count]);
 }
 
 test "the shutdown phase runs once when the runtime is destroyed, after every tick" {
@@ -2755,138 +2488,214 @@ test "the render extract keeps multi term columns aligned" {
     try testing.expectEqual(expect, g_extract_pv_sum);
 }
 
-fn waveSystem(list: [*c]const c.ke_component_access, count: u32) c.ke_runtime_system_params {
-    var s = systemParams("Synthetic", c.KE_PHASE_UPDATE);
-    s.access_list = list;
-    s.access_count = count;
+fn waveSystem(name: [*c]const u8, list: []const c.ke_component_access) c.ke_runtime_system_params {
+    var s = systemParams(name, c.KE_PHASE_UPDATE);
+    s.access_list = list.ptr;
+    s.access_count = @intCast(list.len);
     s.execute = &noopSystem;
     return s;
 }
 
-test "no systems produce no waves" {
-    var assignments = [_]u32{ 99, 99, 99, 99 };
-    var wave_count: u32 = 99;
-    debugComputeWaves(null, 0, &assignments, &wave_count);
-    try testing.expectEqual(@as(u32, 0), wave_count);
+fn orderOf(params: []const c.ke_runtime_system_params, rules: wave_mod.Rules, waves: []u32) wave_mod.Order {
+    var nodes: [8]wave_mod.Node = undefined;
+    for (params, nodes[0..params.len]) |*p, *n| n.* = .{ .params = p, .explicit = if (p.access_list != null) p.access_list[0..p.access_count] else &.{} };
+    return wave_mod.order(nodes[0..params.len], rules, waves);
 }
 
-test "a single system occupies one wave" {
-    const acc = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
-    const sys = [_]c.ke_runtime_system_params{waveSystem(&acc, 1)};
-
-    var assignments = [_]u32{99};
-    var wave_count: u32 = 0;
-    debugComputeWaves(&sys, 1, &assignments, &wave_count);
-
-    try testing.expectEqual(@as(u32, 1), wave_count);
-    try testing.expectEqual(@as(u32, 0), assignments[0]);
+test "no systems produce no waves" {
+    var waves: [1]u32 = undefined;
+    try testing.expectEqual(@as(u32, 0), orderOf(&.{}, .{}, &waves).wave_count);
 }
 
 test "systems writing different components share a wave" {
     const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
     const b = [_]c.ke_component_access{access(2, c.KE_ACCESS_WRITE)};
-    const sys = [_]c.ke_runtime_system_params{ waveSystem(&a, 1), waveSystem(&b, 1) };
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("a", &a), waveSystem("b", &b) };
+    var waves: [2]u32 = undefined;
+    const o = orderOf(&sys, .{}, &waves);
 
-    var assignments = [_]u32{ 99, 99 };
-    var wave_count: u32 = 0;
-    debugComputeWaves(&sys, 2, &assignments, &wave_count);
-
-    try testing.expectEqual(@as(u32, 1), wave_count);
-    try testing.expectEqual(@as(u32, 0), assignments[0]);
-    try testing.expectEqual(@as(u32, 0), assignments[1]);
+    try testing.expectEqual(@as(u32, 1), o.wave_count);
+    try testing.expectEqual(wave_mod.Problem.none, o.ambiguity);
 }
 
-test "two systems writing the same component land in different waves" {
-    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
-    const b = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
-    const sys = [_]c.ke_runtime_system_params{ waveSystem(&a, 1), waveSystem(&b, 1) };
+test "a writer runs before a reader of what it writes, whichever registered first" {
+    const reader = [_]c.ke_component_access{access(5, c.KE_ACCESS_READ)};
+    const writer = [_]c.ke_component_access{access(5, c.KE_ACCESS_WRITE)};
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("reader", &reader), waveSystem("writer", &writer) };
+    var waves: [2]u32 = undefined;
+    const o = orderOf(&sys, .{}, &waves);
 
-    var assignments = [_]u32{ 99, 99 };
-    var wave_count: u32 = 0;
-    debugComputeWaves(&sys, 2, &assignments, &wave_count);
-
-    try testing.expectEqual(@as(u32, 2), wave_count);
-    try testing.expectEqual(@as(u32, 0), assignments[0]);
-    try testing.expectEqual(@as(u32, 1), assignments[1]);
-}
-
-test "a writer and a reader of the same component land in different waves" {
-    const a = [_]c.ke_component_access{access(5, c.KE_ACCESS_WRITE)};
-    const b = [_]c.ke_component_access{access(5, c.KE_ACCESS_READ)};
-    const sys = [_]c.ke_runtime_system_params{ waveSystem(&a, 1), waveSystem(&b, 1) };
-
-    var assignments = [_]u32{ 99, 99 };
-    var wave_count: u32 = 0;
-    debugComputeWaves(&sys, 2, &assignments, &wave_count);
-
-    try testing.expectEqual(@as(u32, 2), wave_count);
+    try testing.expectEqual(@as(u32, 2), o.wave_count);
+    try testing.expectEqual(@as(u32, 1), waves[0]);
+    try testing.expectEqual(@as(u32, 0), waves[1]);
 }
 
 test "two readers of the same component share a wave" {
     const a = [_]c.ke_component_access{access(7, c.KE_ACCESS_READ)};
-    const b = [_]c.ke_component_access{access(7, c.KE_ACCESS_READ)};
-    const sys = [_]c.ke_runtime_system_params{ waveSystem(&a, 1), waveSystem(&b, 1) };
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("a", &a), waveSystem("b", &a) };
+    var waves: [2]u32 = undefined;
 
-    var assignments = [_]u32{ 99, 99 };
-    var wave_count: u32 = 0;
-    debugComputeWaves(&sys, 2, &assignments, &wave_count);
-
-    try testing.expectEqual(@as(u32, 1), wave_count);
-    try testing.expectEqual(@as(u32, 0), assignments[0]);
-    try testing.expectEqual(@as(u32, 0), assignments[1]);
+    try testing.expectEqual(@as(u32, 1), orderOf(&sys, .{}, &waves).wave_count);
 }
 
-test "a chain of conflicts groups greedily" {
+test "two writers with no order run in registration order and are reported as ambiguous" {
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("first", &a), waveSystem("second", &a) };
+    var waves: [2]u32 = undefined;
+    const o = orderOf(&sys, .{}, &waves);
+
+    try testing.expectEqual(@as(u32, 0), waves[0]);
+    try testing.expectEqual(@as(u32, 1), waves[1]);
+    try testing.expectEqualStrings("first", std.mem.span(o.ambiguity.ambiguity.first));
+    try testing.expectEqualStrings("second", std.mem.span(o.ambiguity.ambiguity.second));
+    try testing.expectEqual(wave_mod.Problem.none, o.failure);
+}
+
+test "a system named in after runs first, against registration order and without ambiguity" {
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const after = [_][*c]const u8{"late"};
+    var first = waveSystem("first", &a);
+    first.after = &after;
+    first.after_count = 1;
+    const sys = [_]c.ke_runtime_system_params{ first, waveSystem("late", &a) };
+    var waves: [2]u32 = undefined;
+    const o = orderOf(&sys, .{}, &waves);
+
+    try testing.expectEqual(@as(u32, 1), waves[0]);
+    try testing.expectEqual(@as(u32, 0), waves[1]);
+    try testing.expectEqual(wave_mod.Problem.none, o.ambiguity);
+}
+
+test "a system naming another in before runs first" {
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const before = [_][*c]const u8{"first"};
+    var late = waveSystem("late", &a);
+    late.before = &before;
+    late.before_count = 1;
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("first", &a), late };
+    var waves: [2]u32 = undefined;
+    _ = orderOf(&sys, .{}, &waves);
+
+    try testing.expectEqual(@as(u32, 1), waves[0]);
+    try testing.expectEqual(@as(u32, 0), waves[1]);
+}
+
+test "an after naming no system of the phase fails the order" {
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    const after = [_][*c]const u8{"missing"};
+    var s = waveSystem("lonely", &a);
+    s.after = &after;
+    s.after_count = 1;
+    var waves: [1]u32 = undefined;
+    const o = orderOf(&.{s}, .{}, &waves);
+
+    try testing.expectEqualStrings("missing", std.mem.span(o.failure.unknown_name.name));
+}
+
+test "two systems each after the other fail the order as a cycle" {
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_READ)};
+    const after_b = [_][*c]const u8{"b"};
+    const after_a = [_][*c]const u8{"a"};
+    var sa = waveSystem("a", &a);
+    sa.after = &after_b;
+    sa.after_count = 1;
+    var sb = waveSystem("b", &a);
+    sb.after = &after_a;
+    sb.after_count = 1;
+    var waves: [2]u32 = undefined;
+    const o = orderOf(&.{ sa, sb }, .{}, &waves);
+
+    try testing.expect(o.failure == .cycle);
+}
+
+test "writers of a component its owner orders share a wave and are not ambiguous" {
+    const a = [_]c.ke_component_access{access(9, c.KE_ACCESS_WRITE)};
+    const r = [_]c.ke_component_access{access(9, c.KE_ACCESS_READ)};
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("p1", &a), waveSystem("p2", &a), waveSystem("end", &r) };
+    const owned = [_]c.ke_component_id{9};
+    var waves: [3]u32 = undefined;
+    const o = orderOf(&sys, .{ .self_ordered = &owned }, &waves);
+
+    try testing.expectEqual(@as(u32, 2), o.wave_count);
+    try testing.expectEqual(waves[0], waves[1]);
+    try testing.expectEqual(@as(u32, 1), waves[2]);
+    try testing.expectEqual(wave_mod.Problem.none, o.ambiguity);
+}
+
+test "systems whose queries require different members of an exclusive group share a wave" {
+    const body = access(3, c.KE_ACCESS_WRITE);
+    const ball_terms = [_]c.ke_component_access{ body, access(10, c.KE_ACCESS_READ) };
+    const paddle_terms = [_]c.ke_component_access{ body, access(11, c.KE_ACCESS_READ) };
+    const ball_q = [_]queries_mod.QueryDecl{.{ .terms = &ball_terms, .term_count = 2 }};
+    const paddle_q = [_]queries_mod.QueryDecl{.{ .terms = &paddle_terms, .term_count = 2 }};
+    const ball = waveSystem("ball", &ball_terms);
+    const paddle = waveSystem("paddle", &paddle_terms);
+    const nodes = [_]wave_mod.Node{ .{ .params = &ball, .queries = &ball_q }, .{ .params = &paddle, .queries = &paddle_q } };
+    const members = [_]wave_mod.Exclusive{ .{ .group = 20, .member = 10 }, .{ .group = 20, .member = 11 } };
+    var waves: [2]u32 = undefined;
+    const o = wave_mod.order(&nodes, .{ .exclusive = &members }, &waves);
+
+    try testing.expectEqual(@as(u32, 1), o.wave_count);
+    try testing.expectEqual(wave_mod.Problem.none, o.ambiguity);
+}
+
+test "what an access list names still orders systems confined to different members" {
+    const ball_terms = [_]c.ke_component_access{ access(3, c.KE_ACCESS_WRITE), access(10, c.KE_ACCESS_READ) };
+    const paddle_terms = [_]c.ke_component_access{ access(3, c.KE_ACCESS_WRITE), access(11, c.KE_ACCESS_READ) };
+    const shared = [_]c.ke_component_access{access(3, c.KE_ACCESS_WRITE)};
+    const ball_q = [_]queries_mod.QueryDecl{.{ .terms = &ball_terms, .term_count = 2 }};
+    const paddle_q = [_]queries_mod.QueryDecl{.{ .terms = &paddle_terms, .term_count = 2 }};
+    const ball = waveSystem("ball", &ball_terms);
+    const paddle = waveSystem("paddle", &paddle_terms);
+    const nodes = [_]wave_mod.Node{ .{ .params = &ball, .queries = &ball_q, .explicit = &shared }, .{ .params = &paddle, .queries = &paddle_q } };
+    const members = [_]wave_mod.Exclusive{ .{ .group = 20, .member = 10 }, .{ .group = 20, .member = 11 } };
+    var waves: [2]u32 = undefined;
+
+    try testing.expectEqual(@as(u32, 2), wave_mod.order(&nodes, .{ .exclusive = &members }, &waves).wave_count);
+}
+
+test "independent chains of writers and readers run side by side" {
     const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
     const b = [_]c.ke_component_access{access(1, c.KE_ACCESS_READ)};
     const d = [_]c.ke_component_access{access(2, c.KE_ACCESS_WRITE)};
     const e = [_]c.ke_component_access{access(2, c.KE_ACCESS_READ)};
-    const sys = [_]c.ke_runtime_system_params{
-        waveSystem(&a, 1),
-        waveSystem(&b, 1),
-        waveSystem(&d, 1),
-        waveSystem(&e, 1),
-    };
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("a", &a), waveSystem("b", &b), waveSystem("d", &d), waveSystem("e", &e) };
+    var waves: [4]u32 = undefined;
 
-    var assignments = [_]u32{ 99, 99, 99, 99 };
-    var wave_count: u32 = 0;
-    debugComputeWaves(&sys, 4, &assignments, &wave_count);
-
-    try testing.expectEqual(@as(u32, 3), wave_count);
-    try testing.expectEqual(@as(u32, 0), assignments[0]);
-    try testing.expectEqual(@as(u32, 1), assignments[1]);
-    try testing.expectEqual(@as(u32, 1), assignments[2]);
-    try testing.expectEqual(@as(u32, 2), assignments[3]);
+    try testing.expectEqual(@as(u32, 2), orderOf(&sys, .{}, &waves).wave_count);
+    try testing.expectEqual(waves[0], waves[2]);
+    try testing.expectEqual(waves[1], waves[3]);
 }
 
-test "the clear shadow and cull access shape lands in one wave" {
-    const clear = [_]c.ke_component_access{
-        access(1, c.KE_ACCESS_READ),
-        access(2, c.KE_ACCESS_WRITE),
-    };
-    const shadow = [_]c.ke_component_access{
-        access(1, c.KE_ACCESS_READ),
-        access(3, c.KE_ACCESS_READ),
-        access(4, c.KE_ACCESS_WRITE),
-    };
-    const cull = [_]c.ke_component_access{
-        access(1, c.KE_ACCESS_READ),
-        access(3, c.KE_ACCESS_READ),
-        access(5, c.KE_ACCESS_WRITE),
-    };
-    const sys = [_]c.ke_runtime_system_params{
-        waveSystem(&clear, 2),
-        waveSystem(&shadow, 3),
-        waveSystem(&cull, 3),
-    };
+test "an exclusive system runs alone before the systems of its phase, whatever it declares" {
+    const r = [_]c.ke_component_access{access(1, c.KE_ACCESS_READ)};
+    const w = [_]c.ke_component_access{access(2, c.KE_ACCESS_WRITE)};
+    var flush = waveSystem("flush", &.{});
+    flush.exclusive = true;
+    const sys = [_]c.ke_runtime_system_params{ waveSystem("reader", &r), waveSystem("writer", &w), flush };
+    var waves: [3]u32 = undefined;
+    const o = orderOf(&sys, .{}, &waves);
 
-    var assignments = [_]u32{ 99, 99, 99 };
-    var wave_count: u32 = 0;
-    debugComputeWaves(&sys, 3, &assignments, &wave_count);
+    try testing.expectEqual(@as(u32, 0), waves[2]);
+    try testing.expectEqual(@as(u32, 1), waves[0]);
+    try testing.expectEqual(@as(u32, 1), waves[1]);
+    try testing.expectEqual(wave_mod.Problem.none, o.ambiguity);
+}
 
-    try testing.expectEqual(@as(u32, 1), wave_count);
-    try testing.expectEqual(assignments[0], assignments[1]);
-    try testing.expectEqual(assignments[1], assignments[2]);
+test "check_order reports two unordered writers only when asked to refuse them" {
+    var fx = try Fixture.init();
+    defer fx.deinit();
+    const rt = fx.rt();
+    const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
+    var p = waveSystem("first", &a);
+    try testing.expect(rt.register_system.?(rt, &p, null) != 0);
+    p.name = "second";
+    try testing.expect(rt.register_system.?(rt, &p, null) != 0);
+
+    try testing.expect(rt.check_order.?(rt, false, null));
+    var err: [*c]c.ke_error = null;
+    try testing.expect(!rt.check_order.?(rt, true, &err));
+    try testing.expect(err != null);
 }
 
 const SpawnProbe = struct {
@@ -3143,8 +2952,7 @@ test "two readers sharing a wave read the same storage without conflicting" {
 
     const sysz = [_]c.ke_runtime_system_params{ a, b };
     var waves = [_]u32{ 0, 0 };
-    var wave_count: u32 = 0;
-    debugComputeWaves(&sysz, 2, &waves, &wave_count);
+    _ = orderOf(&sysz, .{}, &waves);
     try testing.expectEqual(waves[0], waves[1]);
 
     for (0..300) |_| try testing.expect(f.tick(1.0 / 60.0));

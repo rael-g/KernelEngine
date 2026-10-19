@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 
 const E = @import("kerror").Errors(c);
 
@@ -51,7 +51,7 @@ fn eulerDegToQuat(dx: f32, dy: f32, dz: f32) c.ke_quat {
 /// the authored number in the rotation, and converts that stored value from degrees to radians in
 /// place. A "rotation" entry that is not a number reports an invalid argument and returns false;
 /// every entry whose key it does not claim stays unconsumed.
-pub export fn ke_framework_apply_transform2d(
+pub fn ke_framework_apply_transform2d(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
@@ -75,7 +75,7 @@ pub export fn ke_framework_apply_transform2d(
 /// generic writer would leave at zero. A "rotation_euler" entry that is not a three-component
 /// vector reports an invalid argument and returns false; every entry whose key it does not claim
 /// stays unconsumed.
-pub export fn ke_framework_apply_transform(
+pub fn ke_framework_apply_transform(
     _: ?*anyopaque,
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,

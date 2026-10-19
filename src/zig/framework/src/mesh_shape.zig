@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 
 const pi: f32 = 3.14159265358979323846;
@@ -194,7 +194,7 @@ fn bakeSphere(vtx: [*]c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void 
 /// the 16-bit indices. A null output, an unknown primitive and a failed allocation return false
 /// and report no error. On success the caller owns both buffers and releases them with
 /// `ke_mesh_shape_free_internal`; on false the record is empty and nothing is owned.
-pub export fn ke_mesh_shape_bake_internal(
+pub fn ke_mesh_shape_bake_internal(
     prim: c.ke_mesh_primitive,
     segments_in: u32,
     out_data: ?*c.ke_mesh_shape_data,
@@ -273,7 +273,7 @@ pub export fn ke_mesh_shape_bake_internal(
 /// Releases both buffers and leaves the record empty, so a repeat does nothing. The counts in the
 /// data are the lengths the buffers were allocated with, so they must not be altered between the
 /// bake and the free.
-pub export fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callconv(.c) void {
+pub fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callconv(.c) void {
     const data = data_in orelse return;
     if (data.vertices) |v| heap.gpa.free(@as([*]c.ke_vertex, @ptrCast(v))[0..data.vertex_count]);
     if (data.indices) |i| heap.gpa.free(@as([*]u16, @ptrCast(i))[0..data.index_count]);

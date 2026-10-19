@@ -38,7 +38,7 @@ extern "C"
         void *handle;
 
         /**
-         * Schedules a fire-and-forget task.
+         * Schedules a task, which the caller releases by waiting on it.
          * @param func [raw_callback] [closure:data] Entry point invoked on a worker thread.
          * @param data [borrowed] Opaque context passed to func unchanged.
          */
@@ -58,18 +58,21 @@ extern "C"
 
         /**
          * Blocks the calling thread until the task completes, then reports whatever the
-         * task body failed with. A task that nobody waits on reports its failure nowhere.
+         * task body failed with, and releases the task. Every task a dispatch slot returns
+         * is waited on exactly once: afterwards the pointer is invalid for wait and
+         * is_completed alike, and a task never waited on is never released and reports
+         * its failure nowhere.
          *
          * The error is created on the waiting thread from the type the body named. Its
          * message names the slot rather than the failure.
          */
         bool (*wait)(struct ke_scheduler *self, ke_task *task, ke_error **out_error);
 
-        /** Returns true if the task has finished. */
+        /** Returns true if the task has finished. Valid only before the task is waited on. */
         bool (*is_completed)(struct ke_scheduler *self, ke_task *task);
 
         /**
-         * Schedules a fire-and-forget task on one specific worker thread.
+         * Schedules a task on one specific worker thread, which the caller releases by waiting on it.
          * @param thread_num Index of the worker to run on.
          * @param func [raw_callback] [closure:data] Entry point invoked on that worker thread.
          * @param data [borrowed] Opaque context passed to func unchanged.

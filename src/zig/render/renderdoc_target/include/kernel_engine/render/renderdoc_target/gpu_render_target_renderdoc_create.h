@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_RENDERDOC_TARGET_GPU_RENDER_TARGET_RENDERDOC_CREATE_H_
+#define KERNEL_ENGINE_RENDER_RENDERDOC_TARGET_GPU_RENDER_TARGET_RENDERDOC_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
@@ -44,4 +45,6 @@ ke_gpu_render_target_renderdoc_create(ke_gpu_render_target *inner,
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

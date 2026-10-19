@@ -4,12 +4,7 @@ namespace KernelEngine.Render.Native;
 
 public partial struct ke_ndc_convention
 {
-    [NativeTypeName("ke_bool")]
-    public byte z_zero_to_one;
+    public bool z_zero_to_one;
 
-    [NativeTypeName("ke_bool")]
-    public byte y_flip;
-
-    [NativeTypeName("ke_bool")]
-    public byte clip_left_handed;
+    public bool y_flip;
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target   = b.standardTargetOptions(.{});
@@ -28,11 +29,13 @@ pub fn build(b: *std.Build) void {
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_RENDER_SKYBOX_EXPORT", "");
 
     const zmath = b.dependency("zmath", .{});
     mod.addImport("zmath", zmath.module("root"));
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_render_skybox",
         .root_module = mod,
@@ -61,6 +64,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addImport("zmath", zmath.module("root"));
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
 
+    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     b.step("test", "Run the skybox pass unit tests").dependOn(&run_tests.step);

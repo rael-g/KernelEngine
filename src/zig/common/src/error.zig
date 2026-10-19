@@ -5,10 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
-const c = @cImport({
-    @cInclude("kernel_engine/common/error.h");
-    @cInclude("stdio.h");
-});
+const c = @import("c");
 
 /// Win32 entry point for the Windows branch of `ke_error_fatal`. The `extern` is referenced only
 /// from that branch, so other targets never link it.

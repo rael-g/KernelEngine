@@ -13,7 +13,7 @@ on the generated page of its header, under `src/c/`.
 | factory | the factory header in a plugin's `include/`, for example `ke_window_glfw_create` | a `_params` struct, such as `ke_window_glfw_params`, and an error output | an owner |
 | error record | `ke_error` and `ke_error_type` in `kernel_engine/common/error.h` | `ke_error_set`, through `KE_ERROR_SET` and `KE_ERROR_WRAP` | the failing call's output, and `ke_error_last` |
 | error library | `ke_common`, built from `src/zig/common/src/error.zig` | nothing | the eight generic error types, `ke_error_is`, `ke_error_fatal` |
-| error helper | `Errors` in `src/zig/common/kerror.zig` | the plugin's own translated C namespace | the same records, for a plugin that does not link `ke_common` |
+| error helper | `Errors` in `src/zig/common/kerror.zig` | the plugin's own translated C namespace | `fail`, `failWithType` and `wrap`, each a call to `ke_error_set` |
 | managed translation | `NativeErrors` in `src/csharp/common` | a `ke_error` pointer | a .NET exception, or a `ke_error` written from one |
 
 **A call goes through a pointer.** A caller holds a pointer to a contract struct and calls one of
@@ -41,8 +41,10 @@ inner exception, and the full type name is kept in the exception's `Data` under 
 **One call ends the process.** `ke_error_fatal` prints the chain and exits; the header reserves it
 for a caller with nowhere left to send an error.
 
-**Booleans are `ke_bool`.** In a slot or a struct that crosses the ABI, a boolean is `ke_bool`
-(`kernel_engine/common/types.h`), not C `bool`.
+**Booleans are C `bool`.** A slot or a struct that crosses the ABI takes C `bool`, one byte. It
+reaches C# as a one-byte `bool` because every engine assembly disables runtime marshalling
+(`src/csharp/DisableRuntimeMarshalling.props`); an assembly that marshalled it would read a
+four-byte `BOOL`.
 
 ## How a resource is named
 

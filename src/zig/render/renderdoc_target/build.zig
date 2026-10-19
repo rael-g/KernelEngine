@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_common_build = @import("ke_common");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -8,6 +9,7 @@ pub fn build(b: *std.Build) void {
     const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
     const renderdoc_include = b.option([]const u8, "renderdoc-include", "directory holding renderdoc_app.h") orelse @panic("-Drenderdoc-include required");
 
     const mod = b.createModule(.{
@@ -21,9 +23,13 @@ pub fn build(b: *std.Build) void {
     }
     mod.addIncludePath(b.path("include"));
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    mod.linkSystemLibrary("ke_common", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize }));
     mod.addCMacro("KE_GPU_RENDER_TARGET_RENDERDOC_EXPORT", "");
 
+    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
     const lib = b.addLibrary(.{
         .name = "ke_gpu_render_target_renderdoc",
         .root_module = mod,
@@ -46,9 +52,12 @@ pub fn build(b: *std.Build) void {
     }
     test_mod.addIncludePath(b.path("include"));
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
+    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addImport("kerror", b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize }));
     test_mod.addCMacro("KE_GPU_RENDER_TARGET_RENDERDOC_EXPORT", "");
 
+    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run the renderdoc render target unit tests");

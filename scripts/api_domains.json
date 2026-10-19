@@ -9,7 +9,6 @@
     "paramsSuffix": "_params",
     "outParamPrefix": "out_",
     "errorLaneName": "out_error",
-    "byteBoolType": "ke_bool",
     "errorType": "ke_error",
     "errorKindType": "ke_error_type",
     "errorIsFunction": "ke_error_is",
@@ -38,8 +37,14 @@
     },
     "fieldTable": {
       "entryType": "ke_component_field",
+      "variantType": "ke_variant",
+      "variantKindType": "ke_variant_type",
       "include": "kernel_engine/ecs/component_field.h",
       "nameMacroPrefix": "KE_COMPONENT_NAME_",
+      "managedNamespace": "KernelEngine.Ecs",
+      "managedOut": "src/csharp/ecs/KernelEngine.Ecs.Abstractions/Generated/ComponentLayout.g.cs",
+      "bindingsNamespace": "KernelEngine.Ecs.Native",
+      "nativeOut": "src/csharp/ecs/KernelEngine.Ecs/Generated/NativeFieldTable.g.cs",
       "variants": {
         "null": { "constant": "KE_VARIANT_NULL" },
         "bool": { "constant": "KE_VARIANT_BOOL", "member": ".b" },
@@ -322,6 +327,7 @@
       "auxHeaders": [
         "src/c/render/kernel_engine/render/gpu/gpu_device.h",
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/render/kernel_engine/render/binding/resource_binder.h",
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
@@ -751,7 +757,6 @@
       "project": "src/csharp/common/KernelEngine.Common",
       "namespace": "KernelEngine.Common.Native",
       "headers": [
-        "src/zig/common/include/kernel_engine/common/types.h",
         "src/zig/common/include/kernel_engine/common/error.h",
         "src/c/math/kernel_engine/math/math.h",
         "src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h",
@@ -767,6 +772,7 @@
       "namespace": "KernelEngine.Configuration.Native",
       "headers": [
         "src/c/configuration/kernel_engine/configuration/configuration.h",
+        "src/c/configuration/kernel_engine/configuration/configuration_source.h",
         "src/zig/configuration/include/kernel_engine/configuration/configuration_create.h"
       ],
       "library": "ke_configuration",
@@ -820,6 +826,7 @@
         "src/c/framework/kernel_engine/framework/world.h",
         "src/c/framework/kernel_engine/framework/input_actions.h",
         "src/c/framework/kernel_engine/framework/scene_loader.h",
+        "src/c/framework/kernel_engine/framework/scene_component_set.h",
         "src/zig/framework/include/kernel_engine/framework/world_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h",
@@ -878,7 +885,8 @@
       "project": "src/csharp/physics/KernelEngine.Physics",
       "namespace": "KernelEngine.Physics.Native",
       "headers": [
-        "src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h"
+        "src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h",
+        "src/zig/physics/body2d/include/kernel_engine/physics/body2d/scene_components.h"
       ],
       "library": "ke_physics_body2d",
       "output": "Generated/Body2DModule/"
@@ -906,16 +914,136 @@
       "output": "Generated/GpuDevice/"
     },
     {
-      "name": "RenderModule",
+      "name": "RenderServiceFactory",
       "project": "src/csharp/render/KernelEngine.Render.Webgpu",
       "namespace": "KernelEngine.Render.Webgpu.Native",
       "headers": [
-        "src/zig/render/shadow/include/kernel_engine/render/shadow/shadow_create.h",
-        "src/zig/render/module/include/kernel_engine/render/module/render_module_create.h",
+        "src/zig/render/service/include/kernel_engine/render/service/render_service_create.h"
+      ],
+      "library": "ke_render_service",
+      "output": "Generated/RenderServiceFactory/"
+    },
+    {
+      "name": "BinderGrouped",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/binder_grouped/include/kernel_engine/render/binder_grouped/resource_binder_grouped_create.h"
+      ],
+      "library": "ke_render_binder_grouped",
+      "output": "Generated/BinderGrouped/"
+    },
+    {
+      "name": "Camera",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/camera/include/kernel_engine/render/camera/camera_create.h"
+      ],
+      "library": "ke_render_camera",
+      "output": "Generated/Camera/"
+    },
+    {
+      "name": "RenderFrame",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/frame/include/kernel_engine/render/frame/frame_create.h"
+      ],
+      "library": "ke_render_frame",
+      "output": "Generated/RenderFrame/"
+    },
+    {
+      "name": "RenderScene",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/scene/include/kernel_engine/render/scene/scene_components.h",
+        "src/zig/render/scene/include/kernel_engine/render/scene/scene_resolve_create.h",
+        "src/zig/render/scene/include/kernel_engine/render/scene/label_resolve_create.h"
+      ],
+      "library": "ke_render_scene",
+      "output": "Generated/RenderScene/"
+    },
+    {
+      "name": "Shadow",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/shadow/include/kernel_engine/render/shadow/shadow_create.h"
+      ],
+      "library": "ke_render_shadow",
+      "output": "Generated/Shadow/"
+    },
+    {
+      "name": "Cluster",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/cluster/include/kernel_engine/render/cluster/cluster_create.h"
+      ],
+      "library": "ke_render_cluster",
+      "output": "Generated/Cluster/"
+    },
+    {
+      "name": "Gbuffer",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/gbuffer/include/kernel_engine/render/gbuffer/gbuffer_create.h"
+      ],
+      "library": "ke_render_gbuffer",
+      "output": "Generated/Gbuffer/"
+    },
+    {
+      "name": "DeferredLighting",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/deferred_lighting/include/kernel_engine/render/deferred_lighting/deferred_lighting_create.h"
+      ],
+      "library": "ke_render_deferred_lighting",
+      "output": "Generated/DeferredLighting/"
+    },
+    {
+      "name": "Skybox",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/skybox/include/kernel_engine/render/skybox/skybox_create.h"
+      ],
+      "library": "ke_render_skybox",
+      "output": "Generated/Skybox/"
+    },
+    {
+      "name": "Forward",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/forward/include/kernel_engine/render/forward/forward_create.h"
+      ],
+      "library": "ke_render_forward",
+      "output": "Generated/Forward/"
+    },
+    {
+      "name": "Tonemap",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
+        "src/zig/render/tonemap/include/kernel_engine/render/tonemap/tonemap_create.h"
+      ],
+      "library": "ke_render_tonemap",
+      "output": "Generated/Tonemap/"
+    },
+    {
+      "name": "Ui",
+      "project": "src/csharp/render/KernelEngine.Render.Webgpu",
+      "namespace": "KernelEngine.Render.Webgpu.Native",
+      "headers": [
         "src/zig/render/ui/include/kernel_engine/render/ui/ui_create.h"
       ],
-      "library": "ke_render_module",
-      "output": "Generated/RenderModule/"
+      "library": "ke_render_ui",
+      "output": "Generated/Ui/"
     },
     {
       "name": "Render",
@@ -928,9 +1056,11 @@
         "src/c/render/kernel_engine/render/components.h",
         "src/c/render/kernel_engine/render/ui/components.h",
         "src/c/render/kernel_engine/render/service/render_service.h",
+        "src/c/render/kernel_engine/render/binding/resource_binder.h",
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
         "src/c/render/kernel_engine/render/gpu/gpu_device.h",
-        "src/c/render/kernel_engine/render/gpu/gpu_render_target.h"
+        "src/c/render/kernel_engine/render/gpu/gpu_render_target.h",
+        "src/c/render/kernel_engine/render/camera.h"
       ],
       "library": "ke_render_service",
       "output": "Generated/Render/"

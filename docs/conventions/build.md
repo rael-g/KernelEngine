@@ -26,17 +26,19 @@ of its language or of the project, which resolves it:
 
 - **vcpkg** for native libraries (`vcpkg.json`).
 - **NuGet** for .NET packages (`nuget.config`).
-- **`build.zig.zon`** for Zig packages, and for C sources that a `build.zig` compiles. A package there is
-  source, built by the build graph for whatever the target is, never a binary chosen per operating
-  system.
+- **`build.zig.zon`** for Zig packages, for C sources that a `build.zig` compiles, and for the archives
+  of the [fetched tools](#fetched-tools), declared `lazy` so only the ones the host and the target need
+  are downloaded, each checked by its hash. A library a plugin links is source built by the graph,
+  never a binary chosen per operating system; a tool is the exception, a binary per host or target.
 
 Two fallbacks exist, in this order, and each is an exception that has to be justified by the package
 managers not carrying the thing:
 
-1. **A fetch step in the root `build.zig`**, pinned to a version, into `build/tools/`. It exists so that
-   third-party code does not have to be copied into the repository. The tools taken this way are the
-   ones in the table under [Fetched tools](#fetched-tools), and the root `build.zig` is the only place
-   that fetches: a dependency does not download tools on behalf of the build that uses it.
+1. **A fetch step in the root `build.zig`**, pinned to a version and to a SHA-256, for a file published
+   outside any archive, which `build.zig.zon` cannot declare. `fetchFile` builds
+   `scripts/fetch_file.zig` for the host and runs it; Zig caches the run on its arguments. The vcpkg
+   binary is the one file taken this way, and the root `build.zig` is the only place that fetches: a
+   dependency does not download tools on behalf of the build that uses it.
 2. **A vendored copy**, under the rule for vendoring in `CLAUDE.md`.
 
 The machine is never a source. Beyond the prerequisites named above, nothing is looked for in the
@@ -51,7 +53,7 @@ Everything a build fetches or produces is under `build/`, apart from the `zig-pk
 
 | directory | holds |
 |---|---|
-| `build/tools/` | fetched toolchains: vcpkg, `slangc`, wgpu-native, RenderDoc |
+| `build/tools/` | the tools laid out from their packages: vcpkg, `slangc`, RenderDoc |
 | `build/vcpkg-installed/<triplet>/` | the ports vcpkg installed |
 | `build/vcpkg-archives/`, `build/vcpkg-registries/` | vcpkg's binary archives of compiled ports and its registry checkouts; the root build gives `vcpkg install` these paths through `VCPKG_DEFAULT_BINARY_CACHE` and `X_VCPKG_REGISTRIES_CACHE` |
 | `build/zig-global/` | Zig's global cache, when the root build is given `--global-cache-dir build/zig-global`, as `scripts/verify.cs` gives it; the vcpkg ports' `zig cc` is always given it |
@@ -105,14 +107,24 @@ with the options its library was given, because both come from the one `b.depend
 
 | tool | pinned at | fetched by |
 |---|---|---|
-| vcpkg | `2026-07-13` (`build.zig:18`) | `sh -c 'curl … && tar …'` (`build.zig:28-35`) |
-| slangc | `2025.17.2` (`build.zig:65`) | `sh -c 'curl … && unzip …'` (`build.zig:74-79`) |
-| wgpu-native | `v24.0.3.1` (`build.zig:324`) | `sh -c …` |
-| RenderDoc | `1.46` (`build.zig:402`), with a SHA-256 | `sh -c …` |
+| vcpkg | `2026-07-13` | the bundle as `vcpkg_bundle` in `build.zig.zon`; the binary by `fetchFile`, with a SHA-256 |
+| slangc | `2025.17.2` | `slang_linux`, `slang_windows` in `build.zig.zon` |
+| wgpu-native | `v24.0.3.1` | `wgpu_linux`, `wgpu_windows` in `build.zig.zon` |
+| RenderDoc | `1.46` | `renderdoc_linux`, `renderdoc_windows` in `build.zig.zon` |
+
+wgpu-native is used where Zig unpacked it. vcpkg, `slangc` and RenderDoc are laid out under
+`build/tools/` by a `ToolTree` step (`scripts/tool_tree.zig`), because each needs what its package
+cannot carry: vcpkg a writable root holding the bundle and the binary, `slangc` and `renderdoccmd` the
+executable bit an archive's files lose in Zig's cache, RenderDoc a Vulkan layer manifest whose
+library path points into the laid-out tree. A step leaves a tree whose stamp names its version as
+it is. No step runs `sh`, `curl`, `tar`, `unzip`, `cp` or `sha256sum`.
 
 vcpkg runs in manifest mode against `vcpkg.json` with the overlay triplets in `vcpkg-triplets/`,
-installing into `build/vcpkg-installed`. The triplet is chosen by the target OS: `x64-windows-zig` or
-`x64-linux-zig`.
+installing into `build/vcpkg-installed`. The triplet of a platform is the one `vcpkg-triplets/`
+holds for it, `<arch>-<os>-zig`, and vcpkg's own `<arch>-<os>` when it holds none; any other is
+named with `-Dvcpkg-triplet` (and `-Dvcpkg-host-triplet` for the host). The build carries tool
+packages for x86_64 Linux and Windows only; on any other host or target it stops and names the
+option to pass: `-Dslangc`, `-Dwgpu-native` or `-Dvcpkg-root`.
 
 The install step is skipped when the installed tree is current. The root build hashes `vcpkg.json`,
 `vcpkg-configuration.json`, every file in `vcpkg-triplets/`, the vcpkg version and the Zig version
@@ -139,11 +151,12 @@ release of docir publishes it.
 
 ## Shaders
 
-Each shader is compiled to WGSL by running `dotnet run scripts/compile_slang.cs` with the fetched
-`slangc` (`build.zig:829-849`). An authored material is compiled once per pass: a wrapper that
-binds the material into the pass's entry points is generated by
-`dotnet run scripts/generate_material_wrapper.cs`, then compiled like any other shader
-(`build.zig:889`). **The native build therefore needs the .NET SDK on the path**, not only Zig.
+Each shader is compiled to WGSL by the fetched `slangc`, run by `Ctx.shader` in the root `build.zig`,
+which installs the WGSL and its reflection into the shared shaders directory. An authored material is
+compiled once per pass: `Ctx.materialShaders` reads the material and the pass's template while the
+build graph is made, writes a wrapper binding the material into the pass's entry points, and
+compiles it like any other shader. A C example compiles its own shader with `slangc` and takes the
+WGSL in with `#embed`. The native build needs Zig alone; .NET is the managed side's.
 
 ## Windows
 
@@ -151,10 +164,10 @@ The root `build.zig` separates what runs on the machine doing the build (the **h
 
 | what | decided by | Windows | elsewhere |
 |---|---|---|---|
-| vcpkg triplet | target | `x64-windows-zig` | `x64-linux-zig` |
-| wgpu-native | target | `wgpu-windows-x86_64-msvc-release`, `wgpu_native.dll` | `wgpu-linux-x86_64-release`, `libwgpu_native.so` |
+| vcpkg triplet | target, unless `-Dvcpkg-triplet` | `x64-windows-zig` | `x64-linux-zig` on x86_64 Linux |
+| wgpu-native | target | `wgpu_windows`, `wgpu_native.dll` | `wgpu_linux`, `libwgpu_native.so` |
 | vcpkg binary | host | `vcpkg.exe` | `vcpkg` (the `glibc` asset) |
-| `slangc` | host | `slang-<ver>-windows-x86_64`, `slangc.exe` | `slang-<ver>-linux-x86_64` |
+| `slangc` | host | `slang_windows`, `slangc.exe` | `slang_linux`, `slangc` |
 
 That split is what lets a Linux host build the Windows target: `dotnet run scripts/verify.cs -- cross-windows` runs `zig build -Dtarget=x86_64-windows-gnu` into `build/cross-windows`, with the ports installed under their own root, `build/vcpkg-installed-x64-windows-zig`, because a vcpkg manifest root keeps one triplet's packages and installing another would remove the first. It compiles and links every plugin, example and DLL; it does not run any of them, and it cannot reproduce what the Windows runner image brings (its `tar`, its `ccache`).
 

@@ -4,7 +4,7 @@
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/common/export.h>
 
-#include <kernel_engine/common/types.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -24,7 +24,7 @@ extern "C"
         bool (*on_shutdown)(struct ke_window *self, ke_error **out_error);
 
         /** Returns true once the user has requested the window to close. */
-        ke_bool (*should_close)(struct ke_window *self);
+        bool (*should_close)(struct ke_window *self);
 
         /** Processes pending OS events. Call once per frame. */
         bool (*poll_events)(struct ke_window *self, ke_error **out_error);

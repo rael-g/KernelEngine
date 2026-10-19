@@ -1,21 +1,23 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Asset;
 using KernelEngine.Asset.Assimp;
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
-using KernelEngine.Asset;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
 
-string modelPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../assets/Box.gltf"));
+using Microsoft.Extensions.DependencyInjection;
+
+string modelPath = Path.Combine(AppContext.BaseDirectory, "assets", "Box.gltf");
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -44,22 +46,22 @@ var services = new ServiceCollection()
         tree.AddNode(new DirectionalLight
         {
             Direction = Vector3.Normalize(new Vector3(0.3f, -1.0f, -0.5f)),
-            Color     = Vector3.One,
+            Color = Vector3.One,
             Intensity = 3f,
         }, "Sun");
 
         Console.WriteLine($"[KernelEngine] Loading model: {modelPath}");
-#region load
+        #region load
         var loader = sp.GetRequiredService<IAssetLoader>();
         using var model = loader.LoadModel(modelPath);
         Console.WriteLine($"[KernelEngine] Model loaded: {model.Data.Meshes.Length} sub-meshes, {model.Data.Materials.Length} mats, {model.Data.Textures.Length} textures");
         var nodes = tree.AddModel(model.Data, resources, rootName: "Box");
-#endregion
+        #endregion
         Console.WriteLine($"[KernelEngine] Added {nodes.Count} mesh nodes to the scene.");
     }));
 
 using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
+var window = sp.GetRequiredService<IWindow>();
 var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);

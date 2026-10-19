@@ -1,5 +1,6 @@
-using Xunit;
 using KernelEngine.Configuration;
+
+using Xunit;
 
 namespace KernelEngine.Configuration.Tests;
 

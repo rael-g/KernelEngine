@@ -1,4 +1,3 @@
-using System.Text;
 using KernelEngine.Common.Native;
 
 namespace KernelEngine.Framework;
@@ -11,32 +10,27 @@ namespace KernelEngine.Framework;
 public unsafe partial class SceneLoader
 {
     /// <summary>
-    /// Creates a native scene loader bound to <paramref name="world"/>.
+    /// Creates a native scene loader bound to <paramref name="world"/>, resolving every
+    /// <c>res://</c> scene reference through <paramref name="assets"/>.
     /// </summary>
-    /// <exception cref="ArgumentNullException"><paramref name="world"/> is null.</exception>
-    /// <exception cref="InvalidOperationException">The native factory fails.</exception>
+    /// <exception cref="ArgumentNullException">An argument is null.</exception>
+    /// <exception cref="Exception">The native factory fails.</exception>
     /// <param name="world">The world into which entities are loaded.</param>
-    /// <param name="projectRoot">
-    /// Project root that <c>res://</c>-prefixed paths resolve against; with
-    /// <see langword="null"/> such a path resolves to the bare remainder.
-    /// </param>
-    public SceneLoader(World world, string? projectRoot = null) : this(Create(world, projectRoot))
+    /// <param name="assets">Resolves <c>res://</c> paths; must outlive the loader.</param>
+    public SceneLoader(World world, NativeAssetResolver assets) : this(Create(world, assets))
     {
     }
 
-    private static ke_scene_loader_handle Create(World world, string? projectRoot)
+    private static ke_scene_loader_handle Create(World world, NativeAssetResolver assets)
     {
         ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(assets);
 
-        byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
-        fixed (byte* rootPtr = rootBytes)
-        {
-            ke_error* err = null;
-            var handle = KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
-                ((INativeWorld)world).Native, (sbyte*)rootPtr, &err);
-            if (handle.@ref == null) throw NativeErrors.FromNative(err, "scene_loader_create");
-            return handle;
-        }
+        ke_error* err = null;
+        var handle = KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
+            ((INativeWorld)world).Native, ((INativeAssetResolver)assets).Native, &err);
+        if (handle.@ref == null) throw NativeErrors.FromNative(err, "scene_loader_create");
+        return handle;
     }
 
     partial void OnDispose()

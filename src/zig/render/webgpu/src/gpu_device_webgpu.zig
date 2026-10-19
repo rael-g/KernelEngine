@@ -9,26 +9,16 @@ comptime {
     _ = @import("window_target.zig");
 }
 const builtin = @import("builtin");
-pub const wgpu = @cImport({
-    @cInclude("webgpu/webgpu.h");
-    @cInclude("webgpu/wgpu.h");
-});
-pub const ke = @cImport({
-    @cInclude("kernel_engine/common/error.h");
-    @cInclude("kernel_engine/render/gpu/gpu_device.h");
-    @cInclude("kernel_engine/render/gpu/gpu_commands.h");
-    @cInclude("kernel_engine/render/gpu/gpu_render_target.h");
-    @cInclude("kernel_engine/window/window.h");
-    @cInclude("kernel_engine/scheduler/scheduler.h");
-});
+pub const wgpu = @import("c");
+pub const ke = @import("c");
 
 /// Read once by `ke_gpu_device_webgpu_create`. The `scheduler` it carries is borrowed: the state
 /// keeps the pointer, and this file never frees it.
 const Params = extern struct {
     logger:            ?*anyopaque,
-    enable_validation: ke.ke_bool,
+    enable_validation: bool,
     scheduler:         ?*ke.ke_scheduler,
-    debug_labels:      ke.ke_bool,
+    debug_labels:      bool,
 };
 
 const GpuError = error{
@@ -230,6 +220,33 @@ fn toWgpuCompareFunction(f: ke.ke_gpu_compare_function) wgpu.WGPUCompareFunction
     };
 }
 
+fn toWgpuFilter(f: ke.ke_gpu_filter) wgpu.WGPUFilterMode {
+    return switch (f) {
+        ke.KE_GPU_FILTER_NEAREST => wgpu.WGPUFilterMode_Nearest,
+        ke.KE_GPU_FILTER_LINEAR  => wgpu.WGPUFilterMode_Linear,
+        else                     => wgpu.WGPUFilterMode_Undefined,
+    };
+}
+
+fn toWgpuMipmapFilter(f: ke.ke_gpu_sampler_mipmap_filter) wgpu.WGPUMipmapFilterMode {
+    return switch (f) {
+        ke.KE_GPU_SAMPLER_MIPMAP_NEAREST => wgpu.WGPUMipmapFilterMode_Nearest,
+        ke.KE_GPU_SAMPLER_MIPMAP_LINEAR  => wgpu.WGPUMipmapFilterMode_Linear,
+        else                             => wgpu.WGPUMipmapFilterMode_Undefined,
+    };
+}
+
+/// WebGPU has no border colour, so a clamp to the border samples the edge.
+fn toWgpuAddressMode(m: ke.ke_gpu_address_mode) wgpu.WGPUAddressMode {
+    return switch (m) {
+        ke.KE_GPU_ADDRESS_MODE_REPEAT          => wgpu.WGPUAddressMode_Repeat,
+        ke.KE_GPU_ADDRESS_MODE_MIRRORED_REPEAT => wgpu.WGPUAddressMode_MirrorRepeat,
+        ke.KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE   => wgpu.WGPUAddressMode_ClampToEdge,
+        ke.KE_GPU_ADDRESS_MODE_CLAMP_TO_BORDER => wgpu.WGPUAddressMode_ClampToEdge,
+        else                                   => wgpu.WGPUAddressMode_Undefined,
+    };
+}
+
 fn toWgpuStencilOp(op: ke.ke_gpu_stencil_op) wgpu.WGPUStencilOperation {
     return switch (op) {
         ke.KE_GPU_STENCIL_OP_KEEP            => wgpu.WGPUStencilOperation_Keep,
@@ -362,8 +379,8 @@ pub export fn ke_gpu_device_webgpu_create(
 ) ke.ke_gpu_device_handle {
     var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;
     if (params) |p| {
-        if (p.enable_validation != 0) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
-        if (p.debug_labels != 0) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
+        if (p.enable_validation) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
+        if (p.debug_labels) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
     }
     const s = createDeviceState(instance_flags) catch |err| {
         setError(out_error, err, "webgpu: device initialisation failed", @src());
@@ -575,34 +592,23 @@ fn createBuffer(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_buffer_params,
         .label            = labelView(pp.label),
         .usage            = usage,
         .size             = pp.size,
-        .mappedAtCreation = if (pp.mapped_at_creation != 0) 1 else 0,
+        .mappedAtCreation = if (pp.mapped_at_creation) 1 else 0,
     };
 
-    wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
+    pushScope(s.device);
     const buf: wgpu.WGPUBuffer = wgpu.wgpuDeviceCreateBuffer(s.device, &desc);
-    var se = ScopeError{ .captured = false, .buf = undefined };
-    _ = wgpu.wgpuDevicePopErrorScope(s.device, .{
-        .nextInChain = null,
-        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
-        .callback  = popErrorCallback,
-        .userdata1 = &se,
-        .userdata2 = null,
-    });
-    _ = wgpu.wgpuDevicePoll(s.device, 1, null);
-
-    if (se.captured) {
-        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, &se.buf, @src().file, @intCast(@src().line), null);
+    if (scopeFailed(s.device, buf != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
         if (buf != null) wgpu.wgpuBufferRelease(buf);
         return ke.KE_GPU_INVALID_HANDLE;
     }
-    const handle = buf orelse return ke.KE_GPU_INVALID_HANDLE;
+    const handle = buf.?;
     if (pp.initial_data != null) wgpu.wgpuQueueWriteBuffer(s.queue, handle, 0, pp.initial_data, pp.size);
     return @intFromPtr(handle);
 }
 
-/// Has no error output: a failed create returns the invalid handle. A repack buffer that cannot be
-/// allocated returns the texture with the layers from that one on not uploaded.
-fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params) callconv(.c) ke.ke_gpu_texture {
+/// Shares the error scope protocol of `createBuffer`. A repack buffer that cannot be allocated
+/// returns the texture with the layers from that one on not uploaded.
+fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_texture {
     const pp = @as(*const ke.ke_gpu_texture_params, @ptrCast(p));
     const s = state(dev);
     var usage = mapTextureUsage(pp.usage);
@@ -620,7 +626,13 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
         .viewFormatCount = 0,
         .viewFormats     = null,
     };
-    const tex: wgpu.WGPUTexture = wgpu.wgpuDeviceCreateTexture(s.device, &desc) orelse return ke.KE_GPU_INVALID_HANDLE;
+    pushScope(s.device);
+    const made: wgpu.WGPUTexture = wgpu.wgpuDeviceCreateTexture(s.device, &desc);
+    if (scopeFailed(s.device, made != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (made != null) wgpu.wgpuTextureRelease(made);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    const tex = made.?;
     if (pp.initial_data != null) {
         const bytes_per_pixel: u32 = 4;
         const unaligned_bpr: u32 = pp.width * bytes_per_pixel;
@@ -661,8 +673,8 @@ fn createTexture(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_texture_param
     return @intFromPtr(tex);
 }
 
-/// Returns the view as a handle; the invalid handle when wgpu refuses it. Sets no error.
-fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]const ke.ke_gpu_texture_view_params) callconv(.c) ke.ke_gpu_texture_view {
+/// Shares the error scope protocol of `createBuffer`.
+fn createTextureView(dev: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]const ke.ke_gpu_texture_view_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_texture_view {
     const pp = @as(*const ke.ke_gpu_texture_view_params, @ptrCast(p));
     const desc = wgpu.WGPUTextureViewDescriptor{
         .nextInChain     = null,
@@ -676,27 +688,42 @@ fn createTextureView(_: [*c]ke.ke_gpu_device, tex: ke.ke_gpu_texture, p: [*c]con
         .arrayLayerCount = if (pp.array_layer_count == 0) 1 else pp.array_layer_count,
     };
     const wgpu_tex: wgpu.WGPUTexture = @ptrFromInt(tex);
-    return @intFromPtr(wgpu.wgpuTextureCreateView(wgpu_tex, &desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const view = wgpu.wgpuTextureCreateView(wgpu_tex, &desc);
+    if (scopeFailed(device, view != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (view != null) wgpu.wgpuTextureViewRelease(view);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(view);
 }
 
-/// Returns the sampler as a handle. Filter and address modes are passed to wgpu as given.
-fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_params) callconv(.c) ke.ke_gpu_sampler {
+/// Returns the sampler as a handle, with each filter and address mode translated to wgpu's.
+/// Shares the error scope protocol of `createBuffer`.
+fn createSampler(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_sampler_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_sampler {
     const pp = @as(*const ke.ke_gpu_sampler_params, @ptrCast(p));
     const desc = wgpu.WGPUSamplerDescriptor{
         .nextInChain   = null,
         .label         = labelView(pp.label),
-        .addressModeU  = @intCast(pp.address_mode_u),
-        .addressModeV  = @intCast(pp.address_mode_v),
-        .addressModeW  = @intCast(pp.address_mode_w),
-        .magFilter     = @intCast(pp.mag_filter),
-        .minFilter     = @intCast(pp.min_filter),
-        .mipmapFilter  = @intCast(pp.mipmap_filter),
+        .addressModeU  = toWgpuAddressMode(pp.address_mode_u),
+        .addressModeV  = toWgpuAddressMode(pp.address_mode_v),
+        .addressModeW  = toWgpuAddressMode(pp.address_mode_w),
+        .magFilter     = toWgpuFilter(pp.mag_filter),
+        .minFilter     = toWgpuFilter(pp.min_filter),
+        .mipmapFilter  = toWgpuMipmapFilter(pp.mipmap_filter),
         .lodMinClamp   = pp.lod_min_clamp,
         .lodMaxClamp   = pp.lod_max_clamp,
         .compare       = toWgpuCompareFunction(pp.compare),
         .maxAnisotropy = pp.max_anisotropy,
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateSampler(state(dev).device, &desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const sampler = wgpu.wgpuDeviceCreateSampler(device, &desc);
+    if (scopeFailed(device, sampler != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (sampler != null) wgpu.wgpuSamplerRelease(sampler);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(sampler);
 }
 
 /// Answers WGSL; `createShaderModule` also accepts SPIR-V by its magic number.
@@ -706,7 +733,7 @@ fn shaderLanguage(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_gpu_shader_languag
 
 /// Answers depth zero to one, no y flip and a left-handed clip space.
 fn getNdcConvention(_: [*c]ke.ke_gpu_device) callconv(.c) ke.ke_ndc_convention {
-    return .{ .z_zero_to_one = 1, .y_flip = 0, .clip_left_handed = 1 };
+    return .{ .z_zero_to_one = true, .y_flip = false };
 }
 
 const SPIRV_MAGIC: u32 = 0x07230203;
@@ -757,6 +784,35 @@ fn popErrorCallback(
     }
 }
 
+/// Opens the validation error scope that `scopeFailed` closes.
+fn pushScope(device: wgpu.WGPUDevice) void {
+    wgpu.wgpuDevicePushErrorScope(device, wgpu.WGPUErrorFilter_Validation);
+}
+
+/// Closes the scope `pushScope` opened and polls the device until its result is in. Answers true,
+/// with `etype` set on the error output, when the scope captured a validation message, which
+/// becomes the error's message, or when `made` is false, which is wgpu returning no object.
+fn scopeFailed(device: wgpu.WGPUDevice, made: bool, out_error: ?*?*ke.ke_error, etype: *const ke.ke_error_type, src: std.builtin.SourceLocation) bool {
+    var se = ScopeError{ .captured = false, .buf = undefined };
+    _ = wgpu.wgpuDevicePopErrorScope(device, .{
+        .nextInChain = null,
+        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
+        .callback  = popErrorCallback,
+        .userdata1 = &se,
+        .userdata2 = null,
+    });
+    _ = wgpu.wgpuDevicePoll(device, 1, null);
+    if (se.captured) {
+        ke.ke_error_set(out_error, etype, &se.buf, src.file, @intCast(src.line), null);
+        return true;
+    }
+    if (!made) {
+        ke.ke_error_set(out_error, etype, "wgpu returned no object", src.file, @intCast(src.line), null);
+        return true;
+    }
+    return false;
+}
+
 /// Reads the code as SPIR-V when it is at least four bytes long and its first word is
 /// `SPIRV_MAGIC`, otherwise as WGSL. The module is created inside a validation error scope that
 /// is polled before returning; a captured error releases the module, sets
@@ -788,20 +844,9 @@ fn createShaderModule(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_shader_m
         desc.nextInChain = @ptrCast(&wgsl);
     }
 
-    wgpu.wgpuDevicePushErrorScope(device, wgpu.WGPUErrorFilter_Validation);
+    pushScope(device);
     const handle = wgpu.wgpuDeviceCreateShaderModule(device, &desc);
-    var se = ScopeError{ .captured = false, .buf = undefined };
-    _ = wgpu.wgpuDevicePopErrorScope(device, .{
-        .nextInChain = null,
-        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
-        .callback  = popErrorCallback,
-        .userdata1 = &se,
-        .userdata2 = null,
-    });
-    _ = wgpu.wgpuDevicePoll(device, 1, null);
-
-    if (se.captured) {
-        ke.ke_error_set(out_error, &KE_ERROR_WGPU_SHADER_COMPILATION, &se.buf, @src().file, @intCast(@src().line), null);
+    if (scopeFailed(device, handle != null, out_error, &KE_ERROR_WGPU_SHADER_COMPILATION, @src())) {
         if (handle != null) wgpu.wgpuShaderModuleRelease(handle);
         return ke.KE_GPU_INVALID_HANDLE;
     }
@@ -870,7 +915,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
         build.color_targets[ti] = .{
             .nextInChain = null,
             .format      = toWgpuTextureFormat(fmt),
-            .blend       = if (bs.blend_enabled != 0) &build.wgpu_blend else null,
+            .blend       = if (bs.blend_enabled) &build.wgpu_blend else null,
             .writeMask   = pp.blend_state.write_mask,
         };
     }
@@ -888,7 +933,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
     build.ds_state = .{
         .nextInChain         = null,
         .format              = wgpu.WGPUTextureFormat_Depth32Float,
-        .depthWriteEnabled   = if (ds.depth_write_enabled != 0) @intFromBool(true) else @intFromBool(false),
+        .depthWriteEnabled   = @intFromBool(ds.depth_write_enabled),
         .depthCompare        = toWgpuCompareFunction(ds.depth_compare),
         .stencilFront        = .{
             .compare     = toWgpuCompareFunction(ds.stencil_front_compare),
@@ -942,12 +987,12 @@ fn buildRenderPipelineDescriptor(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_g
             .frontFace        = toWgpuFrontFace(pp.front_face),
             .cullMode         = toWgpuCullMode(pp.cull_mode),
         },
-        .depthStencil = if (ds.depth_test_enabled != 0) &build.ds_state else null,
+        .depthStencil = if (ds.depth_test_enabled) &build.ds_state else null,
         .multisample  = .{
             .nextInChain            = null,
             .count                  = 1,
             .mask                   = 0xFFFFFFFF,
-            .alphaToCoverageEnabled = if (pp.alpha_to_coverage_enabled != 0) 1 else 0,
+            .alphaToCoverageEnabled = if (pp.alpha_to_coverage_enabled) 1 else 0,
         },
         .fragment = &build.frag_state,
     };
@@ -962,14 +1007,25 @@ fn colorTargetsDeclared(p: [*c]const ke.ke_gpu_render_pipeline_params) bool {
     return true;
 }
 
-/// Compiles on the calling thread and never touches the scheduler. Returns the invalid handle when
-/// a fragment target has no mappable format.
-fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
-    if (!colorTargetsDeclared(p)) return ke.KE_GPU_INVALID_HANDLE;
+/// Compiles on the calling thread and never touches the scheduler. A fragment target with no
+/// mappable format fails as an invalid argument; otherwise it shares the error scope protocol of
+/// `createBuffer`.
+fn createRenderPipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_render_pipeline_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_pipeline {
+    if (!colorTargetsDeclared(p)) {
+        ke.ke_error_set(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "a color target has no format", @src().file, @intCast(@src().line), null);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
     var build: RenderPipelineDescBuild = undefined;
     buildRenderPipelineDescriptor(dev, p, &build);
     defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
-    return @intFromPtr(wgpu.wgpuDeviceCreateRenderPipeline(state(dev).device, &build.desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(device, &build.desc);
+    if (scopeFailed(device, pipeline != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (pipeline != null) wgpu.wgpuRenderPipelineRelease(pipeline);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(pipeline);
 }
 
 /// Copies the text into `gpa`, null-terminated. Null input and a failed copy both yield null; the
@@ -1103,9 +1159,9 @@ fn flushPipelineCompiles(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     s.pending_compiles_count = 0;
 }
 
-/// Compiles on the calling thread. The pipeline is released with `destroyComputePipeline`.
-/// Returns the invalid handle when wgpu refuses it.
-fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compute_pipeline_params) callconv(.c) ke.ke_gpu_pipeline {
+/// Compiles on the calling thread. The pipeline is released with `destroyComputePipeline`. Shares
+/// the error scope protocol of `createBuffer`.
+fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compute_pipeline_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_pipeline {
     const pp = @as(*const ke.ke_gpu_compute_pipeline_params, @ptrCast(p));
 
     var pipeline_layout: wgpu.WGPUPipelineLayout = null;
@@ -1135,12 +1191,20 @@ fn createComputePipeline(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_compu
             .constants     = null,
         },
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateComputePipeline(state(dev).device, &desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const pipeline = wgpu.wgpuDeviceCreateComputePipeline(device, &desc);
+    if (scopeFailed(device, pipeline != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (pipeline != null) wgpu.wgpuComputePipelineRelease(pipeline);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(pipeline);
 }
 
 /// Maps each binding type to a wgpu layout entry; entries beyond the local capacity are
-/// dropped with no error. A storage texture is fixed to write-only RGBA8 2D.
-fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_layout_params) callconv(.c) ke.ke_gpu_bind_group_layout {
+/// dropped with no error. A storage texture is fixed to write-only RGBA8 2D. Shares the error
+/// scope protocol of `createBuffer`.
+fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_layout_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_bind_group_layout {
     const pp = @as(*const ke.ke_gpu_bind_group_layout_params, @ptrCast(p));
     const n = @min(pp.entry_count, 32);
     var entries: [32]wgpu.WGPUBindGroupLayoutEntry = undefined;
@@ -1152,17 +1216,17 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
         switch (src.type) {
             ke.KE_GPU_BINDING_TYPE_BUFFER => {
                 entries[i].buffer.type             = wgpu.WGPUBufferBindingType_Uniform;
-                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset) 1 else 0;
                 entries[i].buffer.minBindingSize   = 0;
             },
             ke.KE_GPU_BINDING_TYPE_STORAGE_BUFFER => {
                 entries[i].buffer.type             = wgpu.WGPUBufferBindingType_Storage;
-                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset) 1 else 0;
                 entries[i].buffer.minBindingSize   = 0;
             },
             ke.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER => {
                 entries[i].buffer.type             = wgpu.WGPUBufferBindingType_ReadOnlyStorage;
-                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset != 0) 1 else 0;
+                entries[i].buffer.hasDynamicOffset = if (src.has_dynamic_offset) 1 else 0;
                 entries[i].buffer.minBindingSize   = 0;
             },
             ke.KE_GPU_BINDING_TYPE_SAMPLER => {
@@ -1195,7 +1259,14 @@ fn createBindGroupLayout(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_
         .entryCount  = n,
         .entries     = if (n > 0) &entries else null,
     };
-    return @intFromPtr(wgpu.wgpuDeviceCreateBindGroupLayout(state(dev).device, &desc));
+    const device = state(dev).device;
+    pushScope(device);
+    const layout = wgpu.wgpuDeviceCreateBindGroupLayout(device, &desc);
+    if (scopeFailed(device, layout != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
+        if (layout != null) wgpu.wgpuBindGroupLayoutRelease(layout);
+        return ke.KE_GPU_INVALID_HANDLE;
+    }
+    return @intFromPtr(layout);
 }
 
 /// Shares the error scope protocol of `createBuffer`: a validation error captured while the group
@@ -1237,24 +1308,13 @@ fn createBindGroup(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_bind_group_
     };
     const s = state(dev);
 
-    wgpu.wgpuDevicePushErrorScope(s.device, wgpu.WGPUErrorFilter_Validation);
+    pushScope(s.device);
     const bg: wgpu.WGPUBindGroup = wgpu.wgpuDeviceCreateBindGroup(s.device, &desc);
-    var se = ScopeError{ .captured = false, .buf = undefined };
-    _ = wgpu.wgpuDevicePopErrorScope(s.device, .{
-        .nextInChain = null,
-        .mode      = wgpu.WGPUCallbackMode_AllowSpontaneous,
-        .callback  = popErrorCallback,
-        .userdata1 = &se,
-        .userdata2 = null,
-    });
-    _ = wgpu.wgpuDevicePoll(s.device, 1, null);
-
-    if (se.captured) {
-        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, &se.buf, @src().file, @intCast(@src().line), null);
+    if (scopeFailed(s.device, bg != null, out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, @src())) {
         if (bg != null) wgpu.wgpuBindGroupRelease(bg);
         return ke.KE_GPU_INVALID_HANDLE;
     }
-    return @intFromPtr(bg orelse return ke.KE_GPU_INVALID_HANDLE);
+    return @intFromPtr(bg);
 }
 
 /// Destroys the buffer's GPU memory and drops the handle's reference.
@@ -1355,7 +1415,8 @@ fn cpEnd(cp: [*c]ke.ke_gpu_compute_pass) callconv(.c) void {
     gpa.destroy(@as(*ke.ke_gpu_compute_pass, @ptrCast(cp)));
 }
 
-/// Releases the raw command buffer and frees its wrapper. Run after the buffer was submitted.
+/// The `destroy` of the handle `encFinish` returns: releases the raw command buffer and frees its
+/// wrapper, whether or not it was submitted.
 fn cmdBufDestroy(cmd: [*c]ke.ke_gpu_command_buffer) callconv(.c) void {
     wgpu.wgpuCommandBufferRelease(@ptrCast(cmd.*.handle));
     gpa.destroy(@as(*ke.ke_gpu_command_buffer, @ptrCast(cmd)));
@@ -1385,7 +1446,7 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
     const has_ds = pp.depth_stencil_attachment != null;
     if (has_ds) {
         const dsa = @as(*const ke.ke_gpu_depth_stencil_attachment, @ptrCast(pp.depth_stencil_attachment));
-        const depth_ro = dsa.depth_read_only != 0;
+        const depth_ro = dsa.depth_read_only;
         ds_attach = .{
             .view              = @ptrFromInt(dsa.view),
             .depthLoadOp       = if (depth_ro) wgpu.WGPULoadOp_Undefined else toWgpuLoadOp(dsa.depth_load_op),
@@ -1393,9 +1454,9 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
             .depthClearValue   = dsa.clear_depth,
             .depthReadOnly     = if (depth_ro) 1 else 0,
             .stencilLoadOp     = wgpu.WGPULoadOp_Undefined,
-            .stencilStoreOp    = toWgpuStoreOp(dsa.stencil_store_op),
+            .stencilStoreOp    = if (dsa.stencil_read_only) wgpu.WGPUStoreOp_Undefined else toWgpuStoreOp(dsa.stencil_store_op),
             .stencilClearValue = dsa.clear_stencil,
-            .stencilReadOnly   = if (dsa.stencil_read_only != 0) 1 else 0,
+            .stencilReadOnly   = if (dsa.stencil_read_only) 1 else 0,
         };
     }
 
@@ -1413,7 +1474,6 @@ fn encBeginRenderPass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gpu
     const rp = gpa.create(ke.ke_gpu_render_pass) catch return null;
     rp.* = .{
         .handle            = raw,
-        .device            = enc.*.device,
         .set_pipeline      = rpSetPipeline,
         .set_bind_group    = rpSetBindGroup,
         .set_vertex_buffer = rpSetVertexBuffer,
@@ -1439,7 +1499,6 @@ fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gp
     const cp = gpa.create(ke.ke_gpu_compute_pass) catch return null;
     cp.* = .{
         .handle            = raw,
-        .device            = enc.*.device,
         .set_pipeline      = cpSetPipeline,
         .set_bind_group    = cpSetBindGroup,
         .dispatch          = cpDispatch,
@@ -1451,9 +1510,6 @@ fn encBeginComputePass(enc: [*c]ke.ke_gpu_command_encoder, p: [*c]const ke.ke_gp
     };
     return cp;
 }
-
-/// Not implemented: does nothing.
-fn encPipelineBarrier(_: [*c]ke.ke_gpu_command_encoder, _: [*c]const ke.ke_gpu_barrier) callconv(.c) void {}
 
 /// Records the copy on the raw encoder; wgpu validates the ranges.
 fn encCopyBufferToBuffer(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_buffer, src_off: usize, dst: ke.ke_gpu_buffer, dst_off: usize, size: usize) callconv(.c) void {
@@ -1523,45 +1579,59 @@ fn encCopyTextureToTexture(enc: [*c]ke.ke_gpu_command_encoder, src: ke.ke_gpu_te
     wgpu.wgpuCommandEncoderCopyTextureToTexture(@ptrCast(enc.*.handle), &src_info, &dst_info, &extent);
 }
 
-/// Finishes the raw encoder into a command buffer wrapper that `cmdBufDestroy` frees. A failed
-/// finish or allocation returns null with no error set.
-fn encFinish(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) [*c]ke.ke_gpu_command_buffer {
+/// Finishes the raw encoder into a command buffer wrapper that `cmdBufDestroy` frees. A finish
+/// wgpu refuses or a wrapper that cannot be allocated returns a null ref with the error set.
+fn encFinish(enc: [*c]ke.ke_gpu_command_encoder, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_command_buffer_handle {
+    const none: ke.ke_gpu_command_buffer_handle = .{ .ref = null, .destroy = null };
     const desc = wgpu.WGPUCommandBufferDescriptor{ .nextInChain = null, .label = .{ .data = null, .length = 0 } };
-    const raw = wgpu.wgpuCommandEncoderFinish(@ptrCast(enc.*.handle), &desc) orelse return null;
-    const cmd = gpa.create(ke.ke_gpu_command_buffer) catch return null;
-    cmd.* = .{ .handle = raw, .device = enc.*.device, .destroy = cmdBufDestroy };
-    return cmd;
+    const raw = wgpu.wgpuCommandEncoderFinish(@ptrCast(enc.*.handle), &desc) orelse {
+        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, "wgpu returned no command buffer", @src().file, @intCast(@src().line), null);
+        return none;
+    };
+    const cmd = gpa.create(ke.ke_gpu_command_buffer) catch {
+        wgpu.wgpuCommandBufferRelease(raw);
+        ke.ke_error_set(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "command buffer allocation failed", @src().file, @intCast(@src().line), null);
+        return none;
+    };
+    cmd.* = .{ .handle = raw };
+    return .{ .ref = cmd, .destroy = cmdBufDestroy };
 }
 
-/// Releases the raw encoder and frees its wrapper.
+/// The `destroy` of the handle `createCommandEncoder` returns: releases the raw encoder and frees
+/// its wrapper.
 fn encDestroy(enc: [*c]ke.ke_gpu_command_encoder) callconv(.c) void {
     wgpu.wgpuCommandEncoderRelease(@ptrCast(enc.*.handle));
     gpa.destroy(@as(*ke.ke_gpu_command_encoder, @ptrCast(enc)));
 }
 
-/// Wraps a raw wgpu encoder in a wrapper from `gpa` that `encDestroy` frees. `p` may be null.
-/// A failed encoder or wrapper allocation returns null with no error set.
-fn createCommandEncoder(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_command_encoder_params) callconv(.c) [*c]ke.ke_gpu_command_encoder {
+/// Wraps a raw wgpu encoder in a wrapper from `gpa` that `encDestroy` frees. `p` may be null. An
+/// encoder wgpu refuses or a wrapper that cannot be allocated returns a null ref with the error set.
+fn createCommandEncoder(dev: [*c]ke.ke_gpu_device, p: [*c]const ke.ke_gpu_command_encoder_params, out_error: ?*?*ke.ke_error) callconv(.c) ke.ke_gpu_command_encoder_handle {
+    const none: ke.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
     const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = labelView(if (p != null) p.*.label else null) };
-    const raw = wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc) orelse return null;
-    const enc = gpa.create(ke.ke_gpu_command_encoder) catch return null;
+    const raw = wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc) orelse {
+        ke.ke_error_set(out_error, &KE_ERROR_WGPU_RESOURCE_CREATION, "wgpu returned no command encoder", @src().file, @intCast(@src().line), null);
+        return none;
+    };
+    const enc = gpa.create(ke.ke_gpu_command_encoder) catch {
+        wgpu.wgpuCommandEncoderRelease(raw);
+        ke.ke_error_set(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "command encoder allocation failed", @src().file, @intCast(@src().line), null);
+        return none;
+    };
     enc.* = .{
         .handle                 = raw,
-        .device                 = dev,
         .begin_render_pass      = encBeginRenderPass,
         .begin_compute_pass     = encBeginComputePass,
-        .pipeline_barrier       = encPipelineBarrier,
         .copy_buffer_to_buffer  = encCopyBufferToBuffer,
         .copy_buffer_to_texture = encCopyBufferToTexture,
         .copy_texture_to_texture = encCopyTextureToTexture,
         .copy_texture_to_buffer = encCopyTextureToBuffer,
         .finish                 = encFinish,
-        .destroy                = encDestroy,
         .push_debug_group       = encPushDebugGroup,
         .pop_debug_group        = encPopDebugGroup,
         .insert_debug_marker    = encInsertDebugMarker,
     };
-    return enc;
+    return .{ .ref = enc, .destroy = encDestroy };
 }
 
 /// Queues a write that wgpu applies before the next submit; the data is copied during the call.
@@ -1648,6 +1718,14 @@ fn queryExtension(_: [*c]ke.ke_gpu_device, _: [*c]const u8) callconv(.c) ?*const
     return null;
 }
 
+test "a sampler's filters and address modes reach wgpu as the modes they name" {
+    try std.testing.expectEqual(@as(wgpu.WGPUFilterMode, wgpu.WGPUFilterMode_Linear), toWgpuFilter(ke.KE_GPU_FILTER_LINEAR));
+    try std.testing.expectEqual(@as(wgpu.WGPUFilterMode, wgpu.WGPUFilterMode_Nearest), toWgpuFilter(ke.KE_GPU_FILTER_NEAREST));
+    try std.testing.expectEqual(@as(wgpu.WGPUMipmapFilterMode, wgpu.WGPUMipmapFilterMode_Linear), toWgpuMipmapFilter(ke.KE_GPU_SAMPLER_MIPMAP_LINEAR));
+    try std.testing.expectEqual(@as(wgpu.WGPUAddressMode, wgpu.WGPUAddressMode_Repeat), toWgpuAddressMode(ke.KE_GPU_ADDRESS_MODE_REPEAT));
+    try std.testing.expectEqual(@as(wgpu.WGPUAddressMode, wgpu.WGPUAddressMode_ClampToEdge), toWgpuAddressMode(ke.KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE));
+}
+
 test "creating the device and destroying it, or failing to create it, leaves no block allocated" {
     const handle = ke_gpu_device_webgpu_create(null, null);
     if (handle.ref != null) handle.destroy.?(handle.ref);
@@ -1688,7 +1766,7 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
         .sample_count = 1,
         .initial_data = &pixels,
         .initial_data_size = pixels.len,
-    });
+    }, null);
     try std.testing.expect(tex != ke.KE_GPU_INVALID_HANDLE);
     defer dev.*.destroy_texture.?(dev, tex);
 
@@ -1696,13 +1774,15 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
         .initial_data = null,
         .size = row_bytes * height,
         .usage = ke.KE_GPU_BUFFER_USAGE_MAP_READ | ke.KE_GPU_BUFFER_USAGE_COPY_DST,
-        .mapped_at_creation = 0,
+        .mapped_at_creation = false,
     }, null);
     try std.testing.expect(buf != ke.KE_GPU_INVALID_HANDLE);
     defer dev.*.destroy_buffer.?(dev, buf);
 
-    const enc = dev.*.create_command_encoder.?(dev, null);
-    defer enc.*.destroy.?(enc);
+    const enc_h = dev.*.create_command_encoder.?(dev, null, null);
+    try std.testing.expect(enc_h.ref != null);
+    defer enc_h.destroy.?(enc_h.ref);
+    const enc = enc_h.ref;
 
     var misaligned: ?*ke.ke_error = null;
     try std.testing.expect(!enc.*.copy_texture_to_buffer.?(enc, tex, 0, 0, 0, buf, 0, row_bytes - 1, width, height, &misaligned));
@@ -1710,8 +1790,10 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     try std.testing.expect(ke.ke_error_is(misaligned, &ke.KE_ERROR_INVALID_ARGUMENT));
 
     try std.testing.expect(enc.*.copy_texture_to_buffer.?(enc, tex, 0, 0, 0, buf, 0, row_bytes, width, height, null));
-    const cmd = enc.*.finish.?(enc);
-    var cmds = [_][*c]ke.ke_gpu_command_buffer{cmd};
+    const cmd = enc.*.finish.?(enc, null);
+    try std.testing.expect(cmd.ref != null);
+    defer cmd.destroy.?(cmd.ref);
+    var cmds = [_][*c]ke.ke_gpu_command_buffer{cmd.ref};
     const queue = dev.*.get_default_queue.?(dev);
     dev.*.queue_submit.?(dev, queue, &cmds, 1);
 

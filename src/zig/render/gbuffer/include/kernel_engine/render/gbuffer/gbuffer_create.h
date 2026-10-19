@@ -1,10 +1,10 @@
-#pragma once
+#ifndef KERNEL_ENGINE_RENDER_GBUFFER_GBUFFER_CREATE_H_
+#define KERNEL_ENGINE_RENDER_GBUFFER_GBUFFER_CREATE_H_
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
-#include <kernel_engine/render/camera.h>
 #include <kernel_engine/runtime/runtime.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -32,13 +32,28 @@ extern "C"
         void (*destroy)(ke_render_gbuffer *self);
     } ke_render_gbuffer_handle;
 
+    /// What the gbuffer pass writes, besides the frame's depth. The names are copied.
+    typedef struct ke_render_gbuffer_params
+    {
+        ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
+        ke_render_service *service; ///< Holds the resources it writes; borrowed.
+        ke_gpu_device     *device;  ///< Borrowed.
+        ke_component_id    mesh_cid;
+        ke_component_id    world_transform_cid;
+        ke_component_id    camera_cid;
+        ke_component_id    frame_cid;
+        /// [utf8] The group it writes: albedo, normal and emissive under the suffixes of
+        /// kernel_engine/render/resource_groups.h, each declared the size of the backbuffer.
+        const char *output;
+    } ke_render_gbuffer_params;
+
+    /// Registers the pass's render-phase system. A missing runtime, service, device or output
+    /// fails as an invalid argument; the handle's ref is NULL on failure.
     KE_RENDER_GBUFFER_API ke_render_gbuffer_handle ke_render_gbuffer_create(
-        ke_runtime *runtime, ke_render_service *core, ke_gpu_device *device,
-        ke_render_camera *camera,
-        ke_component_id mesh_cid, ke_component_id world_transform_cid,
-        ke_component_id camera_cid, ke_component_id frame_cid,
-        ke_error **out_error);
+        const ke_render_gbuffer_params *params, ke_error **out_error);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

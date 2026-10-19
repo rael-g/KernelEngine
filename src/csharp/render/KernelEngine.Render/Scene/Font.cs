@@ -11,18 +11,18 @@ public sealed class Font
 {
     private readonly Dictionary<uint, GlyphMetrics> _glyphs;
 
-    public FontHandle     Handle      { get; }
-    public TextureHandle  AtlasHandle { get; }
-    public float          LineHeight  { get; }
-    public float          Ascent      { get; }
+    public FontHandle Handle { get; }
+    public TextureHandle AtlasHandle { get; }
+    public float LineHeight { get; }
+    public float Ascent { get; }
 
     private Font(FontHandle handle, TextureHandle atlas, GlyphMetrics[] glyphs, float lineHeight, float ascent)
     {
-        Handle      = handle;
+        Handle = handle;
         AtlasHandle = atlas;
-        LineHeight  = lineHeight;
-        Ascent      = ascent;
-        _glyphs     = new Dictionary<uint, GlyphMetrics>(glyphs.Length);
+        LineHeight = lineHeight;
+        Ascent = ascent;
+        _glyphs = new Dictionary<uint, GlyphMetrics>(glyphs.Length);
         foreach (var g in glyphs) _glyphs[g.Codepoint] = g;
     }
 

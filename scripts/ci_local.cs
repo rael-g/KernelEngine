@@ -79,7 +79,7 @@ try
     var exit = Run("docker", [.. run]);
     if (exit == 0 && updateGolden)
     {
-        foreach (var file in Directory.EnumerateFiles(Path.Combine(checkout, "golden"), "*", SearchOption.AllDirectories))
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(checkout, "tests", "visual", "golden"), "*", SearchOption.AllDirectories))
         {
             var destination = Path.Combine(rootDir, Path.GetRelativePath(checkout, file));
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);

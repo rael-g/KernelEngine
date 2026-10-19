@@ -1,17 +1,19 @@
 using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 const float metal0 = 0.0f; const float rough0 = 0.8f;
 const float metal1 = 1.0f; const float rough1 = 0.5f;
@@ -58,8 +60,8 @@ var services = new ServiceCollection()
     }));
 
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 

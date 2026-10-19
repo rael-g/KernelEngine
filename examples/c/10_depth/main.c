@@ -7,8 +7,12 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 
-#include "depth_vs_wgsl.h"
-#include "depth_fs_wgsl.h"
+static const char depth_vs_wgsl[] = {
+#embed "depth_vs.wgsl"
+    , 0};
+static const char depth_fs_wgsl[] = {
+#embed "depth_fs.wgsl"
+    , 0};
 #include <string.h>
 
 #include <stdint.h>
@@ -59,7 +63,7 @@ int main(void)
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
 
-    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, &err);
+    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &err);
     if (!target.ref) die("render target create failed", err);
 
     ke_gpu_texture depth_tex = gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
@@ -68,8 +72,8 @@ int main(void)
         .dimension = KE_GPU_TEXTURE_DIM_2D,
         .usage = KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH,
         .mip_level_count = 1, .sample_count = 1,
-    });
-    if (depth_tex == KE_GPU_INVALID_HANDLE) die("depth texture", NULL);
+    }, &err);
+    if (depth_tex == KE_GPU_INVALID_HANDLE) die("depth texture", err);
 
     ke_gpu_texture_view depth_view = gpu.ref->create_texture_view(gpu.ref, depth_tex,
         &(ke_gpu_texture_view_params){
@@ -77,8 +81,8 @@ int main(void)
             .dimension = KE_GPU_TEXTURE_DIM_2D,
             .aspect = KE_GPU_TEXTURE_ASPECT_DEPTH,
             .mip_level_count = 1, .array_layer_count = 1,
-        });
-    if (depth_view == KE_GPU_INVALID_HANDLE) die("depth view", NULL);
+        }, &err);
+    if (depth_view == KE_GPU_INVALID_HANDLE) die("depth view", err);
 
     ke_gpu_buffer vbo_back  = gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
         .initial_data = back_verts,  .size = sizeof(back_verts),  .usage = KE_GPU_BUFFER_USAGE_VERTEX }, &err);
@@ -121,8 +125,8 @@ int main(void)
             .depth_compare       = KE_GPU_COMPARE_LESS_EQUAL,
         },
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", NULL);
+    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
+    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", err);
 
     gpu.ref->destroy_shader_module(gpu.ref, vs);
     gpu.ref->destroy_shader_module(gpu.ref, fs);
@@ -158,7 +162,11 @@ int main(void)
             .depth_stencil_attachment = &dsa,
         };
 
-        ke_gpu_command_encoder *enc = gpu.ref->create_command_encoder(gpu.ref, NULL);
+        ke_gpu_command_encoder_handle enc_handle = gpu.ref->create_command_encoder(gpu.ref, NULL, &err);
+
+        if (!enc_handle.ref) die("command encoder creation failed", err);
+
+        ke_gpu_command_encoder *enc = enc_handle.ref;
         ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
         rp->set_pipeline(rp, pipeline);
         rp->set_index_buffer(rp, ibo, KE_GPU_INDEX_FORMAT_UINT16, 0);
@@ -171,11 +179,13 @@ int main(void)
 
         rp->end(rp);
 
-        ke_gpu_command_buffer *cmd = enc->finish(enc);
-        enc->destroy(enc);
-        ke_gpu_command_buffer *cmds[] = { cmd };
+        ke_gpu_command_buffer_handle cmd = enc->finish(enc, &err);
+
+        if (!cmd.ref) die("command encoder finish failed", err);
+        enc_handle.destroy(enc);
+        ke_gpu_command_buffer *cmds[] = { cmd.ref };
         gpu.ref->queue_submit(gpu.ref, q, cmds, 1);
-        cmd->destroy(cmd);
+        cmd.destroy(cmd.ref);
         if (!target.ref->present(target.ref, &err)) die("present failed", err);
         gpu.ref->queue_poll(gpu.ref, q);
     }

@@ -3,6 +3,7 @@
 
 #include <kernel_engine/framework/scene_loader.h>
 #include <kernel_engine/framework/world.h>
+#include <kernel_engine/asset/asset_resolver.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -27,15 +28,15 @@ extern "C"
 
     /// Allocates a scene loader bound to the given world. The loader uses the
     /// world's component registry to drive [entity.<component>] blocks and the
-    /// world's scene_tree to spawn entities. project_root may be NULL — when
-    /// provided, "res://" prefixed paths resolve to (project_root + remainder).
+    /// world's scene_tree to spawn entities. A "res://" scene reference is resolved
+    /// by `assets`, which is borrowed and must outlive the loader.
     ///
     /// String lifetime: a value a block authors into a char field is copied into
     /// the component, but the parsed entries themselves come from an arena freed
     /// at loader.destroy(). Nothing the loader wrote outlives it by reference.
     KE_FRAMEWORK_API ke_scene_loader_handle ke_scene_loader_create(
         struct ke_world   *world,
-        const char        *project_root,
+        ke_asset_resolver *assets,
         ke_error         **out_error);
 
 #ifdef __cplusplus

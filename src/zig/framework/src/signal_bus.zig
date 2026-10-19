@@ -3,12 +3,10 @@
 
 const std = @import("std");
 
-const c = @import("c.zig").c;
+const c = @import("c");
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
-
-const name_max = 64;
 
 const unknown_size: u32 = c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN;
 
@@ -20,8 +18,7 @@ const default_payload_capacity = 16 * 1024;
 
 /// `payload_size` stays unknown until a registration declares it, and cannot change after that.
 const Signal = struct {
-    name: [name_max]u8,
-    name_len: usize,
+    name: []u8,
     payload_size: u32,
 };
 
@@ -86,7 +83,7 @@ fn orDefault(v: u32, d: u32) u32 {
 /// Slot `signal_id`. Registers the name on first use and returns its id; nothing removes names,
 /// so an id stays valid for the life of the bus. The payload size is part of the identity: the
 /// first registration that gives one declares it, and a later one with a different size fails as
-/// already exists. A null bus, name or `out_id`, or an empty or too long name, fails as an
+/// already exists. A null bus, name or `out_id`, or an empty name, fails as an
 /// invalid argument; a full table fails as out of memory. A failed call leaves the table as it
 /// was.
 fn signalId(
@@ -106,13 +103,13 @@ fn signalId(
     }
     const s = stateOf(self);
     const name = std.mem.span(name_in);
-    if (name.len == 0 or name.len >= name_max) {
-        E.fail(out_error, .invalid_argument, "signal name is empty or too long", @src());
+    if (name.len == 0) {
+        E.fail(out_error, .invalid_argument, "signal name is empty", @src());
         return false;
     }
 
     for (s.signals[0..s.signal_count], 0..) |*sig, i| {
-        if (!std.mem.eql(u8, sig.name[0..sig.name_len], name)) continue;
+        if (!std.mem.eql(u8, sig.name, name)) continue;
         if (payload_size != unknown_size) {
             if (sig.payload_size == unknown_size) {
                 sig.payload_size = payload_size;
@@ -129,9 +126,11 @@ fn signalId(
         E.fail(out_error, .out_of_memory, "signal table is full", @src());
         return false;
     }
-    var sig = Signal{ .name = undefined, .name_len = name.len, .payload_size = payload_size };
-    @memcpy(sig.name[0..name.len], name);
-    s.signals[s.signal_count] = sig;
+    const owned = heap.gpa.dupe(u8, name) catch {
+        E.fail(out_error, .out_of_memory, "signal name allocation failed", @src());
+        return false;
+    };
+    s.signals[s.signal_count] = .{ .name = owned, .payload_size = payload_size };
     out_id.* = s.signal_count;
     s.signal_count += 1;
     return true;
@@ -149,7 +148,7 @@ fn signalLookup(
     const s = stateOf(self);
     const name = std.mem.span(name_in);
     for (s.signals[0..s.signal_count], 0..) |*sig, i| {
-        if (!std.mem.eql(u8, sig.name[0..sig.name_len], name)) continue;
+        if (!std.mem.eql(u8, sig.name, name)) continue;
         out_id.* = @intCast(i);
         return true;
     }
@@ -355,6 +354,7 @@ fn clearFrame(self_in: ?*c.ke_signal_bus) callconv(.c) void {
 fn destroy(self_in: ?*c.ke_signal_bus) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
+    for (s.signals[0..s.signal_count]) |sig| heap.gpa.free(sig.name);
     heap.gpa.free(s.signals);
     heap.gpa.free(s.connections);
     heap.gpa.free(s.events);

@@ -1,9 +1,10 @@
 
 using KernelEngine.Common.Native;
+using KernelEngine.Logger;
 using KernelEngine.Text.Native;
 using KernelEngine.Text.StbTrueType.Native;
+
 using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Logger;
 
 namespace KernelEngine.Text.StbTrueType;
 

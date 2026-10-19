@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Logger;
+﻿using KernelEngine.Logger;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Input;
 

@@ -23,9 +23,9 @@ public readonly record struct CollisionFilter2D(uint Layer, uint Mask)
 /// <summary>Snapshot of a body's pose and motion at a point in time.</summary>
 public readonly record struct BodyState2D(
     Vector2 Position,
-    float   Angle,
+    float Angle,
     Vector2 Velocity,
-    float   AngularVelocity);
+    float AngularVelocity);
 
 /// <summary>
 /// Managed mirror of the C kernel's <c>ke_physics_2d</c> vtable — a 2D rigid-body world.

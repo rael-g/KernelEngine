@@ -1,13 +1,14 @@
-﻿using KernelEngine.Ecs.Flecs;
+﻿using KernelEngine.Ecs;
+using KernelEngine.Ecs.Flecs;
+using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
 using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
 using KernelEngine.Window;
-using KernelEngine.Logger;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -19,8 +20,8 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new System.Numerics.Vector4(0.15f, 0.20f, 0.35f, 1.0f)));
 
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 

@@ -8,7 +8,6 @@ pub const Config = struct {
     width: u32,
     height: u32,
     fullscreen: bool,
-    vsync: bool,
 };
 
 /// The kinds of event `pollEvents` can deliver. The GLFW device never produces `focus_gained` or

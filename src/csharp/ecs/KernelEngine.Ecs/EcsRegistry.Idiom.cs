@@ -15,8 +15,10 @@ public unsafe partial class EcsRegistry : IEcsRegistry
     public void DestroyEntity(ulong entity) => EntityDestroy(entity);
 
     /// <inheritdoc/>
-    public uint RegisterComponent<T>(string name) where T : unmanaged =>
-        ComponentRegister(name, (nuint)sizeof(T), null, 0);
+    public uint RegisterComponent<T>(string name) where T : unmanaged, IComponentLayout
+    {
+        return ComponentRegister(name, (nuint)sizeof(T), NativeFieldTable<T>.Fields, (uint)NativeFieldTable<T>.Length);
+    }
 
     /// <inheritdoc/>
     public bool TryLookupComponent(string name, out uint componentId)

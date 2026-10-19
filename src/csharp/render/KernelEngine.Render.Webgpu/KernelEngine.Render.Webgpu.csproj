@@ -11,7 +11,9 @@
     <NativeDep Include="ke_gpu_device_webgpu" />
     <NativeDep Include="ke_view_space" />
     <NativeDep Include="ke_render_service" />
-    <NativeDep Include="ke_render_module" />
+    <NativeDep Include="ke_render_binder_grouped" />
+    <NativeDep Include="ke_render_frame" />
+    <NativeDep Include="ke_render_scene" />
     <NativeDep Include="ke_resource_cache_default" />
     <NativeDep Include="ke_render_tonemap" />
     <NativeDep Include="ke_render_skybox" />

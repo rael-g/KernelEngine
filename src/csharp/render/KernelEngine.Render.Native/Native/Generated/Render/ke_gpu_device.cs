@@ -36,26 +36,26 @@ public unsafe partial struct ke_gpu_device
     [NativeTypeName("ke_gpu_buffer (*)(struct ke_gpu_device *, const ke_gpu_buffer_params *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_buffer_params*, KernelEngine.Common.Native.ke_error**, ulong> create_buffer;
 
-    [NativeTypeName("ke_gpu_texture (*)(struct ke_gpu_device *, const ke_gpu_texture_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_texture_params*, ulong> create_texture;
+    [NativeTypeName("ke_gpu_texture (*)(struct ke_gpu_device *, const ke_gpu_texture_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_texture_params*, KernelEngine.Common.Native.ke_error**, ulong> create_texture;
 
-    [NativeTypeName("ke_gpu_texture_view (*)(struct ke_gpu_device *, ke_gpu_texture, const ke_gpu_texture_view_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ke_gpu_texture_view_params*, ulong> create_texture_view;
+    [NativeTypeName("ke_gpu_texture_view (*)(struct ke_gpu_device *, ke_gpu_texture, const ke_gpu_texture_view_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ke_gpu_texture_view_params*, KernelEngine.Common.Native.ke_error**, ulong> create_texture_view;
 
-    [NativeTypeName("ke_gpu_sampler (*)(struct ke_gpu_device *, const ke_gpu_sampler_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_sampler_params*, ulong> create_sampler;
+    [NativeTypeName("ke_gpu_sampler (*)(struct ke_gpu_device *, const ke_gpu_sampler_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_sampler_params*, KernelEngine.Common.Native.ke_error**, ulong> create_sampler;
 
     [NativeTypeName("ke_gpu_shader_module (*)(struct ke_gpu_device *, const ke_gpu_shader_module_params *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_shader_module_params*, KernelEngine.Common.Native.ke_error**, ulong> create_shader_module;
 
-    [NativeTypeName("ke_gpu_pipeline (*)(struct ke_gpu_device *, const ke_gpu_render_pipeline_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_render_pipeline_params*, ulong> create_render_pipeline;
+    [NativeTypeName("ke_gpu_pipeline (*)(struct ke_gpu_device *, const ke_gpu_render_pipeline_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_render_pipeline_params*, KernelEngine.Common.Native.ke_error**, ulong> create_render_pipeline;
 
-    [NativeTypeName("ke_gpu_pipeline (*)(struct ke_gpu_device *, const ke_gpu_compute_pipeline_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_compute_pipeline_params*, ulong> create_compute_pipeline;
+    [NativeTypeName("ke_gpu_pipeline (*)(struct ke_gpu_device *, const ke_gpu_compute_pipeline_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_compute_pipeline_params*, KernelEngine.Common.Native.ke_error**, ulong> create_compute_pipeline;
 
-    [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_gpu_device *, const ke_gpu_bind_group_layout_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_bind_group_layout_params*, ulong> create_bind_group_layout;
+    [NativeTypeName("ke_gpu_bind_group_layout (*)(struct ke_gpu_device *, const ke_gpu_bind_group_layout_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_bind_group_layout_params*, KernelEngine.Common.Native.ke_error**, ulong> create_bind_group_layout;
 
     [NativeTypeName("ke_gpu_bind_group (*)(struct ke_gpu_device *, const ke_gpu_bind_group_params *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_bind_group_params*, KernelEngine.Common.Native.ke_error**, ulong> create_bind_group;
@@ -84,8 +84,8 @@ public unsafe partial struct ke_gpu_device
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_bind_group)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, void> destroy_bind_group;
 
-    [NativeTypeName("ke_gpu_command_encoder *(*)(struct ke_gpu_device *, const ke_gpu_command_encoder_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_command_encoder_params*, ke_gpu_command_encoder*> create_command_encoder;
+    [NativeTypeName("ke_gpu_command_encoder_handle (*)(struct ke_gpu_device *, const ke_gpu_command_encoder_params *, ke_error **)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_command_encoder_params*, KernelEngine.Common.Native.ke_error**, ke_gpu_command_encoder_handle> create_command_encoder;
 
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_buffer, uint64_t, const void *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ulong, void*, nuint, void> write_buffer;

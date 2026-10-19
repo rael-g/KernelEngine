@@ -8,21 +8,22 @@ pub const std_options: std.Options = .{ .signal_stack_size = null };
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
-const c = @import("c.zig").c;
+const c = @import("c");
 
 const core_mod = @import("core.zig");
 const glfw = @import("glfw_device.zig");
 const heap = @import("heap");
 
-comptime {
+test {
     _ = @import("device.zig");
+    _ = @import("core.zig");
 }
 
 /// Creates the window and starts it. Reports invalid argument when the params are null, out of
 /// memory when the device or the core cannot be allocated, and a general failure when the core's
 /// initialization is refused; each returns a zeroed handle with the error set. On success the
 /// handle's ref is the core's window table and its destroy is the only way to release the window
-/// and its device. The title falls back to "KernelEngine" when absent, vsync is always requested,
+/// and its device. The title falls back to "KernelEngine" when absent,
 /// and a negative size becomes zero. The input in the params is handed to the core, which
 /// borrows it.
 export fn ke_window_glfw_create(
@@ -53,7 +54,6 @@ export fn ke_window_glfw_create(
         .width = @intCast(@max(params.width, 0)),
         .height = @intCast(@max(params.height, 0)),
         .fullscreen = params.fullscreen,
-        .vsync = true,
     };
 
     if (!core.initialize(config)) {

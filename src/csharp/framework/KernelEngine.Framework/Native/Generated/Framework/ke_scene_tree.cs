@@ -38,4 +38,7 @@ public unsafe partial struct ke_scene_tree
 
     [NativeTypeName("void (*)(struct ke_scene_tree *)")]
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, void> propagate_transforms;
+
+    [NativeTypeName("uint64_t (*)(struct ke_scene_tree *)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_tree*, ulong> hierarchy_generation;
 }

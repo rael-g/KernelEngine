@@ -1,17 +1,19 @@
 using System.Diagnostics;
 using System.Numerics;
+
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
-using KernelEngine.Render.Webgpu;
-using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
-using KernelEngine.Window.Glfw;
-using Microsoft.Extensions.DependencyInjection;
-using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
-using KernelEngine.Window;
 using KernelEngine.Logger;
 using KernelEngine.Render;
+using KernelEngine.Render.Webgpu;
+using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
+using KernelEngine.Scheduler.Enki;
+using KernelEngine.Window;
+using KernelEngine.Window.Glfw;
+
+using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -34,20 +36,20 @@ var services = new ServiceCollection()
         cam.Position = new Vector3(0f, 5f, 15f);
 
         var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
-        var cubeMesh  = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
 
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f);
-        var cubeMat  = resources.CreateMaterial("cube", new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
+        var cubeMat = resources.CreateMaterial("cube", new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Scale = new Vector3(30f, 1f, 30f);
 
         for (int x = -4; x <= 4; x += 4)
-        for (int z = -4; z <= 4; z += 4)
-        {
-            var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
-            n.Position = new Vector3(x, 1f, z);
-        }
+            for (int z = -4; z <= 4; z += 4)
+            {
+                var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
+                n.Position = new Vector3(x, 1f, z);
+            }
 
         (Vector3 color, float offset)[] spots =
         [
@@ -59,19 +61,19 @@ var services = new ServiceCollection()
         {
             tree.AddNode(new OrbitingSpot
             {
-                Color         = color,
-                Intensity     = 25f,
-                Range         = 60f,
+                Color = color,
+                Intensity = 25f,
+                Range = 60f,
                 InnerAngle = 12f,
                 OuterAngle = 25f,
-                Offset        = offset,
+                Offset = offset,
             }, $"Spot_{color}");
         }
     }));
 
 using var sp = services.BuildServiceProvider();
-var window   = sp.GetRequiredService<IWindow>();
-var runtime  = sp.GetRequiredService<IRuntime>();
+var window = sp.GetRequiredService<IWindow>();
+var runtime = sp.GetRequiredService<IRuntime>();
 
 runtime.LoadModules(sp);
 
