@@ -8,7 +8,7 @@ const frame_chain = @import("frame_chain.zig");
 const c = rc.c;
 
 /// Opens a frame. The previous frame's ended passes, compute records and upload counters are
-/// cleared before the target is acquired, so a failed acquire leaves the frame closed and
+/// cleared, and the logs of ended passes and compute records grown to what it used, before the target is acquired, so a failed acquire leaves the frame closed and
 /// returns zero with the target's error. Once it has returned one, the backbuffer size is read
 /// from the target, the "backbuffer" entry holds the acquired view, the chain's links are given
 /// their textures, the clear of the frame's color and depth is recorded and the frame is live.
@@ -17,9 +17,9 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     st.frame_live = false;
     dropClear(st);
     st.blit.releaseSets(st.binder);
-    st.ended_count.store(0, .monotonic);
-    st.compute_count.store(0, .monotonic);
-    for (&st.compute_records) |*r| {
+    st.ended.reset(null);
+    st.compute_records.reset(rc.ComputeRecord.deinit);
+    for (st.compute_records.items) |*r| {
         r.cmds.clearRetainingCapacity();
         r.offsets.clearRetainingCapacity();
         r.labels.clearRetainingCapacity();
@@ -43,38 +43,52 @@ fn dropClear(st: *rc.CoreState) void {
     st.clear_pass = null;
 }
 
-/// The encoders of one frame in the order they are submitted. An encoder added here is finished
-/// and destroyed by `submit`, whether its finish succeeds or not.
+/// The encoders of one frame in the order they are submitted, in arrays sized for the frame. An
+/// encoder added here is finished and destroyed by `submit`, whether its finish succeeds or not.
 const Submission = struct {
-    encoders: [rc.MAX_CMD_BUFFERS * 2 + 2]c.ke_gpu_command_encoder_handle = undefined,
-    records: [rc.MAX_CMD_BUFFERS * 2 + 2]?*rc.ComputeRecord = undefined,
+    encoders: []c.ke_gpu_command_encoder_handle,
+    records: []?*rc.ComputeRecord,
+    finished: []c.ke_gpu_command_buffer_handle,
+    cmds: [][*c]c.ke_gpu_command_buffer,
     count: usize = 0,
+
+    fn init(capacity: usize) error{OutOfMemory}!Submission {
+        const encoders = try heap.gpa.alloc(c.ke_gpu_command_encoder_handle, capacity);
+        errdefer heap.gpa.free(encoders);
+        const records = try heap.gpa.alloc(?*rc.ComputeRecord, capacity);
+        errdefer heap.gpa.free(records);
+        const finished = try heap.gpa.alloc(c.ke_gpu_command_buffer_handle, capacity);
+        errdefer heap.gpa.free(finished);
+        const cmds = try heap.gpa.alloc([*c]c.ke_gpu_command_buffer, capacity);
+        return .{ .encoders = encoders, .records = records, .finished = finished, .cmds = cmds };
+    }
+
+    fn deinit(self: *Submission) void {
+        heap.gpa.free(self.cmds);
+        heap.gpa.free(self.finished);
+        heap.gpa.free(self.records);
+        heap.gpa.free(self.encoders);
+    }
 
     fn add(self: *Submission, enc: ?c.ke_gpu_command_encoder_handle, rec: ?*rc.ComputeRecord) void {
         const e = enc orelse return;
-        if (self.count == self.encoders.len) {
-            e.destroy.?(e.ref);
-            return;
-        }
         self.encoders[self.count] = e;
         self.records[self.count] = rec;
         self.count += 1;
     }
 
     fn submit(self: *Submission, st: *rc.CoreState) void {
-        var finished: [rc.MAX_CMD_BUFFERS * 2 + 2]c.ke_gpu_command_buffer_handle = undefined;
-        var cmds: [rc.MAX_CMD_BUFFERS * 2 + 2][*c]c.ke_gpu_command_buffer = undefined;
         var n: u32 = 0;
         for (self.encoders[0..self.count], self.records[0..self.count]) |enc, rec| {
             if (rec) |r| replay(enc.ref, r);
             const cmd = enc.ref.*.finish.?(enc.ref, null);
             if (cmd.ref == null) continue;
-            finished[n] = cmd;
-            cmds[n] = cmd.ref;
+            self.finished[n] = cmd;
+            self.cmds[n] = cmd.ref;
             n += 1;
         }
-        if (n > 0) st.device.queue_submit.?(st.device, st.queue, &cmds, n);
-        for (finished[0..n]) |cmd| cmd.destroy.?(cmd.ref);
+        if (n > 0) st.device.queue_submit.?(st.device, st.queue, self.cmds.ptr, n);
+        for (self.finished[0..n]) |cmd| cmd.destroy.?(cmd.ref);
         for (self.encoders[0..self.count]) |enc| enc.destroy.?(enc.ref);
     }
 };
@@ -87,24 +101,35 @@ const Submission = struct {
 /// record is replayed on its pass's encoder before it is finished; an encoder whose finish fails
 /// is left out. The command buffers are submitted in one call and destroyed with their encoders,
 /// and the frame stops being live. Returns the result of the present, with the target's error on
-/// failure; the queue is polled whatever it returned. Returns zero and does nothing when no frame
-/// is live.
+/// failure; the queue is polled whatever it returned. When the submission cannot be allocated the
+/// frame's encoders are destroyed unsubmitted, nothing is presented and it returns zero with an
+/// out-of-memory error. Returns zero and does nothing when no frame is live.
 pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
     const st = rc.coreOf(self);
     if (!st.frame_live) return false;
 
     flushUploads(st);
 
-    const ended = st.ended[0..@min(st.ended_count.load(.monotonic), rc.MAX_CMD_BUFFERS)];
-    var sub: Submission = .{};
+    st.ended.seal();
+    var ended_count: usize = 0;
+    var it = st.ended.iterator();
+    while (it.next()) |_| ended_count += 1;
+    var sub = Submission.init(ended_count + st.chain.links.items.len + 2) catch {
+        dropFrame(st);
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "end_frame: the submission could not be allocated", @src().file, @intCast(@src().line), null);
+        return false;
+    };
+    defer sub.deinit();
     sub.add(st.clear_pass, null);
     st.clear_pass = null;
-    for (ended) |pass| {
+    it = st.ended.iterator();
+    while (it.next()) |pass| {
         if (pass.chain == c.KE_RENDER_CHAIN_NONE) sub.add(pass.encoder, pass.record);
     }
     for (st.chain.links.items) |*link| {
         var any = false;
-        for (ended) |pass| {
+        var link_it = st.ended.iterator();
+        while (link_it.next()) |pass| {
             if (pass.chain != link.id) continue;
             sub.add(pass.encoder, pass.record);
             any = true;
@@ -112,18 +137,27 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
         if (!any and link.source != c.KE_GPU_INVALID_HANDLE)
             sub.add(frame_chain.recordBlit(st, link.source, link.target, link.target_format), null);
     }
-    for (ended) |pass| {
+    it = st.ended.iterator();
+    while (it.next()) |pass| {
         if (pass.chain != c.KE_RENDER_CHAIN_NONE and st.chain.find(pass.chain) == null) sub.add(pass.encoder, pass.record);
     }
     if (st.find("backbuffer")) |bb| sub.add(frame_chain.recordBlit(st, st.chain.final, bb.view, bb.format), null);
     sub.submit(st);
 
-    st.ended_count.store(0, .monotonic);
     st.frame_live = false;
     if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
     const presented = st.target.present.?(st.target, out_error);
     st.device.queue_poll.?(st.device, st.queue);
     return presented;
+}
+
+/// Destroys the frame's clear and the encoders of its ended passes unsubmitted, and closes the frame.
+fn dropFrame(st: *rc.CoreState) void {
+    dropClear(st);
+    var it = st.ended.iterator();
+    while (it.next()) |pass| pass.encoder.destroy.?(pass.encoder.ref);
+    st.frame_live = false;
+    if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
 }
 
 fn replay(enc: *c.ke_gpu_command_encoder, rec: *const rc.ComputeRecord) void {

@@ -30,6 +30,7 @@ pub fn Stubs(comptime c: type) type {
             texture_view_label: [*c]const u8,
             render_pass_label: [*c]const u8,
             render_passes: u32,
+            submitted: u32,
             color_load: c.ke_gpu_load_op,
             depth_load: ?c.ke_gpu_load_op,
             compute_pass_label: [*c]const u8,
@@ -39,7 +40,7 @@ pub fn Stubs(comptime c: type) type {
             bytes_written: usize,
 
             pub fn init(self: *Device) void {
-                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .render_passes = 0, .color_load = 0, .depth_load = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0, .buffer_writes = 0, .bytes_written = 0 };
+                self.* = .{ .vtable = std.mem.zeroes(c.ke_gpu_device), .next = 1, .live = 0, .compute_live = 0, .fallible_created = 0, .fallible_budget = std.math.maxInt(u32), .encoder = undefined, .render_pass = undefined, .compute_pass = undefined, .command_buffer = undefined, .texture_label = null, .texture_view_label = null, .render_pass_label = null, .render_passes = 0, .submitted = 0, .color_load = 0, .depth_load = null, .compute_pass_label = null, .debug_group_label = null, .debug_groups_open = 0, .buffer_writes = 0, .bytes_written = 0 };
                 self.vtable.handle = self;
                 self.vtable.create_buffer = &createBuffer;
                 self.vtable.create_bind_group_layout = &createBindGroupLayout;
@@ -142,7 +143,11 @@ pub fn Stubs(comptime c: type) type {
 
             fn destroyEncoder(_: ?*c.ke_gpu_command_encoder) callconv(.c) void {}
 
-            fn queueSubmit(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue, _: [*c]const [*c]c.ke_gpu_command_buffer, _: u32) callconv(.c) void {}
+            /// `submitted` counts the command buffers submitted.
+            fn queueSubmit(self: ?*c.ke_gpu_device, _: c.ke_gpu_queue, _: [*c]const [*c]c.ke_gpu_command_buffer, count: u32) callconv(.c) void {
+                const d: *Device = @ptrCast(@alignCast(self.?.handle));
+                d.submitted += count;
+            }
 
             fn queuePoll(_: ?*c.ke_gpu_device, _: c.ke_gpu_queue) callconv(.c) void {}
 

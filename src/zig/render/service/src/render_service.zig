@@ -2,6 +2,7 @@
 //! factory that builds it and fills the `ke_render_service` vtable.
 
 const std = @import("std");
+const FrameLog = @import("frame_log.zig").FrameLog;
 
 pub const std_options: std.Options = .{ .signal_stack_size = null };
 
@@ -21,7 +22,7 @@ const slot_map = @import("slot_map.zig");
 const shader_loader = @import("shader_loader.zig");
 const frame_globals = @import("frame_globals.zig");
 
-pub const MAX_CMD_BUFFERS = 64;
+const first_passes = 64;
 pub const MAX_COLOR_ATTACH = 8;
 pub const first_upload_records = 4096;
 const first_resources = 16;
@@ -114,6 +115,14 @@ pub const ComputeRecord = struct {
     /// Copies the text into `labels`, so the label outlives the caller's buffer. Returns an offset
     /// rather than a pointer, because a later append may move `labels`. Null means nothing was
     /// stored.
+    pub const empty: ComputeRecord = .{ .pass = undefined, .cmds = .empty, .offsets = .empty, .pass_label = null, .labels = .empty };
+
+    pub fn deinit(self: *ComputeRecord) void {
+        self.labels.deinit(gpa);
+        self.cmds.deinit(gpa);
+        self.offsets.deinit(gpa);
+    }
+
     pub fn storeLabel(self: *ComputeRecord, text: [*c]const u8) ?u32 {
         if (text == null) return null;
         const offset: u32 = @intCast(self.labels.items.len);
@@ -152,11 +161,8 @@ pub const CoreState = struct {
 
     frame_live: bool,
 
-    ended: [MAX_CMD_BUFFERS]EndedPass,
-    ended_count: std.atomic.Value(u32),
-
-    compute_records: [MAX_CMD_BUFFERS]ComputeRecord,
-    compute_count: std.atomic.Value(u32),
+    ended: FrameLog(EndedPass),
+    compute_records: FrameLog(ComputeRecord),
 
     upload_records: []UploadRecord,
     upload_spill: std.atomic.Value(?*SpilledUpload),
@@ -287,11 +293,8 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     st.shader_store.deinit();
     st.globals.release(st.device);
     st.pipeline_cache.destroyAll(st.device);
-    for (&st.compute_records) |*r| {
-        r.labels.deinit(gpa);
-        r.cmds.deinit(gpa);
-        r.offsets.deinit(gpa);
-    }
+    st.ended.deinit(null);
+    st.compute_records.deinit(ComputeRecord.deinit);
     var spilled = st.upload_spill.swap(null, .acquire);
     while (spilled) |n| {
         spilled = n.next;
@@ -338,7 +341,22 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
         gpa.destroy(st);
         return .{ .ref = null, .destroy = null };
     };
+    var ended = FrameLog(EndedPass).init(first_passes, .{ .encoder = .{ .ref = null, .destroy = null }, .record = null }) catch {
+        gpa.free(upload_records);
+        gpa.free(upload_arena);
+        gpa.destroy(st);
+        return .{ .ref = null, .destroy = null };
+    };
+    var compute_records = FrameLog(ComputeRecord).init(first_passes, ComputeRecord.empty) catch {
+        ended.deinit(null);
+        gpa.free(upload_records);
+        gpa.free(upload_arena);
+        gpa.destroy(st);
+        return .{ .ref = null, .destroy = null };
+    };
     var resources = std.ArrayList(Resource).initCapacity(gpa, first_resources) catch {
+        compute_records.deinit(ComputeRecord.deinit);
+        ended.deinit(null);
         gpa.free(upload_records);
         gpa.free(upload_arena);
         gpa.destroy(st);
@@ -346,6 +364,8 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
     };
     const shader_dir_owned = gpa.dupe(u8, shader_dir_span) catch {
         resources.deinit(gpa);
+        compute_records.deinit(ComputeRecord.deinit);
+        ended.deinit(null);
         gpa.free(upload_records);
         gpa.free(upload_arena);
         gpa.destroy(st);
@@ -367,10 +387,8 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
         .sized_h = bb_h,
         .resource_generation = 0,
         .frame_live = false,
-        .ended = undefined,
-        .ended_count = std.atomic.Value(u32).init(0),
-        .compute_records = undefined,
-        .compute_count = std.atomic.Value(u32).init(0),
+        .ended = ended,
+        .compute_records = compute_records,
         .upload_records = upload_records,
         .upload_spill = std.atomic.Value(?*SpilledUpload).init(null),
         .upload_count = std.atomic.Value(u32).init(0),
@@ -398,12 +416,6 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
         .ndc = dev.get_ndc_convention.?(dev),
         .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
-    for (&st.compute_records) |*r| {
-        r.labels = .empty;
-        r.cmds = .empty;
-        r.offsets = .empty;
-    }
-
     const mesh_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
         .destroy_fn = asset_upload.destroyMeshResource,
         .destroy_ctx = st,
@@ -423,6 +435,8 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
     if (mesh_ch.ref == null or tex_ch.ref == null or mat_ch.ref == null or shader_ch.ref == null) {
         gpa.free(shader_dir_owned);
         resources.deinit(gpa);
+        compute_records.deinit(ComputeRecord.deinit);
+        ended.deinit(null);
         gpa.free(upload_records);
         gpa.free(upload_arena);
         gpa.destroy(st);
@@ -722,6 +736,45 @@ test "uploads beyond the first frame's records and arena are all written, and th
     const core = coreOf(svc);
     try testing.expect(core.upload_records.len >= upload_count + 1);
     try testing.expect(core.upload_arena.len >= upload_count * @sizeOf(u32) + big_len);
+
+    h.destroy.?(svc);
+    try testing.expectEqual(@as(i64, 0), dev.live);
+    try heap.expectNoLeaks();
+}
+
+test "a frame with more passes than the first frame's log submits every one, and the next frame needs no spill" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
+    var dev: Stubs.Device = undefined;
+    dev.init();
+    var ecs: Stubs.Ecs = undefined;
+    ecs.init();
+    var binder: Stubs.Binder = undefined;
+    binder.init();
+    var target: Stubs.Target = undefined;
+    target.init();
+    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const svc = h.ref orelse return error.TestUnexpectedResult;
+
+    const pass_count = first_passes + 36;
+    var io = std.mem.zeroes(c.ke_render_pass_io);
+    io.name = "render.cull";
+    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
+    for (0..pass_count) |_| {
+        const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
+        const cp = pass.*.begin_compute.?(pass) orelse return error.TestUnexpectedResult;
+        cp.*.end.?(cp);
+        svc.*.end_pass.?(svc, pass);
+    }
+    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
+    try testing.expectEqual(@as(u32, pass_count + 2), dev.submitted);
+
+    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
+    const core = coreOf(svc);
+    try testing.expect(core.ended.items.len >= pass_count);
+    try testing.expect(core.compute_records.items.len >= pass_count);
+    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
 
     h.destroy.?(svc);
     try testing.expectEqual(@as(i64, 0), dev.live);

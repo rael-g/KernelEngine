@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const rc = @import("render_service.zig");
+const FrameLog = @import("frame_log.zig").FrameLog;
 const c = rc.c;
 
 const layout_params = c.ke_render_shader_layout_params{
@@ -13,13 +14,13 @@ const layout_params = c.ke_render_shader_layout_params{
 
 /// The shaders and layout of the full-screen draw, made once when the service is created, and the
 /// sets the frame's draws made. A set must outlive the submission of the frame that binds it, so the
-/// sets of a frame are released when the next one begins; `set_count` is claimed with an atomic
-/// add because the passes of one wave open their render passes concurrently.
+/// sets of a frame are released when the next one begins; `sets` is a frame log because the passes
+/// of one wave open their render passes concurrently. It starts with no slots and grows to the
+/// draws a frame makes.
 pub const Blit = struct {
     layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
     pipeline: c.ke_gpu_render_pipeline_params = undefined,
-    sets: [rc.MAX_CMD_BUFFERS]c.ke_render_resource_set = undefined,
-    set_count: std.atomic.Value(u32) = .init(0),
+    sets: FrameLog(c.ke_render_resource_set) = .{ .items = &.{}, .blank = c.KE_RENDER_BINDING_INVALID },
 
     /// Loads the "blit" shaders and creates their layout. False with the error set when either
     /// fails; nothing is left to release then.
@@ -52,34 +53,33 @@ pub const Blit = struct {
     /// Releases the sets of the frame that just ended. Called by `beginFrame`, before any pass of
     /// the new frame runs.
     pub fn releaseSets(self: *Blit, binder: *c.ke_render_resource_binder) void {
-        const n = @min(self.set_count.load(.monotonic), self.sets.len);
-        for (self.sets[0..n]) |set| binder.destroy_set.?(binder, set);
-        self.set_count.store(0, .monotonic);
+        self.sets.seal();
+        var it = self.sets.iterator();
+        while (it.next()) |set| {
+            if (set.* != c.KE_RENDER_BINDING_INVALID) binder.destroy_set.?(binder, set.*);
+        }
+        self.sets.reset(null);
     }
 
     /// Releases the sets still held and the layout.
     pub fn release(self: *Blit, binder: *c.ke_render_resource_binder) void {
-        if (self.layout == c.KE_RENDER_BINDING_INVALID) return;
         self.releaseSets(binder);
+        self.sets.deinit(null);
+        if (self.layout == c.KE_RENDER_BINDING_INVALID) return;
         binder.destroy_shader_layout.?(binder, self.layout);
         self.layout = c.KE_RENDER_BINDING_INVALID;
     }
 
     /// Records on `encoder` a render pass that draws `src` over the whole of `dst`, whose format is
-    /// `dst_format`. False, recording nothing, when the frame has used up its sets or the set
-    /// cannot be created.
+    /// `dst_format`. False, recording nothing, when no entry of the log or no set can be made.
     pub fn draw(self: *Blit, service: [*c]c.ke_render_service, binder: *c.ke_render_resource_binder, encoder: *c.ke_gpu_command_encoder, src: c.ke_gpu_texture_view, dst: c.ke_gpu_texture_view, dst_format: c.ke_gpu_texture_format) bool {
-        const at = self.set_count.fetchAdd(1, .monotonic);
-        if (at >= self.sets.len) return false;
+        const slot = self.sets.claim() orelse return false;
         const bindings = [1]c.ke_render_shader_binding{
             .{ .name = "t_src", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = src, .sampler = 0 },
         };
         const set = binder.create_set.?(binder, self.layout, null, "blit.set", &bindings, bindings.len, null);
-        if (set == c.KE_RENDER_BINDING_INVALID) {
-            self.sets[at] = c.KE_RENDER_BINDING_INVALID;
-            return false;
-        }
-        self.sets[at] = set;
+        slot.* = set;
+        if (set == c.KE_RENDER_BINDING_INVALID) return false;
 
         var pp = self.pipeline;
         pp.color_target_formats[0] = dst_format;

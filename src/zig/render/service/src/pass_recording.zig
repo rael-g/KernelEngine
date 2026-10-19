@@ -46,14 +46,13 @@ pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_i
 /// Places the pass's encoder next in the frame's submission order and frees the pass and its
 /// context, so the context pointer is invalid afterwards. A pass that depends on another declares
 /// access that conflicts with it, so the runtime runs it in a later wave and it ends later; passes
-/// of one wave end in any order, which none of them depends on. A pass past the command-buffer
-/// limit is not submitted and its encoder is destroyed here.
+/// of one wave end in any order, which none of them depends on. A pass that finds no memory to
+/// record its end is not submitted and its encoder is destroyed here.
 pub fn endPass(self: [*c]c.ke_render_service, ctx: [*c]c.ke_render_pass_ctx) callconv(.c) void {
     const st = rc.coreOf(self);
     const ps = rc.passOf(ctx);
-    const at = st.ended_count.fetchAdd(1, .monotonic);
-    if (at < rc.MAX_CMD_BUFFERS) {
-        st.ended[at] = .{ .encoder = ps.encoder, .record = ps.record, .chain = ps.io.chain };
+    if (st.ended.claim()) |slot| {
+        slot.* = .{ .encoder = ps.encoder, .record = ps.record, .chain = ps.io.chain };
     } else {
         ps.encoder.destroy.?(ps.encoder.ref);
     }
@@ -159,12 +158,10 @@ fn ctxColorSource(self: [*c]c.ke_render_pass_ctx) callconv(.c) c.ke_gpu_texture_
 
 /// Takes the frame's next free record, empties it and returns a compute pass that records into it;
 /// nothing runs until `endFrame` replays the record on the pass's encoder. Each call of the
-/// returned pass appends a `ComputeCmd`. Past the command-buffer limit it returns null.
+/// returned pass appends a `ComputeCmd`. Null when no record can be allocated.
 fn ctxBeginCompute(self: [*c]c.ke_render_pass_ctx) callconv(.c) [*c]c.ke_gpu_compute_pass {
     const ps = rc.passOf(self);
-    const at = ps.core.compute_count.fetchAdd(1, .monotonic);
-    if (at >= rc.MAX_CMD_BUFFERS) return null;
-    const rec = &ps.core.compute_records[at];
+    const rec = ps.core.compute_records.claim() orelse return null;
     ps.record = rec;
     rec.cmds.clearRetainingCapacity();
     rec.offsets.clearRetainingCapacity();
