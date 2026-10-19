@@ -1306,6 +1306,7 @@ const Ctx = struct {
         const artifact = dependency.artifact(name);
         artifact.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| artifact.step.dependOn(d);
+        orderTranslations(&artifact.step, ctx.vcpkg_step, deps);
         const install = b.addInstallArtifact(artifact, .{ .dest_dir = .{ .override = .{ .custom = "lib" } } });
         ctx.libraries_step.dependOn(&install.step);
 
@@ -1313,12 +1314,25 @@ const Ctx = struct {
             .no_tests => {},
             .has_tests => {
                 const own_tests = &dependency.builder.top_level_steps.get("test").?.step;
+                orderTranslations(own_tests, ctx.vcpkg_step, deps);
                 for (own_tests.dependencies.items) |run| run.dependOn(ctx.plugins_step);
                 ctx.test_step.dependOn(own_tests);
             },
         }
 
         return install;
+    }
+
+    /// Makes every C translation reachable from `root` wait for the vcpkg ports and for `deps`, so a
+    /// header a port or a fetch step provides exists before it is read.
+    fn orderTranslations(root: *std.Build.Step, vcpkg_step: *std.Build.Step, deps: []const *std.Build.Step) void {
+        for (root.dependencies.items) |dep| {
+            if (dep.id == .translate_c) {
+                dep.dependOn(vcpkg_step);
+                for (deps) |d| dep.dependOn(d);
+            }
+            orderTranslations(dep, vcpkg_step, deps);
+        }
     }
 
     fn example(ctx: *Ctx, demo_name: []const u8, args: anytype, deps: []const *std.Build.Step) *std.Build.Step.InstallArtifact {
