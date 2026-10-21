@@ -124,7 +124,14 @@ pub fn build(b: *std.Build) void {
     });
 
     const integration_options = b.addOptions();
-    integration_options.addOptionPath("probe_exe_path", probe_exe.getEmittedBin());
+    if (target.result.os.tag == .windows) {
+        const beside = b.addWriteFiles();
+        const probe_path = beside.addCopyFile(probe_exe.getEmittedBin(), probe_exe.out_filename);
+        _ = beside.addCopyFile(.{ .cwd_relative = b.pathJoin(&.{ ke_lib_dir, "ke_common.dll" }) }, "ke_common.dll");
+        integration_options.addOptionPath("probe_exe_path", probe_path);
+    } else {
+        integration_options.addOptionPath("probe_exe_path", probe_exe.getEmittedBin());
+    }
 
     const integration_mod = b.createModule(.{
         .root_source_file = b.path("src/abort_integration_test.zig"),
