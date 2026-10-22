@@ -9,7 +9,7 @@ is in abi.md. How a wrapper works inside is on the generated page of its file.
 | part | declared as | receives | hands on |
 |---|---|---|---|
 | generated wrapper | one class per vtable, under `Generated/` | the owner struct a factory returned, or a borrowed pointer | managed methods over the vtable slots |
-| native interface | `INative<Domain>`, such as `INativeLogger`, `INativeRuntime`, `INativeEcs` | nothing | the wrapper's pointer, as `Native` |
+| native interface | `INative<Domain>`, such as `INativeRuntime`, `INativeEcs` | nothing | the wrapper's pointer, as `Native` |
 | idiom half | `<Name>.Idiom.cs`, a `partial` of the wrapper | managed dependencies | what a header cannot express |
 | error translation | `NativeErrors` | a native error, or a managed exception | the matching exception, or a native error |
 | module | `IRuntimeModule` | `IRuntime` and `IServiceProvider` | components and systems registered into the runtime |

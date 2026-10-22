@@ -10,7 +10,7 @@ public class LoggerSinkTests
     [Fact]
     public void CustomSink_ReceivesLogEvents()
     {
-        using var logger = new Logger();
+        var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
         mockSink.MinLevel.Returns(LogLevel.Info);
 
@@ -26,7 +26,7 @@ public class LoggerSinkTests
     [Fact]
     public void Flush_CallsSinkFlush()
     {
-        using var logger = new Logger();
+        var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
 
         logger.AddSink(mockSink);
@@ -38,7 +38,7 @@ public class LoggerSinkTests
     [Fact]
     public void AllLogLevelMethods_ForwardCorrectLevel()
     {
-        using var logger = new Logger();
+        var logger = new Logger();
         var mockSink = Substitute.For<ILoggerSink>();
         logger.AddSink(mockSink);
 

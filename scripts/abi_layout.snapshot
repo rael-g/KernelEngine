@@ -57,24 +57,6 @@ ke_window_handle size=16 align=8
   destroy 8
 
 [logger]
-ke_log_event size=24 align=8
-  level 0
-  tag 8
-  message 16
-ke_logger_sink size=40 align=8
-  handle 0
-  min_level 8
-  log 16
-  flush 24
-  destroy 32
-ke_logger size=32 align=8
-  handle 0
-  log 8
-  flush 16
-  add_sink 24
-ke_logger_handle size=16 align=8
-  ref 0
-  destroy 8
 
 [scheduler]
 ke_scheduler size=56 align=8

@@ -1,37 +1,39 @@
 # Logging
 
-This is a map: the parts of the logger domain and what each hands on. How a part works inside is
-on the generated page of its file. The contract is under `src/c/logger/`, the plugin under
-`src/zig/logger/`, the managed side under `src/csharp/logger/`.
+This is a map: the parts of the logging mechanism and what each hands on. How a part works inside
+is on the generated page of its file. The contract is under `src/c/logger/`, the shared Zig module
+is `src/zig/common/klog.zig`, the managed side is under `src/csharp/logger/`.
 
 ## The parts
 
 | part | declared as | receives | hands on |
 |---|---|---|---|
-| event | `ke_log_event` | a level, a tag and a message from the emitter | itself, to the logger |
-| sink | `ke_logger_sink` | events whose level reaches its `min_level` | nothing; it writes them somewhere |
-| logger | `ke_logger`, made by `ke_logger_create` | events, and sinks by value through `add_sink` | each event to every sink that admits it |
-| console sink | `ke_console_sink_create` | events | one line on standard error |
-| managed logger | `Logger`, `ILogger` | strings and a `LogLevel` | `ke_log_event` to the native logger |
-| managed sink | `ILoggerSink` | events decoded to strings | whatever the sink does with them |
-
-The native logger and the console sink are both in the plugin `logger_simple`.
+| level | `ke_log_level` | nothing | how severe a line is |
+| callback | `ke_log_callback` | a context, a level, a scope and a message | whatever the host does with the line |
+| library destination | `klog.Destination` in each plugin root's `std_options` | every `std.log` line of the library | the line to the callback the host set, or to stderr |
+| library setter | `<library>_set_log_callback`, declared in each plugin's `<library>_log.h` | a callback and its context | them to the library's destination |
+| managed bridge | `LogCallback`, `LogCallbackNative`, generated from `ke_log_callback` | a managed handler | the callback pointer and the context a setter takes |
+| managed logger | `Logger`, `ILogger` | a `LogLevel`, a tag and a message | the event to every sink that admits it |
+| managed sink | `ILoggerSink` | events whose level reaches its `MinLevel` | whatever the sink does with them |
 
 ## What ties the parts together
 
-**The filter is the sink's.** The logger has no level of its own; it offers an event to each
-sink whose `min_level` the event reaches, in the order the sinks were added.
+**Nothing links a logger.** A plugin logs with `std.log` and receives no logger. Each plugin
+library is its own destination, since `std_options.logFn` is fixed per binary at compile time; the
+host injects where its lines go through the library's setter, once, before the library logs.
 
-**The logger owns what it is given.** `add_sink` takes the sink by value, and destroying the
-logger destroys its sinks.
+**The scope says who logged.** A plugin logs under the scope of its library's name; a third-party
+library a plugin routes logs under that library's own name.
 
-**A plugin that logs is handed a logger.** A plugin takes a borrowed `ke_logger` in its params
-and may be given none, in which case it emits nothing.
+**Until a callback is set, lines go to stderr.** A null callback sends them back there.
 
-**The managed logger is a view of the native one.** `Logger` implements `ILogger` and
-`INativeLogger`, so a service that creates a native plugin passes the same `ke_logger` the game
-logs through. A managed sink reaches the native logger through an adapter registered with the
-`minLevel` given to `AddSink`.
+**The managed side reaches the setters through its wrappers.** The code that creates a library's
+objects hands the setter `LogCallbackNative.Pointer` and `LogCallbackNative.Pin(logger.Log)`, with
+the `ILogger` from the container, so a native line arrives as `ILogger.Log` with the scope as the
+tag.
+
+**The filter is the sink's.** The managed logger has no level of its own; it offers an event to
+each sink whose `MinLevel` the event reaches, in the order the sinks were added.
 
 **Composition.** `AddLogger` registers the logger and, when it is first resolved, adds the
 `ILoggerSink` services registered by then. `AddConsoleSink` registers the console sink.
@@ -40,5 +42,5 @@ logs through. A managed sink reaches the native logger through an adapter regist
 
 - The section "logging" and the key "console_level" of the project file, read by `AddConsoleSink`
   and holding a `LogLevel` name.
-- The console format, `[LEVEL] tag: message`, and the label "UNKNOWN" for a level no label names.
-- The library name "ke_logger_simple", which the managed project asks the build to copy.
+- The console format, `[LEVEL] tag: message`.
+- The setter's name, `<library>_set_log_callback`, spelled from the library name by `klog`.

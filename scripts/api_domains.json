@@ -116,15 +116,11 @@
     {
       "name": "logger",
       "headers": [
-        "src/c/logger/kernel_engine/logger/logger.h",
         "src/c/logger/kernel_engine/logger/log_level.h",
-        "src/c/logger/kernel_engine/logger/log_callback.h",
-        "src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h",
-        "src/zig/logger/simple/include/kernel_engine/logger/simple/console_sink_create.h"
+        "src/c/logger/kernel_engine/logger/log_callback.h"
       ],
       "includeDirs": [
         "src/c/logger",
-        "src/zig/logger/simple/include",
         "src/c/math",
         "src/zig/common/include"
       ],
@@ -133,8 +129,7 @@
       "nativeNamespace": "KernelEngine.Logger.Native",
       "outDir": "src/csharp/logger/KernelEngine.Logger/Generated",
       "abstractionsOutDir": "src/csharp/logger/KernelEngine.Logger.Abstractions/Generated",
-      "usings": [],
-      "library": "ke_logger_simple"
+      "usings": []
     },
     {
       "name": "scheduler",
@@ -876,18 +871,6 @@
         "src/c/logger/kernel_engine/logger/log_callback.h"
       ],
       "output": "Generated/LogCallback/"
-    },
-    {
-      "name": "Logger",
-      "project": "src/csharp/logger/KernelEngine.Logger",
-      "namespace": "KernelEngine.Logger.Native",
-      "headers": [
-        "src/c/logger/kernel_engine/logger/logger.h",
-        "src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h",
-        "src/zig/logger/simple/include/kernel_engine/logger/simple/console_sink_create.h"
-      ],
-      "library": "ke_logger_simple",
-      "output": "Generated/Logger/"
     },
     {
       "name": "Box2D",
