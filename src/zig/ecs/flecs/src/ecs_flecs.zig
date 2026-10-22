@@ -3,9 +3,7 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_ecs_flecs");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_ecs_flecs").logFn };
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 

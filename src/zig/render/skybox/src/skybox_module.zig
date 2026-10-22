@@ -4,9 +4,8 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_skybox").logFn };
 
-const klog = @import("klog").Destination("ke_render_skybox");
 const zm = @import("zmath");
 const c = @import("c");
 
@@ -37,7 +36,6 @@ const SkyboxModule = struct {
     camera_cid: c.ke_component_id = undefined,
     world_transform_cid: c.ke_component_id = undefined,
     skybox_cid: c.ke_component_id = undefined,
-
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     binder: *c.ke_render_resource_binder = undefined,
@@ -188,7 +186,6 @@ fn setup(sm: *SkyboxModule, p: *const c.ke_render_skybox_params, out_error: [*c]
         .mapped_at_creation = false,
     }, out_error);
     if (sm.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-
 
     sm.access = .{
         .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE },

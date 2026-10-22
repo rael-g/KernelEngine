@@ -86,9 +86,8 @@ var rules = new List<Rule>
             {
                 var problems = new List<string>();
                 if (!(sources.TryGetValue(x.Root!, out var root)
-                    && root.Any(l => l.Contains($"@import(\"klog\").Destination(\"{x.Library}\")", StringComparison.Ordinal))
-                    && root.Any(l => l.Contains(".logFn = klog.logFn", StringComparison.Ordinal))))
-                    problems.Add($"{x.Root}: std_options does not route std.log through klog.Destination(\"{x.Library}\")");
+                    && root.Any(l => l.Contains($".logFn = @import(\"log\").Destination(\"{x.Library}\").logFn", StringComparison.Ordinal))))
+                    problems.Add($"{x.Root}: std_options does not route std.log through @import(\"log\").Destination(\"{x.Library}\")");
                 var dir = Path.GetDirectoryName(x.Build)!.Replace('\\', '/') + "/include/";
                 var logHeaders = tracked.Where(h => h.StartsWith(dir, StringComparison.Ordinal) && h.EndsWith("_log.h", StringComparison.Ordinal)).ToList();
                 var expected = x.Library![3..] + "_log.h";

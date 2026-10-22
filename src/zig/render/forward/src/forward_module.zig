@@ -4,9 +4,8 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_forward").logFn };
 
-const klog = @import("klog").Destination("ke_render_forward");
 const zm = @import("zmath");
 const c = @import("c");
 
@@ -125,7 +124,6 @@ const ForwardModule = struct {
 const PASS_NAME = "forward";
 const DEFAULT_MATERIAL_SHADER = "standard";
 const MAX_SHADER_QUALIFIED = 128;
-
 
 const log = std.log.scoped(.render_forward);
 

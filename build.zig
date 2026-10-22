@@ -161,6 +161,7 @@ pub fn build(b: *std.Build) void {
     }));
 
     const common = ctx.member("ke_common", .{ .target = target, .optimize = optimize }, &.{}, .has_tests);
+    ctx.moduleTests("ke_logger", .{ .target = target, .optimize = optimize });
 
     const ecs_flecs = ctx.member("ke_ecs_flecs", .{
         .target = target,
@@ -1316,6 +1317,13 @@ const Ctx = struct {
         }
 
         return install;
+    }
+
+    /// Runs, under the root `test` step, the tests of `name`, a package of shared Zig modules that
+    /// builds no library.
+    fn moduleTests(ctx: *Ctx, name: []const u8, args: anytype) void {
+        const dependency = ctx.b.dependency(name, args);
+        ctx.test_step.dependOn(&dependency.builder.top_level_steps.get("test").?.step);
     }
 
     /// Makes every C translation `compile` imports wait for the vcpkg ports and for `deps`, so a header

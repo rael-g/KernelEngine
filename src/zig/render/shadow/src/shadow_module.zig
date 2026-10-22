@@ -4,15 +4,13 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_shadow").logFn };
 
-const klog = @import("klog").Destination("ke_render_shadow");
 const zm = @import("zmath");
 const c = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
-
 
 /// The shape of the shadow map: the params' fields of the same names, zero taking these values.
 const Shape = struct {

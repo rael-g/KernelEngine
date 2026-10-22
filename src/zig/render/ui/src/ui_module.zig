@@ -4,16 +4,14 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_ui").logFn };
 
-const klog = @import("klog").Destination("ke_render_ui");
 const zm = @import("zmath");
 const c = @import("c");
 const handles = @import("handle").Handles(c);
 
 const heap = @import("heap");
 const gpa = heap.gpa;
-
 
 /// One vertex as `system` writes it into the vertex buffer. Declared extern so the offsets
 /// that `setup` gives the pipeline are the offsets of these bytes.
@@ -469,7 +467,6 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
     if (ui.frame_set == c.KE_RENDER_BINDING_INVALID) return false;
 
     if (!ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex), out_error)) return false;
-
 
     ui.access = .{
         .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE },

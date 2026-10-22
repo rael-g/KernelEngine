@@ -4,9 +4,7 @@
 const std = @import("std");
 const FrameLog = @import("frame_log.zig").FrameLog;
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_render_service");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_service").logFn };
 
 pub const c = @import("c");
 

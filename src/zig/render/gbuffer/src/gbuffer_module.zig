@@ -5,9 +5,8 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_gbuffer").logFn };
 
-const klog = @import("klog").Destination("ke_render_gbuffer");
 const zm = @import("zmath");
 const c = @import("c");
 
@@ -19,7 +18,6 @@ const Groups = @import("material_pass_groups").MaterialPassGroups(c);
 const PASS_NAME = "gbuffer";
 /// The material shader `setup` loads for the pipeline template; each draw loads its own material's.
 const DEFAULT_MATERIAL_SHADER = "standard";
-
 
 /// One draw's transform record, uploaded into that draw's slot of `objects`. The upload and the
 /// object binding both take their size from this type.

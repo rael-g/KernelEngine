@@ -3,9 +3,7 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_resource_cache_default");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_resource_cache_default").logFn };
 
 const heap = @import("heap");
 const gpa = heap.gpa;

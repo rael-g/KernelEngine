@@ -5,6 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .ke_common = .{ .path = "src/zig/common" },
+        .ke_logger = .{ .path = "src/zig/logger" },
         .ke_ecs_flecs = .{ .path = "src/zig/ecs/flecs" },
         .ke_input_default = .{ .path = "src/zig/input/default" },
         .ke_resource_cache_default = .{ .path = "src/zig/resource_cache/default" },

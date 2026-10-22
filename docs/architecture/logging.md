@@ -2,7 +2,7 @@
 
 This is a map: the parts of the logging mechanism and what each hands on. How a part works inside
 is on the generated page of its file. The contract is under `src/c/logger/`, the shared Zig module
-is `src/zig/common/klog.zig`, the managed side is under `src/csharp/logger/`.
+is `src/zig/logger/log.zig`, the managed side is under `src/csharp/logger/`.
 
 ## The parts
 
@@ -10,7 +10,7 @@ is `src/zig/common/klog.zig`, the managed side is under `src/csharp/logger/`.
 |---|---|---|---|
 | level | `ke_log_level` | nothing | how severe a line is |
 | callback | `ke_log_callback` | a context, a level, a scope and a message | whatever the host does with the line |
-| library destination | `klog.Destination` in each plugin root's `std_options` | every `std.log` line of the library | the line to the callback the host set, or to stderr |
+| library destination | `@import("log").Destination` in each plugin root's `std_options` | every `std.log` line of the library | the line to the callback the host set, or to stderr |
 | library setter | `<library>_set_log_callback`, declared in each plugin's `<library>_log.h` | a callback and its context | them to the library's destination |
 | managed bridge | `LogCallback`, `LogCallbackNative`, generated from `ke_log_callback` | a managed handler | the callback pointer and the context a setter takes |
 | managed logger | `Logger`, `ILogger` | a `LogLevel`, a tag and a message | the event to every sink that admits it |
@@ -43,4 +43,4 @@ each sink whose `MinLevel` the event reaches, in the order the sinks were added.
 - The section "logging" and the key "console_level" of the project file, read by `AddConsoleSink`
   and holding a `LogLevel` name.
 - The console format, `[LEVEL] tag: message`.
-- The setter's name, `<library>_set_log_callback`, spelled from the library name by `klog`.
+- The setter's name, `<library>_set_log_callback`, spelled from the library name by the `log` module.

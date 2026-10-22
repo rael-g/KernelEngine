@@ -1,5 +1,6 @@
 const std = @import("std");
-const ke_common_build = @import("ke_common");
+const ke_build = @import("ke_build");
+const ke_logger_build = @import("ke_logger");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -50,8 +51,8 @@ pub fn build(b: *std.Build) void {
     mod.addImport("kerror", kerror_mod);
     mod.addCMacro("KE_WINDOW_EXPORT", "");
 
-    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("klog", ke_common_build.klog(b));
+    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("log", ke_logger_build.log(b));
     const lib = b.addLibrary(.{
         .name = "ke_window_glfw",
         .root_module = mod,
@@ -93,8 +94,8 @@ pub fn build(b: *std.Build) void {
     }));
     test_mod.addCMacro("KE_WINDOW_EXPORT", "");
 
-    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
-    test_mod.addImport("klog", ke_common_build.klog(b));
+    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
+    test_mod.addImport("log", ke_logger_build.log(b));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     b.step("test", "Run the window core unit tests").dependOn(&run_tests.step);

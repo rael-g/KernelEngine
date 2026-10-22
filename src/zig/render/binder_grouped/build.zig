@@ -1,5 +1,6 @@
 const std = @import("std");
-const ke_common_build = @import("ke_common");
+const ke_build = @import("ke_build");
+const ke_logger_build = @import("ke_logger");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -22,7 +23,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .link_libc = true,
         });
-        m.*.addImport("klog", ke_common_build.klog(b));
+        m.*.addImport("log", ke_logger_build.log(b));
         m.*.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
         m.*.addImport("shader_files", b.createModule(.{ .root_source_file = .{ .cwd_relative = shader_files_src }, .target = target, .optimize = optimize, .link_libc = true }));
         if (r.tests) m.*.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
@@ -33,7 +34,7 @@ pub fn build(b: *std.Build) void {
         m.*.addRPathSpecial("$ORIGIN");
         m.*.addCMacro("KE_RENDER_BINDER_GROUPED_EXPORT", "");
         m.*.addAnonymousImport("material_params.json", .{ .root_source_file = .{ .cwd_relative = material_params_json } });
-        m.*.addImport("c", ke_common_build.cImports(b, m.*, b.path("src/c.h")));
+        m.*.addImport("c", ke_build.cImports(b, m.*, b.path("src/c.h")));
     }
 
     const lib = b.addLibrary(.{

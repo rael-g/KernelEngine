@@ -1,5 +1,6 @@
 const std = @import("std");
-const ke_common_build = @import("ke_common");
+const ke_build = @import("ke_build");
+const ke_logger_build = @import("ke_logger");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -29,8 +30,8 @@ pub fn build(b: *std.Build) void {
     mod.addImport("kerror", b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize }));
     mod.addCMacro("KE_GPU_RENDER_TARGET_TEXTURE_EXPORT", "");
 
-    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("klog", ke_common_build.klog(b));
+    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("log", ke_logger_build.log(b));
     const lib = b.addLibrary(.{
         .name = "ke_gpu_render_target_texture",
         .root_module = mod,
@@ -59,8 +60,8 @@ pub fn build(b: *std.Build) void {
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
     test_mod.addCMacro("KE_GPU_RENDER_TARGET_TEXTURE_EXPORT", "");
 
-    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
-    test_mod.addImport("klog", ke_common_build.klog(b));
+    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
+    test_mod.addImport("log", ke_logger_build.log(b));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run the texture render target unit tests");

@@ -4,9 +4,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_gpu_render_target_renderdoc");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_gpu_render_target_renderdoc").logFn };
 
 const c = @import("c");
 

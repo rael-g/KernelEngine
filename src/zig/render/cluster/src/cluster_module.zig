@@ -4,9 +4,8 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_cluster").logFn };
 
-const klog = @import("klog").Destination("ke_render_cluster");
 const feature_bindings = @import("feature_bindings");
 const cluster_buffers = feature_bindings.FeatureBindings(c).cluster_buffers;
 const c = @import("c");

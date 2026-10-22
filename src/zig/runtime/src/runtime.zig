@@ -3,9 +3,7 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_runtime");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_runtime").logFn };
 
 const c = @import("c");
 const alloc = @import("runtime_alloc.zig");
@@ -1456,9 +1454,6 @@ test "a per-entity system pinned to a thread stays one slice" {
     try testing.expectEqual(@as(u32, 1), probe.reported_count.load(.acquire));
     try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
 }
-
-
-
 
 test "a runtime with no systems ticks and tears down" {
     var f = try Fixture.init();

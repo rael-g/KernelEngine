@@ -1,33 +1,5 @@
 const std = @import("std");
-
-/// Translates `header` with the include directories and C macros `from` was given, and returns the
-/// module of the result. The translation is a build step of its own, so a change to any header it
-/// reads rebuilds every module importing it. Call it once `from` is fully configured.
-pub fn cImports(b: *std.Build, from: *std.Build.Module, header: std.Build.LazyPath) *std.Build.Module {
-    const tc = b.addTranslateC(.{
-        .root_source_file = header,
-        .target = from.resolved_target.?,
-        .optimize = from.optimize.?,
-        .link_libc = from.link_libc orelse false,
-    });
-    for (from.include_dirs.items) |dir| switch (dir) {
-        .path => |p| tc.addIncludePath(p),
-        .path_system => |p| tc.addSystemIncludePath(p),
-        .path_after => |p| tc.addAfterIncludePath(p),
-        .config_header_step => |h| tc.addConfigHeader(h),
-        .framework_path => |p| tc.addFrameworkPath(p),
-        .framework_path_system => |p| tc.addSystemFrameworkPath(p),
-        .other_step, .embed_path => @panic("cImports: only include paths, config headers and frameworks are translated"),
-    };
-    for (from.c_macros.items) |m| tc.defineCMacroRaw(m["-D".len..]);
-    return tc.createModule();
-}
-
-/// The `klog` module of ke_common's package, for a plugin build that imports this file as
-/// `ke_common`: the plugin root names its library with `klog.Destination` in its `std_options`.
-pub fn klog(b: *std.Build) *std.Build.Module {
-    return b.dependencyFromBuildZig(@This(), .{}).module("klog");
-}
+const ke_build = @import("ke_build");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -41,7 +13,7 @@ pub fn build(b: *std.Build) void {
     });
     mod.addIncludePath(b.path("include"));
     mod.addCMacro("KE_COMMON_EXPORT", "");
-    mod.addImport("c", cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
 
     const lib = b.addLibrary(.{
         .name = "ke_common",
@@ -54,15 +26,7 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install.step);
 
-    _ = b.addModule("klog", .{ .root_source_file = b.path("klog.zig") });
-
     const test_step = b.step("test", "Run the ke_common tests");
-    const klog_tests = b.addTest(.{ .root_module = b.createModule(.{
-        .root_source_file = b.path("klog.zig"),
-        .target = target,
-        .optimize = optimize,
-    }) });
-    test_step.dependOn(&b.addRunArtifact(klog_tests).step);
     if (target.result.os.tag == .windows) addDllCrtInitTest(b, target, optimize, test_step);
 }
 
