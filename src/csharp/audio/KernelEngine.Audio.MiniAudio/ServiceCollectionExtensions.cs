@@ -1,5 +1,4 @@
 ﻿using KernelEngine.Audio.MiniAudio.Native;
-using KernelEngine.Common.Native;
 using KernelEngine.Logger;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -23,9 +22,9 @@ public static class ServiceCollectionExtensions
                 if (sp.GetService<ILogger>() is { } logger)
                     KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
 
-                ke_error* err = null;
-                var handle = KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_create(&err);
-                if (handle.@ref == null) throw NativeErrors.FromNative(err, "audio_miniaudio_create");
+                KernelEngine.Audio.Native.ke_audio_handle handle;
+                KernelEngine.NativeResults.ThrowIfFailed(
+                    KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_create(&handle), "ke_audio_miniaudio_create");
                 return new KernelEngine.Audio.Audio(handle);
             }
         });

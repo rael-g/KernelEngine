@@ -1,5 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 
+using KernelEngine.Result.Native;
+
 using Xunit;
 
 namespace EngineTests;
@@ -14,10 +16,11 @@ public class AudioTests
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe uint MockLoadSound(ke_audio* self, sbyte* path, ke_error** out_error)
+    private static unsafe ke_result MockLoadSound(ke_audio* self, sbyte* path, uint* outSound)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
-        return LastResult ? 42u : 0u;
+        *outSound = LastResult ? 42u : 0u;
+        return LastResult ? ke_result.KE_OK : ke_result.KE_RESULT_NOT_FOUND;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -27,12 +30,12 @@ public class AudioTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe bool MockPlay(ke_audio* self, uint soundId, float volume, bool loop, ke_error** out_error)
+    private static unsafe ke_result MockPlay(ke_audio* self, uint soundId, float volume, bool loop)
     {
         LastSoundId = soundId;
         LastVolume = volume;
         LastLoop = loop;
-        return true;
+        return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -85,15 +88,13 @@ public class AudioTests
     }
 
     [Fact]
-    public unsafe void LoadSound_ReturnsNone_WhenNativeFails()
+    public unsafe void LoadSound_Throws_WhenNativeFails()
     {
         var h = CreateMockHandle();
         IAudio audio = new Audio(h);
         LastResult = false;
 
-        var handle = audio.LoadSound("test.wav");
-
-        Assert.Equal(SoundHandle.None, handle);
+        Assert.Throws<KeyNotFoundException>(() => audio.LoadSound("test.wav"));
         LastResult = true;
         NativeMemory.Free(h.@ref);
     }

@@ -11,8 +11,9 @@ public interface IAudio : IDisposable
     /// Loads a sound from <paramref name="path"/>. Format autodetected by the backend
     /// (miniaudio handles WAV / FLAC / MP3 / OGG out of the box).
     /// </summary>
-    /// <returns>An opaque handle suitable for repeated playback, or <see cref="SoundHandle.None"/>
-    /// on failure.</returns>
+    /// <returns>An opaque handle suitable for repeated playback.</returns>
+    /// <exception cref="KeyNotFoundException">The file cannot be opened.</exception>
+    /// <exception cref="OutOfMemoryException">The backend cannot allocate the sound.</exception>
     SoundHandle LoadSound(string path);
 
     /// <summary>Releases a previously loaded sound. Safe on

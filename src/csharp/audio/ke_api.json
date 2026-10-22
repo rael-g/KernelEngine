@@ -17,10 +17,10 @@
       "slots": [
         {
           "name": "load_sound",
-          "returns": "ke_audio_sound",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Loads a sound for repeated playback; the backend autodetects the format.",
-          "return_doc": "KE_AUDIO_SOUND_INVALID on error.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_sound; KE_RESULT_NOT_FOUND when the file cannot be opened; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "path",
@@ -32,10 +32,12 @@
               "doc": "Filesystem path to the audio file."
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_sound",
+              "type": "ke_audio_sound *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the sound; KE_AUDIO_SOUND_INVALID on failure."
             }
           ],
           "receiver": "struct ke_audio *"
@@ -58,10 +60,10 @@
         },
         {
           "name": "play",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Plays a sound, restarting it from the beginning if already playing.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for KE_AUDIO_SOUND_INVALID; KE_RESULT_NOT_FOUND for a sound that is not loaded; KE_RESULT_GENERAL when the backend cannot start it.",
           "params": [
             {
               "name": "sound",
@@ -80,12 +82,6 @@
               "type": "_Bool",
               "tags": [],
               "doc": "Non-zero to restart the sound when it ends."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_audio *"
