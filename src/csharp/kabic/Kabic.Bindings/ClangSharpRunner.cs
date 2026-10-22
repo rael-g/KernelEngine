@@ -143,16 +143,16 @@ public static class ClangSharpRunner
     };
 
     /// <summary>
-    /// The namespaces every file of the job imports: the common bindings namespace, and the owner
-    /// namespace of each remapped type, since ClangSharp writes a remapped type inside a function
-    /// pointer type by its bare name.
+    /// The namespaces every file of the job imports: the common bindings namespace when a type is
+    /// remapped into it, and the owner namespace of each remapped type, since ClangSharp writes a
+    /// remapped type inside a function pointer type by its bare name.
     /// </summary>
     static Dictionary<string, IReadOnlyList<string>> Usings(BindingJob job)
     {
         var namespaces = job.Remaps
             .Select(pair => pair.Split('=', 2)[1].Trim())
             .Select(target => target[..target.LastIndexOf('.')])
-            .Append(job.CommonNamespace)
+            .Append(job.UsesCommon ? job.CommonNamespace : "")
             .Where(ns => ns.Length > 0 && ns != job.Namespace)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)

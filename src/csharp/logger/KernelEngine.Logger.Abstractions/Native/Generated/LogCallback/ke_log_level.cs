@@ -1,5 +1,3 @@
-using KernelEngine.Common.Native;
-
 namespace KernelEngine.Logger.Native;
 
 [NativeTypeName("unsigned int")]
