@@ -16,8 +16,15 @@ static const char rotate_fs_wgsl[] = {
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+static void die_result(const char *what, ke_result result)
+{
+    fprintf(stderr, "%s failed with result code 0x%08x\n", what, (unsigned)result);
+    exit(1);
+}
 
 static void die(const char *msg, ke_error *err)
 {
@@ -50,9 +57,11 @@ int main(void)
         .height     = 600,
         .fullscreen = false,
     };
-    ke_window_handle win = ke_window_glfw_create(&wp, &err);
-    if (!win.ref) die("window create failed", err);
-    if (!win.ref->on_initialize(win.ref, &err)) die("window init failed", err);
+    ke_window_handle win = { 0 };
+    ke_result made_window = ke_window_glfw_create(&wp, &win);
+    if (made_window != KE_OK) die_result("window create failed", made_window);
+    ke_result window_ready = win.ref->on_initialize(win.ref);
+    if (window_ready != KE_OK) die_result("window init failed", window_ready);
 
     ke_gpu_device_webgpu_params dp = {
         .enable_validation = 1,
@@ -158,7 +167,7 @@ int main(void)
 
     while (!win.ref->should_close(win.ref))
     {
-        win.ref->poll_events(win.ref, NULL);
+        win.ref->poll_events(win.ref);
 
         float angle = (float)(fmod(elapsed_seconds(), 1.0) * 6.2831853);
         uniform_data[0] = angle;
@@ -213,7 +222,7 @@ int main(void)
     gpu.ref->destroy_buffer(gpu.ref, ubo);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);
-    win.ref->on_shutdown(win.ref, NULL);
+    win.ref->on_shutdown(win.ref);
     win.destroy(win.ref);
 
     printf("--- Done ---\n");

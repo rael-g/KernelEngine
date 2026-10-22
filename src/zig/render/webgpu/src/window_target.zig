@@ -116,12 +116,11 @@ fn configure(t: *WindowTarget, width: u32, height: u32) void {
     t.height = height;
 }
 
-/// Reads the window's client size, with negative values clamped to zero. When the window cannot
-/// report it, returns null and leaves in the out error parameter the error its `get_size` set.
-fn windowSize(t: *WindowTarget, out_error: [*c][*c]ke.ke_error) ?[2]u32 {
+/// Reads the window's client size, with negative values clamped to zero.
+fn windowSize(t: *WindowTarget) [2]u32 {
     var w: i32 = 0;
     var h: i32 = 0;
-    if (!t.window.get_size.?(t.window, &w, &h, out_error)) return null;
+    t.window.get_size.?(t.window, &w, &h);
     return .{ @intCast(@max(w, 0)), @intCast(@max(h, 0)) };
 }
 
@@ -146,7 +145,7 @@ fn acquire(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) ca
         fail(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "window target: a frame is already acquired", @src());
         return ke.KE_GPU_INVALID_HANDLE;
     }
-    const area = windowSize(t, out_error) orelse return ke.KE_GPU_INVALID_HANDLE;
+    const area = windowSize(t);
     if (area[0] == 0 or area[1] == 0) return ke.KE_GPU_INVALID_HANDLE;
     if (area[0] != t.width or area[1] != t.height) configure(t, area[0], area[1]);
 
@@ -315,10 +314,7 @@ export fn ke_gpu_render_target_webgpu_window_create(
         .texture = null,
         .view = null,
     };
-    const initial = windowSize(t, out_error) orelse {
-        destroyUnconfigured(t);
-        return empty;
-    };
+    const initial = windowSize(t);
     if (initial[0] != 0 and initial[1] != 0) configure(t, initial[0], initial[1]);
     return .{ .ref = &t.vtable, .destroy = destroy };
 }

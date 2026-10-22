@@ -13,40 +13,40 @@ const c = @import("c");
 const core_mod = @import("core.zig");
 const glfw = @import("glfw_device.zig");
 const heap = @import("heap");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.window_glfw);
 
 test {
     _ = @import("device.zig");
     _ = @import("core.zig");
 }
 
-/// Creates the window and starts it. Reports invalid argument when the params are null, out of
-/// memory when the device or the core cannot be allocated, and a general failure when the core's
-/// initialization is refused; each returns a zeroed handle with the error set. On success the
+/// Creates the window and starts it. Fails with invalid argument when the params or the
+/// out-parameter are null, out of memory when the device or the core cannot be allocated, and
+/// general when the core's initialization is refused, leaving the handle zeroed. On success the
 /// handle's ref is the core's window table and its destroy is the only way to release the window
-/// and its device. The title falls back to "KernelEngine" when absent,
-/// and a negative size becomes zero. The input in the params is handed to the core, which
-/// borrows it.
+/// and its device. The title falls back to "KernelEngine" when absent, and a negative size becomes
+/// zero. The input in the params is handed to the core, which borrows it.
 export fn ke_window_glfw_create(
     params_in: ?*const c.ke_window_glfw_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_window_handle {
-    const E = @import("kerror").Errors(c);
-    const null_handle = std.mem.zeroes(c.ke_window_handle);
-
-    const params = params_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return null_handle;
+    out_window: ?*c.ke_window_handle,
+) callconv(.c) c.ke_result {
+    const out = out_window orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_window_handle);
+    const params = params_in orelse return R.code(error.InvalidArgument);
+    out.* = create(params) catch |err| {
+        log.warn("creating the window failed: {t}", .{err});
+        return R.code(err);
     };
+    return R.ok;
+}
 
-    const dev = glfw.GlfwDevice.create() orelse {
-        E.fail(out_error, .out_of_memory, "device allocation failed", @src());
-        return null_handle;
-    };
+fn create(params: *const c.ke_window_glfw_params) R.Error!c.ke_window_handle {
+    const dev = glfw.GlfwDevice.create() orelse return error.OutOfMemory;
 
     const core = core_mod.Core.create(dev.asDevice(), params.input) orelse {
         heap.gpa.destroy(dev);
-        E.fail(out_error, .out_of_memory, "window state allocation failed", @src());
-        return null_handle;
+        return error.OutOfMemory;
     };
 
     const config: @import("device.zig").Config = .{
@@ -58,8 +58,7 @@ export fn ke_window_glfw_create(
 
     if (!core.initialize(config)) {
         core_mod.Core.destroyApi(core.toApi());
-        E.fail(out_error, .general, "window creation failed", @src());
-        return null_handle;
+        return error.General;
     }
 
     return .{ .ref = core.toApi(), .destroy = core_mod.Core.destroyApi };

@@ -1,5 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 
+using KernelEngine.Result.Native;
+
 using Xunit;
 
 namespace EngineTests;
@@ -7,14 +9,13 @@ namespace EngineTests;
 public unsafe class WindowDetailsTests
 {
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static bool MockInit(ke_window* self, ke_error** out_error) => true;
+    private static ke_result MockInit(ke_window* self) => ke_result.KE_OK;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static bool MockGetSize(ke_window* self, int* w, int* h, ke_error** out_error)
+    private static void MockGetSize(ke_window* self, int* w, int* h)
     {
         *w = 1920;
         *h = 1080;
-        return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
@@ -24,7 +25,7 @@ public unsafe class WindowDetailsTests
     private static void MockDestroy(ke_window* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static bool MockShutdown(ke_window* self, ke_error** out_error) => true;
+    private static void MockShutdown(ke_window* self) { }
 
     private static ke_window_handle MakeHandle(ke_window* ptr) =>
         new ke_window_handle { @ref = ptr, destroy = &MockDestroy };

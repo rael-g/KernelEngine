@@ -18,7 +18,14 @@ static const char triangle_wgsl[] = {
     , 0};
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+static void die_result(const char *what, ke_result result)
+{
+    fprintf(stderr, "%s failed with result code 0x%08x\n", what, (unsigned)result);
+    exit(1);
+}
 
 static void die(const char *msg, ke_error *err)
 {
@@ -36,9 +43,11 @@ int main(void)
         .input = NULL,
         .title = "c_demo_12 render core", .width = 800, .height = 600,
     };
-    ke_window_handle win = ke_window_glfw_create(&wp, &err);
-    if (!win.ref) die("window", err);
-    if (!win.ref->on_initialize(win.ref, &err)) die("window init", err);
+    ke_window_handle win = { 0 };
+    ke_result made_window = ke_window_glfw_create(&wp, &win);
+    if (made_window != KE_OK) die_result("window", made_window);
+    ke_result window_ready = win.ref->on_initialize(win.ref);
+    if (window_ready != KE_OK) die_result("window init", window_ready);
 
     ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
@@ -89,7 +98,7 @@ int main(void)
     printf("Triangle drawn through ke_render_service. Close the window to exit.\n");
     while (!win.ref->should_close(win.ref))
     {
-        win.ref->poll_events(win.ref, NULL);
+        win.ref->poll_events(win.ref);
 
         if (!core.ref->begin_frame(core.ref, &err)) continue;
 
@@ -110,7 +119,7 @@ int main(void)
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);
-    win.ref->on_shutdown(win.ref, NULL);
+    win.ref->on_shutdown(win.ref);
     win.destroy(win.ref);
     printf("--- Done ---\n");
     return 0;

@@ -159,9 +159,11 @@ int main(void)
         .input = NULL,
         .title = "c_demo_14 forward mesh", .width = 800, .height = 600,
     };
-    ke_window_handle win = ke_window_glfw_create(&wp, &err);
-    if (!win.ref) die("window", err);
-    if (!win.ref->on_initialize(win.ref, &err)) die("window init", err);
+    ke_window_handle win = { 0 };
+    ke_result made_window = ke_window_glfw_create(&wp, &win);
+    if (made_window != KE_OK) die_result("window", made_window);
+    ke_result window_ready = win.ref->on_initialize(win.ref);
+    if (window_ready != KE_OK) die_result("window init", window_ready);
 
     ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
@@ -235,7 +237,7 @@ int main(void)
     double prev = now_seconds();
     while (!win.ref->should_close(win.ref))
     {
-        win.ref->poll_events(win.ref, NULL);
+        win.ref->poll_events(win.ref);
         double t = now_seconds();
         rt.ref->tick(rt.ref, (float)(t - prev), &err);
         prev = t;
@@ -248,7 +250,7 @@ int main(void)
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);
-    win.ref->on_shutdown(win.ref, NULL);
+    win.ref->on_shutdown(win.ref);
     win.destroy(win.ref);
 
     printf("--- Done ---\n");

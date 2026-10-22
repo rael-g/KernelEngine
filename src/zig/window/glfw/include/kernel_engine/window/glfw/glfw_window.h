@@ -30,8 +30,14 @@ typedef struct ke_window_glfw_params {
     bool              fullscreen;
 } ke_window_glfw_params;
 
-/** Creates a window. Returns a handle whose `ref` is NULL on failure. */
-KE_WINDOW_API ke_window_handle ke_window_glfw_create(const ke_window_glfw_params *params, ke_error **out_error);
+/**
+ * Creates a window and starts it.
+ * @param params [borrowed] The title, size, fullscreen flag and optional input sink.
+ * @param out_window [out] Receives the window; left zeroed on failure.
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p params or @p out_window;
+ *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the OS refuses the window.
+ */
+KE_WINDOW_API ke_result ke_window_glfw_create(const ke_window_glfw_params *params, ke_window_handle *out_window);
 
 #ifdef __cplusplus
 }

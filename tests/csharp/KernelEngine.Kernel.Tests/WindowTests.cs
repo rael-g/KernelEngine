@@ -1,5 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 
+using KernelEngine.Result.Native;
+
 using Xunit;
 
 namespace EngineTests;
@@ -13,17 +15,16 @@ public unsafe class WindowTests
     private static int _shouldCloseCalled = 0;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static bool MockInitialize(ke_window* window, ke_error** out_error)
+    private static ke_result MockInitialize(ke_window* window)
     {
         _initializeCalled++;
-        return true;
+        return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static bool MockShutdown(ke_window* window, ke_error** out_error)
+    private static void MockShutdown(ke_window* window)
     {
         _shutdownCalled++;
-        return true;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
