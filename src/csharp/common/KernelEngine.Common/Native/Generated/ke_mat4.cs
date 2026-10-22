@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
 
+using KernelEngine.Result.Native;
+
 namespace KernelEngine.Common.Native;
 
 public partial struct ke_mat4

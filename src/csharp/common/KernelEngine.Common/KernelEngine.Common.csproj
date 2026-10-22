@@ -13,4 +13,8 @@
 
   <Import Project="../../NativeDependencies.targets" />
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
+  </ItemGroup>
+
 </Project>

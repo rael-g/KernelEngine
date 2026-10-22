@@ -1,3 +1,5 @@
+using KernelEngine.Result.Native;
+
 namespace KernelEngine.Common.Native;
 
 public unsafe partial struct ke_resource_cache_handle

@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 
+using KernelEngine.Result.Native;
+
 namespace KernelEngine.Common.Native;
 
 public static unsafe partial class NativeMethods

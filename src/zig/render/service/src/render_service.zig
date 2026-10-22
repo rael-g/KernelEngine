@@ -460,8 +460,9 @@ fn assemble(dev: *c.ke_gpu_device, tgt: *c.ke_gpu_render_target, e: *c.ke_ecs, b
 }
 
 fn resourceCache(destroy_fn: c.ke_resource_destroy_func, st: *CoreState) error{ResourceCacheFailed}!c.ke_resource_cache_handle {
-    const h = c.ke_resource_cache_create(&c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, null);
-    if (h.ref == null) return error.ResourceCacheFailed;
+    var h: c.ke_resource_cache_handle = undefined;
+    if (c.ke_resource_cache_create(&c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, &h) != c.KE_OK)
+        return error.ResourceCacheFailed;
     return h;
 }
 

@@ -21,8 +21,8 @@ fn tryCached(cache: *c.ke_resource_cache, key: [*c]const u8) u32 {
 /// Called last in a creation, once the slot is in its store, so a key the cache finds always
 /// names a stored slot.
 fn registerCached(cache: *c.ke_resource_cache, key: [*c]const u8, bits: u32) void {
-    _ = cache.register_resource.?(cache, bits, null);
-    _ = cache.cache_insert.?(cache, key, bits, null);
+    _ = cache.register_resource.?(cache, bits);
+    _ = cache.cache_insert.?(cache, key, bits);
 }
 
 /// Creates a vertex buffer and an index buffer for the key and stores them as one mesh. A key the
@@ -267,8 +267,8 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
         st.binder.destroy_material.?(st.binder, binding);
         return .{ .bits = c.KE_HANDLE_NONE };
     }
-    _ = st.texture_cache.retain.?(st.texture_cache, alb.bits, null);
-    _ = st.texture_cache.retain.?(st.texture_cache, nrm.bits, null);
+    _ = st.texture_cache.retain.?(st.texture_cache, alb.bits);
+    _ = st.texture_cache.retain.?(st.texture_cache, nrm.bits);
     registerCached(st.material_cache, key, bits);
     return .{ .bits = bits };
 }
@@ -300,32 +300,32 @@ pub fn materialBinding(self: [*c]c.ke_render_service, h: c.ke_material_handle) c
 /// Adds a reference to the mesh in the mesh cache.
 pub fn retainMesh(self: [*c]c.ke_render_service, h: c.ke_mesh_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.mesh_cache.retain.?(st.mesh_cache, h.bits, null);
+    _ = st.mesh_cache.retain.?(st.mesh_cache, h.bits);
 }
 /// Drops a reference; the last one runs `destroyMeshResource`.
 pub fn releaseMesh(self: [*c]c.ke_render_service, h: c.ke_mesh_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.mesh_cache.release.?(st.mesh_cache, h.bits, null);
+    _ = st.mesh_cache.release.?(st.mesh_cache, h.bits);
 }
 /// Adds a reference to the texture in the texture cache.
 pub fn retainTexture(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.texture_cache.retain.?(st.texture_cache, h.bits, null);
+    _ = st.texture_cache.retain.?(st.texture_cache, h.bits);
 }
 /// Drops a reference; the last one runs `destroyTextureResource`.
 pub fn releaseTexture(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.texture_cache.release.?(st.texture_cache, h.bits, null);
+    _ = st.texture_cache.release.?(st.texture_cache, h.bits);
 }
 /// Adds a reference to the material in the material cache.
 pub fn retainMaterial(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.material_cache.retain.?(st.material_cache, h.bits, null);
+    _ = st.material_cache.retain.?(st.material_cache, h.bits);
 }
 /// Drops a reference; the last one runs `destroyMaterialResource`.
 pub fn releaseMaterial(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.material_cache.release.?(st.material_cache, h.bits, null);
+    _ = st.material_cache.release.?(st.material_cache, h.bits);
 }
 
 /// Looks the key up in the mesh cache without creating anything. Returns zero and leaves the
@@ -382,7 +382,7 @@ pub fn destroyMaterialResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) c
     const st: *rc.CoreState = @alignCast(@ptrCast(ctx));
     if (st.material_store.remove(handle)) |m| {
         st.binder.destroy_material.?(st.binder, m.binding);
-        _ = st.texture_cache.release.?(st.texture_cache, m.albedo.bits, null);
-        _ = st.texture_cache.release.?(st.texture_cache, m.normal.bits, null);
+        _ = st.texture_cache.release.?(st.texture_cache, m.albedo.bits);
+        _ = st.texture_cache.release.?(st.texture_cache, m.normal.bits);
     }
 }

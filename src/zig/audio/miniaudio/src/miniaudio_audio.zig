@@ -106,8 +106,8 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
         E.fail(out_error, .out_of_memory, "sound map insert failed", @src());
         return c.KE_AUDIO_SOUND_INVALID;
     };
-    _ = state.cache.register_resource.?(state.cache, id, null);
-    _ = state.cache.cache_insert.?(state.cache, path, id, null);
+    _ = state.cache.register_resource.?(state.cache, id);
+    _ = state.cache.cache_insert.?(state.cache, path, id);
 
     return id;
 }
@@ -118,7 +118,7 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
 fn audioUnloadSound(self: ?*c.ke_audio, id: c.ke_audio_sound) callconv(.c) void {
     if (self == null or id == c.KE_AUDIO_SOUND_INVALID) return;
     const state: *State = @ptrCast(@alignCast(self.?.handle));
-    _ = state.cache.release.?(state.cache, id, null);
+    _ = state.cache.release.?(state.cache, id);
 }
 
 /// Resolves an id to its slot, or null when it was never loaded or has been released.
@@ -207,8 +207,10 @@ export fn ke_audio_miniaudio_create(out_error: [*c][*c]c.ke_error) callconv(.c) 
     state.engine_ready = true;
 
     var cache_params = c.ke_resource_cache_params{ .destroy_fn = &destroySoundResource, .destroy_ctx = state };
-    const cache_h = c.ke_resource_cache_create(&cache_params, out_error);
-    if (cache_h.ref == null) {
+    var cache_h: c.ke_resource_cache_handle = undefined;
+    const cache_made = c.ke_resource_cache_create(&cache_params, &cache_h);
+    if (cache_made != c.KE_OK) {
+        E.failCode(out_error, cache_made, "resource cache creation failed", @src());
         ma.ma_engine_uninit(&state.engine);
         state.sounds.deinit();
         gpa.destroy(state);

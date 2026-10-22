@@ -10,7 +10,8 @@ const gpa = heap.gpa;
 
 const c = @import("c");
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.resource_cache_default);
 
 /// Hashes path text; a null path hashes to zero, which `keyFromPath` moves off the empty marker.
 fn hashString(str: ?[*:0]const u8) u64 {
@@ -176,46 +177,34 @@ fn stateOf(self: *c.ke_resource_cache) *State {
 }
 
 /// Starts the resource at one reference, after making room, so a failure changes nothing. Fails
-/// with invalid argument for a null cache or the none handle, and with already exists for a
-/// registered handle. A table that cannot grow returns false and sets no error.
-fn vtRegister(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    if (self == null or handle == HANDLE_NONE) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+/// with invalid argument for a null cache or the none handle, with already exists for a
+/// registered handle, and with out of memory when the table cannot grow.
+fn vtRegister(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle) callconv(.c) c.ke_result {
+    if (self == null or handle == HANDLE_NONE) return R.code(error.InvalidArgument);
     const s = stateOf(self.?);
-    if (!s.resources.reserve()) return false;
+    if (!s.resources.reserve()) return R.code(error.OutOfMemory);
 
     var found = false;
     const key = keyFromHandle(handle);
     const idx = s.resources.probe(key, &found);
-    if (found) {
-        E.fail(out_error, .already_exists, "handle already registered", @src());
-        return false;
-    }
+    if (found) return R.code(error.AlreadyExists);
 
     if (s.resources.slots[idx].key == RC_EMPTY) s.resources.occupied += 1;
     s.resources.active += 1;
     s.resources.slots[idx] = .{ .key = key, .refcount = 1, .handle = handle };
-    return true;
+    return R.ok;
 }
 
 /// Adds one reference. Fails with invalid argument for a null cache or the none handle, and with
 /// not found for a handle that is not registered.
-fn vtRetain(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    if (self == null or handle == HANDLE_NONE) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+fn vtRetain(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle) callconv(.c) c.ke_result {
+    if (self == null or handle == HANDLE_NONE) return R.code(error.InvalidArgument);
     const s = stateOf(self.?);
     var found = false;
     const idx = s.resources.probe(keyFromHandle(handle), &found);
-    if (!found) {
-        E.fail(out_error, .not_found, "handle not found", @src());
-        return false;
-    }
+    if (!found) return R.code(error.NotFound);
     s.resources.slots[idx].refcount += 1;
-    return true;
+    return R.ok;
 }
 
 /// Scans the whole `paths` table and drops every entry naming the handle, so no path outlives
@@ -230,26 +219,20 @@ fn evictPathsForHandle(s: *State, handle: c.ke_resource_handle) void {
 /// path entries, and only then calls the destroy callback, so it never finds the handle still
 /// cached. Fails with invalid argument for a null cache or the none handle, with not found for an
 /// unregistered handle, and with a general error for a count already at zero.
-fn vtRelease(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    if (self == null or handle == HANDLE_NONE) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+fn vtRelease(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle) callconv(.c) c.ke_result {
+    if (self == null or handle == HANDLE_NONE) return R.code(error.InvalidArgument);
     const s = stateOf(self.?);
     var found = false;
     const idx = s.resources.probe(keyFromHandle(handle), &found);
-    if (!found) {
-        E.fail(out_error, .not_found, "handle not found", @src());
-        return false;
-    }
+    if (!found) return R.code(error.NotFound);
 
     const slot_ref = &s.resources.slots[idx];
     if (slot_ref.refcount == 0) {
-        E.fail(out_error, .general, "refcount is already zero", @src());
-        return false;
+        log.warn("handle {d} is registered with a count of zero", .{handle});
+        return R.code(error.General);
     }
     slot_ref.refcount -= 1;
-    if (slot_ref.refcount > 0) return true;
+    if (slot_ref.refcount > 0) return R.ok;
 
     slot_ref.key = RC_TOMBSTONE;
     slot_ref.refcount = 0;
@@ -258,7 +241,7 @@ fn vtRelease(self: ?*c.ke_resource_cache, handle: c.ke_resource_handle, out_erro
     evictPathsForHandle(s, handle);
 
     if (s.destroy_fn) |d| d(handle, s.destroy_ctx);
-    return true;
+    return R.ok;
 }
 
 /// Looks the path up by hash and stored text. A hit retains the handle for the caller and writes
@@ -272,7 +255,7 @@ fn vtTryGetCached(self: ?*c.ke_resource_cache, key: [*c]const u8, out_handle: [*
     if (!found) return false;
 
     const h = s.paths.slots[idx].handle;
-    if (!vtRetain(self, h, null)) {
+    if (vtRetain(self, h) != R.ok) {
         s.paths.drop(&s.paths.slots[idx]);
         return false;
     }
@@ -282,35 +265,23 @@ fn vtTryGetCached(self: ?*c.ke_resource_cache, key: [*c]const u8, out_handle: [*
 
 /// Stores a copy of the path for the handle. The entry takes no reference: the count is
 /// unchanged, and the entry is dropped when the last release runs. Fails with invalid argument
-/// for a null cache, key or the none handle, with a general error when `paths` cannot grow,
+/// for a null cache, key or the none handle, with out of memory when `paths` cannot grow,
 /// with already exists for a cached path, and with out of memory when the copy fails.
-fn vtCacheInsert(self: ?*c.ke_resource_cache, key: [*c]const u8, handle: c.ke_resource_handle, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    if (self == null or key == null or handle == HANDLE_NONE) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+fn vtCacheInsert(self: ?*c.ke_resource_cache, key: [*c]const u8, handle: c.ke_resource_handle) callconv(.c) c.ke_result {
+    if (self == null or key == null or handle == HANDLE_NONE) return R.code(error.InvalidArgument);
     const s = stateOf(self.?);
-    if (!s.paths.reserve()) {
-        E.fail(out_error, .general, "path table rehash failed", @src());
-        return false;
-    }
+    if (!s.paths.reserve()) return R.code(error.OutOfMemory);
 
     var found = false;
     const k = keyFromPath(key);
     const idx = s.paths.probeText(k, key, &found);
-    if (found) {
-        E.fail(out_error, .already_exists, "key already in cache; call try_get_cached first", @src());
-        return false;
-    }
+    if (found) return R.code(error.AlreadyExists);
 
-    const text = gpa.dupeZ(u8, std.mem.span(@as([*:0]const u8, key))) catch {
-        E.fail(out_error, .out_of_memory, "path copy allocation failed", @src());
-        return false;
-    };
+    const text = gpa.dupeZ(u8, std.mem.span(@as([*:0]const u8, key))) catch return R.code(error.OutOfMemory);
     if (s.paths.slots[idx].key == RC_EMPTY) s.paths.occupied += 1;
     s.paths.active += 1;
     s.paths.slots[idx] = .{ .key = k, .refcount = 0, .handle = handle, .text = text };
-    return true;
+    return R.ok;
 }
 
 /// Drops the entry for the path and leaves the resource and its count alone. An absent entry or
@@ -342,36 +313,31 @@ fn vtDestroy(self: ?*c.ke_resource_cache) callconv(.c) void {
     gpa.destroy(s);
 }
 
-/// Builds the `State`, its two tables and the vtable, and returns the handle whose destroy slot is
+/// Builds the `State`, its two tables and the vtable, and writes the handle whose destroy slot is
 /// `vtDestroy`. Fails with invalid argument for null parameters and with out of memory when the
-/// state or either table cannot be allocated; each failure frees what was allocated before it
-/// and returns a handle with no ref.
-export fn ke_resource_cache_create(params: [*c]const c.ke_resource_cache_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_resource_cache_handle {
-    const empty = c.ke_resource_cache_handle{ .ref = null, .destroy = null };
-    if (params == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return empty;
-    }
-
-    const s = gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return empty;
+/// state or either table cannot be allocated, freeing what was allocated before it and leaving the
+/// handle zeroed.
+export fn ke_resource_cache_create(params: ?*const c.ke_resource_cache_params, out_cache: ?*c.ke_resource_cache_handle) callconv(.c) c.ke_result {
+    const out = out_cache orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params orelse return R.code(error.InvalidArgument);
+    out.* = create(p) catch |err| {
+        log.warn("creating the resource cache failed: {t}", .{err});
+        return R.code(err);
     };
+    return R.ok;
+}
+
+fn create(params: *const c.ke_resource_cache_params) R.Error!c.ke_resource_cache_handle {
+    const s = gpa.create(State) catch return error.OutOfMemory;
+    errdefer gpa.destroy(s);
     s.* = std.mem.zeroes(State);
-    s.destroy_fn = params.*.destroy_fn;
-    s.destroy_ctx = params.*.destroy_ctx;
+    s.destroy_fn = params.destroy_fn;
+    s.destroy_ctx = params.destroy_ctx;
 
-    s.resources = Table.init(64) orelse {
-        gpa.destroy(s);
-        E.fail(out_error, .out_of_memory, "resources table allocation failed", @src());
-        return empty;
-    };
-    s.paths = Table.init(64) orelse {
-        s.resources.deinit();
-        gpa.destroy(s);
-        E.fail(out_error, .out_of_memory, "paths table allocation failed", @src());
-        return empty;
-    };
+    s.resources = Table.init(64) orelse return error.OutOfMemory;
+    errdefer s.resources.deinit();
+    s.paths = Table.init(64) orelse return error.OutOfMemory;
 
     s.api.handle = s;
     s.api.register_resource = &vtRegister;
@@ -407,14 +373,18 @@ fn makeCountingCache() c.ke_resource_cache_handle {
     var params = std.mem.zeroes(c.ke_resource_cache_params);
     params.destroy_fn = &countingDestroy;
     params.destroy_ctx = null;
-    return ke_resource_cache_create(&params, null);
+    var h: c.ke_resource_cache_handle = undefined;
+    R.check(ke_resource_cache_create(&params, &h)) catch return .{ .ref = null, .destroy = null };
+    return h;
 }
 
 fn makeMarkerCache(marker: *i32) c.ke_resource_cache_handle {
     var params = std.mem.zeroes(c.ke_resource_cache_params);
     params.destroy_fn = &markerDestroy;
     params.destroy_ctx = marker;
-    return ke_resource_cache_create(&params, null);
+    var h: c.ke_resource_cache_handle = undefined;
+    R.check(ke_resource_cache_create(&params, &h)) catch return .{ .ref = null, .destroy = null };
+    return h;
 }
 
 test "registering a resource starts its refcount at one" {
@@ -422,39 +392,39 @@ test "registering a resource starts its refcount at one" {
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 42, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 42, null));
-    try testing.expect(!h.ref.*.release.?(h.ref, 42, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 42));
+    try R.check(h.ref.*.release.?(h.ref, 42));
+    try testing.expect(h.ref.*.release.?(h.ref, 42) != R.ok);
 }
 
 test "registering the none handle is rejected" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(!h.ref.*.register_resource.?(h.ref, c.KE_RESOURCE_HANDLE_NONE, null));
+    try testing.expect(h.ref.*.register_resource.?(h.ref, c.KE_RESOURCE_HANDLE_NONE) != R.ok);
 }
 
 test "registering the same handle twice is rejected" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 7, null));
-    try testing.expect(!h.ref.*.register_resource.?(h.ref, 7, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 7, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 7));
+    try testing.expect(h.ref.*.register_resource.?(h.ref, 7) != R.ok);
+    try R.check(h.ref.*.release.?(h.ref, 7));
 }
 
 test "each retain adds a release the resource must wait for" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 1, null));
-    try testing.expect(h.ref.*.retain.?(h.ref, 1, null));
-    try testing.expect(h.ref.*.retain.?(h.ref, 1, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 1, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 1));
+    try R.check(h.ref.*.retain.?(h.ref, 1));
+    try R.check(h.ref.*.retain.?(h.ref, 1));
+    try R.check(h.ref.*.release.?(h.ref, 1));
     try testing.expectEqual(@as(i32, 0), test_destroy_calls);
-    try testing.expect(h.ref.*.release.?(h.ref, 1, null));
+    try R.check(h.ref.*.release.?(h.ref, 1));
     try testing.expectEqual(@as(i32, 0), test_destroy_calls);
-    try testing.expect(h.ref.*.release.?(h.ref, 1, null));
+    try R.check(h.ref.*.release.?(h.ref, 1));
     try testing.expectEqual(@as(i32, 1), test_destroy_calls);
     try testing.expectEqual(@as(c.ke_resource_handle, 1), test_last_destroyed);
 }
@@ -463,7 +433,7 @@ test "retaining an unknown handle fails" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(!h.ref.*.retain.?(h.ref, 999, null));
+    try testing.expect(h.ref.*.retain.?(h.ref, 999) != R.ok);
 }
 
 test "the destroy callback receives the context given at creation" {
@@ -472,8 +442,8 @@ test "the destroy callback receives the context given at creation" {
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 100, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 100, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 100));
+    try R.check(h.ref.*.release.?(h.ref, 100));
     try testing.expectEqual(@as(i32, 1), marker);
 }
 
@@ -482,11 +452,11 @@ test "handle zero is an ordinary resource handle" {
     const h = makeMarkerCache(&marker);
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 0, null));
-    try testing.expect(h.ref.*.retain.?(h.ref, 0, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 0, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 0));
+    try R.check(h.ref.*.retain.?(h.ref, 0));
+    try R.check(h.ref.*.release.?(h.ref, 0));
     try testing.expectEqual(@as(i32, 0), marker);
-    try testing.expect(h.ref.*.release.?(h.ref, 0, null));
+    try R.check(h.ref.*.release.?(h.ref, 0));
     try testing.expectEqual(@as(i32, 1), marker);
 }
 
@@ -502,15 +472,15 @@ test "a cache hit returns the handle and retains it for the caller" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 10, null));
-    try testing.expect(h.ref.*.cache_insert.?(h.ref, "res://x.mesh", 10, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 10));
+    try R.check(h.ref.*.cache_insert.?(h.ref, "res://x.mesh", 10));
 
     var out: c.ke_resource_handle = c.KE_RESOURCE_HANDLE_NONE;
     try testing.expect(h.ref.*.try_get_cached.?(h.ref, "res://x.mesh", &out));
     try testing.expectEqual(@as(c.ke_resource_handle, 10), out);
-    try testing.expect(h.ref.*.release.?(h.ref, 10, null));
+    try R.check(h.ref.*.release.?(h.ref, 10));
     try testing.expectEqual(@as(i32, 0), test_destroy_calls);
-    try testing.expect(h.ref.*.release.?(h.ref, 10, null));
+    try R.check(h.ref.*.release.?(h.ref, 10));
     try testing.expectEqual(@as(i32, 1), test_destroy_calls);
 }
 
@@ -518,21 +488,21 @@ test "inserting a key that is already cached is rejected" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 20, null));
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 21, null));
-    try testing.expect(h.ref.*.cache_insert.?(h.ref, "res://y.tex", 20, null));
-    try testing.expect(!h.ref.*.cache_insert.?(h.ref, "res://y.tex", 21, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 20, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 21, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 20));
+    try R.check(h.ref.*.register_resource.?(h.ref, 21));
+    try R.check(h.ref.*.cache_insert.?(h.ref, "res://y.tex", 20));
+    try testing.expect(h.ref.*.cache_insert.?(h.ref, "res://y.tex", 21) != R.ok);
+    try R.check(h.ref.*.release.?(h.ref, 20));
+    try R.check(h.ref.*.release.?(h.ref, 21));
 }
 
 test "releasing the last reference evicts the cached path" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 20, null));
-    try testing.expect(h.ref.*.cache_insert.?(h.ref, "res://y.tex", 20, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 20, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 20));
+    try R.check(h.ref.*.cache_insert.?(h.ref, "res://y.tex", 20));
+    try R.check(h.ref.*.release.?(h.ref, 20));
 
     var out: c.ke_resource_handle = 0;
     try testing.expect(!h.ref.*.try_get_cached.?(h.ref, "res://y.tex", &out));
@@ -542,14 +512,14 @@ test "evicting a path leaves the resource itself alive" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 30, null));
-    try testing.expect(h.ref.*.cache_insert.?(h.ref, "res://z.mat", 30, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 30));
+    try R.check(h.ref.*.cache_insert.?(h.ref, "res://z.mat", 30));
 
     h.ref.*.cache_evict.?(h.ref, "res://z.mat");
     var out: c.ke_resource_handle = 0;
     try testing.expect(!h.ref.*.try_get_cached.?(h.ref, "res://z.mat", &out));
     try testing.expectEqual(@as(i32, 0), test_destroy_calls);
-    try testing.expect(h.ref.*.release.?(h.ref, 30, null));
+    try R.check(h.ref.*.release.?(h.ref, 30));
     try testing.expectEqual(@as(i32, 1), test_destroy_calls);
 }
 
@@ -560,16 +530,16 @@ test "every resource survives the rehashes caused by many insertions" {
     const n: c.ke_resource_handle = 200;
     var i: c.ke_resource_handle = 1;
     while (i <= n) : (i += 1) {
-        try testing.expect(h.ref.*.register_resource.?(h.ref, i, null));
+        try R.check(h.ref.*.register_resource.?(h.ref, i));
     }
     i = 1;
     while (i <= n) : (i += 1) {
-        try testing.expect(h.ref.*.retain.?(h.ref, i, null));
-        try testing.expect(h.ref.*.release.?(h.ref, i, null));
+        try R.check(h.ref.*.retain.?(h.ref, i));
+        try R.check(h.ref.*.release.?(h.ref, i));
     }
     i = 1;
     while (i <= n) : (i += 1) {
-        try testing.expect(h.ref.*.release.?(h.ref, i, null));
+        try R.check(h.ref.*.release.?(h.ref, i));
     }
     try testing.expectEqual(@as(i32, 200), test_destroy_calls);
 }
@@ -578,20 +548,20 @@ test "a handle registered into a tombstoned slot behaves like any other" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 1, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 1, null));
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 65, null));
-    try testing.expect(h.ref.*.retain.?(h.ref, 65, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 65, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 65, null));
-    try testing.expect(!h.ref.*.retain.?(h.ref, 65, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 1));
+    try R.check(h.ref.*.release.?(h.ref, 1));
+    try R.check(h.ref.*.register_resource.?(h.ref, 65));
+    try R.check(h.ref.*.retain.?(h.ref, 65));
+    try R.check(h.ref.*.release.?(h.ref, 65));
+    try R.check(h.ref.*.release.?(h.ref, 65));
+    try testing.expect(h.ref.*.retain.?(h.ref, 65) != R.ok);
 }
 
 test "a cached path pointing at an unregistered handle reports a miss" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.cache_insert.?(h.ref, "res://stale", 500, null));
+    try R.check(h.ref.*.cache_insert.?(h.ref, "res://stale", 500));
     var out: c.ke_resource_handle = 0;
     try testing.expect(!h.ref.*.try_get_cached.?(h.ref, "res://stale", &out));
 }
@@ -600,9 +570,9 @@ test "inserting with a null cache, a null key or the none handle is rejected" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(!h.ref.*.cache_insert.?(null, null, 0, null));
-    try testing.expect(!h.ref.*.cache_insert.?(h.ref, null, 0, null));
-    try testing.expect(!h.ref.*.cache_insert.?(h.ref, "x", c.KE_RESOURCE_HANDLE_NONE, null));
+    try testing.expect(h.ref.*.cache_insert.?(null, null, 0) != R.ok);
+    try testing.expect(h.ref.*.cache_insert.?(h.ref, null, 0) != R.ok);
+    try testing.expect(h.ref.*.cache_insert.?(h.ref, "x", c.KE_RESOURCE_HANDLE_NONE) != R.ok);
 }
 
 test "evicting with a null cache or a null key is a no-op" {
@@ -617,13 +587,13 @@ test "a released slot is reused without losing later lookups" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 1, null));
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 2, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 1, null));
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 3, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 1));
+    try R.check(h.ref.*.register_resource.?(h.ref, 2));
+    try R.check(h.ref.*.release.?(h.ref, 1));
+    try R.check(h.ref.*.register_resource.?(h.ref, 3));
 
     var out: c.ke_resource_handle = 0;
-    try testing.expect(h.ref.*.cache_insert.?(h.ref, "res://3", 3, null));
+    try R.check(h.ref.*.cache_insert.?(h.ref, "res://3", 3));
     try testing.expect(h.ref.*.try_get_cached.?(h.ref, "res://3", &out));
     try testing.expectEqual(@as(c.ke_resource_handle, 3), out);
 }
@@ -634,15 +604,15 @@ test "a rehash triggered while tombstones are present keeps the table consistent
 
     var i: c.ke_resource_handle = 1;
     while (i <= 40) : (i += 1) {
-        try testing.expect(h.ref.*.register_resource.?(h.ref, i, null));
+        try R.check(h.ref.*.register_resource.?(h.ref, i));
     }
     i = 1;
     while (i <= 20) : (i += 1) {
-        try testing.expect(h.ref.*.release.?(h.ref, i, null));
+        try R.check(h.ref.*.release.?(h.ref, i));
     }
     i = 41;
     while (i <= 100) : (i += 1) {
-        try testing.expect(h.ref.*.register_resource.?(h.ref, i, null));
+        try R.check(h.ref.*.register_resource.?(h.ref, i));
     }
 
     var out: c.ke_resource_handle = 0;
@@ -650,8 +620,8 @@ test "a rehash triggered while tombstones are present keeps the table consistent
 
     i = 21;
     while (i <= 100) : (i += 1) {
-        try testing.expect(h.ref.*.retain.?(h.ref, i, null));
-        try testing.expect(h.ref.*.release.?(h.ref, i, null));
+        try R.check(h.ref.*.retain.?(h.ref, i));
+        try R.check(h.ref.*.release.?(h.ref, i));
     }
 }
 
@@ -659,9 +629,9 @@ test "destroying the cache runs the destroy callback for every live resource" {
     var marker: i32 = 0;
     const h = makeMarkerCache(&marker);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 5, null));
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 6, null));
-    try testing.expect(h.ref.*.retain.?(h.ref, 6, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 5));
+    try R.check(h.ref.*.register_resource.?(h.ref, 6));
+    try R.check(h.ref.*.retain.?(h.ref, 6));
 
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i32, 2), marker);
@@ -669,8 +639,8 @@ test "destroying the cache runs the destroy callback for every live resource" {
 
 test "creating, using and destroying a resource cache leaves no block allocated" {
     const h = makeCountingCache();
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 42, null));
-    try testing.expect(h.ref.*.release.?(h.ref, 42, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 42));
+    try R.check(h.ref.*.release.?(h.ref, 42));
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
 }
@@ -681,13 +651,13 @@ test "two different paths whose hashes collide stay two different entries" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 1, null));
-    try testing.expect(h.ref.*.register_resource.?(h.ref, 2, null));
-    try testing.expect(h.ref.*.cache_insert.?(h.ref, "!B", 1, null));
+    try R.check(h.ref.*.register_resource.?(h.ref, 1));
+    try R.check(h.ref.*.register_resource.?(h.ref, 2));
+    try R.check(h.ref.*.cache_insert.?(h.ref, "!B", 1));
 
     var found: c.ke_resource_handle = c.KE_RESOURCE_HANDLE_NONE;
     try testing.expect(!h.ref.*.try_get_cached.?(h.ref, "\"!", &found));
-    try testing.expect(h.ref.*.cache_insert.?(h.ref, "\"!", 2, null));
+    try R.check(h.ref.*.cache_insert.?(h.ref, "\"!", 2));
 
     try testing.expect(h.ref.*.try_get_cached.?(h.ref, "!B", &found));
     try testing.expectEqual(@as(c.ke_resource_handle, 1), found);

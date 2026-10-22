@@ -17,9 +17,16 @@ extern "C"
 #  endif
 #endif
 
-KE_RESOURCE_CACHE_DEFAULT_API ke_resource_cache_handle ke_resource_cache_create(
+/**
+ * Creates a resource cache.
+ * @param params [borrowed] The destroy callback and its context.
+ * @param out_cache [out] Receives the cache; left zeroed on failure.
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for null @p params or @p out_cache, or
+ *         KE_RESULT_OUT_OF_MEMORY.
+ */
+KE_RESOURCE_CACHE_DEFAULT_API ke_result ke_resource_cache_create(
     const ke_resource_cache_params *params,
-    ke_error                       **out_error);
+    ke_resource_cache_handle       *out_cache);
 
 #ifdef __cplusplus
 }

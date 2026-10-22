@@ -73,8 +73,8 @@ pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "load_shader: shader store insert failed", @src().file, @intCast(@src().line), null);
         return c.KE_GPU_INVALID_HANDLE;
     }
-    _ = st.shader_cache.register_resource.?(st.shader_cache, bits, null);
-    _ = st.shader_cache.cache_insert.?(st.shader_cache, path.ptr, bits, null);
+    _ = st.shader_cache.register_resource.?(st.shader_cache, bits);
+    _ = st.shader_cache.cache_insert.?(st.shader_cache, path.ptr, bits);
     return module;
 }
 
