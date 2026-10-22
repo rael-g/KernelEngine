@@ -66,18 +66,25 @@ fn destroyScene(self: ?*c.ke_render_scene_resolve) callconv(.c) void {
 /// returns the id the ecs gives it.
 fn registerComponent(e: *c.ke_ecs, name: [*c]const u8, comptime T: type, comptime table: anytype, out_error: [*c][*c]c.ke_error) c.ke_component_id {
     const fields = @typeInfo(@TypeOf(table.*)).array;
-    return e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, out_error);
+    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    if (e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, &cid) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
+    return cid;
 }
 
 fn registerIds(e: *c.ke_ecs, ids: *c.ke_render_scene_component_ids, out_error: [*c][*c]c.ke_error) bool {
     ids.mesh = registerComponent(e, c.KE_COMPONENT_NAME_MESH, c.ke_mesh_component, &c.ke_mesh_component_fields, out_error);
-    ids.world_transform = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = @sizeOf(c.ke_world_transform_component), .alignment = @alignOf(c.ke_world_transform_component), .fields = null, .field_count = 0 }, out_error);
+    ids.world_transform = c.KE_COMPONENT_INVALID;
+    if (e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = @sizeOf(c.ke_world_transform_component), .alignment = @alignOf(c.ke_world_transform_component), .fields = null, .field_count = 0 }, &ids.world_transform) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
     ids.camera = registerComponent(e, c.KE_COMPONENT_NAME_CAMERA, c.ke_camera_component, &c.ke_camera_component_fields, out_error);
     ids.directional_light = registerComponent(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, c.ke_directional_light_component, &c.ke_directional_light_component_fields, out_error);
     ids.point_light = registerComponent(e, c.KE_COMPONENT_NAME_POINT_LIGHT, c.ke_point_light_component, &c.ke_point_light_component_fields, out_error);
     ids.spot_light = registerComponent(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, c.ke_spot_light_component, &c.ke_spot_light_component_fields, out_error);
     ids.ambient_light = registerComponent(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, c.ke_ambient_light_component, &c.ke_ambient_light_component_fields, out_error);
-    ids.skybox = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(c.ke_skybox_component), .alignment = @alignOf(c.ke_skybox_component), .fields = null, .field_count = 0 }, out_error);
+    ids.skybox = c.KE_COMPONENT_INVALID;
+    if (e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(c.ke_skybox_component), .alignment = @alignOf(c.ke_skybox_component), .fields = null, .field_count = 0 }, &ids.skybox) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
     ids.sprite2d = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields, out_error);
     ids.label = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields, out_error);
     inline for (@typeInfo(c.ke_render_scene_component_ids).@"struct".fields) |f| {

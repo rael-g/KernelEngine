@@ -1,4 +1,5 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Ecs.Native;
 

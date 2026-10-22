@@ -1,7 +1,8 @@
 ﻿#ifndef KERNEL_ENGINE_ECS_KE_ECS_H_
 #define KERNEL_ENGINE_ECS_KE_ECS_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
+#include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <stddef.h>
 
@@ -47,14 +48,14 @@ extern "C"
          * only the size and the alignment are compared.
          *
          * @param params [borrowed] The name, size, alignment and field table of the type.
-         * @param out_error [out,optional] Set when the params are missing, the alignment is not
-         *        a power of two, or the type conflicts with the name's prior registration,
-         *        naming what disagrees.
-         * @return The component's id, or KE_COMPONENT_INVALID on error.
+         * @param out_cid [out] Receives the component's id; KE_COMPONENT_INVALID on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the params are missing, the alignment is
+         *         not a power of two, or the type conflicts with the name's prior registration,
+         *         what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.
          */
-        ke_component_id (*component_register)(struct ke_ecs              *self,
-                                               const ke_component_params  *params,
-                                               ke_error                  **out_error);
+        ke_result (*component_register)(struct ke_ecs              *self,
+                                        const ke_component_params  *params,
+                                        ke_component_id            *out_cid);
 
         /**
          * [try] Looks up a previously registered component by name.
@@ -64,8 +65,7 @@ extern "C"
          */
         bool (*component_lookup)(struct ke_ecs     *self,
                                  const char        *name,
-                                 ke_component_meta *out_meta,
-                                 ke_error         **out_error);
+                                 ke_component_meta *out_meta);
 
         /**
          * Attaches a component to an entity, returning its storage: zeroed, then seeded with

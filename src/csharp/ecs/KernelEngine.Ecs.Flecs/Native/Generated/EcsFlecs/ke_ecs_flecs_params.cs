@@ -1,6 +1,6 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Logger.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Ecs.Flecs.Native;
 

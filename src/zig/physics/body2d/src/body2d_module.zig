@@ -311,10 +311,14 @@ fn create(pr: *const c.ke_physics_body2d_module_params) R.Error!c.ke_physics_bod
     errdefer gpa.destroy(m);
     m.* = .{ .physics = physics, .runtime = rt, .tree = tree };
 
-    const body_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(c.ke_body2d_component), .alignment = @alignOf(c.ke_body2d_component), .fields = &c.ke_body2d_component_fields, .field_count = c.ke_body2d_component_fields.len }, null);
-    const transform_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_TRANSFORM2D, .size = @sizeOf(c.ke_transform2d_component), .alignment = @alignOf(c.ke_transform2d_component), .fields = &c.ke_transform2d_component_fields, .field_count = c.ke_transform2d_component_fields.len }, null);
-    const collider_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(c.ke_collider2d_component), .alignment = @alignOf(c.ke_collider2d_component), .fields = &c.ke_collider2d_component_fields, .field_count = c.ke_collider2d_component_fields.len }, null);
-    const hierarchy_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_HIERARCHY, .size = @sizeOf(c.ke_hierarchy_component), .alignment = @alignOf(c.ke_hierarchy_component), .fields = null, .field_count = 0 }, null);
+    var body_cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(c.ke_body2d_component), .alignment = @alignOf(c.ke_body2d_component), .fields = &c.ke_body2d_component_fields, .field_count = c.ke_body2d_component_fields.len }, &body_cid));
+    var transform_cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_TRANSFORM2D, .size = @sizeOf(c.ke_transform2d_component), .alignment = @alignOf(c.ke_transform2d_component), .fields = &c.ke_transform2d_component_fields, .field_count = c.ke_transform2d_component_fields.len }, &transform_cid));
+    var collider_cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(c.ke_collider2d_component), .alignment = @alignOf(c.ke_collider2d_component), .fields = &c.ke_collider2d_component_fields, .field_count = c.ke_collider2d_component_fields.len }, &collider_cid));
+    var hierarchy_cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_HIERARCHY, .size = @sizeOf(c.ke_hierarchy_component), .alignment = @alignOf(c.ke_hierarchy_component), .fields = null, .field_count = 0 }, &hierarchy_cid));
 
     const rd = c.KE_ACCESS_READ;
     const wr = c.KE_ACCESS_WRITE;

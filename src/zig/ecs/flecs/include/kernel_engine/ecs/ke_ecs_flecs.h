@@ -36,8 +36,13 @@ typedef struct ke_ecs_flecs_params
 /// Also installs process-wide log and abort handlers: an internal assertion
 /// failure in the world ends the process through ke_error_fatal, with a
 /// readable message, and does not return.
-KE_ECS_FLECS_API ke_ecs_handle ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
-                                                   ke_error                 **out_error);
+/// @param params [borrowed,optional] NULL takes every default.
+/// @param out_ecs [out] Receives the ECS; left zeroed on failure.
+/// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_ecs or a world_id_base that leaves
+///         no reserve pool; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_NOT_INITIALIZED when flecs cannot
+///         start the world.
+KE_ECS_FLECS_API ke_result ke_ecs_flecs_create(const ke_ecs_flecs_params *params,
+                                               ke_ecs_handle             *out_ecs);
 
 #ifdef __cplusplus
 }

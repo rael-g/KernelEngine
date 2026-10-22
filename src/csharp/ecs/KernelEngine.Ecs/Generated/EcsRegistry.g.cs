@@ -61,13 +61,12 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
 
     /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With `fields` the layouts are compared field by field; without them, only the size and the alignment are compared.</summary>
     /// <param name="@params">The name, size, alignment and field table of the type.</param>
-    /// <returns>The component's id, or KE_COMPONENT_INVALID on error.</returns>
+    /// <returns>Receives the component's id; KE_COMPONENT_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint ComponentRegister(ke_component_params* @params)
     {
-        ke_error* err = null;
-        var result = Handle->component_register(Handle, @params, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "component_register");
+        uint result;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_register(Handle, @params, &result), "component_register");
         return result;
     }
 
@@ -81,7 +80,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            var found = Handle->component_lookup(Handle, (sbyte*)namePtr, &metaLocal, null);
+            var found = Handle->component_lookup(Handle, (sbyte*)namePtr, &metaLocal);
             meta = metaLocal;
             return found;
         }

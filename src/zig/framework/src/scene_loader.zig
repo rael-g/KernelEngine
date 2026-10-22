@@ -15,6 +15,7 @@ const type_name_max = names_mod.type_name_max;
 const normalizeTypeName = names_mod.normalizeTypeName;
 
 const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 
 const res_prefix = "res://";
@@ -726,27 +727,29 @@ fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
 fn fakeComponentRegister(
     self: ?*c.ke_ecs,
     params: [*c]const c.ke_component_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_component_id {
-    _ = out_error;
+    out_cid: [*c]c.ke_component_id,
+) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(params.*.name);
     for (f.components[0..f.component_count], 0..) |comp, i| {
-        if (std.mem.eql(u8, comp.name, wanted)) return @intCast(i + 1);
+        if (std.mem.eql(u8, comp.name, wanted)) return answer(out_cid, @intCast(i + 1));
     }
-    if (f.component_count >= fake_max_components) return 0;
+    if (f.component_count >= fake_max_components) return answer(out_cid, 0);
     f.components[f.component_count] = .{ .name = wanted, .size = params.*.size };
     f.component_count += 1;
-    return @intCast(f.component_count);
+    return answer(out_cid, @intCast(f.component_count));
+}
+
+fn answer(out_cid: [*c]c.ke_component_id, cid: c.ke_component_id) c.ke_result {
+    out_cid.* = cid;
+    return if (cid == 0) R.code(error.InvalidArgument) else R.ok;
 }
 
 fn fakeComponentLookup(
     self: ?*c.ke_ecs,
     name: [*c]const u8,
     out_meta: [*c]c.ke_component_meta,
-    out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
-    _ = out_error;
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(name);
     for (f.components[0..f.component_count], 0..) |comp, i| {
@@ -969,7 +972,8 @@ const Fixture = struct {
         field_count: usize,
     ) void {
         const e = &self.ecs.vtable;
-        const cid = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = size, .alignment = 0, .fields = null, .field_count = 0 }, null);
+        var cid: c.ke_component_id = 0;
+        _ = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = size, .alignment = 0, .fields = null, .field_count = 0 }, &cid);
         const w = self.world_h.ref.?;
         _ = w.*.register_component_fields.?(w, cid, fields, @intCast(field_count), null);
     }
@@ -1004,7 +1008,7 @@ const Fixture = struct {
 
     fn comp(self: *Fixture, comptime T: type, name: [*c]const u8, entity: c.ke_entity) ?*T {
         var meta: c.ke_component_meta = undefined;
-        if (!fakeComponentLookup(&self.ecs.vtable, name, &meta, null)) return null;
+        if (!fakeComponentLookup(&self.ecs.vtable, name, &meta)) return null;
         return @ptrCast(@alignCast(fakeComponentGet(&self.ecs.vtable, entity, meta.cid)));
     }
 
@@ -1858,7 +1862,8 @@ test "a user component is applied through the callback its owner registered" {
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    const demo_cid = e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, null);
+    var demo_cid: c.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
     var saw_ctx = false;
@@ -1903,7 +1908,8 @@ test "the reason an apply callback rejects a value reaches the caller instead of
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    const demo_cid = e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, null);
+    var demo_cid: c.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
     try testing.expect(w.*.register_component_apply.?(w, demo_cid, rejectingApply, null, null));

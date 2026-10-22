@@ -1,6 +1,7 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
 const ke_logger_build = @import("ke_logger");
+const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -53,6 +54,7 @@ pub fn build(b: *std.Build) void {
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
     mod.addImport("log", ke_logger_build.log(b));
+    mod.addImport("result", ke_result_build.result(b));
     const lib = b.addLibrary(.{
         .name = "ke_framework",
         .root_module = mod,
@@ -93,6 +95,7 @@ pub fn build(b: *std.Build) void {
         test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
         test_mod.addImport("test_c", ke_build.cImports(b, test_mod, b.path("src/test_c.h")));
         test_mod.addImport("log", ke_logger_build.log(b));
+        test_mod.addImport("result", ke_result_build.result(b));
         const unit_tests = b.addTest(.{ .root_module = test_mod });
         test_step.dependOn(&b.addRunArtifact(unit_tests).step);
     }

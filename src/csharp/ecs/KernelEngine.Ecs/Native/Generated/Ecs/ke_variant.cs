@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 using KernelEngine.Common.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Ecs.Native;
 

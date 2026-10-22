@@ -167,8 +167,10 @@ fn registerType(
         return false;
     };
     defer heap.gpa.free(tag_name);
-    const tag = s.ecs.component_register.?(s.ecs, &c.ke_component_params{ .name = tag_name.ptr, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, out_error);
-    if (tag == 0) {
+    var tag: c.ke_component_id = 0;
+    const made = s.ecs.component_register.?(s.ecs, &c.ke_component_params{ .name = tag_name.ptr, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &tag);
+    if (made != c.KE_OK) {
+        E.failCode(out_error, made, "registering the script type's tag failed", @src());
         heap.gpa.free(owned_name);
         heap.gpa.free(owned_components);
         return false;
@@ -585,8 +587,8 @@ pub export fn ke_script_host_create(
 
     var hierarchy_meta: c.ke_component_meta = undefined;
     var name_meta: c.ke_component_meta = undefined;
-    if (!ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta, null) or
-        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_NAME, &name_meta, null))
+    if (!ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta) or
+        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_NAME, &name_meta))
     {
         E.fail(out_error, .not_found, "hierarchy and name components are not registered; create a scene tree first", @src());
         return null_handle;
@@ -608,8 +610,10 @@ pub export fn ke_script_host_create(
     s.ecs = ecs;
     s.hierarchy_cid = hierarchy_meta.cid;
     s.name_cid = name_meta.cid;
-    s.binding_cid = ecs.component_register.?(ecs, &c.ke_component_params{ .name = binding_component, .size = @sizeOf(Binding), .alignment = @alignOf(Binding), .fields = null, .field_count = 0 }, null);
-    s.tag_group_cid = ecs.component_register.?(ecs, &c.ke_component_params{ .name = tag_group_component, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    s.binding_cid = 0;
+    s.tag_group_cid = 0;
+    _ = ecs.component_register.?(ecs, &c.ke_component_params{ .name = binding_component, .size = @sizeOf(Binding), .alignment = @alignOf(Binding), .fields = null, .field_count = 0 }, &s.binding_cid);
+    _ = ecs.component_register.?(ecs, &c.ke_component_params{ .name = tag_group_component, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &s.tag_group_cid);
     if (s.binding_cid == 0 or s.tag_group_cid == 0) {
         E.fail(out_error, .invalid_argument, "could not register the script instance or type group component", @src());
         heap.gpa.free(s.types);

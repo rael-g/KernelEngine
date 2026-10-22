@@ -1278,7 +1278,7 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 
 const testing = std.testing;
 
-extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ecs_handle;
+extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_ecs: *c.ke_ecs_handle) callconv(.c) c.ke_result;
 extern fn ke_scheduler_enki_create(params: ?*const anyopaque, out_scheduler: *c.ke_scheduler_handle) callconv(.c) c.ke_result;
 
 const Fixture = struct {
@@ -1290,8 +1290,8 @@ const Fixture = struct {
         var sh: c.ke_scheduler_handle = undefined;
         try R.check(ke_scheduler_enki_create(null, &sh));
 
-        const eh = ke_ecs_flecs_create(null, null);
-        try testing.expect(eh.ref != null);
+        var eh: c.ke_ecs_handle = undefined;
+        try R.check(ke_ecs_flecs_create(null, &eh));
 
         var rp = std.mem.zeroes(c.ke_runtime_params);
         const rh = ke_runtime_create(eh.ref, sh.ref, &rp, null);
@@ -2412,7 +2412,8 @@ test "the render extract carries this tick's sim write" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    const cid = f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "Extract.Value", .size = @sizeOf(i32), .alignment = @alignOf(i32), .fields = null, .field_count = 0 }, null);
+    var cid: c.ke_component_id = 0;
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "Extract.Value", .size = @sizeOf(i32), .alignment = @alignOf(i32), .fields = null, .field_count = 0 }, &cid));
     const e = f.ecs().entity_create.?(f.ecs());
     const v = f.ecs().component_add.?(f.ecs(), e, cid);
     try testing.expect(v != null);
@@ -2475,8 +2476,10 @@ test "the render extract keeps multi term columns aligned" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    const pos = f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "ExtractPos", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, null);
-    const vel = f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "ExtractVel", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, null);
+    var pos: c.ke_component_id = 0;
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "ExtractPos", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, &pos));
+    var vel: c.ke_component_id = 0;
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "ExtractVel", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, &vel));
 
     var expect: f64 = 0.0;
     for (0..64) |i| {
@@ -2760,7 +2763,8 @@ test "spawn hands the system body an id it can actually use" {
     try testing.expect(f.tick(1.0 / 60.0));
 
     const e = f.ecs();
-    const cid = e.component_register.?(e, &c.ke_component_params{ .name = "spawned_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    var cid: c.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "spawned_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
     for (probe.ids, 0..) |id, i| {
         try testing.expect(id != c.KE_ENTITY_INVALID);
         for (probe.ids[i + 1 ..]) |other| try testing.expect(id != other);
@@ -2780,7 +2784,8 @@ test "an entity spawned with no components still exists after the barrier" {
     try testing.expect(f.tick(1.0 / 60.0));
 
     const e = f.ecs();
-    const cid = e.component_register.?(e, &c.ke_component_params{ .name = "exists_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    var cid: c.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "exists_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
     e.entity_destroy.?(e, probe.ids[0]);
     try testing.expect(e.component_add.?(e, probe.ids[0], cid) == null);
 }
@@ -2808,7 +2813,7 @@ test "deferred attach detach and despawn are applied at the barrier" {
     resetDeferApplied();
 
     var probe = MutatorProbe{};
-    probe.cid = f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "mutator_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "mutator_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
     var sys = systemParams("Mutator", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &mutatorBody;
@@ -2859,7 +2864,7 @@ test "an attach whose payload size differs from the component size is refused wi
     resetDeferApplied();
 
     var probe = RefusalProbe{};
-    probe.cid = f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "refusal_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "refusal_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
     var sys = systemParams("WrongSize", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &wrongSizeBody;
@@ -2903,13 +2908,14 @@ test "the defer queue drains between ticks" {
 }
 
 test "a zero size component registers as a usable tag" {
-    const h = ke_ecs_flecs_create(null, null);
-    try testing.expect(h.ref != null);
+    var h: c.ke_ecs_handle = undefined;
+    try R.check(ke_ecs_flecs_create(null, &h));
     defer h.destroy.?(h.ref);
 
     const ecs: *c.ke_ecs = @ptrCast(h.ref);
 
-    var tag = ecs.component_register.?(ecs, &c.ke_component_params{ .name = "ZeroSizeTag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    var tag: c.ke_component_id = 0;
+    try R.check(ecs.component_register.?(ecs, &c.ke_component_params{ .name = "ZeroSizeTag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &tag));
     try testing.expect(tag != 0);
 
     const e = ecs.entity_create.?(ecs);
@@ -2946,7 +2952,8 @@ test "two readers sharing a wave read the same storage without conflicting" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    const pos = f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "pos", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, null);
+    var pos: c.ke_component_id = 0;
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "pos", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, &pos));
     try testing.expect(pos != 0);
 
     for (0..512) |i| {
@@ -2995,8 +3002,10 @@ test "a multi term query hands back aligned columns" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    const pos = f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "pos2", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, null);
-    const vel = f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "vel2", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, null);
+    var pos: c.ke_component_id = 0;
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "pos2", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, &pos));
+    var vel: c.ke_component_id = 0;
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "vel2", .size = @sizeOf(Vec3), .alignment = @alignOf(Vec3), .fields = null, .field_count = 0 }, &vel));
     try testing.expect(pos != 0);
     try testing.expect(vel != 0);
 

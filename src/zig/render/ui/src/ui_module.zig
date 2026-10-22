@@ -533,9 +533,11 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
         return empty;
     }
 
-    ui.quad_cid = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &c.ke_ui_quad_component_fields, .field_count = c.ke_ui_quad_component_fields.len }, null);
+    ui.quad_cid = c.KE_COMPONENT_INVALID;
+    _ = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &c.ke_ui_quad_component_fields, .field_count = c.ke_ui_quad_component_fields.len }, &ui.quad_cid);
 
-    ui.label_cid = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(c.ke_label_component), .alignment = @alignOf(c.ke_label_component), .fields = &c.ke_label_component_fields, .field_count = c.ke_label_component_fields.len }, null);
+    ui.label_cid = c.KE_COMPONENT_INVALID;
+    _ = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(c.ke_label_component), .alignment = @alignOf(c.ke_label_component), .fields = &c.ke_label_component_fields, .field_count = c.ke_label_component_fields.len }, &ui.label_cid);
     ui.queries_terms = .{ .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ }, .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ } };
     ui.queries = .{ .{ .terms = &ui.queries_terms[0], .term_count = 1 }, .{ .terms = &ui.queries_terms[1], .term_count = 1 } };
 

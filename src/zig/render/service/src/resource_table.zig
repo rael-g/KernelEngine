@@ -26,7 +26,9 @@ pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_reso
         return c.KE_COMPONENT_INVALID;
     };
 
-    const cid = st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = params.*.name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, out_error);
+    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    if (st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = params.*.name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
     if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
 
     var w = params.*.width;
@@ -144,7 +146,9 @@ pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.k
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
     };
-    const cid = st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, out_error);
+    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    if (st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
     if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
     const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
@@ -172,7 +176,9 @@ pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
     };
-    const cid = st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, out_error);
+    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    if (st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
     if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
     const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
@@ -199,7 +205,9 @@ pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
         return c.KE_COMPONENT_INVALID;
     };
-    const cid = st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, out_error);
+    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    if (st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
     if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
     const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);

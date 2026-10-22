@@ -30,8 +30,11 @@ pub fn Set(comptime c: type, comptime entries: []const Entry(c)) type {
             const world = world_in;
             inline for (entries) |e| {
                 const fields: [*c]const c.ke_component_field = if (e.fields.len == 0) null else e.fields.ptr;
-                const cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = e.name, .size = e.size, .alignment = e.alignment, .fields = fields, .field_count = @intCast(e.fields.len) }, out_error);
-                if (cid == c.KE_COMPONENT_INVALID) return false;
+                var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+                if (ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = e.name, .size = e.size, .alignment = e.alignment, .fields = fields, .field_count = @intCast(e.fields.len) }, &cid) != c.KE_OK) {
+                    c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "scene component set: the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
+                    return false;
+                }
                 if (e.fields.len > 0 and !world.*.register_component_fields.?(world, cid, fields, @intCast(e.fields.len), out_error)) return false;
                 if (e.apply != null and !world.*.register_component_apply.?(world, cid, e.apply, null, out_error)) return false;
             }

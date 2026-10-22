@@ -57,8 +57,9 @@ int main(void)
     if (!target.ref) die("render target", err);
 
     ke_ecs_flecs_params ep = { .world_id_base = 0 };
-    ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
-    if (!ecs.ref) die("ecs", err);
+    ke_ecs_handle ecs = { 0 };
+    ke_result made_ecs = ke_ecs_flecs_create(&ep, &ecs);
+    if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
     ke_render_resource_binder_handle binder = ke_render_resource_binder_grouped_create(
         &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &err);

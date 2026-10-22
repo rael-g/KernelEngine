@@ -7,6 +7,7 @@ const c = @import("c");
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 const mat4 = @import("mat4.zig");
 
@@ -63,7 +64,10 @@ fn getWorldTransform(s: *State, e: c.ke_entity) ?*c.ke_world_transform_component
 /// no field of it is written by a scene. A component the ecs already knows keeps its id, so trees
 /// created on one ecs share their ids, and its table is checked against the one registered first.
 fn registerComponent(ecs: *c.ke_ecs, name: [*c]const u8, comptime T: type, fields: []const c.ke_component_field, out_error: [*c][*c]c.ke_error) c.ke_component_id {
-    return ecs.component_register.?(ecs, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = if (fields.len > 0) fields.ptr else null, .field_count = @intCast(fields.len) }, out_error);
+    var cid: c.ke_component_id = 0;
+    const made = ecs.component_register.?(ecs, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = if (fields.len > 0) fields.ptr else null, .field_count = @intCast(fields.len) }, &cid);
+    if (made != c.KE_OK) E.failCode(out_error, made, "registering a scene tree component failed", @src());
+    return cid;
 }
 
 fn writeName(dst: []u8, src: [*c]const u8) void {
@@ -641,30 +645,32 @@ fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
 fn fakeComponentRegister(
     self: ?*c.ke_ecs,
     params: [*c]const c.ke_component_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_component_id {
+    out_cid: [*c]c.ke_component_id,
+) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(params.*.name);
     if (f.refused) |r| if (std.mem.eql(u8, r, wanted)) {
-        E.fail(out_error, .invalid_argument, "refused", @src());
-        return 0;
+        return answer(out_cid, 0);
     };
     for (f.components[0..f.component_count], 0..) |comp, i| {
-        if (std.mem.eql(u8, comp.name, wanted)) return @intCast(i + 1);
+        if (std.mem.eql(u8, comp.name, wanted)) return answer(out_cid, @intCast(i + 1));
     }
-    if (f.component_count >= fake_max_components) return 0;
+    if (f.component_count >= fake_max_components) return answer(out_cid, 0);
     f.components[f.component_count] = .{ .name = wanted, .size = params.*.size, .fields = params.*.fields };
     f.component_count += 1;
-    return @intCast(f.component_count);
+    return answer(out_cid, @intCast(f.component_count));
+}
+
+fn answer(out_cid: [*c]c.ke_component_id, cid: c.ke_component_id) c.ke_result {
+    out_cid.* = cid;
+    return if (cid == 0) R.code(error.InvalidArgument) else R.ok;
 }
 
 fn fakeComponentLookup(
     self: ?*c.ke_ecs,
     name: [*c]const u8,
     out_meta: [*c]c.ke_component_meta,
-    out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
-    _ = out_error;
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(name);
     for (f.components[0..f.component_count], 0..) |comp, i| {
@@ -771,13 +777,13 @@ pub const Fixture = struct {
 
     fn hierarchyOf(self: *Fixture, e: c.ke_entity) ?*c.ke_hierarchy_component {
         var meta: c.ke_component_meta = undefined;
-        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_HIERARCHY, &meta, null)) return null;
+        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_HIERARCHY, &meta)) return null;
         return @ptrCast(@alignCast(fakeComponentGet(&self.ecs.vtable, e, meta.cid)));
     }
 
     fn transformOf(self: *Fixture, e: c.ke_entity) ?*c.ke_transform_component {
         var meta: c.ke_component_meta = undefined;
-        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_TRANSFORM, &meta, null)) return null;
+        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_TRANSFORM, &meta)) return null;
         if (fakeComponentGet(&self.ecs.vtable, e, meta.cid)) |existing| {
             return @ptrCast(@alignCast(existing));
         }
@@ -793,7 +799,7 @@ pub const Fixture = struct {
 
     fn worldOf(self: *Fixture, e: c.ke_entity) ?*c.ke_world_transform_component {
         var meta: c.ke_component_meta = undefined;
-        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, &meta, null)) return null;
+        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, &meta)) return null;
         return @ptrCast(@alignCast(fakeComponentGet(&self.ecs.vtable, e, meta.cid)));
     }
 };

@@ -389,7 +389,8 @@ fn assemble(dev: *c.ke_gpu_device, tgt: *c.ke_gpu_render_target, e: *c.ke_ecs, b
     st.material_cache_destroy = mat_ch.destroy.?;
     st.shader_cache_destroy = shader_ch.destroy.?;
 
-    const bb_cid = e.component_register.?(e, &c.ke_component_params{ .name = "backbuffer", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    var bb_cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    _ = e.component_register.?(e, &c.ke_component_params{ .name = "backbuffer", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &bb_cid);
     const bb_name = try gpa.dupeZ(u8, "backbuffer");
     errdefer gpa.free(bb_name);
     st.resources.appendAssumeCapacity(.{

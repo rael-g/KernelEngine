@@ -7,6 +7,7 @@ const c = @import("c");
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 const apply = @import("components_apply.zig");
 
@@ -277,7 +278,7 @@ fn worldResolveComponent(
         list.print("{s}'{s}'", .{ if (candidates > 1) " and " else "", a.name }) catch {};
     }
 
-    const direct = e.component_lookup.?(e, name, out_meta, null);
+    const direct = e.component_lookup.?(e, name, out_meta);
     if (candidates == 0) {
         if (direct) return true;
         var msg: [256]u8 = undefined;
@@ -286,7 +287,8 @@ fn worldResolveComponent(
         return false;
     }
     if (candidates == 1 and !direct) {
-        if (e.component_lookup.?(e, target.?.ptr, out_meta, out_error)) return true;
+        if (e.component_lookup.?(e, target.?.ptr, out_meta)) return true;
+        E.fail(out_error, .not_found, "the component a short name resolves to is not registered", @src());
         return false;
     }
     if (direct) list.print(" and '{s}'", .{name_s}) catch {};
@@ -323,8 +325,12 @@ fn registerBuiltin(
     field_count: u32,
     out_error: [*c][*c]c.ke_error,
 ) bool {
-    const cid = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = fields orelse null, .field_count = field_count }, out_error);
-    if (cid == 0) return false;
+    var cid: c.ke_component_id = 0;
+    const made = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = fields orelse null, .field_count = field_count }, &cid);
+    if (made != c.KE_OK) {
+        E.failCode(out_error, made, "registering a builtin component failed", @src());
+        return false;
+    }
     if (fields) |f| _ = world.register_component_fields.?(world, cid, f, field_count, null);
     if (apply_fn != null) _ = world.register_component_apply.?(world, cid, apply_fn, null, null);
     return true;
@@ -406,9 +412,7 @@ fn stubComponentLookup(
     self: ?*c.ke_ecs,
     name: [*c]const u8,
     out_meta: [*c]c.ke_component_meta,
-    out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
-    _ = out_error;
     const s = stubEcsOf(self);
     for (s.names[0..s.next_cid], 1..) |*n, cid| {
         if (!std.mem.eql(u8, std.mem.sliceTo(n, 0), std.mem.span(name))) continue;
@@ -422,14 +426,18 @@ fn stubComponentLookup(
 fn stubComponentRegister(
     self: ?*c.ke_ecs,
     params: [*c]const c.ke_component_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_component_id {
-    _ = out_error;
+    out_cid: [*c]c.ke_component_id,
+) callconv(.c) c.ke_result {
     const s = stubEcsOf(self);
     const span = std.mem.span(params.*.name);
     @memcpy(s.names[s.next_cid][0..span.len], span);
     s.next_cid += 1;
-    return s.next_cid;
+    return answer(out_cid, s.next_cid);
+}
+
+fn answer(out_cid: [*c]c.ke_component_id, cid: c.ke_component_id) c.ke_result {
+    out_cid.* = cid;
+    return if (cid == 0) R.code(error.InvalidArgument) else R.ok;
 }
 
 fn stubEntityCreate(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
@@ -535,7 +543,8 @@ test "a short name a single component answers to resolves to it, and the full na
     var runtime: c.ke_runtime = undefined;
     const h = aliasWorld(&ecs, &runtime);
     const w: *c.ke_world = h.ref;
-    const paddle = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    var paddle: c.ke_component_id = 0;
+    try R.check(ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &paddle));
     try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
     try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
 
@@ -554,8 +563,14 @@ test "a short name two components answer to is refused, naming both" {
     var runtime: c.ke_runtime = undefined;
     const h = aliasWorld(&ecs, &runtime);
     const w: *c.ke_world = h.ref;
-    _ = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
-    _ = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "tennis.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    {
+        var ignored: c.ke_component_id = 0;
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+    }
+    {
+        var ignored: c.ke_component_id = 0;
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "tennis.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+    }
     try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
     try testing.expect(w.register_component_alias.?(w, "paddle", "tennis.paddle", null));
 
@@ -575,8 +590,14 @@ test "a short name that is also a registered component name is refused" {
     var runtime: c.ke_runtime = undefined;
     const h = aliasWorld(&ecs, &runtime);
     const w: *c.ke_world = h.ref;
-    _ = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
-    _ = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "game.marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    {
+        var ignored: c.ke_component_id = 0;
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+    }
+    {
+        var ignored: c.ke_component_id = 0;
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "game.marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+    }
     try testing.expect(w.register_component_alias.?(w, "marker", "game.marker", null));
 
     var meta: c.ke_component_meta = undefined;

@@ -1,6 +1,7 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
 const ke_logger_build = @import("ke_logger");
+const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -51,6 +52,7 @@ pub fn build(b: *std.Build) void {
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
     mod.addImport("log", ke_logger_build.log(b));
+    mod.addImport("result", ke_result_build.result(b));
     const lib = b.addLibrary(.{
         .name = "ke_ecs_flecs",
         .root_module = mod,
@@ -91,6 +93,7 @@ pub fn build(b: *std.Build) void {
 
     test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
     test_mod.addImport("log", ke_logger_build.log(b));
+    test_mod.addImport("result", ke_result_build.result(b));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
 
@@ -121,6 +124,7 @@ pub fn build(b: *std.Build) void {
     probe_mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
     probe_mod.addCMacro("flecs_STATIC", "");
     probe_mod.addImport("c", ke_build.cImports(b, probe_mod, b.path("src/c.h")));
+    probe_mod.addImport("result", ke_result_build.result(b));
 
     const probe_exe = b.addExecutable(.{
         .name = "ecs_flecs_abort_probe",

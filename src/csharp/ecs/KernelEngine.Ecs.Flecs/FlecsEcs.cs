@@ -13,7 +13,8 @@ public sealed unsafe class FlecsEcs : IDisposable, INativeEcs
     private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;
 
     /// <summary>Creates the native world with the default parameters.</summary>
-    /// <exception cref="InvalidOperationException">The native factory returned no world.</exception>
+    /// <exception cref="OutOfMemoryException">The native factory could not allocate the world.</exception>
+    /// <exception cref="InvalidOperationException">flecs could not start the world.</exception>
     public FlecsEcs() : this(null)
     {
     }
@@ -22,15 +23,16 @@ public sealed unsafe class FlecsEcs : IDisposable, INativeEcs
     /// Creates the native world with the default parameters, the flecs library logging to
     /// <paramref name="logger"/>, or to stderr when it is null.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The native factory returned no world.</exception>
+    /// <exception cref="OutOfMemoryException">The native factory could not allocate the world.</exception>
+    /// <exception cref="InvalidOperationException">flecs could not start the world.</exception>
     public FlecsEcs(KernelEngine.Logger.ILogger? logger)
     {
         if (logger is not null)
             KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
         ke_ecs_flecs_params @params = default;
-        var handle = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, null);
-        if (handle.@ref == null)
-            throw new InvalidOperationException("ke_ecs_flecs_create failed");
+        ke_ecs_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(
+            KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, &handle), "ke_ecs_flecs_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }

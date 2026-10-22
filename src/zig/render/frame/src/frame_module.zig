@@ -72,7 +72,9 @@ export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, ou
         return empty;
     };
     st.api = .{ .handle = st, .frame_cid = frameCid };
-    st.frame_cid = e.component_register.?(e, &c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, out_error);
+    st.frame_cid = c.KE_COMPONENT_INVALID;
+    if (e.component_register.?(e, &c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
     if (st.frame_cid == c.KE_COMPONENT_INVALID) {
         gpa.destroy(st);
         return empty;
