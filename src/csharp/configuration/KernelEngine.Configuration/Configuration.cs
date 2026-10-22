@@ -1,7 +1,5 @@
 using System.Text;
 
-using KernelEngine.Common.Native;
-
 using ConfigNative = KernelEngine.Configuration.Native.NativeMethods;
 
 namespace KernelEngine.Configuration;
@@ -19,9 +17,8 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
 
     public Configuration()
     {
-        ke_error* err = null;
-        var handle = ConfigNative.configuration_create(&err);
-        if (handle.@ref == null) throw NativeErrors.FromNative(err, "configuration_create");
+        KernelEngine.Configuration.Native.ke_configuration_handle handle;
+        NativeResults.ThrowIfFailed(ConfigNative.configuration_create(&handle), "ke_configuration_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -29,16 +26,14 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
     /// <summary>Reads <paramref name="path"/> into the store. A missing file is a no-op.</summary>
     public void LoadToml(string path)
     {
-        ke_error* err = null;
-        var source = ConfigNative.configuration_toml_create(&err);
-        if (source.@ref == null) throw NativeErrors.FromNative(err, "configuration_toml_create");
+        KernelEngine.Configuration.Native.ke_configuration_source_handle source;
+        NativeResults.ThrowIfFailed(ConfigNative.configuration_toml_create(&source), "ke_configuration_toml_create");
         try
         {
             var bytes = Encoding.UTF8.GetBytes(path + '\0');
             fixed (byte* p = bytes)
             {
-                if (!source.@ref->load(source.@ref, _native, (sbyte*)p, &err))
-                    throw NativeErrors.FromNative(err, "load");
+                NativeResults.ThrowIfFailed(source.@ref->load(source.@ref, _native, (sbyte*)p), "load");
             }
         }
         finally
@@ -89,9 +84,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         var k = Ansi(key);
         fixed (byte* sp = s, kp = k)
         {
-            ke_error* err = null;
-            if (!_native->set_int(_native, (sbyte*)sp, (sbyte*)kp, value, &err))
-                throw NativeErrors.FromNative(err, "configuration set_int");
+            NativeResults.ThrowIfFailed(_native->set_int(_native, (sbyte*)sp, (sbyte*)kp, value), "configuration set_int");
         }
     }
 
@@ -101,9 +94,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         var k = Ansi(key);
         fixed (byte* sp = s, kp = k)
         {
-            ke_error* err = null;
-            if (!_native->set_double(_native, (sbyte*)sp, (sbyte*)kp, value, &err))
-                throw NativeErrors.FromNative(err, "configuration set_double");
+            NativeResults.ThrowIfFailed(_native->set_double(_native, (sbyte*)sp, (sbyte*)kp, value), "configuration set_double");
         }
     }
 
@@ -113,9 +104,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         var k = Ansi(key);
         fixed (byte* sp = s, kp = k)
         {
-            ke_error* err = null;
-            if (!_native->set_bool(_native, (sbyte*)sp, (sbyte*)kp, value, &err))
-                throw NativeErrors.FromNative(err, "configuration set_bool");
+            NativeResults.ThrowIfFailed(_native->set_bool(_native, (sbyte*)sp, (sbyte*)kp, value), "configuration set_bool");
         }
     }
 
@@ -126,9 +115,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         var v = Ansi(value);
         fixed (byte* sp = s, kp = k, vp = v)
         {
-            ke_error* err = null;
-            if (!_native->set_string(_native, (sbyte*)sp, (sbyte*)kp, (sbyte*)vp, &err))
-                throw NativeErrors.FromNative(err, "configuration set_string");
+            NativeResults.ThrowIfFailed(_native->set_string(_native, (sbyte*)sp, (sbyte*)kp, (sbyte*)vp), "configuration set_string");
         }
     }
 
