@@ -1,4 +1,8 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Framework.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Physics.Native;
 
@@ -14,7 +18,4 @@ public unsafe partial struct ke_physics_body2d_module_params
 
     [NativeTypeName("ke_scene_tree *")]
     public KernelEngine.Framework.Native.ke_scene_tree* scene_tree;
-
-    [NativeTypeName("ke_logger *")]
-    public KernelEngine.Logger.Native.ke_logger* logger;
 }

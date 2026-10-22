@@ -1,28 +1,36 @@
-﻿#include <kernel_engine/common/error.h>
-#include <kernel_engine/logger/simple/logger_simple_create.h>
-#include <kernel_engine/logger/simple/console_sink_create.h>
+#include <kernel_engine/common/error.h>
+#include <kernel_engine/physics/box2d/box2d_physics.h>
+#include <kernel_engine/physics/box2d/physics_2d_box2d_log.h>
 #include <stdio.h>
+
+static const char *level_name(ke_log_level level)
+{
+    switch (level)
+    {
+    case KE_LOG_LEVEL_ERROR:   return "ERROR";
+    case KE_LOG_LEVEL_WARNING: return "WARNING";
+    case KE_LOG_LEVEL_INFO:    return "INFO";
+    default:                   return "DEBUG";
+    }
+}
+
+static void print_line(void *ctx, ke_log_level level, const char *scope, const char *message)
+{
+    (void)ctx;
+    printf("[%s] %s: %s\n", level_name(level), scope, message);
+}
 
 int main(void)
 {
     printf("--- KernelEngine C Minimal Log Demo ---\n");
 
-    ke_logger_handle logger_h = ke_logger_create(NULL);
-    ke_logger *logger = logger_h.ref;
+    ke_physics_2d_box2d_set_log_callback(print_line, NULL);
 
-    if (logger_h.ref)
-    {
-        logger->add_sink(logger, ke_console_sink_create(), NULL);
+    ke_physics_2d_box2d_params params = {.gravity_x = 0.0f, .gravity_y = -9.81f};
+    ke_physics_2d_handle physics = ke_physics_2d_box2d_create(&params, NULL);
+    if (physics.ref)
+        physics.destroy(physics.ref);
 
-        ke_log_event ev = {KE_LOG_LEVEL_INFO, "app", "Hello from C Minimal Log!"};
-        logger->log(logger, &ev);
-
-        ke_log_event ev2 = {KE_LOG_LEVEL_DEBUG, "app", "Debug message"};
-        logger->log(logger, &ev2);
-
-        logger_h.destroy(logger_h.ref);
-    }
     printf("--- Demo Complete ---\n");
-
     return 0;
 }

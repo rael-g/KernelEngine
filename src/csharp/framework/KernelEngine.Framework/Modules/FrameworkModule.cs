@@ -40,7 +40,9 @@ public sealed class FrameworkModule : IRuntimeModule
     public string Name => "Framework";
 
     /// <summary>
-    /// Registers the ECS registry, the signal bus and the world.
+    /// Registers the ECS registry, the signal bus and the world. The framework library logs to the
+    /// registered <see cref="KernelEngine.Logger.ILogger"/> once the world is created, or to stderr
+    /// when there is none.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// A native factory fails when the service is first requested.
@@ -75,6 +77,8 @@ public sealed class FrameworkModule : IRuntimeModule
             var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
             unsafe
             {
+                if (sp.GetService<KernelEngine.Logger.ILogger>() is { } logger)
+                    KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
                 var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
                     flecsEcs.Native, ((INativeRuntime)rtRuntime).Native, null);
                 if (tree.@ref == null) throw new InvalidOperationException("scene_tree_create failed");
@@ -84,7 +88,6 @@ public sealed class FrameworkModule : IRuntimeModule
                 p.runtime = ((INativeRuntime)rtRuntime).Native;
                 p.scene_tree = tree.@ref;
                 p.signal_bus = ((INativeSignalBus)sp.GetRequiredService<SignalBus>()).Native;
-                p.logger = sp.GetService<KernelEngine.Logger.INativeLogger>() is { } lg ? lg.Native : null;
                 var w = KernelEngine.Framework.Native.NativeMethods.world_create(&p, null);
                 if (w.@ref == null) throw new InvalidOperationException("world_create failed");
                 return new World(w, tree);

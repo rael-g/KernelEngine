@@ -1,4 +1,8 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Render.Native;
+using KernelEngine.Runtime.Native;
+using KernelEngine.View.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
@@ -12,9 +16,6 @@ public unsafe partial struct ke_render_cluster_params
 
     [NativeTypeName("ke_gpu_device *")]
     public KernelEngine.Render.Native.ke_gpu_device* device;
-
-    [NativeTypeName("ke_logger *")]
-    public KernelEngine.Logger.Native.ke_logger* logger;
 
     [NativeTypeName("ke_view_space *")]
     public KernelEngine.View.Native.ke_view_space* view_space;

@@ -9,7 +9,6 @@ int main(void)
 
     ke_error *err = NULL;
     ke_gpu_device_webgpu_params params = {
-        .logger            = NULL,
         .enable_validation = 1,
     };
 

@@ -55,9 +55,7 @@ public static class ClangSharpRunner
             MethodPrefixToStrip = job.MethodPrefix,
             RemappedNames = remaps,
             TraversalNames = job.Traverse.ToArray(),
-            WithUsings = job.CommonNamespace.Length == 0 || job.Namespace == job.CommonNamespace
-                ? new Dictionary<string, IReadOnlyList<string>>()
-                : new Dictionary<string, IReadOnlyList<string>> { ["*"] = new List<string> { job.CommonNamespace } },
+            WithUsings = Usings(job),
         };
 
         var clangArgs = new List<string> { "--language=c++", "-Wno-pragma-once-outside-header" };
@@ -143,6 +141,26 @@ public static class ClangSharpRunner
         "generate-macro-bindings" => options | PInvokeGeneratorConfigurationOptions.GenerateMacroBindings,
         _ => throw new InvalidOperationException($"unknown ClangSharp config switch '{flag}'"),
     };
+
+    /// <summary>
+    /// The namespaces every file of the job imports: the common bindings namespace, and the owner
+    /// namespace of each remapped type, since ClangSharp writes a remapped type inside a function
+    /// pointer type by its bare name.
+    /// </summary>
+    static Dictionary<string, IReadOnlyList<string>> Usings(BindingJob job)
+    {
+        var namespaces = job.Remaps
+            .Select(pair => pair.Split('=', 2)[1].Trim())
+            .Select(target => target[..target.LastIndexOf('.')])
+            .Append(job.CommonNamespace)
+            .Where(ns => ns.Length > 0 && ns != job.Namespace)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        return namespaces.Count == 0
+            ? new Dictionary<string, IReadOnlyList<string>>()
+            : new Dictionary<string, IReadOnlyList<string>> { ["*"] = namespaces };
+    }
 }
 
 /// <summary>

@@ -73,10 +73,10 @@ Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-sta
 
 Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Seventeen domains: `asset`, `audio`, `configuration`, `ecs`, `framework`, `input`, `logger`, `math`, `physics`, `render`, `resource_cache`, `runtime`, `scheduler`, `spatial`, `text`, `view`, `window`.
 
-One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `scheduler`? include `scheduler`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_logger_simple`, `ke_resource_cache_default`, …).
+One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `scheduler`? include `scheduler`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
 
 Contracts worth knowing by name:
-- `ke_logger` / `ke_logger_sink` — pluggable logging
+- `ke_log_callback` — where a plugin library's `std.log` lines go, set by the host through the library's `<library>_set_log_callback`
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
 - `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
 - `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
@@ -86,7 +86,7 @@ Contracts worth knowing by name:
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
-Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function. Everything else it exposes is a vtable returned by that factory. Thirty-four plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
+Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Thirty-three plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
 No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile come from vcpkg (stb, miniaudio) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
 
@@ -186,7 +186,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 The rules below and the conventions above that a machine can check are checked by `scripts/check_engine_rules.cs`, which `scripts/verify.cs` runs with the other gates. Where a rule is already broken it holds a ceiling that can only go down.
 
-1. **A plugin exposes vtables behind one factory per header.** A contract header declares vtable shapes only; a plugin exports one create function per factory header; only the shared kernel library exports plain functions.
+1. **A plugin exposes vtables behind one factory per header.** A contract header declares vtable shapes only; a plugin exports one create function per factory header and one log-callback setter; only the shared kernel library exports plain functions.
 
 2. **No `InternalsVisibleTo`.** A native handle crosses assemblies through the `Native` pointer of a generated `INative<Domain>` interface.
 

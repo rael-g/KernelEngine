@@ -3,7 +3,6 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
-#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/runtime/system_ctx.h>
 #include <kernel_engine/spatial/transform.h>

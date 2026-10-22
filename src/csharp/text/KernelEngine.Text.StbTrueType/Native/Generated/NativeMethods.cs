@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Text.Native;
 
 namespace KernelEngine.Text.StbTrueType.Native;
 
@@ -8,5 +10,8 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_text_stb_truetype", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_font_loader_stb_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_font_loader_handle")]
-    public static extern KernelEngine.Text.Native.ke_font_loader_handle font_loader_stb_create([NativeTypeName("const ke_font_loader_stb_params *")] ke_font_loader_stb_params* @params, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
+    public static extern KernelEngine.Text.Native.ke_font_loader_handle font_loader_stb_create([NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
+
+    [DllImport("ke_text_stb_truetype", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_text_stb_truetype_set_log_callback", ExactSpelling = true)]
+    public static extern void text_stb_truetype_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, KernelEngine.Logger.Native.ke_log_level, sbyte*, sbyte*, void> callback, void* ctx);
 }

@@ -4,7 +4,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_render_forward");
 const zm = @import("zmath");
 const c = @import("c");
 
@@ -73,7 +75,6 @@ const Objects = @import("object_uniforms").ObjectUniforms(c, PerObject);
 const ForwardModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    logger: ?*c.ke_logger = null,
 
     ibl_enabled: bool = true,
 
@@ -126,16 +127,14 @@ const DEFAULT_MATERIAL_SHADER = "standard";
 const MAX_SHADER_QUALIFIED = 128;
 
 
-/// Writes one error-level line tagged "render_forward" when both a logger and an error are given,
-/// and does nothing otherwise. The error is read, not freed or cleared. The line is dropped, not
-/// cut, when its text does not fit the buffer it is formatted in.
-fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
-    const lg = logger orelse return;
+const log = std.log.scoped(.render_forward);
+
+/// Writes one error-level line naming `what` and the error's message when an error is given. The
+/// error is read, not freed or cleared. The frame systems that call it have no error channel, so
+/// the line is the only report of the failure.
+fn logGpuError(err: ?*c.ke_error, what: []const u8) void {
     const e = err orelse return;
-    var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, "{s} failed: {s}", .{ what, e.message }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_forward", .message = msg.ptr };
-    lg.log.?(lg, &ev);
+    log.err("{s} failed: {s}", .{ what, e.message });
 }
 
 inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
@@ -162,7 +161,7 @@ fn rebuildFrameSet(fwd: *ForwardModule) void {
     fwd.resource_generation = core.*.resource_generation.?(core);
     var err: ?*c.ke_error = null;
     fwd.frame_set = binder.create_set.?(binder, fwd.groups.layout, null, "forward.frame_set", &bindings, bindings.len, &err);
-    if (err != null) logGpuError(fwd.logger, err, "transparent-forward frame set");
+    if (err != null) logGpuError(err, "transparent-forward frame set");
 }
 
 /// The render-phase system that `ke_render_forward_create` registers, with no pinned worker. It
@@ -267,7 +266,6 @@ fn setup(fwd: *ForwardModule, p: *const c.ke_render_forward_params, out_error: [
     const frame_cid = p.frame_cid;
     fwd.core = core;
     fwd.device = dev;
-    fwd.logger = p.logger;
     fwd.ibl_enabled = p.ibl_enabled;
     fwd.mesh_cid = mesh_cid;
     fwd.world_transform_cid = world_transform_cid;
@@ -658,7 +656,7 @@ test "creating and destroying the forward pass leaves no block allocated and no 
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, null);
+    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -673,7 +671,7 @@ test "a forward pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, null);
+    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -687,7 +685,7 @@ test "a forward pass the runtime refuses to register releases what it had create
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, null);
+    const h = ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

@@ -4,7 +4,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_physics_body2d");
 
 const c = @import("c");
 
@@ -19,8 +21,7 @@ const Tracked = struct {
 
 /// The state behind the handle `ke_physics_body2d_module_create` returns, owned by that handle.
 /// The query declarations point into this struct's own term arrays, so its address must stay
-/// fixed while the two systems are registered. `physics` and `logger` are borrowed from the
-/// params; `logger` may be null. `tracked` holds every body the module created, by entity, and
+/// fixed while the two systems are registered. `physics` is borrowed from the params. `tracked` holds every body the module created, by entity, and
 /// `update` counts the body system's runs, so a body whose entity no longer holds it is found.
 const Module = struct {
     physics: *c.ke_physics_2d,
@@ -30,7 +31,6 @@ const Module = struct {
     attempt: ?Attempt = null,
     body_system: c.ke_system_id = 0,
     collider_system: c.ke_system_id = 0,
-    logger: ?*c.ke_logger = null,
     tracked: std.AutoHashMapUnmanaged(c.ke_entity, Tracked) = .empty,
     update: u64 = 0,
     body_queries_terms: [2]c.ke_component_access = undefined,
@@ -48,13 +48,7 @@ fn moduleOf(user: ?*anyopaque) *Module {
     return @ptrCast(@alignCast(user.?));
 }
 
-fn log(logger: ?*c.ke_logger, level: c_int, comptime fmt: []const u8, args: anytype) void {
-    const lg = logger orelse return;
-    var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch return;
-    var ev = c.ke_log_event{ .level = level, .tag = "physics.body2d", .message = msg.ptr };
-    if (lg.log) |f| f(lg, &ev);
-}
+const log = std.log.scoped(.physics_body2d);
 
 /// The fixed-post-update-phase system that reconciles every body with its component and transform,
 /// in this order: a component with no body gets one at its transform's position and rotation; a
@@ -95,7 +89,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
                 p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
                 p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
                 p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
-                log(m.logger, c.KE_LOG_LEVEL_INFO,
+                log.info(
                     "body on entity {d}: type={d} pos=({d:.3},{d:.3}) angle={d:.4} scale=({d:.3},{d:.3})",
                     .{ segs[s].entities[i], b.type, pose.position.x, pose.position.y, pose.rotation, pose.scale.x, pose.scale.y });
                 continue;
@@ -232,7 +226,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
             if (col.attached) continue;
 
             const body = findBody(&parents, &bodies, segs[s].entities[i]) orelse {
-                log(m.logger, c.KE_LOG_LEVEL_WARNING,
+                log.warn(
                     "shape on entity {d} resolves to no body; it will never collide", .{segs[s].entities[i]});
                 continue;
             };
@@ -245,9 +239,9 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
                 else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, angle, col.density, col.friction, col.restitution, &filter, null),
             };
             col.attached = ok;
-            log(m.logger, if (ok) c.KE_LOG_LEVEL_INFO else c.KE_LOG_LEVEL_ERROR,
-                "shape on entity {d}: kind={d} half=({d:.3},{d:.3}) r={d:.3} off=({d:.3},{d:.3}) angle={d:.4} density={d:.3} friction={d:.3} restitution={d:.3} attached={}",
-                .{ segs[s].entities[i], col.kind, col.half_extents.x, col.half_extents.y, col.radius, off.x, off.y, angle, col.density, col.friction, col.restitution, ok });
+            const shape_fmt = "shape on entity {d}: kind={d} half=({d:.3},{d:.3}) r={d:.3} off=({d:.3},{d:.3}) angle={d:.4} density={d:.3} friction={d:.3} restitution={d:.3} attached={}";
+            const shape_args = .{ segs[s].entities[i], col.kind, col.half_extents.x, col.half_extents.y, col.radius, off.x, off.y, angle, col.density, col.friction, col.restitution, ok };
+            if (ok) log.info(shape_fmt, shape_args) else log.err(shape_fmt, shape_args);
         }
     }
     m.attempt = attempt;
@@ -303,7 +297,7 @@ export fn ke_physics_body2d_module_create(
     const tree = pr.scene_tree orelse return empty;
 
     const m = gpa.create(Module) catch return empty;
-    m.* = .{ .physics = physics, .runtime = rt, .tree = tree, .logger = pr.logger };
+    m.* = .{ .physics = physics, .runtime = rt, .tree = tree };
 
     const body_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(c.ke_body2d_component), .alignment = @alignOf(c.ke_body2d_component), .fields = &c.ke_body2d_component_fields, .field_count = c.ke_body2d_component_fields.len }, null);
     const transform_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_TRANSFORM2D, .size = @sizeOf(c.ke_transform2d_component), .alignment = @alignOf(c.ke_transform2d_component), .fields = &c.ke_transform2d_component_fields, .field_count = c.ke_transform2d_component_fields.len }, null);

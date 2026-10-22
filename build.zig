@@ -162,16 +162,6 @@ pub fn build(b: *std.Build) void {
 
     const common = ctx.member("ke_common", .{ .target = target, .optimize = optimize }, &.{}, .has_tests);
 
-    const logger_simple = ctx.member("ke_logger_simple", .{
-        .target = target,
-        .optimize = optimize,
-        .@"heap-src" = heap_src,
-        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
-        .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
-        .@"kerror-src" = kerror_src,
-        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
-    }, &.{&common.step}, .has_tests);
-
     const ecs_flecs = ctx.member("ke_ecs_flecs", .{
         .target = target,
         .optimize = optimize,
@@ -313,7 +303,7 @@ pub fn build(b: *std.Build) void {
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
     }, &.{&common.step}, .has_tests);
 
-    _ = ctx.member("ke_physics_2d_box2d", .{
+    const physics_2d_box2d = ctx.member("ke_physics_2d_box2d", .{
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
@@ -786,12 +776,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "logger" }),
-            b.pathJoin(&.{ src_zig, "logger/simple/include" }),
-            b.pathJoin(&.{ src_c, "math" }),
+            b.pathJoin(&.{ src_c, "physics" }),
+            b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
         }),
-        .@"libs" = b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_logger_simple") }),
-    }, &.{&logger_simple.step});
+        .@"libs" = b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
+    }, &.{&physics_2d_box2d.step});
 
     const demo_step = b.step("demo01", "Build examples/c/01_minimal_log");
     demo_step.dependOn(&demo01.step);

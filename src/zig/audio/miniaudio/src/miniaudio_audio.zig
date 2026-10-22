@@ -3,7 +3,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_audio_miniaudio");
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
@@ -31,7 +33,6 @@ const LoadedSound = struct {
 /// alive. A sound id is a key of `sounds` and a handle of the cache, which reference-counts it by
 /// id and by path. Everything runs on the calling thread.
 const State = struct {
-    logger: ?*c.ke_logger,
     engine: ma.ma_engine,
     engine_ready: bool,
     sounds: std.AutoHashMap(c.ke_audio_sound, *LoadedSound),
@@ -40,19 +41,7 @@ const State = struct {
     cache_destroy: *const fn (?*c.ke_resource_cache) callconv(.c) void,
 };
 
-/// Sends a warning tagged "miniaudio" to the logger, or nothing when there is none.
-fn logWarn(logger: ?*c.ke_logger, msg: [*c]const u8) void {
-    const lg = logger orelse return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "miniaudio", .message = msg };
-    lg.log.?(lg, &ev);
-}
-
-/// Sends an informational message tagged "miniaudio" to the logger, or nothing when there is none.
-fn logInfo(logger: ?*c.ke_logger, msg: [*c]const u8) void {
-    const lg = logger orelse return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_INFO, .tag = "miniaudio", .message = msg };
-    lg.log.?(lg, &ev);
-}
+const log = std.log.scoped(.audio_miniaudio);
 
 /// Destroy callback the cache calls when the last reference to an id goes. It removes the slot from
 /// `sounds` before freeing it, so the id stops resolving.
@@ -103,7 +92,7 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_error: [*c][*c]c.k
 
     const r = ma.ma_sound_init_from_file(&state.engine, path, 0, null, null, &slot.sound);
     if (r != ma.MA_SUCCESS) {
-        logWarn(state.logger, ma.ma_result_description(r));
+        log.warn("{s}: {s}", .{ std.mem.span(path), ma.ma_result_description(r) });
         gpa.destroy(slot);
         E.fail(out_error, .not_found, "sound file not found or failed to load", @src());
         return c.KE_AUDIO_SOUND_INVALID;
@@ -189,25 +178,17 @@ fn audioSetMasterVolume(self: ?*c.ke_audio, volume: f32) callconv(.c) void {
 /// Builds the state, the engine, the cache and the contract struct, in that order, and logs that
 /// the backend initialised. Each failure path releases the steps before it, so a failed call
 /// leaves no engine, cache or state behind and returns a null handle. Fails with an
-/// invalid-argument error on null params, an out-of-memory error on the state or the struct, a
+/// out-of-memory error on the state or the struct, a
 /// general error when the engine cannot start (also logged), and whatever error the cache
 /// creation reports.
-export fn ke_audio_miniaudio_create(
-    params: [*c]const c.ke_audio_miniaudio_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_audio_handle {
+export fn ke_audio_miniaudio_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_audio_handle {
     const empty = c.ke_audio_handle{ .ref = null, .destroy = null };
-    if (params == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return empty;
-    }
 
     const state = gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "state allocation failed", @src());
         return empty;
     };
     state.* = .{
-        .logger = params.*.logger,
         .engine = undefined,
         .engine_ready = false,
         .sounds = std.AutoHashMap(c.ke_audio_sound, *LoadedSound).init(gpa),
@@ -219,7 +200,7 @@ export fn ke_audio_miniaudio_create(
     var cfg = ma.ma_engine_config_init();
     const r = ma.ma_engine_init(&cfg, &state.engine);
     if (r != ma.MA_SUCCESS) {
-        logWarn(state.logger, ma.ma_result_description(r));
+        log.warn("the engine did not start: {s}", .{ma.ma_result_description(r)});
         state.sounds.deinit();
         gpa.destroy(state);
         E.fail(out_error, .general, "engine init failed", @src());
@@ -254,16 +235,14 @@ export fn ke_audio_miniaudio_create(
     api.stop = &audioStop;
     api.set_master_volume = &audioSetMasterVolume;
 
-    logInfo(state.logger, "miniaudio backend initialized");
+    log.info("backend initialized", .{});
     return .{ .ref = api, .destroy = &audioDestroy };
 }
 
 const testing = std.testing;
 
 fn createAudio() c.ke_audio_handle {
-    var params = std.mem.zeroes(c.ke_audio_miniaudio_params);
-    params.logger = null;
-    return ke_audio_miniaudio_create(&params, null);
+    return ke_audio_miniaudio_create(null);
 }
 
 test "creating the backend yields a usable handle when a device is available" {
@@ -272,11 +251,6 @@ test "creating the backend yields a usable handle when a device is available" {
     defer h.destroy.?(h.ref);
 
     try testing.expect(h.destroy != null);
-}
-
-test "creating the backend with null params returns a null handle" {
-    const h = ke_audio_miniaudio_create(null, null);
-    try testing.expect(h.ref == null);
 }
 
 test "loading a sound with a null path returns the invalid sound id" {

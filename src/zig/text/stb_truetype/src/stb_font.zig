@@ -3,7 +3,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_text_stb_truetype");
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
@@ -18,19 +20,21 @@ const c = @import("c");
 
 const E = @import("kerror").Errors(c);
 
-/// Reached only through the `handle` field of its loader; it lives exactly as long as that loader,
-/// from creation until `destroy`.
+/// The loader: the vtable the handle refers to, whose `handle` points back at the state. It holds
+/// nothing else, since a bake needs only its arguments.
 const State = struct {
-    logger: ?*c.ke_logger,
+    api: c.ke_font_loader,
 };
 
-/// Frees the `State` and the loader record that `ke_font_loader_stb_create` allocated. A null
-/// loader is ignored. Fonts already loaded are separate allocations and stay valid until freed.
+fn stateOf(self: *c.ke_font_loader) *State {
+    return @fieldParentPtr("api", self);
+}
+
+/// Frees the loader that `ke_font_loader_stb_create` allocated. A null loader is ignored. Fonts
+/// already loaded are separate allocations and stay valid until freed.
 fn destroy(self: ?*c.ke_font_loader) callconv(.c) void {
     const loader = self orelse return;
-    const state: *State = @ptrCast(@alignCast(loader.handle));
-    gpa.destroy(state);
-    gpa.destroy(loader);
+    gpa.destroy(stateOf(loader));
 }
 
 /// Returns the whole file, or null when it cannot be opened, is empty, cannot be allocated, or
@@ -196,36 +200,15 @@ fn freeFont(self: ?*c.ke_font_loader, data: [*c]c.ke_font_data) callconv(.c) voi
     gpa.destroy(d);
 }
 
-/// Allocates the `State` and the loader and fills the `load_font` and `free_font` slots. On success
-/// the handle's `destroy` releases both. Fails with an invalid-argument error on null params and
-/// with an out-of-memory error on either allocation; then nothing stays allocated and `ref` is
-/// null.
-export fn ke_font_loader_stb_create(
-    params: [*c]const c.ke_font_loader_stb_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_font_loader_handle {
-    const empty = c.ke_font_loader_handle{ .ref = null, .destroy = null };
-    if (params == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return empty;
-    }
-
+/// Allocates the loader and fills the `load_font` and `free_font` slots; the handle's `destroy`
+/// releases it. Fails with an out-of-memory error, `ref` null, when it cannot be allocated.
+export fn ke_font_loader_stb_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_font_loader_handle {
     const state = gpa.create(State) catch {
         E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
-        return empty;
+        return .{ .ref = null, .destroy = null };
     };
-    state.* = .{ .logger = params.*.logger };
-
-    const loader = gpa.create(c.ke_font_loader) catch {
-        gpa.destroy(state);
-        E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
-        return empty;
-    };
-    loader.handle = state;
-    loader.load_font = &loadFont;
-    loader.free_font = &freeFont;
-
-    return .{ .ref = loader, .destroy = &destroy };
+    state.* = .{ .api = .{ .handle = state, .load_font = &loadFont, .free_font = &freeFont } };
+    return .{ .ref = &state.api, .destroy = &destroy };
 }
 
 const testing = std.testing;
@@ -239,14 +222,7 @@ const font_candidates = [_][*c]const u8{
 };
 
 fn createLoader() c.ke_font_loader_handle {
-    var params = std.mem.zeroes(c.ke_font_loader_stb_params);
-    params.logger = null;
-    return ke_font_loader_stb_create(&params, null);
-}
-
-test "creating the loader with null params returns a null handle" {
-    const h = ke_font_loader_stb_create(null, null);
-    try testing.expect(h.ref == null);
+    return ke_font_loader_stb_create(null);
 }
 
 test "loading a font from a null path fails" {

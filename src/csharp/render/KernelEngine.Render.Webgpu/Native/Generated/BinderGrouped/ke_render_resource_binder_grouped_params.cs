@@ -1,4 +1,6 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Render.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 

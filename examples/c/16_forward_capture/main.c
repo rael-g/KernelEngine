@@ -199,7 +199,7 @@ int main(int argc, char **argv)
 
     const bool renderdoc = argc > 2 && strcmp(argv[2], "--renderdoc") == 0;
 
-    ke_gpu_device_webgpu_params dp = { .logger = NULL, .enable_validation = 1, .debug_labels = renderdoc };
+    ke_gpu_device_webgpu_params dp = { .enable_validation = 1, .debug_labels = renderdoc };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
 

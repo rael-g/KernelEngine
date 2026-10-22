@@ -76,6 +76,26 @@ var rules = new List<Rule>
             .Select(p => (Build: p, Root: LibraryRoot(p, sources[p])))
             .Where(x => x.Root is not null && !(sources.TryGetValue(x.Root, out var root) && root.Any(l => l.Contains("signal_stack_size = null", StringComparison.Ordinal))))
             .Select(x => $"{x.Root}: no std_options with signal_stack_size = null")),
+    new("a plugin's root routes std.log to its library's log callback, declared in one <library>_log.h", 0,
+        tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p)
+                && !p.StartsWith("src/zig/common/", StringComparison.Ordinal))
+            .Where(p => sources[p].Any(l => l.Contains(".linkage = .dynamic", StringComparison.Ordinal)))
+            .Select(p => (Build: p, Root: LibraryRoot(p, sources[p]), Library: LibraryName(sources[p])))
+            .Where(x => x.Root is not null && x.Library is not null)
+            .SelectMany(x =>
+            {
+                var problems = new List<string>();
+                if (!(sources.TryGetValue(x.Root!, out var root)
+                    && root.Any(l => l.Contains($"@import(\"klog\").Destination(\"{x.Library}\")", StringComparison.Ordinal))
+                    && root.Any(l => l.Contains(".logFn = klog.logFn", StringComparison.Ordinal))))
+                    problems.Add($"{x.Root}: std_options does not route std.log through klog.Destination(\"{x.Library}\")");
+                var dir = Path.GetDirectoryName(x.Build)!.Replace('\\', '/') + "/include/";
+                var logHeaders = tracked.Where(h => h.StartsWith(dir, StringComparison.Ordinal) && h.EndsWith("_log.h", StringComparison.Ordinal)).ToList();
+                var expected = x.Library![3..] + "_log.h";
+                if (logHeaders.Count != 1 || !logHeaders[0].EndsWith("/" + expected, StringComparison.Ordinal))
+                    problems.Add($"{x.Build}: expected exactly one {expected} under include/, found {logHeaders.Count}");
+                return problems;
+            })),
     new("a header has an #ifndef guard, never #pragma once", 0,
         Lines(headers, l => l.TrimStart().StartsWith("#pragma once", StringComparison.Ordinal))),
     new("a contract header declares no export macro", 0,
@@ -93,7 +113,7 @@ var rules = new List<Rule>
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
     new("no file named after impl", 0,
         tracked.Where(p => p.StartsWith("src/", StringComparison.Ordinal) && implName.IsMatch(Path.GetFileNameWithoutExtension(p)))),
-    new("no identifier named after impl", 13,
+    new("no identifier named after impl", 12,
         Lines(zig.Concat(headers), l => !slashComment.IsMatch(l) && !l.TrimStart().StartsWith("//", StringComparison.Ordinal) && implName.IsMatch(l))),
     new("no comment in Zig besides a doc comment", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".zig", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),
@@ -134,6 +154,13 @@ return 1;
 static IEnumerable<string> Segments(string path) => path.Split('/');
 
 static bool IsBuildFile(string path) => Path.GetFileName(path) == "build.zig";
+
+static string? LibraryName(string[] lines)
+{
+    var text = string.Join('\n', lines);
+    var name = Regex.Match(text, @"addLibrary\(\.\{\s*\.name = ""(ke_\w+)""");
+    return name.Success ? name.Groups[1].Value : null;
+}
 
 static string? LibraryRoot(string buildFile, string[] lines)
 {

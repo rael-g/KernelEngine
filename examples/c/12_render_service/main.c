@@ -33,14 +33,14 @@ int main(void)
     ke_error *err = NULL;
 
     ke_window_glfw_params wp = {
-        .logger = NULL, .input = NULL,
+        .input = NULL,
         .title = "c_demo_12 render core", .width = 800, .height = 600,
     };
     ke_window_handle win = ke_window_glfw_create(&wp, &err);
     if (!win.ref) die("window", err);
     if (!win.ref->on_initialize(win.ref, &err)) die("window init", err);
 
-    ke_gpu_device_webgpu_params dp = { .logger = NULL, .enable_validation = 1 };
+    ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device", err);
 

@@ -616,6 +616,35 @@ internal static class GeneratorShapeCases
             contains: ["Attach(ke_probe* self, INativeScheduler scheduler)", "scheduler.Native"],
             absent: ["ke_scheduler* scheduler", "ke_scheduler *scheduler"]);
 
+        ExpectCallbackBridge("a bridged callback becomes a delegate without its context and a pinning trampoline",
+            new ApiCallback("ke_probe_line_fn", "void", "Receives a line.",
+            [
+                new ApiParam("ctx", "void *", ["context"], null),
+                new ApiParam("level", "ke_probe_reach_kind", [], null),
+                new ApiParam("text", "const char *", ["borrowed", "utf8"], null),
+            ])
+            { Tags = ["bridge"] },
+            contains: ["public delegate void ProbeLineFn(ProbeReachKind level, string text);",
+                       "public static delegate* unmanaged[Cdecl]<void*, ke_probe_reach_kind, sbyte*, void> Pointer => &Trampoline;",
+                       "public static void* Pin(ProbeLineFn handler)",
+                       "((ProbeLineFn)GCHandle.FromIntPtr((nint)ctx).Target!)((ProbeReachKind)level, Marshal.PtrToStringUTF8((nint)text)!);"],
+            absent: ["void* ctx, ProbeReachKind"]);
+
+        ExpectCallbackBridge("a bridged callback without a context lane is refused",
+            new ApiCallback("ke_probe_line_fn", "void", null,
+                [new ApiParam("text", "const char *", ["utf8"], null)])
+            { Tags = ["bridge"] },
+            contains: [], absent: [], throws: "exactly one [context] lane");
+
+        ExpectCallbackBridge("a bridged callback lane with no managed form is refused",
+            new ApiCallback("ke_probe_line_fn", "void", null,
+            [
+                new ApiParam("ctx", "void *", ["context"], null),
+                new ApiParam("count", "uint32_t", [], null),
+            ])
+            { Tags = ["bridge"] },
+            contains: [], absent: [], throws: "has no bridged form");
+
         ExpectBorrowKinds("a borrow-kinds enum emits one wrapper per value, each marked with its reach",
             contains: [
                 "public sealed class NodeBorrowAttribute : Attribute",
@@ -987,6 +1016,45 @@ internal static class GeneratorShapeCases
             new(name, null, [],
                 fields.Select(f => new ApiField(f.Name, f.Type,
                     f.Tags is "" ? [] : f.Tags.Split(','), null)).ToList(), []);
+
+        void ExpectCallbackBridge(string what, ApiCallback callback, string[] contains, string[] absent, string? throws = null)
+        {
+            Register(what, failures =>
+            {
+                var model = new ApiModel();
+                model.Enums.Add(new ApiEnum("ke_probe_reach_kind", "Where a borrow looks.",
+                [
+                    new ApiEnumValue("KE_PROBE_REACH_KIND_NEAR", "0", true, "Close by."),
+                ]));
+                model.Callbacks.Add(callback);
+
+                string emitted;
+                try
+                {
+                    emitted = CSharpWriter.RenderCallbackBridge(model, callback, "Probe", "Probe.Native", ProbeConvention.Value);
+                }
+                catch (Exception ex)
+                {
+                    if (throws is null || !ex.Message.Contains(throws, StringComparison.Ordinal))
+                        failures.Add($"{what}: the writer threw {ex.GetType().Name}: {ex.Message}");
+                    return;
+                }
+                if (throws is not null)
+                {
+                    failures.Add($"{what}: expected the writer to refuse with \"{throws}\"");
+                    return;
+                }
+                if (Environment.GetEnvironmentVariable("KE_SHAPES_DUMP") == what) Console.WriteLine(emitted);
+
+                foreach (var needle in contains)
+                    if (!emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected to find \"{needle}\"");
+
+                foreach (var needle in absent)
+                    if (emitted.Contains(needle, StringComparison.Ordinal))
+                        failures.Add($"{what}: expected NOT to find \"{needle}\"");
+            });
+        }
 
         void ExpectBorrowKinds(string what, string[] contains, string[] absent)
 

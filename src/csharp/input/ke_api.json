@@ -1272,15 +1272,6 @@
       "return_doc": null,
       "params": [
         {
-          "name": "logger",
-          "type": "struct ke_logger *",
-          "tags": [
-            "borrowed",
-            "nullable"
-          ],
-          "doc": "Optional logger; pass NULL to disable logging."
-        },
-        {
           "name": "out_error",
           "type": "ke_error **",
           "tags": [],

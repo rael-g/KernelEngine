@@ -3,7 +3,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_asset_stb_image");
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
@@ -16,26 +18,22 @@ const c = @import("c");
 
 const E = @import("kerror").Errors(c);
 
-/// Reached only through the loader's `handle`. The factory allocates it before the loader and
-/// `destroy` frees it, so it lives exactly as long as the loader. `logger` is the logger from the
-/// params and stays null when the params carried none.
+const log = std.log.scoped(.asset_stb_image);
+
+/// The loader: the vtable the handle refers to, whose `handle` points back at the state. It holds
+/// nothing else, since a decode needs only its path.
 const State = struct {
-    logger: ?*c.ke_logger,
+    api: c.ke_image_loader,
 };
 
-/// Sends a warning to the logger under the loader's tag; with no logger it does nothing.
-fn logWarn(logger: ?*c.ke_logger, msg: [*c]const u8) void {
-    const lg = logger orelse return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "stb_image", .message = msg };
-    lg.log.?(lg, &ev);
+fn stateOf(self: *c.ke_image_loader) *State {
+    return @fieldParentPtr("api", self);
 }
 
-/// The handle's `destroy`: releases the state and then the vtable. A null loader is ignored.
+/// The handle's `destroy`: releases the loader. A null loader is ignored.
 fn destroy(self: ?*c.ke_image_loader) callconv(.c) void {
     const loader = self orelse return;
-    const state: *State = @ptrCast(@alignCast(loader.handle));
-    gpa.destroy(state);
-    gpa.destroy(loader);
+    gpa.destroy(stateOf(loader));
 }
 
 /// Called through the `load_image` slot. A decode failure logs stb's failure reason as a warning
@@ -48,15 +46,12 @@ fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return null;
     }
-    const loader = self.?;
-    const state: *State = @ptrCast(@alignCast(loader.handle));
-
     var w: c_int = 0;
     var h: c_int = 0;
     var channels: c_int = 0;
     const raw = stb.stbi_load(path, &w, &h, &channels, 4);
     if (raw == null) {
-        logWarn(state.logger, stb.stbi_failure_reason());
+        log.warn("{s}: {s}", .{ path, stb.stbi_failure_reason() });
         E.fail(out_error, .not_found, "image file not found or failed to decode", @src());
         return null;
     }
@@ -102,36 +97,16 @@ fn freeImage(self: ?*c.ke_image_loader, data: [*c]c.ke_texture_data) callconv(.c
     gpa.destroy(d);
 }
 
-/// The exported factory. On success the handle's `ref` is set, its `handle` and both vtable slots
-/// are wired, and its `destroy` releases the state and then the loader. On failure `ref` is null
-/// and `out_error` is set: an invalid-argument error for null params, or an out-of-memory error
-/// when the state or the loader cannot be allocated, after the state already taken is released.
-export fn ke_image_loader_stb_create(
-    params: [*c]const c.ke_image_loader_stb_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_image_loader_handle {
-    const empty = c.ke_image_loader_handle{ .ref = null, .destroy = null };
-    if (params == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return empty;
-    }
-
+/// The exported factory. On success the handle's `ref` is the loader with both slots wired and
+/// its `destroy` releases it; when the loader cannot be allocated `ref` is null and `out_error`
+/// holds an out-of-memory error.
+export fn ke_image_loader_stb_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_image_loader_handle {
     const state = gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return empty;
-    };
-    state.* = .{ .logger = params.*.logger };
-
-    const loader = gpa.create(c.ke_image_loader) catch {
-        gpa.destroy(state);
         E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
-        return empty;
+        return .{ .ref = null, .destroy = null };
     };
-    loader.handle = state;
-    loader.load_image = &loadImage;
-    loader.free_image = &freeImage;
-
-    return .{ .ref = loader, .destroy = &destroy };
+    state.* = .{ .api = .{ .handle = state, .load_image = &loadImage, .free_image = &freeImage } };
+    return .{ .ref = &state.api, .destroy = &destroy };
 }
 
 const testing = std.testing;
@@ -139,8 +114,7 @@ const testing = std.testing;
 const testing_libc = @import("c");
 
 fn createLoader() c.ke_image_loader_handle {
-    var params = std.mem.zeroes(c.ke_image_loader_stb_params);
-    return ke_image_loader_stb_create(&params, null);
+    return ke_image_loader_stb_create(null);
 }
 
 test "creating the loader wires up a handle with every vtable slot filled" {
@@ -151,11 +125,6 @@ test "creating the loader wires up a handle with every vtable slot filled" {
     try testing.expect(h.ref.*.handle != null);
     try testing.expect(h.destroy != null);
     try testing.expect(h.ref.*.load_image != null);
-}
-
-test "creating the loader with null params returns a null handle" {
-    const h = ke_image_loader_stb_create(null, null);
-    try testing.expect(h.ref == null);
 }
 
 test "loading an image with a null loader or a null path fails" {

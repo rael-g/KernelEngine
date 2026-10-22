@@ -34,6 +34,7 @@ pub fn build(b: *std.Build) void {
     mod.linkSystemLibrary("ke_common", .{});
     mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", kerror_mod);
+    mod.addImport("klog", ke_common_build.klog(b));
     mod.addCMacro("KE_ASSET_STB_IMAGE_EXPORT", "");
 
     mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
@@ -66,6 +67,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }));
+    test_mod.addImport("klog", ke_common_build.klog(b));
     test_mod.addCMacro("KE_ASSET_STB_IMAGE_EXPORT", "");
 
     test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));

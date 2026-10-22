@@ -42,7 +42,6 @@ int main(void)
     ke_error *err = NULL;
 
     ke_window_glfw_params wp = {
-        .logger     = NULL,
         .input      = NULL,
         .title      = "c_demo_08 vertex buffer",
         .width      = 800,
@@ -54,7 +53,6 @@ int main(void)
     if (!win.ref->on_initialize(win.ref, &err)) die("window init failed", err);
 
     ke_gpu_device_webgpu_params dp = {
-        .logger            = NULL,
         .enable_validation = 1,
     };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);

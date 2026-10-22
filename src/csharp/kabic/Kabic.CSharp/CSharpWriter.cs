@@ -2956,6 +2956,90 @@ public static class CSharpWriter
     /// Renders the managed interface a callback struct is implemented against: one method for
     /// each slot other than <c>destroy</c>.
     /// </summary>
+    /// <summary>
+    /// The managed side of a callback typedef tagged <c>bridge</c>: a delegate of its lanes
+    /// without the context lane, and a class whose <c>Pointer</c> and <c>Pin</c> are the two
+    /// arguments a native setter of that typedef takes. The trampoline turns an enum lane into
+    /// the managed enum of the same name and a utf8 lane into a string; a lane of any other kind,
+    /// a typedef without exactly one context lane, or one that returns a value is refused.
+    /// </summary>
+    public static string RenderCallbackBridge(ApiModel model, ApiCallback cb, string ns, string nativeNs, Convention convention)
+    {
+        var name = Idioms.TypeName(cb.Name, convention);
+        if (cb.Returns.Trim() != "void")
+            throw new InvalidOperationException($"{cb.Name}: a bridged callback returns nothing, and this one returns {cb.Returns}");
+        var contexts = cb.Lanes.Where(l => l.Has("context")).ToList();
+        if (contexts.Count != 1)
+            throw new InvalidOperationException($"{cb.Name}: a bridged callback has exactly one [context] lane, and this one has {contexts.Count}");
+
+        var nativeLanes = new List<string>();
+        var nativeParams = new List<string>();
+        var managedParams = new List<string>();
+        var managedArgs = new List<string>();
+        foreach (var lane in cb.Lanes)
+        {
+            var ident = Idioms.Ident(lane.Name ?? $"arg{nativeLanes.Count}");
+            if (lane.Has("context"))
+            {
+                nativeLanes.Add("void*");
+                nativeParams.Add($"void* {ident}");
+                continue;
+            }
+            var enumType = model.Enums.FirstOrDefault(e => e.Name == lane.Type.Trim());
+            if (enumType is not null)
+            {
+                var managed = Idioms.TypeName(enumType.Name, convention);
+                nativeLanes.Add(enumType.Name);
+                nativeParams.Add($"{enumType.Name} {ident}");
+                managedParams.Add($"{managed} {ident}");
+                managedArgs.Add($"({managed}){ident}");
+            }
+            else if (lane.Has("utf8"))
+            {
+                nativeLanes.Add("sbyte*");
+                nativeParams.Add($"sbyte* {ident}");
+                managedParams.Add($"string {ident}");
+                managedArgs.Add($"Marshal.PtrToStringUTF8((nint){ident})!");
+            }
+            else
+            {
+                throw new InvalidOperationException($"{cb.Name}: lane '{lane.Name}' of type {lane.Type} has no bridged form; an enum or a [utf8] string has");
+            }
+        }
+        var pointer = $"delegate* unmanaged[Cdecl]<{string.Join(", ", nativeLanes)}, void>";
+        var ctx = Idioms.Ident(contexts[0].Name ?? "ctx");
+
+        var o = new List<string>
+        {
+            Header,
+            "using System.Runtime.CompilerServices;",
+            "using System.Runtime.InteropServices;",
+            "",
+            $"using {nativeNs};",
+            "",
+            $"namespace {ns};",
+            "",
+        };
+        o.Add(XmlDoc("", cb.Doc, convention).TrimEnd());
+        o.Add($"public delegate void {name}({string.Join(", ", managedParams)});");
+        o.Add("");
+        o.Add($"/// <summary>Hands a <see cref=\"{name}\"/> to native code: <see cref=\"Pointer\"/> and the context <see cref=\"Pin\"/> returns are the two arguments a native setter of <c>{cb.Name}</c> takes.</summary>");
+        o.Add($"public static unsafe class {name}Native");
+        o.Add("{");
+        o.Add("    /// <summary>The function native code calls; it forwards each call to the handler the context names.</summary>");
+        o.Add($"    public static {pointer} Pointer => &Trampoline;");
+        o.Add("");
+        o.Add("    /// <summary>The context naming <paramref name=\"handler\"/>. The handler is kept alive from then on, since native code may call it until the process ends.</summary>");
+        o.Add($"    public static void* Pin({name} handler) => (void*)GCHandle.ToIntPtr(GCHandle.Alloc(handler));");
+        o.Add("");
+        o.Add("    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]");
+        o.Add($"    static void Trampoline({string.Join(", ", nativeParams)}) =>");
+        o.Add($"        (({name})GCHandle.FromIntPtr((nint){ctx}).Target!)({string.Join(", ", managedArgs)});");
+        o.Add("}");
+        o.Add("");
+        return string.Join('\n', o);
+    }
+
     public static string RenderCallbackInterface(ApiStruct cbType, string ns, string nativeNs, Convention convention)
     {
         var ifaceName = "I" + Idioms.TypeName(cbType.Name, convention) + "Native";

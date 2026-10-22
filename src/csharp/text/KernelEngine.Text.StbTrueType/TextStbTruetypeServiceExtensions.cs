@@ -12,7 +12,8 @@ public static class TextStbTrueTypeServiceExtensions
 {
     /// <summary>
     /// Registers a stb_truetype-backed <see cref="IFontLoader"/> singleton, and the same
-    /// loader as <see cref="INativeFontLoader"/>.
+    /// loader as <see cref="INativeFontLoader"/>. The library logs to the registered
+    /// <see cref="ILogger"/>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddTextStbTrueType(this IServiceCollection services)
     {
@@ -20,13 +21,10 @@ public static class TextStbTrueTypeServiceExtensions
         {
             unsafe
             {
-                var logger = sp.GetService<INativeLogger>();
-                var @params = new ke_font_loader_stb_params
-                {
-                    logger = logger != null ? logger.Native : null,
-                };
+                if (sp.GetService<ILogger>() is { } logger)
+                    KernelEngine.Text.StbTrueType.Native.NativeMethods.text_stb_truetype_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
                 ke_error* err = null;
-                var handle = KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&@params, &err);
+                var handle = KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&err);
                 if (handle.@ref == null) throw NativeErrors.FromNative(err, "font_loader_stb_create");
                 return new FontLoader(handle);
             }

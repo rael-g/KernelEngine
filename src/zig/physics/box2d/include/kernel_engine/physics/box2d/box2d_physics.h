@@ -24,7 +24,6 @@ extern "C" {
 /// @brief Construction parameters for a ke_physics_2d world.
 typedef struct ke_physics_2d_box2d_params
 {
-    struct ke_logger    *logger;       ///< Optional; may be NULL
     float                gravity_x;    ///< Default 0
     float                gravity_y;    ///< Default -9.81
 } ke_physics_2d_box2d_params;

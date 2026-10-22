@@ -12,7 +12,6 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/service/pass_context.h>
 #include <kernel_engine/render/service/render_service_create.h>
-#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
 #include <kernel_engine/resource_cache/resource_cache.h>
 #include <kernel_engine/resource_cache/default/resource_cache_default_create.h>

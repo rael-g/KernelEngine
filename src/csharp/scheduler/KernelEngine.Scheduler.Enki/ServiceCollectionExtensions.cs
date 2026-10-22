@@ -11,6 +11,7 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers a singleton <see cref="KernelEngine.Scheduler.Scheduler"/> created on first resolution.
+    /// The enki library logs to the registered logger, or to stderr when there is none.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown at resolution when the native factory fails.</exception>
     public static IServiceCollection AddEnkiScheduler(this IServiceCollection services)
@@ -19,6 +20,8 @@ public static class ServiceCollectionExtensions
         {
             unsafe
             {
+                if (sp.GetService<KernelEngine.Logger.ILogger>() is { } logger)
+                    KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
                 ke_error* err = null;
                 ke_scheduler_enki_params @params = default;
                 var handle = KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&@params, &err);

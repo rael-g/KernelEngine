@@ -4,7 +4,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_render_scene");
 pub const c = @import("c");
 const component_apply = @import("component_apply.zig");
 const mesh_resolve = @import("mesh_resolve.zig");
@@ -180,7 +182,7 @@ export fn ke_render_label_resolve_create(params_in: ?*const c.ke_render_label_re
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "label resolve: allocation failed", @src().file, @intCast(@src().line), null);
         return empty;
     };
-    st.state = .{ .core = core, .ui = ui, .resolver = p.resolver, .logger = p.logger };
+    st.state = .{ .core = core, .ui = ui, .resolver = p.resolver };
     st.terms = .{.{ .cid = p.label_cid, .access = c.KE_ACCESS_WRITE }};
     st.queries = .{.{ .terms = &st.terms[0], .term_count = 1 }};
     var label = std.mem.zeroes(c.ke_runtime_system_params);
@@ -262,7 +264,7 @@ test "the label resolve registers its system, and fails when the runtime refuses
     var rig: Rig = undefined;
     rig.init();
     var ui = std.mem.zeroes(c.ke_render_ui);
-    const p = c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .logger = null, .label_cid = 7 };
+    const p = c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .label_cid = 7 };
     const h = ke_render_label_resolve_create(&p, null);
     try testing.expect(h.ref != null);
     try testing.expectEqual(@as(u32, 1), rig.rt.live_count);
@@ -275,7 +277,7 @@ test "the label resolve registers its system, and fails when the runtime refuses
 test "a label resolve missing its ui is refused as an invalid argument" {
     var rig: Rig = undefined;
     rig.init();
-    const p = c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = null, .resolver = null, .logger = null, .label_cid = 7 };
+    const p = c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = null, .resolver = null, .label_cid = 7 };
     var err: [*c]c.ke_error = null;
     try testing.expect(ke_render_label_resolve_create(&p, &err).ref == null);
     try testing.expectEqual(&c.KE_ERROR_INVALID_ARGUMENT, err.*.type);

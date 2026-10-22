@@ -116,16 +116,17 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         var window = services.GetRequiredService<IWindow>();
         var ecs = services.GetRequiredService<INativeEcs>();
-        var logger = services.GetService<INativeLogger>();
         var scheduler = services.GetRequiredService<IScheduler>();
         var world = services.GetService<KernelEngine.Framework.World>();
 
         var win = ((INativeWindow)window).Native;
         var rt = ((INativeRuntime)runtime).Native;
         var ec = ecs.Native;
-        var lg = logger != null ? logger.Native : null;
         var sc = ((INativeScheduler)scheduler).Native;
         var wd = world != null ? ((KernelEngine.Framework.INativeWorld)world).Native : null;
+
+        if (services.GetService<ILogger>() is { } logger)
+            RouteLogs(logger);
 
         ke_error* err = null;
 
@@ -150,7 +151,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var ar = services.GetService<KernelEngine.Framework.NativeAssetResolver>() is { } resolver
             ? (KernelEngine.Asset.Native.ke_asset_resolver*)((KernelEngine.Framework.INativeAssetResolver)resolver).Native
             : null;
-        Compose(rt, ec, wd, lg, ar, config);
+        Compose(rt, ec, wd, ar, config);
 
         _renderService = RenderService.Borrow(_core);
         var clearColor = _clearColorOverride ?? ResolveClearColor(config);
@@ -159,12 +160,36 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <summary>
+    /// Sends the log of every native library this module composes to <paramref name="logger"/>.
+    /// </summary>
+    private static void RouteLogs(ILogger logger)
+    {
+        var callback = LogCallbackNative.Pointer;
+        var ctx = LogCallbackNative.Pin(logger.Log);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_binder_grouped_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_set_log_callback(callback, ctx);
+        KernelEngine.View.Native.NativeMethods.view_space_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_camera_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_shadow_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_skybox_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_set_log_callback(callback, ctx);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_set_log_callback(callback, ctx);
+    }
+
+    /// <summary>
     /// Creates every piece of the renderer on the device and the window target and wires their
     /// component ids together, then registers render's scene components into the world when there
     /// is one. Throws <see cref="InvalidOperationException"/> naming the first piece that fails.
     /// </summary>
     private void Compose(KernelEngine.Runtime.Native.ke_runtime* rt, KernelEngine.Ecs.Native.ke_ecs* ec,
-        KernelEngine.Framework.Native.ke_world* wd, KernelEngine.Logger.Native.ke_logger* lg,
+        KernelEngine.Framework.Native.ke_world* wd,
         KernelEngine.Asset.Native.ke_asset_resolver* ar, IConfiguration? config)
     {
         ke_error* err = null;
@@ -244,7 +269,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 runtime = rt,
                 service = core,
                 device = dev,
-                logger = lg,
                 view_space = _viewSpace.@ref,
                 camera = _camera.@ref,
                 point_light_cid = ids.point_light,
@@ -284,7 +308,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 runtime = rt,
                 service = core,
                 device = dev,
-                logger = lg,
                 ibl_enabled = _enableIbl,
                 camera_cid = ids.camera,
                 world_transform_cid = ids.world_transform,
@@ -318,7 +341,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 runtime = rt,
                 service = core,
                 device = dev,
-                logger = lg,
                 ibl_enabled = _enableIbl,
                 mesh_cid = ids.mesh,
                 world_transform_cid = ids.world_transform,
@@ -333,7 +355,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 throw Fail("forward pass create failed", err);
         }
 
-        var tmp = new ke_render_tonemap_params { runtime = rt, service = core, device = dev, logger = lg, frame_cid = frameCid };
+        var tmp = new ke_render_tonemap_params { runtime = rt, service = core, device = dev, frame_cid = frameCid };
         _tonemap = KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_create(&tmp, &err);
         if (_tonemap.@ref == null)
             throw Fail("tonemap pass create failed", err);
@@ -343,7 +365,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (_ui.@ref == null)
             throw Fail("ui pass create failed", err);
 
-        var lrp = new ke_render_label_resolve_params { runtime = rt, service = core, ui = _ui.@ref, resolver = ar, logger = lg, label_cid = ids.label };
+        var lrp = new ke_render_label_resolve_params { runtime = rt, service = core, ui = _ui.@ref, resolver = ar, label_cid = ids.label };
         _labels = KernelEngine.Render.Webgpu.Native.NativeMethods.render_label_resolve_create(&lrp, &err);
         if (_labels.@ref == null)
             throw Fail("label resolve create failed", err);

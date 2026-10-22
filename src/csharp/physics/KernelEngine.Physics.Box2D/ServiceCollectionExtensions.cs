@@ -39,10 +39,10 @@ public static class ServiceCollectionExtensions
 
     private static unsafe IPhysics2D CreatePhysics(IServiceProvider sp, float gravityX, float gravityY)
     {
-        var logger = sp.GetService<INativeLogger>();
+        if (sp.GetService<ILogger>() is { } logger)
+            KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
         var @params = new ke_physics_2d_box2d_params
         {
-            logger = logger != null ? logger.Native : null,
             gravity_x = gravityX,
             gravity_y = gravityY,
         };

@@ -1,5 +1,4 @@
 ﻿using KernelEngine.Configuration;
-using KernelEngine.Logger.Native;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,9 +7,10 @@ namespace KernelEngine.Logger;
 public static class LoggerServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the <see cref="Logger"/> singleton and exposes it as <see cref="ILogger"/> and
-    /// <see cref="INativeLogger"/>. When the logger is first resolved it adds every
-    /// <see cref="ILoggerSink"/> registered by then, each at its own minimum level.
+    /// Registers the <see cref="Logger"/> singleton and exposes it as <see cref="ILogger"/>. When
+    /// the logger is first resolved it adds every <see cref="ILoggerSink"/> registered by then,
+    /// each at its own minimum level, and receives the log of the configuration libraries, which
+    /// are created before it.
     /// </summary>
     public static IServiceCollection AddLogger(this IServiceCollection services)
     {
@@ -19,15 +19,21 @@ public static class LoggerServiceCollectionExtensions
             var logger = new Logger();
             foreach (var sink in sp.GetServices<ILoggerSink>())
                 logger.AddSink(sink);
+            unsafe
+            {
+                var callback = LogCallbackNative.Pointer;
+                var ctx = LogCallbackNative.Pin(logger.Log);
+                KernelEngine.Configuration.Native.NativeMethods.configuration_set_log_callback(callback, ctx);
+                KernelEngine.Configuration.Native.NativeMethods.configuration_toml_set_log_callback(callback, ctx);
+            }
             return logger;
         });
         services.AddSingleton<ILogger>(sp => sp.GetRequiredService<Logger>());
-        services.AddSingleton<INativeLogger>(sp => sp.GetRequiredService<Logger>());
         return services;
     }
 
     /// <summary>
-    /// Registers the native console sink. Its minimum level is the <c>console_level</c> key of the
+    /// Registers the console sink. Its minimum level is the <c>console_level</c> key of the
     /// <c>logging</c> section of the Project file, and every level when the key is missing.
     /// Throws when the key is not a <see cref="LogLevel"/> name.
     /// </summary>
@@ -38,46 +44,31 @@ public static class LoggerServiceCollectionExtensions
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
             var level = cfg.GetString("logging", "console_level", nameof(LogLevel.Trace));
-            return new NativeConsoleLoggerSink(Enum.Parse<LogLevel>(level, ignoreCase: true));
+            return new ConsoleLoggerSink(Enum.Parse<LogLevel>(level, ignoreCase: true));
         });
         return services;
     }
 
     /// <summary>
-    /// Registers the native console sink with this minimum level, without reading the Project file.
+    /// Registers the console sink with this minimum level, without reading the Project file.
     /// </summary>
     public static IServiceCollection AddConsoleSink(this IServiceCollection services, LogLevel minLevel)
     {
-        services.AddSingleton<ILoggerSink>(new NativeConsoleLoggerSink(minLevel));
+        services.AddSingleton<ILoggerSink>(new ConsoleLoggerSink(minLevel));
         return services;
     }
 }
 
 /// <summary>
-/// An <see cref="ILoggerSink"/> that forwards each event to the native console sink.
+/// An <see cref="ILoggerSink"/> that writes each event to standard error as
+/// <c>[LEVEL] tag: message</c>.
 /// </summary>
-internal sealed unsafe class NativeConsoleLoggerSink : ILoggerSink
+internal sealed class ConsoleLoggerSink(LogLevel minLevel) : ILoggerSink
 {
-    private ke_logger_sink _native = KernelEngine.Logger.LoggerSink.ConsoleSinkCreate();
+    public LogLevel MinLevel => minLevel;
 
-    public NativeConsoleLoggerSink(LogLevel minLevel) => _native.min_level = (int)minLevel;
+    public void Log(LogLevel level, string tag, string message) =>
+        Console.Error.WriteLine($"[{level.ToString().ToUpperInvariant()}] {tag}: {message}");
 
-    public LogLevel MinLevel => (LogLevel)_native.min_level;
-
-    public void Log(LogLevel level, string tag, string message)
-    {
-        var tagBytes = System.Text.Encoding.ASCII.GetBytes(tag + '\0');
-        var msgBytes = System.Text.Encoding.ASCII.GetBytes(message + '\0');
-        fixed (byte* tagPtr = tagBytes, msgPtr = msgBytes)
-        fixed (ke_logger_sink* self = &_native)
-        {
-            var evt = new ke_log_event { level = (int)level, tag = (sbyte*)tagPtr, message = (sbyte*)msgPtr };
-            self->log(self, &evt);
-        }
-    }
-
-    public void Flush()
-    {
-        fixed (ke_logger_sink* self = &_native) self->flush(self);
-    }
+    public void Flush() => Console.Error.Flush();
 }

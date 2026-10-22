@@ -4,7 +4,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_render_tonemap");
 const c = @import("c");
 
 const heap = @import("heap");
@@ -23,7 +25,6 @@ const shader_layout = c.ke_render_shader_layout_params{
 pub const TonemapModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    logger: ?*c.ke_logger = null,
 
     pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
     binder: *c.ke_render_resource_binder = undefined,
@@ -34,16 +35,14 @@ pub const TonemapModule = struct {
     access: [2]c.ke_component_access = undefined,
 };
 
-/// Writes one error line to the logger, for a failure `system` has to report while it draws. Does
-/// nothing when the logger or the error is absent, and drops a message that does not fit its
-/// buffer.
-fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
-    const lg = logger orelse return;
+const log = std.log.scoped(.render_tonemap);
+
+/// Writes one error-level line naming `what` and the error's message when an error is given. The
+/// error is read, not freed or cleared. The frame systems that call it have no error channel, so
+/// the line is the only report of the failure.
+fn logGpuError(err: ?*c.ke_error, what: []const u8) void {
     const e = err orelse return;
-    var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, "{s} failed: {s}", .{ what, e.message }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_tonemap", .message = msg.ptr };
-    lg.log.?(lg, &ev);
+    log.err("{s} failed: {s}", .{ what, e.message });
 }
 
 inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
@@ -72,7 +71,7 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
     var err: ?*c.ke_error = null;
     tm.set = tm.binder.create_set.?(tm.binder, tm.layout, null, "tonemap.set", &bindings, bindings.len, &err);
     if (tm.set == c.KE_RENDER_BINDING_INVALID) {
-        logGpuError(tm.logger, err, "tonemap set");
+        logGpuError(err, "tonemap set");
         core.*.end_pass.?(core, pc);
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "tonemap pass: set creation failed", @src().file, @intCast(@src().line), err);
         return false;
@@ -99,7 +98,6 @@ fn setup(tm: *TonemapModule, p: *const c.ke_render_tonemap_params, out_error: [*
     const core: *c.ke_render_service = p.service;
     tm.core = core;
     tm.device = p.device;
-    tm.logger = p.logger;
 
     tm.io.name = "render.tonemap";
     tm.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_TONEMAP, c.KE_RENDER_CHAIN_REPLACE, out_error);
@@ -204,7 +202,7 @@ const testing = std.testing;
 const Stubs = @import("stubs").Stubs(c);
 
 fn testParams(rt: *Stubs.Runtime, core: *Stubs.Core, dev: *Stubs.Device) c.ke_render_tonemap_params {
-    return .{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .frame_cid = 1 };
+    return .{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .frame_cid = 1 };
 }
 
 test "creating and destroying the tonemap pass leaves no block allocated and no GPU resource live" {

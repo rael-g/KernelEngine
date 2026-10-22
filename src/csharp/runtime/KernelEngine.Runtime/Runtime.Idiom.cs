@@ -23,6 +23,22 @@ public sealed unsafe partial class Runtime : IRuntime
     {
     }
 
+    /// <summary>
+    /// Builds a runtime as the constructor above does, the runtime library logging to
+    /// <paramref name="logger"/>.
+    /// </summary>
+    public Runtime(INativeEcs ecs, IScheduler taskScheduler, KernelEngine.Logger.ILogger logger)
+        : this(RoutingLog(ecs, logger), taskScheduler)
+    {
+    }
+
+    private static INativeEcs RoutingLog(INativeEcs ecs, KernelEngine.Logger.ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        KernelEngine.Runtime.Native.NativeMethods.runtime_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        return ecs;
+    }
+
     private static ke_ecs* NativeEcsOf(INativeEcs ecs)
     {
         ArgumentNullException.ThrowIfNull(ecs);

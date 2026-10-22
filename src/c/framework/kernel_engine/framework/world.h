@@ -13,7 +13,6 @@ extern "C"
 #endif
 
     struct ke_scene_tree;
-    struct ke_logger;
     struct ke_signal_bus;
 
     /// Fills a component from a scene block's keys.
@@ -45,9 +44,6 @@ extern "C"
         ke_runtime               *runtime;
         /// The scene tree the world hands out; optional, borrowed.
         struct ke_scene_tree     *scene_tree;
-        /// The logger the scene loader writes to while loading into this world;
-        /// optional, borrowed.
-        struct ke_logger         *logger;
         /// Signal bus scene-declared connections are wired into; optional,
         /// borrowed. Without one, a scene's connection blocks are reported and
         /// skipped rather than silently doing nothing.

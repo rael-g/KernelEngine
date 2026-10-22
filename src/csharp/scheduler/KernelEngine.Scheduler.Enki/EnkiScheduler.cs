@@ -24,8 +24,17 @@ public sealed unsafe class EnkiScheduler : KernelEngine.Scheduler.Scheduler
     {
     }
 
-    private static ke_scheduler_handle CreateNative(uint workerCount)
+    /// <summary>Creates the native scheduler with one worker per hardware thread besides the calling
+    /// one, the enki library logging to <paramref name="logger"/>.</summary>
+    /// <exception cref="InvalidOperationException">The native factory returned no scheduler.</exception>
+    public EnkiScheduler(KernelEngine.Logger.ILogger logger) : base(CreateNative(0, logger))
     {
+    }
+
+    private static ke_scheduler_handle CreateNative(uint workerCount, KernelEngine.Logger.ILogger? logger = null)
+    {
+        if (logger is not null)
+            KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
         ke_scheduler_enki_params @params = default;
         @params.worker_count = workerCount;
         var handle = KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&@params, null);

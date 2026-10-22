@@ -37,205 +37,54 @@
       ]
     }
   ],
-  "structs": [
+  "structs": [],
+  "vtables": [],
+  "functions": [],
+  "callbacks": [
     {
-      "name": "ke_log_event",
-      "doc": "One log entry. \u0060tag\u0060/\u0060message\u0060 are valid only for the duration of the call they\u0027re passed to.",
-      "tags": [],
-      "fields": [
+      "name": "ke_log_callback",
+      "returns": "void",
+      "doc": "Receives one line a plugin library logged. Each plugin library exports \u0060 \u003Clibrary \u003E_set_log_callback(ke_log_callback callback, void *ctx)\u0060, declared in its \u0060 \u003Clibrary \u003E_log.h\u0060; the host sets it once, before the library logs, and a NULL callback sends the library\u0027s lines to stderr, which is also where they go until it is set. Called on whichever thread logged.",
+      "lanes": [
         {
-          "name": "level",
-          "type": "int32_t",
-          "tags": [],
-          "doc": null
+          "name": "ctx",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "The pointer given to the setter, unchanged."
         },
         {
-          "name": "tag",
-          "type": "const char *",
+          "name": "level",
+          "type": "ke_log_level",
           "tags": [],
-          "doc": null
+          "doc": "How severe the line is: error, warning, info or debug."
+        },
+        {
+          "name": "scope",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "The name of what logged: the plugin, or a third-party library it routes. Valid only during the call."
         },
         {
           "name": "message",
           "type": "const char *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "The formatted line. Valid only during the call."
         }
+      ],
+      "tags": [
+        "bridge"
       ]
     }
   ],
-  "vtables": [
-    {
-      "name": "ke_logger_sink",
-      "doc": "Output target for log messages. Implemented by the caller and handed to a logger; the logger owns it from that point and calls destroy on teardown.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "handle",
-          "type": "void *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "min_level",
-          "type": "int32_t",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "log",
-          "returns": "void",
-          "tags": [],
-          "doc": "Receives one log entry that passed this sink\u0027s level filter.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "event",
-              "type": "const ke_log_event *",
-              "tags": [
-                "borrowed"
-              ],
-              "doc": "Entry to write. Not valid after the call returns."
-            }
-          ],
-          "receiver": "struct ke_logger_sink *"
-        },
-        {
-          "name": "flush",
-          "returns": "void",
-          "tags": [],
-          "doc": "Flushes any buffered output.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_logger_sink *"
-        },
-        {
-          "name": "destroy",
-          "returns": "void",
-          "tags": [],
-          "doc": "Releases the sink. Called by the logger that took ownership.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_logger_sink *"
-        }
-      ]
-    },
-    {
-      "name": "ke_logger",
-      "doc": "Engine logging system. Dispatches events to every registered sink.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "handle",
-          "type": "void *",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "log",
-          "returns": "void",
-          "tags": [],
-          "doc": "Dispatches one entry to every registered sink whose \u0060min_level\u0060 it clears.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "event",
-              "type": "const ke_log_event *",
-              "tags": [
-                "borrowed"
-              ],
-              "doc": "Entry to dispatch."
-            }
-          ],
-          "receiver": "struct ke_logger *"
-        },
-        {
-          "name": "flush",
-          "returns": "void",
-          "tags": [],
-          "doc": "Flushes every registered sink.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_logger *"
-        },
-        {
-          "name": "add_sink",
-          "returns": "_Bool",
-          "tags": [],
-          "doc": "Takes ownership of a sink and starts routing entries to it.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "sink",
-              "type": "ke_logger_sink",
-              "tags": [
-                "callback"
-              ],
-              "doc": "Caller-implemented output target."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_logger *"
-        }
-      ]
-    },
-    {
-      "name": "ke_logger_handle",
-      "doc": null,
-      "tags": [],
-      "fields": [
-        {
-          "name": "ref",
-          "type": "ke_logger *",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "destroy",
-          "returns": "void",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [],
-          "receiver": "ke_logger *"
-        }
-      ]
-    }
-  ],
-  "functions": [
-    {
-      "name": "ke_logger_create",
-      "returns": "ke_logger_handle",
-      "doc": "Creates a logger instance.",
-      "return_doc": null,
-      "params": [
-        {
-          "name": "out_error",
-          "type": "ke_error **",
-          "tags": [],
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_console_sink_create",
-      "returns": "ke_logger_sink",
-      "doc": "Builds a stateless sink that formats entries as \u0060[LEVEL] tag: message\u0060 and writes them to the process\u0027s standard error stream, flushing after every entry.",
-      "return_doc": null,
-      "params": []
-    }
-  ],
-  "callbacks": [],
-  "type_aliases": {}
+  "type_aliases": {
+    "ke_log_callback": "void (*)(void *, ke_log_level, const char *, const char *)"
+  }
 }

@@ -1,4 +1,6 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Scheduler.Enki.Native;
 

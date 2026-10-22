@@ -21,6 +21,5 @@
 #include <kernel_engine/render/scene/scene_components.h>
 #include <kernel_engine/render/scene/scene_resolve_create.h>
 #include <kernel_engine/render/scene/label_resolve_create.h>
-#include <kernel_engine/logger/logger.h>
 
 #endif

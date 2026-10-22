@@ -21,6 +21,7 @@
     <ProjectReference Include="..\KernelEngine.Ecs.Abstractions\KernelEngine.Ecs.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Abstractions\KernelEngine.Logger.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

@@ -2,7 +2,6 @@
 #define KERNEL_ENGINE_ASSET_ASSIMP_C_H_
 
 #include <kernel_engine/common/error.h>
-#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/asset/asset_loader.h>
 #include <kernel_engine/asset/assimp/assimp_loader.h>
 #include <assimp/cimport.h>

@@ -1,4 +1,10 @@
+using KernelEngine.Asset.Native;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Input.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Runtime.Native;
+using KernelEngine.Text.Native;
 
 namespace KernelEngine.Framework.Native;
 
@@ -12,9 +18,6 @@ public unsafe partial struct ke_world_params
 
     [NativeTypeName("struct ke_scene_tree *")]
     public ke_scene_tree* scene_tree;
-
-    [NativeTypeName("struct ke_logger *")]
-    public KernelEngine.Logger.Native.ke_logger* logger;
 
     [NativeTypeName("struct ke_signal_bus *")]
     public ke_signal_bus* signal_bus;

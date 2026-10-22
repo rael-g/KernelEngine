@@ -49,12 +49,12 @@ public static class ServiceCollectionExtensions
         var titlePtr = Marshal.StringToHGlobalAnsi(title);
         try
         {
-            var logger = sp.GetService<INativeLogger>();
+            if (sp.GetService<ILogger>() is { } logger)
+                KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
             var input = sp.GetService<INativeInput>();
 
             var @params = new ke_window_glfw_params
             {
-                logger = logger != null ? logger.Native : null,
                 input = input != null ? input.Native : null,
                 title = (sbyte*)titlePtr,
                 width = width,
