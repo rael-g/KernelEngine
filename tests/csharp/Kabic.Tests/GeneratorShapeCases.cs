@@ -53,6 +53,11 @@ internal static class GeneratorShapeCases
                        "KernelEngine.NativeResults.ThrowIfFailed(Probe.Native.NativeMethods.probe_create(size, &handle), \"ke_probe_create\");"],
             absent: ["&err", "outProbe"]);
 
+        Expect("a shutdown slot with no failure lane is called with its handle alone",
+            Vtable("ke_probe", Slot("on_shutdown", "void", "lifecycle:shutdown")),
+            contains: ["_native->on_shutdown(_native);"],
+            absent: ["_native->on_shutdown(_native, null);"]);
+
         Expect("a utf8 parameter is a string on the public surface",
             Vtable("ke_probe", Slot("named", "ke_entity", Param("name", "const char *", "utf8"))),
             contains: ["public ulong Named(string name)", "Encoding.UTF8.GetBytes"],

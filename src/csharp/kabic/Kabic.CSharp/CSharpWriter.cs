@@ -1599,7 +1599,11 @@ public static class CSharpWriter
         else
             o.Add("        if (_borrowed) { _native = null; return; }");
         if (shutdownSlot is not null)
-            o.Add($"        _native->{shutdownSlot}(_native, null);");
+        {
+            var shutdownParams = vtable.Slots.FirstOrDefault(sl => sl.Name == shutdownSlot)?.Params ?? [];
+            var lane = shutdownParams.Count > 0 && convention.IsErrorOutParam(shutdownParams[^1]) ? ", null" : "";
+            o.Add($"        _native->{shutdownSlot}(_native{lane});");
+        }
         if (teardownParks) o.Add("        s_parkedCallbackException = null;");
         o.Add("        _destroy(_native);");
         o.Add("        _native = null;");
