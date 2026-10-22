@@ -42,11 +42,16 @@ typedef struct ke_physics_body2d_module_handle
     void (*destroy)(ke_physics_body2d_module *self);
 } ke_physics_body2d_module_handle;
 
-/// @brief Registers the system that creates, steps, and syncs 2D bodies.
-/// @return Handle whose @c ref is NULL on failure.
-KE_PHYSICS_BODY2D_API ke_physics_body2d_module_handle ke_physics_body2d_module_create(
+/**
+ * @brief Registers the system that creates, steps, and syncs 2D bodies.
+ * @param params [borrowed] The runtime, ECS, physics world and scene tree, none of them null.
+ * @param out_module [out] Receives the module; left zeroed on failure.
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument or a null field of @p params;
+ *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the runtime refuses a system.
+ */
+KE_PHYSICS_BODY2D_API ke_result ke_physics_body2d_module_create(
     const ke_physics_body2d_module_params *params,
-    ke_error **out_error);
+    ke_physics_body2d_module_handle       *out_module);
 
 
 #ifdef __cplusplus

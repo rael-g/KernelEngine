@@ -60,13 +60,13 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
         Handle->step(Handle, dt);
     }
 
-    /// <summary>Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.</summary>
+    /// <summary>Creates a body at the given world position.</summary>
+    /// <returns>Receives the body; KE_BODY_2D_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint CreateBody(BodyType2D type, Vector2 position)
     {
-        ke_error* err = null;
-        var result = Handle->create_body(Handle, (ke_body_type_2d)type, position.X, position.Y, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "create_body");
+        uint result;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->create_body(Handle, (ke_body_type_2d)type, position.X, position.Y, &result), "create_body");
         return result;
     }
 
@@ -82,8 +82,7 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
     /// <exception cref="Exception">The native call failed.</exception>
     public void AddBoxFixture(uint body, Vector2 halfExtents, Vector2 offset, float offsetAngle, float density, float friction, float restitution, ke_collision_filter_2d* filter)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->add_box_fixture(Handle, body, halfExtents.X, halfExtents.Y, offset.X, offset.Y, offsetAngle, density, friction, restitution, filter, &err), err, "add_box_fixture");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_box_fixture(Handle, body, halfExtents.X, halfExtents.Y, offset.X, offset.Y, offsetAngle, density, friction, restitution, filter), "add_box_fixture");
     }
 
     /// <summary>Attaches a circle fixture at the given offset from the body origin.</summary>
@@ -91,8 +90,7 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
     /// <exception cref="Exception">The native call failed.</exception>
     public void AddCircleFixture(uint body, float radius, Vector2 offset, float density, float friction, float restitution, ke_collision_filter_2d* filter)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->add_circle_fixture(Handle, body, radius, offset.X, offset.Y, density, friction, restitution, filter, &err), err, "add_circle_fixture");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_circle_fixture(Handle, body, radius, offset.X, offset.Y, density, friction, restitution, filter), "add_circle_fixture");
     }
 
     /// <summary>Reads the body's current pose and motion.</summary>

@@ -47,6 +47,7 @@ fn moduleOf(user: ?*anyopaque) *Module {
 }
 
 const log = std.log.scoped(.physics_body2d);
+const R = @import("result").Result(c, .{});
 
 /// The fixed-post-update-phase system that reconciles every body with its component and transform,
 /// in this order: a component with no body gets one at its transform's position and rotation; a
@@ -75,8 +76,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
             const b = &bodies[i];
             const pose = tcs0[i];
             if (b.body == c.KE_BODY_2D_INVALID) {
-                b.body = p.create_body.?(p, b.type, pose.position.x, pose.position.y, null);
-                if (b.body == c.KE_BODY_2D_INVALID) continue;
+                if (p.create_body.?(p, b.type, pose.position.x, pose.position.y, &b.body) != R.ok) continue;
                 m.tracked.put(gpa, segs[s].entities[i], .{ .body = b.body, .seen = m.update }) catch {
                     p.destroy_body.?(p, b.body);
                     b.body = c.KE_BODY_2D_INVALID;
@@ -232,9 +232,9 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
             const off = tcs[i].position;
             const angle = tcs[i].rotation;
             const filter = c.ke_collision_filter_2d{ .layer = col.layer, .mask = col.mask };
-            const ok = switch (col.kind) {
-                c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, off.x, off.y, col.density, col.friction, col.restitution, &filter, null),
-                else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, angle, col.density, col.friction, col.restitution, &filter, null),
+            const ok = R.ok == switch (col.kind) {
+                c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, off.x, off.y, col.density, col.friction, col.restitution, &filter),
+                else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, angle, col.density, col.friction, col.restitution, &filter),
             };
             col.attached = ok;
             const shape_fmt = "shape on entity {d}: kind={d} half=({d:.3},{d:.3}) r={d:.3} off=({d:.3},{d:.3}) angle={d:.4} density={d:.3} friction={d:.3} restitution={d:.3} attached={}";
@@ -278,23 +278,37 @@ fn destroyHandle(self: ?*c.ke_physics_body2d_module) callconv(.c) void {
 }
 
 /// Registers the component ids with the ECS, then the body system and the collider system, both in
-/// the fixed post-update phase, after the fixed update where scripts write. A missing argument or a
-/// failed allocation returns a null handle and sets nothing on the error output. A system the
-/// runtime refuses passes the runtime's error through the error output and returns a null handle.
-/// On success, the handle's `destroy` frees the module.
+/// the fixed post-update phase, after the fixed update where scripts write. Fails with invalid
+/// argument for a missing argument, out of memory for a failed allocation, and general for a system
+/// the runtime refuses, whose reason is logged. On success, the handle's `destroy` frees the module.
 export fn ke_physics_body2d_module_create(
     params: ?*const c.ke_physics_body2d_module_params,
-    out_error: ?*?*c.ke_error,
-) callconv(.c) c.ke_physics_body2d_module_handle {
-    const empty: c.ke_physics_body2d_module_handle = .{ .ref = null, .destroy = null };
+    out_module: ?*c.ke_physics_body2d_module_handle,
+) callconv(.c) c.ke_result {
+    const out = out_module orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const pr = params orelse return R.code(error.InvalidArgument);
+    out.* = create(pr) catch |err| {
+        log.warn("creating the body2d module failed: {t}", .{err});
+        return R.code(err);
+    };
+    return R.ok;
+}
 
-    const pr = params orelse return empty;
-    const rt = pr.runtime orelse return empty;
-    const ecs = pr.ecs orelse return empty;
-    const physics = pr.physics orelse return empty;
-    const tree = pr.scene_tree orelse return empty;
+/// The runtime's reason for refusing a system, read from its error record.
+fn refusal(err: [*c]c.ke_error) []const u8 {
+    if (err == null or err.*.message == null) return "no reason given";
+    return std.mem.span(err.*.message);
+}
 
-    const m = gpa.create(Module) catch return empty;
+fn create(pr: *const c.ke_physics_body2d_module_params) R.Error!c.ke_physics_body2d_module_handle {
+    const rt = pr.runtime orelse return error.InvalidArgument;
+    const ecs = pr.ecs orelse return error.InvalidArgument;
+    const physics = pr.physics orelse return error.InvalidArgument;
+    const tree = pr.scene_tree orelse return error.InvalidArgument;
+
+    const m = gpa.create(Module) catch return error.OutOfMemory;
+    errdefer gpa.destroy(m);
     m.* = .{ .physics = physics, .runtime = rt, .tree = tree };
 
     const body_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(c.ke_body2d_component), .alignment = @alignOf(c.ke_body2d_component), .fields = &c.ke_body2d_component_fields, .field_count = c.ke_body2d_component_fields.len }, null);
@@ -315,11 +329,13 @@ export fn ke_physics_body2d_module_create(
     sp.pinned_thread = 0;
     sp.user_data = m;
     sp.execute = bodySystem;
-    m.body_system = rt.*.register_system.?(rt, &sp, @ptrCast(out_error));
+    var err: [*c]c.ke_error = null;
+    m.body_system = rt.*.register_system.?(rt, &sp, &err);
     if (m.body_system == 0) {
-        gpa.destroy(m);
-        return empty;
+        log.warn("the runtime refused the body system: {s}", .{refusal(err)});
+        return error.General;
     }
+    errdefer _ = rt.*.unregister_system.?(rt, m.body_system, null);
     m.collider_queries_terms = .{ .{ .cid = collider_cid, .access = wr }, .{ .cid = transform_cid, .access = rd }, .{ .cid = body_cid, .access = rd }, .{ .cid = hierarchy_cid, .access = rd } };
     m.collider_queries = .{ .{ .terms = &m.collider_queries_terms[0], .term_count = 2 }, .{ .terms = &m.collider_queries_terms[2], .term_count = 1 }, .{ .terms = &m.collider_queries_terms[3], .term_count = 1 } };
 
@@ -331,11 +347,10 @@ export fn ke_physics_body2d_module_create(
     cp.pinned_thread = 0;
     cp.user_data = m;
     cp.execute = colliderSystem;
-    m.collider_system = rt.*.register_system.?(rt, &cp, @ptrCast(out_error));
+    m.collider_system = rt.*.register_system.?(rt, &cp, &err);
     if (m.collider_system == 0) {
-        _ = rt.*.unregister_system.?(rt, m.body_system, null);
-        gpa.destroy(m);
-        return empty;
+        log.warn("the runtime refused the collider system: {s}", .{refusal(err)});
+        return error.General;
     }
 
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
@@ -352,6 +367,12 @@ export fn ke_physics_scene_components_create() callconv(.c) c.ke_scene_component
 }
 
 const testing = std.testing;
+
+fn made(params: ?*const c.ke_physics_body2d_module_params) !c.ke_physics_body2d_module_handle {
+    var h: c.ke_physics_body2d_module_handle = undefined;
+    try R.check(ke_physics_body2d_module_create(params, &h));
+    return h;
+}
 
 const Stubs = @import("stubs").Stubs(c);
 
@@ -370,8 +391,7 @@ test "creating and destroying the body2d module leaves no block allocated and no
     tree.init();
     params.scene_tree = tree.api();
 
-    const h = ke_physics_body2d_module_create(&params, null);
-    try testing.expect(h.ref != null);
+    const h = try made(&params);
     try testing.expectEqual(@as(u32, 2), rt.registered);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(u32, 0), rt.live_count);
@@ -386,19 +406,18 @@ test "a body2d module missing its runtime, ecs, physics or scene tree is refused
     var physics = std.mem.zeroes(c.ke_physics_2d);
 
     var params = std.mem.zeroes(c.ke_physics_body2d_module_params);
-    try testing.expect(ke_physics_body2d_module_create(null, null).ref == null);
-    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    try testing.expect(std.meta.isError(made(null)));
+    try testing.expect(std.meta.isError(made(&params)));
     params.runtime = rt.api();
-    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    try testing.expect(std.meta.isError(made(&params)));
     params.ecs = ecs.api();
-    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    try testing.expect(std.meta.isError(made(&params)));
     params.physics = &physics;
-    try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+    try testing.expect(std.meta.isError(made(&params)));
     var tree: Stubs.Tree = undefined;
     tree.init();
     params.scene_tree = tree.api();
-    const h = ke_physics_body2d_module_create(&params, null);
-    try testing.expect(h.ref != null);
+    const h = try made(&params);
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
 }
@@ -420,7 +439,7 @@ test "a body2d module the runtime refuses a system of fails the create and leave
         tree.init();
         params.scene_tree = tree.api();
 
-        try testing.expect(ke_physics_body2d_module_create(&params, null).ref == null);
+        try testing.expect(std.meta.isError(made(&params)));
         try testing.expectEqual(@as(u32, 0), rt.live_count);
         try heap.expectNoLeaks();
     }
@@ -436,9 +455,10 @@ const FakeWorld = struct {
         destroyed_count = 0;
     }
 
-    fn createBody(_: [*c]c.ke_physics_2d, _: c.ke_body_type_2d, _: f32, _: f32, _: [*c][*c]c.ke_error) callconv(.c) c.ke_body_2d {
+    fn createBody(_: [*c]c.ke_physics_2d, _: c.ke_body_type_2d, _: f32, _: f32, out_body: [*c]c.ke_body_2d) callconv(.c) c.ke_result {
         next_body += 1;
-        return next_body - 1;
+        out_body.* = next_body - 1;
+        return R.ok;
     }
 
     fn destroyBody(_: [*c]c.ke_physics_2d, body: c.ke_body_2d) callconv(.c) void {

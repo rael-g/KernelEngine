@@ -45,14 +45,16 @@ public sealed unsafe class Body2DModule : IRuntimeModule
             scene_tree = ((KernelEngine.Framework.INativeSceneTree)world.SceneTree).Native,
         };
 
+        ke_physics_body2d_module_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(
+            KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(&@params, &handle), "ke_physics_body2d_module_create");
+        _handle = handle;
+
         ke_error* err = null;
-        _handle = KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(&@params, &err);
-        if (_handle.@ref == null) throw NativeErrors.FromNative(err, "physics_body2d_module_create");
 
         var set = KernelEngine.Physics.Native.NativeMethods.physics_scene_components_create();
         try
         {
-            err = null;
             if (!set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native,
                     ((KernelEngine.Framework.INativeWorld)world).Native, &err))
                 throw NativeErrors.FromNative(err, "register_into");

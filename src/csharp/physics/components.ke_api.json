@@ -538,10 +538,10 @@
         },
         {
           "name": "create_body",
-          "returns": "ke_body_2d",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.",
-          "return_doc": null,
+          "doc": "Creates a body at the given world position.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null out_body, or KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "type",
@@ -564,10 +564,12 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_body",
+              "type": "ke_body_2d *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the body; KE_BODY_2D_INVALID on failure."
             }
           ],
           "receiver": "struct ke_physics_2d *"
@@ -590,10 +592,10 @@
         },
         {
           "name": "add_box_fixture",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin.",
-          "return_doc": null,
+          "return_doc": "KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.",
           "params": [
             {
               "name": "body",
@@ -660,22 +662,16 @@
                 "opt"
               ],
               "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_physics_2d *"
         },
         {
           "name": "add_circle_fixture",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Attaches a circle fixture at the given offset from the body origin.",
-          "return_doc": null,
+          "return_doc": "KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.",
           "params": [
             {
               "name": "body",
@@ -728,12 +724,6 @@
                 "opt"
               ],
               "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_physics_2d *"

@@ -28,11 +28,16 @@ typedef struct ke_physics_2d_box2d_params
     float                gravity_y;    ///< Default -9.81
 } ke_physics_2d_box2d_params;
 
-/// @brief Creates a 2D physics world.
-/// @return Handle whose @c ref is NULL on failure.
-KE_PHYSICS_BOX2D_API ke_physics_2d_handle ke_physics_2d_box2d_create(
+/**
+ * @brief Creates a 2D physics world.
+ * @param params [borrowed] The world's gravity.
+ * @param out_world [out] Receives the world; left zeroed on failure.
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p params or @p out_world;
+ *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when Box2D refuses the world.
+ */
+KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
     const ke_physics_2d_box2d_params *params,
-    ke_error **out_error);
+    ke_physics_2d_handle             *out_world);
 
 #ifdef __cplusplus
 }
