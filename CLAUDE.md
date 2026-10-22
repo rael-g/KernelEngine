@@ -184,6 +184,8 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 
 ## Project rules
 
+**Dissatisfaction is a requirement not yet named.** A design that leaves its owner unsatisfied is not finished: name what it fails to honour, and design again from that, not from the proposal.
+
 The rules below and the conventions above that a machine can check are checked by `scripts/check_engine_rules.cs`, which `scripts/verify.cs` runs with the other gates. Where a rule is already broken it holds a ceiling that can only go down.
 
 1. **A plugin exposes vtables behind one factory per header.** A contract header declares vtable shapes only; a plugin exports one create function per factory header and one log-callback setter; only the shared kernel library exports plain functions.
