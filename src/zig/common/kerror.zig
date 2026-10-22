@@ -62,6 +62,25 @@ pub fn Errors(comptime c: type) type {
             c.ke_error_set(out_error, typeOf(kind), msg, src.file, @intCast(src.line), cause);
         }
 
+        /// Records a failure of the kind result code `code` names, for a caller that reports through
+        /// `ke_error` a call that returned `ke_result`; a code of no general kind is `general`.
+        /// `c` must include `kernel_engine/result/result.h`. A bridge while both shapes coexist.
+        pub fn failCode(out_error: [*c][*c]c.ke_error, code: c.ke_result, msg: [*c]const u8, src: std.builtin.SourceLocation) void {
+            const pairs = .{
+                .{ c.KE_RESULT_NOT_FOUND, Kind.not_found },
+                .{ c.KE_RESULT_IO, Kind.io },
+                .{ c.KE_RESULT_OUT_OF_MEMORY, Kind.out_of_memory },
+                .{ c.KE_RESULT_INVALID_ARGUMENT, Kind.invalid_argument },
+                .{ c.KE_RESULT_NOT_INITIALIZED, Kind.not_initialized },
+                .{ c.KE_RESULT_NOT_SUPPORTED, Kind.not_supported },
+                .{ c.KE_RESULT_ALREADY_EXISTS, Kind.already_exists },
+            };
+            inline for (pairs) |pair| {
+                if (code == pair[0]) return fail(out_error, pair[1], msg, src);
+            }
+            fail(out_error, .general, msg, src);
+        }
+
         /// Writes the error chain to standard error and ends the process with a failure status.
         pub fn fatal(err: ?*const c.ke_error) noreturn {
             c.ke_error_fatal(err);
