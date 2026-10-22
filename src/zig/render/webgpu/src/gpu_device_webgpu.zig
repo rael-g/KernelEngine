@@ -25,7 +25,6 @@ const GpuError = error{
     OutOfMemory,
     NoAdapter,
     DeviceCreationFailed,
-    NotImplemented,
 };
 
 /// Created by `createDeviceState`, reached from the vtable through its handle, and freed by
@@ -66,7 +65,6 @@ fn setError(
         GpuError.OutOfMemory           => &ke.KE_ERROR_OUT_OF_MEMORY,
         GpuError.NoAdapter,
         GpuError.DeviceCreationFailed  => &ke.KE_ERROR_NOT_INITIALIZED,
-        GpuError.NotImplemented        => &ke.KE_ERROR_NOT_SUPPORTED,
     };
     ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
 }
@@ -329,11 +327,6 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
         .queue_submit                   = queueSubmit,
         .queue_poll                     = queuePoll,
         .queue_wait_idle                = queueWaitIdle,
-        .create_fence                   = createFence,
-        .queue_signal_fence             = queueSignalFence,
-        .wait_fence                     = waitFence,
-        .get_fence_value                = getFenceValue,
-        .destroy_fence                  = destroyFence,
         .create_buffer                  = createBuffer,
         .create_texture                 = createTexture,
         .create_texture_view            = createTextureView,
@@ -489,20 +482,6 @@ fn queuePoll(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
 fn queueWaitIdle(dev: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue) callconv(.c) void {
     _ = wgpu.wgpuDevicePoll(state(dev).device, 1, null);
 }
-
-/// Not implemented: returns the invalid handle.
-fn createFence(_: [*c]ke.ke_gpu_device, _: u64) callconv(.c) ke.ke_gpu_fence { return ke.KE_GPU_INVALID_HANDLE; }
-/// Not implemented: does nothing.
-fn queueSignalFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_queue, _: ke.ke_gpu_fence, _: u64) callconv(.c) void {}
-/// Not implemented: sets a not-supported error and returns false.
-fn waitFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence, _: u64, _: u64, out_error: ?*?*ke.ke_error) callconv(.c) bool {
-    setError(out_error, GpuError.NotImplemented, "webgpu: timeline fences not implemented", @src());
-    return false;
-}
-/// Not implemented: returns zero.
-fn getFenceValue(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.c) u64 { return 0; }
-/// Not implemented: does nothing.
-fn destroyFence(_: [*c]ke.ke_gpu_device, _: ke.ke_gpu_fence) callconv(.c) void {}
 
 fn mapBufferUsage(ke_usage: ke.ke_gpu_buffer_usage) wgpu.WGPUBufferUsage {
     var u: wgpu.WGPUBufferUsage = wgpu.WGPUBufferUsage_None;

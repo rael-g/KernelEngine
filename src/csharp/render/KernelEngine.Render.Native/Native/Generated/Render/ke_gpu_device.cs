@@ -18,21 +18,6 @@ public unsafe partial struct ke_gpu_device
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_queue)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, void> queue_wait_idle;
 
-    [NativeTypeName("ke_gpu_fence (*)(struct ke_gpu_device *, uint64_t)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ulong> create_fence;
-
-    [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_queue, ke_gpu_fence, uint64_t)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ulong, ulong, void> queue_signal_fence;
-
-    [NativeTypeName("bool (*)(struct ke_gpu_device *, ke_gpu_fence, uint64_t, uint64_t, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ulong, ulong, KernelEngine.Common.Native.ke_error**, bool> wait_fence;
-
-    [NativeTypeName("uint64_t (*)(struct ke_gpu_device *, ke_gpu_fence)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ulong> get_fence_value;
-
-    [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_fence)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, void> destroy_fence;
-
     [NativeTypeName("ke_gpu_buffer (*)(struct ke_gpu_device *, const ke_gpu_buffer_params *, ke_error **)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_buffer_params*, KernelEngine.Common.Native.ke_error**, ulong> create_buffer;
 
