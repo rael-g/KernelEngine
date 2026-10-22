@@ -22,18 +22,9 @@
 extern "C" {
 #endif
 
-/// @brief Construction parameters for the asset loader.
-typedef struct ke_asset_loader_assimp_params
-{
-    struct ke_logger    *logger;    ///< Optional; may be NULL
-} ke_asset_loader_assimp_params;
-
-/// @brief Creates a ke_asset_loader.
-/// @param params  Non-null construction parameters.
-/// @return        Handle whose @c ref is NULL on failure.
-KE_ASSET_ASSIMP_API ke_asset_loader_handle ke_asset_loader_assimp_create(
-    const ke_asset_loader_assimp_params *params,
-    ke_error **out_error);
+/// @brief Creates a ke_asset_loader that imports models with Assimp.
+/// @return Handle whose @c ref is NULL when the loader cannot be allocated.
+KE_ASSET_ASSIMP_API ke_asset_loader_handle ke_asset_loader_assimp_create(ke_error **out_error);
 
 #ifdef __cplusplus
 }

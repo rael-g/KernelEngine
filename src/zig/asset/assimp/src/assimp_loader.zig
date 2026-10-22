@@ -10,7 +10,7 @@ const klog = @import("klog").Destination("ke_asset_assimp");
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 
 const c = @import("c");
-const log = @import("log.zig");
+const log = std.log.scoped(.asset_assimp);
 const converter = @import("converter.zig");
 const textures = @import("texture_decoder.zig");
 
@@ -43,7 +43,6 @@ const TrackingHeap = std.heap.DebugAllocator(.{ .thread_safe = true });
 /// thread-safe standard allocator otherwise.
 const State = struct {
     api: c.ke_asset_loader,
-    logger: ?*c.ke_logger,
     heap: if (debug_heap) TrackingHeap else void,
     gpa: std.mem.Allocator,
 };
@@ -149,7 +148,7 @@ fn registerTexture(
 /// arrays does. The failure is
 /// written to the out-parameter when the caller gave one; the asynchronous body gives none and
 /// relies on the null alone. It runs on the caller's thread for the synchronous slot and on a
-/// worker for the asynchronous one. It reads only the logger and the allocator from the State and
+/// worker for the asynchronous one. It reads only the allocator from the State and
 /// writes nothing into it.
 fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.ke_model_data {
     if (path == null) {
@@ -166,7 +165,7 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
         (scene_c.*.mFlags & c.AI_SCENE_FLAGS_INCOMPLETE) != 0)
     {
         const detail = c.aiGetErrorString();
-        log.errCtx(s.logger, "LoadModel", detail);
+        log.warn("{s}: {s}", .{ std.mem.span(path), if (detail != null) std.mem.span(detail) else "(no detail)" });
         E.fail(out_error, .io, if (detail != null) detail else "model import failed", @src());
         if (scene_c != null) c.aiReleaseImport(scene_c);
         return null;
@@ -221,12 +220,12 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
         texs[ti] = std.mem.zeroes(c.ke_texture_data);
         if (ref.is_embedded) {
             if (ref.embedded) |et| {
-                _ = textures.decodeEmbedded(gpa, et, s.logger, &texs[ti]);
+                _ = textures.decodeEmbedded(gpa, et, &texs[ti]);
             } else {
-                _ = textures.decodeExternal(gpa, @ptrCast(&ref.resolved_path), s.logger, &texs[ti]);
+                _ = textures.decodeExternal(gpa, @ptrCast(&ref.resolved_path), &texs[ti]);
             }
         } else {
-            _ = textures.decodeExternal(gpa, @ptrCast(&ref.resolved_path), s.logger, &texs[ti]);
+            _ = textures.decodeExternal(gpa, @ptrCast(&ref.resolved_path), &texs[ti]);
         }
     }
 
@@ -267,7 +266,7 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
         .texture_count = tex_count,
     };
 
-    log.info(s.logger, "Model loaded successfully");
+    log.info("{s}: loaded", .{std.mem.span(path)});
     return model;
 }
 
@@ -406,25 +405,16 @@ fn vtDestroy(self_in: ?*c.ke_asset_loader) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     if (debug_heap) {
-        if (s.heap.deinit() == .leak) log.warn(s.logger, "Asset loader destroyed with model memory still live");
+        if (s.heap.deinit() == .leak) log.warn("destroyed with model memory still live", .{});
     }
     state_heap.destroy(s);
 }
 
 /// Factory for the Assimp loader. It returns a handle whose ref is the vtable, or one whose ref is
-/// null when the params argument is null or the State cannot be allocated, with the out-parameter
-/// filled for those two failures. The logger is kept as the pointer given, and each call builds its
-/// own State, so each loader has its own leak tracking in a Debug build.
-export fn ke_asset_loader_assimp_create(
-    params_in: ?*const c.ke_asset_loader_assimp_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_asset_loader_handle {
+/// null when the State cannot be allocated, with the out-parameter filled. Each call builds its own
+/// State, so each loader has its own leak tracking in a Debug build.
+export fn ke_asset_loader_assimp_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_asset_loader_handle {
     const null_handle = std.mem.zeroes(c.ke_asset_loader_handle);
-
-    const params = params_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return null_handle;
-    };
 
     const s = state_heap.create(State) catch {
         E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
@@ -432,7 +422,6 @@ export fn ke_asset_loader_assimp_create(
     };
     s.* = .{
         .api = std.mem.zeroes(c.ke_asset_loader),
-        .logger = params.logger,
         .heap = if (debug_heap) .init else {},
         .gpa = undefined,
     };
@@ -449,9 +438,7 @@ export fn ke_asset_loader_assimp_create(
 const testing = std.testing;
 
 fn makeLoader() c.ke_asset_loader_handle {
-    var params = std.mem.zeroes(c.ke_asset_loader_assimp_params);
-    params.logger = null;
-    return ke_asset_loader_assimp_create(&params, null);
+    return ke_asset_loader_assimp_create(null);
 }
 
 var box_gltf_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -500,12 +487,7 @@ fn asyncComplete(err: [*c]const c.ke_error, data: ?*c.ke_model_data, user: ?*any
     result.done = true;
 }
 
-test "creating a loader without params fails" {
-    const h = ke_asset_loader_assimp_create(null, null);
-    try testing.expect(h.ref == null);
-}
-
-test "creating a loader with params yields a usable vtable" {
+test "creating a loader yields a usable vtable" {
     const h = makeLoader();
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);

@@ -3,7 +3,6 @@
 
 #include <stb_image.h>
 #include <kernel_engine/asset/stb_image/stb_image_loader.h>
-#include <kernel_engine/logger/logger.h>
 #include <stdio.h>
 
 #endif

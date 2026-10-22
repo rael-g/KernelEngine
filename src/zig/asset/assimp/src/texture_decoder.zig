@@ -4,7 +4,9 @@
 const std = @import("std");
 
 const c = @import("c");
-const log = @import("log.zig");
+const strings = @import("strings.zig");
+
+const log = std.log.scoped(.asset_assimp);
 
 /// Alignment of every pixel buffer this file allocates.
 pub const pixel_align: std.mem.Alignment = .@"4";
@@ -19,8 +21,8 @@ pub fn freePixels(gpa: std.mem.Allocator, tex: *const c.ke_texture_data) void {
 
 /// Stands in for a decode that failed, so the record still has pixels. It returns true when the
 /// white texel was allocated, which makes the fallback look like a successful decode to the caller.
-fn fallbackWhite(gpa: std.mem.Allocator, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {
-    log.warn(logger, "Failed to load texture; using white fallback");
+fn fallbackWhite(gpa: std.mem.Allocator, out: *c.ke_texture_data) bool {
+    log.warn("a texture failed to decode; using white", .{});
     const px = gpa.alignedAlloc(u8, pixel_align, 4) catch return false;
     @memset(px, 0xFF);
     out.pixels = px.ptr;
@@ -49,12 +51,12 @@ fn copyToOwnStorage(gpa: std.mem.Allocator, raw: [*]const u8, w: c_int, h: c_int
 /// path is
 /// set before the pixels are allocated, so an allocation failure leaves a path with no pixels.
 /// Returns false only when that allocation fails.
-pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {
+pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, out: *c.ke_texture_data) bool {
     var w: c_int = 0;
     var h: c_int = 0;
     var ch: c_int = 0;
-    const raw = c.stbi_load(path, &w, &h, &ch, 4) orelse return fallbackWhite(gpa, logger, out);
-    log.copyString(&out.path, path);
+    const raw = c.stbi_load(path, &w, &h, &ch, 4) orelse return fallbackWhite(gpa, out);
+    strings.copyString(&out.path, path);
     const ok = copyToOwnStorage(gpa, raw, w, h, out);
     c.stbi_image_free(raw);
     return ok;
@@ -64,7 +66,7 @@ pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, logger: ?*c.k
 /// texture of zero height is compressed and is decoded with the same fallback as `decodeExternal`;
 /// any other texture is copied as it is, without decoding. Allocation failure makes either return
 /// false.
-pub fn decodeEmbedded(gpa: std.mem.Allocator, et: *const c.aiTexture, logger: ?*c.ke_logger, out: *c.ke_texture_data) bool {
+pub fn decodeEmbedded(gpa: std.mem.Allocator, et: *const c.aiTexture, out: *c.ke_texture_data) bool {
     if (et.mHeight == 0) {
         var w: c_int = 0;
         var h: c_int = 0;
@@ -76,7 +78,7 @@ pub fn decodeEmbedded(gpa: std.mem.Allocator, et: *const c.aiTexture, logger: ?*
             &h,
             &ch,
             4,
-        ) orelse return fallbackWhite(gpa, logger, out);
+        ) orelse return fallbackWhite(gpa, out);
         const ok = copyToOwnStorage(gpa, raw, w, h, out);
         c.stbi_image_free(raw);
         return ok;

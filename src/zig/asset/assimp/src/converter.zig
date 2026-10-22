@@ -4,7 +4,7 @@
 const std = @import("std");
 
 const c = @import("c");
-const log = @import("log.zig");
+const strings = @import("strings.zig");
 
 /// The leading part of a path up to and including its last separator, either kind, or an empty
 /// string when the path has none.
@@ -73,7 +73,7 @@ pub fn freeMesh(gpa: std.mem.Allocator, md: *const c.ke_mesh_data) void {
 /// count is the number copied.
 pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *c.ke_mesh_data) bool {
     md.* = std.mem.zeroes(c.ke_mesh_data);
-    log.copyString(&md.name, &am.mName.data);
+    strings.copyString(&md.name, &am.mName.data);
     md.vertex_count = am.mNumVertices;
 
     var index_count: usize = 0;
@@ -173,7 +173,7 @@ pub fn convertMaterial(am: *const c.aiMaterial, md: *c.ke_material_data) void {
     var name: c.aiString = undefined;
     const k = MatKey.name;
     if (c.aiGetMaterialString(am, k.key, k.type, k.index, &name) == c.aiReturn_SUCCESS) {
-        log.copyString(&md.name, &name.data);
+        strings.copyString(&md.name, &name.data);
     }
 
     var color = c.aiColor4D{ .r = 1, .g = 1, .b = 1, .a = 1 };

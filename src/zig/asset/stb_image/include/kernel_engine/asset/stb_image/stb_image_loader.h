@@ -19,18 +19,9 @@
 extern "C" {
 #endif
 
-/// @brief Construction parameters for the image loader.
-typedef struct ke_image_loader_stb_params
-{
-    struct ke_logger    *logger;    ///< Optional; may be NULL
-} ke_image_loader_stb_params;
-
-/// @brief Creates a ke_image_loader.
-/// @param params  Non-null construction parameters.
-/// @return        Handle whose @c ref is NULL on failure.
-KE_ASSET_STB_IMAGE_API ke_image_loader_handle ke_image_loader_stb_create(
-    const ke_image_loader_stb_params *params,
-    ke_error **out_error);
+/// @brief Creates a ke_image_loader that decodes with stb_image and logs a failed decode's reason.
+/// @return Handle whose @c ref is NULL when the loader cannot be allocated.
+KE_ASSET_STB_IMAGE_API ke_image_loader_handle ke_image_loader_stb_create(ke_error **out_error);
 
 #ifdef __cplusplus
 }
