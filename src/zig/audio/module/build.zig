@@ -34,6 +34,7 @@ pub fn build(b: *std.Build) void {
     mod.addCMacro("KE_AUDIO_MODULE_EXPORT", "");
 
     mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("klog", ke_common_build.klog(b));
     const lib = b.addLibrary(.{
         .name = "ke_audio_module",
         .root_module = mod,
@@ -61,6 +62,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addCMacro("KE_AUDIO_MODULE_EXPORT", "");
 
     test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
+    test_mod.addImport("klog", ke_common_build.klog(b));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     b.step("test", "Run the audio module unit tests").dependOn(&b.addRunArtifact(unit_tests).step);
 }

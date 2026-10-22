@@ -36,6 +36,7 @@ pub fn build(b: *std.Build) void {
     mod.addImport("zmath", zmath.module("root"));
 
     mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("klog", ke_common_build.klog(b));
     const lib = b.addLibrary(.{
         .name = "ke_render_skybox",
         .root_module = mod,
@@ -65,6 +66,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
 
     test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
+    test_mod.addImport("klog", ke_common_build.klog(b));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     b.step("test", "Run the skybox pass unit tests").dependOn(&run_tests.step);

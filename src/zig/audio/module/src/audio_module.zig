@@ -1,6 +1,8 @@
 //! The set of audio's scene components, so a scene file can author an audio player.
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_audio_module");
 
 const c = @import("c");
 const scene_components = @import("scene_components");

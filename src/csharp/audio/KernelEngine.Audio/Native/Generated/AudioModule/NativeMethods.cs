@@ -4,9 +4,12 @@ using KernelEngine.Common.Native;
 
 namespace KernelEngine.Audio.Native;
 
-public static partial class NativeMethods
+public static unsafe partial class NativeMethods
 {
     [DllImport("ke_audio_module", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_audio_scene_components_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_scene_component_set_handle")]
     public static extern KernelEngine.Framework.Native.ke_scene_component_set_handle audio_scene_components_create();
+
+    [DllImport("ke_audio_module", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_audio_module_set_log_callback", ExactSpelling = true)]
+    public static extern void audio_module_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, ke_log_level, sbyte*, sbyte*, void> callback, void* ctx);
 }

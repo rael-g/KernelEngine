@@ -3,7 +3,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_runtime");
 
 const c = @import("c");
 const alloc = @import("runtime_alloc.zig");

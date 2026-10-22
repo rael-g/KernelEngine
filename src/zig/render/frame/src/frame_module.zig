@@ -4,7 +4,9 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_render_frame");
 const c = @import("c");
 const frame_producer = @import("frame_producer.zig");
 

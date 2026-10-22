@@ -48,6 +48,7 @@ pub fn build(b: *std.Build) void {
     mod.addCMacro("flecs_STATIC", "");
 
     mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("klog", ke_common_build.klog(b));
     const lib = b.addLibrary(.{
         .name = "ke_ecs_flecs",
         .root_module = mod,
@@ -87,6 +88,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addCMacro("flecs_STATIC", "");
 
     test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
+    test_mod.addImport("klog", ke_common_build.klog(b));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
 

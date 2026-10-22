@@ -23,6 +23,12 @@ pub fn cImports(b: *std.Build, from: *std.Build.Module, header: std.Build.LazyPa
     return tc.createModule();
 }
 
+/// The `klog` module of ke_common's package, for a plugin build that imports this file as
+/// `ke_common`: the plugin root names its library with `klog.Destination` in its `std_options`.
+pub fn klog(b: *std.Build) *std.Build.Module {
+    return b.dependencyFromBuildZig(@This(), .{}).module("klog");
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
     const optimize = b.standardOptimizeOption(.{});
@@ -48,7 +54,15 @@ pub fn build(b: *std.Build) void {
     });
     b.getInstallStep().dependOn(&install.step);
 
+    _ = b.addModule("klog", .{ .root_source_file = b.path("klog.zig") });
+
     const test_step = b.step("test", "Run the ke_common tests");
+    const klog_tests = b.addTest(.{ .root_module = b.createModule(.{
+        .root_source_file = b.path("klog.zig"),
+        .target = target,
+        .optimize = optimize,
+    }) });
+    test_step.dependOn(&b.addRunArtifact(klog_tests).step);
     if (target.result.os.tag == .windows) addDllCrtInitTest(b, target, optimize, test_step);
 }
 

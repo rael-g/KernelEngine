@@ -5,7 +5,9 @@
 const std = @import("std");
 const zm = @import("zmath");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_view_space");
 
 pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
 

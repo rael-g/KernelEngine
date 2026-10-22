@@ -5,7 +5,9 @@ const std = @import("std");
 
 /// Sets the standard library's signal stack size option to null, so no alternate signal stack is
 /// set up.
-pub const std_options: std.Options = .{ .signal_stack_size = null };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+
+const klog = @import("klog").Destination("ke_configuration");
 const ke = @import("c");
 
 const heap = @import("heap");
