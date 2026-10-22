@@ -81,6 +81,27 @@ pub fn Errors(comptime c: type) type {
             fail(out_error, .general, msg, src);
         }
 
+        /// The result code of the general kind `err` is of, walking its type's parents; a null
+        /// error or a type of no general kind is `KE_RESULT_GENERAL`. `c` must include
+        /// `kernel_engine/result/result.h`. A bridge while both shapes coexist.
+        pub fn codeOf(err: [*c]const c.ke_error) c.ke_result {
+            const pairs = .{
+                .{ c.KE_RESULT_NOT_FOUND, Kind.not_found },
+                .{ c.KE_RESULT_IO, Kind.io },
+                .{ c.KE_RESULT_OUT_OF_MEMORY, Kind.out_of_memory },
+                .{ c.KE_RESULT_INVALID_ARGUMENT, Kind.invalid_argument },
+                .{ c.KE_RESULT_NOT_INITIALIZED, Kind.not_initialized },
+                .{ c.KE_RESULT_NOT_SUPPORTED, Kind.not_supported },
+                .{ c.KE_RESULT_ALREADY_EXISTS, Kind.already_exists },
+            };
+            if (err != null) {
+                inline for (pairs) |pair| {
+                    if (c.ke_error_is(err, typeOf(pair[1]))) return @intCast(pair[0]);
+                }
+            }
+            return @intCast(c.KE_RESULT_GENERAL);
+        }
+
         /// Writes the error chain to standard error and ends the process with a failure status.
         pub fn fatal(err: ?*const c.ke_error) noreturn {
             c.ke_error_fatal(err);
