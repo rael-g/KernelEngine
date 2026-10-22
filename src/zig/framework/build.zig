@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
     const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "dir holding toml.c and toml.h, fetched by the root build.zig.zon") orelse @panic("-Dtomlc99-dir required");
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const component_fields_src = b.option([]const u8, "component-fields-src", "path to the shared Zig component_fields.zig") orelse @panic("-Dcomponent-fields-src required");
     const handle_src = b.option([]const u8, "handle-src", "path to the shared Zig handle.zig") orelse @panic("-Dhandle-src required");
     const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
@@ -37,7 +38,7 @@ pub fn build(b: *std.Build) void {
     mod.addImport("component_fields", b.createModule(.{ .root_source_file = .{ .cwd_relative = component_fields_src }, .target = target, .optimize = optimize }));
     mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
@@ -74,7 +75,7 @@ pub fn build(b: *std.Build) void {
         test_mod.addImport("component_fields", b.createModule(.{ .root_source_file = .{ .cwd_relative = component_fields_src }, .target = target, .optimize = optimize }));
         test_mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
         test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-        inline for (.{ ke_common, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
+        inline for (.{ ke_common, ke_result, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
             test_mod.addIncludePath(.{ .cwd_relative = inc });
         }
         if (ke_audio) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });

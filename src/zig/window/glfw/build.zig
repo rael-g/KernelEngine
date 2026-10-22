@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_window = b.option([]const u8, "ke-window-include", "kernel_engine/window include dir") orelse @panic("-Dke-window-include required");
     const ke_input = b.option([]const u8, "ke-input-include", "kernel_engine/input include dir") orelse @panic("-Dke-input-include required");
@@ -23,7 +24,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_window, ke_input, ke_logger, glfw_include }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_window, ke_input, ke_logger, glfw_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
@@ -71,7 +72,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_window, ke_input, ke_logger, glfw_include }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_window, ke_input, ke_logger, glfw_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addIncludePath(b.path("include"));

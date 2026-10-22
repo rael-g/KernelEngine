@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const ke_asset = b.option([]const u8, "ke-asset-include", "kernel_engine/asset include dir") orelse @panic("-Dke-asset-include required");
     const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
@@ -24,7 +25,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
         .link_libcpp = true,
     });
-    inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
@@ -65,7 +66,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
         .link_libcpp = true,
     });
-    inline for (.{ ke_common, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addIncludePath(b.path("include"));

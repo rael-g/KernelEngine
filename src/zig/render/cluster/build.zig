@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common    = b.option([]const u8, "ke-common-include",    "kernel_engine/common include dir")    orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const feature_bindings_src = b.option([]const u8, "feature-bindings-src", "path to the shared Zig feature_bindings.zig") orelse @panic("-Dfeature-bindings-src required");
     const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
@@ -28,7 +29,7 @@ pub fn build(b: *std.Build) void {
     });
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     mod.addImport("feature_bindings", b.createModule(.{ .root_source_file = .{ .cwd_relative = feature_bindings_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_view, ke_logger, ke_self }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_view, ke_logger, ke_self }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
@@ -58,7 +59,7 @@ pub fn build(b: *std.Build) void {
     });
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     test_mod.addImport("feature_bindings", b.createModule(.{ .root_source_file = .{ .cwd_relative = feature_bindings_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_view, ke_logger, ke_self }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_view, ke_logger, ke_self }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });

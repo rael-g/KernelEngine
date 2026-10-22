@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
@@ -17,7 +18,7 @@ pub fn build(b: *std.Build) void {
 
     const zmath = b.dependency("zmath", .{});
 
-    const includes = .{ ke_common, ke_math, ke_render, ke_view, ke_self };
+    const includes = .{ ke_common, ke_result, ke_math, ke_render, ke_view, ke_self };
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/view_space.zig"),

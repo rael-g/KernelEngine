@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
@@ -24,7 +25,7 @@ pub fn build(b: *std.Build) void {
     const ke_self = b.option([]const u8, "ke-self-include", "this plugin's include dir") orelse @panic("-Dke-self-include required");
     const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
-    const includes = .{ ke_common, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_text, ke_logger, ke_asset, ke_ui, ke_self };
+    const includes = .{ ke_common, ke_result, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_text, ke_logger, ke_asset, ke_ui, ke_self };
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/scene_module.zig"),

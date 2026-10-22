@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
     const scene_components_src = b.option([]const u8, "scene-components-src", "path to the shared Zig scene_components.zig") orelse @panic("-Dscene-components-src required");
 
     const ke_common    = b.option([]const u8, "ke-common-include",    "kernel_engine/common include dir")    orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
     const ke_ecs       = b.option([]const u8, "ke-ecs-include",       "kernel_engine/ecs include dir")       orelse @panic("-Dke-ecs-include required");
     const ke_audio     = b.option([]const u8, "ke-audio-include",     "kernel_engine/audio include dir")     orelse @panic("-Dke-audio-include required");
@@ -26,7 +27,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("scene_components", b.createModule(.{ .root_source_file = .{ .cwd_relative = scene_components_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_math, ke_ecs, ke_audio, ke_spatial, ke_runtime, ke_framework, ke_self }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_math, ke_ecs, ke_audio, ke_spatial, ke_runtime, ke_framework, ke_self }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
@@ -54,7 +55,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_mod.addImport("scene_components", b.createModule(.{ .root_source_file = .{ .cwd_relative = scene_components_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_math, ke_ecs, ke_audio, ke_spatial, ke_runtime, ke_framework, ke_self }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_math, ke_ecs, ke_audio, ke_spatial, ke_runtime, ke_framework, ke_self }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));

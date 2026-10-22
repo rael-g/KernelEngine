@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
@@ -27,7 +28,7 @@ pub fn build(b: *std.Build) void {
         m.*.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
         m.*.addImport("shader_files", b.createModule(.{ .root_source_file = .{ .cwd_relative = shader_files_src }, .target = target, .optimize = optimize, .link_libc = true }));
         if (r.tests) m.*.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
-        inline for (.{ ke_common, ke_render }) |inc| m.*.addIncludePath(.{ .cwd_relative = inc });
+        inline for (.{ ke_common, ke_result, ke_render }) |inc| m.*.addIncludePath(.{ .cwd_relative = inc });
         m.*.addIncludePath(b.path("include"));
         m.*.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
         m.*.linkSystemLibrary("ke_common", .{});
