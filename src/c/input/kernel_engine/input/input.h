@@ -1,7 +1,6 @@
 ﻿#ifndef KERNEL_ENGINE_INPUT_INPUT_H_
 #define KERNEL_ENGINE_INPUT_INPUT_H_
 
-#include <kernel_engine/common/error.h>
 #include <stdbool.h>
 #include <kernel_engine/input/snapshot.h>
 #include <kernel_engine/input/event.h>
@@ -20,7 +19,7 @@ extern "C"
          * Updates internal state, clearing this frame's pressed/released edges.
          * Call once per tick, before any query.
          */
-        bool (*update)(struct ke_input *self, ke_error **out_error);
+        void (*update)(struct ke_input *self);
 
         /**
          * Returns true if the key transitioned to down during this tick.

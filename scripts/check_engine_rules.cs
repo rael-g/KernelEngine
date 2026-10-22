@@ -96,7 +96,7 @@ var rules = new List<Rule>
                     problems.Add($"{x.Build}: expected exactly one {expected} under include/, found {logHeaders.Count}");
                 return problems;
             })),
-    new("a call that can fail returns ke_result and takes no ke_error lane", 148,
+    new("a call that can fail returns ke_result and takes no ke_error lane", 146,
         Lines(headers.Where(s => !s.Key.StartsWith("src/zig/common/", StringComparison.Ordinal)),
             l => errorLane.IsMatch(l))),
     new("a header has an #ifndef guard, never #pragma once", 0,

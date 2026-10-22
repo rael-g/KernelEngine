@@ -1,5 +1,5 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Logger.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Input.Native;
 
@@ -7,8 +7,8 @@ public unsafe partial struct ke_input
 {
     public void* handle;
 
-    [NativeTypeName("bool (*)(struct ke_input *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, KernelEngine.Common.Native.ke_error**, bool> update;
+    [NativeTypeName("void (*)(struct ke_input *)")]
+    public delegate* unmanaged[Cdecl]<ke_input*, void> update;
 
     [NativeTypeName("bool (*)(struct ke_input *, int32_t)")]
     public delegate* unmanaged[Cdecl]<ke_input*, int, bool> is_key_pressed;
