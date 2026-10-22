@@ -8,6 +8,8 @@ passed on it before it is pushed.
 - A change of one commit goes straight onto `main`.
 - Work of several commits that form one unit goes on a local branch and merges into `main` with
   `git merge --no-ff`, never fast-forward. The merge commit's message summarises the branch.
+- A branch is named `<type>/<subject>`: `<type>` is the commit type its merge will carry and `<subject>`
+  says the subject in kebab-case, so the name predicts the merge's subject line.
 - A branch is one subject. A commit about something unrelated is moved out by rewriting the branch before
   the merge: a merge whose subject line cannot say what it did is a merge of more than one subject.
   Squashing fixups and dropping experiments before the merge is encouraged.
