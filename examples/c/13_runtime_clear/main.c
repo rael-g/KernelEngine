@@ -83,8 +83,9 @@ int main(void)
     if (!service.ref) die("render service", err);
 
     ke_ndc_convention ndc = gpu.ref->get_ndc_convention(gpu.ref);
-    ke_view_space_handle view_space = ke_view_space_rh_create(&err);
-    if (!view_space.ref) die("view space", err);
+    ke_view_space_handle view_space = { 0 };
+    ke_result made_view = ke_view_space_rh_create(&view_space);
+    if (made_view != KE_OK) die_result("view space", made_view);
     ke_render_camera_handle camera = ke_render_camera_create(view_space.ref, &ndc, &err);
     if (!camera.ref) die("camera", err);
 

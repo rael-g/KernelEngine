@@ -143,8 +143,8 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
     ke_render_service *core = r->service.ref;
 
     ke_ndc_convention ndc = gpu->get_ndc_convention(gpu);
-    r->view_space = ke_view_space_rh_create(&err);
-    if (!r->view_space.ref) die("view space", err);
+    ke_result made_view = ke_view_space_rh_create(&r->view_space);
+    if (made_view != KE_OK) die_result("view space", made_view);
     r->camera = ke_render_camera_create(r->view_space.ref, &ndc, &err);
     if (!r->camera.ref) die("camera", err);
 

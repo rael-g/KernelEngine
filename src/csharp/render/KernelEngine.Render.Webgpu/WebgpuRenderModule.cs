@@ -210,9 +210,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         _core = core;
 
         var ndc = dev->get_ndc_convention(dev);
-        _viewSpace = KernelEngine.View.Native.NativeMethods.view_space_rh_create(&err);
-        if (_viewSpace.@ref == null)
-            throw Fail("view space create failed", err);
+        KernelEngine.View.Native.ke_view_space_handle viewSpace;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.View.Native.NativeMethods.view_space_rh_create(&viewSpace), "ke_view_space_rh_create");
+        _viewSpace = viewSpace;
         _camera = KernelEngine.Render.Webgpu.Native.NativeMethods.render_camera_create(_viewSpace.@ref, &ndc, &err);
         if (_camera.@ref == null)
             throw Fail("camera create failed", err);
