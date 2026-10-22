@@ -248,11 +248,11 @@ pub const EndedPass = struct {
 
 /// The state behind a render service vtable.
 pub inline fn coreOf(self: [*c]c.ke_render_service) *CoreState {
-    return @alignCast(@ptrCast(self.*.handle));
+    return @ptrCast(@alignCast(self.*.handle));
 }
 /// The state behind a pass context.
 pub inline fn passOf(self: [*c]c.ke_render_pass_ctx) *PassState {
-    return @alignCast(@ptrCast(self.*.handle));
+    return @ptrCast(@alignCast(self.*.handle));
 }
 
 /// True for the depth and depth-stencil formats.
@@ -309,68 +309,24 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
     gpa.destroy(@as(*c.ke_render_service, @ptrCast(self)));
 }
 
-/// The factory of the render service. It builds in an order its steps depend on: the target's size
-/// and the device's queue and NDC convention, then the resource caches, each given its destroy
-/// function and the state as context, then the "backbuffer" entry of `resources`, then the vtable,
-/// then the shared globals, which it gives the binder. The default resources, the "blit" shaders and
-/// the frame's color and depth come last because they go through the functions of the vtable just
-/// built. `destroyCore` undoes this in reverse and frees the vtable last. Missing params, or a null
-/// device, target, ecs, shader directory or binder in them, set the invalid-argument error; blit
-/// shaders that cannot be loaded set the loader's error, and so does a frame target the device
-/// refuses. Any other failure returns a null
-/// ref with no error set. On success the ref is the new vtable and `destroy` is
-/// `destroyCore`.
-export fn ke_render_service_create(params: ?*const c.ke_render_service_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
-    const p = params orelse return refused(out_error);
-    const dev: *c.ke_gpu_device = p.device orelse return refused(out_error);
-    const tgt: *c.ke_gpu_render_target = p.target orelse return refused(out_error);
-    const e: *c.ke_ecs = p.ecs orelse return refused(out_error);
-    if (p.shader_dir == null) return refused(out_error);
-    const shader_dir_span = std.mem.span(p.shader_dir);
-    const bnd: *c.ke_render_resource_binder = p.binder orelse return refused(out_error);
-    const color_format = if (p.color_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.color_format else c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
-    const depth_format = if (p.depth_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.depth_format else c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
-
-    const st = gpa.create(CoreState) catch return .{ .ref = null, .destroy = null };
-    const upload_arena = gpa.alloc(u8, first_upload_arena) catch {
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    };
-    const upload_records = gpa.alloc(UploadRecord, first_upload_records) catch {
-        gpa.free(upload_arena);
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    };
-    var ended = FrameLog(EndedPass).init(first_passes, .{ .encoder = .{ .ref = null, .destroy = null }, .record = null }) catch {
-        gpa.free(upload_records);
-        gpa.free(upload_arena);
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    };
-    var compute_records = FrameLog(ComputeRecord).init(first_passes, ComputeRecord.empty) catch {
-        ended.deinit(null);
-        gpa.free(upload_records);
-        gpa.free(upload_arena);
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    };
-    var resources = std.ArrayList(Resource).initCapacity(gpa, first_resources) catch {
-        compute_records.deinit(ComputeRecord.deinit);
-        ended.deinit(null);
-        gpa.free(upload_records);
-        gpa.free(upload_arena);
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    };
-    const shader_dir_owned = gpa.dupe(u8, shader_dir_span) catch {
-        resources.deinit(gpa);
-        compute_records.deinit(ComputeRecord.deinit);
-        ended.deinit(null);
-        gpa.free(upload_records);
-        gpa.free(upload_arena);
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    };
+/// Builds the state and the vtable whole, or frees in reverse what it took and fails. The vtable's
+/// handle is the state; the shared globals, the default resources, the blit shaders and the frame's
+/// color and depth are not made yet.
+fn assemble(dev: *c.ke_gpu_device, tgt: *c.ke_gpu_render_target, e: *c.ke_ecs, bnd: *c.ke_render_resource_binder, shader_dir_span: []const u8) error{ OutOfMemory, ResourceCacheFailed }!*c.ke_render_service {
+    const st = try gpa.create(CoreState);
+    errdefer gpa.destroy(st);
+    const upload_arena = try gpa.alloc(u8, first_upload_arena);
+    errdefer gpa.free(upload_arena);
+    const upload_records = try gpa.alloc(UploadRecord, first_upload_records);
+    errdefer gpa.free(upload_records);
+    var ended = try FrameLog(EndedPass).init(first_passes, .{ .encoder = .{ .ref = null, .destroy = null }, .record = null });
+    errdefer ended.deinit(null);
+    var compute_records = try FrameLog(ComputeRecord).init(first_passes, ComputeRecord.empty);
+    errdefer compute_records.deinit(ComputeRecord.deinit);
+    var resources = try std.ArrayList(Resource).initCapacity(gpa, first_resources);
+    errdefer resources.deinit(gpa);
+    const shader_dir_owned = try gpa.dupe(u8, shader_dir_span);
+    errdefer gpa.free(shader_dir_owned);
     var bb_w: u32 = 0;
     var bb_h: u32 = 0;
     tgt.size.?(tgt, &bb_w, &bb_h);
@@ -416,32 +372,14 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
         .ndc = dev.get_ndc_convention.?(dev),
         .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
-    const mesh_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
-        .destroy_fn = asset_upload.destroyMeshResource,
-        .destroy_ctx = st,
-    }, null);
-    const tex_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
-        .destroy_fn = asset_upload.destroyTextureResource,
-        .destroy_ctx = st,
-    }, null);
-    const mat_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
-        .destroy_fn = asset_upload.destroyMaterialResource,
-        .destroy_ctx = st,
-    }, null);
-    const shader_ch = c.ke_resource_cache_create(&c.ke_resource_cache_params{
-        .destroy_fn = shader_loader.destroyShaderResource,
-        .destroy_ctx = st,
-    }, null);
-    if (mesh_ch.ref == null or tex_ch.ref == null or mat_ch.ref == null or shader_ch.ref == null) {
-        gpa.free(shader_dir_owned);
-        resources.deinit(gpa);
-        compute_records.deinit(ComputeRecord.deinit);
-        ended.deinit(null);
-        gpa.free(upload_records);
-        gpa.free(upload_arena);
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    }
+    const mesh_ch = try resourceCache(asset_upload.destroyMeshResource, st);
+    errdefer mesh_ch.destroy.?(mesh_ch.ref);
+    const tex_ch = try resourceCache(asset_upload.destroyTextureResource, st);
+    errdefer tex_ch.destroy.?(tex_ch.ref);
+    const mat_ch = try resourceCache(asset_upload.destroyMaterialResource, st);
+    errdefer mat_ch.destroy.?(mat_ch.ref);
+    const shader_ch = try resourceCache(shader_loader.destroyShaderResource, st);
+    errdefer shader_ch.destroy.?(shader_ch.ref);
     st.mesh_cache = mesh_ch.ref.?;
     st.texture_cache = tex_ch.ref.?;
     st.material_cache = mat_ch.ref.?;
@@ -452,10 +390,8 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
     st.shader_cache_destroy = shader_ch.destroy.?;
 
     const bb_cid = e.component_register.?(e, "backbuffer", 0, null, 0, null);
-    const bb_name = gpa.dupeZ(u8, "backbuffer") catch {
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    };
+    const bb_name = try gpa.dupeZ(u8, "backbuffer");
+    errdefer gpa.free(bb_name);
     st.resources.appendAssumeCapacity(.{
         .name = bb_name.ptr,
         .cid = bb_cid,
@@ -467,10 +403,7 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
         .clear_value = .{ 0, 0, 0, 0 },
     });
 
-    const core = gpa.create(c.ke_render_service) catch {
-        gpa.destroy(st);
-        return .{ .ref = null, .destroy = null };
-    };
+    const core = try gpa.create(c.ke_render_service);
     core.* = .{
         .handle = st,
         .declare = resource_table.declare,
@@ -523,6 +456,38 @@ export fn ke_render_service_create(params: ?*const c.ke_render_service_params, o
         .leave_chain = frame_chain.leaveChain,
         .chain_format = frame_chain.chainFormat,
     };
+    return core;
+}
+
+fn resourceCache(destroy_fn: c.ke_resource_destroy_func, st: *CoreState) error{ResourceCacheFailed}!c.ke_resource_cache_handle {
+    const h = c.ke_resource_cache_create(&c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, null);
+    if (h.ref == null) return error.ResourceCacheFailed;
+    return h;
+}
+
+/// The factory of the render service. It builds in an order its steps depend on: the target's size
+/// and the device's queue and NDC convention, then the resource caches, each given its destroy
+/// function and the state as context, then the "backbuffer" entry of `resources`, then the vtable,
+/// then the shared globals, which it gives the binder. The default resources, the "blit" shaders and
+/// the frame's color and depth come last because they go through the functions of the vtable just
+/// built. `destroyCore` undoes this in reverse and frees the vtable last. Missing params, or a null
+/// device, target, ecs, shader directory or binder in them, set the invalid-argument error; blit
+/// shaders that cannot be loaded set the loader's error, and so does a frame target the device
+/// refuses. Any other failure returns a null
+/// ref with no error set. On success the ref is the new vtable and `destroy` is
+/// `destroyCore`.
+export fn ke_render_service_create(params: ?*const c.ke_render_service_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
+    const p = params orelse return refused(out_error);
+    const dev: *c.ke_gpu_device = p.device orelse return refused(out_error);
+    const tgt: *c.ke_gpu_render_target = p.target orelse return refused(out_error);
+    const e: *c.ke_ecs = p.ecs orelse return refused(out_error);
+    if (p.shader_dir == null) return refused(out_error);
+    const bnd: *c.ke_render_resource_binder = p.binder orelse return refused(out_error);
+    const color_format = if (p.color_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.color_format else c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    const depth_format = if (p.depth_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.depth_format else c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
+
+    const core = assemble(dev, tgt, e, bnd, std.mem.span(p.shader_dir)) catch return .{ .ref = null, .destroy = null };
+    const st = coreOf(core);
 
     if (!st.globals.create(dev, out_error) or !st.globals.provideTo(bnd, out_error)) {
         destroyCore(core);
@@ -1096,7 +1061,6 @@ test "a render service created without a shader directory is refused and leaves 
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
 }
-
 
 const stress_keys = 64;
 const stress_threads = 8;
