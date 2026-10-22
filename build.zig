@@ -162,6 +162,7 @@ pub fn build(b: *std.Build) void {
 
     const common = ctx.member("ke_common", .{ .target = target, .optimize = optimize }, &.{}, .has_tests);
     ctx.moduleTests("ke_logger", .{ .target = target, .optimize = optimize });
+    ctx.moduleTests("ke_result", .{ .target = target, .optimize = optimize });
 
     const ecs_flecs = ctx.member("ke_ecs_flecs", .{
         .target = target,

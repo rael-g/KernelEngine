@@ -1,0 +1,10 @@
+.{
+    .name = .ke_result,
+    .version = "0.1.0",
+    .fingerprint = 0xd7015ce62f947b4d,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_build = .{ .path = "../build" },
+    },
+    .paths = .{"."},
+}
