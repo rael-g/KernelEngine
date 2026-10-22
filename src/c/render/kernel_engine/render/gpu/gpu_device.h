@@ -21,7 +21,6 @@ typedef uint64_t ke_gpu_pipeline;
 typedef uint64_t ke_gpu_bind_group_layout;
 typedef uint64_t ke_gpu_bind_group;
 typedef uint64_t ke_gpu_queue;
-typedef uint64_t ke_gpu_fence;
 
 typedef struct ke_gpu_command_encoder ke_gpu_command_encoder;
 typedef struct ke_gpu_command_buffer  ke_gpu_command_buffer;
@@ -288,14 +287,6 @@ typedef struct ke_gpu_device
     /// completed since the last pump (create_render_pipeline_async, map_buffer_read).
     void (*queue_poll)(struct ke_gpu_device *self, ke_gpu_queue q);
     void (*queue_wait_idle)(struct ke_gpu_device *self, ke_gpu_queue q);
-
-    ke_gpu_fence (*create_fence)(struct ke_gpu_device *self, uint64_t initial_value);
-    void (*queue_signal_fence)(struct ke_gpu_device *self, ke_gpu_queue q,
-                               ke_gpu_fence f, uint64_t value);
-    bool (*wait_fence)(struct ke_gpu_device *self, ke_gpu_fence f,
-                       uint64_t value, uint64_t timeout_ns, ke_error **out_error);
-    uint64_t (*get_fence_value)(struct ke_gpu_device *self, ke_gpu_fence f);
-    void (*destroy_fence)(struct ke_gpu_device *self, ke_gpu_fence f);
 
     ke_gpu_buffer          (*create_buffer)(struct ke_gpu_device *self,
                                             const ke_gpu_buffer_params *p,

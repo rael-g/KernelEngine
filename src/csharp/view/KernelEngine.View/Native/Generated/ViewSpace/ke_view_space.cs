@@ -19,8 +19,8 @@ public unsafe partial struct ke_view_space
     public delegate* unmanaged[Cdecl]<ke_view_space*, KernelEngine.Common.Native.ke_mat4*, KernelEngine.Common.Native.ke_mat4*, void> view_from_transform;
 
     [NativeTypeName("void (*)(struct ke_view_space *, float, float, float, float, const ke_ndc_convention *, ke_mat4 *)")]
-    public delegate* unmanaged[Cdecl]<ke_view_space*, float, float, float, float, ke_ndc_convention*, KernelEngine.Common.Native.ke_mat4*, void> perspective;
+    public delegate* unmanaged[Cdecl]<ke_view_space*, float, float, float, float, KernelEngine.Render.Native.ke_ndc_convention*, KernelEngine.Common.Native.ke_mat4*, void> perspective;
 
     [NativeTypeName("void (*)(struct ke_view_space *, float, float, float, float, const ke_ndc_convention *, ke_mat4 *)")]
-    public delegate* unmanaged[Cdecl]<ke_view_space*, float, float, float, float, ke_ndc_convention*, KernelEngine.Common.Native.ke_mat4*, void> orthographic;
+    public delegate* unmanaged[Cdecl]<ke_view_space*, float, float, float, float, KernelEngine.Render.Native.ke_ndc_convention*, KernelEngine.Common.Native.ke_mat4*, void> orthographic;
 }

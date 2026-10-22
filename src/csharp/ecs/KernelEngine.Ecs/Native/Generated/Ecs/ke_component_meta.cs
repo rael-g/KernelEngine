@@ -10,6 +10,9 @@ public unsafe partial struct ke_component_meta
     [NativeTypeName("size_t")]
     public nuint size;
 
+    [NativeTypeName("size_t")]
+    public nuint alignment;
+
     [NativeTypeName("const ke_component_field *")]
     public ke_component_field* fields;
 

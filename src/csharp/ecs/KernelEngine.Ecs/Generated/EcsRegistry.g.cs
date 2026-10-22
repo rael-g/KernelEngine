@@ -59,23 +59,16 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         Handle->entity_destroy(Handle, entity);
     }
 
-    /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same layout as its first registration. With `fields` the two are compared field by field; without it, only `element_size` is compared, which a same-size field swap or a reordering satisfies.</summary>
-    /// <param name="name">Unique component name.</param>
-    /// <param name="elementSize">Bytes per entity; 0 registers a tag (no storage).</param>
-    /// <param name="fields">The type's field layout, normally its field table. Must outlive the ecs. NULL registers the size alone.</param>
-    /// <param name="fieldCount">Entries in `fields`; 0 when `fields` is NULL.</param>
+    /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With `fields` the layouts are compared field by field; without them, only the size and the alignment are compared.</summary>
+    /// <param name="@params">The name, size, alignment and field table of the type.</param>
     /// <returns>The component's id, or KE_COMPONENT_INVALID on error.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint ComponentRegister(string name, nuint elementSize, ke_component_field* fields, uint fieldCount)
+    public uint ComponentRegister(ke_component_params* @params)
     {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
-        fixed (byte* namePtr = nameBytes)
-        {
-            ke_error* err = null;
-            var result = Handle->component_register(Handle, (sbyte*)namePtr, elementSize, fields, fieldCount, &err);
-            if (err != null) throw NativeErrors.FromNative(err, "component_register");
-            return result;
-        }
+        ke_error* err = null;
+        var result = Handle->component_register(Handle, @params, &err);
+        if (err != null) throw NativeErrors.FromNative(err, "component_register");
+        return result;
     }
 
     /// <summary>Looks up a previously registered component by name.</summary>

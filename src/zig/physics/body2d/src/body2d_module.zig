@@ -305,10 +305,10 @@ export fn ke_physics_body2d_module_create(
     const m = gpa.create(Module) catch return empty;
     m.* = .{ .physics = physics, .runtime = rt, .tree = tree, .logger = pr.logger };
 
-    const body_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_BODY2D, @sizeOf(c.ke_body2d_component), &c.ke_body2d_component_fields, c.ke_body2d_component_fields.len, null);
-    const transform_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, @sizeOf(c.ke_transform2d_component), &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len, null);
-    const collider_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(c.ke_collider2d_component), &c.ke_collider2d_component_fields, c.ke_collider2d_component_fields.len, null);
-    const hierarchy_cid = ecs.*.component_register.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, @sizeOf(c.ke_hierarchy_component), null, 0, null);
+    const body_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(c.ke_body2d_component), .alignment = @alignOf(c.ke_body2d_component), .fields = &c.ke_body2d_component_fields, .field_count = c.ke_body2d_component_fields.len }, null);
+    const transform_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_TRANSFORM2D, .size = @sizeOf(c.ke_transform2d_component), .alignment = @alignOf(c.ke_transform2d_component), .fields = &c.ke_transform2d_component_fields, .field_count = c.ke_transform2d_component_fields.len }, null);
+    const collider_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(c.ke_collider2d_component), .alignment = @alignOf(c.ke_collider2d_component), .fields = &c.ke_collider2d_component_fields, .field_count = c.ke_collider2d_component_fields.len }, null);
+    const hierarchy_cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_HIERARCHY, .size = @sizeOf(c.ke_hierarchy_component), .alignment = @alignOf(c.ke_hierarchy_component), .fields = null, .field_count = 0 }, null);
 
     const rd = c.KE_ACCESS_READ;
     const wr = c.KE_ACCESS_WRITE;
@@ -350,8 +350,8 @@ export fn ke_physics_body2d_module_create(
 }
 
 const Components = @import("scene_components").Set(c, &.{
-    .{ .name = c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(c.ke_body2d_component), .fields = &c.ke_body2d_component_fields },
-    .{ .name = c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(c.ke_collider2d_component), .fields = &c.ke_collider2d_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(c.ke_body2d_component), .alignment = @alignOf(c.ke_body2d_component), .fields = &c.ke_body2d_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(c.ke_collider2d_component), .alignment = @alignOf(c.ke_collider2d_component), .fields = &c.ke_collider2d_component_fields },
 });
 
 /// The factory of the scene component set. The set holds no state, so it cannot fail.

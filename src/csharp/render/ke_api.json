@@ -1456,7 +1456,6 @@
     "ke_gpu_bind_group_layout": "uint64_t",
     "ke_gpu_bind_group": "uint64_t",
     "ke_gpu_queue": "uint64_t",
-    "ke_gpu_fence": "uint64_t",
     "ke_render_shader_layout": "uint64_t",
     "ke_render_resource_set": "uint64_t",
     "ke_render_material_binding": "uint64_t",

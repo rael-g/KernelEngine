@@ -17,7 +17,7 @@ public unsafe partial struct ke_render_shadow_params
     public KernelEngine.View.Native.ke_view_space* view_space;
 
     [NativeTypeName("ke_ndc_convention")]
-    public KernelEngine.View.Native.ke_ndc_convention ndc;
+    public KernelEngine.Render.Native.ke_ndc_convention ndc;
 
     [NativeTypeName("ke_component_id")]
     public uint mesh_cid;

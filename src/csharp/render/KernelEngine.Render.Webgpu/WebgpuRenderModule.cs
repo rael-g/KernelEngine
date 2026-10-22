@@ -184,8 +184,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var core = _service.@ref;
         _core = core;
 
-        var deviceNdc = dev->get_ndc_convention(dev);
-        var ndc = *(KernelEngine.View.Native.ke_ndc_convention*)&deviceNdc;
+        var ndc = dev->get_ndc_convention(dev);
         _viewSpace = KernelEngine.View.Native.NativeMethods.view_space_rh_create(&err);
         if (_viewSpace.@ref == null)
             throw Fail("view space create failed", err);

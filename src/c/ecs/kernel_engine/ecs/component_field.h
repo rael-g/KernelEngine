@@ -20,8 +20,8 @@ extern "C"
         ke_variant      default_value;
     } ke_component_field;
 
-/** Expands a field table into the `fields, field_count` pair. */
-#define KE_COMPONENT_FIELDS(table) (table), (uint32_t)(sizeof(table) / sizeof((table)[0]))
+/** Expands a field table into the `fields` and `field_count` initializers of ke_component_params. */
+#define KE_COMPONENT_FIELDS(table) .fields = (table), .field_count = (uint32_t)(sizeof(table) / sizeof((table)[0]))
 
 #ifdef __cplusplus
 }

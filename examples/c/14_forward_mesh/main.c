@@ -187,11 +187,11 @@ int main(void)
                                                     KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, NULL, &err);
     if (mat.bits == KE_HANDLE_NONE) die("create_material", err);
 
-    ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_TRANSFORM, sizeof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields), NULL);
-    ke_component_id world_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_WORLD_TRANSFORM, sizeof(ke_world_transform_component), NULL, 0, NULL);
-    ke_component_id camera_cid    = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_CAMERA,    sizeof(ke_camera_component), KE_COMPONENT_FIELDS(ke_camera_component_fields), NULL);
-    ke_component_id mesh_cid      = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_MESH,      sizeof(ke_mesh_component), KE_COMPONENT_FIELDS(ke_mesh_component_fields), NULL);
-    ke_component_id light_cid     = ecs.ref->component_register(ecs.ref, KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, sizeof(ke_directional_light_component), KE_COMPONENT_FIELDS(ke_directional_light_component_fields), NULL);
+    ke_component_id transform_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_TRANSFORM, .size = sizeof(ke_transform_component), .alignment = _Alignof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields) }, NULL);
+    ke_component_id world_cid     = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = sizeof(ke_world_transform_component), .alignment = _Alignof(ke_world_transform_component) }, NULL);
+    ke_component_id camera_cid    = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_CAMERA, .size = sizeof(ke_camera_component), .alignment = _Alignof(ke_camera_component), KE_COMPONENT_FIELDS(ke_camera_component_fields) }, NULL);
+    ke_component_id mesh_cid      = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_MESH, .size = sizeof(ke_mesh_component), .alignment = _Alignof(ke_mesh_component), KE_COMPONENT_FIELDS(ke_mesh_component_fields) }, NULL);
+    ke_component_id light_cid     = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = sizeof(ke_directional_light_component), .alignment = _Alignof(ke_directional_light_component), KE_COMPONENT_FIELDS(ke_directional_light_component_fields) }, NULL);
 
     const ke_mat4 identity = { .m = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 } };
 

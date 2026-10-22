@@ -323,13 +323,13 @@ fn registerBuiltin(
     world: *c.ke_world,
     e: *c.ke_ecs,
     name: [*c]const u8,
-    size: usize,
+    comptime T: type,
     apply_fn: c.ke_component_apply_fn,
     fields: ?[*]const c.ke_component_field,
     field_count: u32,
     out_error: [*c][*c]c.ke_error,
 ) bool {
-    const cid = e.component_register.?(e, name, size, fields orelse null, field_count, out_error);
+    const cid = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = fields orelse null, .field_count = field_count }, out_error);
     if (cid == 0) return false;
     if (fields) |f| _ = world.register_component_fields.?(world, cid, f, field_count, null);
     if (apply_fn != null) _ = world.register_component_apply.?(world, cid, apply_fn, null, null);
@@ -385,9 +385,9 @@ export fn ke_world_create(
 
     const e = params.ecs.?;
     const registered =
-        registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), apply.ke_framework_apply_transform, &c.ke_transform_component_fields, c.ke_transform_component_fields.len, out_error) and
-        registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM2D, @sizeOf(c.ke_transform2d_component), apply.ke_framework_apply_transform2d, &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len, out_error) and
-        registerBuiltin(world, e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component), null, null, 0, out_error);
+        registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM, c.ke_transform_component, apply.ke_framework_apply_transform, &c.ke_transform_component_fields, c.ke_transform_component_fields.len, out_error) and
+        registerBuiltin(world, e, c.KE_COMPONENT_NAME_TRANSFORM2D, c.ke_transform2d_component, apply.ke_framework_apply_transform2d, &c.ke_transform2d_component_fields, c.ke_transform2d_component_fields.len, out_error) and
+        registerBuiltin(world, e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, c.ke_world_transform_component, null, null, 0, out_error);
     if (!registered) {
         worldDestroy(world);
         return null_handle;
@@ -428,18 +428,12 @@ fn stubComponentLookup(
 
 fn stubComponentRegister(
     self: ?*c.ke_ecs,
-    name: [*c]const u8,
-    element_size: usize,
-    fields: [*c]const c.ke_component_field,
-    field_count: u32,
+    params: [*c]const c.ke_component_params,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_component_id {
-    _ = fields;
-    _ = field_count;
-    _ = element_size;
     _ = out_error;
     const s = stubEcsOf(self);
-    const span = std.mem.span(name);
+    const span = std.mem.span(params.*.name);
     @memcpy(s.names[s.next_cid][0..span.len], span);
     s.next_cid += 1;
     return s.next_cid;
@@ -548,7 +542,7 @@ test "a short name a single component answers to resolves to it, and the full na
     var runtime: c.ke_runtime = undefined;
     const h = aliasWorld(&ecs, &runtime);
     const w: *c.ke_world = h.ref;
-    const paddle = ecs.vtable.component_register.?(&ecs.vtable, "pong.paddle", 4, null, 0, null);
+    const paddle = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
     try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
 
@@ -567,8 +561,8 @@ test "a short name two components answer to is refused, naming both" {
     var runtime: c.ke_runtime = undefined;
     const h = aliasWorld(&ecs, &runtime);
     const w: *c.ke_world = h.ref;
-    _ = ecs.vtable.component_register.?(&ecs.vtable, "pong.paddle", 4, null, 0, null);
-    _ = ecs.vtable.component_register.?(&ecs.vtable, "tennis.paddle", 4, null, 0, null);
+    _ = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    _ = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "tennis.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     try testing.expect(w.register_component_alias.?(w, "paddle", "pong.paddle", null));
     try testing.expect(w.register_component_alias.?(w, "paddle", "tennis.paddle", null));
 
@@ -588,8 +582,8 @@ test "a short name that is also a registered component name is refused" {
     var runtime: c.ke_runtime = undefined;
     const h = aliasWorld(&ecs, &runtime);
     const w: *c.ke_world = h.ref;
-    _ = ecs.vtable.component_register.?(&ecs.vtable, "marker", 4, null, 0, null);
-    _ = ecs.vtable.component_register.?(&ecs.vtable, "game.marker", 4, null, 0, null);
+    _ = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    _ = ecs.vtable.component_register.?(&ecs.vtable, &c.ke_component_params{ .name = "game.marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     try testing.expect(w.register_component_alias.?(w, "marker", "game.marker", null));
 
     var meta: c.ke_component_meta = undefined;

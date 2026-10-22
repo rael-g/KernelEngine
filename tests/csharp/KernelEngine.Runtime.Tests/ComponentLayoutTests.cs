@@ -65,6 +65,14 @@ public unsafe class ComponentLayoutTests : IDisposable
     }
 
     [Fact]
+    public void A_struct_is_registered_with_its_own_alignment()
+    {
+        _registry.RegisterComponent<Pose>("pose");
+        Assert.True(_registry.TryComponentLookup("pose", out var meta));
+        Assert.Equal((nuint)sizeof(float), meta.alignment);
+    }
+
+    [Fact]
     public void A_struct_whose_fields_sit_elsewhere_is_refused_under_a_name_already_registered()
     {
         _registry.RegisterComponent<Pose>("pose");

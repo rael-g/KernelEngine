@@ -626,7 +626,7 @@ pub fn Stubs(comptime c: type) type {
                 return id;
             }
 
-            fn componentRegister(self: ?*c.ke_ecs, _: [*c]const u8, _: usize, _: [*c]const c.ke_component_field, _: u32, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+            fn componentRegister(self: ?*c.ke_ecs, _: [*c]const c.ke_component_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
                 return mint(self);
             }
 
