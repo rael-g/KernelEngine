@@ -167,7 +167,7 @@ fn registerType(
         return false;
     };
     defer heap.gpa.free(tag_name);
-    const tag = s.ecs.component_register.?(s.ecs, tag_name.ptr, 0, null, 0, out_error);
+    const tag = s.ecs.component_register.?(s.ecs, &c.ke_component_params{ .name = tag_name.ptr, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, out_error);
     if (tag == 0) {
         heap.gpa.free(owned_name);
         heap.gpa.free(owned_components);
@@ -608,8 +608,8 @@ pub export fn ke_script_host_create(
     s.ecs = ecs;
     s.hierarchy_cid = hierarchy_meta.cid;
     s.name_cid = name_meta.cid;
-    s.binding_cid = ecs.component_register.?(ecs, binding_component, @sizeOf(Binding), null, 0, null);
-    s.tag_group_cid = ecs.component_register.?(ecs, tag_group_component, 0, null, 0, null);
+    s.binding_cid = ecs.component_register.?(ecs, &c.ke_component_params{ .name = binding_component, .size = @sizeOf(Binding), .alignment = @alignOf(Binding), .fields = null, .field_count = 0 }, null);
+    s.tag_group_cid = ecs.component_register.?(ecs, &c.ke_component_params{ .name = tag_group_component, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, null);
     if (s.binding_cid == 0 or s.tag_group_cid == 0) {
         E.fail(out_error, .invalid_argument, "could not register the script instance or type group component", @src());
         heap.gpa.free(s.types);

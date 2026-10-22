@@ -71,7 +71,7 @@ export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, ou
         return empty;
     };
     st.api = .{ .handle = st, .frame_cid = frameCid };
-    st.frame_cid = e.component_register.?(e, "render.frame", 0, null, 0, out_error);
+    st.frame_cid = e.component_register.?(e, &c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, out_error);
     if (st.frame_cid == c.KE_COMPONENT_INVALID) {
         gpa.destroy(st);
         return empty;

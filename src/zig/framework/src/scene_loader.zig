@@ -735,22 +735,17 @@ fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
 
 fn fakeComponentRegister(
     self: ?*c.ke_ecs,
-    name: [*c]const u8,
-    element_size: usize,
-    fields: [*c]const c.ke_component_field,
-    field_count: u32,
+    params: [*c]const c.ke_component_params,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_component_id {
-    _ = fields;
-    _ = field_count;
     _ = out_error;
     const f = fakeEcsOf(self);
-    const wanted = std.mem.span(name);
+    const wanted = std.mem.span(params.*.name);
     for (f.components[0..f.component_count], 0..) |comp, i| {
         if (std.mem.eql(u8, comp.name, wanted)) return @intCast(i + 1);
     }
     if (f.component_count >= fake_max_components) return 0;
-    f.components[f.component_count] = .{ .name = wanted, .size = element_size };
+    f.components[f.component_count] = .{ .name = wanted, .size = params.*.size };
     f.component_count += 1;
     return @intCast(f.component_count);
 }
@@ -984,7 +979,7 @@ const Fixture = struct {
         field_count: usize,
     ) void {
         const e = &self.ecs.vtable;
-        const cid = e.component_register.?(e, name, size, null, 0, null);
+        const cid = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = size, .alignment = 0, .fields = null, .field_count = 0 }, null);
         const w = self.world_h.ref.?;
         _ = w.*.register_component_fields.?(w, cid, fields, @intCast(field_count), null);
     }
@@ -1873,7 +1868,7 @@ test "a user component is applied through the callback its owner registered" {
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    const demo_cid = e.component_register.?(e, "demo", @sizeOf(DemoComponent), null, 0, null);
+    const demo_cid = e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, null);
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
     var saw_ctx = false;
@@ -1918,7 +1913,7 @@ test "the reason an apply callback rejects a value reaches the caller instead of
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    const demo_cid = e.component_register.?(e, "demo", @sizeOf(DemoComponent), null, 0, null);
+    const demo_cid = e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, null);
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
     try testing.expect(w.*.register_component_apply.?(w, demo_cid, rejectingApply, null, null));

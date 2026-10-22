@@ -15,15 +15,15 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 
 const Components = @import("scene_components").Set(c, &.{
-    .{ .name = c.KE_COMPONENT_NAME_MESH, .size = @sizeOf(c.ke_mesh_component), .fields = &c.ke_mesh_component_fields, .apply = component_apply.ke_render_apply_mesh },
-    .{ .name = c.KE_COMPONENT_NAME_CAMERA, .size = @sizeOf(c.ke_camera_component), .fields = &c.ke_camera_component_fields, .apply = component_apply.ke_render_apply_camera },
-    .{ .name = c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = @sizeOf(c.ke_directional_light_component), .fields = &c.ke_directional_light_component_fields },
-    .{ .name = c.KE_COMPONENT_NAME_POINT_LIGHT, .size = @sizeOf(c.ke_point_light_component), .fields = &c.ke_point_light_component_fields },
-    .{ .name = c.KE_COMPONENT_NAME_SPOT_LIGHT, .size = @sizeOf(c.ke_spot_light_component), .fields = &c.ke_spot_light_component_fields },
-    .{ .name = c.KE_COMPONENT_NAME_AMBIENT_LIGHT, .size = @sizeOf(c.ke_ambient_light_component), .fields = &c.ke_ambient_light_component_fields },
-    .{ .name = c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(c.ke_skybox_component) },
-    .{ .name = c.KE_COMPONENT_NAME_SPRITE2D, .size = @sizeOf(c.ke_sprite2d_component), .fields = &c.ke_sprite2d_component_fields, .apply = component_apply.ke_render_apply_sprite2d },
-    .{ .name = c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(c.ke_label_component), .fields = &c.ke_label_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_MESH, .size = @sizeOf(c.ke_mesh_component), .alignment = @alignOf(c.ke_mesh_component), .fields = &c.ke_mesh_component_fields, .apply = component_apply.ke_render_apply_mesh },
+    .{ .name = c.KE_COMPONENT_NAME_CAMERA, .size = @sizeOf(c.ke_camera_component), .alignment = @alignOf(c.ke_camera_component), .fields = &c.ke_camera_component_fields, .apply = component_apply.ke_render_apply_camera },
+    .{ .name = c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = @sizeOf(c.ke_directional_light_component), .alignment = @alignOf(c.ke_directional_light_component), .fields = &c.ke_directional_light_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_POINT_LIGHT, .size = @sizeOf(c.ke_point_light_component), .alignment = @alignOf(c.ke_point_light_component), .fields = &c.ke_point_light_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_SPOT_LIGHT, .size = @sizeOf(c.ke_spot_light_component), .alignment = @alignOf(c.ke_spot_light_component), .fields = &c.ke_spot_light_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_AMBIENT_LIGHT, .size = @sizeOf(c.ke_ambient_light_component), .alignment = @alignOf(c.ke_ambient_light_component), .fields = &c.ke_ambient_light_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(c.ke_skybox_component), .alignment = @alignOf(c.ke_skybox_component) },
+    .{ .name = c.KE_COMPONENT_NAME_SPRITE2D, .size = @sizeOf(c.ke_sprite2d_component), .alignment = @alignOf(c.ke_sprite2d_component), .fields = &c.ke_sprite2d_component_fields, .apply = component_apply.ke_render_apply_sprite2d },
+    .{ .name = c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(c.ke_label_component), .alignment = @alignOf(c.ke_label_component), .fields = &c.ke_label_component_fields },
 });
 
 /// The factory of the scene component set. The set holds no state, so it cannot fail.
@@ -65,18 +65,18 @@ fn destroyScene(self: ?*c.ke_render_scene_resolve) callconv(.c) void {
 /// returns the id the ecs gives it.
 fn registerComponent(e: *c.ke_ecs, name: [*c]const u8, comptime T: type, comptime table: anytype, out_error: [*c][*c]c.ke_error) c.ke_component_id {
     const fields = @typeInfo(@TypeOf(table.*)).array;
-    return e.component_register.?(e, name, @sizeOf(T), table, @intCast(fields.len), out_error);
+    return e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, out_error);
 }
 
 fn registerIds(e: *c.ke_ecs, ids: *c.ke_render_scene_component_ids, out_error: [*c][*c]c.ke_error) bool {
     ids.mesh = registerComponent(e, c.KE_COMPONENT_NAME_MESH, c.ke_mesh_component, &c.ke_mesh_component_fields, out_error);
-    ids.world_transform = e.component_register.?(e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component), null, 0, out_error);
+    ids.world_transform = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = @sizeOf(c.ke_world_transform_component), .alignment = @alignOf(c.ke_world_transform_component), .fields = null, .field_count = 0 }, out_error);
     ids.camera = registerComponent(e, c.KE_COMPONENT_NAME_CAMERA, c.ke_camera_component, &c.ke_camera_component_fields, out_error);
     ids.directional_light = registerComponent(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, c.ke_directional_light_component, &c.ke_directional_light_component_fields, out_error);
     ids.point_light = registerComponent(e, c.KE_COMPONENT_NAME_POINT_LIGHT, c.ke_point_light_component, &c.ke_point_light_component_fields, out_error);
     ids.spot_light = registerComponent(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, c.ke_spot_light_component, &c.ke_spot_light_component_fields, out_error);
     ids.ambient_light = registerComponent(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, c.ke_ambient_light_component, &c.ke_ambient_light_component_fields, out_error);
-    ids.skybox = e.component_register.?(e, c.KE_COMPONENT_NAME_SKYBOX, @sizeOf(c.ke_skybox_component), null, 0, out_error);
+    ids.skybox = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(c.ke_skybox_component), .alignment = @alignOf(c.ke_skybox_component), .fields = null, .field_count = 0 }, out_error);
     ids.sprite2d = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields, out_error);
     ids.label = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields, out_error);
     inline for (@typeInfo(c.ke_render_scene_component_ids).@"struct".fields) |f| {

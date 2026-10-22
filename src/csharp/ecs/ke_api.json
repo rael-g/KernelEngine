@@ -39,6 +39,50 @@
       ]
     },
     {
+      "name": "ke_component_params",
+      "doc": "What a component type is registered with.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "Unique component name."
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": "Bytes per entity; 0 registers a tag (no storage)."
+        },
+        {
+          "name": "alignment",
+          "type": "size_t",
+          "tags": [],
+          "doc": "A power of two; 0 selects the alignment of max_align_t."
+        },
+        {
+          "name": "fields",
+          "type": "const ke_component_field *",
+          "tags": [
+            "borrowed",
+            "optional",
+            "array_of:field_count"
+          ],
+          "doc": "The type\u0027s field layout, normally its field table; must outlive the ecs. NULL registers the size alone."
+        },
+        {
+          "name": "field_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Entries in \u0060fields\u0060; 0 when \u0060fields\u0060 is NULL."
+        }
+      ]
+    },
+    {
       "name": "ke_component_meta",
       "doc": null,
       "tags": [],
@@ -51,6 +95,12 @@
         },
         {
           "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alignment",
           "type": "size_t",
           "tags": [],
           "doc": null
@@ -148,38 +198,16 @@
           "name": "component_register",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same layout as its first registration. With \u0060fields\u0060 the two are compared field by field; without it, only \u0060element_size\u0060 is compared, which a same-size field swap or a reordering satisfies.",
+          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With \u0060fields\u0060 the layouts are compared field by field; without them, only the size and the alignment are compared.",
           "return_doc": "The component\u0027s id, or KE_COMPONENT_INVALID on error.",
           "params": [
             {
-              "name": "name",
-              "type": "const char *",
+              "name": "params",
+              "type": "const ke_component_params *",
               "tags": [
-                "borrowed",
-                "utf8"
+                "borrowed"
               ],
-              "doc": "Unique component name."
-            },
-            {
-              "name": "element_size",
-              "type": "size_t",
-              "tags": [],
-              "doc": "Bytes per entity; 0 registers a tag (no storage)."
-            },
-            {
-              "name": "fields",
-              "type": "const ke_component_field *",
-              "tags": [
-                "borrowed",
-                "optional"
-              ],
-              "doc": "The type\u0027s field layout, normally its field table. Must outlive the ecs. NULL registers the size alone."
-            },
-            {
-              "name": "field_count",
-              "type": "uint32_t",
-              "tags": [],
-              "doc": "Entries in \u0060fields\u0060; 0 when \u0060fields\u0060 is NULL."
+              "doc": "The name, size, alignment and field table of the type."
             },
             {
               "name": "out_error",
@@ -188,7 +216,7 @@
                 "out",
                 "optional"
               ],
-              "doc": "Set when the layout conflicts with the name\u0027s prior registration, naming the field that disagrees."
+              "doc": "Set when the params are missing, the alignment is not a power of two, or the type conflicts with the name\u0027s prior registration, naming what disagrees."
             }
           ],
           "receiver": "struct ke_ecs *"

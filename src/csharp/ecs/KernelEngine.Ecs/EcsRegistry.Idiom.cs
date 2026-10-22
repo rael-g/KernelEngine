@@ -1,3 +1,5 @@
+using System.Text;
+
 using KernelEngine.Ecs.Native;
 
 namespace KernelEngine.Ecs;
@@ -17,7 +19,25 @@ public unsafe partial class EcsRegistry : IEcsRegistry
     /// <inheritdoc/>
     public uint RegisterComponent<T>(string name) where T : unmanaged, IComponentLayout
     {
-        return ComponentRegister(name, (nuint)sizeof(T), NativeFieldTable<T>.Fields, (uint)NativeFieldTable<T>.Length);
+        var utf8 = Encoding.UTF8.GetBytes(name + '\0');
+        fixed (byte* n = utf8)
+        {
+            var p = new ke_component_params
+            {
+                name = (sbyte*)n,
+                size = (nuint)sizeof(T),
+                alignment = (nuint)(sizeof(AlignmentProbe<T>) - sizeof(T)),
+                fields = NativeFieldTable<T>.Fields,
+                field_count = (uint)NativeFieldTable<T>.Length,
+            };
+            return ComponentRegister(&p);
+        }
+    }
+
+    private readonly struct AlignmentProbe<T>(byte head, T value) where T : unmanaged
+    {
+        public readonly byte Head = head;
+        public readonly T Value = value;
     }
 
     /// <inheritdoc/>

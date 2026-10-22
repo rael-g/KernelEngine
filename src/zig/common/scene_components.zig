@@ -1,12 +1,13 @@
 //! The `ke_scene_component_set` a plugin hands out for its scene components, built from a list the
 //! plugin declares, so every plugin registers them the same way and reports the same failures.
 
-/// One component of a set: the name it is registered under, its size, its field table, and the
+/// One component of a set: the name it is registered under, its size and alignment, its field table, and the
 /// apply callback the world consults after the table, if the plugin has one.
 pub fn Entry(comptime c: type) type {
     return struct {
         name: [*:0]const u8,
         size: usize,
+        alignment: usize,
         fields: []const c.ke_component_field = &.{},
         apply: c.ke_component_apply_fn = null,
     };
@@ -29,7 +30,7 @@ pub fn Set(comptime c: type, comptime entries: []const Entry(c)) type {
             const world = world_in;
             inline for (entries) |e| {
                 const fields: [*c]const c.ke_component_field = if (e.fields.len == 0) null else e.fields.ptr;
-                const cid = ecs.*.component_register.?(ecs, e.name, e.size, fields, @intCast(e.fields.len), out_error);
+                const cid = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = e.name, .size = e.size, .alignment = e.alignment, .fields = fields, .field_count = @intCast(e.fields.len) }, out_error);
                 if (cid == c.KE_COMPONENT_INVALID) return false;
                 if (e.fields.len > 0 and !world.*.register_component_fields.?(world, cid, fields, @intCast(e.fields.len), out_error)) return false;
                 if (e.apply != null and !world.*.register_component_apply.?(world, cid, e.apply, null, out_error)) return false;

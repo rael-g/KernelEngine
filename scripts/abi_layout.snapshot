@@ -148,11 +148,18 @@ ke_component_field size=48 align=8
   offset 12
   size 16
   default_value 24
-ke_component_meta size=32 align=8
+ke_component_params size=40 align=8
+  name 0
+  size 8
+  alignment 16
+  fields 24
+  field_count 32
+ke_component_meta size=40 align=8
   cid 0
   size 8
-  fields 16
-  field_count 24
+  alignment 16
+  fields 24
+  field_count 32
 ke_ecs_segment size=32 align=8
   entities 0
   count 8

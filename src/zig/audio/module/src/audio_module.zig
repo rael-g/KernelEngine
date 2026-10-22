@@ -6,7 +6,7 @@ const c = @import("c");
 const scene_components = @import("scene_components");
 
 const Components = scene_components.Set(c, &.{
-    .{ .name = c.KE_COMPONENT_NAME_AUDIO_PLAYER, .size = @sizeOf(c.ke_audio_player_component), .fields = &c.ke_audio_player_component_fields },
+    .{ .name = c.KE_COMPONENT_NAME_AUDIO_PLAYER, .size = @sizeOf(c.ke_audio_player_component), .alignment = @alignOf(c.ke_audio_player_component), .fields = &c.ke_audio_player_component_fields },
 });
 
 /// The factory. The set holds no state, so it cannot fail.

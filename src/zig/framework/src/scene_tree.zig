@@ -62,8 +62,8 @@ fn getWorldTransform(s: *State, e: c.ke_entity) ?*c.ke_world_transform_component
 /// Registers a component the tree writes with the field table its header generates, or none when
 /// no field of it is written by a scene. A component the ecs already knows keeps its id, so trees
 /// created on one ecs share their ids, and its table is checked against the one registered first.
-fn registerComponent(ecs: *c.ke_ecs, name: [*c]const u8, size: usize, fields: []const c.ke_component_field, out_error: [*c][*c]c.ke_error) c.ke_component_id {
-    return ecs.component_register.?(ecs, name, size, if (fields.len > 0) fields.ptr else null, @intCast(fields.len), out_error);
+fn registerComponent(ecs: *c.ke_ecs, name: [*c]const u8, comptime T: type, fields: []const c.ke_component_field, out_error: [*c][*c]c.ke_error) c.ke_component_id {
+    return ecs.component_register.?(ecs, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = if (fields.len > 0) fields.ptr else null, .field_count = @intCast(fields.len) }, out_error);
 }
 
 fn writeName(dst: []u8, src: [*c]const u8) void {
@@ -518,11 +518,11 @@ export fn ke_scene_tree_create(
         .hierarchy = std.mem.zeroes(c.ke_scene_hierarchy_handle),
     };
 
-    s.transform_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_TRANSFORM, @sizeOf(c.ke_transform_component), &c.ke_transform_component_fields, out_error);
-    s.transform2d_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, @sizeOf(c.ke_transform2d_component), &c.ke_transform2d_component_fields, out_error);
-    s.world_transform_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, @sizeOf(c.ke_world_transform_component), &.{}, out_error);
-    s.hierarchy_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_HIERARCHY, @sizeOf(c.ke_hierarchy_component), &.{}, out_error);
-    s.name_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_NAME, @sizeOf(c.ke_name_component), &.{}, out_error);
+    s.transform_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_TRANSFORM, c.ke_transform_component, &c.ke_transform_component_fields, out_error);
+    s.transform2d_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, c.ke_transform2d_component, &c.ke_transform2d_component_fields, out_error);
+    s.world_transform_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, c.ke_world_transform_component, &.{}, out_error);
+    s.hierarchy_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_HIERARCHY, c.ke_hierarchy_component, &.{}, out_error);
+    s.name_cid = registerComponent(ecs, c.KE_COMPONENT_NAME_NAME, c.ke_name_component, &.{}, out_error);
     if (s.transform_cid == 0 or s.transform2d_cid == 0 or s.world_transform_cid == 0 or s.hierarchy_cid == 0 or s.name_cid == 0) {
         heap.gpa.destroy(s);
         return null_handle;
@@ -640,15 +640,11 @@ fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
 
 fn fakeComponentRegister(
     self: ?*c.ke_ecs,
-    name: [*c]const u8,
-    element_size: usize,
-    fields: [*c]const c.ke_component_field,
-    field_count: u32,
+    params: [*c]const c.ke_component_params,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_component_id {
-    _ = field_count;
     const f = fakeEcsOf(self);
-    const wanted = std.mem.span(name);
+    const wanted = std.mem.span(params.*.name);
     if (f.refused) |r| if (std.mem.eql(u8, r, wanted)) {
         E.fail(out_error, .invalid_argument, "refused", @src());
         return 0;
@@ -657,7 +653,7 @@ fn fakeComponentRegister(
         if (std.mem.eql(u8, comp.name, wanted)) return @intCast(i + 1);
     }
     if (f.component_count >= fake_max_components) return 0;
-    f.components[f.component_count] = .{ .name = wanted, .size = element_size, .fields = fields };
+    f.components[f.component_count] = .{ .name = wanted, .size = params.*.size, .fields = params.*.fields };
     f.component_count += 1;
     return @intCast(f.component_count);
 }

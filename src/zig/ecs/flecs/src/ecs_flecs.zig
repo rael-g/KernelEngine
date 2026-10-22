@@ -285,28 +285,38 @@ fn entityDestroy(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
     c.ecs_delete(s.world, @intCast(entity));
 }
 
-/// Slot `component_register`. The field table is checked against `size` before the name is looked
-/// up, so a table that does not fit registers nothing. For a name that already exists, the size is
-/// compared before the layout, and a failure changes nothing. For a new name, a failed layout
-/// allocation leaves the component registered in the world, and a retry by name then finds it and
-/// remembers the table. A failure is reported through out_error and returns zero.
+/// Slot `component_register`. The params are checked first: a missing name, an alignment that is
+/// not a power of two, or a field table that does not fit the size registers nothing. For a name
+/// that already exists, the size and the alignment are compared before the layout, and a failure
+/// changes nothing. For a new name, a failed layout allocation leaves the component registered in
+/// the world, and a retry by name then finds it and remembers the table. A failure is reported
+/// through out_error and returns zero.
 fn componentRegister(
     self_in: ?*c.ke_ecs,
-    name: [*c]const u8,
-    size: usize,
-    fields: [*c]const c.ke_component_field,
-    field_count: u32,
+    params: [*c]const c.ke_component_params,
     out_error: [*c][*c]c.ke_error,
 ) callconv(.c) c.ke_component_id {
     const self = self_in orelse {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return 0;
     };
-    if (self.handle == null or name == null) {
+    if (self.handle == null or params == null or params.*.name == null) {
         E.fail(out_error, .invalid_argument, "invalid argument", @src());
         return 0;
     }
     const s = stateOf(self);
+    const name = params.*.name;
+    const size = params.*.size;
+    const alignment: usize = if (params.*.alignment == 0) @alignOf(c.max_align_t) else params.*.alignment;
+    if (!std.math.isPowerOfTwo(alignment)) {
+        E.fail(out_error, .invalid_argument, layoutMessage(
+            "component '{s}': alignment {d} is not a power of two",
+            .{ name, alignment },
+        ), @src());
+        return 0;
+    }
+    const fields = params.*.fields;
+    const field_count = params.*.field_count;
 
     const incoming: ?[]const c.ke_component_field =
         if (fields != null and field_count > 0) fields[0..field_count] else null;
@@ -330,6 +340,14 @@ fn componentRegister(
             E.fail(out_error, .invalid_argument, layoutMessage(
                 "component '{s}' already registered as {d} bytes, now {d}",
                 .{ name, existing_size, size },
+            ), @src());
+            return 0;
+        }
+        const existing_alignment: usize = if (ti != null and size != 0) @intCast(ti.*.alignment) else alignment;
+        if (size != 0 and existing_alignment != alignment) {
+            E.fail(out_error, .invalid_argument, layoutMessage(
+                "component '{s}' already registered with alignment {d}, now {d}",
+                .{ name, existing_alignment, alignment },
             ), @src());
             return 0;
         }
@@ -363,7 +381,7 @@ fn componentRegister(
     var cdesc: c.ecs_component_desc_t = std.mem.zeroes(c.ecs_component_desc_t);
     cdesc.entity = e;
     cdesc.type.size = @intCast(size);
-    cdesc.type.alignment = @intCast(@alignOf(c.max_align_t));
+    cdesc.type.alignment = @intCast(alignment);
     const cid: c.ke_component_id = @truncate(c.ecs_component_init(s.world, &cdesc));
 
     if (incoming) |inc| {
@@ -413,6 +431,7 @@ fn componentLookup(
         const cid: c.ke_component_id = @truncate(e);
         out_meta.*.cid = cid;
         out_meta.*.size = @intCast(ti.*.size);
+        out_meta.*.alignment = @intCast(ti.*.alignment);
         if (layoutOf(s, cid)) |f| {
             out_meta.*.fields = f.ptr;
             out_meta.*.field_count = @intCast(f.len);
@@ -723,12 +742,54 @@ test "componentRegister rejects re-registering a name with a different size" {
     defer handle.destroy.?(handle.ref);
 
     var out_error: ?*c.ke_error = null;
-    const first = handle.ref.*.component_register.?(handle.ref, "dup_name", 8, null, 0, &out_error);
+    const first = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "dup_name", .size = 8, .alignment = 0, .fields = null, .field_count = 0 }, &out_error);
     try testing.expect(first != 0);
     try testing.expect(out_error == null);
 
-    const second = handle.ref.*.component_register.?(handle.ref, "dup_name", 16, null, 0, &out_error);
+    const second = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "dup_name", .size = 16, .alignment = 0, .fields = null, .field_count = 0 }, &out_error);
     try testing.expectEqual(@as(c.ke_component_id, 0), second);
+    try testing.expect(out_error != null);
+}
+
+test "a component keeps the alignment it was registered with, and a lookup reports it" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    const cid = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "aligned4", .size = 12, .alignment = 4, .fields = null, .field_count = 0 }, null);
+    try testing.expect(cid != 0);
+    var meta = std.mem.zeroes(c.ke_component_meta);
+    try testing.expect(handle.ref.*.component_lookup.?(handle.ref, "aligned4", &meta, null));
+    try testing.expectEqual(@as(usize, 4), meta.alignment);
+}
+
+test "an alignment of zero registers the alignment of max_align_t" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    _ = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "unaligned", .size = 12, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    var meta = std.mem.zeroes(c.ke_component_meta);
+    try testing.expect(handle.ref.*.component_lookup.?(handle.ref, "unaligned", &meta, null));
+    try testing.expectEqual(@as(usize, @alignOf(c.max_align_t)), meta.alignment);
+}
+
+test "componentRegister rejects re-registering a name with a different alignment" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    var out_error: ?*c.ke_error = null;
+    try testing.expect(handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "realigned", .size = 16, .alignment = 4, .fields = null, .field_count = 0 }, &out_error) != 0);
+    const second = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "realigned", .size = 16, .alignment = 16, .fields = null, .field_count = 0 }, &out_error);
+    try testing.expectEqual(@as(c.ke_component_id, 0), second);
+    try testing.expect(out_error != null);
+}
+
+test "componentRegister refuses an alignment that is not a power of two" {
+    const handle = ke_ecs_flecs_create(null, null);
+    defer handle.destroy.?(handle.ref);
+
+    var out_error: ?*c.ke_error = null;
+    const cid = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "odd_align", .size = 12, .alignment = 3, .fields = null, .field_count = 0 }, &out_error);
+    try testing.expectEqual(@as(c.ke_component_id, 0), cid);
     try testing.expect(out_error != null);
 }
 
@@ -779,11 +840,11 @@ test "componentRegister rejects a second layout the size check cannot tell apart
     defer handle.destroy.?(handle.ref);
 
     var out_error: ?*c.ke_error = null;
-    const first = handle.ref.*.component_register.?(handle.ref, "swapped", 8, &swapped_a, swapped_a.len, &out_error);
+    const first = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len }, &out_error);
     try testing.expect(first != 0);
     try testing.expect(out_error == null);
 
-    const second = handle.ref.*.component_register.?(handle.ref, "swapped", 8, &swapped_b, swapped_b.len, &out_error);
+    const second = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 0, .fields = &swapped_b, .field_count = swapped_b.len }, &out_error);
     try testing.expectEqual(@as(c.ke_component_id, 0), second);
     try testing.expect(out_error != null);
 }
@@ -793,8 +854,8 @@ test "componentRegister accepts a second registration describing the same layout
     defer handle.destroy.?(handle.ref);
 
     var out_error: ?*c.ke_error = null;
-    const first = handle.ref.*.component_register.?(handle.ref, "agreed", 8, &swapped_a, swapped_a.len, &out_error);
-    const second = handle.ref.*.component_register.?(handle.ref, "agreed", 8, &swapped_a, swapped_a.len, &out_error);
+    const first = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "agreed", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len }, &out_error);
+    const second = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "agreed", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len }, &out_error);
     try testing.expectEqual(first, second);
     try testing.expect(out_error == null);
 }
@@ -804,8 +865,8 @@ test "a registrant with no table still joins one that has one, on size alone" {
     defer handle.destroy.?(handle.ref);
 
     var out_error: ?*c.ke_error = null;
-    const described = handle.ref.*.component_register.?(handle.ref, "partial", 8, &swapped_a, swapped_a.len, &out_error);
-    const tableless = handle.ref.*.component_register.?(handle.ref, "partial", 8, null, 0, &out_error);
+    const described = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "partial", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len }, &out_error);
+    const tableless = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "partial", .size = 8, .alignment = 0, .fields = null, .field_count = 0 }, &out_error);
     try testing.expectEqual(described, tableless);
     try testing.expect(out_error == null);
 }
@@ -814,8 +875,8 @@ test "the table of the first registrant to carry one describes the component aft
     const handle = ke_ecs_flecs_create(null, null);
     defer handle.destroy.?(handle.ref);
 
-    const tableless = handle.ref.*.component_register.?(handle.ref, "late_table", 8, null, 0, null);
-    _ = handle.ref.*.component_register.?(handle.ref, "late_table", 8, &swapped_a, swapped_a.len, null);
+    const tableless = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "late_table", .size = 8, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    _ = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "late_table", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len }, null);
 
     var meta: c.ke_component_meta = undefined;
     try testing.expect(handle.ref.*.component_lookup.?(handle.ref, "late_table", &meta, null));
@@ -829,7 +890,7 @@ test "componentRegister refuses a table describing bytes the component does not 
     defer handle.destroy.?(handle.ref);
 
     var out_error: ?*c.ke_error = null;
-    const cid = handle.ref.*.component_register.?(handle.ref, "too_small", 4, &swapped_a, swapped_a.len, &out_error);
+    const cid = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "too_small", .size = 4, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len }, &out_error);
     try testing.expectEqual(@as(c.ke_component_id, 0), cid);
     try testing.expect(out_error != null);
 }
@@ -839,8 +900,8 @@ test "componentRegister is idempotent for a repeated identical size" {
     defer handle.destroy.?(handle.ref);
 
     var out_error: ?*c.ke_error = null;
-    const first = handle.ref.*.component_register.?(handle.ref, "same_name", 12, null, 0, &out_error);
-    const second = handle.ref.*.component_register.?(handle.ref, "same_name", 12, null, 0, &out_error);
+    const first = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "same_name", .size = 12, .alignment = 0, .fields = null, .field_count = 0 }, &out_error);
+    const second = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "same_name", .size = 12, .alignment = 0, .fields = null, .field_count = 0 }, &out_error);
     try testing.expectEqual(first, second);
     try testing.expect(out_error == null);
 }
@@ -937,7 +998,7 @@ test "a reserved id is not in the world until something materializes it" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "reserve_probe", 4, null, 0, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "reserve_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     const reserved = e.entity_reserve.?(handle.ref);
     try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
 
@@ -950,7 +1011,7 @@ test "attaching to a reserved id materializes it without a separate call" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "attach_probe", 4, null, 0, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "attach_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     const reserved = e.entity_reserve.?(handle.ref);
 
     const slot = e.component_add.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
@@ -964,7 +1025,7 @@ test "materializing an id twice is a no-op rather than a second entity" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "twice_probe", 4, null, 0, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "twice_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     const reserved = e.entity_reserve.?(handle.ref);
     e.entity_materialize.?(handle.ref, reserved);
     const slot = e.component_add.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
@@ -980,7 +1041,7 @@ test "materializing an id the world already owns leaves it alone" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "owned_probe", 4, null, 0, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "owned_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     const created = e.entity_create.?(handle.ref);
     const slot = e.component_add.?(handle.ref, created, cid) orelse return error.TestUnexpectedResult;
     @as(*u32, @ptrCast(@alignCast(slot))).* = 99;
@@ -1013,7 +1074,7 @@ test "a reserved entity that was destroyed does not come back on the next attach
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "revive_probe", 4, null, 0, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "revive_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     const reserved = e.entity_reserve.?(handle.ref);
     try testing.expect(e.component_add.?(handle.ref, reserved, cid) != null);
 
@@ -1055,7 +1116,7 @@ test "attaching a component seeds the defaults its field table declares" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "layered", @sizeOf(Layered), &layered_fields, layered_fields.len, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "layered", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, null);
     try testing.expect(cid != 0);
 
     const entity = e.entity_create.?(handle.ref);
@@ -1071,7 +1132,7 @@ test "attaching a component that is already there keeps the value it holds" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "layered_twice", @sizeOf(Layered), &layered_fields, layered_fields.len, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "layered_twice", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, null);
     const entity = e.entity_create.?(handle.ref);
 
     const first: *Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
@@ -1086,7 +1147,7 @@ test "a component registered without a field table still attaches zeroed" {
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "untabled", @sizeOf(Layered), null, 0, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "untabled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, null);
     const entity = e.entity_create.?(handle.ref);
     const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
 
@@ -1098,7 +1159,7 @@ test "a component attached over memory a destroyed entity dirtied still arrives 
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const cid = e.component_register.?(handle.ref, "recycled", @sizeOf(Layered), null, 0, null);
+    const cid = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "recycled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, null);
     const first = e.entity_create.?(handle.ref);
     const dirty: [*]u8 = @ptrCast(e.component_add.?(handle.ref, first, cid).?);
     @memset(dirty[0..@sizeOf(Layered)], 0xAA);
@@ -1115,8 +1176,8 @@ test "registering the same component tuple twice returns one query, and another 
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const a = e.component_register.?(handle.ref, "dedup_a", 4, null, 0, null);
-    const b = e.component_register.?(handle.ref, "dedup_b", 4, null, 0, null);
+    const a = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "dedup_a", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    const b = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "dedup_b", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     const ab = [_]c.ke_component_id{ a, b };
     const ba = [_]c.ke_component_id{ b, a };
 
@@ -1131,10 +1192,10 @@ test "resolving a query into too small an array reports every segment it matches
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.*;
 
-    const shared = e.component_register.?(handle.ref, "resolve_shared", 4, null, 0, null);
+    const shared = e.component_register.?(handle.ref, &c.ke_component_params{ .name = "resolve_shared", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
     var extras: [4]c.ke_component_id = undefined;
     const names = [_][*:0]const u8{ "resolve_x0", "resolve_x1", "resolve_x2", "resolve_x3" };
-    for (&extras, names) |*cid, name| cid.* = e.component_register.?(handle.ref, name, 4, null, 0, null);
+    for (&extras, names) |*cid, name| cid.* = e.component_register.?(handle.ref, &c.ke_component_params{ .name = name, .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
 
     for (0..16) |mask| {
         const entity = e.entity_create.?(handle.ref);
@@ -1167,7 +1228,7 @@ test "a query over twelve components resolves with a column for each" {
 
     var cids: [12]c.ke_component_id = undefined;
     const names = [_][*:0]const u8{ "wide_0", "wide_1", "wide_2", "wide_3", "wide_4", "wide_5", "wide_6", "wide_7", "wide_8", "wide_9", "wide_10", "wide_11" };
-    for (&cids, names) |*cid, name| cid.* = e.component_register.?(handle.ref, name, 4, null, 0, null);
+    for (&cids, names) |*cid, name| cid.* = e.component_register.?(handle.ref, &c.ke_component_params{ .name = name, .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, null);
 
     const entity = e.entity_create.?(handle.ref);
     for (cids) |cid| try testing.expect(e.component_add.?(handle.ref, entity, cid) != null);
@@ -1187,7 +1248,7 @@ test "a query over twelve components resolves with a column for each" {
 
 test "creating, filling and destroying an ecs leaves no block allocated" {
     const handle = ke_ecs_flecs_create(null, null);
-    const cid = handle.ref.*.component_register.?(handle.ref, "leak_probe", 8, null, 0, null);
+    const cid = handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "leak_probe", .size = 8, .alignment = 0, .fields = null, .field_count = 0 }, null);
     const e = handle.ref.*.entity_create.?(handle.ref);
     try testing.expect(handle.ref.*.component_add.?(handle.ref, e, cid) != null);
     handle.destroy.?(handle.ref);

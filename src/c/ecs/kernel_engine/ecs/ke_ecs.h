@@ -42,27 +42,19 @@ extern "C"
         /**
          * Registers a component type by name, or returns the existing id if already registered.
          *
-         * A repeated name must describe the same layout as its first registration.
-         * With `fields` the two are compared field by field; without it, only
-         * `element_size` is compared, which a same-size field swap or a reordering
-         * satisfies.
+         * A repeated name must describe the same size, alignment and layout as its first
+         * registration. With `fields` the layouts are compared field by field; without them,
+         * only the size and the alignment are compared.
          *
-         * @param name [borrowed,utf8] Unique component name.
-         * @param element_size Bytes per entity; 0 registers a tag (no storage).
-         * @param fields [borrowed,optional] The type's field layout, normally its
-         *        field table. Must outlive the ecs. NULL registers the
-         *        size alone.
-         * @param field_count Entries in `fields`; 0 when `fields` is NULL.
-         * @param out_error [out,optional] Set when the layout conflicts with the name's
-         *        prior registration, naming the field that disagrees.
+         * @param params [borrowed] The name, size, alignment and field table of the type.
+         * @param out_error [out,optional] Set when the params are missing, the alignment is not
+         *        a power of two, or the type conflicts with the name's prior registration,
+         *        naming what disagrees.
          * @return The component's id, or KE_COMPONENT_INVALID on error.
          */
-        ke_component_id (*component_register)(struct ke_ecs            *self,
-                                               const char               *name,
-                                               size_t                    element_size,
-                                               const ke_component_field *fields,
-                                               uint32_t                  field_count,
-                                               ke_error                **out_error);
+        ke_component_id (*component_register)(struct ke_ecs              *self,
+                                               const ke_component_params  *params,
+                                               ke_error                  **out_error);
 
         /**
          * [try] Looks up a previously registered component by name.
