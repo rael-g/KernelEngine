@@ -1,6 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using KernelEngine.Result.Native;
+
 using Xunit;
 
 using SchedImpl = KernelEngine.Scheduler.Scheduler;
@@ -20,25 +22,23 @@ public sealed class SchedulerTests
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe ke_task* SyncDispatchOnComplete(
         ke_scheduler* self,
-        delegate* unmanaged[Cdecl]<void*, ke_error_type**, void> func,
+        delegate* unmanaged[Cdecl]<void*, ke_result> func,
         void* data,
-        delegate* unmanaged[Cdecl]<ke_task*, void*, ke_error_type*, void> on_complete,
+        delegate* unmanaged[Cdecl]<ke_task*, void*, ke_result, void> on_complete,
         void* user_data)
     {
-        ke_error_type* failure = null;
-        if (func != null) func(data, &failure);
-        if (on_complete != null) on_complete(null, user_data, failure);
+        var result = func != null ? func(data) : ke_result.KE_OK;
+        if (on_complete != null) on_complete(null, user_data, result);
         return null;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe ke_task* SyncDispatch(
         ke_scheduler* self,
-        delegate* unmanaged[Cdecl]<void*, ke_error_type**, void> func,
+        delegate* unmanaged[Cdecl]<void*, ke_result> func,
         void* data)
     {
-        ke_error_type* failure = null;
-        if (func != null) func(data, &failure);
+        if (func != null) func(data);
         return null;
     }
 
@@ -49,7 +49,7 @@ public sealed class SchedulerTests
     private static unsafe void NoopDestroy(ke_scheduler* self) { }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static unsafe bool NoopWait(ke_scheduler* self, ke_task* task, ke_error** outError) => true;
+    private static unsafe ke_result NoopWait(ke_scheduler* self, ke_task* task) => ke_result.KE_OK;
 
     private sealed class MockSchedulerHandle : IDisposable
     {

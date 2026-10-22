@@ -1,4 +1,4 @@
-using KernelEngine.Common.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Scheduler.Native;
 

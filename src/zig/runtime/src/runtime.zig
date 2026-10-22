@@ -46,6 +46,40 @@ const SegBuf = queries_mod.SegBuf;
 const resolveInto = queries_mod.resolveInto;
 
 const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+
+const result_kinds = .{
+    .{ error.General, E.Kind.general },
+    .{ error.NotFound, E.Kind.not_found },
+    .{ error.Io, E.Kind.io },
+    .{ error.OutOfMemory, E.Kind.out_of_memory },
+    .{ error.InvalidArgument, E.Kind.invalid_argument },
+    .{ error.NotInitialized, E.Kind.not_initialized },
+    .{ error.NotSupported, E.Kind.not_supported },
+    .{ error.AlreadyExists, E.Kind.already_exists },
+};
+
+/// The code a task body hands the scheduler for a failure of type `ty`, which a system reported
+/// through its `ke_error` lane. A type of a kind the result codes do not name becomes the general
+/// code. A bridge while systems report through `ke_error` and the scheduler through `ke_result`.
+fn codeOfType(ty: ?*const c.ke_error_type) c.ke_result {
+    const t = ty orelse return R.ok;
+    inline for (result_kinds) |pair| {
+        if (t == E.typeOf(pair[1])) return R.code(pair[0]);
+    }
+    return R.code(error.General);
+}
+
+/// The error type the runtime reports for code `code` a task returned; the inverse of `codeOfType`.
+fn typeOfCode(code: c.ke_result) ?*const c.ke_error_type {
+    R.check(code) catch |err| {
+        inline for (result_kinds) |pair| {
+            if (err == pair[0]) return E.typeOf(pair[1]);
+        }
+        return E.typeOf(.general);
+    };
+    return null;
+}
 
 const KE_RUNTIME_PHASE_COUNT = 9;
 
@@ -608,18 +642,14 @@ const PhaseFailure = struct {
 };
 
 /// The scheduler task body for one package, run on a worker. When the system body fails only the
-/// error's type crosses to the waiting thread, through the failure out-pointer, because the error
-/// record lives in the worker's own storage; the waiter raises a fresh error of that type.
-fn taskPkgRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
+/// code of its error's type crosses to the waiting thread, because the error record lives in the
+/// worker's own storage; the waiter raises a fresh error of the type that code stands for.
+fn taskPkgRun(data: ?*anyopaque) callconv(.c) c.ke_result {
     const pkg: *TaskPkg = @ptrCast(@alignCast(data.?));
     if (pkg.allow_defer) pkg.state.defer_q = &pkg.defer_q;
     var err: [*c]c.ke_error = null;
-    if (pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt, &err)) return;
-    if (out_failure == null) return;
-    out_failure.* = if (err != null and err.*.type != null)
-        err.*.type
-    else
-        E.typeOf(.general);
+    if (pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt, &err)) return R.ok;
+    return if (err != null and err.*.type != null) codeOfType(err.*.type) else R.code(error.General);
 }
 
 /// What `runWaveBody` needs for one wave: the packages built for it, a task slot and a pinned
@@ -647,11 +677,10 @@ fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
     var failure = PhaseFailure{};
     t = 0;
     while (t < wc.wave_size) : (t += 1) {
-        var err: [*c]c.ke_error = null;
-        if (sched.wait.?(sched, wc.tasks[t], &err)) continue;
+        const ty = typeOfCode(sched.wait.?(sched, wc.tasks[t])) orelse continue;
         if (failure.type != null) continue;
         failure = .{
-            .type = if (err != null and err.*.type != null) err.*.type else E.typeOf(.general),
+            .type = ty,
             .system = wc.pkgs[t].state.system_name,
         };
     }
@@ -1019,20 +1048,18 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
 }
 
 /// The scheduler task body for the render phase, run on a worker. The failure stays in the job for
-/// `runtimeJoinPendingRender` to read, and its type is also handed back to the scheduler.
-fn renderJobRun(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
+/// `runtimeJoinPendingRender` to read, and its code is also handed back to the scheduler.
+fn renderJobRun(data: ?*anyopaque) callconv(.c) c.ke_result {
     const job: *RenderJob = @ptrCast(@alignCast(data.?));
     job.failure = runtimeRunPhase(job.h, c.KE_PHASE_RENDER, job.dt);
-    if (job.failure.type) |t| {
-        if (out_failure != null) out_failure.* = t;
-    }
+    return codeOfType(job.failure.type);
 }
 
 /// Waits for the render phase in flight, if any, and returns the failure it recorded. The record is
 /// cleared when read, so a failure is returned once.
 fn runtimeJoinPendingRender(h: *RuntimeHandle) PhaseFailure {
     const task = h.state.pending_render_task orelse return .{};
-    _ = h.state.scheduler.wait.?(h.state.scheduler, task, null);
+    _ = h.state.scheduler.wait.?(h.state.scheduler, task);
     h.state.pending_render_task = null;
     const job = h.state.render_job orelse return .{};
     const failure = job.failure;
@@ -1252,7 +1279,7 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
 const testing = std.testing;
 
 extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ecs_handle;
-extern fn ke_scheduler_enki_create(params: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_scheduler_handle;
+extern fn ke_scheduler_enki_create(params: ?*const anyopaque, out_scheduler: *c.ke_scheduler_handle) callconv(.c) c.ke_result;
 
 const Fixture = struct {
     scheduler_h: c.ke_scheduler_handle,
@@ -1260,8 +1287,8 @@ const Fixture = struct {
     runtime_h: c.ke_runtime_handle,
 
     fn init() !Fixture {
-        const sh = ke_scheduler_enki_create(null, null);
-        try testing.expect(sh.ref != null);
+        var sh: c.ke_scheduler_handle = undefined;
+        try R.check(ke_scheduler_enki_create(null, &sh));
 
         const eh = ke_ecs_flecs_create(null, null);
         try testing.expect(eh.ref != null);
@@ -1758,12 +1785,11 @@ test "a query declaring no terms is refused" {
     try testing.expect(err != null);
 }
 
-var inline_failure: ?*const c.ke_error_type = null;
+var inline_result: c.ke_result = R.ok;
 var inline_token: u8 = 0;
 
 fn inlineDispatch(_: [*c]c.ke_scheduler, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
-    inline_failure = null;
-    func.?(data, &inline_failure);
+    inline_result = func.?(data);
     return @ptrCast(&inline_token);
 }
 
@@ -1771,12 +1797,8 @@ fn inlineDispatchPinned(self: [*c]c.ke_scheduler, _: u32, func: c.ke_task_func, 
     return inlineDispatch(self, func, data);
 }
 
-fn inlineWait(_: [*c]c.ke_scheduler, _: ?*c.ke_task, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    if (inline_failure) |t| {
-        E.failWithType(out_error, t, "inline task failed", @src());
-        return false;
-    }
-    return true;
+fn inlineWait(_: [*c]c.ke_scheduler, _: ?*c.ke_task) callconv(.c) c.ke_result {
+    return inline_result;
 }
 
 const InlineRuntime = struct {

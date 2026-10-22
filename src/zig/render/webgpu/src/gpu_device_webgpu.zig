@@ -453,7 +453,7 @@ fn reapCompletedCompiles(s: *DeviceState) void {
     while (i < s.pending_compiles_count) {
         const task = s.pending_compiles[i].?;
         if (sched.is_completed.?(sched, task)) {
-            _ = sched.wait.?(sched, task, null);
+            _ = sched.wait.?(sched, task);
             s.pending_compiles_count -= 1;
             s.pending_compiles[i] = s.pending_compiles[s.pending_compiles_count];
             continue;
@@ -1047,8 +1047,7 @@ fn debugSleepMs(ms: u64) void {
 
 /// Runs on a scheduler worker as the task body. It calls `on_ready` once, then frees the job and
 /// its copies.
-fn runAsyncCompileJob(data: ?*anyopaque, out_failure: [*c][*c]const ke.ke_error_type) callconv(.c) void {
-    _ = out_failure;
+fn runAsyncCompileJob(data: ?*anyopaque) callconv(.c) ke.ke_result {
     const job: *AsyncCompileJob = @ptrCast(@alignCast(data.?));
     debugSleepMs(debugAsyncDelayMs(&job.build));
     const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(job.device, &job.build.desc);
@@ -1060,6 +1059,7 @@ fn runAsyncCompileJob(data: ?*anyopaque, out_failure: [*c][*c]const ke.ke_error_
     if (job.vertex_entry) |e| gpa.free(e);
     if (job.fragment_entry) |e| gpa.free(e);
     gpa.destroy(job);
+    return @intCast(ke.KE_OK);
 }
 
 /// Compiles a render pipeline off the caller's thread and reports it through `on_ready`, which
@@ -1125,7 +1125,7 @@ fn flushPipelineCompiles(dev: [*c]ke.ke_gpu_device) callconv(.c) void {
     const sched = s.scheduler orelse return;
     var i: u32 = 0;
     while (i < s.pending_compiles_count) : (i += 1) {
-        _ = sched.wait.?(sched, s.pending_compiles[i].?, null);
+        _ = sched.wait.?(sched, s.pending_compiles[i].?);
     }
     s.pending_compiles_count = 0;
 }

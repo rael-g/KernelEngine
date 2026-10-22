@@ -7,6 +7,7 @@
     .dependencies = .{
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
+        .ke_result = .{ .path = "../../result" },
     },
 
     .paths = .{"."},

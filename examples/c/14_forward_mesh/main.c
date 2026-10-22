@@ -29,7 +29,14 @@
 #include <kernel_engine/runtime/runtime_create.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
+
+static void die_result(const char *what, ke_result result)
+{
+    fprintf(stderr, "%s failed with result code 0x%08x\n", what, (unsigned)result);
+    exit(1);
+}
 
 static void die(const char *msg, ke_error *err)
 {
@@ -167,8 +174,9 @@ int main(void)
     ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
     if (!ecs.ref) die("ecs", err);
 
-    ke_scheduler_handle sched = ke_scheduler_enki_create(NULL, &err);
-    if (!sched.ref) die("scheduler", err);
+    ke_scheduler_handle sched = { 0 };
+    ke_result made = ke_scheduler_enki_create(NULL, &sched);
+    if (made != KE_OK) die_result("scheduler", made);
 
     ke_runtime_params rtp = { 0 };
     ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);

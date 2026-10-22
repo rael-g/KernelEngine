@@ -34,6 +34,9 @@ pub fn Result(comptime c: type, comptime domain: anytype) type {
     }
 
     return struct {
+        /// The code of a call that succeeded.
+        pub const ok: c.ke_result = @intCast(c.KE_OK);
+
         /// The errors a call of the plugin fails with: the general ones and those of its domain.
         pub const Error = blk: {
             var set = error{};
@@ -52,13 +55,13 @@ pub fn Result(comptime c: type, comptime domain: anytype) type {
         /// The code a call that returned `result` hands across the ABI.
         pub fn of(result: anyerror!void) c.ke_result {
             result catch |err| return code(err);
-            return @intCast(c.KE_OK);
+            return ok;
         }
 
         /// The error of a code a C call returned, for a caller that goes on with `try`; a code the
         /// set does not name is `error.General`.
         pub fn check(result: c.ke_result) Error!void {
-            if (result == c.KE_OK) return;
+            if (result == ok) return;
             inline for (pairs) |pair| {
                 if (result == pair[1]) return pair[0];
             }

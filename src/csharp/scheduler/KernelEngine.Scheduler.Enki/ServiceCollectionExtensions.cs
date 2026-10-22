@@ -1,5 +1,4 @@
 ﻿
-using KernelEngine.Common.Native;
 using KernelEngine.Scheduler.Enki.Native;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -22,10 +21,10 @@ public static class ServiceCollectionExtensions
             {
                 if (sp.GetService<KernelEngine.Logger.ILogger>() is { } logger)
                     KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-                ke_error* err = null;
                 ke_scheduler_enki_params @params = default;
-                var handle = KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&@params, &err);
-                if (handle.@ref == null) throw NativeErrors.FromNative(err, "scheduler_enki_create");
+                ke_scheduler_handle handle;
+                KernelEngine.NativeResults.ThrowIfFailed(
+                    KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&@params, &handle), "ke_scheduler_enki_create");
                 return new KernelEngine.Scheduler.Scheduler(handle);
             }
         });

@@ -14,6 +14,7 @@ const textures = @import("texture_decoder.zig");
 
 /// Error helpers from kerror, bound to the C declarations in `c`.
 const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 /// Vertex count given to Assimp's large-mesh split through the import properties.
 const vertex_limit: c_int = 65534;
@@ -346,10 +347,9 @@ const AsyncCtx = struct {
 
 /// The task body that the dispatch runs on the thread it chooses. It runs `loadModel`, calls the
 /// completion callback once with the model or the load failure, and frees the context. A failure is
-/// reported only through the callback: the task's failure out-parameter is left unset.
-fn asyncBody(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
-    _ = out_failure;
-    const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return));
+/// reported only through the callback, so the task itself returns OK.
+fn asyncBody(data: ?*anyopaque) callconv(.c) c.ke_result {
+    const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return R.ok));
     const gpa = ctx.state.gpa;
     const model = loadModel(ctx.state, ctx.path.ptr, null);
     if (ctx.on_complete) |done| {
@@ -357,6 +357,7 @@ fn asyncBody(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) call
     }
     gpa.free(ctx.path);
     gpa.destroy(ctx);
+    return R.ok;
 }
 
 /// The `load_model_async` slot. It returns whatever dispatch returns, and the body may already have
@@ -464,8 +465,7 @@ fn boxGltfPath() ?[:0]const u8 {
 
 fn immediateDispatch(self: [*c]c.ke_scheduler, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
     _ = self;
-    var failure: [*c]const c.ke_error_type = null;
-    if (func) |f| f(data, &failure);
+    if (func) |f| _ = f(data);
     return @ptrFromInt(1);
 }
 
