@@ -36,7 +36,6 @@ const Entry = struct {
 /// world must be driven from one thread at a time.
 const State = struct {
     api: c.ke_physics_2d,
-    logger: ?*c.ke_logger,
     world: c.b2WorldId,
     bodies: ?[*]Entry,
     body_count: u32,
@@ -47,15 +46,7 @@ fn stateOf(self: *c.ke_physics_2d) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-fn logInfo(logger: ?*c.ke_logger, msg: [*:0]const u8) void {
-    const lg = logger orelse return;
-    var ev = c.ke_log_event{
-        .level = c.KE_LOG_LEVEL_INFO,
-        .tag = "box2d",
-        .message = msg,
-    };
-    if (lg.log) |f| f(lg, &ev);
-}
+const log = std.log.scoped(.physics_2d_box2d);
 
 /// Every operation on an existing body resolves its id here. A null result means the operation
 /// does nothing or reports that the body was not found.
@@ -333,7 +324,6 @@ export fn ke_physics_2d_box2d_create(
     };
     s.* = .{
         .api = std.mem.zeroes(c.ke_physics_2d),
-        .logger = params.logger,
         .world = undefined,
         .bodies = null,
         .body_count = 0,
@@ -363,7 +353,7 @@ export fn ke_physics_2d_box2d_create(
     s.api.set_body_fixed_rotation = setBodyFixedRotation;
     s.api.set_body_gravity_scale = setBodyGravityScale;
 
-    logInfo(s.logger, "Box2D physics world initialized");
+    log.info("world initialized", .{});
     return .{ .ref = &s.api, .destroy = destroy };
 }
 
@@ -371,7 +361,6 @@ const testing = std.testing;
 
 fn makeWorld(gravity_x: f32, gravity_y: f32) c.ke_physics_2d_handle {
     var params = std.mem.zeroes(c.ke_physics_2d_box2d_params);
-    params.logger = null;
     params.gravity_x = gravity_x;
     params.gravity_y = gravity_y;
     return ke_physics_2d_box2d_create(&params, null);

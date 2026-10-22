@@ -42,7 +42,6 @@ int main(void)
     ke_error *err = NULL;
 
     ke_window_glfw_params wp = {
-        .logger     = NULL,
         .input      = NULL,
         .title      = "c_demo_08 vertex buffer",
         .width      = 800,

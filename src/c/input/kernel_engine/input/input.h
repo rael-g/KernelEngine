@@ -10,7 +10,6 @@ extern "C"
 {
 #endif
 
-    struct ke_logger;
 
     /** Live keyboard and mouse state for one window. */
     typedef struct ke_input

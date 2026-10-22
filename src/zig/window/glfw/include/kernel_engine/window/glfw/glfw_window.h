@@ -23,7 +23,6 @@ extern "C" {
 #endif
 
 typedef struct ke_window_glfw_params {
-    struct ke_logger *logger; /**< [borrowed,nullable] Optional logger. */
     struct ke_input  *input;  /**< [borrowed,nullable] Optional input sink target. */
     const char       *title;  /**< [borrowed,utf8] Window title. */
     int32_t           width;

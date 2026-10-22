@@ -31,12 +31,11 @@ public unsafe partial class Input : IDisposable, INativeInput
     ke_input* INativeInput.Native => Handle;
 
     /// <summary>Creates an input system.</summary>
-    /// <param name="logger">Optional logger; pass NULL to disable logging.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    internal Input(ke_logger* logger)
+    public Input()
     {
         ke_error* err = null;
-        var handle = KernelEngine.Input.Native.NativeMethods.input_create(logger, &err);
+        var handle = KernelEngine.Input.Native.NativeMethods.input_create(&err);
         if (handle.@ref == null) throw NativeErrors.FromNative(err, "ke_input_create");
         _native = handle.@ref;
         _destroy = handle.destroy;

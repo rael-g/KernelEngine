@@ -2,20 +2,15 @@ using System.Numerics;
 
 using KernelEngine.Common.Native;
 using KernelEngine.Input.Native;
-using KernelEngine.Logger;
 
 namespace KernelEngine.Input;
 
 /// <summary>
-/// The input service over <c>ke_input</c>, with a constructor taking a managed logger, a
-/// snapshot reader, and the translation of native events into <see cref="InputEvent"/> values.
+/// The input service over <c>ke_input</c>, with a snapshot reader and the translation of native
+/// events into <see cref="InputEvent"/> values.
 /// </summary>
 public sealed unsafe partial class Input : IInput
 {
-    /// <summary>Creates an input system logging through a managed logger.</summary>
-    public Input(INativeLogger? logger)
-        : this(logger is null ? null : logger.Native) { }
-
     /// <inheritdoc/>
     public IInputReader CaptureSnapshot() => new SnapshotReader(this, GetSnapshot());
 

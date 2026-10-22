@@ -52,7 +52,7 @@ int main(void)
     ke_error *err = NULL;
 
     ke_window_glfw_params wp = {
-        .logger = NULL, .input = NULL,
+        .input = NULL,
         .title = "c_demo_10 depth", .width = WIDTH, .height = HEIGHT,
     };
     ke_window_handle win = ke_window_glfw_create(&wp, &err);

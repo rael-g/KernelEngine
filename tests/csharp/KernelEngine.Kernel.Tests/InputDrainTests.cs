@@ -36,7 +36,7 @@ public unsafe class InputDrainTests
     public void DrainEvents_TranslatesNativeToManaged()
     {
         var mock = (ke_input*)NativeMemory.AllocZeroed((nuint)sizeof(ke_input));
-        mock->drain_events = &MockDrainEvents; var input = new Input(null);
+        mock->drain_events = &MockDrainEvents; var input = new Input();
 
         var field = typeof(Input).GetField("_native", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         var oldNativeValue = field!.GetValue(input)!;
@@ -66,7 +66,7 @@ public unsafe class InputDrainTests
         data.keys_down[1] = 1UL << (65 % 64);
         data.mouse_buttons_down = 1u << (int)MouseButton.Right;
 
-        using var input = new Input(null);
+        using var input = new Input();
 
         Assert.True(input.SnapshotIsKeyDown(&data, Key.A));
         Assert.False(input.SnapshotIsKeyDown(&data, (Key)64));

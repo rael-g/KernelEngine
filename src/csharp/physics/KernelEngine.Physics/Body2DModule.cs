@@ -33,7 +33,8 @@ public sealed unsafe class Body2DModule : IRuntimeModule
         var ecs = services.GetRequiredService<INativeEcs>();
         var physics = services.GetRequiredService<IPhysics2D>();
 
-        var logger = services.GetService<KernelEngine.Logger.INativeLogger>();
+        if (services.GetService<KernelEngine.Logger.ILogger>() is { } logger)
+            KernelEngine.Physics.Native.NativeMethods.physics_body2d_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
         var world = services.GetRequiredService<KernelEngine.Framework.World>();
 
         var @params = new ke_physics_body2d_module_params
@@ -42,7 +43,6 @@ public sealed unsafe class Body2DModule : IRuntimeModule
             ecs = ((INativeEcs)ecs).Native,
             physics = ((INativePhysics2d)physics).Native,
             scene_tree = ((KernelEngine.Framework.INativeSceneTree)world.SceneTree).Native,
-            logger = logger is not null ? logger.Native : null,
         };
 
         ke_error* err = null;

@@ -17,11 +17,8 @@ extern "C"
 #  endif
 #endif
 
-/**
- * Creates an input system.
- * @param logger [borrowed,nullable] Optional logger; pass NULL to disable logging.
- */
-KE_INPUT_DEFAULT_API ke_input_handle ke_input_create(struct ke_logger *logger, ke_error **out_error);
+/** Creates an input system. */
+KE_INPUT_DEFAULT_API ke_input_handle ke_input_create(ke_error **out_error);
 
 #ifdef __cplusplus
 }
