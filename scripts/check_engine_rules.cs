@@ -26,6 +26,7 @@ var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
 var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
 var pinning = new Regex(@"pinnedThread:|\.DispatchPinned\(|dispatch_pinned\.\?\(|\.pinned_thread = [1-9]");
 var exportMacro = new Regex(@"\bKE_[A-Z_]*API\b");
+var errorLane = new Regex(@"\bke_error\s*\*\s*\*");
 var plainFunction = new Regex(@"^(?!typedef)[A-Za-z_][A-Za-z0-9_ \*]*\bke_[a-z0-9_]+\s*\(.*\)\s*;");
 var bagName = new Regex(@"\bke_[a-z0-9_]*_(desc|descriptor|info|config)\b");
 var implName = new Regex(@"(?<![A-Za-z0-9])impl_[a-z]|[a-z0-9]Impl\b|[a-z0-9]_impl\b");
@@ -95,6 +96,9 @@ var rules = new List<Rule>
                     problems.Add($"{x.Build}: expected exactly one {expected} under include/, found {logHeaders.Count}");
                 return problems;
             })),
+    new("a call that can fail returns ke_result and takes no ke_error lane", 150,
+        Lines(headers.Where(s => !s.Key.StartsWith("src/zig/common/", StringComparison.Ordinal)),
+            l => errorLane.IsMatch(l))),
     new("a header has an #ifndef guard, never #pragma once", 0,
         Lines(headers, l => l.TrimStart().StartsWith("#pragma once", StringComparison.Ordinal))),
     new("a contract header declares no export macro", 0,
