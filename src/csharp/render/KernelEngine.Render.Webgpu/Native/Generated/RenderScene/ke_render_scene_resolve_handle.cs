@@ -1,4 +1,10 @@
+using KernelEngine.Asset.Native;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Framework.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Render.Native;
+using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 

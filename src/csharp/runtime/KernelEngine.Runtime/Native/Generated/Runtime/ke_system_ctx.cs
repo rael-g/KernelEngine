@@ -1,4 +1,7 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Runtime.Native;
 

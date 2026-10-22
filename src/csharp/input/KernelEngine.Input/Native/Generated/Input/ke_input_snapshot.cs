@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Input.Native;
 

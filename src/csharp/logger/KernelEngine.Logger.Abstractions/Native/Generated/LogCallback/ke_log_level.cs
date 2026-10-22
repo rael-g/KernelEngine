@@ -1,4 +1,6 @@
-namespace KernelEngine.Common.Native;
+using KernelEngine.Common.Native;
+
+namespace KernelEngine.Logger.Native;
 
 [NativeTypeName("unsigned int")]
 public enum ke_log_level : uint

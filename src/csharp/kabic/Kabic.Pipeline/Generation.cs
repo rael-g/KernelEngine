@@ -99,6 +99,13 @@ public static class Generation
             }
         }
 
+        foreach (var bridged in model.Callbacks.Where(c => c.Has("bridge")))
+        {
+            Directory.CreateDirectory(contractDir);
+            File.WriteAllText(Path.Combine(contractDir, $"{Idioms.TypeName(bridged.Name, convention)}.g.cs"),
+                CSharpWriter.RenderCallbackBridge(model, bridged, ns, nativeNs, convention));
+        }
+
         foreach (var callback in classified.Callbacks)
             File.WriteAllText(Path.Combine(outDir, $"{Idioms.TypeName(callback.Name, convention)}Native.g.cs"),
                 CSharpWriter.RenderCallbackInterface(callback, ns, nativeNs, convention));

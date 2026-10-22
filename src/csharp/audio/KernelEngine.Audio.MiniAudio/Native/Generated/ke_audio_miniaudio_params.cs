@@ -1,4 +1,6 @@
+using KernelEngine.Audio.Native;
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Audio.MiniAudio.Native;
 

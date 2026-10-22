@@ -1,6 +1,10 @@
 using System.Runtime.InteropServices;
 
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Framework.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Physics.Native;
 
@@ -14,5 +18,5 @@ public static unsafe partial class NativeMethods
     public static extern KernelEngine.Framework.Native.ke_scene_component_set_handle physics_scene_components_create();
 
     [DllImport("ke_physics_body2d", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_physics_body2d_set_log_callback", ExactSpelling = true)]
-    public static extern void physics_body2d_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, ke_log_level, sbyte*, sbyte*, void> callback, void* ctx);
+    public static extern void physics_body2d_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, KernelEngine.Logger.Native.ke_log_level, sbyte*, sbyte*, void> callback, void* ctx);
 }

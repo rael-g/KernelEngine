@@ -1,4 +1,7 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Input.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Window.Native;
 
 namespace KernelEngine.Window.Glfw.Native;
 

@@ -201,7 +201,7 @@ public static class Extractor
         var proto = FindProto(node["inner"] as JsonArray);
         if (proto is null) return null;
 
-        var (_, summary, pdocs, _, _) = DocParser.Parse(node);
+        var (summaryTags, summary, pdocs, _, _) = DocParser.Parse(node);
         var laneNames = new Dictionary<int, string>();
         CollectParamIndices(node["inner"] as JsonArray, laneNames);
 
@@ -217,7 +217,7 @@ public static class Extractor
             return new ApiParam(laneName, type, tags, doc.Length > 0 ? doc : null);
         }).ToList();
 
-        return new ApiCallback(name, types[0], summary.Length > 0 ? summary : null, lanes);
+        return new ApiCallback(name, types[0], summary.Length > 0 ? summary : null, lanes) { Tags = summaryTags };
     }
 
     static JsonObject? FindProto(JsonArray? inner)

@@ -1,4 +1,8 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Framework.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Physics.Native;
 

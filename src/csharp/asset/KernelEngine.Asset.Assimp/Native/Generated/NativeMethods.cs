@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 
+using KernelEngine.Asset.Native;
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Asset.Assimp.Native;
 
@@ -11,5 +13,5 @@ public static unsafe partial class NativeMethods
     public static extern KernelEngine.Asset.Native.ke_asset_loader_handle asset_loader_assimp_create([NativeTypeName("const ke_asset_loader_assimp_params *")] ke_asset_loader_assimp_params* @params, [NativeTypeName("ke_error **")] KernelEngine.Common.Native.ke_error** out_error);
 
     [DllImport("ke_asset_assimp", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_assimp_set_log_callback", ExactSpelling = true)]
-    public static extern void asset_assimp_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, ke_log_level, sbyte*, sbyte*, void> callback, void* ctx);
+    public static extern void asset_assimp_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, KernelEngine.Logger.Native.ke_log_level, sbyte*, sbyte*, void> callback, void* ctx);
 }

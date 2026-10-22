@@ -33,6 +33,7 @@ public static class BindingsPlanner
         ];
         var opaque = new Regex($@"^\s*typedef\s+(?:struct|enum|union)\s+({symbol})\s+\1\s*;", RegexOptions.Multiline | RegexOptions.Compiled);
         var alias = new Regex($@"^\s*typedef\s+[\w \*]+?\s+({symbol})\s*;", RegexOptions.Multiline | RegexOptions.Compiled);
+        var functionPointer = new Regex($@"typedef\s+[^;(]*\(\s*\*\s*({symbol})\s*\)\s*\(([^;]*)\)\s*;", RegexOptions.Compiled);
         var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
         var bindings = manifest["bindings"]?.AsArray()
             ?? throw new InvalidOperationException("the manifest has no 'bindings' array");
@@ -88,9 +89,14 @@ public static class BindingsPlanner
         foreach (var header in sourceHeaders)
             foreach (Match m in alias.Matches(sourceTexts[header]))
                 if (!declaredIn.ContainsKey(m.Groups[1].Value)) aliases.Add(m.Groups[1].Value);
+        var functionPointerParameters = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var header in sourceHeaders)
+            foreach (Match m in functionPointer.Matches(sourceTexts[header]))
+                functionPointerParameters.TryAdd(m.Groups[1].Value, m.Groups[2].Value);
 
         var ownHeaders = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var owner = new Dictionary<string, string>(StringComparer.Ordinal);
+        var ownerBinding = new Dictionary<string, string>(StringComparer.Ordinal);
         var claimedBy = new Dictionary<string, string>(StringComparer.Ordinal);
         var contested = new List<string>();
         foreach (var b in bindings)
@@ -104,7 +110,11 @@ public static class BindingsPlanner
                 else claimedBy[h] = name;
             }
             foreach (var (type, header) in declaredIn)
-                if (hs.Contains(header)) owner[type] = b["namespace"]!.GetValue<string>();
+                if (hs.Contains(header))
+                {
+                    owner[type] = b["namespace"]!.GetValue<string>();
+                    ownerBinding[type] = name;
+                }
         }
 
         if (contested.Count > 0)
@@ -131,9 +141,13 @@ public static class BindingsPlanner
             return seen;
         }
 
-        var assemblyOf = new Dictionary<string, string>(StringComparer.Ordinal);
+        var assembliesOf = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var b in bindings)
-            assemblyOf[b!["namespace"]!.GetValue<string>()] = Path.GetFileName(b["project"]!.GetValue<string>());
+        {
+            var bindingNs = b!["namespace"]!.GetValue<string>();
+            if (!assembliesOf.TryGetValue(bindingNs, out var assemblies)) assembliesOf[bindingNs] = assemblies = [];
+            assemblies.Add(Path.GetFileName(b["project"]!.GetValue<string>()));
+        }
 
         string AngleName(string abs)
         {
@@ -177,6 +191,11 @@ public static class BindingsPlanner
                                              .ToHashSet(StringComparer.Ordinal);
                 var referenced = traversed.SelectMany(h => typeName.Matches(File.ReadAllText(h)).Select(m => m.Value))
                                           .ToHashSet(StringComparer.Ordinal);
+                var pending = new Queue<string>(referenced.Where(functionPointerParameters.ContainsKey));
+                while (pending.TryDequeue(out var pointer))
+                    foreach (Match m in typeName.Matches(functionPointerParameters[pointer]))
+                        if (referenced.Add(m.Value) && functionPointerParameters.ContainsKey(m.Value))
+                            pending.Enqueue(m.Value);
                 remaps.Clear();
                 excludes.Clear();
                 foreach (var type in referenced.OrderBy(x => x, StringComparer.Ordinal))
@@ -184,9 +203,13 @@ public static class BindingsPlanner
                     if (aliases.Contains(type)) continue;
                     var mine = declaredHere.Contains(type);
                     if (owner.TryGetValue(type, out var o)
-                        && assemblyOf.TryGetValue(o, out var asm) && reach.Contains(asm))
+                        && assembliesOf.TryGetValue(o, out var assembliesOfOwner) && assembliesOfOwner.Any(reach.Contains))
                     {
-                        if (o == ns) continue;
+                        if (o == ns)
+                        {
+                            if (ownerBinding[type] != name) excludes.Add(type);
+                            continue;
+                        }
                         remaps.Add($"{type}={o}.{type}");
                         excludes.Add(type);
                         continue;

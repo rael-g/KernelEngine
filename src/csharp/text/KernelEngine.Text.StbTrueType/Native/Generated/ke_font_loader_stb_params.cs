@@ -1,4 +1,6 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
+using KernelEngine.Text.Native;
 
 namespace KernelEngine.Text.StbTrueType.Native;
 

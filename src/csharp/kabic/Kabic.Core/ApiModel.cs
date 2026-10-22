@@ -138,7 +138,14 @@ public record ApiFunction(string Name, string Returns, string? Doc, string? Retu
 /// spelling of the type carries none of it, and a writer that has to guess gets it
 /// wrong. Lanes keep the order the prototype declares, so an index identifies one.
 /// </summary>
-public record ApiCallback(string Name, string Returns, string? Doc, IReadOnlyList<ApiParam> Lanes);
+public record ApiCallback(string Name, string Returns, string? Doc, IReadOnlyList<ApiParam> Lanes)
+{
+    /// <summary>The tags of the typedef's own documentation, such as <c>bridge</c>.</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
+
+    /// <summary>Whether the typedef's documentation carries <paramref name="tag"/>.</summary>
+    public bool Has(string tag) => Tags.Contains(tag);
+}
 
 /// <summary>
 /// The declarations one header description lists, kept in the order they were read: enums,
@@ -257,7 +264,10 @@ public static class ApiReader
         {
             var o = c!.AsObject();
             m.Callbacks.Add(new ApiCallback(Str(o, "name")!, Str(o, "returns")!, Str(o, "doc"),
-                o["lanes"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList()));
+                o["lanes"]!.AsArray().Select(p => ReadParam(p!.AsObject())).ToList())
+            {
+                Tags = (o["tags"]?.AsArray() ?? []).Select(t => t!.GetValue<string>()).ToList(),
+            });
         }
 
         foreach (var f in root["functions"]!.AsArray())

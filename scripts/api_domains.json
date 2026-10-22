@@ -118,6 +118,7 @@
       "headers": [
         "src/c/logger/kernel_engine/logger/logger.h",
         "src/c/logger/kernel_engine/logger/log_level.h",
+        "src/c/logger/kernel_engine/logger/log_callback.h",
         "src/zig/logger/simple/include/kernel_engine/logger/simple/logger_simple_create.h",
         "src/zig/logger/simple/include/kernel_engine/logger/simple/console_sink_create.h"
       ],
@@ -762,8 +763,6 @@
       "namespace": "KernelEngine.Common.Native",
       "headers": [
         "src/zig/common/include/kernel_engine/common/error.h",
-        "src/c/logger/kernel_engine/logger/log_level.h",
-        "src/c/logger/kernel_engine/logger/log_callback.h",
         "src/c/math/kernel_engine/math/math.h",
         "src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h",
         "src/c/spatial/kernel_engine/spatial/transform.h"
@@ -867,6 +866,16 @@
       ],
       "library": "ke_input_default",
       "output": "Generated/Input/"
+    },
+    {
+      "name": "LogCallback",
+      "project": "src/csharp/logger/KernelEngine.Logger.Abstractions",
+      "namespace": "KernelEngine.Logger.Native",
+      "headers": [
+        "src/c/logger/kernel_engine/logger/log_level.h",
+        "src/c/logger/kernel_engine/logger/log_callback.h"
+      ],
+      "output": "Generated/LogCallback/"
     },
     {
       "name": "Logger",

@@ -126,15 +126,21 @@ public static class Serialization
     }
 
     /// <summary>
-    /// Writes a callback as an object with its name, return type, documentation and lanes.
+    /// Writes a callback as an object with its name, return type, documentation and lanes, adding
+    /// its tags when it has any.
     /// </summary>
-    public static JsonObject ToJson(this ApiCallback c) => new()
+    public static JsonObject ToJson(this ApiCallback c)
     {
-        ["name"] = c.Name,
-        ["returns"] = c.Returns,
-        ["doc"] = c.Doc,
-        ["lanes"] = new JsonArray(c.Lanes.Select(l => (JsonNode)l.ToJson()).ToArray()),
-    };
+        var o = new JsonObject
+        {
+            ["name"] = c.Name,
+            ["returns"] = c.Returns,
+            ["doc"] = c.Doc,
+            ["lanes"] = new JsonArray(c.Lanes.Select(l => (JsonNode)l.ToJson()).ToArray()),
+        };
+        if (c.Tags.Count > 0) o["tags"] = new JsonArray(c.Tags.Select(t => (JsonNode)t).ToArray());
+        return o;
+    }
 
     /// <summary>
     /// Writes a function as an object with its name, return type, documentation, return

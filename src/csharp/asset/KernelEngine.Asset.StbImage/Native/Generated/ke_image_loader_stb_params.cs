@@ -1,4 +1,6 @@
+using KernelEngine.Asset.Native;
 using KernelEngine.Common.Native;
+using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Asset.StbImage.Native;
 
