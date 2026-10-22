@@ -16,9 +16,6 @@ public unsafe partial struct ke_render_forward_params
     [NativeTypeName("ke_gpu_device *")]
     public KernelEngine.Render.Native.ke_gpu_device* device;
 
-    [NativeTypeName("ke_logger *")]
-    public KernelEngine.Logger.Native.ke_logger* logger;
-
     public bool ibl_enabled;
 
     [NativeTypeName("ke_component_id")]

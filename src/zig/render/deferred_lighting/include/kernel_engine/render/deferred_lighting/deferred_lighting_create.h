@@ -4,7 +4,6 @@
 #include <kernel_engine/common/error.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
-#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -41,7 +40,6 @@ extern "C"
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
         ke_render_service *service; ///< Holds the resources it reads and writes; borrowed.
         ke_gpu_device     *device;  ///< Borrowed.
-        ke_logger         *logger;  ///< Optional, borrowed.
         bool               ibl_enabled;
         ke_component_id    camera_cid;
         ke_component_id    world_transform_cid;

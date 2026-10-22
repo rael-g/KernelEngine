@@ -10,17 +10,13 @@ pub const State = struct {
     core: *c.ke_render_service,
     ui: *c.ke_render_ui,
     resolver: ?*c.ke_asset_resolver,
-    logger: ?*c.ke_logger = null,
 };
 
-/// Logs an error under the tag "render.label" naming the path and the reason. Does nothing when
-/// `logger` is null, and drops the message unlogged when it does not fit its buffer.
-fn reportUnresolved(st: *State, path: []const u8, reason: []const u8) void {
-    const lg = st.logger orelse return;
-    var buf: [320]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, "font '{s}' did not resolve ({s}); the label draws no text", .{ path, reason }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render.label", .message = msg.ptr };
-    lg.log.?(lg, &ev);
+const log = std.log.scoped(.render_scene);
+
+/// Logs as a warning that the label's font did not resolve and why; the label then draws no text.
+fn reportUnresolved(path: []const u8, reason: []const u8) void {
+    log.warn("font '{s}' did not resolve ({s}); the label draws no text", .{ path, reason });
 }
 
 /// Asks the asset resolver for the font at the label's size over a fixed glyph range and atlas
@@ -33,7 +29,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     const path = std.mem.sliceTo(&l.font, 0);
 
     const resolver = st.resolver orelse {
-        reportUnresolved(st, path, "the label resolve was given no asset resolver");
+        reportUnresolved(path, "the label resolve was given no asset resolver");
         return c.KE_UI_FONT_FAILED;
     };
 
@@ -45,30 +41,30 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     const key = std.fmt.bufPrintZ(&key_buf, "font:{s}:{d}:{d}:{d}:{d}", .{
         path, l.font_size, atlas_size, first_codepoint, codepoint_count,
     }) catch {
-        reportUnresolved(st, path, "the bake key does not fit its buffer");
+        reportUnresolved(path, "the bake key does not fit its buffer");
         return c.KE_UI_FONT_FAILED;
     };
 
     var data: ?*c.ke_font_data = null;
     if (!resolver.resolve_font.?(resolver, &l.font, l.font_size, first_codepoint, codepoint_count, atlas_size, &data, null)) {
-        reportUnresolved(st, path, "the asset resolver could not read it");
+        reportUnresolved(path, "the asset resolver could not read it");
         return c.KE_UI_FONT_FAILED;
     }
     const d = data orelse {
-        reportUnresolved(st, path, "the asset resolver reported success without data");
+        reportUnresolved(path, "the asset resolver reported success without data");
         return c.KE_UI_FONT_FAILED;
     };
     defer resolver.free_font.?(resolver, d);
 
     const atlas = st.core.upload_texture.?(st.core, key.ptr, d.atlas_width, d.atlas_height, d.atlas_rgba, null);
     if (atlas.bits == c.KE_HANDLE_NONE) {
-        reportUnresolved(st, path, "its glyph atlas could not be uploaded");
+        reportUnresolved(path, "its glyph atlas could not be uploaded");
         return c.KE_UI_FONT_FAILED;
     }
 
     const font = st.ui.load_font.?(st.ui, key.ptr, atlas, d.glyphs, d.glyph_count, d.line_height, d.ascent, null);
     if (font.bits == c.KE_HANDLE_NONE) {
-        reportUnresolved(st, path, "the ui service refused to register it");
+        reportUnresolved(path, "the ui service refused to register it");
         return c.KE_UI_FONT_FAILED;
     }
     return font;
@@ -98,17 +94,6 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
 
 const testing = std.testing;
 
-var reported_count: usize = 0;
-var reported_msg: [320]u8 = undefined;
-var reported_len: usize = 0;
-
-fn captureLog(_: ?*c.ke_logger, ev: [*c]const c.ke_log_event) callconv(.c) void {
-    reported_count += 1;
-    const m = std.mem.span(ev.*.message);
-    reported_len = @min(m.len, reported_msg.len);
-    @memcpy(reported_msg[0..reported_len], m[0..reported_len]);
-}
-
 fn labelNaming(path: []const u8) c.ke_label_component {
     var l = std.mem.zeroes(c.ke_label_component);
     @memcpy(l.font[0..path.len], path);
@@ -116,33 +101,22 @@ fn labelNaming(path: []const u8) c.ke_label_component {
     return l;
 }
 
-test "a label whose font never resolved is reported rather than drawn as an empty screen" {
+test "a label whose font never resolved gets the failed-font handle" {
     var core = std.mem.zeroes(c.ke_render_service);
     var ui = std.mem.zeroes(c.ke_render_ui);
-    var logger = std.mem.zeroes(c.ke_logger);
-    logger.log = captureLog;
-
-    reported_count = 0;
-    var st = State{ .core = &core, .ui = &ui, .resolver = null, .logger = &logger };
+    var st = State{ .core = &core, .ui = &ui, .resolver = null };
     var l = labelNaming("res://font.ttf");
 
     try testing.expectEqual(@as(u32, std.math.maxInt(u32)), bake(&st, &l).bits);
-    try testing.expectEqual(@as(usize, 1), reported_count);
-    try testing.expect(std.mem.indexOf(u8, reported_msg[0..reported_len], "res://font.ttf") != null);
 }
 
 test "a font that failed to resolve is not retried on the next tick" {
     var core = std.mem.zeroes(c.ke_render_service);
     var ui = std.mem.zeroes(c.ke_render_ui);
-    var logger = std.mem.zeroes(c.ke_logger);
-    logger.log = captureLog;
-
-    reported_count = 0;
-    var st = State{ .core = &core, .ui = &ui, .resolver = null, .logger = &logger };
+    var st = State{ .core = &core, .ui = &ui, .resolver = null };
     var l = labelNaming("res://font.ttf");
 
     l.font_handle = bake(&st, &l);
-    try testing.expectEqual(@as(usize, 1), reported_count);
 
     const skips = l.font[0] == 0 or l.font_handle.bits != c.KE_HANDLE_NONE;
     try testing.expect(skips);
@@ -151,14 +125,9 @@ test "a font that failed to resolve is not retried on the next tick" {
 test "a label naming no font at all is left alone, having asked for nothing" {
     var core = std.mem.zeroes(c.ke_render_service);
     var ui = std.mem.zeroes(c.ke_render_ui);
-    var logger = std.mem.zeroes(c.ke_logger);
-    logger.log = captureLog;
-
-    reported_count = 0;
-    var st = State{ .core = &core, .ui = &ui, .resolver = null, .logger = &logger };
+    var st = State{ .core = &core, .ui = &ui, .resolver = null };
     _ = &st;
     const l = std.mem.zeroes(c.ke_label_component);
 
     try testing.expect(l.font[0] == 0);
-    try testing.expectEqual(@as(usize, 0), reported_count);
 }

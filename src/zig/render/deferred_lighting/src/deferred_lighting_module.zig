@@ -29,7 +29,6 @@ const shader_layout = c.ke_render_shader_layout_params{
 const DeferredLightingModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    logger: ?*c.ke_logger = null,
     ibl_enabled: bool = true,
 
     camera_cid: c.ke_component_id = undefined,
@@ -56,15 +55,14 @@ const DeferredLightingModule = struct {
     access_count: u32 = 0,
 };
 
-/// Reports a failed GPU call to the logger at error level under the pass's tag, and does nothing
-/// without a logger or an error.
-fn logGpuError(logger: ?*c.ke_logger, err: ?*c.ke_error, what: []const u8) void {
-    const lg = logger orelse return;
+const log = std.log.scoped(.render_deferred_lighting);
+
+/// Writes one error-level line naming `what` and the error's message when an error is given. The
+/// error is read, not freed or cleared. The frame systems that call it have no error channel, so
+/// the line is the only report of the failure.
+fn logGpuError(err: ?*c.ke_error, what: []const u8) void {
     const e = err orelse return;
-    var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, "{s} failed: {s}", .{ what, e.message }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_ERROR, .tag = "render_deferred_lighting", .message = msg.ptr };
-    lg.log.?(lg, &ev);
+    log.err("{s} failed: {s}", .{ what, e.message });
 }
 
 inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
@@ -90,7 +88,7 @@ fn rebuildFrameSet(dl: *DeferredLightingModule) void {
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
     var err: ?*c.ke_error = null;
     dl.frame_set = dl.binder.create_set.?(dl.binder, dl.layout, null, "deferred_lighting.frame_set", &bindings, bindings.len, &err);
-    if (err != null) logGpuError(dl.logger, err, "deferred frame set");
+    if (err != null) logGpuError(err, "deferred frame set");
 }
 
 /// The `execute` of the system that `ke_render_deferred_lighting_create` registers in the render
@@ -141,7 +139,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     var err: ?*c.ke_error = null;
     dl.gbuffer_set = dl.binder.create_set.?(dl.binder, dl.layout, "gbuffer", "deferred_lighting.gbuffer_set", &gbuffer_bindings, gbuffer_bindings.len, &err);
     if (dl.gbuffer_set == c.KE_RENDER_BINDING_INVALID) {
-        logGpuError(dl.logger, err, "deferred gbuffer set");
+        logGpuError(err, "deferred gbuffer set");
         core.*.end_pass.?(core, pc);
         c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "deferred lighting pass: gbuffer set creation failed", @src().file, @intCast(@src().line), err);
         return false;
@@ -171,7 +169,6 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
     const frame_cid = p.frame_cid;
     dl.core = core;
     dl.device = p.device;
-    dl.logger = p.logger;
     dl.ibl_enabled = p.ibl_enabled;
     dl.camera_cid = camera_cid;
     dl.world_transform_cid = world_transform_cid;
@@ -336,7 +333,7 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -351,7 +348,7 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -365,7 +362,7 @@ test "a deferred lighting pass the runtime refuses to register releases what it 
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
+    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

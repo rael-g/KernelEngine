@@ -14,15 +14,6 @@ const builtin = @import("builtin");
 pub const wgpu = @import("c");
 pub const ke = @import("c");
 
-/// Read once by `ke_gpu_device_webgpu_create`. The `scheduler` it carries is borrowed: the state
-/// keeps the pointer, and this file never frees it.
-const Params = extern struct {
-    logger:            ?*anyopaque,
-    enable_validation: bool,
-    scheduler:         ?*ke.ke_scheduler,
-    debug_labels:      bool,
-};
-
 const GpuError = error{
     OutOfMemory,
     NoAdapter,
@@ -363,13 +354,14 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*ke.ke_gpu_device {
     return dev;
 }
 
-/// Reads `Params` once. Creates the wgpu instance, adapter, device and queue, then the vtable
+/// Reads the params once; the `scheduler` they carry is borrowed, kept by the state and never
+/// freed here. Creates the wgpu instance, adapter, device and queue, then the vtable
 /// whose handle is the `DeviceState`. A failed creation is reported through `out_error` as not
 /// initialised or out of memory and returns a null `ref`, with every object created on the way
 /// already released. The returned `destroy` releases the wgpu objects and the state without
 /// waiting for compiles still listed.
 pub export fn ke_gpu_device_webgpu_create(
-    params: ?*const Params,
+    params: ?*const ke.ke_gpu_device_webgpu_params,
     out_error: ?*?*ke.ke_error,
 ) ke.ke_gpu_device_handle {
     var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;

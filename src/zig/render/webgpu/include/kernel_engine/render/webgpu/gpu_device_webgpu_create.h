@@ -37,7 +37,6 @@ KE_GPU_WEBGPU_API extern const ke_error_type KE_ERROR_WGPU_RESOURCE_CREATION;
 /// @brief Parameters for the WebGPU GPU device.
 typedef struct ke_gpu_device_webgpu_params
 {
-    struct ke_logger    *logger;
     /// When non-zero, asks the underlying graphics API to validate every call, which takes
     /// effect only where that API's validation layers are installed.
     bool                 enable_validation;

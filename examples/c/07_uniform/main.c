@@ -55,7 +55,6 @@ int main(void)
     if (!win.ref->on_initialize(win.ref, &err)) die("window init failed", err);
 
     ke_gpu_device_webgpu_params dp = {
-        .logger            = NULL,
         .enable_validation = 1,
     };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);

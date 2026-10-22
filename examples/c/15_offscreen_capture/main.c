@@ -96,7 +96,7 @@ int main(int argc, char **argv)
     printf("--- c_demo_15: offscreen capture ---\n");
 
     ke_error *err = NULL;
-    ke_gpu_device_webgpu_params dp = { .logger = NULL, .enable_validation = 1 };
+    ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
     if (!gpu.ref) die("gpu device create failed", err);
 

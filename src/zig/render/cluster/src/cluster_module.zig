@@ -60,14 +60,13 @@ const cull_layout_params = c.ke_render_shader_layout_params{
 };
 
 /// State of one cluster pass, allocated by `ke_render_cluster_create` and freed by `destroyHandle`.
-/// The core, device, logger, view space and camera are borrowed: the module stores them and never
+/// The core, device, view space and camera are borrowed: the module stores them and never
 /// releases them. The component ids, grid fields and access data are assigned by `setup`, so they
 /// are undefined until it runs; the GPU fields are the invalid handle until their own creation
 /// succeeds.
 const ClusterModule = struct {
     core: *c.ke_render_service = undefined,
     device: *c.ke_gpu_device = undefined,
-    logger: ?*c.ke_logger = null,
     view_space: *c.ke_view_space = undefined,
     camera: *c.ke_render_camera = undefined,
     point_light_cid: c.ke_component_id = undefined,
@@ -106,14 +105,11 @@ const ClusterModule = struct {
     spot_overflow_warned: bool = false,
 };
 
-/// Logs the overflow warning through the logger when there is one. The text is formatted into a
-/// fixed stack buffer, and a text that does not fit is dropped silently.
-fn logLightOverflow(logger: ?*c.ke_logger, kind: []const u8, total: usize, cap: usize) void {
-    const lg = logger orelse return;
-    var buf: [192]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, "{s} light count ({d}) exceeds the storage capacity ({d}); only the first {d} are culled/shaded this run", .{ kind, total, cap, cap }) catch return;
-    var ev = c.ke_log_event{ .level = c.KE_LOG_LEVEL_WARNING, .tag = "render_service", .message = msg.ptr };
-    lg.log.?(lg, &ev);
+const log = std.log.scoped(.render_cluster);
+
+/// Logs that a kind of light overflowed the storage, so only the first `cap` of `total` are used.
+fn logLightOverflow(kind: []const u8, total: usize, cap: usize) void {
+    log.warn("{s} light count ({d}) exceeds the storage capacity ({d}); only the first {d} are culled/shaded this run", .{ kind, total, cap, cap });
 }
 
 /// Recovers the module that `ke_render_cluster_create` passed as the system's user data.
@@ -161,7 +157,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         if (fill > 0) core.*.upload.?(core, cm.point_lights_sb, (pn - fill) * @sizeOf(PointLightGpu), &chunk, fill * @sizeOf(PointLightGpu));
     }
     if (point_total > MAX_LIGHTS and !cm.point_overflow_warned) {
-        logLightOverflow(cm.logger, "point", point_total, MAX_LIGHTS);
+        logLightOverflow("point", point_total, MAX_LIGHTS);
         cm.point_overflow_warned = true;
     }
 
@@ -197,7 +193,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
         if (fill > 0) core.*.upload.?(core, cm.spot_lights_sb, (sn - fill) * @sizeOf(SpotLightGpu), &chunk, fill * @sizeOf(SpotLightGpu));
     }
     if (spot_total > MAX_LIGHTS and !cm.spot_overflow_warned) {
-        logLightOverflow(cm.logger, "spot", spot_total, MAX_LIGHTS);
+        logLightOverflow("spot", spot_total, MAX_LIGHTS);
         cm.spot_overflow_warned = true;
     }
 
@@ -267,7 +263,6 @@ fn setup(cm: *ClusterModule, p: *const c.ke_render_cluster_params, out_error: [*
     const dev: *c.ke_gpu_device = p.device;
     cm.core = core;
     cm.device = dev;
-    cm.logger = p.logger;
     cm.view_space = p.view_space;
     cm.camera = p.camera;
     cm.point_light_cid = p.point_light_cid;
@@ -480,7 +475,7 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
     rt.init();
     var camera = std.mem.zeroes(c.ke_render_camera);
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
+    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -498,7 +493,7 @@ test "a cluster pass whose shader fails to load releases what it had created" {
     rt.init();
     var camera = std.mem.zeroes(c.ke_render_camera);
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
+    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try testing.expectEqual(@as(i64, 0), dev.compute_live);
@@ -515,7 +510,7 @@ test "a cluster pass the runtime refuses to register releases what it had create
     rt.limit = 0;
     var camera = std.mem.zeroes(c.ke_render_camera);
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .logger = null, .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
+    const h = ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, null);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try testing.expectEqual(@as(i64, 0), dev.compute_live);

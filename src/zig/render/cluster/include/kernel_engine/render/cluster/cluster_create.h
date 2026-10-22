@@ -3,7 +3,6 @@
 
 #include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ecs.h>
-#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/camera.h>
@@ -41,7 +40,6 @@ extern "C"
         ke_runtime        *runtime;    ///< Registers the pass's system; borrowed, must outlive it.
         ke_render_service *service;    ///< Receives the published buffers; borrowed.
         ke_gpu_device     *device;     ///< Borrowed.
-        ke_logger         *logger;     ///< Optional, borrowed.
         ke_view_space     *view_space; ///< Builds the cluster frusta; borrowed.
         ke_render_camera  *camera;     ///< Gives the camera's projection; borrowed.
         ke_component_id    point_light_cid;
