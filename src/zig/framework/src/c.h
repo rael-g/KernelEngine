@@ -19,7 +19,6 @@
 #include <kernel_engine/framework/script_host_create.h>
 #include <kernel_engine/framework/world_create.h>
 #include <kernel_engine/framework/input_actions_create.h>
-#include <kernel_engine/logger/logger.h>
 #include <kernel_engine/input/key.h>
 #include <toml.h>
 

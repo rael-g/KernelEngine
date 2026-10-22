@@ -36,7 +36,6 @@ const State = struct {
     ecs: ?*c.ke_ecs,
     runtime: ?*c.ke_runtime,
     scene_tree: ?*c.ke_scene_tree,
-    logger: ?*c.ke_logger,
     signal_bus: ?*c.ke_signal_bus,
 
     apply_registry: ?[*]ApplyEntry,
@@ -56,11 +55,6 @@ const Block = struct {
 
 fn stateOf(self: *c.ke_world) *State {
     return @ptrCast(@alignCast(self.handle));
-}
-
-/// Returns the logger given at creation. The world only borrows it, and null if none was given.
-pub fn loggerOf(self: *c.ke_world) ?*c.ke_logger {
-    return stateOf(self).logger;
 }
 
 /// Returns the signal bus given at creation. The world only borrows it, and null if none was given.
@@ -369,7 +363,6 @@ export fn ke_world_create(
     state.ecs = params.ecs;
     state.runtime = params.runtime;
     state.scene_tree = params.scene_tree;
-    state.logger = params.logger;
     state.signal_bus = params.signal_bus;
 
     world.handle = state;

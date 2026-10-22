@@ -25,12 +25,6 @@
           "doc": "The scene tree the world hands out; optional, borrowed."
         },
         {
-          "name": "logger",
-          "type": "struct ke_logger *",
-          "tags": [],
-          "doc": "The logger the scene loader writes to while loading into this world; optional, borrowed."
-        },
-        {
           "name": "signal_bus",
           "type": "struct ke_signal_bus *",
           "tags": [],

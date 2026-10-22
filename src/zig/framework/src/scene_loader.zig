@@ -105,28 +105,18 @@ fn dispatchScript(
     return false;
 }
 
-/// Logs at the given level under the loader's own tag. The text is formatted into a fixed buffer,
-/// and a message that does not fit is dropped without a record. Does nothing when the world has no
-/// logger.
-fn log(world: *c.ke_world, level: c_int, comptime fmt: []const u8, args: anytype) void {
-    const lg = world_impl.loggerOf(world) orelse return;
-    var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch return;
-    var ev = c.ke_log_event{ .level = level, .tag = "scene.loader", .message = msg.ptr };
-    if (lg.log) |f| f(lg, &ev);
-}
+const log = std.log.scoped(.framework);
 
-/// Reports a fault in what the scene says: logs it at error level and fails the out error as an
-/// invalid argument. A message longer than its buffer is replaced by a generic one.
+/// Reports a fault in what the scene says: logs it as a warning, since the caller receives it, and
+/// fails the out error as an invalid argument. A message longer than its buffer is replaced by a generic one.
 fn structural(
-    world: *c.ke_world,
     out_error: [*c][*c]c.ke_error,
     comptime fmt: []const u8,
     args: anytype,
 ) void {
     var buf: [256]u8 = undefined;
     const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch "scene is not loadable";
-    log(world, c.KE_LOG_LEVEL_ERROR, "{s}", .{msg});
+    log.warn("{s}", .{msg});
     E.fail(out_error, .invalid_argument, msg, @src());
 }
 
@@ -145,7 +135,7 @@ fn applyComponentBlock(
 ) bool {
     const world = s.world;
     const e = ecsOf(world) orelse {
-        structural(world, out_error, "world has no ecs", .{});
+        structural(out_error, "world has no ecs", .{});
         return false;
     };
 
@@ -153,7 +143,7 @@ fn applyComponentBlock(
     var resolve_error: [*c]c.ke_error = null;
     if (!world.resolve_component.?(world, comp_name, &meta, &resolve_error)) {
         const reason: [*c]const u8 = if (resolve_error != null and resolve_error.*.message != null) resolve_error.*.message else "unknown component";
-        structural(world, out_error, "scene names component '{s}': {s}", .{ comp_name, reason });
+        structural(out_error, "scene names component '{s}': {s}", .{ comp_name, reason });
         return false;
     }
 
@@ -162,13 +152,13 @@ fn applyComponentBlock(
     var apply_ctx: ?*anyopaque = null;
     const apply_fn = world.get_component_apply.?(world, meta.cid, &apply_ctx);
     if (fields == null and apply_fn == null) {
-        structural(world, out_error, "component '{s}' has no field mapping registered", .{comp_name});
+        structural(out_error, "component '{s}' has no field mapping registered", .{comp_name});
         return false;
     }
 
     const existing = e.component_get.?(e, entity, meta.cid);
     const comp = e.component_add.?(e, entity, meta.cid) orelse {
-        structural(world, out_error, "component '{s}' could not be added to the entity", .{comp_name});
+        structural(out_error, "component '{s}' could not be added to the entity", .{comp_name});
         return false;
     };
     if (existing == null) {
@@ -178,13 +168,13 @@ fn applyComponentBlock(
     }
 
     const entries = values.buildEntries(&s.arena, comp_tbl) orelse {
-        structural(world, out_error, "component '{s}' block could not be read", .{comp_name});
+        structural(out_error, "component '{s}' block could not be read", .{comp_name});
         return false;
     };
 
     if (fields != null) {
         if (fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count)) |refusing| {
-            structural(world, out_error, "component '{s}' field '{s}' cannot hold the value authored for it", .{ comp_name, refusing.name });
+            structural(out_error, "component '{s}' field '{s}' cannot hold the value authored for it", .{ comp_name, refusing.name });
             return false;
         }
     }
@@ -194,7 +184,7 @@ fn applyComponentBlock(
             if (apply_error != null) {
                 if (out_error != null) out_error.* = apply_error;
             } else {
-                structural(world, out_error, "component '{s}' was given a value it cannot hold", .{comp_name});
+                structural(out_error, "component '{s}' was given a value it cannot hold", .{comp_name});
             }
             return false;
         }
@@ -202,7 +192,7 @@ fn applyComponentBlock(
 
     for (entries) |*entry| {
         if (entry.consumed) continue;
-        structural(world, out_error, "component '{s}' has no field '{s}'", .{ comp_name, entry.key });
+        structural(out_error, "component '{s}' has no field '{s}'", .{ comp_name, entry.key });
         return false;
     }
     return true;
@@ -240,24 +230,24 @@ const format_version: i64 = 2;
 
 /// Accepts a file whose top level holds only the `[[entity]]` array and an optional `[scene]`
 /// table, and whose `[scene]` table holds only `version`, equal to `format_version`.
-fn checkHeader(s: *State, root: *c.toml_table_t, out_error: [*c][*c]c.ke_error) bool {
+fn checkHeader(root: *c.toml_table_t, out_error: [*c][*c]c.ke_error) bool {
     var i: c_int = 0;
     while (c.toml_key_in(root, i)) |key| : (i += 1) {
         const k = std.mem.span(key);
         if (std.mem.eql(u8, k, "entity") or std.mem.eql(u8, k, "scene")) continue;
-        structural(s.world, out_error, "top-level key '{s}' is not entity or scene", .{k});
+        structural(out_error, "top-level key '{s}' is not entity or scene", .{k});
         return false;
     }
     const header = c.toml_table_in(root, "scene") orelse return true;
     var j: c_int = 0;
     while (c.toml_key_in(header, j)) |key| : (j += 1) {
         if (std.mem.eql(u8, std.mem.span(key), "version")) continue;
-        structural(s.world, out_error, "[scene] key '{s}' is not version", .{key});
+        structural(out_error, "[scene] key '{s}' is not version", .{key});
         return false;
     }
     const version = c.toml_int_in(header, "version");
     if (version.ok != 0 and version.u.i != format_version) {
-        structural(s.world, out_error, "scene format version {d} is not {d}, the one this loader reads", .{ version.u.i, format_version });
+        structural(out_error, "scene format version {d} is not {d}, the one this loader reads", .{ version.u.i, format_version });
         return false;
     }
     return true;
@@ -274,19 +264,19 @@ fn applyComponentBlocks(
         const key = c.toml_key_in(tbl, i) orelse break;
         const block = c.toml_table_in(tbl, key) orelse {
             if (entityKey(key)) continue;
-            structural(s.world, out_error, "entity key '{s}' is not name, parent, scene, type, connect or a component block", .{key});
+            structural(out_error, "entity key '{s}' is not name, parent, scene, type, connect or a component block", .{key});
             return false;
         };
         if (retiredBlock(key)) |advice| {
-            structural(s.world, out_error, "[entity.{s}] is no longer read; {s}", .{ key, advice });
+            structural(out_error, "[entity.{s}] is no longer read; {s}", .{ key, advice });
             return false;
         }
         if (reservedBlockMiswritten(key)) {
-            structural(s.world, out_error, "[entity.connect] declares nothing; a connection is written [[entity.connect]]", .{});
+            structural(out_error, "[entity.connect] declares nothing; a connection is written [[entity.connect]]", .{});
             return false;
         }
         if (internalComponent(key)) {
-            structural(s.world, out_error, "component '{s}' is the scene tree's own and cannot be authored", .{key});
+            structural(out_error, "component '{s}' is the scene tree's own and cannot be authored", .{key});
             return false;
         }
         if (!applyComponentBlock(s, entity, key, block, out_error)) return false;
@@ -308,7 +298,7 @@ fn applyConnections(
     const world = s.world;
 
     const bus = world_impl.signalBusOf(world) orelse {
-        structural(world, out_error, "scene declares signal connections but the world has no signal bus", .{});
+        structural(out_error, "scene declares signal connections but the world has no signal bus", .{});
         return false;
     };
 
@@ -323,18 +313,18 @@ fn applyConnections(
         defer if (target_d.ok != 0) std.c.free(target_d.u.s);
 
         if (signal_d.ok == 0 or target_d.ok == 0) {
-            structural(world, out_error, "a connect block needs both a signal and a target", .{});
+            structural(out_error, "a connect block needs both a signal and a target", .{});
             return false;
         }
 
         const target = switch (names.find(std.mem.span(target_d.u.s))) {
             .one => |e| e,
             .none => {
-                structural(world, out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
+                structural(out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
                 return false;
             },
             .ambiguous => {
-                structural(world, out_error, "connect targets '{s}', which more than one entity of this scene is named", .{target_d.u.s});
+                structural(out_error, "connect targets '{s}', which more than one entity of this scene is named", .{target_d.u.s});
                 return false;
             },
         };
@@ -343,21 +333,21 @@ fn applyConnections(
         const handler_d = c.toml_int_in(t, "handler");
         if (handler_d.ok != 0) {
             handler = std.math.cast(u32, handler_d.u.i) orelse {
-                structural(world, out_error, "connect handler {d} is not between 0 and {d}", .{ handler_d.u.i, std.math.maxInt(u32) });
+                structural(out_error, "connect handler {d} is not between 0 and {d}", .{ handler_d.u.i, std.math.maxInt(u32) });
                 return false;
             };
         }
 
         var signal_id: u32 = 0;
         if (!bus.signal_lookup.?(bus, signal_d.u.s, &signal_id)) {
-            structural(world, out_error, "connects the signal '{s}', which no node type declares", .{signal_d.u.s});
+            structural(out_error, "connects the signal '{s}', which no node type declares", .{signal_d.u.s});
             return false;
         }
         if (!bus.connect.?(bus, source, signal_id, target, handler, null)) {
-            structural(world, out_error, "could not connect signal '{s}'", .{signal_d.u.s});
+            structural(out_error, "could not connect signal '{s}'", .{signal_d.u.s});
             return false;
         }
-        log(world, c.KE_LOG_LEVEL_INFO, "connected '{s}' from entity {d} to entity {d}", .{ signal_d.u.s, source, target });
+        log.info("connected '{s}' from entity {d} to entity {d}", .{ signal_d.u.s, source, target });
     }
     return true;
 }
@@ -415,11 +405,11 @@ fn processEntity(
         parent = switch (args.names.find(std.mem.span(pn.u.s))) {
             .one => |e| e,
             .none => {
-                structural(s.world, out_error, "parent '{s}' is not an entity declared before it in this scene", .{pn.u.s});
+                structural(out_error, "parent '{s}' is not an entity declared before it in this scene", .{pn.u.s});
                 return false;
             },
             .ambiguous => {
-                structural(s.world, out_error, "parent '{s}' names more than one entity of this scene", .{pn.u.s});
+                structural(out_error, "parent '{s}' names more than one entity of this scene", .{pn.u.s});
                 return false;
             },
         };
@@ -514,7 +504,7 @@ fn loadSceneRecursive(
     }
     defer c.toml_free(root);
 
-    if (!checkHeader(s, root.?, out_error)) return false;
+    if (!checkHeader(root.?, out_error)) return false;
 
     const base_dir = pathDirname(std.mem.span(path));
 
