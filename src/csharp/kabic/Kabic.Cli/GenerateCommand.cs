@@ -58,6 +58,14 @@ internal static class GenerateCommand
             File.WriteAllText(kindsFile, Generation.ErrorKinds(convention));
             Console.WriteLine("error kinds: regenerated");
 
+            if (convention.ResultCodesOut.Length > 0)
+            {
+                var codesFile = Place(convention.ResultCodesOut);
+                Directory.CreateDirectory(Path.GetDirectoryName(codesFile)!);
+                File.WriteAllText(codesFile, Generation.ResultCodes(convention));
+                Console.WriteLine("result codes: regenerated");
+            }
+
             if (convention.FieldTable is { ManagedOut: { } managedOut, NativeOut: { } nativeOut })
             {
                 foreach (var (path, text) in new[] { (managedOut, Generation.ComponentLayout(convention)), (nativeOut, Generation.NativeFieldTable(convention)) })

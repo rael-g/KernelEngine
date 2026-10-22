@@ -28,6 +28,21 @@
     "errorAbiHeader": "src/zig/common/include/kernel_engine/common/error.h",
     "errorAbiIncludeDirs": ["src/zig/common/include"],
     "errorHelperClass": "NativeErrors",
+    "resultType": "ke_result",
+    "resultOk": "KE_OK",
+    "resultManagedType": "KernelEngine.Result.Native.ke_result",
+    "resultHelperClass": "KernelEngine.NativeResults",
+    "resultCodesOut": "src/csharp/result/KernelEngine.Result/Generated/NativeResults.Codes.g.cs",
+    "resultCodes": [
+      { "code": "KE_RESULT_GENERAL", "managed": "InvalidOperationException" },
+      { "code": "KE_RESULT_NOT_FOUND", "managed": "KeyNotFoundException" },
+      { "code": "KE_RESULT_IO", "managed": "IOException" },
+      { "code": "KE_RESULT_OUT_OF_MEMORY", "managed": "OutOfMemoryException" },
+      { "code": "KE_RESULT_INVALID_ARGUMENT", "managed": "ArgumentException" },
+      { "code": "KE_RESULT_NOT_INITIALIZED", "managed": "InvalidOperationException" },
+      { "code": "KE_RESULT_NOT_SUPPORTED", "managed": "NotSupportedException" },
+      { "code": "KE_RESULT_ALREADY_EXISTS", "managed": "InvalidOperationException" }
+    ],
     "commonManagedNamespace": "KernelEngine.Common",
     "handleTypes": {
       "ke_mesh_handle": "KernelEngine.Render.MeshHandle",
@@ -1083,6 +1098,15 @@
       ],
       "library": "ke_render_service",
       "output": "Generated/Render/"
+    },
+    {
+      "name": "Result",
+      "project": "src/csharp/result/KernelEngine.Result",
+      "namespace": "KernelEngine.Result.Native",
+      "headers": [
+        "src/c/result/kernel_engine/result/result.h"
+      ],
+      "output": "Generated/"
     },
     {
       "name": "Runtime",

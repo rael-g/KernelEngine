@@ -27,6 +27,12 @@ public sealed record FieldTableConvention(
     string VariantKindType = "");
 
 /// <summary>
+/// One result code the ABI names on the managed side: the constant, and the exception a caller
+/// catches for it, declared by kabic as deriving from <paramref name="Extends"/> when that is given.
+/// </summary>
+public sealed record ResultCodeSpec(string Code, string Managed, string? Extends);
+
+/// <summary>
 /// One kind of failure the ABI names: the singleton a failure of that kind is reached by, the
 /// dotted name the native type carries, the exception a managed caller catches, and the error a Zig
 /// caller switches on.
@@ -181,6 +187,15 @@ public sealed class Convention
     /// (<c>ThrowIfFailed</c>, <c>FromCode</c>).
     /// </summary>
     public string ResultHelperClass { get; init; } = "";
+
+    /// <summary>
+    /// Path, relative to the repository root, of the generated file that maps each result code to
+    /// its exception.
+    /// </summary>
+    public string ResultCodesOut { get; init; } = "";
+
+    /// <summary>The codes whose managed exception the ABI names, in declaration order.</summary>
+    public IReadOnlyList<ResultCodeSpec> ResultCodes { get; init; } = [];
 
     /// <summary>
     /// True if this slot signals failure through its boolean return rather than by writing the
@@ -361,7 +376,10 @@ public sealed class Convention
                 Text(json, "errorHelperClass"), Text(json, "errorHelperNamespace"), Text(json, "errorKindsOut"));
         if (json["resultType"] is not null)
             builder.Result(Text(json, "resultType"), Text(json, "resultOk"), Text(json, "resultManagedType"),
-                Text(json, "resultHelperClass"));
+                Text(json, "resultHelperClass"), Or(json, "resultCodesOut", ""));
+        foreach (var r in json["resultCodes"]?.AsArray() ?? [])
+            builder.AddResultCode(r!["code"]!.GetValue<string>(), r["managed"]!.GetValue<string>(),
+                r["extends"]?.GetValue<string>());
 
         foreach (var e in json["errors"]?.AsArray() ?? [])
             builder.AddError(e!["singleton"]!.GetValue<string>(), e["nativeName"]!.GetValue<string>(),

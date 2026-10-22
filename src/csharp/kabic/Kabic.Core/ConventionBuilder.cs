@@ -13,7 +13,8 @@ public sealed class ConventionBuilder
     string errorType = "", errorKindType = "", errorIsFunction = "", errorGeneral = "";
     string errorHelperClass = "", errorHelperNamespace = "", errorKindsOut = "", errorAbiHeader = "";
     IReadOnlyList<string> errorAbiIncludeDirs = [];
-    string resultType = "", resultOk = "", resultManagedType = "", resultHelperClass = "";
+    string resultType = "", resultOk = "", resultManagedType = "", resultHelperClass = "", resultCodesOut = "";
+    readonly List<ResultCodeSpec> resultCodes = [];
     FieldTableConvention? fieldTable;
     readonly List<ErrorKindSpec> errors = [];
     readonly Dictionary<string, string> handleTypes = [], typeNames = [];
@@ -73,9 +74,20 @@ public sealed class ConventionBuilder
     /// means success, the managed type the bindings declare for it, and the class that turns a code
     /// into an exception, the last two fully qualified.
     /// </summary>
-    public ConventionBuilder Result(string cType, string ok, string managedType, string helperClass)
+    public ConventionBuilder Result(string cType, string ok, string managedType, string helperClass, string codesOut = "")
     {
-        (resultType, resultOk, resultManagedType, resultHelperClass) = (cType, ok, managedType, helperClass);
+        (resultType, resultOk, resultManagedType, resultHelperClass, resultCodesOut) = (cType, ok, managedType, helperClass, codesOut);
+        return this;
+    }
+
+    /// <summary>
+    /// Declares the exception a code reads as on the managed side. With <paramref name="extends"/>,
+    /// kabic declares <paramref name="managed"/> as a new exception type deriving from it. A code
+    /// never declared reads as the general exception.
+    /// </summary>
+    public ConventionBuilder AddResultCode(string code, string managed, string? extends = null)
+    {
+        resultCodes.Add(new ResultCodeSpec(code, managed, extends));
         return this;
     }
 
@@ -158,6 +170,8 @@ public sealed class ConventionBuilder
         ResultOk = resultOk,
         ResultManagedType = resultManagedType,
         ResultHelperClass = resultHelperClass,
+        ResultCodesOut = resultCodesOut,
+        ResultCodes = resultCodes.ToList(),
         HandleTypes = new Dictionary<string, string>(handleTypes),
         TypeNameOverrides = new Dictionary<string, string>(typeNames),
         FieldTable = fieldTable,
