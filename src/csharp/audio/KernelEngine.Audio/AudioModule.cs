@@ -23,6 +23,8 @@ public sealed unsafe class AudioModule : IRuntimeModule
         if (world is null) return;
 
         var ecs = services.GetRequiredService<INativeEcs>();
+        if (services.GetService<KernelEngine.Logger.ILogger>() is { } logger)
+            KernelEngine.Audio.Native.NativeMethods.audio_module_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
         var set = KernelEngine.Audio.Native.NativeMethods.audio_scene_components_create();
         try
         {

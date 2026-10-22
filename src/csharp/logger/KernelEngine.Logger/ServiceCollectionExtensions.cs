@@ -8,8 +8,9 @@ public static class LoggerServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the <see cref="Logger"/> singleton and exposes it as <see cref="ILogger"/>. When
-    /// the logger is first resolved it adds every
-    /// <see cref="ILoggerSink"/> registered by then, each at its own minimum level.
+    /// the logger is first resolved it adds every <see cref="ILoggerSink"/> registered by then,
+    /// each at its own minimum level, and receives the log of the configuration libraries, which
+    /// are created before it.
     /// </summary>
     public static IServiceCollection AddLogger(this IServiceCollection services)
     {
@@ -18,6 +19,13 @@ public static class LoggerServiceCollectionExtensions
             var logger = new Logger();
             foreach (var sink in sp.GetServices<ILoggerSink>())
                 logger.AddSink(sink);
+            unsafe
+            {
+                var callback = LogCallbackNative.Pointer;
+                var ctx = LogCallbackNative.Pin(logger.Log);
+                KernelEngine.Configuration.Native.NativeMethods.configuration_set_log_callback(callback, ctx);
+                KernelEngine.Configuration.Native.NativeMethods.configuration_toml_set_log_callback(callback, ctx);
+            }
             return logger;
         });
         services.AddSingleton<ILogger>(sp => sp.GetRequiredService<Logger>());

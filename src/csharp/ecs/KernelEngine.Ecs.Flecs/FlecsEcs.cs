@@ -14,8 +14,19 @@ public sealed unsafe class FlecsEcs : IDisposable, INativeEcs
 
     /// <summary>Creates the native world with the default parameters.</summary>
     /// <exception cref="InvalidOperationException">The native factory returned no world.</exception>
-    public FlecsEcs()
+    public FlecsEcs() : this(null)
     {
+    }
+
+    /// <summary>
+    /// Creates the native world with the default parameters, the flecs library logging to
+    /// <paramref name="logger"/>, or to stderr when it is null.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The native factory returned no world.</exception>
+    public FlecsEcs(KernelEngine.Logger.ILogger? logger)
+    {
+        if (logger is not null)
+            KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
         ke_ecs_flecs_params @params = default;
         var handle = KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&@params, null);
         if (handle.@ref == null)
