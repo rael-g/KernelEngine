@@ -330,16 +330,18 @@ fn vtResolveFont(
         return false;
     }
 
-    out.* = loader.load_font.?(
+    const loaded = loader.load_font.?(
         loader,
         resolved,
         pixel_size,
         first_codepoint,
         codepoint_count,
         atlas_size,
-        out_error,
+        out,
     );
-    return out.* != null;
+    if (loaded == c.KE_OK) return true;
+    E.failCode(out_error, loaded, "the font loader failed", @src());
+    return false;
 }
 
 /// Slot `free_font`. Hands the data back to the font loader; does nothing without one.

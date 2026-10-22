@@ -1,5 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 
+using KernelEngine.Result.Native;
+
 using Xunit;
 
 namespace EngineTests;
@@ -12,11 +14,12 @@ public class FontLoaderTests
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_font_data* MockLoadFont(ke_font_loader* self, sbyte* path, float pixelSize, uint first, uint count, uint atlasSize, ke_error** out_error)
+    private static unsafe ke_result MockLoadFont(ke_font_loader* self, sbyte* path, float pixelSize, uint first, uint count, uint atlasSize, ke_font_data** out_font)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
 
-        if (!LastResult) return null;
+        *out_font = null;
+        if (!LastResult) return ke_result.KE_RESULT_GENERAL;
 
         var data = (ke_font_data*)NativeMemory.Alloc((nuint)sizeof(ke_font_data));
         data->atlas_width = 10;
@@ -28,7 +31,8 @@ public class FontLoaderTests
         data->line_height = 12;
         data->ascent = 10;
 
-        return data;
+        *out_font = data;
+        return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]

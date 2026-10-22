@@ -1,8 +1,8 @@
 ﻿#ifndef KERNEL_ENGINE_TEXT_FONT_H_
 #define KERNEL_ENGINE_TEXT_FONT_H_
 
-#include <kernel_engine/common/error.h>
 #include <kernel_engine/common/export.h>
+#include <kernel_engine/result/result.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -39,16 +39,21 @@ extern "C"
         void *handle;
 
         /** Loads @p path and bakes a glyph atlas at @p pixel_size for the codepoint range
-         * [first_codepoint, first_codepoint + codepoint_count). On success allocates a
-         * ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font.
-         * @param path [utf8] TTF/OTF file path to decode. */
-        ke_font_data *(*load_font)(struct ke_font_loader *self,
-                                   const char *path,
-                                   float pixel_size,
-                                   uint32_t first_codepoint,
-                                   uint32_t codepoint_count,
-                                   uint32_t atlas_size,
-                                   ke_error **out_error);
+         * [first_codepoint, first_codepoint + codepoint_count).
+         * @param path [utf8] TTF/OTF file path to decode.
+         * @param out_font [out] Receives a ke_font_data (atlas RGBA8 + metrics) the caller
+         *        releases via free_font; left NULL on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_font, a non-positive
+         *         size, or a zero atlas size or codepoint count; KE_RESULT_IO when the file cannot
+         *         be read; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the font cannot be
+         *         packed. */
+        ke_result (*load_font)(struct ke_font_loader *self,
+                               const char *path,
+                               float pixel_size,
+                               uint32_t first_codepoint,
+                               uint32_t codepoint_count,
+                               uint32_t atlas_size,
+                               ke_font_data **out_font);
 
         /** Frees a ke_font_data previously returned by load_font. */
         void (*free_font)(struct ke_font_loader *self, ke_font_data *data);

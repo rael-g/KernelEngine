@@ -47,17 +47,17 @@ public unsafe partial class FontLoader : IDisposable, INativeFontLoader
         _borrowed = borrowed;
     }
 
-    /// <summary>Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint, first_codepoint + codepoint_count). On success allocates a ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font.</summary>
+    /// <summary>Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint, first_codepoint + codepoint_count).</summary>
     /// <param name="path">TTF/OTF file path to decode.</param>
+    /// <returns>Receives a ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font; left NULL on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ke_font_data* LoadFont(string path, float pixelSize, uint firstCodepoint, uint codepointCount, uint atlasSize)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
-            ke_error* err = null;
-            var result = Handle->load_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &err);
-            if (result == null) throw NativeErrors.FromNative(err, "load_font");
+            ke_font_data* result;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->load_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &result), "load_font");
             return result;
         }
     }

@@ -134,10 +134,10 @@
       "slots": [
         {
           "name": "load_font",
-          "returns": "ke_font_data *",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint, first_codepoint \u002B codepoint_count). On success allocates a ke_font_data (atlas RGBA8 \u002B metrics) the caller releases via free_font.",
-          "return_doc": null,
+          "doc": "Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint, first_codepoint \u002B codepoint_count).",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_font, a non-positive size, or a zero atlas size or codepoint count; KE_RESULT_IO when the file cannot be read; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the font cannot be packed.",
           "params": [
             {
               "name": "path",
@@ -172,10 +172,12 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_font",
+              "type": "ke_font_data **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives a ke_font_data (atlas RGBA8 \u002B metrics) the caller releases via free_font; left NULL on failure."
             }
           ],
           "receiver": "struct ke_font_loader *"
