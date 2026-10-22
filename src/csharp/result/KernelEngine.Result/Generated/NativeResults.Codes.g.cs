@@ -41,4 +41,19 @@ public static class NativeResults
         KernelEngine.Result.Native.ke_result.KE_RESULT_ALREADY_EXISTS => new InvalidOperationException(message),
         _ => new InvalidOperationException(message),
     };
+
+    /// <summary>
+    /// The code that stands for <paramref name="exception"/>: the first code whose exception
+    /// type it is exactly, or the general code.
+    /// </summary>
+    /// <param name="exception">What a managed handler threw.</param>
+    public static KernelEngine.Result.Native.ke_result ToCode(Exception exception) => exception.GetType().Name switch
+    {
+        "KeyNotFoundException" => KernelEngine.Result.Native.ke_result.KE_RESULT_NOT_FOUND,
+        "IOException" => KernelEngine.Result.Native.ke_result.KE_RESULT_IO,
+        "OutOfMemoryException" => KernelEngine.Result.Native.ke_result.KE_RESULT_OUT_OF_MEMORY,
+        "ArgumentException" => KernelEngine.Result.Native.ke_result.KE_RESULT_INVALID_ARGUMENT,
+        "NotSupportedException" => KernelEngine.Result.Native.ke_result.KE_RESULT_NOT_SUPPORTED,
+        _ => KernelEngine.Result.Native.ke_result.KE_RESULT_GENERAL,
+    };
 }

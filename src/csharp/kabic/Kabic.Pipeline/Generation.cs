@@ -401,6 +401,19 @@ public static class Generation
             o.Add($"        {convention.ResultManagedType}.{r.Code} => new {r.Managed}(message),");
         o.Add($"        _ => new {general.Managed}(message),");
         o.Add("    };");
+        o.Add("");
+        o.Add("    /// <summary>");
+        o.Add("    /// The code that stands for <paramref name=\"exception\"/>: the first code whose exception");
+        o.Add("    /// type it is exactly, or the general code.");
+        o.Add("    /// </summary>");
+        o.Add("    /// <param name=\"exception\">What a managed handler threw.</param>");
+        o.Add($"    public static {convention.ResultManagedType} ToCode(Exception exception) => exception.GetType().Name switch");
+        o.Add("    {");
+        foreach (var r in convention.ResultCodes.Where(r => r != general && r.Managed != general.Managed)
+                     .GroupBy(r => r.Managed).Select(g => g.First()))
+            o.Add($"        \"{r.Managed}\" => {convention.ResultManagedType}.{r.Code},");
+        o.Add($"        _ => {convention.ResultManagedType}.{general.Code},");
+        o.Add("    };");
         o.Add("}");
         foreach (var r in convention.ResultCodes.Where(r => r.Extends is not null))
         {

@@ -281,6 +281,28 @@ internal static class GeneratorShapeCases
                 ["slots"] = new JsonArray(),
             }]);
 
+        Expect("a result-returning registration keeps its closure under the id it writes and its handler fails by code",
+            Vtable("ke_probe",
+                Slot("register_job", "ke_result",
+                    Param("job", "ke_probe_job_fn", "closure:ctx,retained:return"),
+                    Param("ctx", "void *"),
+                    Param("out_id", "uint32_t *", "out")),
+                Slot("run", "ke_result", "drains")),
+            contains: ["public uint RegisterJob(ProbeJob? job)",
+                       "uint resultOut = default;",
+                       "Handle->register_job(Handle, ",
+                       "&resultOut)",
+                       "_retainedJob[resultOut] = jobHandle;",
+                       "return resultOut;",
+                       "private static KernelEngine.Result.Native.ke_result RegisterJobTrampoline(",
+                       "return KernelEngine.Result.Native.ke_result.KE_OK;",
+                       "failed.Owner._callbackFailures.Enqueue(ex);",
+                       "return KernelEngine.NativeResults.ToCode(ex);"],
+            absent: ["&err", "ke_error"],
+            aliases: new() { ["ke_probe_job_fn"] = "ke_result (*)(void *, float)" },
+            callbacks: [Callback("ke_probe_job_fn", "ke_result",
+                            Param("ctx", "void *", "context"), Param("dt", "float"))]);
+
         Expect("a retained handler's exception is queued on its provider and raised where the failure is observed",
             Vtable("ke_probe",
                 Slot("register_apply", "bool",

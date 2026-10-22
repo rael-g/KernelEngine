@@ -1707,6 +1707,12 @@ public static class CSharpWriter
         /// field instead of reporting through a lane of its own.
         /// </summary>
         public bool Parks => ErrorLane is null;
+
+        /// <summary>
+        /// Whether the callback reports failure by returning the result code rather than through
+        /// an error lane.
+        /// </summary>
+        public bool ByResult { get; init; }
     }
 
     /// <summary>
@@ -1789,7 +1795,7 @@ public static class CSharpWriter
     /// success for a handler that returned at all, and failure for one that threw.
     /// </summary>
     static string ManagedReturn(ApiModel model, ApiCallback callback, int? errorLane, Convention convention) =>
-        errorLane is not null && IsBoolType(callback.Returns, convention)
+        (errorLane is not null && IsBoolType(callback.Returns, convention)) || convention.ReturnsResult(callback.Returns)
             ? "void"
             : ManagedLane(model, new ApiParam(null, callback.Returns, [], null), "", convention);
 
@@ -1850,7 +1856,8 @@ public static class CSharpWriter
                 throw new InvalidOperationException(
                     $"{slot.Name}.{fn.Name}: [teardown] says the engine calls this handler while the "
                     + "provider is being destroyed, which only a [retained] closure survives to see");
-            if (lifetime == ClosureLifetime.Retained && errorLane is null && !teardown)
+            var reportsByResult = convention.ReturnsResult(callback.Returns);
+            if (lifetime == ClosureLifetime.Retained && errorLane is null && !reportsByResult && !teardown)
                 throw new InvalidOperationException(
                     $"{slot.Name}.{fn.Name}: a retained closure outlives the call that registered it, so a "
                     + $"handler that throws has nowhere to report; {callback.Name} needs a {convention.ErrorType}** lane, "
@@ -1862,7 +1869,8 @@ public static class CSharpWriter
 
             pairs.Add(new CallbackPair(fn, ctx, lifetime, DelegateName(callback, convention),
                 TrampolineName(slot, fn),
-                callback, ctxLane, errorLane, retainKey, retainByReturn, teardown));
+                callback, ctxLane, errorLane, retainKey, retainByReturn, teardown)
+            { ByResult = reportsByResult });
         }
         return pairs;
     }
@@ -2022,7 +2030,7 @@ public static class CSharpWriter
         /// registering call is rethrown there instead, and needs no queue.
         /// </summary>
         public bool Queues(CallbackPair pair) => OwnerDrains
-            && pair.Lifetime == ClosureLifetime.Retained && pair.ErrorLane is not null;
+            && pair.Lifetime == ClosureLifetime.Retained && (pair.ErrorLane is not null || pair.ByResult);
 
         /// <summary>
         /// Whether a handler of this group is called with the provider that registered it.
@@ -2084,13 +2092,16 @@ public static class CSharpWriter
         public static string Field(CallbackPair pair) => Idioms.Pascal(pair.Fn.Name!);
     }
 
-    static IReadOnlyList<ClosureGroup> ClosureGroups(ApiModel model, ApiSlot slot, IReadOnlyList<CallbackPair> pairs,
+    static IReadOnlyList<ClosureGroup> ClosureGroups(ApiModel model, ClassifiedSlot cs, IReadOnlyList<CallbackPair> pairs,
         string owner, bool ownerDrains, Convention convention)
     {
+        var slot = cs.Slot;
+        var keyType = cs.ResultOut is { } resultOut ? OutElement(model, resultOut, convention)
+            : CsType(model, slot.Returns, convention);
         var groups = pairs
             .GroupBy(p => p.Ctx)
             .Select(g => new ClosureGroup(g.Key, g.ToList(), $"{Idioms.Pascal(slot.Name)}Closures",
-                CsType(model, slot.Returns, convention), owner, ownerDrains))
+                keyType, owner, ownerDrains))
             .ToList();
 
         foreach (var g in groups.Where(x => x.Shared))
@@ -2108,7 +2119,7 @@ public static class CSharpWriter
     {
         var drains = Drains(model, slots, convention);
         return slots.Where(Projected)
-            .SelectMany(s => ClosureGroups(model, s.Slot, CallbackPairs(model, s, convention), owner, drains, convention))
+            .SelectMany(s => ClosureGroups(model, s, CallbackPairs(model, s, convention), owner, drains, convention))
             .ToList();
     }
 
@@ -2122,7 +2133,7 @@ public static class CSharpWriter
         var all = slots.ToList();
         return all.Any(s => s.Slot.Has("drains"))
             && all.SelectMany(s => CallbackPairs(model, s, convention))
-                .Any(p => p.Lifetime == ClosureLifetime.Retained && p.ErrorLane is not null);
+                .Any(p => p.Lifetime == ClosureLifetime.Retained && (p.ErrorLane is not null || p.ByResult));
     }
 
     /// <summary>
@@ -2221,9 +2232,10 @@ public static class CSharpWriter
             : ManagedLane(model, lanes[i], group.Owner, convention) != BlittableLane(model, lanes[i].Type, convention)
                 ? $"({ManagedLane(model, lanes[i], group.Owner, convention)})arg{i}"
             : $"arg{i}"));
+        var byResult = convention.ReturnsResult(pair.Callback.Returns);
         var returns = IsBoolType(pair.Callback.Returns, convention);
         var handlerAnswers = ManagedReturn(model, pair.Callback, pair.ErrorLane, convention) != "void";
-        var nativeReturn = BlittableLane(model, pair.Callback.Returns, convention);
+        var nativeReturn = byResult ? convention.ResultManagedType : BlittableLane(model, pair.Callback.Returns, convention);
 
         o.Add("    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]");
         o.Add($"    private static {nativeReturn} {pair.Trampoline}({string.Join(", ", ps)})");
@@ -2234,7 +2246,15 @@ public static class CSharpWriter
             ? $"            if (GCHandle.FromIntPtr((nint)ctx).Target is {group.StateType} state"
                 + $" && state.{ClosureGroup.Field(pair)} is {{ }} handler)"
             : $"            if (GCHandle.FromIntPtr((nint)ctx).Target is {pair.Delegate} handler)");
-        if (returns && !handlerAnswers)
+        if (byResult)
+        {
+            o.Add("            {");
+            o.Add($"                handler({args});");
+            o.Add($"                return {convention.ResultManagedType}.{convention.ResultOk};");
+            o.Add("            }");
+            o.Add($"            return {convention.ResultHelperClass}.ToCode(new InvalidOperationException(\"{pair.Callback.Name}: no handler is registered\"));");
+        }
+        else if (returns && !handlerAnswers)
         {
             o.Add("            {");
             o.Add($"                handler({args});");
@@ -2247,7 +2267,19 @@ public static class CSharpWriter
         o.Add("        }");
         o.Add("        catch (Exception ex)");
         o.Add("        {");
-        if (pair.ErrorLane is { } errLane)
+        if (byResult)
+        {
+            if (group.Queues(pair))
+            {
+                o.Add("            if (GCHandle.FromIntPtr((nint)ctx).Target is"
+                    + $" {group.StateType} failed)");
+                o.Add("                failed.Owner._callbackFailures.Enqueue(ex);");
+            }
+            else
+                o.Add("            s_parkedCallbackException ??= ex;");
+            o.Add($"            return {convention.ResultHelperClass}.ToCode(ex);");
+        }
+        else if (pair.ErrorLane is { } errLane)
         {
             if (group.Queues(pair))
             {
@@ -2381,7 +2413,7 @@ public static class CSharpWriter
         var ownedReturn = owned is not null && owned.Answers(slot.Returns) ? owned : null;
         var lanes = GroupedLanes(slot.Params, convention);
         var callbacks = CallbackPairs(model, cs, convention);
-        var groups = ClosureGroups(model, slot, callbacks, owner, ownerDrains, convention);
+        var groups = ClosureGroups(model, cs, callbacks, owner, ownerDrains, convention);
         var completion = CompletionOf(model, cs, convention, owned);
 
         if (callbacks.Count > 0 && cs.Shape is not SlotShape.Fallible)
@@ -2617,19 +2649,23 @@ public static class CSharpWriter
                     var args = cs.PublicParams;
                     var byReturn = convention.SignalsFailureByReturn(slot.Returns);
                     var lane = FailureLane.Of(convention, slot.Returns, slot.Name);
-                    var retType = byReturn ? "void"
+                    var resultOut = cs.ResultOut;
+                    var retType = resultOut is not null ? OutElement(model, resultOut, convention)
+                        : byReturn ? "void"
                         : ownedReturn is not null ? ownedReturn.TypeName
                         : ReturnType(model, slot.Returns, convention);
                     var sig = Sig(args);
                     var bagLocal = cs.ExpandedParam is null ? null : Idioms.Ident(cs.ExpandedParam.Name!);
                     var call = string.Concat(NativeParams()
-                        .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}" : CallArg(p))));
+                        .Select(p => ", " + (p == cs.ExpandedParam ? $"&{bagLocal}"
+                            : p == resultOut ? OutAddress(model, p, convention, "resultOut")
+                            : CallArg(p))));
                     var fGenerics = cs.Blobs.Count == 0 ? ""
                         : "<" + string.Join(", ", cs.Blobs.Select(bl => BlobTypeParam(bl.Blob))) + ">";
                     var fConstraints = string.Concat(cs.Blobs
                         .Select(bl => $" where {BlobTypeParam(bl.Blob)} : unmanaged"));
                     Declare(o, decls, XmlDoc("    ", slot.Doc, convention, DocParams(args),
-                        byReturn ? null : slot.ReturnDoc, throwsOnFail: true).TrimEnd(),
+                        resultOut is not null ? resultOut.Doc : byReturn ? null : slot.ReturnDoc, throwsOnFail: true).TrimEnd(),
                         $"{retType} {name}{fGenerics}({sig}){fConstraints}");
                     o.Add("    {");
                     var (fPro, fDepth) = Utf8Prologue(args, new string(' ', 8));
@@ -2687,6 +2723,7 @@ public static class CSharpWriter
                         var signalsOk = IsBoolType(slot.Returns, convention) || lane.ByResult;
                         var capture = signalsOk ? "ok" : retType == "void" ? null : "result";
                         var failed = signalsOk ? "!ok" : "err != null";
+                        if (resultOut is not null) o.Add($"{fInd}{OutLocal(model, resultOut, convention)} resultOut = default;");
                         o.Add($"{fInd}{lane.DeclareForCheck}");
                         if (signalsOk) o.Add($"{fInd}bool ok;");
                         else if (capture is not null) o.Add($"{fInd}{retType} {capture};");
@@ -2740,7 +2777,8 @@ public static class CSharpWriter
                             {
                                 var field = g.Retained;
                                 if (g.RetainByReturn)
-                                    o.Add($"{fInd}if ({g.Handle}.IsAllocated) {field}[{capture}] = {g.Handle};");
+                                    o.Add($"{fInd}if ({g.Handle}.IsAllocated) {field}["
+                                        + (resultOut is not null ? OutRead(resultOut, "resultOut") : capture) + $"] = {g.Handle};");
                                 else if (g.RetainKey is { } key)
                                 {
                                     var k = Idioms.Ident(key.Name!);
@@ -2756,6 +2794,7 @@ public static class CSharpWriter
                             }
                         }
                         if (capture == "result") o.Add($"{fInd}return result;");
+                        if (resultOut is not null) o.Add($"{fInd}return {OutRead(resultOut, "resultOut")};");
                         CloseScopes(o, fDepth, fSeqAt, fClosers);
                         o.Add("    }");
                         o.Add("");
