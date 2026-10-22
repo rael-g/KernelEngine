@@ -13,6 +13,7 @@ public sealed class ConventionBuilder
     string errorType = "", errorKindType = "", errorIsFunction = "", errorGeneral = "";
     string errorHelperClass = "", errorHelperNamespace = "", errorKindsOut = "", errorAbiHeader = "";
     IReadOnlyList<string> errorAbiIncludeDirs = [];
+    string resultType = "", resultOk = "", resultManagedType = "", resultHelperClass = "";
     FieldTableConvention? fieldTable;
     readonly List<ErrorKindSpec> errors = [];
     readonly Dictionary<string, string> handleTypes = [], typeNames = [];
@@ -64,6 +65,17 @@ public sealed class ConventionBuilder
         (errorType, errorKindType, errorIsFunction, errorGeneral) = (type, kindType, isFunction, generalSingleton);
         (errorAbiHeader, errorAbiIncludeDirs) = (header, includeDirs.ToList());
         (errorHelperClass, errorHelperNamespace, errorKindsOut) = (helperClass, helperNamespace, kindsOut);
+        return this;
+    }
+
+    /// <summary>
+    /// How a fallible call returns its outcome as a code: the C type of the code, the constant that
+    /// means success, the managed type the bindings declare for it, and the class that turns a code
+    /// into an exception, the last two fully qualified.
+    /// </summary>
+    public ConventionBuilder Result(string cType, string ok, string managedType, string helperClass)
+    {
+        (resultType, resultOk, resultManagedType, resultHelperClass) = (cType, ok, managedType, helperClass);
         return this;
     }
 
@@ -142,6 +154,10 @@ public sealed class ConventionBuilder
         ErrorHelperNamespace = errorHelperNamespace,
         ErrorKindsOut = errorKindsOut,
         ErrorKinds = errors.ToList(),
+        ResultType = resultType,
+        ResultOk = resultOk,
+        ResultManagedType = resultManagedType,
+        ResultHelperClass = resultHelperClass,
         HandleTypes = new Dictionary<string, string>(handleTypes),
         TypeNameOverrides = new Dictionary<string, string>(typeNames),
         FieldTable = fieldTable,

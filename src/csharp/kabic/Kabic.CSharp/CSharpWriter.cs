@@ -1479,23 +1479,34 @@ public static class CSharpWriter
 
         classified.LifecycleInit.TryGetValue(vtable.Name, out var initSlot);
         classified.LifecycleShutdown.TryGetValue(vtable.Name, out var shutdownSlot);
-        var initCall = initSlot is not null
-            ? $"        {{ {convention.ErrorType}* err2 = null; {convention.ErrorHelperClass}.ThrowIfFailed(_native->{initSlot}(_native, &err2), err2, \"{initSlot}\"); }}"
-            : null;
+        var initSlotReturns = initSlot is null ? null
+            : vtable.Slots.FirstOrDefault(sl => sl.Name == initSlot)?.Returns;
+        var initCall = initSlot is null ? null
+            : initSlotReturns is not null && convention.ReturnsResult(initSlotReturns)
+                ? $"        {convention.ResultHelperClass}.ThrowIfFailed(_native->{initSlot}(_native), \"{initSlot}\");"
+                : $"        {{ {convention.ErrorType}* err2 = null; {convention.ErrorHelperClass}.ThrowIfFailed(_native->{initSlot}(_native, &err2), err2, \"{initSlot}\"); }}";
 
         if (plan.Kind == ConstructorKind.FromFactory)
         {
             var factory = plan.Factory!;
-            var fparams = factory.Params.Where(p => !convention.IsErrorOutParam(p)).ToList();
+            var fparams = convention.FactoryInputs(factory);
             var sig = string.Join(", ", fparams.Select(p => $"{Idioms.CsForeignType(p.Type, convention)} {Idioms.Ident(p.Name!)}"));
             var call = string.Join(", ", fparams.Select(p => Idioms.Ident(p.Name!)));
             o.Add(XmlDoc("    ", factory.Doc, convention, fparams.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
                 throwsOnFail: true).TrimEnd());
             o.Add($"    {(plan.NeedsWrapper ? "internal" : "public")} {typeName}({sig})");
             o.Add("    {");
-            o.Add($"        {convention.ErrorType}* err = null;");
-            o.Add($"        var handle = {nativeNs}.NativeMethods.{convention.StripPrefix(factory.Name)}({(call.Length > 0 ? call + ", " : "")}&err);");
-            o.Add($"        if (handle.@ref == null) throw {convention.ErrorHelperClass}.FromNative(err, \"{factory.Name}\");");
+            if (convention.ResultFactoryHandle(factory) is { } madeHandle)
+            {
+                o.Add($"        {madeHandle} handle;");
+                o.Add($"        {convention.ResultHelperClass}.ThrowIfFailed({nativeNs}.NativeMethods.{convention.StripPrefix(factory.Name)}({(call.Length > 0 ? call + ", " : "")}&handle), \"{factory.Name}\");");
+            }
+            else
+            {
+                o.Add($"        {convention.ErrorType}* err = null;");
+                o.Add($"        var handle = {nativeNs}.NativeMethods.{convention.StripPrefix(factory.Name)}({(call.Length > 0 ? call + ", " : "")}&err);");
+                o.Add($"        if (handle.@ref == null) throw {convention.ErrorHelperClass}.FromNative(err, \"{factory.Name}\");");
+            }
             o.Add("        _native = handle.@ref;");
             o.Add("        _destroy = handle.destroy;");
             if (initCall is not null) o.Add(initCall);
@@ -1715,6 +1726,34 @@ public static class CSharpWriter
     const string ReturnKey = "return";
 
     /// <summary>Whether a C type spells a boolean.</summary>
+    /// <summary>
+    /// The failure lane of one call, spelled for the shape its C declaration reports through: a
+    /// result code it returns, or a trailing error record it writes.
+    /// </summary>
+    sealed record FailureLane(Convention C, bool ByResult, string Context)
+    {
+        public static FailureLane Of(Convention c, string returns, string context) =>
+            new(c, c.ReturnsResult(returns), context);
+
+        public string? Declare => ByResult ? null : $"{C.ErrorType}* err = null;";
+
+        public string DeclareForCheck => ByResult ? $"{C.ResultManagedType} rc;" : $"{C.ErrorType}* err = null;";
+
+        public string Arg => ByResult ? "" : ", &err";
+
+        public string ThrowIfFailed(string call) => ByResult
+            ? $"{C.ResultHelperClass}.ThrowIfFailed({call}, \"{Context}\");"
+            : $"{C.ErrorHelperClass}.ThrowIfFailed({call}, err, \"{Context}\");";
+
+        public string Ok(string call) => ByResult ? $"(rc = {call}) == {C.ResultManagedType}.{C.ResultOk}" : call;
+
+        public string Failed(string call) => ByResult ? $"(rc = {call}) != {C.ResultManagedType}.{C.ResultOk}" : $"!{call}";
+
+        public string Exception => ByResult
+            ? $"{C.ResultHelperClass}.FromCode(rc, \"{Context}\")"
+            : $"{C.ErrorHelperClass}.FromNative(err, \"{Context}\")";
+    }
+
     static bool IsBoolType(string type, Convention convention) => convention.BooleanReturnTypes.Contains(type.Trim());
 
     /// <summary>
@@ -2366,7 +2405,7 @@ public static class CSharpWriter
         string Sig(IEnumerable<ApiParam> ps) => string.Join(", ", SigParts(ps));
 
         IEnumerable<ApiParam> NativeParams() => cs.Slot.Params
-            .Where(p => !cs.Fallible || p != cs.Slot.Params[^1]);
+            .Where(p => !cs.Fallible || convention.ReturnsResult(cs.Slot.Returns) || p != cs.Slot.Params[^1]);
 
         IEnumerable<(string, string?)> DocParams(IEnumerable<ApiParam> ps) => ps
             .Where(p => callbacks.All(c => c.Ctx != p))
@@ -2468,8 +2507,9 @@ public static class CSharpWriter
                     o.Add($"{roInd}{OutLocal(model, cs.OutParam!, convention)} result;");
                     if (cs.Fallible)
                     {
-                        o.Add($"{roInd}{convention.ErrorType}* err = null;");
-                        o.Add($"{roInd}{convention.ErrorHelperClass}.ThrowIfFailed(Handle->{slot.Name}(Handle{nativeArgs}, &err), err, \"{slot.Name}\");");
+                        var lane = FailureLane.Of(convention, slot.Returns, slot.Name);
+                        if (lane.Declare is { } decl) o.Add($"{roInd}{decl}");
+                        o.Add($"{roInd}{lane.ThrowIfFailed($"Handle->{slot.Name}(Handle{nativeArgs}{lane.Arg})")}");
                     }
                     else
                     {
@@ -2510,8 +2550,9 @@ public static class CSharpWriter
                         o.Add($"{tuInd}{OutLocal(model, p, convention)} {n};");
                     if (cs.Fallible)
                     {
-                        o.Add($"{tuInd}{convention.ErrorType}* err = null;");
-                        o.Add($"{tuInd}{convention.ErrorHelperClass}.ThrowIfFailed(Handle->{slot.Name}(Handle{callArgs}, &err), err, \"{slot.Name}\");");
+                        var lane = FailureLane.Of(convention, slot.Returns, slot.Name);
+                        if (lane.Declare is { } decl) o.Add($"{tuInd}{decl}");
+                        o.Add($"{tuInd}{lane.ThrowIfFailed($"Handle->{slot.Name}(Handle{callArgs}{lane.Arg})")}");
                     }
                     else
                     {
@@ -2549,6 +2590,11 @@ public static class CSharpWriter
                     var tryArgs = NativeParams()
                         .Select(p => outs.Contains(p)
                             ? OutAddress(model, p, convention, $"{Idioms.Ident(WrittenName(p))}Local") : CallArg(p));
+                    if (convention.ReturnsResult(slot.Returns))
+                        throw new InvalidOperationException(
+                            $"{slot.Name}: a [try] slot answers whether it found something through a bool, and"
+                            + $" this one returns {convention.ResultType}. A miss is either an answer or a"
+                            + " failure; the header has to say which, as a bool [try] slot or a fallible one.");
                     var tryCall = $"Handle->{slot.Name}(Handle, {string.Join(", ", tryArgs)}"
                         + (cs.Fallible ? ", null)" : ")");
                     o.Add($"{tInd}var found = {tryCall};");
@@ -2565,6 +2611,7 @@ public static class CSharpWriter
                 {
                     var args = cs.PublicParams;
                     var byReturn = convention.SignalsFailureByReturn(slot.Returns);
+                    var lane = FailureLane.Of(convention, slot.Returns, slot.Name);
                     var retType = byReturn ? "void"
                         : ownedReturn is not null ? ownedReturn.TypeName
                         : ReturnType(model, slot.Returns, convention);
@@ -2632,17 +2679,17 @@ public static class CSharpWriter
                         }
                         BuildBag();
                         if (parks) o.Add($"{fInd}s_parkedCallbackException = null;");
-                        var signalsOk = IsBoolType(slot.Returns, convention);
+                        var signalsOk = IsBoolType(slot.Returns, convention) || lane.ByResult;
                         var capture = signalsOk ? "ok" : retType == "void" ? null : "result";
                         var failed = signalsOk ? "!ok" : "err != null";
-                        o.Add($"{fInd}{convention.ErrorType}* err = null;");
+                        o.Add($"{fInd}{lane.DeclareForCheck}");
                         if (signalsOk) o.Add($"{fInd}bool ok;");
                         else if (capture is not null) o.Add($"{fInd}{retType} {capture};");
                         o.Add($"{fInd}try");
                         o.Add($"{fInd}{{");
                         o.Add($"{fInd}    {(capture is null ? "" : capture + " = ")}"
-                            + $"{(signalsOk ? "" : ReturnCast(model, slot.Returns, convention))}"
-                            + $"Handle->{slot.Name}(Handle{call}, &err)" + ";");
+                            + (signalsOk ? lane.Ok($"Handle->{slot.Name}(Handle{call}{lane.Arg})")
+                                : $"{ReturnCast(model, slot.Returns, convention)}Handle->{slot.Name}(Handle{call}, &err)") + ";");
                         o.Add($"{fInd}}}");
                         if (scoped.Count > 0)
                         {
@@ -2670,11 +2717,11 @@ public static class CSharpWriter
                             o.Add($"{fInd}}}");
                         }
                         var retained = groups.Where(g => g.Lifetime == ClosureLifetime.Retained).ToList();
-                        if (retained.Count == 0 && signalsOk)
+                        if (retained.Count == 0 && signalsOk && !lane.ByResult)
                             o.Add($"{fInd}{convention.ErrorHelperClass}.ThrowIfFailed(ok, err, \"{slot.Name}\");");
                         else if (retained.Count == 0)
                         {
-                            o.Add($"{fInd}if ({failed}) throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                            o.Add($"{fInd}if ({failed}) throw {lane.Exception};");
                         }
                         else
                         {
@@ -2682,7 +2729,7 @@ public static class CSharpWriter
                             o.Add($"{fInd}{{");
                             foreach (var g in retained)
                                 o.Add($"{fInd}    if ({g.Handle}.IsAllocated) {g.Handle}.Free();");
-                            o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                            o.Add($"{fInd}    throw {lane.Exception};");
                             o.Add($"{fInd}}}");
                             foreach (var g in retained)
                             {
@@ -2714,30 +2761,31 @@ public static class CSharpWriter
                         return;
                     }
                     BuildBag();
-                    o.Add($"{fInd}{convention.ErrorType}* err = null;");
+                    var plainCall = $"Handle->{slot.Name}(Handle{call}{lane.Arg})";
+                    if (!byReturn || rooted.Count > 0 || (ownerDrains && slot.Has("drains")))
+                        o.Add($"{fInd}{lane.DeclareForCheck}");
+                    else if (lane.Declare is { } plainDecl)
+                        o.Add($"{fInd}{plainDecl}");
                     if (byReturn && rooted.Count > 0)
                     {
-                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)";
-                        o.Add($"{fInd}if (!{boolCall})");
+                        o.Add($"{fInd}if ({lane.Failed(plainCall)})");
                         o.Add($"{fInd}{{");
                         foreach (var rp in rooted)
                             o.Add($"{fInd}    {Idioms.Ident(rp.Name!)}Handle.Free();");
-                        o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                        o.Add($"{fInd}    throw {lane.Exception};");
                         o.Add($"{fInd}}}");
                         foreach (var rp in rooted)
                             o.Add($"{fInd}_rooted[{Idioms.Ident(rp.TagValue("rooted")!)}] = {Idioms.Ident(rp.Name!)}Handle;");
                     }
                     else if (byReturn && ownerDrains && slot.Has("drains"))
                     {
-                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)";
-                        o.Add($"{fInd}if (!{boolCall} && _callbackFailures.IsEmpty)");
-                        o.Add($"{fInd}    throw {convention.ErrorHelperClass}.FromNative(err, \"{slot.Name}\");");
+                        o.Add($"{fInd}if ({lane.Failed(plainCall)} && _callbackFailures.IsEmpty)");
+                        o.Add($"{fInd}    throw {lane.Exception};");
                         o.Add($"{fInd}DrainCallbackFailures();");
                     }
                     else if (byReturn)
                     {
-                        var boolCall = $"Handle->{slot.Name}(Handle{call}, &err)";
-                        o.Add($"{fInd}{convention.ErrorHelperClass}.ThrowIfFailed({boolCall}, err, \"{slot.Name}\");");
+                        o.Add($"{fInd}{lane.ThrowIfFailed(plainCall)}");
                     }
                     else
                     {
@@ -2909,9 +2957,10 @@ public static class CSharpWriter
         foreach (var s in cbType.Slots)
             o.Add($"            {s.Name} = &{Idioms.Pascal(s.Name)}Trampoline,");
         o.Add("        };");
-        o.Add($"        {convention.ErrorType}* err = null;");
+        var regLane = FailureLane.Of(convention, slot.Returns, slot.Name);
+        if (regLane.Declare is { } regDecl) o.Add($"        {regDecl}");
         var extraCall = string.Concat(otherParams.Select(p => ", " + Idioms.Ident(p.Name!)));
-        o.Add($"        {convention.ErrorHelperClass}.ThrowIfFailed(Handle->{slot.Name}(Handle, native{extraCall}, &err), err, \"{slot.Name}\");");
+        o.Add($"        {regLane.ThrowIfFailed($"Handle->{slot.Name}(Handle, native{extraCall}{regLane.Arg})")}");
         o.Add("    }");
         o.Add("");
 
@@ -2921,8 +2970,8 @@ public static class CSharpWriter
             + XmlDoc("    ", null, convention, otherParams.Select(p => (Idioms.Ident(p.Name!), p.Doc)), throwsOnFail: true).TrimEnd(),
             $"void {Idioms.Pascal(slot.Name)}Raw({cbParamCsType} {Idioms.Ident(cbParam.Name!)}{otherArgs})");
         o.Add("    {");
-        o.Add($"        {convention.ErrorType}* err = null;");
-        o.Add($"        {convention.ErrorHelperClass}.ThrowIfFailed(Handle->{slot.Name}(Handle, {Idioms.Ident(cbParam.Name!)}{extraCall}, &err), err, \"{slot.Name}\");");
+        if (regLane.Declare is { } rawDecl) o.Add($"        {rawDecl}");
+        o.Add($"        {regLane.ThrowIfFailed($"Handle->{slot.Name}(Handle, {Idioms.Ident(cbParam.Name!)}{extraCall}{regLane.Arg})")}");
         o.Add("    }");
         o.Add("");
 

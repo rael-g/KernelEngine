@@ -139,13 +139,54 @@ public sealed class Convention
     /// success), so both are fallible and neither should expose the parameter.
     /// </summary>
     public bool IsFallible(string returns, IReadOnlyList<ApiParam> parameters) =>
-        parameters.Count > 0 && IsErrorOutParam(parameters[^1]);
+        ReturnsResult(returns) || (parameters.Count > 0 && IsErrorOutParam(parameters[^1]));
+
+    /// <summary>
+    /// True if a slot returns the result code (<see cref="ResultType"/>): it fails by returning a
+    /// code other than <see cref="ResultOk"/>, and hands its value back through an out-parameter.
+    /// </summary>
+    public bool ReturnsResult(string returns) => ResultType.Length > 0 && returns.Trim() == ResultType;
+
+    /// <summary>
+    /// The owner-wrapper handle a factory returning <see cref="ResultType"/> writes through its last
+    /// parameter, or null when <paramref name="factory"/> is not of that shape.
+    /// </summary>
+    public string? ResultFactoryHandle(ApiFunction factory) =>
+        ReturnsResult(factory.Returns) && factory.Params.Count > 0
+            && CTypes.IsPointer(factory.Params[^1].Type)
+            && CTypes.Deref(factory.Params[^1].Type).Replace("struct ", "").Trim() is var target
+            && IsHandleType(target)
+            ? target : null;
+
+    /// <summary>
+    /// The parameters a caller of <paramref name="factory"/> supplies: all of them but the failure
+    /// lane, or but the handle written back when the factory returns <see cref="ResultType"/>.
+    /// </summary>
+    public IReadOnlyList<ApiParam> FactoryInputs(ApiFunction factory) =>
+        ResultFactoryHandle(factory) is not null
+            ? factory.Params.Take(factory.Params.Count - 1).ToList()
+            : factory.Params.Where(p => !IsErrorOutParam(p)).ToList();
+
+    /// <summary>The C type a fallible call returns its outcome as (<c>ke_result</c>).</summary>
+    public string ResultType { get; init; } = "";
+
+    /// <summary>The constant of <see cref="ResultType"/> that means success (<c>KE_OK</c>).</summary>
+    public string ResultOk { get; init; } = "";
+
+    /// <summary>The fully qualified managed type the bindings declare for <see cref="ResultType"/>.</summary>
+    public string ResultManagedType { get; init; } = "";
+
+    /// <summary>
+    /// The fully qualified managed class that turns a code into an exception
+    /// (<c>ThrowIfFailed</c>, <c>FromCode</c>).
+    /// </summary>
+    public string ResultHelperClass { get; init; } = "";
 
     /// <summary>
     /// True if this slot signals failure through its boolean return rather than by writing the
     /// error out-param.
     /// </summary>
-    public bool SignalsFailureByReturn(string returns) => BooleanReturnTypes.Contains(returns);
+    public bool SignalsFailureByReturn(string returns) => BooleanReturnTypes.Contains(returns) || ReturnsResult(returns);
 
     /// <summary>
     /// Explicit target-language type names for ABI symbols whose derived name is
@@ -318,6 +359,9 @@ public sealed class Convention
                 Text(json, "errorGeneralSingleton"), Text(json, "errorAbiHeader"),
                 (json["errorAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()),
                 Text(json, "errorHelperClass"), Text(json, "errorHelperNamespace"), Text(json, "errorKindsOut"));
+        if (json["resultType"] is not null)
+            builder.Result(Text(json, "resultType"), Text(json, "resultOk"), Text(json, "resultManagedType"),
+                Text(json, "resultHelperClass"));
 
         foreach (var e in json["errors"]?.AsArray() ?? [])
             builder.AddError(e!["singleton"]!.GetValue<string>(), e["nativeName"]!.GetValue<string>(),

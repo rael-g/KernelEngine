@@ -195,7 +195,7 @@ public static class Classifier
             var factory = model.Functions.FirstOrDefault(f => f.Name == convention.FactoryNameFor(v.Name));
             if (factory is not null)
             {
-                var fparams = factory.Params.Where(p => !convention.IsErrorOutParam(p));
+                var fparams = convention.FactoryInputs(factory);
                 result.Constructors[v.Name] = new ConstructorPlan(ConstructorKind.FromFactory, factory, null,
                     NeedsWrapper: fparams.Any(p => CTypes.IsPointer(p.Type)));
                 continue;
@@ -210,6 +210,9 @@ public static class Classifier
         {
             if (convention.IsFactoryName(fn.Name) && fn.Params.Any(convention.IsErrorOutParam)
                 && vtables.Any(v => fn.Returns.Contains(convention.HandleTypeFor(v.Name))))
+                continue;
+            if (convention.IsFactoryName(fn.Name) && convention.ResultFactoryHandle(fn) is { } made
+                && vtables.Any(v => convention.HandleTypeFor(v.Name) == made))
                 continue;
 
             var firstParamType = fn.Params.FirstOrDefault()?.Type.Replace("const ", "").Replace("struct ", "").TrimEnd('*', ' ');
@@ -264,7 +267,7 @@ public static class Classifier
     {
         var ps = slot.Params.ToList();
         var fallible = convention.IsFallible(slot.Returns, ps);
-        if (fallible) ps = ps[..^1];
+        if (fallible && !convention.ReturnsResult(slot.Returns)) ps = ps[..^1];
 
         var (expanded, bag) = ExpandedBag(model, slot);
         if (expanded is not null)

@@ -31,6 +31,28 @@ internal static class GeneratorShapeCases
             contains: ["public uint SizeOf("],
             absent: ["uint* outSize"]);
 
+        Expect("a slot returning the result code throws on a code other than success",
+            Vtable("ke_probe", Slot("flush", "ke_result", Param("force", "bool"))),
+            contains: ["public void Flush(bool force)",
+                       "KernelEngine.NativeResults.ThrowIfFailed(Handle->flush(Handle, force), \"flush\");"],
+            absent: ["&err", "ke_error"]);
+
+        Expect("a slot returning the result code hands its single out parameter back as the return",
+            Vtable("ke_probe", Slot("count_of", "ke_result", Param("kind", "uint32_t"),
+                Param("out_count", "uint32_t *", "out"))),
+            contains: ["public uint CountOf(uint kind)",
+                       "KernelEngine.NativeResults.ThrowIfFailed(Handle->count_of(Handle, kind, &result), \"count_of\");",
+                       "return result;"],
+            absent: ["&err", "out uint count"]);
+
+        Expect("a factory returning the result code writes the handle through its last parameter",
+            Vtable("ke_probe", "provider", Slot("flush", "ke_result")),
+            functions: [Function("ke_probe_create", "ke_result", Param("size", "uint32_t"),
+                Param("out_probe", "ke_probe_handle *", "out"))],
+            contains: ["(uint size)", "ke_probe_handle handle;",
+                       "KernelEngine.NativeResults.ThrowIfFailed(Probe.Native.NativeMethods.probe_create(size, &handle), \"ke_probe_create\");"],
+            absent: ["&err", "outProbe"]);
+
         Expect("a utf8 parameter is a string on the public surface",
             Vtable("ke_probe", Slot("named", "ke_entity", Param("name", "const char *", "utf8"))),
             contains: ["public ulong Named(string name)", "Encoding.UTF8.GetBytes"],
@@ -659,7 +681,7 @@ internal static class GeneratorShapeCases
 
         void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
             Dictionary<string, string>? aliases = null, JsonObject[]? callbacks = null,
-            JsonObject[]? structs = null, string? throws = null)
+            JsonObject[]? structs = null, string? throws = null, JsonObject[]? functions = null)
 
         {
             Register(what, failures =>
@@ -685,7 +707,7 @@ internal static class GeneratorShapeCases
                     }),
                     ["vtables"] = new JsonArray(vtable),
                     ["callbacks"] = new JsonArray((callbacks ?? []).Cast<JsonNode>().ToArray()),
-                    ["functions"] = new JsonArray(),
+                    ["functions"] = new JsonArray((functions ?? []).Cast<JsonNode>().ToArray()),
                     ["type_aliases"] = new JsonObject { ["ke_entity"] = "uint64_t" },
                 };
                 foreach (var extra in structs ?? [])

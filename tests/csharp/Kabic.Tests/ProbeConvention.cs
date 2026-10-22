@@ -11,6 +11,7 @@ internal static class ProbeConvention
         .Managed("KernelEngine.Common")
         .Failure("ke_error", "ke_error_type", "ke_error_is", "KE_ERROR_GENERAL",
             "", [], "NativeErrors", "KernelEngine", "")
+        .Result("ke_result", "KE_OK", "KernelEngine.Result.Native.ke_result", "KernelEngine.NativeResults")
         .AddError("KE_ERROR_GENERAL", "ke.error", "InvalidOperationException", "General")
         .AddError("KE_ERROR_NOT_FOUND", "ke.error.not_found", "KeyNotFoundException")
         .AddError("KE_ERROR_IO", "ke.error.io", "IOException")
