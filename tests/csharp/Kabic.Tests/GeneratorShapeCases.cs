@@ -39,10 +39,10 @@ internal static class GeneratorShapeCases
 
         Expect("a slot returning the result code hands its single out parameter back as the return",
             Vtable("ke_probe", Slot("count_of", "ke_result", Param("kind", "uint32_t"),
-                Param("out_count", "uint32_t *", "out"))),
+                ParamDoc("out_count", "uint32_t *", "out", "How many there are."))),
             contains: ["public uint CountOf(uint kind)",
                        "KernelEngine.NativeResults.ThrowIfFailed(Handle->count_of(Handle, kind, &result), \"count_of\");",
-                       "return result;"],
+                       "return result;", "<returns>How many there are.</returns>"],
             absent: ["&err", "out uint count"]);
 
         Expect("a factory returning the result code writes the handle through its last parameter",
@@ -1173,6 +1173,13 @@ internal static class GeneratorShapeCases
         };
 
         static ReturnTags Returning(string tags) => new(tags);
+
+        static JsonObject ParamDoc(string name, string type, string tags, string doc)
+        {
+            var p = Param(name, type, tags);
+            p["doc"] = doc;
+            return p;
+        }
 
         static JsonObject Param(string name, string type, string tags = "") => new()
         {

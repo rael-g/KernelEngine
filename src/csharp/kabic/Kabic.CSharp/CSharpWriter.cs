@@ -2493,7 +2493,8 @@ public static class CSharpWriter
                         ", " + (p == cs.OutParam ? OutAddress(model, p, convention, "result") : CallArg(p))));
 
                     Declare(o, decls, XmlDoc("    ", slot.Doc, convention, ins.Select(p => (Idioms.Ident(p.Name!), p.Doc)),
-                        slot.ReturnDoc, cs.Fallible).TrimEnd(), $"{ret} {name}({sig})");
+                        convention.ReturnsResult(slot.Returns) ? cs.OutParam!.Doc : slot.ReturnDoc, cs.Fallible).TrimEnd(),
+                        $"{ret} {name}({sig})");
                     o.Add("    {");
                     var (roPro, roDepth) = Utf8Prologue(ins, new string(' ', 8));
                     var (roSeq, roSeqDepth) = SequencePrologue(model, cs.Sequences,
