@@ -1058,6 +1058,7 @@
         "src/c/render/kernel_engine/render/service/render_service.h",
         "src/c/render/kernel_engine/render/binding/resource_binder.h",
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/render/kernel_engine/render/gpu/ndc_convention.h",
         "src/c/render/kernel_engine/render/gpu/gpu_device.h",
         "src/c/render/kernel_engine/render/gpu/gpu_render_target.h",
         "src/c/render/kernel_engine/render/camera.h"
@@ -1122,7 +1123,6 @@
       "project": "src/csharp/view/KernelEngine.View",
       "namespace": "KernelEngine.View.Native",
       "headers": [
-        "src/c/render/kernel_engine/render/gpu/ndc_convention.h",
         "src/c/view/kernel_engine/view/view_space.h",
         "src/zig/view/space/include/kernel_engine/view/space/view_space_rh_create.h",
         "src/zig/view/space/include/kernel_engine/view/space/view_space_lh_create.h"
