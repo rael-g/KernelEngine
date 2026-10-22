@@ -19,17 +19,9 @@
 extern "C" {
 #endif
 
-/// @brief Construction parameters for a ke_font_loader.
-typedef struct ke_font_loader_stb_params
-{
-    struct ke_logger    *logger;        ///< Optional
-} ke_font_loader_stb_params;
-
 /// @brief Creates a ke_font_loader. Callable from any thread (CPU only).
 /// @return Handle whose @c ref is NULL on failure.
-KE_TEXT_STB_TRUETYPE_API ke_font_loader_handle ke_font_loader_stb_create(
-    const ke_font_loader_stb_params *params,
-    ke_error **out_error);
+KE_TEXT_STB_TRUETYPE_API ke_font_loader_handle ke_font_loader_stb_create(ke_error **out_error);
 
 #ifdef __cplusplus
 }

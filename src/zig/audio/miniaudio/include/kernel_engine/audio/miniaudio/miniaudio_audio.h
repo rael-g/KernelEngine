@@ -19,17 +19,9 @@
 extern "C" {
 #endif
 
-/// @brief Construction parameters for the ke_audio backend made by ke_audio_miniaudio_create.
-typedef struct ke_audio_miniaudio_params
-{
-    struct ke_logger    *logger;    ///< Optional; may be NULL
-} ke_audio_miniaudio_params;
-
 /// @brief Creates a ke_audio backend for the audio output device.
 /// @return Handle whose @c ref is NULL on failure.
-KE_AUDIO_MINIAUDIO_API ke_audio_handle ke_audio_miniaudio_create(
-    const ke_audio_miniaudio_params *params,
-    ke_error **out_error);
+KE_AUDIO_MINIAUDIO_API ke_audio_handle ke_audio_miniaudio_create(ke_error **out_error);
 
 #ifdef __cplusplus
 }
