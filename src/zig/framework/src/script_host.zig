@@ -298,20 +298,26 @@ const PendingUnbind = struct {
     entity: c.ke_entity,
 };
 
-/// Run by the command queue when a recorded bind is applied. It passes no error channel, so a bind
-/// that fails at that point is dropped and only logged.
-fn cbBind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
+/// Run by the command queue when a recorded bind is applied; a bind that fails there is returned
+/// to the flush.
+fn cbBind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) c.ke_result {
     const p: *const PendingBind = @ptrCast(@alignCast(user.?));
-    bindNow(p.s, p.entity, p.type_id, p.instance) catch |err|
+    bindNow(p.s, p.entity, p.type_id, p.instance) catch |err| {
         log.warn("binding the recorded entity {d} failed: {t}", .{ p.entity, err });
+        return R.code(err);
+    };
+    return R.ok;
 }
 
 /// Run by the command queue when a recorded unbind is applied; an entity without a binding by then
 /// is left alone.
-fn cbUnbind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
+fn cbUnbind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) c.ke_result {
     const p: *const PendingUnbind = @ptrCast(@alignCast(user.?));
-    unbindNow(p.s, p.entity) catch |err|
+    unbindNow(p.s, p.entity) catch |err| {
         log.warn("unbinding the recorded entity {d} failed: {t}", .{ p.entity, err });
+        return R.code(err);
+    };
+    return R.ok;
 }
 
 /// Slot `bind_deferred`. Checks the type, the entity and the command queue when it is called, but

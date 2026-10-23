@@ -2835,6 +2835,29 @@ test "a recorded attach the ecs refuses fails the tick and names the system" {
     try testing.expectEqual(@as(u32, 0), deferAppliedCount());
 }
 
+fn failingCallback(_: ?*c.ke_ecs, _: ?*anyopaque) callconv(.c) c.ke_result {
+    return R.code(error.NotFound);
+}
+
+fn callbackBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    const cmds = ctx.?.commands;
+    return cmds.*.@"defer".?(cmds, failingCallback, null, 0);
+}
+
+test "a recorded callback that fails fails the tick and is not counted as applied" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    resetDeferApplied();
+
+    var sys = systemParams("FailingCallback", c.KE_PHASE_UPDATE);
+    sys.execute = &callbackBody;
+    try testing.expect(systemId(f.rt(), &sys) != 0);
+
+    try testing.expectError(error.NotFound, R.check(f.rt().tick.?(f.rt(), 1.0 / 60.0)));
+    try testing.expectEqual(@as(u32, 0), deferAppliedCount());
+}
+
 fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const cmds = ctx.?.commands;
     _ = spawned(cmds);

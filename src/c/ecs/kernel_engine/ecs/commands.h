@@ -14,8 +14,9 @@ extern "C" {
 typedef struct ke_ecs_commands ke_ecs_commands;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at
-/// the copy of the payload passed to defer; `ecs` is the live world.
-typedef void (*ke_defer_fn)(ke_ecs *ecs, void *user);
+/// the copy of the payload passed to defer; `ecs` is the live world. A failure is returned,
+/// and the queue stops there: the operations recorded after it are dropped.
+typedef ke_result (*ke_defer_fn)(ke_ecs *ecs, void *user);
 
 /// A queue of structural mutations. Every operation records its intent and
 /// returns; none changes the world while it runs. The queue is applied, in the order the

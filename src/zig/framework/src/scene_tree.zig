@@ -174,13 +174,16 @@ const PendingCreate = extern struct {
     name: [name_max]u8,
 };
 
-/// Runs when the commands apply. Its result cannot reach the caller, so a node that populateNode
-/// cannot finish is destroyed and the failure only logged.
-fn cbCreateNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
+/// Runs when the commands apply. A node that populateNode cannot finish is destroyed, and the
+/// failure is returned to the flush.
+fn cbCreateNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) c.ke_result {
     _ = ecs;
     const p: *PendingCreate = @ptrCast(@alignCast(user));
-    populateNode(p.s, p.entity, @ptrCast(&p.name), p.parent) catch |err|
+    populateNode(p.s, p.entity, @ptrCast(&p.name), p.parent) catch |err| {
         log.warn("creating the recorded node {d} failed: {t}", .{ p.entity, err });
+        return R.code(err);
+    };
+    return R.ok;
 }
 
 /// Slot `create_node`. Creates and links the node before returning; the invalid entity as parent
@@ -209,7 +212,7 @@ fn vtCreateNode(
 
 /// Slot `create_node_deferred`. The id is reserved before returning and is usable as a reference
 /// at once; the node gets its components and its link when the commands apply, so a failure of
-/// that recorded call is not reported. A null tree, command queue or out-parameter fails as an
+/// that recorded call fails the flush that applies it. A null tree, command queue or out-parameter fails as an
 /// invalid argument, and a failed reservation or recording with the queue's code; each writes the
 /// invalid entity.
 fn vtCreateNodeDeferred(
@@ -358,11 +361,14 @@ const PendingDestroy = extern struct {
 };
 
 /// Runs when the commands apply, and does not repeat the checks made when the call was recorded.
-fn cbDestroyNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
+fn cbDestroyNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) c.ke_result {
     _ = ecs;
     const p: *PendingDestroy = @ptrCast(@alignCast(user));
-    destroySubtree(p.s, p.entity) catch |err|
+    destroySubtree(p.s, p.entity) catch |err| {
         log.warn("destroying the recorded node {d} failed: {t}", .{ p.entity, err });
+        return R.code(err);
+    };
+    return R.ok;
 }
 
 /// Shared by the immediate and the deferred destroy. Fails as an invalid argument for a null tree,
@@ -1063,7 +1069,7 @@ pub const RecordingCommands = struct {
     }
 
     pub fn apply(self: *RecordingCommands) void {
-        for (0..self.count) |i| self.fns[i].?(self.ecs, &self.payloads[i]);
+        for (0..self.count) |i| _ = self.fns[i].?(self.ecs, &self.payloads[i]);
         self.count = 0;
     }
 };
