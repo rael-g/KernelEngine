@@ -6,7 +6,8 @@ const std = @import("std");
 const c = @import("c");
 const heap = @import("heap");
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.framework);
 
 const unknown_size: u32 = c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN;
 
@@ -72,6 +73,12 @@ const State = struct {
     joined: bool,
 };
 
+/// Logs `msg` and returns the code of `err`, for a failure whose reason the code does not carry.
+fn failed(err: R.Error, comptime msg: []const u8) c.ke_result {
+    log.warn(msg, .{});
+    return R.code(err);
+}
+
 fn stateOf(self: *c.ke_signal_bus) *State {
     return @ptrCast(@alignCast(self.handle));
 }
@@ -91,21 +98,15 @@ fn signalId(
     name_in: [*c]const u8,
     payload_size: u32,
     out_id: [*c]u32,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "signal bus is null", @src());
-        return false;
-    };
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
     if (name_in == null or out_id == null) {
-        E.fail(out_error, .invalid_argument, "signal name and out_id are required", @src());
-        return false;
+        return failed(error.InvalidArgument, "signal name and out_id are required");
     }
     const s = stateOf(self);
     const name = std.mem.span(name_in);
     if (name.len == 0) {
-        E.fail(out_error, .invalid_argument, "signal name is empty", @src());
-        return false;
+        return failed(error.InvalidArgument, "signal name is empty");
     }
 
     for (s.signals[0..s.signal_count], 0..) |*sig, i| {
@@ -114,26 +115,23 @@ fn signalId(
             if (sig.payload_size == unknown_size) {
                 sig.payload_size = payload_size;
             } else if (sig.payload_size != payload_size) {
-                E.fail(out_error, .already_exists, "signal already registered with a different payload size", @src());
-                return false;
+                return failed(error.AlreadyExists, "signal already registered with a different payload size");
             }
         }
         out_id.* = @intCast(i);
-        return true;
+        return R.ok;
     }
 
     if (s.signal_count == s.signals.len) {
-        E.fail(out_error, .out_of_memory, "signal table is full", @src());
-        return false;
+        return failed(error.OutOfMemory, "signal table is full");
     }
     const owned = heap.gpa.dupe(u8, name) catch {
-        E.fail(out_error, .out_of_memory, "signal name allocation failed", @src());
-        return false;
+        return failed(error.OutOfMemory, "signal name allocation failed");
     };
     s.signals[s.signal_count] = .{ .name = owned, .payload_size = payload_size };
     out_id.* = s.signal_count;
     s.signal_count += 1;
-    return true;
+    return R.ok;
 }
 
 /// Slot `signal_lookup`. Like `signalId` but read-only: nothing is registered, and a miss returns
@@ -158,31 +156,25 @@ fn signalLookup(
 /// Slot `connect`. Adds a wire. Wires are unique by source, signal id, target and handler.
 /// Connecting a wire that exists changes nothing, so `deliveries` yields one delivery per wire
 /// however often it was connected. A null bus fails as an invalid argument, an id never
-/// registered as not found, and a full table as out of memory; each returns false.
+/// registered as not found, and a full table as out of memory.
 fn connect(
     self_in: ?*c.ke_signal_bus,
     source: c.ke_entity,
     signal_id: u32,
     target: c.ke_entity,
     handler_id: u32,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "signal bus is null", @src());
-        return false;
-    };
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
     const s = stateOf(self);
     if (signal_id >= s.signal_count) {
-        E.fail(out_error, .not_found, "signal id was never registered", @src());
-        return false;
+        return failed(error.NotFound, "signal id was never registered");
     }
     for (s.connections[0..s.connection_count]) |conn| {
         if (conn.source == source and conn.signal_id == signal_id and
-            conn.target == target and conn.handler_id == handler_id) return true;
+            conn.target == target and conn.handler_id == handler_id) return R.ok;
     }
     if (s.connection_count == s.connections.len) {
-        E.fail(out_error, .out_of_memory, "connection table is full", @src());
-        return false;
+        return failed(error.OutOfMemory, "connection table is full");
     }
     s.connections[s.connection_count] = .{
         .source = source,
@@ -191,7 +183,7 @@ fn connect(
         .handler_id = handler_id,
     };
     s.connection_count += 1;
-    return true;
+    return R.ok;
 }
 
 /// The last connection fills the freed slot, so after a removal `deliveries` follows the table
@@ -245,8 +237,8 @@ fn forgetEntity(self_in: ?*c.ke_signal_bus, entity: c.ke_entity) callconv(.c) vo
 /// Slot `emit`. Records one emission for the current frame. No delivery is made here: the payload
 /// bytes are copied into `payloads` and the event stores where they start. A zero-size payload
 /// stores an offset but copies nothing, which is why the join gives it a null pointer. Every
-/// check runs before anything is written, and a success clears `joined`. Failures, each
-/// returning false: a null bus, a payload missing for a non-zero size, or a size differing from
+/// check runs before anything is written, and a success clears `joined`. Failures:
+/// a null bus, a payload missing for a non-zero size, or a size differing from
 /// the registered one is an invalid argument; an id never registered is not found; a signal
 /// whose payload size was never declared is not initialized; a full event buffer or payload
 /// storage is out of memory.
@@ -256,39 +248,29 @@ fn emit(
     signal_id: u32,
     payload: ?*const anyopaque,
     payload_size: u32,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "signal bus is null", @src());
-        return false;
-    };
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
     const s = stateOf(self);
     if (signal_id >= s.signal_count) {
-        E.fail(out_error, .not_found, "signal id was never registered", @src());
-        return false;
+        return failed(error.NotFound, "signal id was never registered");
     }
     if (s.signals[signal_id].payload_size == unknown_size) {
-        E.fail(out_error, .not_initialized, "signal's payload layout was never declared", @src());
-        return false;
+        return failed(error.NotInitialized, "signal's payload layout was never declared");
     }
     if (payload_size != s.signals[signal_id].payload_size) {
-        E.fail(out_error, .invalid_argument, "payload size does not match the registered signal", @src());
-        return false;
+        return failed(error.InvalidArgument, "payload size does not match the registered signal");
     }
     if (s.event_count == s.events.len) {
-        E.fail(out_error, .out_of_memory, "frame event buffer is full", @src());
-        return false;
+        return failed(error.OutOfMemory, "frame event buffer is full");
     }
     if (s.payload_used + payload_size > s.payloads.len) {
-        E.fail(out_error, .out_of_memory, "frame payload storage is full", @src());
-        return false;
+        return failed(error.OutOfMemory, "frame payload storage is full");
     }
 
     const offset = s.payload_used;
     if (payload_size > 0) {
         const src: [*]const u8 = @ptrCast(payload orelse {
-            E.fail(out_error, .invalid_argument, "signal carries a payload but none was given", @src());
-            return false;
+            return failed(error.InvalidArgument, "signal carries a payload but none was given");
         });
         @memcpy(s.payloads[offset .. offset + payload_size], src[0..payload_size]);
         s.payload_used += payload_size;
@@ -302,7 +284,7 @@ fn emit(
     };
     s.event_count += 1;
     s.joined = false;
-    return true;
+    return R.ok;
 }
 
 /// Slot `deliveries`. The join: it walks only on the first call after an emit, pairing each
@@ -363,62 +345,32 @@ fn destroy(self_in: ?*c.ke_signal_bus) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Factory. Returns a handle whose `ref` is the `api` field inside the new state. A null params
-/// pointer, or a zero field, selects the default for it. If an allocation fails, the arrays
-/// allocated before it are freed, an out of memory error is set and a null handle is returned.
+/// Factory. Writes a handle whose `ref` is the `api` field inside the new state. A null params
+/// pointer, or a zero field, selects the default for it. A null out-parameter fails as an invalid
+/// argument; a failed allocation frees what was allocated before it, fails as out of memory and
+/// leaves the handle zeroed.
 pub export fn ke_signal_bus_create(
     params: [*c]const c.ke_signal_bus_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_signal_bus_handle {
-    const null_handle = std.mem.zeroes(c.ke_signal_bus_handle);
+    out_bus: ?*c.ke_signal_bus_handle,
+) callconv(.c) c.ke_result {
+    const out = out_bus orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_signal_bus_handle);
+    out.* = create(if (params != null) params.* else std.mem.zeroes(c.ke_signal_bus_params)) catch |err| return R.code(err);
+    return R.ok;
+}
 
-    const n_signals = if (params != null) orDefault(params.*.max_signals, default_max_signals) else default_max_signals;
-    const n_connections = if (params != null) orDefault(params.*.max_connections, default_max_connections) else default_max_connections;
-    const n_events = if (params != null) orDefault(params.*.max_events, default_max_events) else default_max_events;
-    const n_deliveries = if (params != null) orDefault(params.*.max_deliveries, default_max_deliveries) else default_max_deliveries;
-    const n_payload = if (params != null) orDefault(params.*.payload_capacity, default_payload_capacity) else default_payload_capacity;
-
-    const s = heap.gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "signal bus allocation failed", @src());
-        return null_handle;
-    };
+fn create(params: c.ke_signal_bus_params) error{OutOfMemory}!c.ke_signal_bus_handle {
+    const s = try heap.gpa.create(State);
     errdefer heap.gpa.destroy(s);
-
-    s.signals = heap.gpa.alloc(Signal, n_signals) catch {
-        E.fail(out_error, .out_of_memory, "signal table allocation failed", @src());
-        heap.gpa.destroy(s);
-        return null_handle;
-    };
-    s.connections = heap.gpa.alloc(Connection, n_connections) catch {
-        E.fail(out_error, .out_of_memory, "connection table allocation failed", @src());
-        heap.gpa.free(s.signals);
-        heap.gpa.destroy(s);
-        return null_handle;
-    };
-    s.events = heap.gpa.alloc(Event, n_events) catch {
-        E.fail(out_error, .out_of_memory, "event buffer allocation failed", @src());
-        heap.gpa.free(s.connections);
-        heap.gpa.free(s.signals);
-        heap.gpa.destroy(s);
-        return null_handle;
-    };
-    s.payloads = heap.gpa.alloc(u8, n_payload) catch {
-        E.fail(out_error, .out_of_memory, "payload storage allocation failed", @src());
-        heap.gpa.free(s.events);
-        heap.gpa.free(s.connections);
-        heap.gpa.free(s.signals);
-        heap.gpa.destroy(s);
-        return null_handle;
-    };
-    s.deliveries = heap.gpa.alloc(c.ke_signal_delivery, n_deliveries) catch {
-        E.fail(out_error, .out_of_memory, "delivery buffer allocation failed", @src());
-        heap.gpa.free(s.payloads);
-        heap.gpa.free(s.events);
-        heap.gpa.free(s.connections);
-        heap.gpa.free(s.signals);
-        heap.gpa.destroy(s);
-        return null_handle;
-    };
+    s.signals = try heap.gpa.alloc(Signal, orDefault(params.max_signals, default_max_signals));
+    errdefer heap.gpa.free(s.signals);
+    s.connections = try heap.gpa.alloc(Connection, orDefault(params.max_connections, default_max_connections));
+    errdefer heap.gpa.free(s.connections);
+    s.events = try heap.gpa.alloc(Event, orDefault(params.max_events, default_max_events));
+    errdefer heap.gpa.free(s.events);
+    s.payloads = try heap.gpa.alloc(u8, orDefault(params.payload_capacity, default_payload_capacity));
+    errdefer heap.gpa.free(s.payloads);
+    s.deliveries = try heap.gpa.alloc(c.ke_signal_delivery, orDefault(params.max_deliveries, default_max_deliveries));
 
     s.signal_count = 0;
     s.connection_count = 0;
@@ -447,7 +399,9 @@ const testing = std.testing;
 const Payload = extern struct { left_scored: u8 };
 
 fn makeBus() c.ke_signal_bus_handle {
-    return ke_signal_bus_create(null, null);
+    var h = std.mem.zeroes(c.ke_signal_bus_handle);
+    _ = ke_signal_bus_create(null, &h);
+    return h;
 }
 
 test "an emission reaches every node connected to it and nobody else" {
@@ -456,14 +410,14 @@ test "an emission reaches every node connected to it and nobody else" {
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
 
     var goal: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &goal, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &goal));
 
-    try testing.expect(bus.connect.?(bus, 1, goal, 2, 7, null));
-    try testing.expect(bus.connect.?(bus, 1, goal, 3, 9, null));
-    try testing.expect(bus.connect.?(bus, 99, goal, 4, 0, null));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, goal, 2, 7));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, goal, 3, 9));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 99, goal, 4, 0));
 
     const sent = Payload{ .left_scored = 1 };
-    try testing.expect(bus.emit.?(bus, 1, goal, &sent, @sizeOf(Payload), null));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 1, goal, &sent, @sizeOf(Payload)));
 
     var count: u32 = 0;
     const list = bus.deliveries.?(bus, &count);
@@ -482,9 +436,9 @@ test "calling deliveries twice joins once, and a later emission still lands" {
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "Ping", 0, &sig, null));
-    try testing.expect(bus.connect.?(bus, 1, sig, 2, 0, null));
-    try testing.expect(bus.emit.?(bus, 1, sig, null, 0, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "Ping", 0, &sig));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, sig, 2, 0));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 1, sig, null, 0));
 
     var count: u32 = 0;
     _ = bus.deliveries.?(bus, &count);
@@ -492,7 +446,7 @@ test "calling deliveries twice joins once, and a later emission still lands" {
     _ = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 1), count);
 
-    try testing.expect(bus.emit.?(bus, 1, sig, null, 0, null));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 1, sig, null, 0));
     _ = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 2), count);
 }
@@ -503,16 +457,16 @@ test "clearing a frame drops emissions and keeps connections" {
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "Ping", 0, &sig, null));
-    try testing.expect(bus.connect.?(bus, 1, sig, 2, 0, null));
-    try testing.expect(bus.emit.?(bus, 1, sig, null, 0, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "Ping", 0, &sig));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, sig, 2, 0));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 1, sig, null, 0));
 
     bus.clear_frame.?(bus);
     var count: u32 = 1;
     _ = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 0), count);
 
-    try testing.expect(bus.emit.?(bus, 1, sig, null, 0, null));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 1, sig, null, 0));
     _ = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 1), count);
 }
@@ -524,9 +478,9 @@ test "the same signal name under a different payload size is rejected" {
 
     var a: u32 = 0;
     var b: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "GoalScored", 4, &a, null));
-    try testing.expect(!bus.signal_id.?(bus, "GoalScored", 8, &b, null));
-    try testing.expect(bus.signal_id.?(bus, "GoalScored", 4, &b, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", 4, &a));
+    try testing.expectEqual(R.code(error.AlreadyExists), bus.signal_id.?(bus, "GoalScored", 8, &b));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", 4, &b));
     try testing.expectEqual(a, b);
 }
 
@@ -536,10 +490,10 @@ test "connecting the same wire twice delivers once" {
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "Ping", 0, &sig, null));
-    try testing.expect(bus.connect.?(bus, 1, sig, 2, 0, null));
-    try testing.expect(bus.connect.?(bus, 1, sig, 2, 0, null));
-    try testing.expect(bus.emit.?(bus, 1, sig, null, 0, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "Ping", 0, &sig));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, sig, 2, 0));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, sig, 2, 0));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 1, sig, null, 0));
 
     var count: u32 = 0;
     _ = bus.deliveries.?(bus, &count);
@@ -552,15 +506,15 @@ test "forgetting an entity removes every wire it is either end of" {
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "Ping", 0, &sig, null));
-    try testing.expect(bus.connect.?(bus, 1, sig, 2, 0, null));
-    try testing.expect(bus.connect.?(bus, 2, sig, 3, 0, null));
-    try testing.expect(bus.connect.?(bus, 1, sig, 3, 0, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "Ping", 0, &sig));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, sig, 2, 0));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 2, sig, 3, 0));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, sig, 3, 0));
 
     bus.forget_entity.?(bus, 2);
 
-    try testing.expect(bus.emit.?(bus, 1, sig, null, 0, null));
-    try testing.expect(bus.emit.?(bus, 2, sig, null, 0, null));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 1, sig, null, 0));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 2, sig, null, 0));
     var count: u32 = 0;
     const list = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 1), count);
@@ -573,11 +527,11 @@ test "emitting a payload of the wrong size fails instead of writing it" {
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &sig, null));
-    try testing.expect(bus.connect.?(bus, 1, sig, 2, 0, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &sig));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, sig, 2, 0));
 
     var wrong: u64 = 0;
-    try testing.expect(!bus.emit.?(bus, 1, sig, &wrong, @sizeOf(u64), null));
+    try testing.expectEqual(R.code(error.InvalidArgument), bus.emit.?(bus, 1, sig, &wrong, @sizeOf(u64)));
 
     var count: u32 = 1;
     _ = bus.deliveries.?(bus, &count);
@@ -588,7 +542,7 @@ test "emitting an unregistered signal fails" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
-    try testing.expect(!bus.emit.?(bus, 1, 42, null, 0, null));
+    try testing.expectEqual(R.code(error.NotFound), bus.emit.?(bus, 1, 42, null, 0));
 }
 
 test "a signal wired by name before its layout is declared still resolves to one id" {
@@ -597,17 +551,17 @@ test "a signal wired by name before its layout is declared still resolves to one
     const bus: *c.ke_signal_bus = @ptrCast(h.ref);
 
     var wired: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "GoalScored", unknown_size, &wired, null));
-    try testing.expect(bus.connect.?(bus, 1, wired, 2, 0, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", unknown_size, &wired));
+    try testing.expectEqual(R.ok, bus.connect.?(bus, 1, wired, 2, 0));
 
     var p = Payload{ .left_scored = 1 };
-    try testing.expect(!bus.emit.?(bus, 1, wired, &p, @sizeOf(Payload), null));
+    try testing.expectEqual(R.code(error.NotInitialized), bus.emit.?(bus, 1, wired, &p, @sizeOf(Payload)));
 
     var declared: u32 = 0;
-    try testing.expect(bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &declared, null));
+    try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &declared));
     try testing.expectEqual(wired, declared);
 
-    try testing.expect(bus.emit.?(bus, 1, declared, &p, @sizeOf(Payload), null));
+    try testing.expectEqual(R.ok, bus.emit.?(bus, 1, declared, &p, @sizeOf(Payload)));
     var count: u32 = 0;
     _ = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 1), count);

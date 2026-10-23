@@ -68,9 +68,8 @@ public sealed class SceneNodesModule : IRuntimeModule
             unsafe
             {
                 var ecs = sp.GetRequiredService<INativeEcs>();
-                KernelEngine.Common.Native.ke_error* err = null;
-                var handle = Native.NativeMethods.script_host_create(ecs.Native, null, &err);
-                if (handle.@ref == null) throw NativeErrors.FromNative(err, "script_host_create");
+                Native.ke_script_host_handle handle;
+                KernelEngine.NativeResults.ThrowIfFailed(Native.NativeMethods.script_host_create(ecs.Native, null, &handle), "ke_script_host_create");
                 return new ScriptHost(handle).Compose(
                     sp.GetRequiredService<World>(),
                     sp.GetRequiredService<IEcsRegistry>(),

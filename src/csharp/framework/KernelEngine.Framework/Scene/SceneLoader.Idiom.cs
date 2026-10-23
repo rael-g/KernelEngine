@@ -1,4 +1,3 @@
-using KernelEngine.Common.Native;
 
 namespace KernelEngine.Framework;
 
@@ -26,10 +25,9 @@ public unsafe partial class SceneLoader
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(assets);
 
-        ke_error* err = null;
-        var handle = KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
-            ((INativeWorld)world).Native, ((INativeAssetResolver)assets).Native, &err);
-        if (handle.@ref == null) throw NativeErrors.FromNative(err, "scene_loader_create");
+        ke_scene_loader_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_loader_create(
+            ((INativeWorld)world).Native, ((INativeAssetResolver)assets).Native, &handle), "ke_scene_loader_create");
         return handle;
     }
 

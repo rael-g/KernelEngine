@@ -375,8 +375,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var set = KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_components_create();
         try
         {
-            if (!set.@ref->register_into(set.@ref, ec, wd, &err))
-                throw Fail("render scene components register failed", err);
+            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ec, wd), "register_into");
         }
         finally
         {

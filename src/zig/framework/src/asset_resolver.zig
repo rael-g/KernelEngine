@@ -7,7 +7,6 @@ const c = @import("c");
 const handles = @import("handle").Handles(c);
 const heap = @import("heap");
 
-const E = @import("kerror").Errors(c);
 const R = @import("result").Result(c, .{});
 const log = std.log.scoped(.framework);
 
@@ -453,20 +452,18 @@ fn vtDestroy(self_in: ?*c.ke_asset_resolver) callconv(.c) void {
 
 /// Factory. The loaders are kept by pointer and never freed, and either may be null, which makes
 /// the slots that need it fail; the project root is copied. A failed state allocation or root
-/// copy reports out of memory and returns a null handle, the state freed again in the second
-/// case.
+/// copy fails as out of memory and leaves the handle zeroed, the state freed again in the second
+/// case. A null out-parameter fails as an invalid argument.
 export fn ke_asset_resolver_create(
     image_loader: ?*c.ke_image_loader,
     font_loader: ?*c.ke_font_loader,
     project_root: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_asset_resolver_handle {
-    const null_handle = std.mem.zeroes(c.ke_asset_resolver_handle);
+    out_resolver: ?*c.ke_asset_resolver_handle,
+) callconv(.c) c.ke_result {
+    const out = out_resolver orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_asset_resolver_handle);
 
-    const s = heap.gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return null_handle;
-    };
+    const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = std.mem.zeroes(State);
 
     s.image_loader = image_loader;
@@ -474,8 +471,7 @@ export fn ke_asset_resolver_create(
     s.project_root = dupCStr(project_root);
     if (project_root != null and s.project_root == null) {
         heap.gpa.destroy(s);
-        E.fail(out_error, .out_of_memory, "project root allocation failed", @src());
-        return null_handle;
+        return R.code(error.OutOfMemory);
     }
 
     s.api.handle = s;
@@ -491,10 +487,17 @@ export fn ke_asset_resolver_create(
     s.api.resolve_material_into = vtResolveMaterialInto;
     s.api.resolve_path = vtResolvePath;
 
-    return .{ .ref = &s.api, .destroy = vtDestroy };
+    out.* = .{ .ref = &s.api, .destroy = vtDestroy };
+    return R.ok;
 }
 
 const testing = std.testing;
+
+fn testResolver(image_loader: ?*c.ke_image_loader, project_root: [*c]const u8) c.ke_asset_resolver_handle {
+    var h = std.mem.zeroes(c.ke_asset_resolver_handle);
+    _ = ke_asset_resolver_create(image_loader, null, project_root, &h);
+    return h;
+}
 
 const material_tolerance: f32 = 1e-6;
 
@@ -683,7 +686,7 @@ const Resolver = struct {
     handle: c.ke_asset_resolver_handle,
 
     fn init(loader: ?*c.ke_image_loader, root: ?[*:0]const u8) !Resolver {
-        const h = ke_asset_resolver_create(loader, null, root, null);
+        const h = testResolver(loader, root);
         try testing.expect(h.ref != null);
         return .{ .handle = h };
     }
@@ -975,7 +978,7 @@ test "an authored distortion strength overrides the default" {
 }
 
 test "a resolver with neither a loader nor a project root is still constructible" {
-    const h = ke_asset_resolver_create(null, null, null, null);
+    const h = testResolver(null, null);
     try testing.expect(h.ref != null);
     try testing.expect(h.destroy != null);
     h.destroy.?(h.ref);
@@ -1081,7 +1084,7 @@ test "a live handle is never zero, not even at index zero" {
 }
 
 test "a res:// path joins the project root and any other path stands as written" {
-    const h = ke_asset_resolver_create(null, null, "/game", null);
+    const h = testResolver(null, "/game");
     defer h.destroy.?(h.ref);
     const r = h.ref.?;
     var out: [64]u8 = undefined;
@@ -1093,7 +1096,7 @@ test "a res:// path joins the project root and any other path stands as written"
 }
 
 test "a resolved path that does not fit is refused rather than cut" {
-    const h = ke_asset_resolver_create(null, null, "/game", null);
+    const h = testResolver(null, "/game");
     defer h.destroy.?(h.ref);
     const r = h.ref.?;
     var out: [8]u8 = undefined;
@@ -1101,7 +1104,7 @@ test "a resolved path that does not fit is refused rather than cut" {
 }
 
 test "creating and destroying a resolver leaves no block allocated" {
-    const h = ke_asset_resolver_create(null, null, null, null);
+    const h = testResolver(null, null);
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
 }

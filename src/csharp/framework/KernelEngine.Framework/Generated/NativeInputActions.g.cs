@@ -62,15 +62,14 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
         _borrowed = borrowed;
     }
 
-    /// <summary>Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, with a message naming the action and the binding; a load that fails leaves no actions.</summary>
+    /// <summary>Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, as an invalid argument, logging the action and the binding; a load that fails leaves no actions. A file that cannot be opened fails as not found and one that does not parse as KE_RESULT_IO.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Load(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
-            ke_error* err = null;
-            NativeErrors.ThrowIfFailed(Handle->load(Handle, (sbyte*)pathPtr, &err), err, "load");
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->load(Handle, (sbyte*)pathPtr), "load");
         }
     }
 
@@ -94,32 +93,32 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
         }
     }
 
+    /// <summary>Adds a key binding to an action.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BindKey(int actionId, ke_key key)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->bind_key(Handle, actionId, key, &err), err, "bind_key");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_key(Handle, actionId, key), "bind_key");
     }
 
+    /// <summary>Adds a mouse button binding to an action. Fails as bind_key does.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BindMouseButton(int actionId, ke_mouse_button button)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->bind_mouse_button(Handle, actionId, button, &err), err, "bind_mouse_button");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_mouse_button(Handle, actionId, button), "bind_mouse_button");
     }
 
+    /// <summary>Adds a one-axis binding to an action, positive while positive is held and negative while negative is. Fails as bind_key does.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BindKeyPair(int actionId, ke_key negative, ke_key positive)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->bind_key_pair(Handle, actionId, negative, positive, &err), err, "bind_key_pair");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_key_pair(Handle, actionId, negative, positive), "bind_key_pair");
     }
 
+    /// <summary>Adds a two-axis binding to an action: x is right minus left and y is up minus down. Fails as bind_key does.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BindKeyQuad(int actionId, ke_key up, ke_key down, ke_key left, ke_key right)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, up, down, left, right, &err), err, "bind_key_quad");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, up, down, left, right), "bind_key_quad");
     }
 
     /// <summary>Runs one frame of binding evaluation against snapshot, updating polling state and firing on_event for each phase transition. A null on_event updates polling only.</summary>
@@ -128,11 +127,11 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
     {
         var onEventHandle = onEvent is null ? default : GCHandle.Alloc(onEvent);
         s_parkedCallbackException = null;
-        ke_error* err = null;
+        KernelEngine.Result.Native.ke_result rc;
         bool ok;
         try
         {
-            ok = Handle->evaluate(Handle, snapshot, onEvent is null ? null : (delegate* unmanaged[Cdecl]<void*, ke_input_action_event, void>)&EvaluateOnEventTrampoline, (void*)GCHandle.ToIntPtr(onEventHandle), &err);
+            ok = (rc = Handle->evaluate(Handle, snapshot, onEvent is null ? null : (delegate* unmanaged[Cdecl]<void*, ke_input_action_event, void>)&EvaluateOnEventTrampoline, (void*)GCHandle.ToIntPtr(onEventHandle))) == KernelEngine.Result.Native.ke_result.KE_OK;
         }
         finally
         {
@@ -143,7 +142,7 @@ public unsafe partial class NativeInputActions : IDisposable, INativeInputAction
             s_parkedCallbackException = null;
             throw parked;
         }
-        NativeErrors.ThrowIfFailed(ok, err, "evaluate");
+        if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "evaluate");
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

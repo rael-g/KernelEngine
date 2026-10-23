@@ -1,7 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_H_
 #define KERNEL_ENGINE_FRAMEWORK_WORLD_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/variant.h>
@@ -25,14 +25,12 @@ extern "C"
     /// @param component The component's memory, already added to the entity.
     /// @param entries   The block's keys, one per key the scene declared.
     /// @param count     Number of entries.
-    /// @param out_error Set when the callback rejects a value; the load fails with it.
-    /// @return false when a key the callback owns carries a value it cannot map,
-    /// which fails the load.
-    typedef bool (*ke_component_apply_fn)(void                   *ctx,
-                                          void                   *component,
-                                          ke_variant_table_entry *entries,
-                                          uint32_t                count,
-                                          ke_error              **out_error);
+    /// @return KE_OK, or a failure code when a key the callback owns carries a value it cannot
+    /// map, which fails the load with that code.
+    typedef ke_result (*ke_component_apply_fn)(void                   *ctx,
+                                               void                   *component,
+                                               ke_variant_table_entry *entries,
+                                               uint32_t                count);
 
     typedef struct ke_world ke_world;
 
@@ -67,12 +65,12 @@ extern "C"
          * Runs before the apply callback registered for the same component, if
          * any: the table covers every field it can describe, the callback is
          * left with what a description cannot express (a unit conversion, an
-         * enum spelled as a string). Borrowed; must outlive the world. */
-        bool (*register_component_fields)(struct ke_world          *self,
-                                          ke_component_id           cid,
-                                          const ke_component_field *fields,
-                                          uint32_t                  field_count,
-                                          ke_error                **out_error);
+         * enum spelled as a string). Borrowed; must outlive the world. Fails as an invalid
+         * argument for a null table or a zero count, and as out of memory. */
+        ke_result (*register_component_fields)(struct ke_world          *self,
+                                               ke_component_id           cid,
+                                               const ke_component_field *fields,
+                                               uint32_t                  field_count);
 
         /** [idiom] Field table registered for `cid`, or NULL.
          * @param out_count [out]
@@ -85,12 +83,13 @@ extern "C"
          * describe. Replaces any callback registered for the same component.
          * @param cid   The component the callback answers for.
          * @param apply [closure:ctx,retained:cid] Consulted after the field table.
-         * @param ctx   Forwarded to @p apply unchanged. */
-        bool (*register_component_apply)(struct ke_world      *self,
-                                         ke_component_id       cid,
-                                         ke_component_apply_fn apply,
-                                         void                 *ctx,
-                                         ke_error            **out_error);
+         * @param ctx   Forwarded to @p apply unchanged.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p apply, or
+         *         KE_RESULT_OUT_OF_MEMORY. */
+        ke_result (*register_component_apply)(struct ke_world      *self,
+                                              ke_component_id       cid,
+                                              ke_component_apply_fn apply,
+                                              void                 *ctx);
 
         /** [idiom] Callback registered for `cid`, or NULL, and the context it was
          * registered with.
@@ -104,21 +103,21 @@ extern "C"
          * or a component registered under the alias itself, makes it ambiguous, and a scene must
          * then write the full name. Registering the same pair twice changes nothing.
          * @param alias [borrowed,utf8] The short name.
-         * @param name  [borrowed,utf8] The name the component is registered under. */
-        bool (*register_component_alias)(struct ke_world *self,
-                                         const char      *alias,
-                                         const char      *name,
-                                         ke_error       **out_error);
+         * @param name  [borrowed,utf8] The name the component is registered under.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or
+         *         KE_RESULT_OUT_OF_MEMORY. */
+        ke_result (*register_component_alias)(struct ke_world *self,
+                                              const char      *alias,
+                                              const char      *name);
 
         /** Resolves the component name a scene wrote: the component registered under it, else
          * the one its alias stands for. Fails as not found when neither exists, and as an
-         * invalid argument naming the candidates when the alias is ambiguous.
+         * invalid argument when the alias is ambiguous, logging the candidates.
          * @param name     [borrowed,utf8] The name the scene wrote.
          * @param out_meta [out] Receives the component's id, size and field metadata. */
-        bool (*resolve_component)(struct ke_world   *self,
-                                  const char        *name,
-                                  ke_component_meta *out_meta,
-                                  ke_error         **out_error);
+        ke_result (*resolve_component)(struct ke_world   *self,
+                                       const char        *name,
+                                       ke_component_meta *out_meta);
 
     };
 

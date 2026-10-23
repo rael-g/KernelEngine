@@ -65,8 +65,8 @@ public sealed class FrameworkModule : IRuntimeModule
                 sp.max_events = _signalCapacities.MaxEvents;
                 sp.max_deliveries = _signalCapacities.MaxDeliveries;
                 sp.payload_capacity = _signalCapacities.PayloadCapacity;
-                var h = KernelEngine.Framework.Native.NativeMethods.signal_bus_create(&sp, null);
-                if (h.@ref == null) throw new InvalidOperationException("signal_bus_create failed");
+                ke_signal_bus_handle h;
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.signal_bus_create(&sp, &h), "ke_signal_bus_create");
                 return new SignalBus(h);
             }
         });
@@ -79,17 +79,22 @@ public sealed class FrameworkModule : IRuntimeModule
             {
                 if (sp.GetService<KernelEngine.Logger.ILogger>() is { } logger)
                     KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-                var tree = KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
-                    flecsEcs.Native, ((INativeRuntime)rtRuntime).Native, null);
-                if (tree.@ref == null) throw new InvalidOperationException("scene_tree_create failed");
+                ke_scene_tree_handle tree;
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
+                    flecsEcs.Native, ((INativeRuntime)rtRuntime).Native, &tree), "ke_scene_tree_create");
 
                 ke_world_params p = default;
                 p.ecs = flecsEcs.Native;
                 p.runtime = ((INativeRuntime)rtRuntime).Native;
                 p.scene_tree = tree.@ref;
                 p.signal_bus = ((INativeSignalBus)sp.GetRequiredService<SignalBus>()).Native;
-                var w = KernelEngine.Framework.Native.NativeMethods.world_create(&p, null);
-                if (w.@ref == null) throw new InvalidOperationException("world_create failed");
+                ke_world_handle w;
+                var made = KernelEngine.Framework.Native.NativeMethods.world_create(&p, &w);
+                if (made != KernelEngine.Result.Native.ke_result.KE_OK)
+                {
+                    tree.destroy(tree.@ref);
+                    KernelEngine.NativeResults.ThrowIfFailed(made, "ke_world_create");
+                }
                 return new World(w, tree);
             }
         });

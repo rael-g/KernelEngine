@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_COMPONENT_SET_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_COMPONENT_SET_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/framework/world.h>
 #include <stdbool.h>
@@ -22,10 +22,9 @@ extern "C"
         /// before a failure stay.
         /// @param ecs   [borrowed] The registry the components are registered with.
         /// @param world [borrowed] The world that learns their field tables and apply callbacks.
-        /// @return false, with the error set, when an argument is null or the ecs or the world
-        ///         refuses a registration.
-        bool (*register_into)(struct ke_scene_component_set *self, ke_ecs *ecs, ke_world *world,
-                              ke_error **out_error);
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when an argument is null, or the code of the
+        ///         ecs or the world that refused a registration.
+        ke_result (*register_into)(struct ke_scene_component_set *self, ke_ecs *ecs, ke_world *world);
     } ke_scene_component_set;
 
     typedef struct ke_scene_component_set_handle

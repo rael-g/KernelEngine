@@ -6,7 +6,8 @@ const std = @import("std");
 const c = @import("c");
 const heap = @import("heap");
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.framework);
 
 const default_max_types = 64;
 
@@ -61,6 +62,12 @@ const State = struct {
     type_count: u32,
 };
 
+/// Logs `msg` and returns the code of `err`, for a failure whose reason the code does not carry.
+fn failed(err: R.Error, comptime msg: []const u8) c.ke_result {
+    log.warn(msg, .{});
+    return R.code(err);
+}
+
 fn stateOf(self: *c.ke_script_host) *State {
     return @ptrCast(@alignCast(self.handle));
 }
@@ -101,8 +108,7 @@ fn matches(s: *State, entity: c.ke_entity, type_id: c.ke_script_type_id, wanted:
 /// id the first registration got. The same name with any other description fails with
 /// already-exists and leaves the table unchanged. A new name fails with out-of-memory when the
 /// table is full. A null host, name or `out_id`, an empty name, or a component count without
-/// components fails as an invalid argument. Each
-/// failure returns false.
+/// components fails as an invalid argument. A tag the ecs refuses fails with its code.
 fn registerType(
     self_in: ?*c.ke_script_host,
     name_in: [*c]const u8,
@@ -110,70 +116,56 @@ fn registerType(
     component_count: u32,
     reach: c.ke_script_reach,
     out_id: [*c]c.ke_script_type_id,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "script host is null", @src());
-        return false;
-    };
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
     if (name_in == null or out_id == null) {
-        E.fail(out_error, .invalid_argument, "type name and out_id are required", @src());
-        return false;
+        return failed(error.InvalidArgument, "type name and out_id are required");
     }
     const s = stateOf(self);
     const name = std.mem.span(name_in);
     if (name.len == 0) {
-        E.fail(out_error, .invalid_argument, "script type name is empty", @src());
-        return false;
+        return failed(error.InvalidArgument, "script type name is empty");
     }
     if (component_count > 0 and components_in == null) {
-        E.fail(out_error, .invalid_argument, "component count is non-zero but no components were given", @src());
-        return false;
+        return failed(error.InvalidArgument, "component count is non-zero but no components were given");
     }
 
     for (s.types[0..s.type_count], 0..) |*t, i| {
         if (!std.mem.eql(u8, t.name, name)) continue;
         if (t.components.len != component_count or t.reach != reach) {
-            E.fail(out_error, .already_exists, "script type already registered with a different description", @src());
-            return false;
+            return failed(error.AlreadyExists, "script type already registered with a different description");
         }
         for (0..component_count) |k| {
             if (t.components[k] == components_in[k]) continue;
-            E.fail(out_error, .already_exists, "script type already registered with different components", @src());
-            return false;
+            return failed(error.AlreadyExists, "script type already registered with different components");
         }
         out_id.* = @intCast(i + 1);
-        return true;
+        return R.ok;
     }
 
     if (s.type_count == s.types.len) {
-        E.fail(out_error, .out_of_memory, "script type table is full", @src());
-        return false;
+        return failed(error.OutOfMemory, "script type table is full");
     }
 
     const owned_name = heap.gpa.dupe(u8, name) catch {
-        E.fail(out_error, .out_of_memory, "script type name allocation failed", @src());
-        return false;
+        return failed(error.OutOfMemory, "script type name allocation failed");
     };
     const owned_components = heap.gpa.dupe(c.ke_component_id, if (component_count > 0) components_in[0..component_count] else &.{}) catch {
         heap.gpa.free(owned_name);
-        E.fail(out_error, .out_of_memory, "script type component list allocation failed", @src());
-        return false;
+        return failed(error.OutOfMemory, "script type component list allocation failed");
     };
     const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "{s}{s}", .{ tag_prefix, name }, 0) catch {
         heap.gpa.free(owned_name);
         heap.gpa.free(owned_components);
-        E.fail(out_error, .out_of_memory, "script type tag name allocation failed", @src());
-        return false;
+        return failed(error.OutOfMemory, "script type tag name allocation failed");
     };
     defer heap.gpa.free(tag_name);
     var tag: c.ke_component_id = 0;
     const made = s.ecs.component_register.?(s.ecs, &c.ke_component_params{ .name = tag_name.ptr, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &tag);
     if (made != c.KE_OK) {
-        E.failCode(out_error, made, "registering the script type's tag failed", @src());
         heap.gpa.free(owned_name);
         heap.gpa.free(owned_components);
-        return false;
+        return made;
     }
     const t = ScriptType{
         .name = owned_name,
@@ -186,7 +178,7 @@ fn registerType(
     s.types[s.type_count] = t;
     s.type_count += 1;
     out_id.* = s.type_count;
-    return true;
+    return R.ok;
 }
 
 /// Slot `type_lookup`. Writes the id registered under the name and returns true; an unknown name
@@ -249,54 +241,36 @@ fn typeTagGroup(self_in: ?*c.ke_script_host) callconv(.c) c.ke_component_id {
 }
 
 /// Slot `bind`. Attaches the instance to the entity at once, so it belongs to code that no system
-/// body runs beside. Fails as invalid argument for a null host or the invalid entity, as not
-/// found for an unregistered type id, as already exists for an entity that carries an instance,
-/// and as out of memory when the component or the type's list cannot grow; each returns false.
+/// body runs beside. Fails as `bindNow` does, and as an invalid argument for a null host.
 fn bind(
     self_in: ?*c.ke_script_host,
     entity: c.ke_entity,
     type_id: c.ke_script_type_id,
     instance: ?*anyopaque,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "script host is null", @src());
-        return false;
-    };
-    return bindNow(stateOf(self), entity, type_id, instance, out_error);
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    return R.of(bindNow(stateOf(self), entity, type_id, instance));
 }
 
 /// The one place a binding is attached: `bind` calls it directly, and `cbBind` calls it when a
-/// recorded bind is applied. On failure the entity is left without a binding component, so no
-/// caller sees a half-made binding.
+/// recorded bind is applied. Fails as not found for an unregistered type id, as an invalid
+/// argument for the invalid entity, as already exists for an entity that carries an instance, and
+/// as out of memory when the component or the type's list cannot grow. On failure the entity is
+/// left without a binding component, so no caller sees a half-made binding.
 fn bindNow(
     s: *State,
     entity: c.ke_entity,
     type_id: c.ke_script_type_id,
     instance: ?*anyopaque,
-    out_error: [*c][*c]c.ke_error,
-) bool {
-    const t = typeAt(s, type_id) orelse {
-        E.fail(out_error, .not_found, "script type id was never registered", @src());
-        return false;
-    };
-    if (entity == c.KE_ENTITY_INVALID) {
-        E.fail(out_error, .invalid_argument, "cannot bind an instance to an invalid entity", @src());
-        return false;
-    }
-    if (bindingOf(s, entity) != null) {
-        E.fail(out_error, .already_exists, "entity already carries a script instance", @src());
-        return false;
-    }
+) R.Error!void {
+    const t = typeAt(s, type_id) orelse return error.NotFound;
+    if (entity == c.KE_ENTITY_INVALID) return error.InvalidArgument;
+    if (bindingOf(s, entity) != null) return error.AlreadyExists;
 
-    _ = s.ecs.component_add.?(s.ecs, entity, s.binding_cid) orelse {
-        E.fail(out_error, .out_of_memory, "could not attach the script instance component", @src());
-        return false;
-    };
+    _ = s.ecs.component_add.?(s.ecs, entity, s.binding_cid) orelse return error.OutOfMemory;
     t.entities.append(heap.gpa, entity) catch {
         _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
-        E.fail(out_error, .out_of_memory, "could not record the instance in its type", @src());
-        return false;
+        return error.OutOfMemory;
     };
 
     _ = s.ecs.component_add.?(s.ecs, entity, t.tag);
@@ -305,14 +279,12 @@ fn bindNow(
         _ = t.entities.pop();
         s.ecs.component_remove.?(s.ecs, entity, t.tag);
         _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
-        E.fail(out_error, .out_of_memory, "could not read back the script instance component", @src());
-        return false;
+        return error.OutOfMemory;
     };
     const b: *Binding = @ptrCast(@alignCast(moved));
     b.type_id = type_id;
     b.instance = instance;
     b.slot = @intCast(t.entities.items.len - 1);
-    return true;
 }
 
 /// A bind waiting in a command queue. `bindDeferred` hands the queue this record's address and
@@ -333,7 +305,7 @@ const PendingUnbind = struct {
 /// that fails at that point is dropped and nothing reports it.
 fn cbBind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
     const p: *const PendingBind = @ptrCast(@alignCast(user.?));
-    _ = bindNow(p.s, p.entity, p.type_id, p.instance, null);
+    bindNow(p.s, p.entity, p.type_id, p.instance) catch {};
 }
 
 /// Run by the command queue when a recorded unbind is applied; an entity without a binding by then
@@ -347,62 +319,35 @@ fn cbUnbind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
 /// attaches nothing: the bind is recorded to run `cbBind` when the queue is applied, so the host
 /// does not change under a system body that is reading `instances`. A null host or queue or the
 /// invalid entity fails as an invalid argument, an unregistered type as not found, and a failed
-/// recording reports the queue's error; each returns false.
+/// recording with the queue's code.
 fn bindDeferred(
     self_in: ?*c.ke_script_host,
     entity: c.ke_entity,
     type_id: c.ke_script_type_id,
     instance: ?*anyopaque,
     commands: ?*c.ke_ecs_commands,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "script host is null", @src());
-        return false;
-    };
-    const cmds = commands orelse {
-        E.fail(out_error, .invalid_argument, "a deferred bind needs a command queue", @src());
-        return false;
-    };
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    const cmds = commands orelse return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    if (typeAt(s, type_id) == null) {
-        E.fail(out_error, .not_found, "script type id was never registered", @src());
-        return false;
-    }
-    if (entity == c.KE_ENTITY_INVALID) {
-        E.fail(out_error, .invalid_argument, "cannot bind an instance to an invalid entity", @src());
-        return false;
-    }
+    if (typeAt(s, type_id) == null) return R.code(error.NotFound);
+    if (entity == c.KE_ENTITY_INVALID) return R.code(error.InvalidArgument);
     var pending: PendingBind = .{ .s = s, .entity = entity, .type_id = type_id, .instance = instance };
-    const recorded = cmds.@"defer".?(cmds, cbBind, &pending, @sizeOf(PendingBind));
-    if (recorded == c.KE_OK) return true;
-    E.failCode(out_error, recorded, "recording a deferred tree change failed", @src());
-    return false;
+    return cmds.@"defer".?(cmds, cbBind, &pending, @sizeOf(PendingBind));
 }
 
 /// Slot `unbind_deferred`. Only the host and the command queue are checked when it is called, and
-/// a null one fails as an invalid argument; a failed recording reports the queue's error. Each
-/// returns false. The entity's binding is looked up when the recorded unbind is applied by
-/// `cbUnbind`, not now.
+/// a null one fails as an invalid argument; a failed recording fails with the queue's code. The
+/// entity's binding is looked up when the recorded unbind is applied by `cbUnbind`, not now.
 fn unbindDeferred(
     self_in: ?*c.ke_script_host,
     entity: c.ke_entity,
     commands: ?*c.ke_ecs_commands,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "script host is null", @src());
-        return false;
-    };
-    const cmds = commands orelse {
-        E.fail(out_error, .invalid_argument, "a deferred unbind needs a command queue", @src());
-        return false;
-    };
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    const cmds = commands orelse return R.code(error.InvalidArgument);
     var pending: PendingUnbind = .{ .s = stateOf(self), .entity = entity };
-    const recorded = cmds.@"defer".?(cmds, cbUnbind, &pending, @sizeOf(PendingUnbind));
-    if (recorded == c.KE_OK) return true;
-    E.failCode(out_error, recorded, "recording a deferred tree change failed", @src());
-    return false;
+    return cmds.@"defer".?(cmds, cbUnbind, &pending, @sizeOf(PendingUnbind));
 }
 
 /// Slot `unbind`. Removes the entity's binding at once; an entity with none is left alone.
@@ -570,62 +515,48 @@ fn destroy(self_in: ?*c.ke_script_host) callconv(.c) void {
 
 /// Factory. Needs the hierarchy and name components to exist already, so a scene tree is created
 /// first; registers the binding component "script_instance" on the ecs and sizes the type table
-/// from the params, a zero field or a null pointer selecting the default. Fails with
-/// invalid-argument for a null ecs, an ecs without component lookup and get, or a binding
-/// component that cannot be registered; with not-found when the hierarchy and name components
-/// are not registered yet; and with out-of-memory when the state or the type table cannot be
-/// allocated. Each failure releases what the call had allocated and returns a zeroed handle.
+/// from the params, a zero field or a null pointer selecting the default. Fails as an invalid
+/// argument for a null ecs or out-parameter or an ecs without component lookup and get; as not
+/// found when the hierarchy and name components are not registered yet; as out of memory when the
+/// state or the type table cannot be allocated; and with the ecs's code when it refuses the
+/// binding or group component. Each failure releases what the call had allocated and leaves the
+/// handle zeroed.
 pub export fn ke_script_host_create(
     ecs_in: ?*c.ke_ecs,
     params: [*c]const c.ke_script_host_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_script_host_handle {
-    const null_handle = std.mem.zeroes(c.ke_script_host_handle);
+    out_host: ?*c.ke_script_host_handle,
+) callconv(.c) c.ke_result {
+    const out = out_host orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_script_host_handle);
+    const ecs = ecs_in orelse return R.code(error.InvalidArgument);
+    if (ecs.component_lookup == null or ecs.component_get == null) return R.code(error.InvalidArgument);
+    const n_types = if (params != null) orDefault(params.*.max_types, default_max_types) else default_max_types;
+    out.* = create(ecs, n_types) catch |err| return R.code(err);
+    return R.ok;
+}
 
-    const ecs = ecs_in orelse {
-        E.fail(out_error, .invalid_argument, "script host requires an ecs", @src());
-        return null_handle;
-    };
-    if (ecs.component_lookup == null or ecs.component_get == null) {
-        E.fail(out_error, .invalid_argument, "ecs does not expose component lookup", @src());
-        return null_handle;
-    }
-
+fn create(ecs: *c.ke_ecs, n_types: u32) R.Error!c.ke_script_host_handle {
     var hierarchy_meta: c.ke_component_meta = undefined;
     var name_meta: c.ke_component_meta = undefined;
     if (!ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta) or
         !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_NAME, &name_meta))
     {
-        E.fail(out_error, .not_found, "hierarchy and name components are not registered; create a scene tree first", @src());
-        return null_handle;
+        log.warn("script host: hierarchy and name components are not registered; create a scene tree first", .{});
+        return error.NotFound;
     }
 
-    const n_types = if (params != null) orDefault(params.*.max_types, default_max_types) else default_max_types;
-
-    const s = heap.gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "script host allocation failed", @src());
-        return null_handle;
-    };
-
-    s.types = heap.gpa.alloc(ScriptType, n_types) catch {
-        E.fail(out_error, .out_of_memory, "script type table allocation failed", @src());
-        heap.gpa.destroy(s);
-        return null_handle;
-    };
+    const s = try heap.gpa.create(State);
+    errdefer heap.gpa.destroy(s);
+    s.types = try heap.gpa.alloc(ScriptType, n_types);
+    errdefer heap.gpa.free(s.types);
 
     s.ecs = ecs;
     s.hierarchy_cid = hierarchy_meta.cid;
     s.name_cid = name_meta.cid;
     s.binding_cid = 0;
     s.tag_group_cid = 0;
-    _ = ecs.component_register.?(ecs, &c.ke_component_params{ .name = binding_component, .size = @sizeOf(Binding), .alignment = @alignOf(Binding), .fields = null, .field_count = 0 }, &s.binding_cid);
-    _ = ecs.component_register.?(ecs, &c.ke_component_params{ .name = tag_group_component, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &s.tag_group_cid);
-    if (s.binding_cid == 0 or s.tag_group_cid == 0) {
-        E.fail(out_error, .invalid_argument, "could not register the script instance or type group component", @src());
-        heap.gpa.free(s.types);
-        heap.gpa.destroy(s);
-        return null_handle;
-    }
+    try R.check(ecs.component_register.?(ecs, &c.ke_component_params{ .name = binding_component, .size = @sizeOf(Binding), .alignment = @alignOf(Binding), .fields = null, .field_count = 0 }, &s.binding_cid));
+    try R.check(ecs.component_register.?(ecs, &c.ke_component_params{ .name = tag_group_component, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &s.tag_group_cid));
     s.type_count = 0;
 
     s.api = .{
@@ -658,8 +589,7 @@ const Harness = struct {
 
     fn init(self: *Harness) !void {
         try self.tree.init();
-        self.handle = ke_script_host_create(&self.tree.ecs.vtable, null, null);
-        try testing.expect(self.handle.ref != null);
+        try testing.expectEqual(R.ok, ke_script_host_create(&self.tree.ecs.vtable, null, &self.handle));
     }
 
     fn deinit(self: *Harness) void {
@@ -674,7 +604,7 @@ const Harness = struct {
     fn declare(self: *Harness, name: [*c]const u8, reach: c.ke_script_reach) !c.ke_script_type_id {
         var id: c.ke_script_type_id = c.KE_SCRIPT_TYPE_NONE;
         const components = [_]c.ke_component_id{ 1, 2 };
-        try testing.expect(self.host().register_type.?(self.host(), name, &components, components.len, reach, &id, null));
+        try testing.expectEqual(R.ok, self.host().register_type.?(self.host(), name, &components, components.len, reach, &id));
         return id;
     }
 };
@@ -699,7 +629,7 @@ test "a type re-registered with a different reach is refused" {
 
     var id: c.ke_script_type_id = c.KE_SCRIPT_TYPE_NONE;
     const components = [_]c.ke_component_id{ 1, 2 };
-    try testing.expect(!h.host().register_type.?(h.host(), "pong.paddle", &components, components.len, c.KE_SCRIPT_REACH_ANY, &id, null));
+    try testing.expectEqual(R.code(error.AlreadyExists), h.host().register_type.?(h.host(), "pong.paddle", &components, components.len, c.KE_SCRIPT_REACH_ANY, &id));
 }
 
 test "an unregistered type name resolves to nothing" {
@@ -743,7 +673,7 @@ test "an entity carries the instance it was bound to" {
     const e = h.tree.create("Left", 0);
     var marker: u32 = 7;
 
-    try testing.expect(h.host().bind.?(h.host(), e, id, &marker, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), e, id, &marker));
 
     var out_type: c.ke_script_type_id = c.KE_SCRIPT_TYPE_NONE;
     var out_instance: ?*anyopaque = null;
@@ -768,7 +698,7 @@ test "each type has its own tag, apart from the group of tags, carried by a boun
 
     const e = h.tree.create("Left", 0);
     var marker: u32 = 7;
-    try testing.expect(h.host().bind.?(h.host(), e, paddle, &marker, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), e, paddle, &marker));
     const ecs = &h.tree.ecs.vtable;
     try testing.expect(ecs.component_get.?(ecs, e, tag) != null);
 
@@ -786,8 +716,8 @@ test "binding over an existing instance is refused rather than dropping it silen
     var first: u32 = 1;
     var second: u32 = 2;
 
-    try testing.expect(h.host().bind.?(h.host(), e, id, &first, null));
-    try testing.expect(!h.host().bind.?(h.host(), e, id, &second, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), e, id, &first));
+    try testing.expectEqual(R.code(error.AlreadyExists), h.host().bind.?(h.host(), e, id, &second));
 
     var out_instance: ?*anyopaque = null;
     _ = h.host().instance_of.?(h.host(), e, null, &out_instance);
@@ -815,8 +745,8 @@ test "instance count follows bind and unbind" {
     var mb: u32 = 2;
 
     try testing.expectEqual(@as(u32, 0), h.host().instance_count.?(h.host(), id));
-    try testing.expect(h.host().bind.?(h.host(), a, id, &ma, null));
-    try testing.expect(h.host().bind.?(h.host(), b, id, &mb, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), a, id, &ma));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), b, id, &mb));
     try testing.expectEqual(@as(u32, 2), h.host().instance_count.?(h.host(), id));
 
     h.host().unbind.?(h.host(), a);
@@ -834,7 +764,7 @@ test "unbinding an entity keeps the others in binding order" {
     var entities: [4]c.ke_entity = undefined;
     for (&entities, &marks, 0..) |*e, *m, i| {
         e.* = h.tree.create(if (i == 0) "A" else if (i == 1) "B" else if (i == 2) "C" else "D", 0);
-        try testing.expect(h.host().bind.?(h.host(), e.*, id, m, null));
+        try testing.expectEqual(R.ok, h.host().bind.?(h.host(), e.*, id, m));
     }
 
     h.host().unbind.?(h.host(), entities[1]);
@@ -857,7 +787,7 @@ test "a deferred bind and unbind take effect only once the recorded commands are
     var ma: u32 = 1;
     var rec = scene_tree.RecordingCommands.init(&h.tree.ecs.vtable);
 
-    try testing.expect(h.host().bind_deferred.?(h.host(), a, id, &ma, rec.bind(), null));
+    try testing.expectEqual(R.ok, h.host().bind_deferred.?(h.host(), a, id, &ma, rec.bind()));
     try testing.expectEqual(@as(u32, 0), h.host().instance_count.?(h.host(), id));
     try testing.expect(!h.host().instance_of.?(h.host(), a, null, null));
 
@@ -867,7 +797,7 @@ test "a deferred bind and unbind take effect only once the recorded commands are
     try testing.expect(h.host().instance_of.?(h.host(), a, null, &seen));
     try testing.expectEqual(@as(?*anyopaque, &ma), seen);
 
-    try testing.expect(h.host().unbind_deferred.?(h.host(), a, rec.bind(), null));
+    try testing.expectEqual(R.ok, h.host().unbind_deferred.?(h.host(), a, rec.bind()));
     try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
     rec.apply();
     try testing.expectEqual(@as(u32, 0), h.host().instance_count.?(h.host(), id));
@@ -883,10 +813,10 @@ test "a deferred bind without a command queue, a type, or an entity is refused" 
     var m: u32 = 1;
     var rec = scene_tree.RecordingCommands.init(&h.tree.ecs.vtable);
 
-    try testing.expect(!h.host().bind_deferred.?(h.host(), a, id, &m, null, null));
-    try testing.expect(!h.host().bind_deferred.?(h.host(), a, 9999, &m, rec.bind(), null));
-    try testing.expect(!h.host().bind_deferred.?(h.host(), c.KE_ENTITY_INVALID, id, &m, rec.bind(), null));
-    try testing.expect(!h.host().unbind_deferred.?(h.host(), a, null, null));
+    try testing.expectEqual(R.code(error.InvalidArgument), h.host().bind_deferred.?(h.host(), a, id, &m, null));
+    try testing.expectEqual(R.code(error.NotFound), h.host().bind_deferred.?(h.host(), a, 9999, &m, rec.bind()));
+    try testing.expectEqual(R.code(error.InvalidArgument), h.host().bind_deferred.?(h.host(), c.KE_ENTITY_INVALID, id, &m, rec.bind()));
+    try testing.expectEqual(R.code(error.InvalidArgument), h.host().unbind_deferred.?(h.host(), a, null));
 }
 
 test "a type lists the entities bound to it" {
@@ -899,8 +829,8 @@ test "a type lists the entities bound to it" {
     const b = h.tree.create("Right", 0);
     var ma: u32 = 1;
     var mb: u32 = 2;
-    try testing.expect(h.host().bind.?(h.host(), a, id, &ma, null));
-    try testing.expect(h.host().bind.?(h.host(), b, id, &mb, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), a, id, &ma));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), b, id, &mb));
 
     var count: u32 = 0;
     const listed = h.host().instances.?(h.host(), id, &count);
@@ -919,7 +849,7 @@ test "unbinding one instance leaves every other one reachable" {
     var marks = [_]u32{ 1, 2, 3, 4 };
     for (&entities, 0..) |*e, i| {
         e.* = h.tree.create("Node", 0);
-        try testing.expect(h.host().bind.?(h.host(), e.*, id, &marks[i], null));
+        try testing.expectEqual(R.ok, h.host().bind.?(h.host(), e.*, id, &marks[i]));
     }
 
     h.host().unbind.?(h.host(), entities[0]);
@@ -943,7 +873,7 @@ test "the last instance unbound empties its type" {
     const id = try h.declare("pong.paddle", c.KE_SCRIPT_REACH_SELF);
     const only = h.tree.create("Only", 0);
     var mark: u32 = 1;
-    try testing.expect(h.host().bind.?(h.host(), only, id, &mark, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), only, id, &mark));
     h.host().unbind.?(h.host(), only);
 
     var count: u32 = 1;
@@ -962,7 +892,7 @@ test "a descendant of the wanted type is found through intermediate nodes" {
     const holder = h.tree.create("Sounds", ball);
     const hit = h.tree.create("HitSound", holder);
     var marker: u32 = 1;
-    try testing.expect(h.host().bind.?(h.host(), hit, audio, &marker, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), hit, audio, &marker));
 
     try testing.expectEqual(hit, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
 }
@@ -978,8 +908,8 @@ test "a descendant named by the borrow is picked out of several of its type" {
     const score = h.tree.create("ScoreSound", ball);
     var m1: u32 = 1;
     var m2: u32 = 2;
-    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
-    try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), hit, audio, &m1));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), score, audio, &m2));
 
     try testing.expectEqual(score, h.host().resolve.?(h.host(), ball, audio, "ScoreSound", c.KE_SCRIPT_BORROW_DESCENDANT, null));
 }
@@ -995,8 +925,8 @@ test "an unnamed borrow answered by two nodes resolves to nothing instead of gue
     const score = h.tree.create("ScoreSound", ball);
     var m1: u32 = 1;
     var m2: u32 = 2;
-    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
-    try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), hit, audio, &m1));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), score, audio, &m2));
 
     try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
 }
@@ -1015,13 +945,13 @@ test "an invalid answer says whether nothing matched or too much did" {
 
     const hit = h.tree.create("HitSound", ball);
     var m1: u32 = 1;
-    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m1, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), hit, audio, &m1));
     try testing.expectEqual(hit, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, &verdict));
     try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_FOUND), verdict);
 
     const score = h.tree.create("ScoreSound", ball);
     var m2: u32 = 2;
-    try testing.expect(h.host().bind.?(h.host(), score, audio, &m2, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), score, audio, &m2));
     _ = h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, &verdict);
     try testing.expectEqual(@as(c.ke_script_resolve, c.KE_SCRIPT_RESOLVE_AMBIGUOUS), verdict);
 }
@@ -1048,7 +978,7 @@ test "a node of the wanted type outside the subtree is not a descendant" {
     const ball = h.tree.create("Ball", 0);
     const elsewhere = h.tree.create("Music", 0);
     var marker: u32 = 1;
-    try testing.expect(h.host().bind.?(h.host(), elsewhere, audio, &marker, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), elsewhere, audio, &marker));
 
     try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_DESCENDANT, null));
 }
@@ -1062,7 +992,7 @@ test "a borrow reaching anywhere finds a node the subtree does not contain" {
     const ball = h.tree.create("Ball", 0);
     const elsewhere = h.tree.create("Music", 0);
     var marker: u32 = 1;
-    try testing.expect(h.host().bind.?(h.host(), elsewhere, audio, &marker, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), elsewhere, audio, &marker));
 
     try testing.expectEqual(elsewhere, h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_ANYWHERE, null));
     try testing.expectEqual(elsewhere, h.host().resolve.?(h.host(), ball, audio, "Music", c.KE_SCRIPT_BORROW_ANYWHERE, null));
@@ -1079,8 +1009,8 @@ test "two nodes of one type anywhere are ambiguous until the borrow names one" {
     const hit = h.tree.create("HitSound", 0);
     var m1: u32 = 1;
     var m2: u32 = 2;
-    try testing.expect(h.host().bind.?(h.host(), music, audio, &m1, null));
-    try testing.expect(h.host().bind.?(h.host(), hit, audio, &m2, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), music, audio, &m1));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), hit, audio, &m2));
 
     var verdict: c.ke_script_resolve = c.KE_SCRIPT_RESOLVE_FOUND;
     _ = h.host().resolve.?(h.host(), ball, audio, "", c.KE_SCRIPT_BORROW_ANYWHERE, &verdict);
@@ -1113,8 +1043,8 @@ test "the nearest ancestor of the wanted type wins over a further one" {
     const leaf = h.tree.create("Leaf", inner);
     var m1: u32 = 1;
     var m2: u32 = 2;
-    try testing.expect(h.host().bind.?(h.host(), outer, field, &m1, null));
-    try testing.expect(h.host().bind.?(h.host(), inner, field, &m2, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), outer, field, &m1));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), inner, field, &m2));
 
     try testing.expectEqual(inner, h.host().resolve.?(h.host(), leaf, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, null));
 }
@@ -1127,7 +1057,7 @@ test "a node is not its own ancestor" {
     const field = try h.declare("pong.field", c.KE_SCRIPT_REACH_ANY);
     const node = h.tree.create("Field", 0);
     var marker: u32 = 1;
-    try testing.expect(h.host().bind.?(h.host(), node, field, &marker, null));
+    try testing.expectEqual(R.ok, h.host().bind.?(h.host(), node, field, &marker));
 
     try testing.expectEqual(@as(c.ke_entity, c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), node, field, "", c.KE_SCRIPT_BORROW_ANCESTOR, null));
 }

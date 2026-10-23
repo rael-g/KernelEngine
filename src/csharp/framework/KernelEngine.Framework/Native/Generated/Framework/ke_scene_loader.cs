@@ -1,8 +1,8 @@
 using KernelEngine.Asset.Native;
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Logger.Native;
+using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
 using KernelEngine.Text.Native;
 
@@ -12,9 +12,9 @@ public unsafe partial struct ke_scene_loader
 {
     public void* handle;
 
-    [NativeTypeName("bool (*)(struct ke_scene_loader *, const char *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_scene_loader*, sbyte*, KernelEngine.Common.Native.ke_error**, bool> load;
+    [NativeTypeName("ke_result (*)(struct ke_scene_loader *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_loader*, sbyte*, KernelEngine.Result.Native.ke_result> load;
 
-    [NativeTypeName("bool (*)(struct ke_scene_loader *, ke_script_factory_func, void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_scene_loader*, delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, KernelEngine.Common.Native.ke_error**, bool>, void*, KernelEngine.Common.Native.ke_error**, bool> register_script_factory;
+    [NativeTypeName("ke_result (*)(struct ke_scene_loader *, ke_script_factory_func, void *)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_loader*, delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, KernelEngine.Result.Native.ke_result>, void*, KernelEngine.Result.Native.ke_result> register_script_factory;
 }

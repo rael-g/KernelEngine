@@ -1,5 +1,4 @@
 using KernelEngine.Common;
-using KernelEngine.Common.Native;
 
 namespace KernelEngine.Framework;
 
@@ -17,9 +16,8 @@ public unsafe partial class NativeInputActions
 
     private static ke_input_actions_handle Create()
     {
-        ke_error* err = null;
-        var handle = KernelEngine.Framework.Native.NativeMethods.input_actions_create(&err);
-        if (handle.@ref == null) throw NativeErrors.FromNative(err, "input_actions_create");
+        ke_input_actions_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create(&handle), "ke_input_actions_create");
         return handle;
     }
 }

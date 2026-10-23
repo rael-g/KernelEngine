@@ -654,12 +654,12 @@ pub fn Stubs(comptime c: type) type {
                 return &self.vtable;
             }
 
-            fn registerFields(_: ?*c.ke_world, _: c.ke_component_id, _: [*c]const c.ke_component_field, _: u32, _: [*c][*c]c.ke_error) callconv(.c) bool {
-                return true;
+            fn registerFields(_: ?*c.ke_world, _: c.ke_component_id, _: [*c]const c.ke_component_field, _: u32) callconv(.c) c.ke_result {
+                return c.KE_OK;
             }
 
-            fn registerApply(_: ?*c.ke_world, _: c.ke_component_id, _: c.ke_component_apply_fn, _: ?*anyopaque, _: [*c][*c]c.ke_error) callconv(.c) bool {
-                return true;
+            fn registerApply(_: ?*c.ke_world, _: c.ke_component_id, _: c.ke_component_apply_fn, _: ?*anyopaque) callconv(.c) c.ke_result {
+                return c.KE_OK;
             }
         };
     };

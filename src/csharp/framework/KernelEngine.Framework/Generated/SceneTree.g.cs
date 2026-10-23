@@ -54,48 +54,46 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         get => Handle->root(Handle);
     }
 
-    /// <summary>Creates a node attached under `parent`, or under the root when `parent` is KE_ENTITY_INVALID. The node exists when the call returns.</summary>
+    /// <summary>Creates a node attached under `parent`, or under the root when `parent` is KE_ENTITY_INVALID. The node exists when the call returns. Fails as an invalid argument for a null tree or out_node, and as general when the ecs refuses the node.</summary>
+    /// <returns>Receives the node.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong CreateNode(string name, ulong parent)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            ke_error* err = null;
-            var result = Handle->create_node(Handle, (sbyte*)namePtr, parent, &err);
-            if (err != null) throw NativeErrors.FromNative(err, "create_node");
-            return result;
+            ulong resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_node(Handle, (sbyte*)namePtr, parent, &resultOut), "create_node");
+            return resultOut;
         }
     }
 
-    /// <summary>Records the creation of a node into `commands`, with the same placement as create_node. The id is usable as a reference at once; the node exists when `commands` is applied. For a caller that may not touch the world, such as a system body.</summary>
+    /// <summary>Records the creation of a node into `commands`, with the same placement as create_node. The id is usable as a reference at once; the node exists when `commands` is applied. For a caller that may not touch the world, such as a system body. Fails as an invalid argument for a null tree, commands or out_node, and with the queue's code when it refuses the recording.</summary>
+    /// <returns>Receives the reserved id.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong CreateNodeDeferred(string name, ulong parent, nint commands)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            ke_error* err = null;
-            var result = Handle->create_node_deferred(Handle, (sbyte*)namePtr, parent, (ke_ecs_commands*)commands, &err);
-            if (err != null) throw NativeErrors.FromNative(err, "create_node_deferred");
-            return result;
+            ulong resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_node_deferred(Handle, (sbyte*)namePtr, parent, (ke_ecs_commands*)commands, &resultOut), "create_node_deferred");
+            return resultOut;
         }
     }
 
-    /// <summary>Destroys a node and all its descendants, each child before its parent. The node is gone when the call returns.</summary>
+    /// <summary>Destroys a node and all its descendants, each child before its parent. The node is gone when the call returns. Fails as an invalid argument for a null tree or the invalid entity, and as not found for an entity that is not a node.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void DestroyNode(ulong entity)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->destroy_node(Handle, entity, &err), err, "destroy_node");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_node(Handle, entity), "destroy_node");
     }
 
-    /// <summary>Records the destruction of a node and its descendants into `commands`, as destroy_node would do it when `commands` is applied.</summary>
+    /// <summary>Records the destruction of a node and its descendants into `commands`, as destroy_node would do it when `commands` is applied. Fails as destroy_node does, as an invalid argument for a null commands, and with the queue's code when it refuses the recording.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void DestroyNodeDeferred(ulong entity, nint commands)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, (ke_ecs_commands*)commands, &err), err, "destroy_node_deferred");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, (ke_ecs_commands*)commands), "destroy_node_deferred");
     }
 
 
@@ -104,16 +102,13 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         Handle->destroy_all(Handle);
     }
 
-    /// <exception cref="Exception">The native call failed.</exception>
+    /// <summary>The node a name or a slash-separated path from the root names, or KE_ENTITY_INVALID when none does.</summary>
     public ulong FindNode(string nameOrPath)
     {
         var nameOrPathBytes = System.Text.Encoding.UTF8.GetBytes(nameOrPath + '\0');
         fixed (byte* nameOrPathPtr = nameOrPathBytes)
         {
-            ke_error* err = null;
-            var result = Handle->find_node(Handle, (sbyte*)nameOrPathPtr, &err);
-            if (err != null) throw NativeErrors.FromNative(err, "find_node");
-            return result;
+            return Handle->find_node(Handle, (sbyte*)nameOrPathPtr);
         }
     }
 

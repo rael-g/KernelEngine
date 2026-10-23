@@ -1,4 +1,3 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Physics.Native;
 using KernelEngine.Runtime;
@@ -50,14 +49,11 @@ public sealed unsafe class Body2DModule : IRuntimeModule
             KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(&@params, &handle), "ke_physics_body2d_module_create");
         _handle = handle;
 
-        ke_error* err = null;
-
         var set = KernelEngine.Physics.Native.NativeMethods.physics_scene_components_create();
         try
         {
-            if (!set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native,
-                    ((KernelEngine.Framework.INativeWorld)world).Native, &err))
-                throw NativeErrors.FromNative(err, "register_into");
+            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native,
+                ((KernelEngine.Framework.INativeWorld)world).Native), "register_into");
         }
         finally
         {

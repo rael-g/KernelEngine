@@ -1,4 +1,3 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Runtime;
 
@@ -28,10 +27,8 @@ public sealed unsafe class AudioModule : IRuntimeModule
         var set = KernelEngine.Audio.Native.NativeMethods.audio_scene_components_create();
         try
         {
-            ke_error* err = null;
-            if (!set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native,
-                    ((KernelEngine.Framework.INativeWorld)world).Native, &err))
-                throw NativeErrors.FromNative(err, "register_into");
+            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native,
+                ((KernelEngine.Framework.INativeWorld)world).Native), "register_into");
         }
         finally
         {

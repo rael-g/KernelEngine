@@ -20,25 +20,26 @@ pub fn Set(comptime c: type, comptime entries: []const Entry(c)) type {
         var api: c.ke_scene_component_set = .{ .handle = null, .register_into = registerInto };
 
         /// Slot `register_into`. Registers the entries in order and stops at the first one the
-        /// ecs or the world refuses, whose error it reports.
-        fn registerInto(self: [*c]c.ke_scene_component_set, ecs_in: [*c]c.ke_ecs, world_in: [*c]c.ke_world, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-            if (self == null or ecs_in == null or world_in == null) {
-                c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "scene component set: a null argument", @src().file, @intCast(@src().line), null);
-                return false;
-            }
+        /// ecs or the world refuses, failing with its code.
+        fn registerInto(self: [*c]c.ke_scene_component_set, ecs_in: [*c]c.ke_ecs, world_in: [*c]c.ke_world) callconv(.c) c.ke_result {
+            if (self == null or ecs_in == null or world_in == null) return c.KE_RESULT_INVALID_ARGUMENT;
             const ecs = ecs_in;
             const world = world_in;
             inline for (entries) |e| {
                 const fields: [*c]const c.ke_component_field = if (e.fields.len == 0) null else e.fields.ptr;
                 var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
-                if (ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = e.name, .size = e.size, .alignment = e.alignment, .fields = fields, .field_count = @intCast(e.fields.len) }, &cid) != c.KE_OK) {
-                    c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "scene component set: the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
-                    return false;
+                const made = ecs.*.component_register.?(ecs, &c.ke_component_params{ .name = e.name, .size = e.size, .alignment = e.alignment, .fields = fields, .field_count = @intCast(e.fields.len) }, &cid);
+                if (made != c.KE_OK) return made;
+                if (e.fields.len > 0) {
+                    const described = world.*.register_component_fields.?(world, cid, fields, @intCast(e.fields.len));
+                    if (described != c.KE_OK) return described;
                 }
-                if (e.fields.len > 0 and !world.*.register_component_fields.?(world, cid, fields, @intCast(e.fields.len), out_error)) return false;
-                if (e.apply != null and !world.*.register_component_apply.?(world, cid, e.apply, null, out_error)) return false;
+                if (e.apply != null) {
+                    const applied = world.*.register_component_apply.?(world, cid, e.apply, null);
+                    if (applied != c.KE_OK) return applied;
+                }
             }
-            return true;
+            return c.KE_OK;
         }
 
         fn destroy(_: [*c]c.ke_scene_component_set) callconv(.c) void {}

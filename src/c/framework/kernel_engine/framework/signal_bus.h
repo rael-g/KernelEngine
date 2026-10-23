@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 
 #ifdef __cplusplus
@@ -44,15 +44,17 @@ extern "C"
         /// [interns] Resolves a signal by name, registering it on first use.
         ///
         /// The payload size is part of the identity: a second registration of the
-        /// name under a different size fails.
+        /// name under a different size fails as already existing.
         /// @param name [utf8, type_name]
         /// @param payload_size [type_size]
         /// @param out_id [out]
-        bool (*signal_id)(struct ke_signal_bus *self,
-                          const char           *name,
-                          uint32_t              payload_size,
-                          uint32_t             *out_id,
-                          ke_error            **out_error);
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or empty @p name or a null
+        ///         @p out_id, KE_RESULT_ALREADY_EXISTS, or KE_RESULT_OUT_OF_MEMORY when the
+        ///         table is full.
+        ke_result (*signal_id)(struct ke_signal_bus *self,
+                               const char           *name,
+                               uint32_t              payload_size,
+                               uint32_t             *out_id);
 
         /// [try] Resolves a signal by name without registering it. An unregistered
         /// name fails.
@@ -65,12 +67,13 @@ extern "C"
         /// Wires one source entity's signal to one target entity, tagged with a
         /// handler selector. Connecting the same
         /// quadruple twice is a no-op rather than a duplicate delivery.
-        bool (*connect)(struct ke_signal_bus *self,
-                        ke_entity             source,
-                        uint32_t              signal_id,
-                        ke_entity             target,
-                        uint32_t              handler_id,
-                        ke_error            **out_error);
+        /// @return KE_OK; KE_RESULT_NOT_FOUND for a signal never registered, or
+        ///         KE_RESULT_OUT_OF_MEMORY when the table is full.
+        ke_result (*connect)(struct ke_signal_bus *self,
+                             ke_entity             source,
+                             uint32_t              signal_id,
+                             ke_entity             target,
+                             uint32_t              handler_id);
 
         /// Removes a connection previously made by connect(). Returns false when
         /// no such connection exists.
@@ -85,12 +88,15 @@ extern "C"
 
         /// Queues one emission for this frame. The payload is copied into frame
         /// storage, so the caller's buffer need not outlive the call.
-        bool (*emit)(struct ke_signal_bus *self,
-                     ke_entity             source,
-                     uint32_t              signal_id,
-                     const void           *payload,
-                     uint32_t              payload_size,
-                     ke_error            **out_error);
+        /// @return KE_OK; KE_RESULT_NOT_FOUND for a signal never registered,
+        ///         KE_RESULT_NOT_INITIALIZED for one whose payload size was never declared,
+        ///         KE_RESULT_INVALID_ARGUMENT for a size that differs from it or a missing
+        ///         payload, or KE_RESULT_OUT_OF_MEMORY when the frame's storage is full.
+        ke_result (*emit)(struct ke_signal_bus *self,
+                          ke_entity             source,
+                          uint32_t              signal_id,
+                          const void           *payload,
+                          uint32_t              payload_size);
 
         /// Joins this frame's emissions against the connection table and returns
         /// the resulting deliveries. Idempotent within a frame: calling it twice

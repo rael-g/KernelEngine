@@ -1,7 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/input/key.h>
 #include <kernel_engine/input/snapshot.h>
 #include <stdint.h>
@@ -47,9 +47,11 @@ extern "C"
         /** Replaces every action with those of a TOML input file. An action type other than
          * Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a
          * field, and a key or mouse button name the engine does not know each fail the load,
-         * with a message naming the action and the binding; a load that fails leaves no actions.
+         * as an invalid argument, logging the action and the binding; a load that fails leaves
+         * no actions. A file that cannot be opened fails as not found and one that does not parse
+         * as KE_RESULT_IO.
          * @param path [utf8] */
-        bool (*load)(struct ke_input_actions *self, const char *path, ke_error **out_error);
+        ke_result (*load)(struct ke_input_actions *self, const char *path);
 
         /** @param name [utf8] */
         int32_t (*get_action_id)(struct ke_input_actions *self, const char *name);
@@ -58,26 +60,34 @@ extern "C"
         int32_t (*add_action)(struct ke_input_actions *self, const char *name,
                               ke_action_type type);
 
-        bool (*bind_key)(struct ke_input_actions *self, int32_t action_id, ke_key key, ke_error **out_error);
+        /** Adds a key binding to an action.
+         * @return KE_OK; KE_RESULT_NOT_FOUND for an id no action has, or KE_RESULT_OUT_OF_MEMORY. */
+        ke_result (*bind_key)(struct ke_input_actions *self, int32_t action_id, ke_key key);
 
-        bool (*bind_mouse_button)(struct ke_input_actions *self, int32_t action_id,
-                                  ke_mouse_button button, ke_error **out_error);
+        /** Adds a mouse button binding to an action. Fails as bind_key does. */
+        ke_result (*bind_mouse_button)(struct ke_input_actions *self, int32_t action_id,
+                                       ke_mouse_button button);
 
-        bool (*bind_key_pair)(struct ke_input_actions *self, int32_t action_id,
-                              ke_key negative, ke_key positive, ke_error **out_error);
+        /** Adds a one-axis binding to an action, positive while @p positive is held and negative
+         * while @p negative is. Fails as bind_key does. */
+        ke_result (*bind_key_pair)(struct ke_input_actions *self, int32_t action_id,
+                                   ke_key negative, ke_key positive);
 
-        bool (*bind_key_quad)(struct ke_input_actions *self, int32_t action_id,
-                              ke_key up, ke_key down, ke_key left, ke_key right, ke_error **out_error);
+        /** Adds a two-axis binding to an action: x is right minus left and y is up minus down.
+         * Fails as bind_key does. */
+        ke_result (*bind_key_quad)(struct ke_input_actions *self, int32_t action_id,
+                                   ke_key up, ke_key down, ke_key left, ke_key right);
 
         /** Runs one frame of binding evaluation against @p snapshot, updating polling
          * state and firing @p on_event for each phase transition. A null @p on_event
          * updates polling only.
-         * @param on_event [closure:event_ctx] */
-        bool (*evaluate)(struct ke_input_actions *self,
-                         const ke_input_snapshot    *snapshot,
-                         ke_input_action_event_func  on_event,
-                         void                       *event_ctx,
-                         ke_error                  **out_error);
+         * @param on_event [closure:event_ctx]
+         * @return KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null @p snapshot, which changes
+         *         nothing. */
+        ke_result (*evaluate)(struct ke_input_actions *self,
+                              const ke_input_snapshot    *snapshot,
+                              ke_input_action_event_func  on_event,
+                              void                       *event_ctx);
 
         bool (*is_action_down)(struct ke_input_actions *self, int32_t action_id);
         bool (*was_action_pressed)(struct ke_input_actions *self, int32_t action_id);

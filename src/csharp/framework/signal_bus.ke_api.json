@@ -61,12 +61,12 @@
       "slots": [
         {
           "name": "signal_id",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [
             "interns"
           ],
-          "doc": "Resolves a signal by name, registering it on first use. The payload size is part of the identity: a second registration of the name under a different size fails.",
-          "return_doc": null,
+          "doc": "Resolves a signal by name, registering it on first use. The payload size is part of the identity: a second registration of the name under a different size fails as already existing.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or empty name or a null out_id, KE_RESULT_ALREADY_EXISTS, or KE_RESULT_OUT_OF_MEMORY when the table is full.",
           "params": [
             {
               "name": "name",
@@ -91,12 +91,6 @@
               "tags": [
                 "out"
               ],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
               "doc": null
             }
           ],
@@ -132,10 +126,10 @@
         },
         {
           "name": "connect",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Wires one source entity\u0027s signal to one target entity, tagged with a handler selector. Connecting the same quadruple twice is a no-op rather than a duplicate delivery.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for a signal never registered, or KE_RESULT_OUT_OF_MEMORY when the table is full.",
           "params": [
             {
               "name": "source",
@@ -158,12 +152,6 @@
             {
               "name": "handler_id",
               "type": "uint32_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }
@@ -222,10 +210,10 @@
         },
         {
           "name": "emit",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Queues one emission for this frame. The payload is copied into frame storage, so the caller\u0027s buffer need not outlive the call.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for a signal never registered, KE_RESULT_NOT_INITIALIZED for one whose payload size was never declared, KE_RESULT_INVALID_ARGUMENT for a size that differs from it or a missing payload, or KE_RESULT_OUT_OF_MEMORY when the frame\u0027s storage is full.",
           "params": [
             {
               "name": "source",
@@ -248,12 +236,6 @@
             {
               "name": "payload_size",
               "type": "uint32_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }

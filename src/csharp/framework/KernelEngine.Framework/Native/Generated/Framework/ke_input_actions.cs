@@ -1,8 +1,8 @@
 using KernelEngine.Asset.Native;
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Logger.Native;
+using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
 using KernelEngine.Text.Native;
 
@@ -12,8 +12,8 @@ public unsafe partial struct ke_input_actions
 {
     public void* handle;
 
-    [NativeTypeName("bool (*)(struct ke_input_actions *, const char *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, KernelEngine.Common.Native.ke_error**, bool> load;
+    [NativeTypeName("ke_result (*)(struct ke_input_actions *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, KernelEngine.Result.Native.ke_result> load;
 
     [NativeTypeName("int32_t (*)(struct ke_input_actions *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, int> get_action_id;
@@ -21,20 +21,20 @@ public unsafe partial struct ke_input_actions
     [NativeTypeName("int32_t (*)(struct ke_input_actions *, const char *, ke_action_type)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, ke_action_type, int> add_action;
 
-    [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t, ke_key, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, KernelEngine.Input.Native.ke_key, KernelEngine.Common.Native.ke_error**, bool> bind_key;
+    [NativeTypeName("ke_result (*)(struct ke_input_actions *, int32_t, ke_key)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, KernelEngine.Input.Native.ke_key, KernelEngine.Result.Native.ke_result> bind_key;
 
-    [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t, ke_mouse_button, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, KernelEngine.Input.Native.ke_mouse_button, KernelEngine.Common.Native.ke_error**, bool> bind_mouse_button;
+    [NativeTypeName("ke_result (*)(struct ke_input_actions *, int32_t, ke_mouse_button)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, KernelEngine.Input.Native.ke_mouse_button, KernelEngine.Result.Native.ke_result> bind_mouse_button;
 
-    [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t, ke_key, ke_key, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, KernelEngine.Input.Native.ke_key, KernelEngine.Input.Native.ke_key, KernelEngine.Common.Native.ke_error**, bool> bind_key_pair;
+    [NativeTypeName("ke_result (*)(struct ke_input_actions *, int32_t, ke_key, ke_key)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, KernelEngine.Input.Native.ke_key, KernelEngine.Input.Native.ke_key, KernelEngine.Result.Native.ke_result> bind_key_pair;
 
-    [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t, ke_key, ke_key, ke_key, ke_key, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, KernelEngine.Input.Native.ke_key, KernelEngine.Input.Native.ke_key, KernelEngine.Input.Native.ke_key, KernelEngine.Input.Native.ke_key, KernelEngine.Common.Native.ke_error**, bool> bind_key_quad;
+    [NativeTypeName("ke_result (*)(struct ke_input_actions *, int32_t, ke_key, ke_key, ke_key, ke_key)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, KernelEngine.Input.Native.ke_key, KernelEngine.Input.Native.ke_key, KernelEngine.Input.Native.ke_key, KernelEngine.Input.Native.ke_key, KernelEngine.Result.Native.ke_result> bind_key_quad;
 
-    [NativeTypeName("bool (*)(struct ke_input_actions *, const ke_input_snapshot *, ke_input_action_event_func, void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, KernelEngine.Input.Native.ke_input_snapshot*, delegate* unmanaged[Cdecl]<void*, ke_input_action_event, void>, void*, KernelEngine.Common.Native.ke_error**, bool> evaluate;
+    [NativeTypeName("ke_result (*)(struct ke_input_actions *, const ke_input_snapshot *, ke_input_action_event_func, void *)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, KernelEngine.Input.Native.ke_input_snapshot*, delegate* unmanaged[Cdecl]<void*, ke_input_action_event, void>, void*, KernelEngine.Result.Native.ke_result> evaluate;
 
     [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, int, bool> is_action_down;
