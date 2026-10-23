@@ -27,8 +27,8 @@ public unsafe partial struct ke_scene_tree
     [NativeTypeName("ke_result (*)(struct ke_scene_tree *, ke_entity, ke_ecs_commands *)")]
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, ulong, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Result.Native.ke_result> destroy_node_deferred;
 
-    [NativeTypeName("void (*)(struct ke_scene_tree *)")]
-    public delegate* unmanaged[Cdecl]<ke_scene_tree*, void> destroy_all;
+    [NativeTypeName("ke_result (*)(struct ke_scene_tree *)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_tree*, KernelEngine.Result.Native.ke_result> destroy_all;
 
     [NativeTypeName("ke_entity (*)(struct ke_scene_tree *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_scene_tree*, sbyte*, ulong> find_node;

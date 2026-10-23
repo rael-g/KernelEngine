@@ -96,10 +96,11 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
         KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, (ke_ecs_commands*)commands), "destroy_node_deferred");
     }
 
-
+    /// <summary>Destroys every child of the root and leaves the root. Keeps going past a subtree the ecs refuses and returns the first failure.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void DestroyAll()
     {
-        Handle->destroy_all(Handle);
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_all(Handle), "destroy_all");
     }
 
     /// <summary>The node a name or a slash-separated path from the root names, or KE_ENTITY_INVALID when none does.</summary>
