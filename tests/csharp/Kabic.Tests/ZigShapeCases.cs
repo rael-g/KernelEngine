@@ -42,7 +42,7 @@ internal static class ZigShapeCases
                 var model = new ApiModel();
                 build(model);
                 var classified = Classifier.Classify(model, (providers ?? []).ToHashSet(), [], ProbeConvention.Value);
-                var emitted = ZigWriter.Render(model, classified, ProbeConvention.Value, foreign, ProbeErrorAbi.Model());
+                var emitted = ZigWriter.Render(model, classified, ProbeConvention.Value, foreign, ProbeResultAbi.Model());
                 if (Environment.GetEnvironmentVariable("KE_ZIG_SHAPES_DUMP") == what) Console.WriteLine(emitted);
 
                 foreach (var needle in contains)
@@ -149,43 +149,42 @@ internal static class ZigShapeCases
         Expect("a supplied handler is a trampoline over the caller's own state",
             m =>
             {
-                m.Callbacks.Add(new ApiCallback("ke_probe_apply_fn", "_Bool", null, [
+                m.Callbacks.Add(new ApiCallback("ke_probe_apply_fn", "ke_result", null, [
                     P("ctx", "void *", "context"),
                     P("name", "const char *", "utf8"),
-                    P("out_error", "ke_error **"),
                 ]));
                 m.Structs.Add(Vtable("ke_probe",
-                    Slot("register_apply", "_Bool",
+                    Slot("register_apply", "ke_result",
                         P("apply", "ke_probe_apply_fn", "closure:ctx", "retained"),
-                        P("ctx", "void *"),
-                        P("out_error", "ke_error **"))));
+                        P("ctx", "void *"))));
                 m.Structs.Add(Handle("ke_probe"));
             },
             contains: [
                 "pub fn registerApply(self: Probe, ctx: anytype, comptime apply: "
                     + "fn (@TypeOf(ctx), [:0]const u8) Error!void) Error!void {",
                 "const ApplyTrampoline = struct {",
-                "fn call(ctx_lane: ?*anyopaque, name: [*:0]const u8, _: ?*?*abi.ke_error) callconv(.c) bool {",
-                "apply(@ptrCast(@alignCast(ctx_lane.?)), std.mem.span(name)) catch return false;",
-                "return true;",
-                "self.ref.register_apply(self.ref, ApplyTrampoline.call, @ptrCast(ctx), &err)",
+                "fn call(ctx_lane: ?*anyopaque, name: [*:0]const u8) callconv(.c) abi.ke_result {",
+                "apply(@ptrCast(@alignCast(ctx_lane.?)), std.mem.span(name)) catch |e| return codeOf(e);",
+                "return abi.KE_OK;",
+                "const rc = self.ref.register_apply(self.ref, ApplyTrampoline.call, @ptrCast(ctx));",
+                "if (rc != abi.KE_OK) return raise(rc);",
                 "const std = @import(\"std\");",
             ],
-            absent: ["@TypeOf(ctx), ?*anyopaque", "out_error: ?*?*abi.ke_error"],
+            absent: ["@TypeOf(ctx), ?*anyopaque", "ke_error"],
             providers: ["ke_probe"]);
 
         Expect("a type nothing describes is declared opaque so its pointer is legal",
             m =>
             {
                 m.Structs.Add(Vtable("ke_probe",
-                    Slot("spawn", "ke_task *", P("out_error", "ke_error **")),
+                    Slot("spawn", "ke_task *"),
                     Slot("cancel", "void", P("task", "ke_task *"))));
                 m.Structs.Add(Handle("ke_probe"));
             },
             contains: ["pub const ke_task = opaque {};",
-                       "pub fn spawn(self: Probe) Error!*abi.ke_task {",
+                       "pub fn spawn(self: Probe) *abi.ke_task {",
                        "pub fn cancel(self: Probe, task: *abi.ke_task) void {"],
-            absent: ["pub const ke_error = opaque", "pub const ke_error_type = opaque"],
+            absent: ["ke_error"],
             providers: ["ke_probe"]);
 
         Expect("an undescribed type reached by value is not made opaque",
@@ -201,13 +200,12 @@ internal static class ZigShapeCases
         Expect("a failure crosses as an error union one way and an optional error the other",
             m =>
             {
-                m.Callbacks.Add(new ApiCallback("ke_probe_body_fn", "void", null, [
+                m.Callbacks.Add(new ApiCallback("ke_probe_body_fn", "ke_result", null, [
                     P("data", "void *", "context"),
-                    P("out_failure", "const ke_error_type **"),
                 ]));
                 m.Callbacks.Add(new ApiCallback("ke_probe_done_fn", "void", null, [
                     P("data", "void *", "context"),
-                    P("failure", "const ke_error_type *"),
+                    P("outcome", "ke_result"),
                 ]));
                 m.Structs.Add(Vtable("ke_probe",
                     Slot("run", "void",
@@ -220,15 +218,14 @@ internal static class ZigShapeCases
             contains: [
                 "pub fn run(self: Probe, data: anytype, comptime body: fn (@TypeOf(data)) Error!void, "
                     + "tail: anytype, comptime done: fn (@TypeOf(tail), ?Error) void) void {",
-                "fn call(data_lane: ?*anyopaque, out_failure: ?*?*const abi.ke_error_type) callconv(.c) void {",
-                "body(@ptrCast(@alignCast(data_lane.?))) catch |e| {",
-                "if (out_failure) |slot| slot.* = errorType(e);",
-                "fn call(data_lane: ?*anyopaque, failure: ?*const abi.ke_error_type) callconv(.c) void {",
-                "done(@ptrCast(@alignCast(data_lane.?)), errorFrom(failure));",
-                "fn errorType(e: Error) *const abi.ke_error_type {",
-                "fn errorFrom(t: ?*const abi.ke_error_type) ?Error {",
+                "fn call(data_lane: ?*anyopaque) callconv(.c) abi.ke_result {",
+                "body(@ptrCast(@alignCast(data_lane.?))) catch |e| return codeOf(e);",
+                "fn call(data_lane: ?*anyopaque, outcome: abi.ke_result) callconv(.c) void {",
+                "done(@ptrCast(@alignCast(data_lane.?)), if (outcome == abi.KE_OK) null else raise(outcome));",
+                "fn codeOf(e: Error) abi.ke_result {",
+                "fn raise(code: abi.ke_result) Error {",
             ],
-            absent: ["?Error) Error!void", "failure: *const abi.ke_error_type"],
+            absent: ["?Error) Error!void", "ke_error"],
             providers: ["ke_probe"]);
 
         Expect("a vtable the caller implements is filled from a type the compiler looks methods up on",
@@ -243,9 +240,8 @@ internal static class ZigShapeCases
                     new ApiSlot("destroy", "void", [], null, null, []) { Receiver = "ke_probe_sink *" },
                 ]));
                 m.Structs.Add(Vtable("ke_probe",
-                    Slot("add_sink", "bool",
-                        P("sink", "ke_probe_sink", "callback"),
-                        P("out_error", "ke_error **"))));
+                    Slot("add_sink", "ke_result",
+                        P("sink", "ke_probe_sink", "callback"))));
                 m.Structs.Add(Handle("ke_probe"));
             },
             contains: [
@@ -258,7 +254,8 @@ internal static class ZigShapeCases
                 "    .min_level = min_level,",
                 "    .write = SinkVtable.write,",
                 "    .destroy = SinkVtable.destroy,",
-                "if (!self.ref.add_sink(self.ref, sink_native, &err)) return raise(err);",
+                "const rc = self.ref.add_sink(self.ref, sink_native);",
+                "if (rc != abi.KE_OK) return raise(rc);",
             ],
             absent: ["sink: abi.ke_probe_sink", "ProbeSink = struct"],
             providers: ["ke_probe"]);
@@ -268,7 +265,7 @@ internal static class ZigShapeCases
             {
                 m.Structs.Add(Vtable("ke_probe_ctx", Slot("spawn", "u64")));
                 m.Structs.Add(Vtable("ke_probe",
-                    Slot("attach", "bool", P("ctx", "ke_probe_ctx *", "ctx"), P("out_error", "ke_error **"))));
+                    Slot("attach", "ke_result", P("ctx", "ke_probe_ctx *", "ctx"))));
                 m.Structs.Add(Handle("ke_probe"));
             },
             contains: [
@@ -276,7 +273,8 @@ internal static class ZigShapeCases
                 "pub fn borrow(ref: *abi.ke_probe_ctx) ProbeCtx {",
                 "        return .{ .ref = ref };",
                 "pub fn attach(self: Probe, ctx: ProbeCtx) Error!void {",
-                "if (!self.ref.attach(self.ref, ctx.ref, &err)) return raise(err);",
+                "const rc = self.ref.attach(self.ref, ctx.ref);",
+                "if (rc != abi.KE_OK) return raise(rc);",
             ],
             absent: [
                 "ctx: *abi.ke_probe_ctx)",
@@ -300,9 +298,8 @@ internal static class ZigShapeCases
                     new ApiField("pinned", "uint32_t", ["default:0"], null),
                 ], []));
                 m.Structs.Add(Vtable("ke_probe",
-                    Slot("register", "bool",
-                        P("p", "const ke_probe_params *", "expand"),
-                        P("out_error", "ke_error **"))));
+                    Slot("register", "ke_result",
+                        P("p", "const ke_probe_params *", "expand"))));
                 m.Structs.Add(Handle("ke_probe"));
             },
             contains: [
@@ -316,7 +313,8 @@ internal static class ZigShapeCases
                 "    .run = RunTrampoline.call,",
                 "    .terms = p.terms.ptr,",
                 "    .term_count = @intCast(p.terms.len),",
-                "if (!self.ref.register(self.ref, &p_native, &err)) return raise(err);",
+                "const rc = self.ref.register(self.ref, &p_native);",
+                "if (rc != abi.KE_OK) return raise(rc);",
             ],
             absent: ["p: *const abi.ke_probe_params", "name: [*:0]const u8,\n    data:"],
             providers: ["ke_probe"]);

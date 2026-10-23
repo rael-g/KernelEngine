@@ -71,7 +71,7 @@ internal static class WriteZigCommand
         var convention = ConventionLoader.Load(domainsPath);
         var classified = Classifier.Classify(model, providers.ToHashSet(), [], convention);
         var text = ZigWriter.Render(model, classified, convention, foreign,
-            Regeneration.ExtractErrorAbi(convention, root, null));
+            Regeneration.ExtractResultAbi(convention, root, null));
 
         Directory.CreateDirectory(outDir);
         var outPath = Path.Combine(outDir, $"{domain}.zig");

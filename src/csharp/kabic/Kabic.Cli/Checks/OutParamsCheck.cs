@@ -24,7 +24,7 @@ internal static class OutParamsCheck
             foreach (var p in parameters?.AsArray() ?? [])
             {
                 var name = p!["name"]?.GetValue<string>();
-                if (name is null || name == convention.ErrorLaneName) continue;
+                if (name is null) continue;
                 if (name != "out" && !name.StartsWith(convention.OutParamPrefix, StringComparison.Ordinal)) continue;
                 var tags = (p["tags"]?.AsArray() ?? []).Select(t => t!.GetValue<string>().Split(':')[0]);
                 if (tags.Contains("out")) continue;

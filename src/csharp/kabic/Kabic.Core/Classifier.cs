@@ -214,9 +214,6 @@ public static class Classifier
 
         foreach (var fn in model.Functions)
         {
-            if (convention.IsFactoryName(fn.Name) && fn.Params.Any(convention.IsErrorOutParam)
-                && vtables.Any(v => fn.Returns.Contains(convention.HandleTypeFor(v.Name))))
-                continue;
             if (convention.IsFactoryName(fn.Name) && convention.ResultFactoryHandle(fn) is { } made
                 && vtables.Any(v => convention.HandleTypeFor(v.Name) == made))
                 continue;
@@ -272,8 +269,7 @@ public static class Classifier
     static ClassifiedSlot ClassifySlot(ApiModel model, ApiSlot slot, Convention convention)
     {
         var ps = slot.Params.ToList();
-        var fallible = convention.IsFallible(slot.Returns, ps);
-        if (fallible && !convention.ReturnsResult(slot.Returns)) ps = ps[..^1];
+        var fallible = convention.ReturnsResult(slot.Returns);
 
         var (expanded, bag) = ExpandedBag(model, slot);
         if (expanded is not null)

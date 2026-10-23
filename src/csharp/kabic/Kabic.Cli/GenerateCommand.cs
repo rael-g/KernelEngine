@@ -53,11 +53,6 @@ internal static class GenerateCommand
 
         if (options.Domains.Count == 0)
         {
-            var kindsFile = Place(convention.ErrorKindsOut);
-            Directory.CreateDirectory(Path.GetDirectoryName(kindsFile)!);
-            File.WriteAllText(kindsFile, Generation.ErrorKinds(convention));
-            Console.WriteLine("error kinds: regenerated");
-
             if (convention.ResultCodesOut.Length > 0)
             {
                 var codesFile = Place(convention.ResultCodesOut);
