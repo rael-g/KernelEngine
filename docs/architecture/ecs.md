@@ -36,12 +36,17 @@ field and must outlive the ecs.
 `entity_reserve` draws from; the world's own allocator issues ids from `world_id_base` upward.
 `ke_ecs_flecs_params.world_id_base` is therefore the capacity of the pool.
 
-**An internal flecs failure ends the process.** The plugin replaces the flecs abort hook,
-process-wide, logs the message and exits with status 1; every other failure is a `ke_result`.
+**A check flecs fails is a `ke_result`.** The triplets build flecs with soft checks kept in every
+build type (`vcpkg-triplets/flecs-checks.cmake`), so a check of a caller's input logs and returns
+instead of aborting, in release builds too. The plugin's log hook marks the calling
+thread's call as refused, and the slot returns `KE_RESULT_INVALID_ARGUMENT` with flecs's message
+logged. Only an internal flecs failure still ends the process, because flecs aborts once its abort
+hook returns; the plugin's hook logs the message and the stack at the failure first, through the
+log callback the host set.
 
 ## What the parts agree on without a contract
 
 - The invalid entity is `KE_ENTITY_INVALID` (0), and the plugin also treats component id 0 as
   invalid, while `KE_COMPONENT_INVALID` is declared as the all-ones value.
-- A destroyed or never-materialized id is refused by the plugin: add and get return null, destroy
-  and remove do nothing. The contract does not say this.
+- A destroyed or never-materialized id is refused by the plugin's add as an invalid argument; get
+  returns null, and destroy and remove leave it alone.

@@ -16,12 +16,17 @@ const log = std.log.scoped(.ecs_flecs);
 
 threadlocal var last_msg_buf: [1024]u8 = undefined;
 threadlocal var last_msg_len: usize = 0;
+threadlocal var flecs_refused: bool = false;
 
-/// flecs calls this for each log message, on the thread that logs it. Only messages at a fatal
-/// level with text are kept, in that thread's buffer, and a message that does not fit leaves the
-/// buffer empty.
+const abort_trace_depth = 32;
+
+/// flecs calls this for each log message, on the thread that logs it. A message at a fatal level is
+/// how flecs reports a check it failed, so it marks this thread's current call as refused and is
+/// kept in that thread's buffer; a message that does not fit leaves the buffer empty. Other levels
+/// are dropped.
 fn flecsLogHandler(level: i32, file: [*c]const u8, line: i32, msg: [*c]const u8) callconv(.c) void {
     if (level >= 0 or msg == null) return;
+    flecs_refused = true;
     const f: []const u8 = if (file != null) std.mem.span(file) else "?";
     const m: []const u8 = std.mem.span(msg);
     const dst = last_msg_buf[0 .. last_msg_buf.len - 1];
@@ -29,13 +34,32 @@ fn flecsLogHandler(level: i32, file: [*c]const u8, line: i32, msg: [*c]const u8)
     last_msg_len = written.len;
 }
 
-/// The abort hook flecs calls on an internal failure, past which flecs cannot recover the world. It
-/// logs the message this thread captured, or a fixed one when none was captured, and ends the
-/// process with a failure status.
+fn lastMessage() []const u8 {
+    return if (last_msg_len > 0) last_msg_buf[0..last_msg_len] else "no message captured";
+}
+
+/// Clears this thread's refusal, so the next `outcome` answers only for the flecs calls between
+/// the two.
+fn begin() void {
+    flecs_refused = false;
+}
+
+/// The result of the flecs calls since `begin`: ok, or the invalid-argument code with the message
+/// flecs gave logged.
+fn outcome() c.ke_result {
+    if (!flecs_refused) return R.ok;
+    flecs_refused = false;
+    log.warn("flecs refused the call: {s}", .{lastMessage()});
+    return R.code(error.InvalidArgument);
+}
+
+/// The abort hook flecs calls on an internal failure, one no check of a caller's input reaches.
+/// flecs ends the process itself once the hook returns; the hook logs the message this thread
+/// captured and the stack at the failure first, so the failure reaches the host's log.
 fn flecsAbortHandler() callconv(.c) void {
-    const msg = if (last_msg_len > 0) last_msg_buf[0..last_msg_len] else "no message captured";
-    log.err("flecs fatal: {s}", .{msg});
-    std.process.exit(1);
+    var addresses: [abort_trace_depth]usize = undefined;
+    const trace = std.debug.captureCurrentStackTrace(.{ .first_address = @returnAddress() }, &addresses);
+    log.err("flecs internal failure: {s}{f}", .{ lastMessage(), std.debug.FormatStackTrace{ .stack_trace = trace } });
 }
 
 var os_api_installed: bool = false;
@@ -206,44 +230,61 @@ fn rememberLayout(
 }
 
 /// Slot `entity_create`. Ids come from flecs's own allocator, which stays at or above
-/// `world_id_base`, so they never coincide with a reserved id. A null handle returns
-/// the null entity.
-fn entityCreate(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
-    const self = self_in orelse return 0;
-    if (self.handle == null) return 0;
+/// `world_id_base`, so they never coincide with a reserved id.
+fn entityCreate(self_in: ?*c.ke_ecs, out_entity: ?*c.ke_entity) callconv(.c) c.ke_result {
+    const out = out_entity orelse return R.code(error.InvalidArgument);
+    out.* = 0;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    return @intCast(c.ecs_new(s.world));
+    begin();
+    const e = c.ecs_new(s.world);
+    const rc = outcome();
+    if (rc != c.KE_OK) return rc;
+    out.* = @intCast(e);
+    return R.ok;
 }
 
 /// Slot `entity_reserve`. Hands out the next id of the reserve pool. The id is not alive in the
-/// world until `materializeReserved` runs for it. Returns the null entity when the pool is spent,
-/// and takes no lock, so threads may call it concurrently.
-fn entityReserve(self_in: ?*c.ke_ecs) callconv(.c) c.ke_entity {
-    const self = self_in orelse return 0;
-    if (self.handle == null) return 0;
+/// world until `materializeReserved` runs for it. It takes no lock and calls nothing of flecs, so
+/// threads may call it concurrently.
+fn entityReserve(self_in: ?*c.ke_ecs, out_entity: ?*c.ke_entity) callconv(.c) c.ke_result {
+    const out = out_entity orelse return R.code(error.InvalidArgument);
+    out.* = 0;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     const offset = s.reserve_next.fetchAdd(1, .monotonic);
-    if (offset >= s.reserve_end - s.reserve_low) return 0;
-    return @as(c.ke_entity, s.reserve_low) + offset;
+    if (offset >= s.reserve_end - s.reserve_low) {
+        log.warn("every id below world_id_base {d} was reserved", .{s.reserve_end});
+        return R.code(error.OutOfMemory);
+    }
+    out.* = @as(c.ke_entity, s.reserve_low) + offset;
+    return R.ok;
 }
 
 /// Slot `entity_materialize`. Brings a reserved id alive in the world through
 /// `materializeReserved`. An id outside the pool is left alone.
-fn entityMaterialize(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
-    const self = self_in orelse return;
-    if (self.handle == null or entity == 0) return;
-    materializeReserved(stateOf(self), entity);
+fn entityMaterialize(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or entity == 0) return R.code(error.InvalidArgument);
+    begin();
+    materializeReserved(stateOf(self), entity) catch |err| return R.code(err);
+    return outcome();
 }
 
 /// Makes a reserved id alive in flecs, and only the first call for its slot does. The bit recorded
 /// in `materialized` is the only memory of that call, so a reserved entity destroyed later is not
 /// revived. If the bitmap cannot be allocated, nothing is recorded and the id stays dead.
-fn materializeReserved(s: *State, entity: c.ke_entity) void {
+fn materializeReserved(s: *State, entity: c.ke_entity) error{OutOfMemory}!void {
     if (entity < s.reserve_low or entity >= s.reserve_end) return;
 
     const bits = s.materialized orelse blk: {
         const bytes = ((s.reserve_end - s.reserve_low) + 7) / 8;
-        const buf = heap.gpa.alloc(u8, bytes) catch return;
+        const buf = heap.gpa.alloc(u8, bytes) catch {
+            log.warn("materializing entity {d} failed: out of memory", .{entity});
+            return error.OutOfMemory;
+        };
         @memset(buf, 0);
         s.materialized = buf;
         break :blk buf;
@@ -258,12 +299,13 @@ fn materializeReserved(s: *State, entity: c.ke_entity) void {
 
 /// Slot `entity_destroy`. Deletes a living entity; a dead id is left alone. A reserved id that is
 /// destroyed stays dead, because its slot in `materialized` is already set.
-fn entityDestroy(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
-    const self = self_in orelse return;
-    if (self.handle == null or entity == 0) return;
+fn entityDestroy(self_in: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or entity == 0) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    if (!c.ecs_is_alive(s.world, @intCast(entity))) return;
-    c.ecs_delete(s.world, @intCast(entity));
+    begin();
+    if (c.ecs_is_alive(s.world, @intCast(entity))) c.ecs_delete(s.world, @intCast(entity));
+    return outcome();
 }
 
 /// Slot `component_register`. The params are checked first: a missing name, an alignment that is
@@ -329,7 +371,10 @@ fn componentRegister(
 
     var edesc: c.ecs_entity_desc_t = std.mem.zeroes(c.ecs_entity_desc_t);
     edesc.name = name;
+    begin();
     const e = c.ecs_entity_init(s.world, &edesc);
+    var rc = outcome();
+    if (rc != c.KE_OK) return rc;
 
     if (size == 0) {
         _ = findOrCreateQuery(s, @truncate(e));
@@ -342,6 +387,8 @@ fn componentRegister(
     cdesc.type.size = @intCast(size);
     cdesc.type.alignment = @intCast(alignment);
     const cid: c.ke_component_id = @truncate(c.ecs_component_init(s.world, &cdesc));
+    rc = outcome();
+    if (rc != c.KE_OK) return rc;
 
     if (incoming) |inc| {
         if (!rememberLayout(s, cid, inc.ptr, field_count)) {
@@ -398,21 +445,36 @@ fn componentLookup(
 
 /// Slot `component_add`. The bytes are zeroed and seeded with the remembered defaults only on the
 /// attach that adds the component; attaching a component the entity already holds returns its bytes
-/// unchanged. A zero-size component is added but yields null, as does an entity still not alive
-/// after materialization.
-fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_component_id) callconv(.c) ?*anyopaque {
-    const self = self_in orelse return null;
-    if (self.handle == null or entity == 0 or component == 0) return null;
+/// unchanged. A zero-size component is added and yields null. A reserved id is materialized first,
+/// and an entity still not alive after that is refused.
+fn componentAdd(
+    self_in: ?*c.ke_ecs,
+    entity: c.ke_entity,
+    component: c.ke_component_id,
+    out_data: ?*?*anyopaque,
+) callconv(.c) c.ke_result {
+    const out = out_data orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or entity == 0 or component == 0) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    materializeReserved(s, entity);
-    if (!c.ecs_is_alive(s.world, @intCast(entity))) return null;
+    begin();
+    materializeReserved(s, entity) catch |err| return R.code(err);
+    if (!c.ecs_is_alive(s.world, @intCast(entity))) {
+        log.warn("attaching component {d} to entity {d}, which is not alive", .{ component, entity });
+        return R.code(error.InvalidArgument);
+    }
 
     const already_had = c.ecs_has_id(s.world, @intCast(entity), @intCast(component));
     c.ecs_add_id(s.world, @intCast(entity), @intCast(component));
+    var rc = outcome();
+    if (rc != c.KE_OK) return rc;
     const ti = c.ecs_get_type_info(s.world, @intCast(component));
-    if (ti == null or ti.*.size <= 0) return null;
+    if (ti == null or ti.*.size <= 0) return R.ok;
 
     const slot = c.ecs_get_mut_id(s.world, @intCast(entity), @intCast(component));
+    rc = outcome();
+    if (rc != c.KE_OK) return rc;
     if (!already_had) {
         const bytes: [*]u8 = @ptrCast(slot);
         @memset(bytes[0..@intCast(ti.*.size)], 0);
@@ -420,17 +482,19 @@ fn componentAdd(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_compon
             component_fields.seedDefaults(slot, fields.ptr, @intCast(fields.len));
         }
     }
-    return slot;
+    out.* = slot;
+    return R.ok;
 }
 
 /// Slot `component_remove`. Removes a component from a living entity. An entity that is not alive
 /// is left alone.
-fn componentRemove(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_component_id) callconv(.c) void {
-    const self = self_in orelse return;
-    if (self.handle == null or entity == 0 or component == 0) return;
+fn componentRemove(self_in: ?*c.ke_ecs, entity: c.ke_entity, component: c.ke_component_id) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or entity == 0 or component == 0) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    if (!c.ecs_is_alive(s.world, @intCast(entity))) return;
-    c.ecs_remove_id(s.world, @intCast(entity), @intCast(component));
+    begin();
+    if (c.ecs_is_alive(s.world, @intCast(entity))) c.ecs_remove_id(s.world, @intCast(entity), @intCast(component));
+    return outcome();
 }
 
 /// Slot `component_get`. The bytes of a component for a living entity that holds it, otherwise
@@ -456,34 +520,56 @@ fn componentSize(self_in: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usize
 }
 
 /// Slot `query_register`. Builds a flecs query with one term per component id and records the byte
-/// size of each term for `queryResolve`; a tuple registered before, in the same order, returns the
-/// id it got then and builds nothing. The returned id counts from one, so it is never the invalid
-/// id. It returns the invalid id for a null argument, a zero count, more ids than a flecs
-/// query has terms, a query flecs refuses, or an allocation that fails; a flecs query created
-/// before a later step fails is finalized first.
-fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_count: usize) callconv(.c) c.ke_query_id {
-    const self = self_in orelse return c.KE_QUERY_INVALID;
+/// size of each term for `queryResolve`; a tuple registered before, in the same order, answers the
+/// id it got then and builds nothing. The id counts from one, so it is never the invalid id. A null
+/// argument, a zero count, more ids than a flecs query has terms and a query flecs refuses are
+/// invalid arguments; a flecs query created before a later step fails is finalized first.
+fn queryRegister(
+    self_in: ?*c.ke_ecs,
+    cids: [*c]const c.ke_component_id,
+    cid_count: usize,
+    out_query: ?*c.ke_query_id,
+) callconv(.c) c.ke_result {
+    const out = out_query orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_QUERY_INVALID;
+    const self = self_in orelse return R.code(error.InvalidArgument);
     var desc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
-    if (self.handle == null or cids == null or cid_count == 0 or cid_count > desc.terms.len)
-        return c.KE_QUERY_INVALID;
+    if (self.handle == null or cids == null or cid_count == 0) return R.code(error.InvalidArgument);
+    if (cid_count > desc.terms.len) {
+        log.warn("a query of {d} terms is more than the {d} a flecs query holds", .{ cid_count, desc.terms.len });
+        return R.code(error.InvalidArgument);
+    }
     const s = stateOf(self);
 
     if (s.rqueries) |existing| {
         for (existing[0..s.rquery_count], 1..) |*rq, id| {
-            if (std.mem.eql(c.ke_component_id, rq.cids, cids[0..cid_count])) return @intCast(id);
+            if (std.mem.eql(c.ke_component_id, rq.cids, cids[0..cid_count])) {
+                out.* = @intCast(id);
+                return R.ok;
+            }
         }
     }
 
     for (0..cid_count) |i| desc.terms[i].id = @intCast(cids[i]);
-    const q = c.ecs_query_init(s.world, &desc) orelse return c.KE_QUERY_INVALID;
+    begin();
+    const query = c.ecs_query_init(s.world, &desc);
+    const rc = outcome();
+    const q = query orelse {
+        if (rc == c.KE_OK) log.warn("flecs refused the query", .{});
+        return R.code(error.InvalidArgument);
+    };
+    if (rc != c.KE_OK) {
+        c.ecs_query_fini(q);
+        return rc;
+    }
     const elem_sizes = heap.gpa.alloc(usize, cid_count) catch {
         c.ecs_query_fini(q);
-        return c.KE_QUERY_INVALID;
+        return R.code(error.OutOfMemory);
     };
     const owned_cids = heap.gpa.dupe(c.ke_component_id, cids[0..cid_count]) catch {
         heap.gpa.free(elem_sizes);
         c.ecs_query_fini(q);
-        return c.KE_QUERY_INVALID;
+        return R.code(error.OutOfMemory);
     };
 
     if (s.rquery_count == s.rquery_capacity) {
@@ -492,7 +578,7 @@ fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_cou
             heap.gpa.free(owned_cids);
             heap.gpa.free(elem_sizes);
             c.ecs_query_fini(q);
-            return c.KE_QUERY_INVALID;
+            return R.code(error.OutOfMemory);
         };
         if (s.rqueries) |old| {
             @memcpy(new_buf[0..s.rquery_count], old[0..s.rquery_count]);
@@ -511,9 +597,9 @@ fn queryRegister(self_in: ?*c.ke_ecs, cids: [*c]const c.ke_component_id, cid_cou
         const ti = c.ecs_get_type_info(s.world, @intCast(cids[i]));
         rq.elem_sizes[i] = if (ti != null) @intCast(ti.*.size) else 0;
     }
-    const id: c.ke_query_id = @intCast(s.rquery_count + 1);
     s.rquery_count += 1;
-    return id;
+    out.* = @intCast(s.rquery_count);
+    return R.ok;
 }
 
 /// Slot `query_resolve`. Runs the query from its start and writes one segment per matching table:
@@ -529,16 +615,22 @@ fn queryResolve(
     max_segments: usize,
     out_columns: [*c]?*anyopaque,
     out_count: [*c]usize,
-) callconv(.c) void {
-    if (out_count != null) out_count.* = 0;
-    const self = self_in orelse return;
-    if (self.handle == null or query == c.KE_QUERY_INVALID or out_segments == null or out_columns == null or max_segments == 0) return;
+) callconv(.c) c.ke_result {
+    if (out_count == null) return R.code(error.InvalidArgument);
+    out_count.* = 0;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or query == c.KE_QUERY_INVALID or out_segments == null or out_columns == null or max_segments == 0)
+        return R.code(error.InvalidArgument);
     const s = stateOf(self);
     const idx: usize = @intCast(query - 1);
-    if (idx >= s.rquery_count) return;
+    if (idx >= s.rquery_count) {
+        log.warn("no query has id {d}", .{query});
+        return R.code(error.InvalidArgument);
+    }
     const rq = &s.rqueries.?[idx];
-    const q = rq.query orelse return;
+    const q = rq.query orelse return R.code(error.InvalidArgument);
 
+    begin();
     var seg: usize = 0;
     var it = c.ecs_query_iter(s.world, q);
     while (c.ecs_query_next(&it)) {
@@ -556,7 +648,10 @@ fn queryResolve(
         dst.column_count = @intCast(rq.term_count);
         seg += 1;
     }
-    if (out_count != null) out_count.* = seg;
+    const rc = outcome();
+    if (rc != c.KE_OK) return rc;
+    out_count.* = seg;
+    return R.ok;
 }
 
 /// The handle's `destroy`. Finalizes every cached and registered query and frees their arrays, the
@@ -677,6 +772,30 @@ fn register(h: c.ke_ecs_handle, params: *const c.ke_component_params) R.Error!c.
     var cid: c.ke_component_id = 0;
     try R.check(h.ref.*.component_register.?(h.ref, params, &cid));
     return cid;
+}
+
+fn spawn(h: c.ke_ecs_handle) R.Error!c.ke_entity {
+    var entity: c.ke_entity = 0;
+    try R.check(h.ref.*.entity_create.?(h.ref, &entity));
+    return entity;
+}
+
+fn reserve(h: c.ke_ecs_handle) R.Error!c.ke_entity {
+    var entity: c.ke_entity = 0;
+    try R.check(h.ref.*.entity_reserve.?(h.ref, &entity));
+    return entity;
+}
+
+fn attach(h: c.ke_ecs_handle, entity: c.ke_entity, cid: c.ke_component_id) R.Error!?*anyopaque {
+    var data: ?*anyopaque = null;
+    try R.check(h.ref.*.component_add.?(h.ref, entity, cid, &data));
+    return data;
+}
+
+fn queryOf(h: c.ke_ecs_handle, cids: []const c.ke_component_id) R.Error!c.ke_query_id {
+    var query: c.ke_query_id = c.KE_QUERY_INVALID;
+    try R.check(h.ref.*.query_register.?(h.ref, cids.ptr, cids.len, &query));
+    return query;
 }
 
 test "flecsLogHandler stashes a fatal-level message with file:line" {
@@ -855,31 +974,48 @@ test "componentRegister is idempotent for a repeated identical size" {
     try testing.expectEqual(first, second);
 }
 
-pub fn debugTriggerRealFlecsAssertion() void {
+/// Runs the abort hook as flecs does on an internal failure, after flecs reported `msg`.
+pub fn debugRunAbortHook(msg: [*:0]const u8) void {
     installFlecsOsApi();
+    flecsLogHandler(-4, "flecs_probe.c", 7, msg);
+    c.ecs_os_get_api().abort_.?();
+}
 
-    const world = c.ecs_init();
-    var edesc: c.ecs_entity_desc_t = std.mem.zeroes(c.ecs_entity_desc_t);
-    edesc.name = "ProbeTag";
-    const tag = c.ecs_entity_init(world, &edesc);
-    const e = c.ecs_new(world);
-    c.ecs_add_id(world, e, tag);
+test "a check flecs fails is answered as an invalid argument instead of an abort" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+    const tag = try register(handle, &c.ke_component_params{ .name = "refusal_tag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 });
+    const entity = try spawn(handle);
+    _ = try attach(handle, entity, tag);
 
-    _ = c.ecs_get_mut_id(world, e, tag);
+    begin();
+    _ = c.ecs_get_mut_id(stateOf(handle.ref.?).world, @intCast(entity), @intCast(tag));
+    try testing.expectError(error.InvalidArgument, R.check(outcome()));
+    try testing.expect(!flecs_refused);
+}
+
+test "a refusal does not leak into the next call on the same thread" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+    const entity = try spawn(handle);
+
+    var data: ?*anyopaque = null;
+    _ = handle.ref.*.component_add.?(handle.ref, entity, 0x7fff_fff0, &data);
+    flecsLogHandler(-4, "elsewhere.c", 1, "a message nobody answered for");
+    _ = try spawn(handle);
 }
 
 test "a reserved id can never be one the world's own allocator will issue" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
-    const e = handle.ref.*;
 
-    const reserved = e.entity_reserve.?(handle.ref);
+    const reserved = try reserve(handle);
     try testing.expect(reserved != 0);
     try testing.expect(reserved < default_world_id_base);
 
     var i: usize = 0;
     while (i < 64) : (i += 1) {
-        const created = e.entity_create.?(handle.ref);
+        const created = try spawn(handle);
         try testing.expect(created >= default_world_id_base);
     }
 }
@@ -898,17 +1034,18 @@ test "reserving past the pool's capacity reports exhaustion instead of colliding
     const e = handle.ref.*;
 
     var i: usize = 0;
-    while (i < 4) : (i += 1) try testing.expect(e.entity_reserve.?(handle.ref) != 0);
-    try testing.expectEqual(@as(c.ke_entity, 0), e.entity_reserve.?(handle.ref));
+    while (i < 4) : (i += 1) try testing.expect(try reserve(handle) != 0);
+    var spent: c.ke_entity = 1;
+    try testing.expectError(error.OutOfMemory, R.check(e.entity_reserve.?(handle.ref, &spent)));
+    try testing.expectEqual(@as(c.ke_entity, 0), spent);
 }
 
 test "every reserved id is distinct" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
-    const e = handle.ref.*;
 
     var seen: [256]c.ke_entity = undefined;
-    for (&seen) |*slot| slot.* = e.entity_reserve.?(handle.ref);
+    for (&seen) |*slot| slot.* = try reserve(handle);
     for (seen, 0..) |a, i| {
         try testing.expect(a != 0);
         for (seen[i + 1 ..]) |b| try testing.expect(a != b);
@@ -925,7 +1062,9 @@ test "reserving concurrently never hands the same id to two threads" {
 
     const Worker = struct {
         fn run(ecs: *c.ke_ecs, out: *[per_thread]c.ke_entity) void {
-            for (out) |*slot| slot.* = ecs.entity_reserve.?(ecs);
+            for (out) |*slot| {
+                if (ecs.entity_reserve.?(ecs, slot) != c.KE_OK) slot.* = 0;
+            }
         }
     };
 
@@ -951,11 +1090,11 @@ test "a reserved id is not in the world until something materializes it" {
 
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "reserve_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
-    const reserved = e.entity_reserve.?(handle.ref);
+    const reserved = try reserve(handle);
     try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
 
-    e.entity_materialize.?(handle.ref, reserved);
-    try testing.expect(e.component_add.?(handle.ref, reserved, cid) != null);
+    try R.check(e.entity_materialize.?(handle.ref, reserved));
+    try testing.expect((try attach(handle, reserved, cid)) != null);
 }
 
 test "attaching to a reserved id materializes it without a separate call" {
@@ -965,9 +1104,9 @@ test "attaching to a reserved id materializes it without a separate call" {
 
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "attach_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
-    const reserved = e.entity_reserve.?(handle.ref);
+    const reserved = try reserve(handle);
 
-    const slot = e.component_add.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
+    const slot = (try attach(handle, reserved, cid)) orelse return error.TestUnexpectedResult;
     @as(*u32, @ptrCast(@alignCast(slot))).* = 0xabcd;
     const read = e.component_get.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
     try testing.expectEqual(@as(u32, 0xabcd), @as(*u32, @ptrCast(@alignCast(read))).*);
@@ -980,12 +1119,12 @@ test "materializing an id twice is a no-op rather than a second entity" {
 
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "twice_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
-    const reserved = e.entity_reserve.?(handle.ref);
-    e.entity_materialize.?(handle.ref, reserved);
-    const slot = e.component_add.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
+    const reserved = try reserve(handle);
+    try R.check(e.entity_materialize.?(handle.ref, reserved));
+    const slot = (try attach(handle, reserved, cid)) orelse return error.TestUnexpectedResult;
     @as(*u32, @ptrCast(@alignCast(slot))).* = 7;
 
-    e.entity_materialize.?(handle.ref, reserved);
+    try R.check(e.entity_materialize.?(handle.ref, reserved));
     const read = e.component_get.?(handle.ref, reserved, cid) orelse return error.TestUnexpectedResult;
     try testing.expectEqual(@as(u32, 7), @as(*u32, @ptrCast(@alignCast(read))).*);
 }
@@ -997,11 +1136,11 @@ test "materializing an id the world already owns leaves it alone" {
 
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "owned_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
-    const created = e.entity_create.?(handle.ref);
-    const slot = e.component_add.?(handle.ref, created, cid) orelse return error.TestUnexpectedResult;
+    const created = try spawn(handle);
+    const slot = (try attach(handle, created, cid)) orelse return error.TestUnexpectedResult;
     @as(*u32, @ptrCast(@alignCast(slot))).* = 99;
 
-    e.entity_materialize.?(handle.ref, created);
+    try R.check(e.entity_materialize.?(handle.ref, created));
     const read = e.component_get.?(handle.ref, created, cid) orelse return error.TestUnexpectedResult;
     try testing.expectEqual(@as(u32, 99), @as(*u32, @ptrCast(@alignCast(read))).*);
 }
@@ -1018,10 +1157,9 @@ test "a caller may move the split between the two id allocators" {
     var handle: c.ke_ecs_handle = undefined;
     try R.check(ke_ecs_flecs_create(&params, &handle));
     defer handle.destroy.?(handle.ref);
-    const e = handle.ref.*;
 
-    try testing.expect(e.entity_reserve.?(handle.ref) < 1_000_000);
-    try testing.expect(e.entity_create.?(handle.ref) >= 1_000_000);
+    try testing.expect(try reserve(handle) < 1_000_000);
+    try testing.expect(try spawn(handle) >= 1_000_000);
 }
 
 test "a reserved entity that was destroyed does not come back on the next attach" {
@@ -1031,11 +1169,13 @@ test "a reserved entity that was destroyed does not come back on the next attach
 
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "revive_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
-    const reserved = e.entity_reserve.?(handle.ref);
-    try testing.expect(e.component_add.?(handle.ref, reserved, cid) != null);
+    const reserved = try reserve(handle);
+    try testing.expect((try attach(handle, reserved, cid)) != null);
 
-    e.entity_destroy.?(handle.ref, reserved);
-    try testing.expect(e.component_add.?(handle.ref, reserved, cid) == null);
+    try R.check(e.entity_destroy.?(handle.ref, reserved));
+    var revived: ?*anyopaque = null;
+    try testing.expectError(error.InvalidArgument, R.check(e.component_add.?(handle.ref, reserved, cid, &revived)));
+    try testing.expect(revived == null);
     try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
 }
 
@@ -1076,8 +1216,8 @@ test "attaching a component seeds the defaults its field table declares" {
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "layered", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, &cid));
     try testing.expect(cid != 0);
 
-    const entity = e.entity_create.?(handle.ref);
-    const slot = e.component_add.?(handle.ref, entity, cid) orelse return error.MissingComponent;
+    const entity = try spawn(handle);
+    const slot = (try attach(handle, entity, cid)) orelse return error.TestUnexpectedResult;
     const v: *const Layered = @ptrCast(@alignCast(slot));
 
     try testing.expectEqual(@as(u32, 1), v.layers);
@@ -1091,12 +1231,12 @@ test "attaching a component that is already there keeps the value it holds" {
 
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "layered_twice", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, &cid));
-    const entity = e.entity_create.?(handle.ref);
+    const entity = try spawn(handle);
 
-    const first: *Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
+    const first: *Layered = @ptrCast(@alignCast((try attach(handle, entity, cid)).?));
     first.layers = 0b1010;
 
-    const second: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
+    const second: *const Layered = @ptrCast(@alignCast((try attach(handle, entity, cid)).?));
     try testing.expectEqual(@as(u32, 0b1010), second.layers);
 }
 
@@ -1107,8 +1247,8 @@ test "a component registered without a field table still attaches zeroed" {
 
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "untabled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, &cid));
-    const entity = e.entity_create.?(handle.ref);
-    const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, entity, cid).?));
+    const entity = try spawn(handle);
+    const v: *const Layered = @ptrCast(@alignCast((try attach(handle, entity, cid)).?));
 
     try testing.expectEqual(@as(u32, 0), v.layers);
 }
@@ -1120,13 +1260,13 @@ test "a component attached over memory a destroyed entity dirtied still arrives 
 
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = "recycled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, &cid));
-    const first = e.entity_create.?(handle.ref);
-    const dirty: [*]u8 = @ptrCast(e.component_add.?(handle.ref, first, cid).?);
+    const first = try spawn(handle);
+    const dirty: [*]u8 = @ptrCast((try attach(handle, first, cid)).?);
     @memset(dirty[0..@sizeOf(Layered)], 0xAA);
-    e.entity_destroy.?(handle.ref, first);
+    try R.check(e.entity_destroy.?(handle.ref, first));
 
-    const second = e.entity_create.?(handle.ref);
-    const v: *const Layered = @ptrCast(@alignCast(e.component_add.?(handle.ref, second, cid).?));
+    const second = try spawn(handle);
+    const v: *const Layered = @ptrCast(@alignCast((try attach(handle, second, cid)).?));
 
     try testing.expectEqual(@as(u32, 0), v.layers);
 }
@@ -1143,10 +1283,10 @@ test "registering the same component tuple twice returns one query, and another 
     const ab = [_]c.ke_component_id{ a, b };
     const ba = [_]c.ke_component_id{ b, a };
 
-    const first = e.query_register.?(handle.ref, &ab, ab.len);
+    const first = (try queryOf(handle, &ab));
     try testing.expect(first != c.KE_QUERY_INVALID);
-    try testing.expectEqual(first, e.query_register.?(handle.ref, &ab, ab.len));
-    try testing.expect(e.query_register.?(handle.ref, &ba, ba.len) != first);
+    try testing.expectEqual(first, (try queryOf(handle, &ab)));
+    try testing.expect((try queryOf(handle, &ba)) != first);
 }
 
 test "resolving a query into too small an array reports every segment it matches" {
@@ -1161,26 +1301,26 @@ test "resolving a query into too small an array reports every segment it matches
     for (&extras, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = name, .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, cid));
 
     for (0..16) |mask| {
-        const entity = e.entity_create.?(handle.ref);
-        try testing.expect(e.component_add.?(handle.ref, entity, shared) != null);
+        const entity = try spawn(handle);
+        try testing.expect((try attach(handle, entity, shared)) != null);
         for (extras, 0..) |cid, bit| {
-            if ((mask >> @intCast(bit)) & 1 != 0) try testing.expect(e.component_add.?(handle.ref, entity, cid) != null);
+            if ((mask >> @intCast(bit)) & 1 != 0) try testing.expect((try attach(handle, entity, cid)) != null);
         }
     }
 
     const cids = [_]c.ke_component_id{shared};
-    const query = e.query_register.?(handle.ref, &cids, cids.len);
+    const query = (try queryOf(handle, &cids));
     try testing.expect(query != c.KE_QUERY_INVALID);
 
     var small: [4]c.ke_ecs_segment = undefined;
     var small_columns: [4]?*anyopaque = undefined;
     var count: usize = 0;
-    e.query_resolve.?(handle.ref, query, &small, small.len, &small_columns, &count);
+    try R.check(e.query_resolve.?(handle.ref, query, &small, small.len, &small_columns, &count));
     try testing.expectEqual(@as(usize, 16), count);
 
     var roomy: [32]c.ke_ecs_segment = undefined;
     var roomy_columns: [32]?*anyopaque = undefined;
-    e.query_resolve.?(handle.ref, query, &roomy, roomy.len, &roomy_columns, &count);
+    try R.check(e.query_resolve.?(handle.ref, query, &roomy, roomy.len, &roomy_columns, &count));
     try testing.expectEqual(@as(usize, 16), count);
 }
 
@@ -1193,16 +1333,16 @@ test "a query over twelve components resolves with a column for each" {
     const names = [_][*:0]const u8{ "wide_0", "wide_1", "wide_2", "wide_3", "wide_4", "wide_5", "wide_6", "wide_7", "wide_8", "wide_9", "wide_10", "wide_11" };
     for (&cids, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &c.ke_component_params{ .name = name, .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, cid));
 
-    const entity = e.entity_create.?(handle.ref);
-    for (cids) |cid| try testing.expect(e.component_add.?(handle.ref, entity, cid) != null);
+    const entity = try spawn(handle);
+    for (cids) |cid| try testing.expect((try attach(handle, entity, cid)) != null);
 
-    const query = e.query_register.?(handle.ref, &cids, cids.len);
+    const query = (try queryOf(handle, &cids));
     try testing.expect(query != c.KE_QUERY_INVALID);
 
     var segs: [4]c.ke_ecs_segment = undefined;
     var columns: [4 * cids.len]?*anyopaque = undefined;
     var count: usize = 0;
-    e.query_resolve.?(handle.ref, query, &segs, segs.len, &columns, &count);
+    try R.check(e.query_resolve.?(handle.ref, query, &segs, segs.len, &columns, &count));
 
     try testing.expectEqual(@as(usize, 1), count);
     try testing.expectEqual(@as(u32, 12), segs[0].column_count);
@@ -1213,8 +1353,8 @@ test "creating, filling and destroying an ecs leaves no block allocated" {
     const handle = try made();
     var cid: c.ke_component_id = 0;
     try R.check(handle.ref.*.component_register.?(handle.ref, &c.ke_component_params{ .name = "leak_probe", .size = 8, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
-    const e = handle.ref.*.entity_create.?(handle.ref);
-    try testing.expect(handle.ref.*.component_add.?(handle.ref, e, cid) != null);
+    const entity = try spawn(handle);
+    try testing.expect((try attach(handle, entity, cid)) != null);
     handle.destroy.?(handle.ref);
     try heap.expectNoLeaks();
 }

@@ -7,6 +7,7 @@ const c = @import("c");
 const heap = @import("heap");
 
 const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.framework);
 
 const mat4 = @import("mat4.zig");
 
@@ -123,14 +124,13 @@ fn vtNextSibling(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c
 /// is created at once or when the commands apply. The node is appended as the last child of the
 /// parent, so children are visited in creation order; a parent without a hierarchy component
 /// leaves the node unlinked. If one of the three components cannot be added, the entity is
-/// destroyed and false comes back before anything is linked.
-fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) bool {
-    if (s.ecs.component_add.?(s.ecs, entity, s.world_transform_cid) == null or
-        s.ecs.component_add.?(s.ecs, entity, s.hierarchy_cid) == null or
-        s.ecs.component_add.?(s.ecs, entity, s.name_cid) == null)
-    {
-        s.ecs.entity_destroy.?(s.ecs, entity);
-        return false;
+/// destroyed and the ecs's failure comes back before anything is linked.
+fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) R.Error!void {
+    errdefer _ = s.ecs.entity_destroy.?(s.ecs, entity);
+    for ([_]c.ke_component_id{ s.world_transform_cid, s.hierarchy_cid, s.name_cid }) |cid| {
+        var data: ?*anyopaque = null;
+        try R.check(s.ecs.component_add.?(s.ecs, entity, cid, &data));
+        if (data == null) return error.General;
     }
 
     if (getWorldTransform(s, entity)) |w| {
@@ -163,7 +163,6 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
         }
         ph.?.last_child = entity;
     }
-    return true;
 }
 
 /// Payload of a deferred create. The name is copied into it when the call is recorded, so the
@@ -176,11 +175,12 @@ const PendingCreate = extern struct {
 };
 
 /// Runs when the commands apply. Its result cannot reach the caller, so a node that populateNode
-/// cannot finish is destroyed without a report.
+/// cannot finish is destroyed and the failure only logged.
 fn cbCreateNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
     _ = ecs;
     const p: *PendingCreate = @ptrCast(@alignCast(user));
-    _ = populateNode(p.s, p.entity, @ptrCast(&p.name), p.parent);
+    populateNode(p.s, p.entity, @ptrCast(&p.name), p.parent) catch |err|
+        log.warn("creating the recorded node {d} failed: {t}", .{ p.entity, err });
 }
 
 /// Slot `create_node`. Creates and links the node before returning; the invalid entity as parent
@@ -199,8 +199,10 @@ fn vtCreateNode(
     const s = stateOf(self);
     const parent = if (parent_in == c.KE_ENTITY_INVALID) s.root else parent_in;
 
-    const entity = s.ecs.entity_create.?(s.ecs);
-    if (entity == c.KE_ENTITY_INVALID or !populateNode(s, entity, name, parent)) return R.code(error.General);
+    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    const created = s.ecs.entity_create.?(s.ecs, &entity);
+    if (created != c.KE_OK) return created;
+    populateNode(s, entity, name, parent) catch |err| return R.code(err);
     out.* = entity;
     return R.ok;
 }
@@ -303,22 +305,30 @@ fn vtFindNode(
     return current;
 }
 
-fn destroyEntitiesRecursive(s: *State, e: c.ke_entity) void {
+/// Destroys the entity and its subtree, children first. A destroy the ecs refuses does not stop
+/// the others; the first refusal is returned once all were tried.
+fn destroyEntitiesRecursive(s: *State, e: c.ke_entity) R.Error!void {
+    var first: R.Error!void = {};
     if (getHierarchy(s, e)) |h| {
         var child = h.first_child;
         while (child != c.KE_ENTITY_INVALID) {
             const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
-            destroyEntitiesRecursive(s, child);
+            destroyEntitiesRecursive(s, child) catch |err| {
+                if (first) |_| first = err else |_| {}
+            };
             child = next;
         }
     }
-    s.ecs.entity_destroy.?(s.ecs, e);
+    R.check(s.ecs.entity_destroy.?(s.ecs, e)) catch |err| {
+        if (first) |_| first = err else |_| {}
+    };
+    return first;
 }
 
 /// Unlinks the entity from its neighbours and its parent, then destroys its subtree. The recorded
 /// destroy calls it when the commands apply, and an entity already gone by then has no hierarchy
 /// component, so it is skipped.
-fn destroySubtree(s: *State, entity: c.ke_entity) void {
+fn destroySubtree(s: *State, entity: c.ke_entity) R.Error!void {
     const h = getHierarchy(s, entity) orelse return;
     const h_prev = h.prev_sibling;
     const h_next = h.next_sibling;
@@ -338,7 +348,7 @@ fn destroySubtree(s: *State, entity: c.ke_entity) void {
         }
     }
 
-    destroyEntitiesRecursive(s, entity);
+    try destroyEntitiesRecursive(s, entity);
 }
 
 /// Payload of a deferred destroy, read by `cbDestroyNode` when the commands apply.
@@ -351,7 +361,8 @@ const PendingDestroy = extern struct {
 fn cbDestroyNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
     _ = ecs;
     const p: *PendingDestroy = @ptrCast(@alignCast(user));
-    destroySubtree(p.s, p.entity);
+    destroySubtree(p.s, p.entity) catch |err|
+        log.warn("destroying the recorded node {d} failed: {t}", .{ p.entity, err });
 }
 
 /// Shared by the immediate and the deferred destroy. Fails as an invalid argument for a null tree,
@@ -372,8 +383,7 @@ fn vtDestroyNode(
     entity: c.ke_entity,
 ) callconv(.c) c.ke_result {
     const s = checkDestroyable(self_in, entity) catch |err| return R.code(err);
-    destroySubtree(s, entity);
-    return R.ok;
+    return R.of(destroySubtree(s, entity));
 }
 
 /// Slot `destroy_node_deferred`. Checks the entity now and records the unlink and destroy, which
@@ -404,7 +414,8 @@ fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     var child = rh.first_child;
     while (child != c.KE_ENTITY_INVALID) {
         const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
-        destroyEntitiesRecursive(s, child);
+        destroyEntitiesRecursive(s, child) catch |err|
+            log.warn("destroying the subtree of node {d} failed: {t}", .{ child, err });
         child = next;
     }
     if (getHierarchy(s, s.root)) |h| {
@@ -469,7 +480,8 @@ fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     if (self.handle == null) return;
     const s = stateOf(self);
     if (s.hierarchy.destroy) |d| d(s.hierarchy.ref);
-    destroyEntitiesRecursive(s, s.root);
+    destroyEntitiesRecursive(s, s.root) catch |err|
+        log.warn("destroying the tree's entities failed: {t}", .{err});
     heap.gpa.destroy(s);
 }
 
@@ -507,12 +519,13 @@ fn create(ecs: *c.ke_ecs, runtime: ?*c.ke_runtime) R.Error!c.ke_scene_tree_handl
         .hierarchy = std.mem.zeroes(c.ke_scene_hierarchy_handle),
     };
 
-    s.root = ecs.entity_create.?(ecs);
-    if (s.root == c.KE_ENTITY_INVALID) return error.General;
-    errdefer ecs.entity_destroy.?(ecs, s.root);
-    if (ecs.component_add.?(ecs, s.root, s.hierarchy_cid) == null or
-        ecs.component_add.?(ecs, s.root, s.name_cid) == null)
-        return error.General;
+    try R.check(ecs.entity_create.?(ecs, &s.root));
+    errdefer _ = ecs.entity_destroy.?(ecs, s.root);
+    for ([_]c.ke_component_id{ s.hierarchy_cid, s.name_cid }) |cid| {
+        var data: ?*anyopaque = null;
+        try R.check(ecs.component_add.?(ecs, s.root, cid, &data));
+        if (data == null) return error.General;
+    }
 
     if (getHierarchy(s, s.root)) |h| {
         h.parent = c.KE_ENTITY_INVALID;
@@ -582,24 +595,27 @@ fn fakeSlot(f: *FakeEcs, entity: c.ke_entity, cid: c.ke_component_id) ?*?[*]u8 {
     return &f.storage[row][cid - 1];
 }
 
-fn fakeEntityCreate(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
+fn fakeEntityCreate(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
-    if (f.next_entity >= fake_max_entities) return c.KE_ENTITY_INVALID;
+    out_entity.* = c.KE_ENTITY_INVALID;
+    if (f.next_entity >= fake_max_entities) return R.code(error.OutOfMemory);
     f.next_entity += 1;
     f.alive[f.next_entity - 1] = true;
-    return f.next_entity;
+    out_entity.* = f.next_entity;
+    return R.ok;
 }
 
-fn fakeEntityReserve(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
-    return fakeEntityCreate(self);
+fn fakeEntityReserve(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
+    return fakeEntityCreate(self, out_entity);
 }
 
-fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
+fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
-    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return;
+    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return R.code(error.InvalidArgument);
     const row = entity - 1;
     f.alive[row] = false;
     for (&f.storage[row]) |*cell| cell.* = null;
+    return R.ok;
 }
 
 fn fakeComponentRegister(
@@ -652,25 +668,32 @@ fn fakeComponentAdd(
     self: ?*c.ke_ecs,
     entity: c.ke_entity,
     component: c.ke_component_id,
-) callconv(.c) ?*anyopaque {
+    out_data: [*c]?*anyopaque,
+) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
-    const slot = fakeSlot(f, entity, component) orelse return null;
-    if (slot.*) |existing| return existing;
+    out_data.* = null;
+    const slot = fakeSlot(f, entity, component) orelse return R.code(error.InvalidArgument);
+    if (slot.*) |existing| {
+        out_data.* = existing;
+        return R.ok;
+    }
     const size = f.components[component - 1].size;
-    const block = f.arena.allocator().alignedAlloc(u8, .of(u64), @max(size, 1)) catch return null;
+    const block = f.arena.allocator().alignedAlloc(u8, .of(u64), @max(size, 1)) catch return R.code(error.OutOfMemory);
     @memset(block, 0);
     slot.* = block.ptr;
-    return block.ptr;
+    out_data.* = block.ptr;
+    return R.ok;
 }
 
 fn fakeComponentRemove(
     self: ?*c.ke_ecs,
     entity: c.ke_entity,
     component: c.ke_component_id,
-) callconv(.c) void {
+) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
-    const slot = fakeSlot(f, entity, component) orelse return;
+    const slot = fakeSlot(f, entity, component) orelse return R.code(error.InvalidArgument);
     slot.* = null;
+    return R.ok;
 }
 
 fn fakeComponentGet(
@@ -749,8 +772,9 @@ pub const Fixture = struct {
         if (fakeComponentGet(&self.ecs.vtable, e, meta.cid)) |existing| {
             return @ptrCast(@alignCast(existing));
         }
-        const added: ?*c.ke_transform_component =
-            @ptrCast(@alignCast(fakeComponentAdd(&self.ecs.vtable, e, meta.cid)));
+        var data: ?*anyopaque = null;
+        if (fakeComponentAdd(&self.ecs.vtable, e, meta.cid, &data) != R.ok) return null;
+        const added: ?*c.ke_transform_component = @ptrCast(@alignCast(data));
         if (added) |t| {
             t.position = .{ .x = 0, .y = 0, .z = 0 };
             t.rotation = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
@@ -897,7 +921,8 @@ test "walking an entity the tree never made answers nothing rather than guessing
     defer f.deinit();
 
     const tree: *c.ke_scene_tree = @ptrCast(f.handle.ref);
-    const stranger = f.ecs.vtable.entity_create.?(&f.ecs.vtable);
+    var stranger: c.ke_entity = c.KE_ENTITY_INVALID;
+    try R.check(f.ecs.vtable.entity_create.?(&f.ecs.vtable, &stranger));
 
     try testing.expectEqual(c.KE_ENTITY_INVALID, tree.parent.?(tree, stranger));
     try testing.expectEqual(c.KE_ENTITY_INVALID, tree.first_child.?(tree, stranger));
@@ -1013,8 +1038,7 @@ pub const RecordingCommands = struct {
 
     fn spawn(self: ?*c.ke_ecs_commands, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
         const r = of(self);
-        out_entity.* = r.ecs.entity_reserve.?(r.ecs);
-        return R.ok;
+        return r.ecs.entity_reserve.?(r.ecs, out_entity);
     }
 
     fn defer_(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, size: usize) callconv(.c) c.ke_result {

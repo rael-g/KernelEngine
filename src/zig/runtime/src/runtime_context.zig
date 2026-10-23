@@ -196,8 +196,8 @@ pub fn commandsSpawn(self: ?*c.ke_ecs_commands, out_entity: ?*c.ke_entity) callc
 fn spawn(self: ?*c.ke_ecs_commands) R.Error!c.ke_entity {
     const q = try recordTarget(self);
     const ecs = commandsOf(self).?.ecs orelse return error.NotInitialized;
-    const entity = ecs.entity_reserve.?(ecs);
-    if (entity == c.KE_ENTITY_INVALID) return error.OutOfMemory;
+    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    try R.check(ecs.entity_reserve.?(ecs, &entity));
     const cmd = try recordCommand(q);
     cmd.kind = .spawn;
     cmd.entity = entity;
@@ -278,31 +278,36 @@ fn deferCall(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyop
 pub var s_defer_applied_total: u32 = 0;
 
 /// Applies the recorded commands in recorded order, then empties the queue. It must run only once
-/// every task of the wave has returned; the caller frees the queue's buffers afterwards.
-pub fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) void {
+/// every task of the wave has returned; the caller frees the queue's buffers afterwards. The first
+/// command the ecs refuses stops the flush, the commands after it are dropped with the rest of the
+/// queue, and its failure is returned.
+pub fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) R.Error!void {
+    defer {
+        q.count = 0;
+        q.arena_used = 0;
+    }
     for (0..q.count) |i| {
         const cmd = &q.cmds.?[i];
         switch (cmd.kind) {
             .spawn => {
-                if (ecs.entity_materialize) |materialize| materialize(ecs, cmd.entity);
+                if (ecs.entity_materialize) |materialize| try R.check(materialize(ecs, cmd.entity));
             },
             .attach => {
-                const slot = ecs.component_add.?(ecs, cmd.entity, cmd.cid);
+                var slot: ?*anyopaque = null;
+                try R.check(ecs.component_add.?(ecs, cmd.entity, cmd.cid, &slot));
                 if (slot != null and cmd.attach_size > 0) {
                     const dst: [*]u8 = @ptrCast(slot.?);
                     @memcpy(dst[0..cmd.attach_size], q.arena.?[cmd.attach_offset .. cmd.attach_offset + cmd.attach_size]);
                 }
             },
-            .detach => ecs.component_remove.?(ecs, cmd.entity, cmd.cid),
-            .despawn => ecs.entity_destroy.?(ecs, cmd.entity),
+            .detach => try R.check(ecs.component_remove.?(ecs, cmd.entity, cmd.cid)),
+            .despawn => try R.check(ecs.entity_destroy.?(ecs, cmd.entity)),
             .callback => {
                 if (cmd.fn_) |f| f(ecs, q.arena.? + cmd.attach_offset);
             },
         }
         s_defer_applied_total += 1;
     }
-    q.count = 0;
-    q.arena_used = 0;
 }
 
 pub fn deferAppliedCount() u32 {

@@ -125,9 +125,10 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>Drops the binding for `entity`, if any. The instance itself is the binding runtime's to release.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
     public void Unbind(ulong entity)
     {
-        Handle->unbind(Handle, entity);
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->unbind(Handle, entity), "unbind");
         if (_rooted.TryRemove(entity, out var freed)) freed.Free();
     }
 

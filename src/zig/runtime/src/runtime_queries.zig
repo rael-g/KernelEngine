@@ -5,6 +5,7 @@ const std = @import("std");
 
 const c = @import("c");
 const heap = @import("heap");
+const R = @import("result").Result(c, .{});
 const alloc = @import("runtime_alloc.zig");
 const cAlloc = alloc.cAlloc;
 const cFree = alloc.cFree;
@@ -65,15 +66,15 @@ pub const SegBuf = struct {
 };
 
 /// Resolves a query into the buffer, growing it to the match count the ecs reports and asking
-/// again. Returns the number of matched segments, or null when the buffer cannot grow or the
-/// count does not settle within the attempts allowed.
-pub fn resolveInto(ecs: *c.ke_ecs, query: c.ke_query_id, buf: *SegBuf, terms: usize) ?usize {
-    if (!buf.reserve(initial_segments_per_query, terms)) return null;
+/// again. Returns the number of matched segments; out of memory when the buffer cannot grow or the
+/// count does not settle within the attempts allowed, and the ecs's own failure when it refuses.
+pub fn resolveInto(ecs: *c.ke_ecs, query: c.ke_query_id, buf: *SegBuf, terms: usize) R.Error!usize {
+    if (!buf.reserve(initial_segments_per_query, terms)) return error.OutOfMemory;
     for (0..resolve_attempts) |_| {
         var matched: usize = 0;
-        ecs.query_resolve.?(ecs, query, buf.ptr, buf.cap, buf.cols, &matched);
+        try R.check(ecs.query_resolve.?(ecs, query, buf.ptr, buf.cap, buf.cols, &matched));
         if (matched <= buf.cap) return matched;
-        if (!buf.reserve(matched, terms)) return null;
+        if (!buf.reserve(matched, terms)) return error.OutOfMemory;
     }
-    return null;
+    return error.OutOfMemory;
 }

@@ -171,19 +171,28 @@
       "slots": [
         {
           "name": "entity_create",
-          "returns": "ke_entity",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Creates a fresh entity with no components. Structural; single-threaded.",
-          "return_doc": null,
-          "params": [],
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the entity; the null entity on failure."
+            }
+          ],
           "receiver": "struct ke_ecs *"
         },
         {
           "name": "entity_destroy",
-          "returns": "void",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Destroys an entity and all its components. Structural; single-threaded.",
-          "return_doc": null,
+          "doc": "Destroys an entity and all its components; an entity that is not alive is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend refuses the call, its reason logged.",
           "params": [
             {
               "name": "entity",
@@ -251,10 +260,10 @@
         },
         {
           "name": "component_add",
-          "returns": "void *",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Attaches a component to an entity, returning its storage: zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component gets its storage unchanged. The pointer is valid until the next structural change on this ecs. Structural; single-threaded. Returns NULL for an unknown entity or cid.",
-          "return_doc": null,
+          "doc": "Attaches a component to an entity: its storage is zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component keeps its storage unchanged. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive, the null entity or component, or when the backend refuses the call, its reason logged.",
           "params": [
             {
               "name": "entity",
@@ -267,16 +276,24 @@
               "type": "ke_component_id",
               "tags": [],
               "doc": null
+            },
+            {
+              "name": "out_data",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure."
             }
           ],
           "receiver": "struct ke_ecs *"
         },
         {
           "name": "component_remove",
-          "returns": "void",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Detaches a component from an entity. Structural; single-threaded.",
-          "return_doc": null,
+          "doc": "Detaches a component from an entity; an entity that is not alive is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or component, or when the backend refuses the call, its reason logged.",
           "params": [
             {
               "name": "entity",
@@ -333,10 +350,10 @@
         },
         {
           "name": "query_register",
-          "returns": "ke_query_id",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Registers a query over a component tuple (entities matching ALL cids).",
-          "return_doc": "KE_QUERY_INVALID on failure.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an empty tuple, one with more terms than the backend\u0027s queries hold, or one the backend refuses, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "cids",
@@ -352,18 +369,26 @@
               "type": "size_t",
               "tags": [],
               "doc": "Number of components in the tuple."
+            },
+            {
+              "name": "out_query",
+              "type": "ke_query_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the query; KE_QUERY_INVALID on failure."
             }
           ],
           "receiver": "struct ke_ecs *"
         },
         {
           "name": "query_resolve",
-          "returns": "void",
+          "returns": "ke_result",
           "tags": [
             "raw"
           ],
           "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays or a zero capacity, or when the backend refuses the call, its reason logged.",
           "params": [
             {
               "name": "query",
@@ -400,26 +425,35 @@
               "tags": [
                 "out"
               ],
-              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them."
+              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them; zero on failure."
             }
           ],
           "receiver": "struct ke_ecs *"
         },
         {
           "name": "entity_reserve",
-          "returns": "ke_entity",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.",
-          "return_doc": null,
-          "params": [],
+          "return_doc": "KE_OK; KE_RESULT_OUT_OF_MEMORY when every id the implementation can reserve was handed out.",
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; the null entity on failure."
+            }
+          ],
           "receiver": "struct ke_ecs *"
         },
         {
           "name": "entity_materialize",
-          "returns": "void",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive.",
-          "return_doc": null,
+          "doc": "Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive or was never reserved.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend refuses the call, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "entity",

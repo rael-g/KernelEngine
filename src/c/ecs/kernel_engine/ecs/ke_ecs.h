@@ -34,11 +34,21 @@ extern "C"
     {
         void *handle;
 
-        /** Creates a fresh entity with no components. Structural; single-threaded. */
-        ke_entity (*entity_create)(struct ke_ecs *self);
+        /**
+         * Creates a fresh entity with no components. Structural; single-threaded.
+         * @param out_entity [out] Receives the entity; the null entity on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the backend refuses the call, its
+         *         reason logged.
+         */
+        ke_result (*entity_create)(struct ke_ecs *self, ke_entity *out_entity);
 
-        /** Destroys an entity and all its components. Structural; single-threaded. */
-        void      (*entity_destroy)(struct ke_ecs *self, ke_entity entity);
+        /**
+         * Destroys an entity and all its components; an entity that is not alive is left
+         * alone. Structural; single-threaded.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend
+         *         refuses the call, its reason logged.
+         */
+        ke_result (*entity_destroy)(struct ke_ecs *self, ke_entity entity);
 
         /**
          * Registers a component type by name, or returns the existing id if already registered.
@@ -68,20 +78,29 @@ extern "C"
                                  ke_component_meta *out_meta);
 
         /**
-         * Attaches a component to an entity, returning its storage: zeroed, then seeded with
-         * the defaults of the field table the component was registered with, on the first
-         * attach; an entity that already has the component gets its storage unchanged.
-         * The pointer is valid until the next structural change on this ecs.
-         * Structural; single-threaded. Returns NULL for an unknown entity or cid.
+         * Attaches a component to an entity: its storage is zeroed, then seeded with the
+         * defaults of the field table the component was registered with, on the first
+         * attach; an entity that already has the component keeps its storage unchanged.
+         * Structural; single-threaded.
+         * @param out_data [out] Receives the storage, valid until the next structural change on
+         *        this ecs; NULL for a tag, and on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive, the null
+         *         entity or component, or when the backend refuses the call, its reason logged.
          */
-        void *(*component_add)(struct ke_ecs *self,
-                               ke_entity      entity,
-                               ke_component_id component);
+        ke_result (*component_add)(struct ke_ecs  *self,
+                                   ke_entity       entity,
+                                   ke_component_id component,
+                                   void          **out_data);
 
-        /** Detaches a component from an entity. Structural; single-threaded. */
-        void (*component_remove)(struct ke_ecs *self,
-                                 ke_entity      entity,
-                                 ke_component_id component);
+        /**
+         * Detaches a component from an entity; an entity that is not alive is left alone.
+         * Structural; single-threaded.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or component, or when
+         *         the backend refuses the call, its reason logged.
+         */
+        ke_result (*component_remove)(struct ke_ecs  *self,
+                                      ke_entity       entity,
+                                      ke_component_id component);
 
         /**
          * Returns an entity's component storage, or NULL if it doesn't have that component.
@@ -98,11 +117,15 @@ extern "C"
          * Registers a query over a component tuple (entities matching ALL cids).
          * @param cids [borrowed,array_of:cid_count] Component tuple to match.
          * @param cid_count Number of components in the tuple.
-         * @return KE_QUERY_INVALID on failure.
+         * @param out_query [out] Receives the query; KE_QUERY_INVALID on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an empty tuple, one with more terms than
+         *         the backend's queries hold, or one the backend refuses, its reason logged;
+         *         KE_RESULT_OUT_OF_MEMORY.
          */
-        ke_query_id (*query_register)(struct ke_ecs       *self,
-                                       const ke_component_id *cids,
-                                       size_t                 cid_count);
+        ke_result (*query_register)(struct ke_ecs         *self,
+                                    const ke_component_id *cids,
+                                    size_t                 cid_count,
+                                    ke_query_id           *out_query);
 
         /**
          * [raw] Resolves a query into archetype segments. MUST run single-threaded, before
@@ -114,14 +137,17 @@ extern "C"
          *        are the cid_count entries starting at index i * cid_count, cid_count being
          *        the length of the tuple the query was registered with.
          * @param out_count [out] Receives how many segments the query matches; above
-         *        max_segments, out_segments holds only the first max_segments of them.
+         *        max_segments, out_segments holds only the first max_segments of them; zero on
+         *        failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays
+         *         or a zero capacity, or when the backend refuses the call, its reason logged.
          */
-        void (*query_resolve)(struct ke_ecs   *self,
-                              ke_query_id       query,
-                              ke_ecs_segment   *out_segments,
-                              size_t            max_segments,
-                              void            **out_columns,
-                              size_t           *out_count);
+        ke_result (*query_resolve)(struct ke_ecs   *self,
+                                   ke_query_id       query,
+                                   ke_ecs_segment   *out_segments,
+                                   size_t            max_segments,
+                                   void            **out_columns,
+                                   size_t           *out_count);
 
         /**
          * Reserves an entity id, callable concurrently from any wave thread —
@@ -131,15 +157,20 @@ extern "C"
          *
          * An implementation may not satisfy this by forwarding to entity_create,
          * which is single-threaded.
+         * @param out_entity [out] Receives the id; the null entity on failure.
+         * @return KE_OK; KE_RESULT_OUT_OF_MEMORY when every id the implementation can reserve
+         *         was handed out.
          */
-        ke_entity (*entity_reserve)(struct ke_ecs *self);
+        ke_result (*entity_reserve)(struct ke_ecs *self, ke_entity *out_entity);
 
         /**
          * Brings a reserved id into the world, so an entity that never receives a
          * component still exists. Structural; single-threaded. A no-op for an id
-         * that is already alive.
+         * that is already alive or was never reserved.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend
+         *         refuses the call, its reason logged; KE_RESULT_OUT_OF_MEMORY.
          */
-        void (*entity_materialize)(struct ke_ecs *self, ke_entity entity);
+        ke_result (*entity_materialize)(struct ke_ecs *self, ke_entity entity);
 
     } ke_ecs;
 

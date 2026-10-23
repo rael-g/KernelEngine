@@ -592,6 +592,7 @@ const TaskPkg = struct {
     dt: f32,
     defer_q: DeferQueue,
     allow_defer: bool,
+    name: [*c]const u8,
 };
 
 /// The first failure of a phase or of a wave: the code and the name of the system that returned
@@ -678,6 +679,12 @@ fn segmentAllocationFailed(rs: *const RegisteredSystem) PhaseFailure {
     return .{ .code = R.code(error.OutOfMemory), .system = rs.params.name };
 }
 
+/// The failure that names a system whose query could not be resolved.
+fn resolveFailed(rs: *const RegisteredSystem, err: R.Error) PhaseFailure {
+    log.warn("resolving a query of {s} failed: {t}", .{ std.mem.span(rs.params.name), err });
+    return .{ .code = R.code(err), .system = rs.params.name };
+}
+
 /// Runs one phase wave by wave until it finishes or its first failure stops it. The systems of
 /// the phase are taken in registration order and cut into waves by `debugComputeWaves`; each
 /// wave's queries are resolved on the calling thread, one package per slice of each system is
@@ -726,7 +733,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
 
             if (rs.query_count > 0 and phase != c.KE_PHASE_RENDER and h.state.ecs.query_resolve != null) {
                 for (0..rs.query_count) |q| {
-                    rs.seg_counts[q] = resolveInto(h.state.ecs, rs.query_ids[q], &rs.segs[q], rs.query_decls[q].term_count) orelse return segmentAllocationFailed(rs);
+                    rs.seg_counts[q] = resolveInto(h.state.ecs, rs.query_ids[q], &rs.segs[q], rs.query_decls[q].term_count) catch |err| return resolveFailed(rs, err);
                     rs.seg_ptrs[q] = rs.segs[q].ptr;
                 }
             }
@@ -754,6 +761,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
                     pkg.state.view_query_count = 0;
                 }
                 pkg.execute = rs.params.execute;
+                pkg.name = rs.params.name;
                 pkg.user_data = rs.params.user_data;
                 pkg.dt = dt;
                 pkg.defer_q = .{};
@@ -768,7 +776,10 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
 
         var t: u32 = 0;
         while (t < wave_size) : (t += 1) {
-            deferFlush(&pkgs[t].defer_q, h.state.ecs);
+            deferFlush(&pkgs[t].defer_q, h.state.ecs) catch |err| {
+                log.warn("applying the commands of {s} failed: {t}", .{ std.mem.span(pkgs[t].name), err });
+                failure = failure.firstOf(.{ .code = R.code(err), .system = pkgs[t].name });
+            };
             if (pkgs[t].defer_q.cmds) |cmds| cFree(DeferCommand, cmds, pkgs[t].defer_q.capacity);
             if (pkgs[t].defer_q.arena) |arena| cFree(u8, arena, pkgs[t].defer_q.arena_capacity);
         }
@@ -904,8 +915,7 @@ fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) ?*Registered
             const cids = heap.gpa.alloc(c.ke_component_id, qd.term_count) catch return rs;
             defer heap.gpa.free(cids);
             for (0..qd.term_count) |t| cids[t] = qd.terms[t].cid;
-            rs.query_ids[q] = h.state.ecs.query_register.?(h.state.ecs, cids.ptr, qd.term_count);
-            if (rs.query_ids[q] == c.KE_QUERY_INVALID) return rs;
+            if (h.state.ecs.query_register.?(h.state.ecs, cids.ptr, qd.term_count, &rs.query_ids[q]) != c.KE_OK) return rs;
         }
     }
     return null;
@@ -950,7 +960,7 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
             }
 
             var raw_count: usize = 0;
-            raw_count = resolveInto(h.state.ecs, rs.query_ids[q], scratch, qd.term_count) orelse return segmentAllocationFailed(rs);
+            raw_count = resolveInto(h.state.ecs, rs.query_ids[q], scratch, qd.term_count) catch |err| return resolveFailed(rs, err);
             const raw = scratch.ptr.?;
 
             var total: usize = 0;
@@ -1260,6 +1270,18 @@ fn createdRuntime(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params: [*c]cons
 
 extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_ecs: *c.ke_ecs_handle) callconv(.c) c.ke_result;
 extern fn ke_scheduler_enki_create(params: ?*const anyopaque, out_scheduler: *c.ke_scheduler_handle) callconv(.c) c.ke_result;
+
+fn ecsSpawn(ecs: *c.ke_ecs) R.Error!c.ke_entity {
+    var entity: c.ke_entity = 0;
+    try R.check(ecs.entity_create.?(ecs, &entity));
+    return entity;
+}
+
+fn ecsAttach(ecs: *c.ke_ecs, entity: c.ke_entity, cid: c.ke_component_id) R.Error!?*anyopaque {
+    var data: ?*anyopaque = null;
+    try R.check(ecs.component_add.?(ecs, entity, cid, &data));
+    return data;
+}
 
 const Fixture = struct {
     scheduler_h: c.ke_scheduler_handle,
@@ -1875,8 +1897,9 @@ test "the shutdown phase runs once when the runtime is destroyed, after every ti
     try testing.expectEqual(@as(c_int, c.KE_PHASE_SHUTDOWN), seen_log.seen[2]);
 }
 
-fn fakeQueryRegister(_: ?*c.ke_ecs, _: [*c]const c.ke_component_id, _: usize) callconv(.c) c.ke_query_id {
-    return 1;
+fn fakeQueryRegister(_: ?*c.ke_ecs, _: [*c]const c.ke_component_id, _: usize, out_query: [*c]c.ke_query_id) callconv(.c) c.ke_result {
+    out_query.* = 1;
+    return R.ok;
 }
 
 const many_segments = 100;
@@ -1887,7 +1910,7 @@ var seen_entities: usize = 0;
 
 var fake_term_count: usize = 1;
 
-fn fakeQueryResolveMany(_: ?*c.ke_ecs, _: c.ke_query_id, out: [*c]c.ke_ecs_segment, max: usize, out_columns: [*c]?*anyopaque, out_count: [*c]usize) callconv(.c) void {
+fn fakeQueryResolveMany(_: ?*c.ke_ecs, _: c.ke_query_id, out: [*c]c.ke_ecs_segment, max: usize, out_columns: [*c]?*anyopaque, out_count: [*c]usize) callconv(.c) c.ke_result {
     for (0..@min(max, many_segments)) |i| {
         const cols = out_columns + i * fake_term_count;
         for (0..fake_term_count) |t| cols[t] = &many_column;
@@ -1898,6 +1921,7 @@ fn fakeQueryResolveMany(_: ?*c.ke_ecs, _: c.ke_query_id, out: [*c]c.ke_ecs_segme
         out[i].column_count = @intCast(fake_term_count);
     }
     out_count.* = many_segments;
+    return R.ok;
 }
 
 fn fakeComponentSize(_: ?*c.ke_ecs, _: c.ke_component_id) callconv(.c) usize {
@@ -2382,8 +2406,8 @@ test "the render extract carries this tick's sim write" {
 
     var cid: c.ke_component_id = 0;
     try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "Extract.Value", .size = @sizeOf(i32), .alignment = @alignOf(i32), .fields = null, .field_count = 0 }, &cid));
-    const e = f.ecs().entity_create.?(f.ecs());
-    const v = f.ecs().component_add.?(f.ecs(), e, cid);
+    const e = try ecsSpawn(f.ecs());
+    const v = (try ecsAttach(f.ecs(), e, cid));
     try testing.expect(v != null);
     @as(*i32, @ptrCast(@alignCast(v.?))).* = 0;
 
@@ -2451,9 +2475,9 @@ test "the render extract keeps multi term columns aligned" {
 
     var expect: f64 = 0.0;
     for (0..64) |i| {
-        const e = f.ecs().entity_create.?(f.ecs());
-        _ = f.ecs().component_add.?(f.ecs(), e, pos);
-        _ = f.ecs().component_add.?(f.ecs(), e, vel);
+        const e = try ecsSpawn(f.ecs());
+        _ = (try ecsAttach(f.ecs(), e, pos));
+        _ = (try ecsAttach(f.ecs(), e, vel));
         const p: *Vec3 = @ptrCast(@alignCast(f.ecs().component_get.?(f.ecs(), e, pos).?));
         const v: *Vec3 = @ptrCast(@alignCast(f.ecs().component_get.?(f.ecs(), e, vel).?));
         p.x = @floatFromInt(i);
@@ -2734,7 +2758,7 @@ test "spawn hands the system body an id it can actually use" {
     for (probe.ids, 0..) |id, i| {
         try testing.expect(id != c.KE_ENTITY_INVALID);
         for (probe.ids[i + 1 ..]) |other| try testing.expect(id != other);
-        try testing.expect(e.component_add.?(e, id, cid) != null);
+        try testing.expect((try ecsAttach(e, id, cid)) != null);
     }
 }
 
@@ -2752,23 +2776,27 @@ test "an entity spawned with no components still exists after the barrier" {
     const e = f.ecs();
     var cid: c.ke_component_id = 0;
     try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "exists_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
-    e.entity_destroy.?(e, probe.ids[0]);
-    try testing.expect(e.component_add.?(e, probe.ids[0], cid) == null);
+    try R.check(e.entity_destroy.?(e, probe.ids[0]));
+    var revived: ?*anyopaque = null;
+    try testing.expectError(error.InvalidArgument, R.check(e.component_add.?(e, probe.ids[0], cid, &revived)));
 }
 
 const MutatorProbe = struct {
     payload: u8 = 'X',
     cid: c.ke_component_id = 0,
+    target: c.ke_entity = c.KE_ENTITY_INVALID,
     ok: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 };
 
 fn mutatorBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const probe: *MutatorProbe = @ptrCast(@alignCast(ud.?));
     const cmds = ctx.?.commands;
-    const attached = (cmds.*.attach.?(cmds, 42, probe.cid, &probe.payload, 1) == R.ok);
-    const detached = (cmds.*.detach.?(cmds, 42, probe.cid) == R.ok);
-    const despawned = (cmds.*.despawn.?(cmds, 42) == R.ok);
-    probe.ok.store(attached and detached and despawned, .release);
+    var entity = probe.target;
+    const spawned_ok = entity != c.KE_ENTITY_INVALID or cmds.*.spawn.?(cmds, &entity) == R.ok;
+    const attached = (cmds.*.attach.?(cmds, entity, probe.cid, &probe.payload, 1) == R.ok);
+    const detached = (cmds.*.detach.?(cmds, entity, probe.cid) == R.ok);
+    const despawned = (cmds.*.despawn.?(cmds, entity) == R.ok);
+    probe.ok.store(spawned_ok and attached and detached and despawned, .release);
     return R.ok;
 }
 
@@ -2787,7 +2815,24 @@ test "deferred attach detach and despawn are applied at the barrier" {
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expect(probe.ok.load(.acquire));
-    try testing.expectEqual(@as(u32, 3), deferAppliedCount());
+    try testing.expectEqual(@as(u32, 4), deferAppliedCount());
+}
+
+test "a recorded attach the ecs refuses fails the tick and names the system" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    resetDeferApplied();
+
+    var probe = MutatorProbe{ .target = 42 };
+    try R.check(f.ecs().component_register.?(f.ecs(), &c.ke_component_params{ .name = "refused_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
+    var sys = systemParams("Refused", c.KE_PHASE_UPDATE);
+    sys.user_data = &probe;
+    sys.execute = &mutatorBody;
+    try testing.expect(systemId(f.rt(), &sys) != 0);
+
+    try testing.expectError(error.InvalidArgument, R.check(f.rt().tick.?(f.rt(), 1.0 / 60.0)));
+    try testing.expectEqual(@as(u32, 0), deferAppliedCount());
 }
 
 fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
@@ -2883,16 +2928,17 @@ test "a zero size component registers as a usable tag" {
     try R.check(ecs.component_register.?(ecs, &c.ke_component_params{ .name = "ZeroSizeTag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &tag));
     try testing.expect(tag != 0);
 
-    const e = ecs.entity_create.?(ecs);
-    _ = ecs.component_add.?(ecs, e, tag);
+    const e = try ecsSpawn(ecs);
+    _ = (try ecsAttach(ecs, e, tag));
 
-    const q = ecs.query_register.?(ecs, &tag, 1);
+    var q: c.ke_query_id = c.KE_QUERY_INVALID;
+    try R.check(ecs.query_register.?(ecs, &tag, 1, &q));
     try testing.expect(q != c.KE_QUERY_INVALID);
 
     var segs = std.mem.zeroes([8]c.ke_ecs_segment);
     var columns: [8]?*anyopaque = undefined;
     var seg_count: usize = 0;
-    ecs.query_resolve.?(ecs, q, &segs, 8, &columns, &seg_count);
+    try R.check(ecs.query_resolve.?(ecs, q, &segs, 8, &columns, &seg_count));
 
     var total: usize = 0;
     for (0..seg_count) |i| total += segs[i].count;
@@ -2922,8 +2968,8 @@ test "two readers sharing a wave read the same storage without conflicting" {
     try testing.expect(pos != 0);
 
     for (0..512) |i| {
-        const e = f.ecs().entity_create.?(f.ecs());
-        const p: *Vec3 = @ptrCast(@alignCast(f.ecs().component_add.?(f.ecs(), e, pos).?));
+        const e = try ecsSpawn(f.ecs());
+        const p: *Vec3 = @ptrCast(@alignCast((try ecsAttach(f.ecs(), e, pos)).?));
         p.x = @floatFromInt(i);
         p.y = 0.0;
         p.z = 0.0;
@@ -2976,9 +3022,9 @@ test "a multi term query hands back aligned columns" {
 
     var expect: f64 = 0.0;
     for (0..100) |i| {
-        const e = f.ecs().entity_create.?(f.ecs());
-        _ = f.ecs().component_add.?(f.ecs(), e, pos);
-        _ = f.ecs().component_add.?(f.ecs(), e, vel);
+        const e = try ecsSpawn(f.ecs());
+        _ = (try ecsAttach(f.ecs(), e, pos));
+        _ = (try ecsAttach(f.ecs(), e, vel));
         const p: *Vec3 = @ptrCast(@alignCast(f.ecs().component_get.?(f.ecs(), e, pos).?));
         const v: *Vec3 = @ptrCast(@alignCast(f.ecs().component_get.?(f.ecs(), e, vel).?));
         p.x = @floatFromInt(i);

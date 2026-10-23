@@ -2774,6 +2774,8 @@ public static class CSharpWriter
                     else
                     {
                         o.Add($"{fInd}{lane.ThrowIfFailed(plainCall)}");
+                        if (slot.TagValue("unroots") is string freedKey)
+                            o.Add($"{fInd}if (_rooted.TryRemove({Idioms.Ident(freedKey)}, out var freed)) freed.Free();");
                     }
                     CloseScopes(o, fDepth, fSeqAt, fClosers);
                     o.Add("    }");

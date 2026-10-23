@@ -388,10 +388,17 @@ fn answer(out_cid: [*c]c.ke_component_id, cid: c.ke_component_id) c.ke_result {
     return if (cid == 0) R.code(error.InvalidArgument) else R.ok;
 }
 
-fn stubEntityCreate(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
+fn stubEntityCreate(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
     const s = stubEcsOf(self);
     s.next_entity += 1;
-    return s.next_entity;
+    out_entity.* = s.next_entity;
+    return R.ok;
+}
+
+fn worldEntity(ecs: *c.ke_ecs) R.Error!c.ke_entity {
+    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    try R.check(ecs.entity_create.?(ecs, &entity));
+    return entity;
 }
 
 fn stubEcsInit(s: *StubEcs) void {
@@ -421,7 +428,7 @@ test "a world hands back the ecs and runtime it was built with, and no tree it n
     try testing.expect(w.*.scene_tree.?(w) == null);
 
     const e = w.*.ecs.?(w).?;
-    try testing.expect(e.*.entity_create.?(e) != c.KE_ENTITY_INVALID);
+    try testing.expect((try worldEntity(e)) != c.KE_ENTITY_INVALID);
 }
 
 test "two worlds never share the ecs, and destroying one leaves the other alive" {
@@ -449,14 +456,14 @@ test "two worlds never share the ecs, and destroying one leaves the other alive"
     const eb = wb.*.ecs.?(wb).?;
     try testing.expect(ea != eb);
 
-    const a = ea.*.entity_create.?(ea);
-    const b = eb.*.entity_create.?(eb);
+    const a = (try worldEntity(ea));
+    const b = (try worldEntity(eb));
     try testing.expect(a != c.KE_ENTITY_INVALID);
     try testing.expect(b != c.KE_ENTITY_INVALID);
 
     ha.destroy.?(ha.ref);
 
-    const b2 = eb.*.entity_create.?(eb);
+    const b2 = (try worldEntity(eb));
     try testing.expect(b2 != c.KE_ENTITY_INVALID);
     try testing.expect(b2 != b);
 

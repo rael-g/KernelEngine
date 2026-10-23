@@ -128,7 +128,9 @@ extern "C"
 
         /// [unroots:entity] Drops the binding for `entity`, if any. The instance
         /// itself is the binding runtime's to release.
-        void (*unbind)(struct ke_script_host *self, ke_entity entity);
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null host; the ecs's code when it
+        ///         refuses to detach the binding.
+        ke_result (*unbind)(struct ke_script_host *self, ke_entity entity);
 
         /// [idiom] Records bind into `commands`; the binding takes effect when `commands`
         /// is applied. A bind that fails at that point is dropped.
