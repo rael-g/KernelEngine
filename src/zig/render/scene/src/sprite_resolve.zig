@@ -30,7 +30,7 @@ pub const State = struct {
 
 /// Uploads a quad for the sprite's shape and returns its handle, which `swapMesh` takes over.
 /// The key covers every field the vertices and indices are computed from, so sprites of one
-/// shape name the same upload. The upload gets no error out-parameter.
+/// shape name the same upload. A failed upload is logged and returns the empty handle.
 fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_mesh_handle {
     const w = sp.size.x;
     const h = sp.size.y;
@@ -62,12 +62,15 @@ fn quadFor(core: *c.ke_render_service, sp: *const c.ke_sprite2d_component) c.ke_
         bitsOf(sp.region.y),  bitsOf(sp.region.z),  bitsOf(sp.region.w),  sp.flip_h,     sp.flip_v,
     });
 
-    return core.upload_mesh.?(core, k, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, null);
+    var mesh: c.ke_mesh_handle = c.KE_MESH_NONE;
+    if (core.upload_mesh.?(core, k, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, &mesh) != R.ok)
+        log.warn("a sprite quad could not be uploaded", .{});
+    return mesh;
 }
 
 /// Keeps the resolved handle in `texture_handle` and returns it, so a handle that is not empty
 /// skips the resolver from then on. With no resolver the sprite gets the empty texture and
-/// nothing is stored, so the next call tries again. The resolver gets no error out-parameter.
+/// nothing is stored, so the next call tries again.
 fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle {
     if (sp.texture[0] == 0) return c.KE_TEXTURE_NONE;
     if (sp.texture_handle.bits != c.KE_HANDLE_NONE) return sp.texture_handle;
@@ -79,8 +82,8 @@ fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle 
 }
 
 /// Asks the core for a material under a key of the color, the resolved texture and the alpha
-/// fields, so a change to any of them yields another material. The creation gets no error
-/// out-parameter.
+/// fields, so a change to any of them yields another material. A failed creation is logged and
+/// returns the empty handle.
 fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
     const core = st.core;
     const col = sp.color;
@@ -90,7 +93,8 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
         bitsOf(col.x), bitsOf(col.y), bitsOf(col.z), bitsOf(col.w), tex.bits, sp.alpha_mode, bitsOf(sp.alpha_cutoff),
     });
 
-    return core.create_material.?(
+    var material: c.ke_material_handle = c.KE_MATERIAL_NONE;
+    const made = core.create_material.?(
         core,
         k,
         @ptrCast(&sp.color),
@@ -103,8 +107,10 @@ fn materialFor(st: *State, sp: *c.ke_sprite2d_component) c.ke_material_handle {
         1.5,
         0,
         null,
-        null,
+        &material,
     );
+    if (made != R.ok) log.warn("a sprite material could not be created", .{});
+    return material;
 }
 
 /// Takes over the handle passed in and releases the one the component held, so across ticks the
@@ -132,8 +138,7 @@ fn swapMaterial(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c
 /// component: it marks each and queues an attach of the mesh component on the commands of the
 /// context, so the first pass reaches the sprite on a later tick. A refused attach returns the
 /// commands' code, and the sprite stays marked, so a later tick does not
-/// queue it again. The upload, the material creation and the texture resolve get no error
-/// output, so their failures are not reported.
+/// queue it again. A failed upload, material creation or texture resolve leaves its handle empty.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const st: *State = @ptrCast(@alignCast(user.?));
 
@@ -198,8 +203,8 @@ fn captureUploadMesh(
     _: usize,
     indices: [*c]const u16,
     index_count: u32,
-    _: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_mesh_handle {
+    out: [*c]c.ke_mesh_handle,
+) callconv(.c) c.ke_result {
     const k = std.mem.span(key);
     @memcpy(Capture.key[0..k.len], k);
     Capture.key_len = k.len;
@@ -207,7 +212,8 @@ fn captureUploadMesh(
     Capture.verts = v[0..4].*;
     @memcpy(Capture.indices[0..index_count], indices[0..index_count]);
     Capture.calls += 1;
-    return .{ .bits = 77 };
+    out.* = .{ .bits = 77 };
+    return R.ok;
 }
 
 fn fakeService() c.ke_render_service {
@@ -373,10 +379,11 @@ fn refUploadMesh(
     _: usize,
     _: [*c]const u16,
     _: u32,
-    _: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_mesh_handle {
+    out: [*c]c.ke_mesh_handle,
+) callconv(.c) c.ke_result {
     Refs.mesh += 1;
-    return .{ .bits = 100 };
+    out.* = .{ .bits = 100 };
+    return R.ok;
 }
 
 fn refCreateMaterial(
@@ -392,10 +399,11 @@ fn refCreateMaterial(
     _: f32,
     _: f32,
     _: [*c]const u8,
-    _: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_material_handle {
+    out: [*c]c.ke_material_handle,
+) callconv(.c) c.ke_result {
     Refs.material += 1;
-    return .{ .bits = 200 };
+    out.* = .{ .bits = 200 };
+    return R.ok;
 }
 
 fn refReleaseMesh(_: [*c]c.ke_render_service, _: c.ke_mesh_handle) callconv(.c) void {

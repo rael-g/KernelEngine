@@ -8,7 +8,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 const c = @import("c");
 const heap = @import("heap");
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 /// The allocation `ke_render_camera_create` makes and `destroy` frees. The vtable is stored inside
 /// it and its `handle` points back at it, so the `ref` handed out is the address of `api`.
@@ -131,28 +131,19 @@ fn destroy(self_in: ?*c.ke_render_camera) callconv(.c) void {
 /// Every slot of the vtable is total: a null self, input or output, or a view space function
 /// that is missing, makes it return without a report. The clip convention is copied; the view
 /// space is borrowed and must outlive the camera.
-/// When the view space or the clip convention is missing, or the allocation fails, the error output
-/// is set and the returned handle is zeroed, with nothing left allocated.
+/// A missing view space or clip convention fails as an invalid argument and a failed allocation
+/// as out of memory, the handle left zeroed and nothing allocated.
 export fn ke_render_camera_create(
     view_space: ?*c.ke_view_space,
     clip: [*c]const c.ke_ndc_convention,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_render_camera_handle {
-    const null_handle = std.mem.zeroes(c.ke_render_camera_handle);
+    out_camera: [*c]c.ke_render_camera_handle,
+) callconv(.c) c.ke_result {
+    const out = out_camera orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_render_camera_handle);
+    const vs = view_space orelse return R.code(error.InvalidArgument);
+    if (clip == null) return R.code(error.InvalidArgument);
 
-    const vs = view_space orelse {
-        E.fail(out_error, .invalid_argument, "view_space is required", @src());
-        return null_handle;
-    };
-    if (clip == null) {
-        E.fail(out_error, .invalid_argument, "clip is required", @src());
-        return null_handle;
-    }
-
-    const s = heap.gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return null_handle;
-    };
+    const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{ .api = std.mem.zeroes(c.ke_render_camera), .view_space = vs, .clip = clip.* };
     s.api.handle = s;
     s.api.view = cameraView;
@@ -161,7 +152,8 @@ export fn ke_render_camera_create(
     s.api.perspective_projection = cameraPerspectiveProjection;
     s.api.perspective_frustum = cameraPerspectiveFrustum;
 
-    return .{ .ref = &s.api, .destroy = destroy };
+    out.* = .{ .ref = &s.api, .destroy = destroy };
+    return R.ok;
 }
 
 const testing = std.testing;
@@ -209,7 +201,7 @@ const Fixture = struct {
         self.view_space.perspective = &fakePerspective;
         self.view_space.view_from_transform = &fakeViewFromTransform;
         self.clip = .{ .z_zero_to_one = true, .y_flip = true };
-        self.handle = ke_render_camera_create(&self.view_space, &self.clip, null);
+        _ = ke_render_camera_create(&self.view_space, &self.clip, &self.handle);
     }
 
     fn api(self: *Fixture) *c.ke_render_camera {
@@ -364,9 +356,11 @@ test "creation without a view space or a clip convention fails with no handle" {
     var vs = std.mem.zeroes(c.ke_view_space);
     var clip = std.mem.zeroes(c.ke_ndc_convention);
 
-    const no_view_space = ke_render_camera_create(null, &clip, null);
+    var no_view_space: c.ke_render_camera_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_camera_create(null, &clip, &no_view_space)));
     try testing.expect(no_view_space.ref == null);
-    const no_clip = ke_render_camera_create(&vs, null, null);
+    var no_clip: c.ke_render_camera_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_camera_create(&vs, null, &no_clip)));
     try testing.expect(no_clip.ref == null);
 }
 

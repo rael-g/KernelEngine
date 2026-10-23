@@ -22,20 +22,21 @@ pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
         capacity: u32 = 0,
 
         /// Makes room for `count` draws, replacing the buffer and the set with ones of the next
-        /// power of two slots when the current ones are smaller. On failure it returns false with
-        /// the device's or the binder's error and keeps what it had.
-        pub fn ensure(self: *Self, count: u32, out_error: [*c][*c]c.ke_error) bool {
-            if (count <= self.capacity) return true;
+        /// power of two slots when the current ones are smaller. On failure it returns the
+        /// device's or the binder's code and keeps what it had.
+        pub fn ensure(self: *Self, count: u32) c.ke_result {
+            if (count <= self.capacity) return c.KE_OK;
             const slots = @import("std").math.ceilPowerOfTwoAssert(u32, @max(count, 1));
             const dev = self.device;
-            const buffer = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+            var buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE;
+            const made = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
                 .label = self.buffer_label,
                 .initial_data = null,
                 .size = @as(u64, stride) * slots,
                 .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
                 .mapped_at_creation = false,
-            }, out_error);
-            if (buffer == c.KE_GPU_INVALID_HANDLE) return false;
+            }, &buffer);
+            if (made != c.KE_OK) return made;
             const binding = [_]c.ke_render_shader_binding{.{
                 .name = "object",
                 .buffer = buffer,
@@ -44,16 +45,17 @@ pub fn ObjectUniforms(comptime c: type, comptime Record: type) type {
                 .texture_view = 0,
                 .sampler = 0,
             }};
-            const set = self.binder.create_set.?(self.binder, self.layout, "object", self.set_label, &binding, binding.len, out_error);
-            if (set == c.KE_RENDER_BINDING_INVALID) {
+            var set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID;
+            const bound = self.binder.create_set.?(self.binder, self.layout, "object", self.set_label, &binding, binding.len, &set);
+            if (bound != c.KE_OK) {
                 dev.destroy_buffer.?(dev, buffer);
-                return false;
+                return bound;
             }
             self.release();
             self.buffer = buffer;
             self.set = set;
             self.capacity = slots;
-            return true;
+            return c.KE_OK;
         }
 
         /// The dynamic offset of a draw's slot.

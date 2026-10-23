@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_SCENE_LABEL_RESOLVE_CREATE_H_
 
 #include <kernel_engine/asset/asset_resolver.h>
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/ui/ui_create.h>
@@ -49,8 +49,9 @@ extern "C"
     /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
     /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
     /// handle's ref is NULL on failure.
-    KE_RENDER_SCENE_API ke_render_label_resolve_handle ke_render_label_resolve_create(
-        const ke_render_label_resolve_params *params, ke_error **out_error);
+    /// @param out_resolve [out] Receives the handle; left zeroed on failure.
+    KE_RENDER_SCENE_API ke_result ke_render_label_resolve_create(
+        const ke_render_label_resolve_params *params, ke_render_label_resolve_handle *out_resolve);
 
 #ifdef __cplusplus
 }

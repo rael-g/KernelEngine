@@ -3,6 +3,8 @@
 const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
+const R = rc.R;
+const log = std.log.scoped(.render_service);
 
 const shader_files = @import("shader_files").ShaderFiles(c);
 
@@ -28,28 +30,32 @@ fn stageSuffix(stage: c.ke_gpu_shader_stage) ?[]const u8 {
 }
 
 /// The service's shader-loading slot. The file read is "<shader dir>/<name>.<vs|fs|cs>.<ext>", and
-/// the resolved path is the cache key. A cache hit returns the stored module without reading the
-/// disk and leaves the error out-parameter untouched. On a miss the module is created on the
-/// device, stored, registered with the cache and cached under the path. Every failure returns the
-/// invalid handle and fills the error: invalid argument for a stage that is not exactly one or a
-/// path too long for its buffer; not found when the file does not open; I/O when it cannot be
-/// sized or fully read; out of memory when the file buffer or the store cannot be allocated, in
-/// which case a module already created is destroyed on the device first. A failure of the device
-/// call is the device's own error.
-pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke_gpu_shader_stage, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
-    const st = rc.coreOf(self);
+/// the resolved path is the cache key. A cache hit writes the stored module without reading the
+/// disk. On a miss the module is created on the device, stored, registered with the cache and
+/// cached under the path. A stage that is not exactly one or a path too long for its buffer fails
+/// as an invalid argument; a file that does not open as not found; one that cannot be sized or
+/// fully read as I/O; a file buffer or a store that cannot be allocated as out of memory, a module
+/// already created being destroyed on the device first. A failure of the device is its own code.
+pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke_gpu_shader_stage, out_module: [*c]c.ke_gpu_shader_module) callconv(.c) c.ke_result {
+    const out = out_module orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_GPU_INVALID_HANDLE;
+    if (self == null or name == null) return R.code(error.InvalidArgument);
+    out.* = load(rc.coreOf(self), name, stage) catch |err| return R.code(err);
+    return R.ok;
+}
 
+fn load(st: *rc.CoreState, name: [*c]const u8, stage: c.ke_gpu_shader_stage) R.Error!c.ke_gpu_shader_module {
     const suffix = stageSuffix(stage) orelse {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "load_shader: stage must be exactly one of VERTEX/FRAGMENT/COMPUTE", @src().file, @intCast(@src().line), null);
-        return c.KE_GPU_INVALID_HANDLE;
+        log.warn("load_shader: the stage of {s} must be exactly one of vertex, fragment or compute", .{std.mem.span(name)});
+        return error.InvalidArgument;
     };
     const ext = extForLanguage(st.device.shader_language.?(st.device));
 
     var path_buf: [1024]u8 = undefined;
     const name_span = std.mem.span(name);
     const path = std.fmt.bufPrintZ(&path_buf, "{s}/{s}.{s}.{s}", .{ st.shader_dir, name_span, suffix, ext }) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "load_shader: resolved path too long", @src().file, @intCast(@src().line), null);
-        return c.KE_GPU_INVALID_HANDLE;
+        log.warn("load_shader: the resolved path of {s} is too long", .{name_span});
+        return error.InvalidArgument;
     };
 
     var cached: c.ke_resource_handle = c.KE_HANDLE_NONE;
@@ -57,22 +63,19 @@ pub fn loadShader(self: [*c]c.ke_render_service, name: [*c]const u8, stage: c.ke
         return st.shader_store.get(cached).?.*;
     }
 
-    const bytes = shader_files.read(rc.gpa, path, out_error) orelse return c.KE_GPU_INVALID_HANDLE;
+    const bytes = try shader_files.read(rc.gpa, path);
     defer rc.gpa.free(bytes);
 
-    const module = st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
+    var module: c.ke_gpu_shader_module = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
         .code = bytes.ptr,
         .byte_size = bytes.len,
         .label = name,
-    }, out_error);
-    if (module == c.KE_GPU_INVALID_HANDLE) return module;
+    }, &module));
+    errdefer st.device.destroy_shader_module.?(st.device, module);
 
     const bits = st.shader_store.insert(module);
-    if (bits == c.KE_HANDLE_NONE) {
-        st.device.destroy_shader_module.?(st.device, module);
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "load_shader: shader store insert failed", @src().file, @intCast(@src().line), null);
-        return c.KE_GPU_INVALID_HANDLE;
-    }
+    if (bits == c.KE_HANDLE_NONE) return error.OutOfMemory;
     _ = st.shader_cache.register_resource.?(st.shader_cache, bits);
     _ = st.shader_cache.cache_insert.?(st.shader_cache, path.ptr, bits);
     return module;

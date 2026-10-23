@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_CORE_RENDER_CORE_H_
 #define KERNEL_ENGINE_RENDER_CORE_RENDER_CORE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -147,20 +147,22 @@ struct ke_render_service
     void *handle;
 
     /// Declares a transient resource the service allocates and recycles.
-    /// @return The tag-component cid to place in a pass's access_list.
-    ke_component_id (*declare)(struct ke_render_service *self,
-                               const ke_render_resource_params *params, ke_error **out_error);
+    /// @param out_cid [out] Receives the tag-component cid to place in a pass's access_list.
+    ke_result (*declare)(struct ke_render_service *self,
+                         const ke_render_resource_params *params, ke_component_id *out_cid);
     /// Imports an externally-owned texture under `name`.
-    /// @return Its tag-component cid.
-    ke_component_id (*import_texture)(struct ke_render_service *self, const char *name,
-                                      ke_gpu_texture tex, ke_error **out_error);
+    /// @param out_cid [out] Receives its tag-component cid.
+    ke_result (*import_texture)(struct ke_render_service *self, const char *name,
+                                ke_gpu_texture tex, ke_component_id *out_cid);
     /// Mints a tag cid under `name` with no GPU payload.
-    ke_component_id (*import_tag)(struct ke_render_service *self, const char *name,
-                                  ke_error **out_error);
+    /// @param out_cid [out] Receives the cid.
+    ke_result (*import_tag)(struct ke_render_service *self, const char *name,
+                            ke_component_id *out_cid);
     /// Publishes an externally-owned GPU buffer under `name` for another pass to
     /// bind by name.
-    ke_component_id (*import_buffer)(struct ke_render_service *self, const char *name,
-                                     ke_gpu_buffer buffer, uint64_t size, ke_error **out_error);
+    /// @param out_cid [out] Receives its tag-component cid.
+    ke_result (*import_buffer)(struct ke_render_service *self, const char *name,
+                               ke_gpu_buffer buffer, uint64_t size, ke_component_id *out_cid);
     /// @return The tag cid minted for `name`, or KE_COMPONENT_INVALID.
     ke_component_id (*cid)(struct ke_render_service *self, const char *name);
 
@@ -172,21 +174,23 @@ struct ke_render_service
 
     /// Acquires the service's render target as the backbuffer (a built-in resource named
     /// "backbuffer"), clears the per-pass command slot table, and clears the frame's color and
-    /// depth. Returns false when the target
-    /// has nothing to draw into this frame, with out_error set when acquiring it failed.
-    bool (*begin_frame)(struct ke_render_service *self, ke_error **out_error);
+    /// depth. When the target has nothing to draw into this frame it succeeds without beginning
+    /// one, and begin_pass then opens no pass; it fails with the target's code when acquiring
+    /// failed.
+    ke_result (*begin_frame)(struct ke_render_service *self);
     /// Submits the passes outside the chain in the order they ended, then the chain in its order,
     /// then draws the frame's color into the backbuffer and presents the render target. A link
-    /// whose pass recorded nothing still carries the color through it. Returns false when no frame began, or with out_error set when presenting failed.
-    bool (*end_frame)(struct ke_render_service *self, ke_error **out_error);
+    /// whose pass recorded nothing still carries the color through it. Succeeds doing nothing when
+    /// no frame began, and fails with the target's code when presenting failed.
+    ke_result (*end_frame)(struct ke_render_service *self);
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
-    /// @return The handle of the uploaded mesh.
-    /** @param key [utf8] Dedup cache key; required. */
-    ke_mesh_handle (*upload_mesh)(struct ke_render_service *self, const char *key,
-                                  const void *vertices, size_t vertices_size,
-                                  const uint16_t *indices, uint32_t index_count,
-                                  ke_error **out_error);
+    /** @param key [utf8] Dedup cache key; required.
+     *  @param out_mesh [out] Receives the handle of the uploaded mesh. */
+    ke_result (*upload_mesh)(struct ke_render_service *self, const char *key,
+                             const void *vertices, size_t vertices_size,
+                             const uint16_t *indices, uint32_t index_count,
+                             ke_mesh_handle *out_mesh);
     /// [try] Resolves a mesh handle to its GPU buffers. Returns false for a
     /// handle this service never uploaded.
     /// @param out_vbo [out]
@@ -200,25 +204,27 @@ struct ke_render_service
     /// LOAD_OP_CLEAR).
     void (*set_clear_color)(struct ke_render_service *self, float r, float g, float b, float a);
 
-    /** @param key [utf8] Dedup cache key; required. */
-    ke_texture_handle (*upload_texture)(struct ke_render_service *self, const char *key,
-                                        uint32_t width, uint32_t height,
-                                        const void *rgba, ke_error **out_error);
+    /** @param key [utf8] Dedup cache key; required.
+     *  @param out_texture [out] Receives the handle of the uploaded texture. */
+    ke_result (*upload_texture)(struct ke_render_service *self, const char *key,
+                                uint32_t width, uint32_t height,
+                                const void *rgba, ke_texture_handle *out_texture);
     /**
      * @param key [utf8] Dedup cache key; required.
      * @param shader [utf8,nullable] Authored material name; NULL/empty selects the engine default.
+     * @param out_material [out] Receives the handle of the material.
      */
-    ke_material_handle (*create_material)(struct ke_render_service *self, const char *key,
-                                          const float *base_color,
-                                          float metallic, float roughness,
-                                          ke_texture_handle albedo,
-                                          ke_texture_handle normal,
-                                          ke_alpha_mode alpha_mode,
-                                          float alpha_cutoff,
-                                          float ior,
-                                          float distortion_strength,
-                                          const char *shader,
-                                          ke_error **out_error);
+    ke_result (*create_material)(struct ke_render_service *self, const char *key,
+                                 const float *base_color,
+                                 float metallic, float roughness,
+                                 ke_texture_handle albedo,
+                                 ke_texture_handle normal,
+                                 ke_alpha_mode alpha_mode,
+                                 float alpha_cutoff,
+                                 float ior,
+                                 float distortion_strength,
+                                 const char *shader,
+                                 ke_material_handle *out_material);
     /// What the service's resource binder holds for a material handle, the argument a pass gives
     /// its bind_material; an unknown handle resolves to the built-in white material.
     ke_render_material_binding (*material_binding)(struct ke_render_service *self, ke_material_handle h);
@@ -228,10 +234,11 @@ struct ke_render_service
     /// The MASK discard threshold for a material handle.
     float (*material_alpha_cutoff)(struct ke_render_service *self, ke_material_handle h);
 
-    /** @param key [utf8] Dedup cache key; required. */
-    ke_texture_handle (*upload_cubemap)(struct ke_render_service *self, const char *key,
-                                        uint32_t face_size, const void *faces,
-                                        ke_error **out_error);
+    /** @param key [utf8] Dedup cache key; required.
+     *  @param out_cubemap [out] Receives the handle of the uploaded cubemap. */
+    ke_result (*upload_cubemap)(struct ke_render_service *self, const char *key,
+                                uint32_t face_size, const void *faces,
+                                ke_texture_handle *out_cubemap);
     /// The GPU view for a texture/cubemap handle.
     ke_gpu_texture_view (*texture_view)(struct ke_render_service *self, ke_texture_handle h);
 
@@ -305,8 +312,11 @@ struct ke_render_service
     ke_texture_handle (*white_texture)(struct ke_render_service *self);
 
     /// Resolves a shader by logical NAME + STAGE to a device-ready module.
-    ke_gpu_shader_module (*load_shader)(struct ke_render_service *self, const char *name,
-                                        ke_gpu_shader_stage stage, ke_error **out_error);
+    /// @param out_module [out] Receives the module.
+    /// @return KE_OK; KE_RESULT_NOT_FOUND when no shader has that name, or the device's code
+    ///         when it rejects the module.
+    ke_result (*load_shader)(struct ke_render_service *self, const char *name,
+                             ke_gpu_shader_stage stage, ke_gpu_shader_module *out_module);
 
     /// Replaces the frame globals and records their upload; a shader reads them as `ke_frame`.
     void (*set_frame_globals)(struct ke_render_service *self, const ke_render_frame_globals *globals);
@@ -335,10 +345,10 @@ struct ke_render_service
 
     /// Gives a pass a place in the chain, after every pass that joined the same stage before it.
     /// The place is kept until leave_chain.
-    /// @return The link, or KE_RENDER_CHAIN_NONE with KE_ERROR_INVALID_ARGUMENT for a stage or
-    ///         mode out of range.
-    ke_render_chain_link (*join_chain)(struct ke_render_service *self, ke_render_stage stage,
-                                       ke_render_chain_mode mode, ke_error **out_error);
+    /// @param out_link [out] Receives the link; KE_RENDER_CHAIN_NONE on failure.
+    /// @return KE_OK, or KE_RESULT_INVALID_ARGUMENT for a stage or mode out of range.
+    ke_result (*join_chain)(struct ke_render_service *self, ke_render_stage stage,
+                            ke_render_chain_mode mode, ke_render_chain_link *out_link);
     /// Gives the place back. An unknown link is ignored.
     void (*leave_chain)(struct ke_render_service *self, ke_render_chain_link link);
     /// Texel format of the color a pass of @p stage draws into, the format its pipeline declares.

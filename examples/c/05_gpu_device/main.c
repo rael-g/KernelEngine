@@ -1,4 +1,4 @@
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <stdio.h>
@@ -7,18 +7,15 @@ int main(void)
 {
     printf("--- KernelEngine GPU Device Demo ---\n");
 
-    ke_error *err = NULL;
     ke_gpu_device_webgpu_params params = {
         .enable_validation = 1,
     };
 
-    ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&params, &err);
-    if (!gpu.ref)
+    ke_gpu_device_handle gpu = { 0 };
+    ke_result made = ke_gpu_device_webgpu_create(&params, &gpu);
+    if (made != KE_OK)
     {
-        if (err)
-            printf("ERROR [%s]: %s\n", err->type->name, err->message);
-        else
-            printf("ERROR: ke_gpu_device_webgpu_create returned null\n");
+        printf("ERROR: ke_gpu_device_webgpu_create failed with result code 0x%08x\n", (unsigned)made);
         return 1;
     }
 

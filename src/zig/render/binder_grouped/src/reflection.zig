@@ -4,6 +4,8 @@
 const std = @import("std");
 const c = @import("c");
 const gpa = @import("heap").gpa;
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.reflection);
 
 const JBinding = struct {
     kind: []const u8,
@@ -166,10 +168,6 @@ fn bindingOf(name: []const u8, index: u32, t: JType, stage: u32) ReadError!Bindi
     return error.Malformed;
 }
 
-fn fail(out_error: [*c][*c]c.ke_error, kind: *const c.ke_error_type, message: [*c]const u8, src: std.builtin.SourceLocation) void {
-    c.ke_error_set(out_error, kind, message, src.file, @intCast(src.line), null);
-}
-
 /// A resource a binder was given for every parameter of `name` a set leaves out.
 pub const Provided = struct {
     name: [:0]const u8,
@@ -190,13 +188,9 @@ pub fn blockNames(a: std.mem.Allocator, json: []const u8) ReadError![]const []co
 }
 
 /// A layout with one entry per binding of `group`, each visible to the stages that declare it.
-/// The invalid handle with the error filled when the entries cannot be allocated or the device
-/// refuses the layout.
-pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const u8, out_error: [*c][*c]c.ke_error) c.ke_gpu_bind_group_layout {
-    const entries = gpa.alloc(c.ke_gpu_bind_group_layout_entry, group.bindings.items.len) catch {
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "shader group: entry allocation failed", @src());
-        return c.KE_GPU_INVALID_HANDLE;
-    };
+/// Fails when the entries cannot be allocated or the device refuses the layout.
+pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const u8) R.Error!c.ke_gpu_bind_group_layout {
+    const entries = try gpa.alloc(c.ke_gpu_bind_group_layout_entry, group.bindings.items.len);
     defer gpa.free(entries);
     for (group.bindings.items, entries) |b, *e| {
         e.* = .{
@@ -207,40 +201,33 @@ pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const
             .view_dimension = b.view_dimension,
         };
     }
-    const layout = dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+    var layout: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE;
+    try R.check(dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
         .label = label,
         .entry_count = @intCast(entries.len),
         .entries = entries.ptr,
-    }, out_error);
+    }, &layout));
     return layout;
 }
 
 /// The bind group entries for `bindings` in the group's numbering, plus one for each parameter of
-/// the group they leave out that `provided` names, owned by the caller. Null with the error
-/// filled when a binding names no parameter, a parameter is bound twice, or one is left unbound.
-pub fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding, provided: []const Provided, out_error: [*c][*c]c.ke_error) ?[]c.ke_gpu_bind_group_entry {
-    const entries = gpa.alloc(c.ke_gpu_bind_group_entry, group.bindings.items.len) catch {
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_set: entry allocation failed", @src());
-        return null;
-    };
-    const bound = gpa.alloc(bool, group.bindings.items.len) catch {
-        gpa.free(entries);
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_set: entry allocation failed", @src());
-        return null;
-    };
+/// the group they leave out that `provided` names, owned by the caller. Fails as an invalid
+/// argument when a binding names no parameter, a parameter is bound twice, or one is left unbound.
+pub fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding, provided: []const Provided) R.Error![]c.ke_gpu_bind_group_entry {
+    const entries = try gpa.alloc(c.ke_gpu_bind_group_entry, group.bindings.items.len);
+    errdefer gpa.free(entries);
+    const bound = try gpa.alloc(bool, group.bindings.items.len);
     defer gpa.free(bound);
     @memset(bound, false);
     for (bindings) |src| {
         const slot = if (src.name != null) indexOf(group, std.mem.span(src.name)) else null;
         const i = slot orelse {
-            fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_set: a binding names no parameter of the group", @src());
-            gpa.free(entries);
-            return null;
+            log.warn("create_set: the binding {s} names no parameter of the group", .{if (src.name != null) std.mem.span(src.name) else "(unnamed)"});
+            return error.InvalidArgument;
         };
         if (bound[i]) {
-            fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_set: a parameter is bound twice", @src());
-            gpa.free(entries);
-            return null;
+            log.warn("create_set: the parameter {s} is bound twice", .{group.bindings.items[i].name});
+            return error.InvalidArgument;
         }
         bound[i] = true;
         entries[i] = entryOf(group.bindings.items[i], src);
@@ -248,9 +235,8 @@ pub fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding
     for (group.bindings.items, bound, entries) |b, was_bound, *e| {
         if (was_bound) continue;
         const given = providedFor(provided, b.name) orelse {
-            fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_set: a parameter of the group has no binding", @src());
-            gpa.free(entries);
-            return null;
+            log.warn("create_set: the parameter {s} of the group has no binding", .{b.name});
+            return error.InvalidArgument;
         };
         e.* = entryOf(b, given);
     }
@@ -389,9 +375,8 @@ test "a parameter the binder was given is bound to it when the set leaves it out
     var linear = zero;
     linear.sampler = 12;
     const globals = [_]Provided{ .{ .name = "ke_frame", .binding = frame }, .{ .name = "ke_samp_linear", .binding = linear } };
-    var err: [*c]c.ke_error = null;
     const own = [_]c.ke_render_shader_binding{.{ .name = "own", .buffer = 13, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 }};
-    const entries = matchBindings(&group, &own, &globals, &err).?;
+    const entries = try matchBindings(&group, &own, &globals);
     defer gpa.free(entries);
     try std.testing.expectEqual(@as(c.ke_gpu_buffer, 11), entries[0].buffer);
     try std.testing.expectEqual(@as(c.ke_gpu_sampler, 12), entries[1].sampler);
@@ -402,14 +387,13 @@ test "bindings are placed at their parameters' numbers, and a name the group lac
     var group = Group.init(std.testing.allocator);
     defer group.deinit();
     _ = try group.collect(forward_like_json, "mat", c.KE_GPU_SHADER_STAGE_FRAGMENT);
-    var err: [*c]c.ke_error = null;
     const ok = [_]c.ke_render_shader_binding{
         .{ .name = "smp", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = 7 },
         .{ .name = "mat", .buffer = 3, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 },
         .{ .name = "albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 5, .sampler = 0 },
     };
     const globals = [_]Provided{};
-    const entries = matchBindings(&group, &ok, &globals, &err).?;
+    const entries = try matchBindings(&group, &ok, &globals);
     defer gpa.free(entries);
     try std.testing.expectEqual(@as(c.ke_gpu_buffer, 3), entries[0].buffer);
     try std.testing.expectEqual(@as(c.ke_gpu_binding_type, c.KE_GPU_BINDING_TYPE_TEXTURE), entries[1].type);
@@ -418,8 +402,7 @@ test "bindings are placed at their parameters' numbers, and a name the group lac
 
     var wrong = ok;
     wrong[2].name = "albedo_map";
-    try std.testing.expect(matchBindings(&group, &wrong, &globals, &err) == null);
-    try std.testing.expect(err != null);
+    try std.testing.expectError(error.InvalidArgument, matchBindings(&group, &wrong, &globals));
 }
 
 test "the blocks a shader declares are listed by name" {

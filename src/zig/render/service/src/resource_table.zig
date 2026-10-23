@@ -3,71 +3,82 @@
 const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
+const R = rc.R;
+const log = std.log.scoped(.render_service);
 
 /// Every adder registers the name as a component with the service's ecs and appends one entry
-/// to the table in call order. None fills its error out-parameter. Declares a texture resource:
+/// to the table in call order, writing its cid, and fails as out of memory when the table cannot
+/// grow or with the ecs's code when the name cannot be registered. Declares a texture resource:
 /// registers the name, creates a texture and its view on the device,
 /// and appends a transient entry that records the format and the clear value. A depth format gets
 /// a depth attachment, any other a color attachment. A size relative to the backbuffer is scaled
 /// from the size the service last read from the target. Entries made here are the only
 /// transient ones: `destroyCore` destroys the texture and view of transient entries and of no
-/// other entry. Returns the invalid component id, with the error set, when the table cannot grow,
-/// the name cannot be registered, or the device refuses the texture or its view.
-pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_resource_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-    const st = rc.coreOf(self);
-    if (st.find(params.*.name)) |r| {
-        const relative = params.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
-        if (r.is_transient and r.format == params.*.format and r.relative == relative) return r.cid;
-        c.ke_error_set(out_error, &c.KE_ERROR_ALREADY_EXISTS, "declare: a resource of that name exists with another description", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    }
-    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
+/// other entry. A name declared before with the same description writes the same cid; with
+/// another it fails as already existing. A texture or view the device refuses fails with the
+/// device's code.
+pub fn declare(self: [*c]c.ke_render_service, params: [*c]const c.ke_render_resource_params, out_cid: [*c]c.ke_component_id) callconv(.c) c.ke_result {
+    const out = out_cid orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_COMPONENT_INVALID;
+    if (self == null or params == null or params.*.name == null) return R.code(error.InvalidArgument);
+    out.* = declareResource(rc.coreOf(self), params.*) catch |err| return R.code(err);
+    return R.ok;
+}
 
+fn declareResource(st: *rc.CoreState, params: c.ke_render_resource_params) R.Error!c.ke_component_id {
+    if (st.find(params.name)) |r| {
+        const relative = params.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+        if (r.is_transient and r.format == params.format and r.relative == relative) return r.cid;
+        log.warn("declare: a resource named {s} exists with another description", .{std.mem.span(params.name)});
+        return error.AlreadyExists;
+    }
+    var w = params.width;
+    var h = params.height;
+    if (params.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER) {
+        w = scaled(st.backbuffer_w, params.scale_x);
+        h = scaled(st.backbuffer_h, params.scale_y);
+    }
+    const entry = try register(st, params.name);
+    errdefer rc.gpa.free(std.mem.span(entry.name));
+    const made = try createTarget(st, params.name, params.format, w, h);
+    var r = entry;
+    r.format = params.format;
+    r.texture = made.texture;
+    r.view = made.view;
+    r.is_transient = true;
+    r.clear_value = params.clear_value;
+    r.relative = params.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+    r.scale_x = params.scale_x;
+    r.scale_y = params.scale_y;
+    st.resources.appendAssumeCapacity(r);
+    return r.cid;
+}
+
+/// An entry for `name` with no payload, its cid registered and its name owned, once the table has
+/// room for it; the caller appends it or frees the name.
+fn register(st: *rc.CoreState, name: [*c]const u8) R.Error!rc.Resource {
+    try st.resources.ensureUnusedCapacity(rc.gpa, 1);
     var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
-    if (st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = params.*.name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid) != c.KE_OK)
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
-    if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
-
-    var w = params.*.width;
-    var h = params.*.height;
-    if (params.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER) {
-        w = scaled(st.backbuffer_w, params.*.scale_x);
-        h = scaled(st.backbuffer_h, params.*.scale_y);
-    }
-
-    const owned = rc.gpa.dupeZ(u8, std.mem.span(params.*.name)) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
-    const made = createTarget(st, params.*.name, params.*.format, w, h, out_error) orelse {
-        rc.gpa.free(owned);
-        return c.KE_COMPONENT_INVALID;
-    };
-    st.resources.appendAssumeCapacity(.{
+    try R.check(st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    const owned = try rc.gpa.dupeZ(u8, std.mem.span(name));
+    return .{
         .name = owned.ptr,
         .cid = cid,
-        .format = params.*.format,
-        .texture = made.texture,
-        .view = made.view,
+        .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
+        .texture = c.KE_GPU_INVALID_HANDLE,
+        .view = c.KE_GPU_INVALID_HANDLE,
         .is_backbuffer = false,
-        .is_transient = true,
-        .clear_value = params.*.clear_value,
-        .relative = params.*.size_mode == c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
-        .scale_x = params.*.scale_x,
-        .scale_y = params.*.scale_y,
-    });
-    return cid;
+        .is_transient = false,
+        .clear_value = .{ 0, 0, 0, 0 },
+    };
 }
 
 const Target = struct { texture: c.ke_gpu_texture, view: c.ke_gpu_texture_view };
 
 /// Creates a declared target's texture and its view. A depth format gets a depth attachment, any
-/// other a color attachment. Null, with the device's error, when either is refused; a refused view
+/// other a color attachment. Fails with the device's code when either is refused; a refused view
 /// destroys the texture.
-fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_format, w: u32, h: u32, out_error: [*c][*c]c.ke_error) ?Target {
+fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_format, w: u32, h: u32) R.Error!Target {
     const depth = rc.isDepthFormat(format);
     const usage: c.ke_gpu_texture_usage = if (depth)
         c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED |
@@ -76,7 +87,8 @@ fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_
         c.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | c.KE_GPU_TEXTURE_USAGE_SAMPLED |
             c.KE_GPU_TEXTURE_USAGE_COPY_SRC | c.KE_GPU_TEXTURE_USAGE_COPY_DST;
 
-    const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
+    var tex: c.ke_gpu_texture = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
         .label = name,
         .width = w,
         .height = h,
@@ -88,10 +100,11 @@ fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_
         .sample_count = 1,
         .initial_data = null,
         .initial_data_size = 0,
-    }, out_error);
-    if (tex == c.KE_GPU_INVALID_HANDLE) return null;
+    }, &tex));
+    errdefer st.device.destroy_texture.?(st.device, tex);
 
-    const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
+    var view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
         .label = name,
         .format = format,
         .dimension = c.KE_GPU_TEXTURE_DIM_2D,
@@ -100,11 +113,7 @@ fn createTarget(st: *rc.CoreState, name: [*c]const u8, format: c.ke_gpu_texture_
         .mip_level_count = 1,
         .base_array_layer = 0,
         .array_layer_count = 1,
-    }, out_error);
-    if (view == c.KE_GPU_INVALID_HANDLE) {
-        st.device.destroy_texture.?(st.device, tex);
-        return null;
-    }
+    }, &view));
     return .{ .texture = tex, .view = view };
 }
 
@@ -124,7 +133,7 @@ pub fn resizeRelative(st: *rc.CoreState) void {
         if (!r.relative) continue;
         if (r.view != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture_view.?(st.device, r.view);
         if (r.texture != c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
-        const made = createTarget(st, r.name, r.format, scaled(st.backbuffer_w, r.scale_x), scaled(st.backbuffer_h, r.scale_y), null) orelse Target{ .texture = c.KE_GPU_INVALID_HANDLE, .view = c.KE_GPU_INVALID_HANDLE };
+        const made = createTarget(st, r.name, r.format, scaled(st.backbuffer_w, r.scale_x), scaled(st.backbuffer_h, r.scale_y)) catch Target{ .texture = c.KE_GPU_INVALID_HANDLE, .view = c.KE_GPU_INVALID_HANDLE };
         r.texture = made.texture;
         r.view = made.view;
     }
@@ -138,94 +147,48 @@ pub fn resourceGeneration(self: [*c]c.ke_render_service) callconv(.c) u32 {
     return rc.coreOf(self).resource_generation;
 }
 
-/// Appends an entry for a texture owned by the caller, with no view. Returns the invalid component
-/// id when the table cannot grow, with an out-of-memory error.
-pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.ke_gpu_texture, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+/// Appends an entry for a texture owned by the caller, with no view.
+pub fn importTexture(self: [*c]c.ke_render_service, name: [*c]const u8, tex: c.ke_gpu_texture, out_cid: [*c]c.ke_component_id) callconv(.c) c.ke_result {
+    const out = out_cid orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_COMPONENT_INVALID;
+    if (self == null or name == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
-    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
-    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
-    if (st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid) != c.KE_OK)
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
-    if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
-    const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
-    st.resources.appendAssumeCapacity(.{
-        .name = owned.ptr,
-        .cid = cid,
-        .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
-        .texture = tex,
-        .view = c.KE_GPU_INVALID_HANDLE,
-        .is_backbuffer = false,
-        .is_transient = false,
-        .clear_value = .{ 0, 0, 0, 0 },
-    });
-    return cid;
+    var r = register(st, name) catch |err| return R.code(err);
+    r.texture = tex;
+    st.resources.appendAssumeCapacity(r);
+    out.* = r.cid;
+    return R.ok;
 }
 
-/// Appends an entry that names a resource with no handle, so passes can order on it. Returns the
-/// invalid component id when the table cannot grow, with an out-of-memory error.
-pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+/// Appends an entry that names a resource with no handle, so passes can order on it. A name
+/// already in the table writes its cid.
+pub fn importTag(self: [*c]c.ke_render_service, name: [*c]const u8, out_cid: [*c]c.ke_component_id) callconv(.c) c.ke_result {
+    const out = out_cid orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_COMPONENT_INVALID;
+    if (self == null or name == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
-    if (st.find(name)) |r| return r.cid;
-    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
-    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
-    if (st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid) != c.KE_OK)
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
-    if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
-    const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
-    st.resources.appendAssumeCapacity(.{
-        .name = owned.ptr,
-        .cid = cid,
-        .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
-        .texture = c.KE_GPU_INVALID_HANDLE,
-        .view = c.KE_GPU_INVALID_HANDLE,
-        .is_backbuffer = false,
-        .is_transient = false,
-        .clear_value = .{ 0, 0, 0, 0 },
-    });
-    return cid;
+    if (st.find(name)) |r| {
+        out.* = r.cid;
+        return R.ok;
+    }
+    const r = register(st, name) catch |err| return R.code(err);
+    st.resources.appendAssumeCapacity(r);
+    out.* = r.cid;
+    return R.ok;
 }
 
-/// Appends an entry for a buffer owned by the caller, recording its size. Returns the invalid
-/// component id when the table cannot grow, with an out-of-memory error.
-pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c.ke_gpu_buffer, size: u64, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
+/// Appends an entry for a buffer owned by the caller, recording its size.
+pub fn importBuffer(self: [*c]c.ke_render_service, name: [*c]const u8, buffer: c.ke_gpu_buffer, size: u64, out_cid: [*c]c.ke_component_id) callconv(.c) c.ke_result {
+    const out = out_cid orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_COMPONENT_INVALID;
+    if (self == null or name == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
-    st.resources.ensureUnusedCapacity(rc.gpa, 1) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource table allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
-    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
-    if (st.ecs.component_register.?(st.ecs, &c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid) != c.KE_OK)
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
-    if (cid == c.KE_COMPONENT_INVALID) return c.KE_COMPONENT_INVALID;
-    const owned = rc.gpa.dupeZ(u8, std.mem.span(name)) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "resource name allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_COMPONENT_INVALID;
-    };
-    st.resources.appendAssumeCapacity(.{
-        .name = owned.ptr,
-        .cid = cid,
-        .format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
-        .texture = c.KE_GPU_INVALID_HANDLE,
-        .view = c.KE_GPU_INVALID_HANDLE,
-        .is_backbuffer = false,
-        .is_transient = false,
-        .clear_value = .{ 0, 0, 0, 0 },
-        .buffer = buffer,
-        .buffer_size = size,
-    });
-    return cid;
+    var r = register(st, name) catch |err| return R.code(err);
+    r.buffer = buffer;
+    r.buffer_size = size;
+    st.resources.appendAssumeCapacity(r);
+    out.* = r.cid;
+    return R.ok;
 }
 
 /// Returns the component id of the named entry; the invalid id for an unknown name.

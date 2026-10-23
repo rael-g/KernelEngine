@@ -1,6 +1,4 @@
-using System.Runtime.InteropServices;
 
-using KernelEngine.Common.Native;
 using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Framework;
@@ -128,14 +126,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (services.GetService<ILogger>() is { } logger)
             RouteLogs(logger);
 
-        ke_error* err = null;
-
         var config = services.GetService<IConfiguration>();
         var debugLabels = _debugLabelsOverride || (config?.GetBool("render", "debug_labels", false) ?? false);
         var dp = new ke_gpu_device_webgpu_params { enable_validation = true, scheduler = sc, debug_labels = debugLabels };
-        _device = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, &err);
-        if (_device.@ref == null)
-            throw Fail("webgpu device create failed", err);
+        fixed (ke_gpu_device_handle* made = &_device)
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, made), "webgpu device create");
 
         var vsync = config?.GetBool("runtime.renderer", "vsync", true) ?? true;
         var tp = new ke_gpu_render_target_webgpu_window_params
@@ -144,9 +139,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             window = win,
             present_mode = vsync ? ke_gpu_present_mode.KE_GPU_PRESENT_MODE_FIFO : ke_gpu_present_mode.KE_GPU_PRESENT_MODE_IMMEDIATE,
         };
-        _target = KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(&tp, &err);
-        if (_target.@ref == null)
-            throw Fail("webgpu window render target create failed", err);
+        fixed (ke_gpu_render_target_handle* made = &_target)
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(&tp, made), "webgpu window render target create");
 
         var ar = services.GetService<KernelEngine.Framework.NativeAssetResolver>() is { } resolver
             ? (KernelEngine.Asset.Native.ke_asset_resolver*)((KernelEngine.Framework.INativeAssetResolver)resolver).Native
@@ -192,19 +186,16 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         KernelEngine.Framework.Native.ke_world* wd,
         KernelEngine.Asset.Native.ke_asset_resolver* ar, IConfiguration? config)
     {
-        ke_error* err = null;
         var dev = _device.@ref;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
         fixed (byte* sd = shaderDirBytes)
         {
             var bp = new ke_render_resource_binder_grouped_params { device = dev, shader_dir = (sbyte*)sd };
-            _binder = KernelEngine.Render.Webgpu.Native.NativeMethods.render_resource_binder_grouped_create(&bp, &err);
-            if (_binder.@ref == null)
-                throw Fail("resource binder create failed", err);
+            fixed (KernelEngine.Render.Native.ke_render_resource_binder_handle* made = &_binder)
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_resource_binder_grouped_create(&bp, made), "resource binder create");
             var sp = new ke_render_service_params { device = dev, target = _target.@ref, ecs = ec, shader_dir = (sbyte*)sd, binder = _binder.@ref };
-            _service = KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(&sp, &err);
-            if (_service.@ref == null)
-                throw Fail("render service create failed", err);
+            fixed (KernelEngine.Render.Native.ke_render_service_handle* made = &_service)
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(&sp, made), "render service create");
         }
         var core = _service.@ref;
         _core = core;
@@ -213,14 +204,12 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         KernelEngine.View.Native.ke_view_space_handle viewSpace;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.View.Native.NativeMethods.view_space_rh_create(&viewSpace), "ke_view_space_rh_create");
         _viewSpace = viewSpace;
-        _camera = KernelEngine.Render.Webgpu.Native.NativeMethods.render_camera_create(_viewSpace.@ref, &ndc, &err);
-        if (_camera.@ref == null)
-            throw Fail("camera create failed", err);
+        fixed (KernelEngine.Render.Native.ke_render_camera_handle* made = &_camera)
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_camera_create(_viewSpace.@ref, &ndc, made), "camera create");
 
         var scp = new ke_render_scene_resolve_params { runtime = rt, ecs = ec, service = core, resolver = ar };
-        _scene = KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(&scp, &err);
-        if (_scene.@ref == null)
-            throw Fail("scene resolve create failed", err);
+        fixed (ke_render_scene_resolve_handle* made = &_scene)
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(&scp, made), "scene resolve create");
         var ids = *_scene.@ref->component_ids(_scene.@ref);
 
         var frp = new ke_render_frame_params
@@ -234,9 +223,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             directional_light_cid = ids.directional_light,
             ambient_light_cid = ids.ambient_light,
         };
-        _frame = KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(&frp, &err);
-        if (_frame.@ref == null)
-            throw Fail("frame create failed", err);
+        fixed (ke_render_frame_handle* made = &_frame)
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(&frp, made), "frame create");
         var frameCid = _frame.@ref->frame_cid(_frame.@ref);
 
         fixed (byte* shadowName = "shadow\0"u8)
@@ -259,9 +247,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                     frame_cid = frameCid,
                     output = shadowGroup,
                 };
-                _shadow = KernelEngine.Render.Webgpu.Native.NativeMethods.render_shadow_create(&shp, &err);
-                if (_shadow.@ref == null)
-                    throw Fail("shadow pass create failed", err);
+                fixed (ke_render_shadow_handle* made = &_shadow)
+                    KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_shadow_create(&shp, made), "shadow pass create");
             }
 
             var clp = new ke_render_cluster_params
@@ -284,9 +271,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                     ? _maxLightsPerClusterOverride
                     : (uint)(config?.GetInt("render", "max_lights_per_cluster", 0) ?? 0),
             };
-            _cluster = KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&clp, &err);
-            if (_cluster.@ref == null)
-                throw Fail("cluster pass create failed", err);
+            fixed (ke_render_cluster_handle* made = &_cluster)
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&clp, made), "cluster pass create");
 
             var gbp = new ke_render_gbuffer_params
             {
@@ -299,9 +285,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 frame_cid = frameCid,
                 output = (sbyte*)gbufferName,
             };
-            _gbuffer = KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_create(&gbp, &err);
-            if (_gbuffer.@ref == null)
-                throw Fail("gbuffer pass create failed", err);
+            fixed (ke_render_gbuffer_handle* made = &_gbuffer)
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_create(&gbp, made), "gbuffer pass create");
 
             var dlp = new ke_render_deferred_lighting_params
             {
@@ -317,9 +302,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 shadow = shadowGroup,
                 clusters = (sbyte*)clustersName,
             };
-            _deferred = KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(&dlp, &err);
-            if (_deferred.@ref == null)
-                throw Fail("deferred lighting pass create failed", err);
+            fixed (ke_render_deferred_lighting_handle* made = &_deferred)
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(&dlp, made), "deferred lighting pass create");
 
             var skp = new ke_render_skybox_params
             {
@@ -332,9 +316,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 skybox_cid = ids.skybox,
                 frame_cid = frameCid,
             };
-            _skybox = KernelEngine.Render.Webgpu.Native.NativeMethods.render_skybox_create(&skp, &err);
-            if (_skybox.@ref == null)
-                throw Fail("skybox pass create failed", err);
+            fixed (ke_render_skybox_handle* made = &_skybox)
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_skybox_create(&skp, made), "skybox pass create");
 
             var fwp = new ke_render_forward_params
             {
@@ -350,25 +333,21 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 shadow = shadowGroup,
                 clusters = (sbyte*)clustersName,
             };
-            _forward = KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_create(&fwp, &err);
-            if (_forward.@ref == null)
-                throw Fail("forward pass create failed", err);
+            fixed (ke_render_forward_handle* made = &_forward)
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_create(&fwp, made), "forward pass create");
         }
 
         var tmp = new ke_render_tonemap_params { runtime = rt, service = core, device = dev, frame_cid = frameCid };
-        _tonemap = KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_create(&tmp, &err);
-        if (_tonemap.@ref == null)
-            throw Fail("tonemap pass create failed", err);
+        fixed (ke_render_tonemap_handle* made = &_tonemap)
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_create(&tmp, made), "tonemap pass create");
 
         var uip = new ke_render_ui_params { runtime = rt, ecs = ec, service = core, device = dev, ndc = ndc, frame_cid = frameCid };
-        _ui = KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_create(&uip, &err);
-        if (_ui.@ref == null)
-            throw Fail("ui pass create failed", err);
+        fixed (ke_render_ui_handle* made = &_ui)
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_create(&uip, made), "ui pass create");
 
         var lrp = new ke_render_label_resolve_params { runtime = rt, service = core, ui = _ui.@ref, resolver = ar, label_cid = ids.label };
-        _labels = KernelEngine.Render.Webgpu.Native.NativeMethods.render_label_resolve_create(&lrp, &err);
-        if (_labels.@ref == null)
-            throw Fail("label resolve create failed", err);
+        fixed (ke_render_label_resolve_handle* made = &_labels)
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_label_resolve_create(&lrp, made), "label resolve create");
 
         if (wd == null)
             return;
@@ -545,25 +524,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         }
 
         var texH = new ke_texture_handle { bits = atlas.Value };
-        ke_error* err = null;
         KernelEngine.Render.Native.ke_ui_font_handle h;
         fixed (byte* k = keyBytes)
-            h = _ui.@ref->load_font(_ui.@ref, (sbyte*)k, texH, native, (uint)glyphs.Length, lineHeight, ascent, &err);
-        if (h.bits == uint.MaxValue)
-            throw Fail("load_font failed", err);
+            KernelEngine.NativeResults.ThrowIfFailed(_ui.@ref->load_font(_ui.@ref, (sbyte*)k, texH, native, (uint)glyphs.Length, lineHeight, ascent, &h), "load_font");
         return new FontHandle(h.bits);
-    }
-
-    /// <summary>Builds the exception for a failed native call, with the native error's type and message when there is one.</summary>
-    private static InvalidOperationException Fail(string what, ke_error* err)
-    {
-        if (err != null)
-        {
-            var msg = Marshal.PtrToStringUTF8((IntPtr)err->message) ?? "(no message)";
-            var name = err->type != null ? Marshal.PtrToStringUTF8((IntPtr)err->type->name) ?? "?" : "?";
-            return new InvalidOperationException($"{what} [{name}]: {msg}");
-        }
-        return new InvalidOperationException(what);
     }
 
     /// <summary>

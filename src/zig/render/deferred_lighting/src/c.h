@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_DEFERRED_LIGHTING_C_H_
 #define KERNEL_ENGINE_RENDER_DEFERRED_LIGHTING_C_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/resource_groups.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/runtime/runtime.h>

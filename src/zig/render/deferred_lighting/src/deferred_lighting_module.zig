@@ -57,14 +57,6 @@ const DeferredLightingModule = struct {
 
 const log = std.log.scoped(.render_deferred_lighting);
 
-/// Writes one error-level line naming `what` and the error's message when an error is given. The
-/// error is read, not freed or cleared. The frame systems that call it have no error channel, so
-/// the line is the only report of the failure.
-fn logGpuError(err: ?*c.ke_error, what: []const u8) void {
-    const e = err orelse return;
-    log.err("{s} failed: {s}", .{ what, e.message });
-}
-
 inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
     return @alignCast(@ptrCast(user.?));
 }
@@ -74,8 +66,7 @@ inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
 /// environment when `ibl_enabled` is false, and the white texture for the shadow map when the pass
 /// was given no shadow group or the group published none. It runs
 /// from `setup`, and from `system` when the sky cubemap changes; the set it replaces is
-/// destroyed. A failure is logged and not returned, so `frame_set` then holds what the binder
-/// returned.
+/// destroyed. A failure is logged and not returned, and `frame_set` is then invalid.
 fn rebuildFrameSet(dl: *DeferredLightingModule) void {
     const core = dl.core;
     const env_view = core.*.texture_view.?(core, dl.env_cubemap);
@@ -86,15 +77,14 @@ fn rebuildFrameSet(dl: *DeferredLightingModule) void {
     var bindings: [Features.count]c.ke_render_shader_binding = undefined;
     Features.fill(core, ibl_view, nameOf(dl.shadow), nameOf(dl.clusters), &bindings);
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
-    var err: ?*c.ke_error = null;
-    dl.frame_set = dl.binder.create_set.?(dl.binder, dl.layout, null, "deferred_lighting.frame_set", &bindings, bindings.len, &err);
-    if (err != null) logGpuError(err, "deferred frame set");
+    if (dl.binder.create_set.?(dl.binder, dl.layout, null, "deferred_lighting.frame_set", &bindings, bindings.len, &dl.frame_set) != R.ok)
+        log.err("deferred frame set creation failed", .{});
 }
 
 /// The `execute` of the system that `ke_render_deferred_lighting_create` registers in the render
-/// phase. It ends the pass on every path that began one. A missing pass returns true without
-/// work, and a missing camera returns true after ending an empty pass; neither is a failure. Only
-/// a failure to create the G-buffer set sets the error out-parameter and returns false.
+/// phase. It ends the pass on every path that began one. A missing pass succeeds without work,
+/// and a missing camera succeeds after ending an empty pass. Only a failure to create the
+/// G-buffer set fails, with the binder's code.
 /// The camera and the light come from the frame globals the service holds; the sky selects the
 /// environment. The G-buffer views are wrapped in a fresh set every tick, because the
 /// targets can be recreated.
@@ -136,13 +126,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
         .{ .name = "g_depth", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = depth_view, .sampler = 0 },
     };
     dl.binder.destroy_set.?(dl.binder, dl.gbuffer_set);
-    var err: ?*c.ke_error = null;
-    dl.gbuffer_set = dl.binder.create_set.?(dl.binder, dl.layout, "gbuffer", "deferred_lighting.gbuffer_set", &gbuffer_bindings, gbuffer_bindings.len, &err);
-    if (dl.gbuffer_set == c.KE_RENDER_BINDING_INVALID) {
-        logGpuError(err, "deferred gbuffer set");
+    const made = dl.binder.create_set.?(dl.binder, dl.layout, "gbuffer", "deferred_lighting.gbuffer_set", &gbuffer_bindings, gbuffer_bindings.len, &dl.gbuffer_set);
+    if (made != R.ok) {
         core.*.end_pass.?(core, pc);
         log.warn("deferred lighting pass: gbuffer set creation failed", .{});
-        return R.code(error.NotInitialized);
+        return made;
     }
 
     const rp = pc.*.begin_render.?(pc);
@@ -155,13 +143,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
     return R.ok;
 }
 
-/// Called once by `ke_render_deferred_lighting_create` on a freshly reset block. It returns true
-/// only when every object it creates exists, the pipeline included, and the io, access list and
-/// queries are filled. On false, the objects already created stay in the block for the caller to
+/// Called once by `ke_render_deferred_lighting_create` on a freshly reset block. It succeeds only
+/// when every object it creates exists, the pipeline included, and the io, access list and
+/// queries are filled. On failure, the objects already created stay in the block for the caller to
 /// release through `destroyModule`.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_params, out_error: [*c][*c]c.ke_error) bool {
+fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_params) R.Error!void {
     const core: *c.ke_render_service = p.service;
     const camera_cid = p.camera_cid;
     const world_transform_cid = p.world_transform_cid;
@@ -176,27 +164,22 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
     dl.env_cubemap = .{ .bits = c.KE_HANDLE_NONE };
 
     const group = std.mem.span(p.gbuffer);
-    dl.albedo = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_ALBEDO }, 0) catch return outOfMemory(out_error);
-    dl.normal = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_NORMAL }, 0) catch return outOfMemory(out_error);
-    dl.emissive = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_EMISSIVE }, 0) catch return outOfMemory(out_error);
+    dl.albedo = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_ALBEDO }, 0) catch return error.OutOfMemory;
+    dl.normal = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_NORMAL }, 0) catch return error.OutOfMemory;
+    dl.emissive = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_GBUFFER_EMISSIVE }, 0) catch return error.OutOfMemory;
     dl.io.name = "render.deferred_lighting";
-    dl.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
-    if (dl.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
-    if (p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR)) != c.KE_OK) {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "the runtime could not store the frame color as self-ordered", @src().file, @intCast(@src().line), null);
-        return false;
-    }
-    if (p.shadow != null) dl.shadow = gpa.dupeZ(u8, std.mem.span(p.shadow)) catch return outOfMemory(out_error);
-    if (p.clusters != null) dl.clusters = gpa.dupeZ(u8, std.mem.span(p.clusters)) catch return outOfMemory(out_error);
+    try R.check(core.*.join_chain.?(core, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER, &dl.io.chain));
+    try R.check(p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR)));
+    if (p.shadow != null) dl.shadow = gpa.dupeZ(u8, std.mem.span(p.shadow)) catch return error.OutOfMemory;
+    if (p.clusters != null) dl.clusters = gpa.dupeZ(u8, std.mem.span(p.clusters)) catch return error.OutOfMemory;
 
     dl.binder = core.*.resource_binder.?(core);
-    dl.layout = dl.binder.create_shader_layout.?(dl.binder, &shader_layout, out_error);
-    if (dl.layout == c.KE_RENDER_BINDING_INVALID) return false;
+    try R.check(dl.binder.create_shader_layout.?(dl.binder, &shader_layout, &dl.layout));
 
-    const vs = core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
-    if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-    const fs = core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
-    if (fs == c.KE_GPU_INVALID_HANDLE) return false;
+    var vs: c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
+    var fs: c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "deferred_lighting", c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
     var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
     pp.label = "deferred_lighting.pipeline";
@@ -211,13 +194,13 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
     pp.depth_stencil.depth_test_enabled = false;
     pp.depth_stencil.depth_write_enabled = false;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
-    if (!dl.binder.pipeline_layouts.?(dl.binder, dl.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) return false;
+    try R.check(dl.binder.pipeline_layouts.?(dl.binder, dl.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count));
     pp.color_target_formats[0] = core.*.chain_format.?(core, c.KE_RENDER_STAGE_OPAQUE);
     pp.color_target_count = 1;
     dl.pipeline_params = pp;
     if (core.*.get_or_create_pipeline.?(core, &dl.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "deferred lighting: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
+        log.warn("deferred lighting: render pipeline creation failed", .{});
+        return error.NotInitialized;
     }
 
     rebuildFrameSet(dl);
@@ -245,7 +228,6 @@ fn setup(dl: *DeferredLightingModule, p: *const c.ke_render_deferred_lighting_pa
     const rd = c.KE_ACCESS_READ;
     dl.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd } };
     dl.queries = .{ .{ .terms = &dl.queries_terms[0], .term_count = 2 }, .{ .terms = &dl.queries_terms[2], .term_count = 1 } };
-    return true;
 }
 
 /// Gives the link back and releases the names, the sets and the layout the block holds, those still
@@ -270,27 +252,23 @@ fn destroyHandle(self: ?*c.ke_render_deferred_lighting) callconv(.c) void {
 
 /// Builds the pass and registers its system in the render phase, with `pinned_thread` set to zero.
 /// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A missing
-/// runtime, service, device or gbuffer fails as an invalid argument. A failed setup
-/// or a refused registration also returns an empty handle, after the block is released; errors
-/// those steps report go to the error out-parameter.
-export fn ke_render_deferred_lighting_create(params_in: ?*const c.ke_render_deferred_lighting_params,
-                                              out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_deferred_lighting_handle {
-    const empty = c.ke_render_deferred_lighting_handle{ .ref = null, .destroy = null };
-    const p = params_in orelse return refused(out_error);
-    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
+/// runtime, service, device or gbuffer fails as an invalid argument. A failed setup or a refused
+/// registration fails with its code and leaves the handle zeroed, after the block is released.
+export fn ke_render_deferred_lighting_create(params_in: ?*const c.ke_render_deferred_lighting_params, out_lighting: [*c]c.ke_render_deferred_lighting_handle) callconv(.c) c.ke_result {
+    const out = out_lighting orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params_in orelse return R.code(error.InvalidArgument);
+    const rt: *c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.service == null or p.device == null or p.gbuffer == null)
-        return refused(out_error);
+        return R.code(error.InvalidArgument);
 
-    const dl = gpa.create(DeferredLightingModule) catch {
-        _ = outOfMemory(out_error);
-        return empty;
-    };
+    const dl = gpa.create(DeferredLightingModule) catch |err| return R.code(err);
     dl.* = .{};
-    if (!setup(dl, p, out_error)) {
+    setup(dl, p) catch |err| {
         destroyModule(dl);
         gpa.destroy(dl);
-        return empty;
-    }
+        return R.code(err);
+    };
 
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.deferred_lighting";
@@ -303,29 +281,22 @@ export fn ke_render_deferred_lighting_create(params_in: ?*const c.ke_render_defe
     params.user_data = dl;
     params.execute = system;
     var system_id: c.ke_system_id = 0;
-    if (rt.register_system.?(rt, &params, &system_id) != c.KE_OK) {
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
+    const registered = rt.register_system.?(rt, &params, &system_id);
+    if (registered != R.ok) {
         destroyModule(dl);
         gpa.destroy(dl);
-        return empty;
+        return registered;
     }
 
-    return .{ .ref = @ptrCast(dl), .destroy = destroyHandle };
+    out.* = .{ .ref = @ptrCast(dl), .destroy = destroyHandle };
+    return R.ok;
 }
 
-fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
-    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "deferred lighting pass: allocation failed", @src().file, @intCast(@src().line), null);
-    return false;
-}
 
 fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
     return if (name) |n| n.ptr else null;
 }
 
-fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_deferred_lighting_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "deferred lighting pass: runtime, service, device and gbuffer are required", @src().file, @intCast(@src().line), null);
-    return .{ .ref = null, .destroy = null };
-}
 
 const testing = std.testing;
 
@@ -338,8 +309,8 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
-    try testing.expect(h.ref != null);
+    var h: c.ke_render_deferred_lighting_handle = undefined;
+    try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -353,7 +324,8 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
+    var h: c.ke_render_deferred_lighting_handle = undefined;
+    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -367,7 +339,8 @@ test "a deferred lighting pass the runtime refuses to register releases what it 
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, null);
+    var h: c.ke_render_deferred_lighting_handle = undefined;
+    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

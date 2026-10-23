@@ -90,13 +90,6 @@ fn vtResolvePath(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8
     return R.ok;
 }
 
-/// The code a slot returns when a render service call it made failed and filled `record`, whose
-/// message is logged. A bridge while the render service reports through `ke_error`.
-fn serviceFailed(record: [*c]const c.ke_error) R.Error {
-    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
-    return error.General;
-}
-
 fn tomlNumberIn(tab: ?*c.toml_table_t, key: [*c]const u8) ?f32 {
     const d = c.toml_double_in(tab, key);
     if (d.ok != 0) return @floatCast(d.u.d);
@@ -320,7 +313,7 @@ fn vtFreeFont(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_font_data) callconv(.
 /// Slot `resolve_texture_into`. Checks the service's cache first, so a path it already holds costs
 /// no file access. Uploads under the authored path, not the resolved one, so the service keys the
 /// texture by what the caller wrote. A missing service is an invalid argument; the failures of
-/// `vtResolveTexture` are returned as they are, and a failed upload is general.
+/// `vtResolveTexture` and of the upload are returned as they are.
 fn vtResolveTextureInto(self_in: ?*c.ke_asset_resolver, core_in: ?*c.ke_render_service, path: [*c]const u8, out_texture: ?*c.ke_texture_handle) callconv(.c) c.ke_result {
     const out = out_texture orelse return R.code(error.InvalidArgument);
     out.* = c.KE_TEXTURE_NONE;
@@ -337,9 +330,8 @@ fn textureInto(s: *State, core: *c.ke_render_service, path: [*:0]const u8) R.Err
 
     const d = try resolveTexture(s, path);
     defer vtFreeTexture(&s.api, d);
-    var err: [*c]c.ke_error = null;
-    const h = core.upload_texture.?(core, path, d.width, d.height, d.pixels, &err);
-    if (h.bits == c.KE_HANDLE_NONE) return serviceFailed(err);
+    var h: c.ke_texture_handle = c.KE_TEXTURE_NONE;
+    try R.check(core.upload_texture.?(core, path, d.width, d.height, d.pixels, &h));
     return h;
 }
 
@@ -348,7 +340,7 @@ const gpu_floats_per_vertex = 11;
 /// Slot `resolve_mesh_into`. Checks the service's cache first, as `vtResolveTextureInto` does,
 /// and uploads the baked vertices converted to the layout the service takes. The shape is freed
 /// on every path once it is baked, so none of its memory outlives the call. An allocation failure
-/// is out of memory; the other failures are those of `vtResolveMesh` and, as general, of the upload.
+/// is out of memory; the other failures are those of `vtResolveMesh` and of the upload.
 fn vtResolveMeshInto(self_in: ?*c.ke_asset_resolver, core_in: ?*c.ke_render_service, path: [*c]const u8, out_mesh: ?*c.ke_mesh_handle) callconv(.c) c.ke_result {
     const out = out_mesh orelse return R.code(error.InvalidArgument);
     out.* = c.KE_MESH_NONE;
@@ -388,16 +380,15 @@ fn meshInto(core: *c.ke_render_service, path: [*:0]const u8) R.Error!c.ke_mesh_h
         dst[10] = v.tz;
     }
 
-    var err: [*c]c.ke_error = null;
-    const h = core.upload_mesh.?(core, path, gpu_verts.ptr, byte_count, shape.indices, shape.index_count, &err);
-    if (h.bits == c.KE_HANDLE_NONE) return serviceFailed(err);
+    var h: c.ke_mesh_handle = c.KE_MESH_NONE;
+    try R.check(core.upload_mesh.?(core, path, gpu_verts.ptr, byte_count, shape.indices, shape.index_count, &h));
     return h;
 }
 
 /// Slot `resolve_material_into`. Checks the service's cache first. The albedo and normal textures
 /// go through `vtResolveTextureInto`, so each is cached under its own path, and a failure there
 /// ends the call before the material is created. The other failures are those of
-/// `vtResolveMaterial` and, as general, of the material creation.
+/// `vtResolveMaterial` and of the material creation.
 fn vtResolveMaterialInto(self_in: ?*c.ke_asset_resolver, core_in: ?*c.ke_render_service, path: [*c]const u8, out_material: ?*c.ke_material_handle) callconv(.c) c.ke_result {
     const out = out_material orelse return R.code(error.InvalidArgument);
     out.* = c.KE_MATERIAL_NONE;
@@ -420,8 +411,8 @@ fn materialInto(s: *State, core: *c.ke_render_service, path: [*:0]const u8) R.Er
     var normal = c.KE_TEXTURE_NONE;
     if (spec.normal_path[0] != 0) normal = try textureInto(s, core, @ptrCast(&spec.normal_path));
 
-    var err: [*c]c.ke_error = null;
-    const h = core.create_material.?(
+    var h: c.ke_material_handle = c.KE_MATERIAL_NONE;
+    try R.check(core.create_material.?(
         core,
         path,
         &spec.base_color,
@@ -434,9 +425,8 @@ fn materialInto(s: *State, core: *c.ke_render_service, path: [*:0]const u8) R.Er
         spec.ior,
         spec.distortion_strength,
         0,
-        &err,
-    );
-    if (h.bits == c.KE_HANDLE_NONE) return serviceFailed(err);
+        &h,
+    ));
     return h;
 }
 

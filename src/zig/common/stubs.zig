@@ -11,8 +11,8 @@ pub fn Stubs(comptime c: type) type {
         /// Fake of the GPU device contract. `api` returns the vtable pointer and is valid only
         /// after `init`. `live` counts the handles minted and not released, `compute_live` counts
         /// the compute pipelines among them, and `fallible_created` against `fallible_budget` is
-        /// the only way a creation is refused. A refused creation returns the invalid handle,
-        /// leaves the error output untouched and leaves every counter as it was. Command
+        /// the only way a creation is refused. A refused creation fails as general, writes no
+        /// handle and leaves every counter as it was. Command
         /// recording keeps no history: one record per kind of pass is handed back, and only the
         /// latest label and the depth of open debug groups are kept.
         pub const Device = struct {
@@ -131,14 +131,16 @@ pub fn Stubs(comptime c: type) type {
                 passOwner(pass).debug_groups_open -= 1;
             }
 
-            fn finishEncoder(enc: ?*c.ke_gpu_command_encoder, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_command_buffer_handle {
-                return .{ .ref = &encoderOwner(enc).command_buffer, .destroy = &destroyCommandBuffer };
+            fn finishEncoder(enc: ?*c.ke_gpu_command_encoder, out: [*c]c.ke_gpu_command_buffer_handle) callconv(.c) c.ke_result {
+                out.* = .{ .ref = &encoderOwner(enc).command_buffer, .destroy = &destroyCommandBuffer };
+                return c.KE_OK;
             }
 
             fn destroyCommandBuffer(_: ?*c.ke_gpu_command_buffer) callconv(.c) void {}
 
-            fn createCommandEncoder(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_command_encoder_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_command_encoder_handle {
-                return .{ .ref = &of(self).encoder, .destroy = &destroyEncoder };
+            fn createCommandEncoder(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_command_encoder_params, out: [*c]c.ke_gpu_command_encoder_handle) callconv(.c) c.ke_result {
+                out.* = .{ .ref = &of(self).encoder, .destroy = &destroyEncoder };
+                return c.KE_OK;
             }
 
             fn destroyEncoder(_: ?*c.ke_gpu_command_encoder) callconv(.c) void {}
@@ -176,28 +178,32 @@ pub fn Stubs(comptime c: type) type {
                 return true;
             }
 
-            /// Refused through `spendFallible`: once the budget is spent it returns the invalid
-            /// handle and writes nothing to the error output.
-            fn createBuffer(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_buffer_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_buffer {
-                if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
-                return mint(self);
+            /// Refused through `spendFallible`: once the budget is spent it fails as general and writes
+            /// nothing.
+            fn createBuffer(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_buffer_params, out: [*c]c.ke_gpu_buffer) callconv(.c) c.ke_result {
+                if (!spendFallible(self)) return c.KE_RESULT_GENERAL;
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
-            fn createBindGroupLayout(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_layout_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group_layout {
-                return mint(self);
+            fn createBindGroupLayout(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_layout_params, out: [*c]c.ke_gpu_bind_group_layout) callconv(.c) c.ke_result {
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
-            /// Refused through `spendFallible`: once the budget is spent it returns the invalid
-            /// handle and writes nothing to the error output.
-            fn createBindGroup(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_bind_group {
-                if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
-                return mint(self);
+            /// Refused through `spendFallible`: once the budget is spent it fails as general and writes
+            /// nothing.
+            fn createBindGroup(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_bind_group_params, out: [*c]c.ke_gpu_bind_group) callconv(.c) c.ke_result {
+                if (!spendFallible(self)) return c.KE_RESULT_GENERAL;
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
             /// Also counts toward `compute_live`, which `destroyComputePipeline` releases.
-            fn createComputePipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_compute_pipeline_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_pipeline {
+            fn createComputePipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_compute_pipeline_params, out: [*c]c.ke_gpu_pipeline) callconv(.c) c.ke_result {
                 _ = @atomicRmw(i64, &of(self).compute_live, .Add, 1, .monotonic);
-                return mint(self);
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
             fn destroyComputePipeline(self: ?*c.ke_gpu_device, h: c.ke_gpu_pipeline) callconv(.c) void {
@@ -205,19 +211,22 @@ pub fn Stubs(comptime c: type) type {
                 destroyHandle(self, h);
             }
 
-            fn createRenderPipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_pipeline {
-                return mint(self);
+            fn createRenderPipeline(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_render_pipeline_params, out: [*c]c.ke_gpu_pipeline) callconv(.c) c.ke_result {
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
-            fn createSampler(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_sampler_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_sampler {
-                return mint(self);
+            fn createSampler(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_sampler_params, out: [*c]c.ke_gpu_sampler) callconv(.c) c.ke_result {
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
-            /// Refused through `spendFallible`: once the budget is spent it returns the invalid
-            /// handle and writes nothing to the error output.
-            fn createShaderModule(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_shader_module_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
-                if (!spendFallible(self)) return c.KE_GPU_INVALID_HANDLE;
-                return mint(self);
+            /// Refused through `spendFallible`: once the budget is spent it fails as general and writes
+            /// nothing.
+            fn createShaderModule(self: ?*c.ke_gpu_device, _: [*c]const c.ke_gpu_shader_module_params, out: [*c]c.ke_gpu_shader_module) callconv(.c) c.ke_result {
+                if (!spendFallible(self)) return c.KE_RESULT_GENERAL;
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
             fn shaderLanguage(_: ?*c.ke_gpu_device) callconv(.c) c.ke_gpu_shader_language {
@@ -230,14 +239,16 @@ pub fn Stubs(comptime c: type) type {
                 if (on_ready) |ready| ready(mint(self), user);
             }
 
-            fn createTexture(self: ?*c.ke_gpu_device, p: [*c]const c.ke_gpu_texture_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture {
+            fn createTexture(self: ?*c.ke_gpu_device, p: [*c]const c.ke_gpu_texture_params, out: [*c]c.ke_gpu_texture) callconv(.c) c.ke_result {
                 of(self).texture_label = p.*.label;
-                return mint(self);
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
-            fn createTextureView(self: ?*c.ke_gpu_device, _: c.ke_gpu_texture, p: [*c]const c.ke_gpu_texture_view_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
+            fn createTextureView(self: ?*c.ke_gpu_device, _: c.ke_gpu_texture, p: [*c]const c.ke_gpu_texture_view_params, out: [*c]c.ke_gpu_texture_view) callconv(.c) c.ke_result {
                 of(self).texture_view_label = p.*.label;
-                return mint(self);
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
             fn writeBuffer(self: ?*c.ke_gpu_device, _: c.ke_gpu_buffer, _: u64, _: ?*const anyopaque, size: usize) callconv(.c) void {
@@ -292,18 +303,19 @@ pub fn Stubs(comptime c: type) type {
             }
 
             /// Repeated acquires are not counted: `acquired` is a flag.
-            fn acquire(self: ?*c.ke_gpu_render_target, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
+            fn acquire(self: ?*c.ke_gpu_render_target, out: [*c]c.ke_gpu_texture_view) callconv(.c) c.ke_result {
                 of(self).acquired = true;
-                return 1;
+                out.* = 1;
+                return c.KE_OK;
             }
 
-            /// Returns false and leaves `presented` alone unless an acquire came first.
-            fn present(self: ?*c.ke_gpu_render_target, _: [*c][*c]c.ke_error) callconv(.c) bool {
+            /// Fails as an invalid argument and leaves `presented` alone unless an acquire came first.
+            fn present(self: ?*c.ke_gpu_render_target) callconv(.c) c.ke_result {
                 const t = of(self);
-                if (!t.acquired) return false;
+                if (!t.acquired) return c.KE_RESULT_INVALID_ARGUMENT;
                 t.acquired = false;
                 t.presented += 1;
-                return true;
+                return c.KE_OK;
             }
 
             fn size(self: ?*c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
@@ -359,30 +371,33 @@ pub fn Stubs(comptime c: type) type {
                 if (h != 0) of(self).live -= 1;
             }
 
-            fn provide(_: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_shader_binding, _: [*c][*c]c.ke_error) callconv(.c) bool {
-                return true;
+            fn provide(_: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_shader_binding) callconv(.c) c.ke_result {
+                return c.KE_OK;
             }
 
-            fn createShaderLayout(self: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_shader_layout_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_shader_layout {
-                return mint(self);
+            fn createShaderLayout(self: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_shader_layout_params, out: [*c]c.ke_render_shader_layout) callconv(.c) c.ke_result {
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
             /// Writes no layout.
-            fn pipelineLayouts(_: [*c]c.ke_render_resource_binder, _: c.ke_render_shader_layout, _: [*c]c.ke_gpu_bind_group_layout, _: u32, out_count: [*c]u32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+            fn pipelineLayouts(_: [*c]c.ke_render_resource_binder, _: c.ke_render_shader_layout, _: [*c]c.ke_gpu_bind_group_layout, _: u32, out_count: [*c]u32) callconv(.c) c.ke_result {
                 out_count.* = 0;
-                return true;
+                return c.KE_OK;
             }
 
-            fn createSet(self: [*c]c.ke_render_resource_binder, _: c.ke_render_shader_layout, _: [*c]const u8, _: [*c]const u8, _: [*c]const c.ke_render_shader_binding, _: u32, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_resource_set {
-                return mint(self);
+            fn createSet(self: [*c]c.ke_render_resource_binder, _: c.ke_render_shader_layout, _: [*c]const u8, _: [*c]const u8, _: [*c]const c.ke_render_shader_binding, _: u32, out: [*c]c.ke_render_resource_set) callconv(.c) c.ke_result {
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
             fn bindRenderSet(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_render_pass, _: c.ke_render_resource_set, _: [*c]const u32, _: u32) callconv(.c) void {}
 
             fn bindComputeSet(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_compute_pass, _: c.ke_render_resource_set, _: [*c]const u32, _: u32) callconv(.c) void {}
 
-            fn createMaterial(self: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_material_data, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_material_binding {
-                return mint(self);
+            fn createMaterial(self: [*c]c.ke_render_resource_binder, _: [*c]const c.ke_render_material_data, out: [*c]c.ke_render_material_binding) callconv(.c) c.ke_result {
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
             fn bindMaterial(_: [*c]c.ke_render_resource_binder, _: [*c]c.ke_gpu_render_pass, _: c.ke_render_shader_layout, _: c.ke_render_material_binding) callconv(.c) void {}
@@ -424,10 +439,11 @@ pub fn Stubs(comptime c: type) type {
             }
 
             /// Counts the links held in `links`.
-            fn joinChain(self: ?*c.ke_render_service, _: c.ke_render_stage, _: c.ke_render_chain_mode, _: [*c][*c]c.ke_error) callconv(.c) c.ke_render_chain_link {
+            fn joinChain(self: ?*c.ke_render_service, _: c.ke_render_stage, _: c.ke_render_chain_mode, out: [*c]c.ke_render_chain_link) callconv(.c) c.ke_result {
                 const core: *Core = @ptrCast(@alignCast(self.?.handle));
                 core.links += 1;
-                return @intCast(mint(self));
+                out.* = @intCast(mint(self));
+                return c.KE_OK;
             }
 
             fn leaveChain(self: ?*c.ke_render_service, _: c.ke_render_chain_link) callconv(.c) void {
@@ -465,12 +481,12 @@ pub fn Stubs(comptime c: type) type {
                 return h;
             }
 
-            /// Returns the invalid handle while `shader_loads_fail` is set, and writes nothing to
-            /// the error output.
-            fn loadShader(self: ?*c.ke_render_service, _: [*c]const u8, _: c.ke_gpu_shader_stage, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_shader_module {
+            /// Fails as general while `shader_loads_fail` is set, and writes nothing.
+            fn loadShader(self: ?*c.ke_render_service, _: [*c]const u8, _: c.ke_gpu_shader_stage, out: [*c]c.ke_gpu_shader_module) callconv(.c) c.ke_result {
                 const core: *Core = @ptrCast(@alignCast(self.?.handle));
-                if (core.shader_loads_fail) return c.KE_GPU_INVALID_HANDLE;
-                return mint(self);
+                if (core.shader_loads_fail) return c.KE_RESULT_GENERAL;
+                out.* = mint(self);
+                return c.KE_OK;
             }
 
             fn resourceBinder(self: [*c]c.ke_render_service) callconv(.c) [*c]c.ke_render_resource_binder {
@@ -491,16 +507,19 @@ pub fn Stubs(comptime c: type) type {
                 return @intCast(mint(self));
             }
 
-            fn declare(self: ?*c.ke_render_service, _: [*c]const c.ke_render_resource_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-                return @intCast(mint(self));
+            fn declare(self: ?*c.ke_render_service, _: [*c]const c.ke_render_resource_params, out: [*c]c.ke_component_id) callconv(.c) c.ke_result {
+                out.* = @intCast(mint(self));
+                return c.KE_OK;
             }
 
-            fn importBuffer(self: ?*c.ke_render_service, _: [*c]const u8, _: c.ke_gpu_buffer, _: u64, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-                return @intCast(mint(self));
+            fn importBuffer(self: ?*c.ke_render_service, _: [*c]const u8, _: c.ke_gpu_buffer, _: u64, out: [*c]c.ke_component_id) callconv(.c) c.ke_result {
+                out.* = @intCast(mint(self));
+                return c.KE_OK;
             }
 
-            fn importTag(self: ?*c.ke_render_service, _: [*c]const u8, _: [*c][*c]c.ke_error) callconv(.c) c.ke_component_id {
-                return @intCast(mint(self));
+            fn importTag(self: ?*c.ke_render_service, _: [*c]const u8, out: [*c]c.ke_component_id) callconv(.c) c.ke_result {
+                out.* = @intCast(mint(self));
+                return c.KE_OK;
             }
 
             fn resourceView(self: ?*c.ke_render_service, _: [*c]const u8) callconv(.c) c.ke_gpu_texture_view {

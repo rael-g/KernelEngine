@@ -10,7 +10,8 @@ const c = @import("c");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.renderdoc_target);
 
 const Api = c.RENDERDOC_API_1_4_0;
 
@@ -39,30 +40,36 @@ fn chosen(t: *const RenderdocTarget) bool {
 
 /// Runs at the start of each frame. RenderDoc is told to start a capture before the inner `acquire`
 /// when `chosen` accepts the frame counter. A capture it starts stays open until `present` ends it
-/// or `destroy` discards it, and is discarded here when the inner target yields no view.
-fn acquire(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
+/// or `destroy` discards it, and is discarded here when the inner target yields no view. The code
+/// and the view are the inner target's.
+fn acquire(self: [*c]c.ke_gpu_render_target, out_view: [*c]c.ke_gpu_texture_view) callconv(.c) c.ke_result {
+    const out = out_view orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_GPU_INVALID_HANDLE;
+    if (self == null) return R.code(error.InvalidArgument);
     const t = of(self);
     const capture = chosen(t) and !t.capturing;
     if (capture) t.api.StartFrameCapture.?(null, null);
-    const view = t.inner.acquire.?(t.inner, out_error);
-    if (view == c.KE_GPU_INVALID_HANDLE) {
+    const inner_code = t.inner.acquire.?(t.inner, out);
+    if (inner_code != R.ok or out.* == c.KE_GPU_INVALID_HANDLE) {
         if (capture) _ = t.api.DiscardFrameCapture.?(null, null);
-        return view;
+        return inner_code;
     }
     if (capture) t.capturing = true;
-    return view;
+    return R.ok;
 }
 
 /// Runs at the end of each frame. The open capture is ended whether or not the inner `present`
-/// succeeded; `frame` moves on only when it did, so a failed present keeps the frame number.
-fn present(self: [*c]c.ke_gpu_render_target, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+/// succeeded; `frame` moves on only when it did, so a failed present keeps the frame number. The
+/// code is the inner target's.
+fn present(self: [*c]c.ke_gpu_render_target) callconv(.c) c.ke_result {
+    if (self == null) return R.code(error.InvalidArgument);
     const t = of(self);
-    const presented = t.inner.present.?(t.inner, out_error);
+    const presented = t.inner.present.?(t.inner);
     if (t.capturing) {
         _ = t.api.EndFrameCapture.?(null, null);
         t.capturing = false;
     }
-    if (presented) t.frame +%= 1;
+    if (presented == R.ok) t.frame +%= 1;
     return presented;
 }
 
@@ -118,31 +125,21 @@ fn loadedApi() ?*Api {
 }
 
 /// Holds the checks and the allocation behind `ke_gpu_render_target_renderdoc_create`, taking the
-/// table as a parameter rather than looking it up. A failed check or an allocation failure fills
-/// `out_error` and returns a null `ref`, with nothing left allocated.
+/// table as a parameter rather than looking it up. A missing inner target or params fail as an
+/// invalid argument, a missing table as not found and a failed allocation as out of memory, with
+/// nothing left allocated.
 fn create(
     inner: ?*c.ke_gpu_render_target,
     params: ?*const c.ke_gpu_render_target_renderdoc_params,
     api: ?*Api,
-    out_error: [*c][*c]c.ke_error,
-) c.ke_gpu_render_target_handle {
-    const empty: c.ke_gpu_render_target_handle = .{ .ref = null, .destroy = null };
-    const target = inner orelse {
-        E.fail(out_error, .invalid_argument, "renderdoc target: the inner target is required", @src());
-        return empty;
-    };
-    const p = params orelse {
-        E.fail(out_error, .invalid_argument, "renderdoc target: params are required", @src());
-        return empty;
-    };
+) R.Error!c.ke_gpu_render_target_handle {
+    const target = inner orelse return error.InvalidArgument;
+    const p = params orelse return error.InvalidArgument;
     const rdoc = api orelse {
-        E.fail(out_error, .not_found, "renderdoc target: RenderDoc is not loaded into this process", @src());
-        return empty;
+        log.warn("RenderDoc is not loaded into this process", .{});
+        return error.NotFound;
     };
-    const t = gpa.create(RenderdocTarget) catch {
-        E.fail(out_error, .out_of_memory, "renderdoc target: out of memory", @src());
-        return empty;
-    };
+    const t = try gpa.create(RenderdocTarget);
     t.* = .{
         .vtable = .{ .handle = t, .acquire = acquire, .present = present, .size = size, .format = format },
         .inner = target,
@@ -156,13 +153,16 @@ fn create(
 }
 
 /// Wraps `inner` with the table of the RenderDoc already loaded in the process. Fails with the
-/// errors of `create`, among them not found when RenderDoc is not loaded.
+/// errors of `create`, among them not found when RenderDoc is not loaded, leaving the handle zeroed.
 export fn ke_gpu_render_target_renderdoc_create(
     inner: ?*c.ke_gpu_render_target,
     params: ?*const c.ke_gpu_render_target_renderdoc_params,
-    out_error: [*c][*c]c.ke_error,
-) c.ke_gpu_render_target_handle {
-    return create(inner, params, loadedApi(), out_error);
+    out_target: [*c]c.ke_gpu_render_target_handle,
+) c.ke_result {
+    const out = out_target orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    out.* = create(inner, params, loadedApi()) catch |err| return R.code(err);
+    return R.ok;
 }
 
 const testing = std.testing;
@@ -221,20 +221,22 @@ const Fake = struct {
         return @ptrCast(@alignCast(target.*.handle));
     }
 
-    fn innerAcquire(target: [*c]c.ke_gpu_render_target, _: [*c][*c]c.ke_error) callconv(.c) c.ke_gpu_texture_view {
+    fn innerAcquire(target: [*c]c.ke_gpu_render_target, out_view: [*c]c.ke_gpu_texture_view) callconv(.c) c.ke_result {
         const self = selfOf(target);
         if (self.empty_frames > 0) {
             self.empty_frames -= 1;
-            return c.KE_GPU_INVALID_HANDLE;
+            out_view.* = c.KE_GPU_INVALID_HANDLE;
+            return R.ok;
         }
         if (open) acquired_while_open += 1;
-        return 9;
+        out_view.* = 9;
+        return R.ok;
     }
 
-    fn innerPresent(target: [*c]c.ke_gpu_render_target, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    fn innerPresent(target: [*c]c.ke_gpu_render_target) callconv(.c) c.ke_result {
         if (open) presented_while_open += 1;
         selfOf(target).presented += 1;
-        return true;
+        return R.ok;
     }
 
     fn innerSize(_: [*c]c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
@@ -248,15 +250,21 @@ const Fake = struct {
 };
 
 fn frame(t: *c.ke_gpu_render_target) !void {
-    try testing.expectEqual(@as(c.ke_gpu_texture_view, 9), t.acquire.?(t, null));
-    try testing.expect(t.present.?(t, null));
+    try testing.expectEqual(@as(c.ke_gpu_texture_view, 9), try acquired(t));
+    try R.check(t.present.?(t));
+}
+
+fn acquired(t: *c.ke_gpu_render_target) !c.ke_gpu_texture_view {
+    var view: c.ke_gpu_texture_view = undefined;
+    try R.check(t.acquire.?(t, &view));
+    return view;
 }
 
 test "only the chosen frames are captured, each from before its acquire until after its present" {
     var inner: Fake = undefined;
     const api = inner.init(0);
     const p = c.ke_gpu_render_target_renderdoc_params{ .first_frame = 1, .frame_count = 2 };
-    const h = create(&inner.vtable, &p, api, null);
+    const h = try create(&inner.vtable, &p, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
 
@@ -278,11 +286,11 @@ test "a chosen frame the inner target has nothing to draw into is discarded and 
     var inner: Fake = undefined;
     const api = inner.init(1);
     const p = c.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
-    const h = create(&inner.vtable, &p, api, null);
+    const h = try create(&inner.vtable, &p, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
 
-    try testing.expectEqual(@as(c.ke_gpu_texture_view, c.KE_GPU_INVALID_HANDLE), t.*.acquire.?(t, null));
+    try testing.expectEqual(@as(c.ke_gpu_texture_view, c.KE_GPU_INVALID_HANDLE), try acquired(t));
     try testing.expectEqual(@as(u32, 1), Fake.discarded);
     try testing.expectEqual(@as(u32, 0), Fake.ended);
 
@@ -295,7 +303,7 @@ test "size and format are the inner target's" {
     var inner: Fake = undefined;
     const api = inner.init(0);
     const p = c.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 0 };
-    const h = create(&inner.vtable, &p, api, null);
+    const h = try create(&inner.vtable, &p, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
 
@@ -313,10 +321,10 @@ test "a target destroyed with a capture open discards it" {
     var inner: Fake = undefined;
     const api = inner.init(0);
     const p = c.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
-    const h = create(&inner.vtable, &p, api, null);
+    const h = try create(&inner.vtable, &p, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
 
-    try testing.expectEqual(@as(c.ke_gpu_texture_view, 9), t.*.acquire.?(t, null));
+    try testing.expectEqual(@as(c.ke_gpu_texture_view, 9), try acquired(t));
     h.destroy.?(t);
     try testing.expectEqual(@as(u32, 1), Fake.discarded);
     try heap.expectNoLeaks();
@@ -327,16 +335,11 @@ test "creation is refused without an inner target, without params, and when Rend
     const api = inner.init(0);
     const p = c.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(create(null, &p, api, &err).ref == null);
-    try testing.expect(err != null and err.*.type == E.typeOf(.invalid_argument));
+    try testing.expectError(error.InvalidArgument, create(null, &p, api));
+    try testing.expectError(error.InvalidArgument, create(&inner.vtable, null, api));
 
-    err = null;
-    try testing.expect(create(&inner.vtable, null, api, &err).ref == null);
-    try testing.expect(err != null and err.*.type == E.typeOf(.invalid_argument));
-
-    err = null;
-    try testing.expect(ke_gpu_render_target_renderdoc_create(&inner.vtable, &p, &err).ref == null);
-    try testing.expect(err != null and err.*.type == E.typeOf(.not_found));
+    var h: c.ke_gpu_render_target_handle = undefined;
+    try testing.expectError(error.NotFound, R.check(ke_gpu_render_target_renderdoc_create(&inner.vtable, &p, &h)));
+    try testing.expect(h.ref == null);
     try heap.expectNoLeaks();
 }

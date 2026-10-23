@@ -272,12 +272,12 @@ fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) c.ke_gpu_shader_m
         w.writeAll("  return o;\n}\n") catch {};
     }
     const src = w.buffered();
-    const made = st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
+    var made: c.ke_gpu_shader_module = c.KE_GPU_INVALID_HANDLE;
+    if (st.device.create_shader_module.?(st.device, &c.ke_gpu_shader_module_params{
         .code = src.ptr,
         .byte_size = src.len,
         .label = "service.fallback_fragment",
-    }, null);
-    if (made == c.KE_GPU_INVALID_HANDLE) return made;
+    }, &made) != c.KE_OK) return c.KE_GPU_INVALID_HANDLE;
     if (slot.cmpxchgStrong(c.KE_GPU_INVALID_HANDLE, made, .acq_rel, .acquire)) |won| {
         st.device.destroy_shader_module.?(st.device, made);
         return won;
@@ -292,7 +292,15 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_p
     var fallback_params = p.*;
     fallback_params.fragment_module = magentaFragmentModule(st, p.color_target_count);
     fallback_params.fragment_entry = "fs_main";
-    return st.device.create_render_pipeline.?(st.device, &fallback_params, null);
+    return createNow(st, &fallback_params);
+}
+
+/// The pipeline the device creates for `params` synchronously; the invalid handle, its reason
+/// logged by the device, when it refuses it.
+fn createNow(st: *rc.CoreState, params: [*c]const c.ke_gpu_render_pipeline_params) c.ke_gpu_pipeline {
+    var made: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE;
+    if (st.device.create_render_pipeline.?(st.device, params, &made) != c.KE_OK) return c.KE_GPU_INVALID_HANDLE;
+    return made;
 }
 
 /// Answers the render service's pipeline request. A key already in the table returns its current
@@ -311,7 +319,7 @@ pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke
     if (st.pipeline_cache.find(hash, &key)) |entry| return entry.current();
 
     const entry = heap.gpa.create(Entry) catch {
-        return st.device.create_render_pipeline.?(st.device, params, null);
+        return createNow(st, params);
     };
     entry.* = .{
         .key = key,
@@ -334,7 +342,7 @@ pub fn getOrCreatePipeline(self: [*c]c.ke_render_service, params: [*c]const c.ke
         .failed => {
             st.device.destroy_pipeline.?(st.device, entry.fallback_pso);
             heap.gpa.destroy(entry);
-            return st.device.create_render_pipeline.?(st.device, params, null);
+            return createNow(st, params);
         },
     }
 }

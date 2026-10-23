@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 #define KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -61,9 +61,10 @@ extern "C"
     } ke_render_cluster_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service, device, view space,
-    /// camera or output fails as an invalid argument; the handle's ref is NULL on failure.
-    KE_RENDER_CLUSTER_API ke_render_cluster_handle ke_render_cluster_create(
-        const ke_render_cluster_params *params, ke_error **out_error);
+    /// camera or output fails as an invalid argument.
+    /// @param out_cluster [out] Receives the handle; left zeroed on failure.
+    KE_RENDER_CLUSTER_API ke_result ke_render_cluster_create(
+        const ke_render_cluster_params *params, ke_render_cluster_handle *out_cluster);
 
 #ifdef __cplusplus
 }

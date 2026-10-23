@@ -1,4 +1,4 @@
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_commands.h>
 #include <kernel_engine/render/gpu/gpu_enums.h>
@@ -27,11 +27,21 @@ typedef struct readback
     bool ok;
 } readback;
 
-static void die(const char *msg, ke_error *err)
+static void die_result(const char *what, ke_result result)
 {
-    if (err) { ke_error_fatal(err); }
-    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
-    ke_error_fatal(&fallback);
+    fprintf(stderr, "%s failed with result code 0x%08x\n", what, (unsigned)result);
+    exit(1);
+}
+
+static void die(const char *what)
+{
+    fprintf(stderr, "%s\n", what);
+    exit(1);
+}
+
+static void check(const char *what, ke_result result)
+{
+    if (result != KE_OK) die_result(what, result);
 }
 
 static void on_mapped(ke_gpu_buffer buffer, bool ok, void *user)
@@ -46,11 +56,10 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
                          ke_gpu_texture texture, ke_gpu_buffer staging, uint32_t padded_row,
                          uint8_t *out_pixels)
 {
-    ke_error *err = NULL;
     ke_gpu_queue q = gpu->get_default_queue(gpu);
 
-    ke_gpu_texture_view view = target->acquire(target, &err);
-    if (view == KE_GPU_INVALID_HANDLE) die("acquire failed", err);
+    ke_gpu_texture_view view = { 0 };
+    check("acquire", target->acquire(target, &view));
 
     ke_gpu_color_attachment ca = {
         .view        = view,
@@ -60,32 +69,30 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
     };
     ke_gpu_render_pass_params rpp = { .color_attachments = &ca, .color_attachment_count = 1 };
 
-    ke_gpu_command_encoder_handle enc_handle = gpu->create_command_encoder(gpu, NULL, &err);
-
-    if (!enc_handle.ref) die("command encoder creation failed", err);
+    ke_gpu_command_encoder_handle enc_handle = { 0 };
+    check("create_command_encoder", gpu->create_command_encoder(gpu, NULL, &enc_handle));
 
     ke_gpu_command_encoder *enc = enc_handle.ref;
     ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
     rp->set_pipeline(rp, pipeline);
     rp->draw(rp, 3, 1, 0, 0);
     rp->end(rp);
-    if (!enc->copy_texture_to_buffer(enc, texture, 0, 0, 0, staging, 0, padded_row, WIDTH, HEIGHT, &err))
-        die("copy to buffer failed", err);
-    ke_gpu_command_buffer_handle cmd = enc->finish(enc, &err);
-    if (!cmd.ref) die("command encoder finish failed", err);
+    check("copy to buffer", enc->copy_texture_to_buffer(enc, texture, 0, 0, 0, staging, 0, padded_row, WIDTH, HEIGHT));
+    ke_gpu_command_buffer_handle cmd = { 0 };
+    check("command encoder finish", enc->finish(enc, &cmd));
     enc_handle.destroy(enc);
     ke_gpu_command_buffer *cmds[] = { cmd.ref };
     gpu->queue_submit(gpu, q, cmds, 1);
     cmd.destroy(cmd.ref);
-    if (!target->present(target, &err)) die("present failed", err);
+    check("present", target->present(target));
 
     readback r = { 0 };
     gpu->map_buffer_read(gpu, staging, 0, (size_t)padded_row * HEIGHT, on_mapped, &r);
     while (!r.done) gpu->queue_wait_idle(gpu, q);
-    if (!r.ok) die("map for reading failed", NULL);
+    if (!r.ok) die("map for reading failed");
 
     const uint8_t *mapped = gpu->map_buffer(gpu, staging, 0, (size_t)padded_row * HEIGHT);
-    if (!mapped) die("mapped range unavailable", NULL);
+    if (!mapped) die("mapped range unavailable");
     for (uint32_t y = 0; y < HEIGHT; ++y)
         memcpy(out_pixels + (size_t)y * WIDTH * BYTES_PER_TEXEL, mapped + (size_t)y * padded_row, WIDTH * BYTES_PER_TEXEL);
     gpu->unmap_buffer(gpu, staging);
@@ -95,39 +102,38 @@ int main(int argc, char **argv)
 {
     printf("--- c_demo_15: offscreen capture ---\n");
 
-    ke_error *err = NULL;
     ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
-    ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
-    if (!gpu.ref) die("gpu device create failed", err);
+    ke_gpu_device_handle gpu = { 0 };
+    check("gpu device create", ke_gpu_device_webgpu_create(&dp, &gpu));
 
-    ke_gpu_texture texture = gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
+    ke_gpu_texture texture = { 0 };
+    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
         .width = WIDTH, .height = HEIGHT, .depth_or_array_layers = 1,
         .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, .dimension = KE_GPU_TEXTURE_DIM_2D,
         .usage = KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | KE_GPU_TEXTURE_USAGE_COPY_SRC,
-        .mip_level_count = 1, .sample_count = 1 }, &err);
-    if (texture == KE_GPU_INVALID_HANDLE) die("texture create failed", err);
+        .mip_level_count = 1, .sample_count = 1 }, &texture));
 
-    ke_gpu_render_target_handle target = ke_gpu_render_target_texture_create(gpu.ref,
+    ke_gpu_render_target_handle target = { 0 };
+    check("render target create", ke_gpu_render_target_texture_create(gpu.ref,
         &(ke_gpu_render_target_texture_params){ .texture = texture, .width = WIDTH, .height = HEIGHT,
-                                                 .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM }, &err);
-    if (!target.ref) die("render target create failed", err);
+                                                 .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM }, &target));
 
     ke_gpu_capabilities caps = { 0 };
     gpu.ref->get_capabilities(gpu.ref, &caps);
     uint32_t align = caps.copy_bytes_per_row_alignment;
     uint32_t padded_row = (WIDTH * BYTES_PER_TEXEL + align - 1) / align * align;
 
-    ke_gpu_buffer staging = gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
+    ke_gpu_buffer staging = { 0 };
+    check("staging buffer create", gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
         .size = (size_t)padded_row * HEIGHT,
-        .usage = KE_GPU_BUFFER_USAGE_COPY_DST | KE_GPU_BUFFER_USAGE_MAP_READ }, &err);
-    if (staging == KE_GPU_INVALID_HANDLE) die("staging buffer create failed", err);
+        .usage = KE_GPU_BUFFER_USAGE_COPY_DST | KE_GPU_BUFFER_USAGE_MAP_READ }, &staging));
 
-    ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_vs_wgsl, .byte_size = strlen(triangle_vs_wgsl), .label = "vs_main" }, &err);
-    if (vs == KE_GPU_INVALID_HANDLE) die("vertex shader creation failed", err);
-    ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_fs_wgsl, .byte_size = strlen(triangle_fs_wgsl), .label = "fs_main" }, &err);
-    if (fs == KE_GPU_INVALID_HANDLE) die("fragment shader creation failed", err);
+    ke_gpu_shader_module vs = { 0 };
+    check("vertex shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
+        .code = triangle_vs_wgsl, .byte_size = strlen(triangle_vs_wgsl), .label = "vs_main" }, &vs));
+    ke_gpu_shader_module fs = { 0 };
+    check("fragment shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
+        .code = triangle_fs_wgsl, .byte_size = strlen(triangle_fs_wgsl), .label = "fs_main" }, &fs));
 
     ke_gpu_render_pipeline_params pp = {
         .color_target_formats = { target.ref->format(target.ref) },
@@ -142,15 +148,15 @@ int main(int argc, char **argv)
                          .alpha_op = KE_GPU_BLEND_OP_ADD, .write_mask = 0x0F },
         .depth_stencil = { .depth_test_enabled = 0 },
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline creation failed", err);
+    ke_gpu_pipeline pipeline = { 0 };
+    check("pipeline creation", gpu.ref->create_render_pipeline(gpu.ref, &pp, &pipeline));
     gpu.ref->destroy_shader_module(gpu.ref, vs);
     gpu.ref->destroy_shader_module(gpu.ref, fs);
 
     size_t image_bytes = (size_t)WIDTH * HEIGHT * BYTES_PER_TEXEL;
     uint8_t *first = malloc(image_bytes);
     uint8_t *second = malloc(image_bytes);
-    if (!first || !second) die("out of memory", NULL);
+    if (!first || !second) die("out of memory");
 
     render_frame(gpu.ref, target.ref, pipeline, texture, staging, padded_row, first);
     render_frame(gpu.ref, target.ref, pipeline, texture, staging, padded_row, second);

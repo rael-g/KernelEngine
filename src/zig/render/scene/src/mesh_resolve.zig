@@ -19,7 +19,7 @@ const Vertex = extern struct {
 };
 
 /// A unit square in the plane facing the positive z axis, uploaded under the key of the quad.
-fn quad(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_handle {
+fn quad(core: *c.ke_render_service, out: *c.ke_mesh_handle) c.ke_result {
     const t = [3]f32{ 1, 0, 0 };
     const verts = [4]Vertex{
         .{ .position = .{ -0.5, -0.5, 0 }, .normal = .{ 0, 0, 1 }, .uv = .{ 0, 1 }, .tangent = t },
@@ -28,11 +28,11 @@ fn quad(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_han
         .{ .position = .{ -0.5, 0.5, 0 }, .normal = .{ 0, 0, 1 }, .uv = .{ 0, 0 }, .tangent = t },
     };
     const idx = [6]u16{ 0, 1, 2, 0, 2, 3 };
-    return core.upload_mesh.?(core, "primitive:quad", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out_error);
+    return core.upload_mesh.?(core, "primitive:quad", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
 }
 
 /// A unit square lying flat with its normal along the positive y axis, uploaded under its own key.
-fn plane(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_handle {
+fn plane(core: *c.ke_render_service, out: *c.ke_mesh_handle) c.ke_result {
     const n = [3]f32{ 0, 1, 0 };
     const t = [3]f32{ 1, 0, 0 };
     const verts = [4]Vertex{
@@ -42,7 +42,7 @@ fn plane(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_ha
         .{ .position = .{ -0.5, 0, 0.5 }, .normal = n, .uv = .{ 0, 1 }, .tangent = t },
     };
     const idx = [6]u16{ 0, 1, 2, 0, 2, 3 };
-    return core.upload_mesh.?(core, "primitive:plane", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out_error);
+    return core.upload_mesh.?(core, "primitive:plane", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
 }
 
 fn sub(a: [3]f32, b: [3]f32) [3]f32 {
@@ -56,7 +56,7 @@ fn normalize(v: [3]f32) [3]f32 {
 
 /// Gives each face vertices of its own, carrying that face's normal, so no vertex is shared between
 /// two faces. The tangent of a face runs along the edge from its first vertex to its second.
-fn cube(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_handle {
+fn cube(core: *c.ke_render_service, out: *c.ke_mesh_handle) c.ke_result {
     const h = 0.5;
     var verts: [24]Vertex = undefined;
     var idx: [36]u16 = undefined;
@@ -85,7 +85,7 @@ fn cube(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_han
         idx[i + 4] = @intCast(v + 2);
         idx[i + 5] = @intCast(v + 3);
     }
-    return core.upload_mesh.?(core, "primitive:cube", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out_error);
+    return core.upload_mesh.?(core, "primitive:cube", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
 }
 
 const sphere_rings = 24;
@@ -93,7 +93,7 @@ const sphere_segments = 32;
 
 /// Builds a grid with one more vertex per ring than it has cells. The extra vertex repeats the
 /// position of the first one in its ring, with the texture coordinate at the far edge.
-fn uvSphere(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh_handle {
+fn uvSphere(core: *c.ke_render_service, out: *c.ke_mesh_handle) c.ke_result {
     const radius = 0.5;
     const vert_count = (sphere_rings + 1) * (sphere_segments + 1);
     const idx_count = sphere_rings * sphere_segments * 6;
@@ -139,27 +139,24 @@ fn uvSphere(core: *c.ke_render_service, out_error: [*c][*c]c.ke_error) c.ke_mesh
             ii += 6;
         }
     }
-    return core.upload_mesh.?(core, "primitive:sphere:0.5:24:32", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out_error);
+    return core.upload_mesh.?(core, "primitive:sphere:0.5:24:32", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
 }
 
 /// Maps the name in the component's primitive field to one of the built-in shapes, uploaded
 /// under a key that names the shape, so components of one shape share one upload. Leaves the
 /// component alone when it has a mesh or names no primitive, and stores no handle for a name
-/// that is none of the built-in shapes.
+/// that is none of the built-in shapes or a shape whose upload fails.
 fn resolveMesh(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void {
     const mc: *c.ke_mesh_component = @ptrCast(m);
     if (mc.mesh.bits != c.KE_HANDLE_NONE or mc.primitive[0] == 0) return;
     const name = std.mem.sliceTo(&mc.primitive, 0);
-    mc.mesh = if (std.mem.eql(u8, name, "quad"))
-        quad(core, null)
-    else if (std.mem.eql(u8, name, "plane"))
-        plane(core, null)
-    else if (std.mem.eql(u8, name, "cube"))
-        cube(core, null)
-    else if (std.mem.eql(u8, name, "sphere"))
-        uvSphere(core, null)
-    else
-        c.KE_MESH_NONE;
+    const shapes = .{ .{ "quad", quad }, .{ "plane", plane }, .{ "cube", cube }, .{ "sphere", uvSphere } };
+    inline for (shapes) |shape| {
+        if (std.mem.eql(u8, name, shape[0])) {
+            if (shape[1](core, &mc.mesh) != R.ok) log.warn("the {s} primitive could not be uploaded", .{shape[0]});
+            return;
+        }
+    }
 }
 
 /// The key spells every value this call varies, so a material's key changes whenever one of the
@@ -176,7 +173,7 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
         bitsOf(mc.alpha_cutoff), bitsOf(mc.ior),       bitsOf(mc.distortion_strength),
     });
 
-    mc.material = core.create_material.?(
+    const made = core.create_material.?(
         core,
         k,
         @ptrCast(&mc.base_color),
@@ -189,14 +186,14 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
         mc.ior,
         mc.distortion_strength,
         null,
-        null,
+        &mc.material,
     );
+    if (made != R.ok) log.warn("an inline material could not be created", .{});
 }
 
 /// Runs in the update phase over the mesh view. For every component it runs `resolveMesh` and
-/// then `resolveMaterial`, each only while its handle is still empty. Neither is given an error
-/// output and this always returns true, so a failed upload or creation is not reported, leaves
-/// the handle empty and is attempted again on the next pass.
+/// then `resolveMaterial`, each only while its handle is still empty. It always succeeds: a failed
+/// upload or creation is logged, leaves the handle empty and is attempted again on the next pass.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const core: *c.ke_render_service = @ptrCast(@alignCast(user.?));
 
@@ -256,15 +253,16 @@ fn recordUploadMesh(
     vertices_size: usize,
     _: [*c]const u16,
     idx_count: u32,
-    _: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_mesh_handle {
+    out: [*c]c.ke_mesh_handle,
+) callconv(.c) c.ke_result {
     const k = std.mem.span(key);
     @memcpy(Recorder.mesh_key[0..k.len], k);
     Recorder.mesh_key_len = k.len;
     Recorder.vertex_count = vertices_size / @sizeOf(Vertex);
     Recorder.index_count = idx_count;
     Recorder.mesh_calls += 1;
-    return .{ .bits = 42 };
+    out.* = .{ .bits = 42 };
+    return R.ok;
 }
 
 fn recordCreateMaterial(
@@ -280,15 +278,16 @@ fn recordCreateMaterial(
     _: f32,
     _: f32,
     _: [*c]const u8,
-    _: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_material_handle {
+    out: [*c]c.ke_material_handle,
+) callconv(.c) c.ke_result {
     const k = std.mem.span(key);
     @memcpy(Recorder.material_key[0..k.len], k);
     Recorder.material_key_len = k.len;
     Recorder.material_roughness = roughness;
     Recorder.material_alpha_mode = alpha_mode;
     Recorder.material_calls += 1;
-    return .{ .bits = 43 };
+    out.* = .{ .bits = 43 };
+    return R.ok;
 }
 
 fn recordingService() c.ke_render_service {

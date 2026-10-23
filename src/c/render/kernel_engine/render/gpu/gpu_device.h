@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_RENDER_GPU_DEVICE_H_
 
 #include <kernel_engine/render/gpu/gpu_enums.h>
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/ndc_convention.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -42,15 +42,6 @@ typedef struct ke_gpu_command_buffer_handle
 } ke_gpu_command_buffer_handle;
 
 typedef struct ke_gpu_device ke_gpu_device;
-
-/// A shader module failed to compile/validate (source rejected by the backend).
-extern const ke_error_type KE_ERROR_GPU_SHADER_COMPILATION;
-
-/// A resource creation call (buffer, bind group, ...) was rejected by backend
-/// validation, e.g. a buffer or binding range exceeding a device limit. The
-/// device limit is backend-specific. The caller that requested the resource
-/// decides how to react.
-extern const ke_error_type KE_ERROR_GPU_RESOURCE_CREATION;
 
 
 
@@ -288,34 +279,62 @@ typedef struct ke_gpu_device
     void (*queue_poll)(struct ke_gpu_device *self, ke_gpu_queue q);
     void (*queue_wait_idle)(struct ke_gpu_device *self, ke_gpu_queue q);
 
-    ke_gpu_buffer          (*create_buffer)(struct ke_gpu_device *self,
-                                            const ke_gpu_buffer_params *p,
-                                            ke_error **out_error);
-    ke_gpu_texture         (*create_texture)(struct ke_gpu_device *self,
-                                             const ke_gpu_texture_params *p,
-                                             ke_error **out_error);
-    ke_gpu_texture_view    (*create_texture_view)(struct ke_gpu_device *self,
-                                                  ke_gpu_texture tex,
-                                                  const ke_gpu_texture_view_params *p,
-                                                  ke_error **out_error);
-    ke_gpu_sampler         (*create_sampler)(struct ke_gpu_device *self,
-                                             const ke_gpu_sampler_params *p,
-                                             ke_error **out_error);
-    ke_gpu_shader_module   (*create_shader_module)(struct ke_gpu_device *self,
-                                                   const ke_gpu_shader_module_params *p,
-                                                   ke_error **out_error);
-    ke_gpu_pipeline        (*create_render_pipeline)(struct ke_gpu_device *self,
-                                                     const ke_gpu_render_pipeline_params *p,
-                                                     ke_error **out_error);
-    ke_gpu_pipeline        (*create_compute_pipeline)(struct ke_gpu_device *self,
-                                                      const ke_gpu_compute_pipeline_params *p,
-                                                      ke_error **out_error);
-    ke_gpu_bind_group_layout (*create_bind_group_layout)(struct ke_gpu_device *self,
-                                                         const ke_gpu_bind_group_layout_params *p,
-                                                         ke_error **out_error);
-    ke_gpu_bind_group      (*create_bind_group)(struct ke_gpu_device *self,
-                                                const ke_gpu_bind_group_params *p,
-                                                ke_error **out_error);
+    /// Creates a buffer. The backend's reason for a rejection is logged.
+    /// @param out_buffer [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_buffer)(struct ke_gpu_device *self,
+                    const ke_gpu_buffer_params *p,
+                    ke_gpu_buffer *out_buffer);
+    /// Creates a texture. The backend's reason for a rejection is logged.
+    /// @param out_texture [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_texture)(struct ke_gpu_device *self,
+                    const ke_gpu_texture_params *p,
+                    ke_gpu_texture *out_texture);
+    /// Creates a view of `tex`. The backend's reason for a rejection is logged.
+    /// @param out_view [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_texture_view)(struct ke_gpu_device *self,
+                    ke_gpu_texture tex,
+                    const ke_gpu_texture_view_params *p,
+                    ke_gpu_texture_view *out_view);
+    /// Creates a sampler. The backend's reason for a rejection is logged.
+    /// @param out_sampler [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_sampler)(struct ke_gpu_device *self,
+                    const ke_gpu_sampler_params *p,
+                    ke_gpu_sampler *out_sampler);
+    /// Creates a shader module. The backend's reason for rejecting the source is logged.
+    /// @param out_module [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_shader_module)(struct ke_gpu_device *self,
+                    const ke_gpu_shader_module_params *p,
+                    ke_gpu_shader_module *out_module);
+    /// Creates a render pipeline. The backend's reason for a rejection is logged.
+    /// @param out_pipeline [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a color target without a format, or
+    ///         KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_render_pipeline)(struct ke_gpu_device *self,
+                    const ke_gpu_render_pipeline_params *p,
+                    ke_gpu_pipeline *out_pipeline);
+    /// Creates a compute pipeline. The backend's reason for a rejection is logged.
+    /// @param out_pipeline [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_compute_pipeline)(struct ke_gpu_device *self,
+                    const ke_gpu_compute_pipeline_params *p,
+                    ke_gpu_pipeline *out_pipeline);
+    /// Creates a bind group layout. The backend's reason for a rejection is logged.
+    /// @param out_layout [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_bind_group_layout)(struct ke_gpu_device *self,
+                    const ke_gpu_bind_group_layout_params *p,
+                    ke_gpu_bind_group_layout *out_layout);
+    /// Creates a bind group. The backend's reason for a rejection is logged.
+    /// @param out_group [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
+    /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
+    ke_result (*create_bind_group)(struct ke_gpu_device *self,
+                    const ke_gpu_bind_group_params *p,
+                    ke_gpu_bind_group *out_group);
 
     void (*destroy_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h);
     void (*destroy_texture)(struct ke_gpu_device *self, ke_gpu_texture h);
@@ -327,11 +346,11 @@ typedef struct ke_gpu_device
     void (*destroy_bind_group_layout)(struct ke_gpu_device *self, ke_gpu_bind_group_layout h);
     void (*destroy_bind_group)(struct ke_gpu_device *self, ke_gpu_bind_group h);
 
-    /// Creates a command encoder. p may be NULL, which creates it unlabeled. On failure the
-    /// handle's ref is NULL.
-    ke_gpu_command_encoder_handle (*create_command_encoder)(struct ke_gpu_device *self,
-                                                            const ke_gpu_command_encoder_params *p,
-                                                            ke_error **out_error);
+    /// Creates a command encoder. p may be NULL, which creates it unlabeled.
+    /// @param out_encoder [out] Receives the encoder; left zeroed on failure.
+    ke_result (*create_command_encoder)(struct ke_gpu_device *self,
+                                        const ke_gpu_command_encoder_params *p,
+                                        ke_gpu_command_encoder_handle *out_encoder);
 
     void (*write_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,
                          uint64_t offset, const void *data, size_t size);

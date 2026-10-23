@@ -98,10 +98,10 @@ const GBufferModule = struct {
     fn resolvePipeline(gb: *GBufferModule, shader: [*c]const u8) bool {
         var name_buf: [rc_MAX_SHADER_QUALIFIED]u8 = undefined;
         const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
-        const vs = gb.core.*.load_shader.?(gb.core, name.ptr, c.KE_GPU_SHADER_STAGE_VERTEX, null);
-        if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-        const fs = gb.core.*.load_shader.?(gb.core, name.ptr, c.KE_GPU_SHADER_STAGE_FRAGMENT, null);
-        if (fs == c.KE_GPU_INVALID_HANDLE) return false;
+        var vs: c.ke_gpu_shader_module = undefined;
+        if (gb.core.*.load_shader.?(gb.core, name.ptr, c.KE_GPU_SHADER_STAGE_VERTEX, &vs) != R.ok) return false;
+        var fs: c.ke_gpu_shader_module = undefined;
+        if (gb.core.*.load_shader.?(gb.core, name.ptr, c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs) != R.ok) return false;
         gb.pipeline_template.vertex_module = vs;
         gb.pipeline_template.fragment_module = fs;
         return true;
@@ -121,10 +121,9 @@ inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
 /// nothing is drawn. It draws the meshes `collectDraws` selects: those on a layer the camera's cull
 /// mask names, minus the blended ones. A draw writes its matrices into the next slot of the one
 /// shared uniform buffer and binds that slot by dynamic offset; a draw whose geometry or shader is
-/// missing is skipped without consuming a slot.
+/// missing is skipped without consuming a slot. It fails as out of memory when the draw list
+/// cannot grow, and with the code of the call that failed when the per-draw uniforms cannot.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
-    var err_record: [*c]c.ke_error = null;
-    const out_error: [*c][*c]c.ke_error = &err_record;
     const gb = moduleOf(user);
     const core = gb.core;
 
@@ -151,15 +150,16 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
     const segs = ctx.?.view.?(ctx, 1, &segc);
     const objects = &gb.objects.?;
     if (!collectDraws(core, cam, segs, segc, &gb.draws)) {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "gbuffer pass: draw list allocation failed", @src().file, @intCast(@src().line), null);
+        log.warn("gbuffer pass: draw list allocation failed", .{});
         rp.*.end.?(rp);
         core.*.end_pass.?(core, pc);
-        return bodyFailed(err_record);
+        return R.code(error.OutOfMemory);
     }
-    if (!objects.ensure(@intCast(gb.draws.items.len), out_error)) {
+    const grown = objects.ensure(@intCast(gb.draws.items.len));
+    if (grown != R.ok) {
         rp.*.end.?(rp);
         core.*.end_pass.?(core, pc);
-        return bodyFailed(err_record);
+        return grown;
     }
 
     var draw_idx: u32 = 0;
@@ -195,9 +195,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 
 /// Called once by `ke_render_gbuffer_create`. It creates the GPU objects and fills
 /// `pipeline_template`, `io`, `access` and `queries`, and it requests the pipeline now, so a
-/// failure there fails creation instead of the first frame. On failure it returns false with the
-/// error written to the error output, and the module keeps the handles it made for `destroyModule`.
-fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params, out_error: [*c][*c]c.ke_error) bool {
+/// failure there fails creation instead of the first frame. On failure the module keeps the
+/// handles it made for `destroyModule`.
+fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params) R.Error!void {
     const core: *c.ke_render_service = p.service;
     const dev: *c.ke_gpu_device = p.device;
     const mesh_cid = p.mesh_cid;
@@ -213,13 +213,12 @@ fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params, out_error: [*
     const group = std.mem.span(p.output);
     const suffixes = [3][]const u8{ c.KE_RENDER_GBUFFER_ALBEDO, c.KE_RENDER_GBUFFER_NORMAL, c.KE_RENDER_GBUFFER_EMISSIVE };
     for (suffixes, &gb.names) |suffix, *name| {
-        name.* = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, suffix }, 0) catch return outOfMemory(out_error);
+        name.* = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, suffix }, 0) catch return error.OutOfMemory;
     }
 
     const binder: *c.ke_render_resource_binder = core.*.resource_binder.?(core);
-    if (!gb.groups.init(binder, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME, out_error)) return false;
-    gb.frame_set = binder.create_set.?(binder, gb.groups.layout, null, "gbuffer.frame_set", null, 0, out_error);
-    if (gb.frame_set == c.KE_RENDER_BINDING_INVALID) return false;
+    try R.check(gb.groups.init(binder, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME));
+    try R.check(binder.create_set.?(binder, gb.groups.layout, null, "gbuffer.frame_set", null, 0, &gb.frame_set));
 
     gb.attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 },
@@ -247,7 +246,7 @@ fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params, out_error: [*
     pp.depth_stencil.depth_test_enabled = true;
     pp.depth_stencil.depth_write_enabled = true;
     pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    if (!gb.groups.place(&pp, out_error)) return false;
+    try R.check(gb.groups.place(&pp));
     pp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
     pp.color_target_formats[1] = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
     pp.color_target_formats[2] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
@@ -255,28 +254,27 @@ fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params, out_error: [*
     gb.pipeline_template = pp;
 
     if (!gb.resolvePipeline(DEFAULT_MATERIAL_SHADER)) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: default material shader failed to load", @src().file, @intCast(@src().line), null);
-        return false;
+        log.warn("gbuffer pass: default material shader failed to load", .{});
+        return error.NotInitialized;
     }
     if (core.*.get_or_create_pipeline.?(core, &gb.pipeline_template) == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "gbuffer pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
+        log.warn("gbuffer pass: render pipeline creation failed", .{});
+        return error.NotInitialized;
     }
 
     gb.objects = .{ .device = dev, .binder = binder, .layout = gb.groups.layout, .buffer_label = "gbuffer.obj_uniform", .set_label = "gbuffer.obj_set" };
-    if (!gb.objects.?.ensure(1, out_error)) return false;
+    try R.check(gb.objects.?.ensure(1));
 
     const formats = [3]c.ke_gpu_texture_format{ c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT };
     var cids: [3]c.ke_component_id = undefined;
     for (gb.names, formats, &cids, 0..) |name, format, *cid, i| {
-        cid.* = core.*.declare.?(core, &c.ke_render_resource_params{
+        try R.check(core.*.declare.?(core, &c.ke_render_resource_params{
             .name = name.?.ptr,
             .type = c.KE_RENDER_RESOURCE_TEXTURE,
             .format = format,
             .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
             .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
-        }, out_error);
-        if (cid.* == c.KE_COMPONENT_INVALID) return false;
+        }, cid));
         gb.writes[i] = name.?.ptr;
     }
 
@@ -301,7 +299,6 @@ fn setup(gb: *GBufferModule, p: *const c.ke_render_gbuffer_params, out_error: [*
     const rd = c.KE_ACCESS_READ;
     gb.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
     gb.queries = .{ .{ .terms = &gb.queries_terms[0], .term_count = 2 }, .{ .terms = &gb.queries_terms[2], .term_count = 2 } };
-    return true;
 }
 
 /// Releases the GPU objects and sets `setup` created, skipping any still invalid, so it also serves a module whose setup stopped partway. Used on creation failure and by
@@ -325,25 +322,22 @@ fn destroyHandle(self: ?*c.ke_render_gbuffer) callconv(.c) void {
 /// The factory the plugin exports, declared in the plugin's factory header. On success it returns
 /// the module as the handle's ref and `destroyHandle` as its destroy slot. A missing runtime,
 /// render service, device or output fails as an invalid argument and a failed allocation as
-/// out of memory. A failing setup, or a runtime that refuses the registration, writes the error and
-/// returns the empty handle after releasing the module.
-export fn ke_render_gbuffer_create(params_in: ?*const c.ke_render_gbuffer_params,
-                                    out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_gbuffer_handle {
-    const empty = c.ke_render_gbuffer_handle{ .ref = null, .destroy = null };
-    const p = params_in orelse return refused(out_error);
-    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
-    if (p.service == null or p.device == null or p.output == null) return refused(out_error);
+/// out of memory. A failing setup, or a runtime that refuses the registration, fails with its code
+/// and leaves the handle zeroed after releasing the module.
+export fn ke_render_gbuffer_create(params_in: ?*const c.ke_render_gbuffer_params, out_gbuffer: [*c]c.ke_render_gbuffer_handle) callconv(.c) c.ke_result {
+    const out = out_gbuffer orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params_in orelse return R.code(error.InvalidArgument);
+    const rt: *c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    if (p.service == null or p.device == null or p.output == null) return R.code(error.InvalidArgument);
 
-    const gb = gpa.create(GBufferModule) catch {
-        _ = outOfMemory(out_error);
-        return empty;
-    };
+    const gb = gpa.create(GBufferModule) catch |err| return R.code(err);
     gb.* = .{};
-    if (!setup(gb, p, out_error)) {
+    setup(gb, p) catch |err| {
         destroyModule(gb);
         gpa.destroy(gb);
-        return empty;
-    }
+        return R.code(err);
+    };
 
     var params = std.mem.zeroes(c.ke_runtime_system_params);
     params.name = "render.gbuffer";
@@ -356,33 +350,17 @@ export fn ke_render_gbuffer_create(params_in: ?*const c.ke_render_gbuffer_params
     params.user_data = gb;
     params.execute = system;
     var system_id: c.ke_system_id = 0;
-    if (rt.register_system.?(rt, &params, &system_id) != c.KE_OK) {
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
+    const registered = rt.register_system.?(rt, &params, &system_id);
+    if (registered != R.ok) {
         destroyModule(gb);
         gpa.destroy(gb);
-        return empty;
+        return registered;
     }
 
-    return .{ .ref = @ptrCast(gb), .destroy = destroyHandle };
+    out.* = .{ .ref = @ptrCast(gb), .destroy = destroyHandle };
+    return R.ok;
 }
 
-fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
-    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "gbuffer pass: allocation failed", @src().file, @intCast(@src().line), null);
-    return false;
-}
-
-fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_gbuffer_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "gbuffer pass: runtime, service, device and output are required", @src().file, @intCast(@src().line), null);
-    return .{ .ref = null, .destroy = null };
-}
-
-
-/// The code a system body returns when a call it made failed and filled `record`, whose message is
-/// logged. A bridge while the calls a body makes still report through `ke_error`.
-fn bodyFailed(record: [*c]const c.ke_error) c.ke_result {
-    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
-    return R.code(error.General);
-}
 
 const testing = std.testing;
 
@@ -506,8 +484,8 @@ test "creating and destroying the gbuffer pass leaves no block allocated and no 
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, null);
-    try testing.expect(h.ref != null);
+    var h: c.ke_render_gbuffer_handle = undefined;
+    try R.check(ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -521,7 +499,8 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, null);
+    var h: c.ke_render_gbuffer_handle = undefined;
+    try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -535,7 +514,8 @@ test "a gbuffer pass the runtime refuses to register releases what it had create
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    const h = ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, null);
+    var h: c.ke_render_gbuffer_handle = undefined;
+    try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

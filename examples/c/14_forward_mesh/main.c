@@ -1,4 +1,4 @@
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
@@ -38,11 +38,9 @@ static void die_result(const char *what, ke_result result)
     exit(1);
 }
 
-static void die(const char *msg, ke_error *err)
+static void check(const char *what, ke_result result)
 {
-    if (err) { ke_error_fatal(err); }
-    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
-    ke_error_fatal(&fallback);
+    if (result != KE_OK) die_result(what, result);
 }
 
 static double now_seconds(void)
@@ -86,53 +84,42 @@ typedef struct renderer
 
 static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target)
 {
-    ke_error *err = NULL;
-    r->binder = ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = "shaders" }, &err);
-    if (!r->binder.ref) die("resource binder", err);
-    r->service = ke_render_service_create(&(ke_render_service_params){
-        .device = gpu, .target = target, .ecs = ecs, .shader_dir = "shaders", .binder = r->binder.ref }, &err);
-    if (!r->service.ref) die("render service", err);
+    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = "shaders" }, &r->binder));
+    check("render service", ke_render_service_create(&(ke_render_service_params){
+        .device = gpu, .target = target, .ecs = ecs, .shader_dir = "shaders", .binder = r->binder.ref }, &r->service));
     ke_render_service *core = r->service.ref;
 
     ke_ndc_convention ndc = gpu->get_ndc_convention(gpu);
     ke_result made_view = ke_view_space_rh_create(&r->view_space);
     if (made_view != KE_OK) die_result("view space", made_view);
-    r->camera = ke_render_camera_create(r->view_space.ref, &ndc, &err);
-    if (!r->camera.ref) die("camera", err);
+    check("camera", ke_render_camera_create(r->view_space.ref, &ndc, &r->camera));
 
-    r->scene = ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt, .ecs = ecs, .service = core }, &err);
-    if (!r->scene.ref) die("scene resolve", err);
+    check("scene resolve", ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt, .ecs = ecs, .service = core }, &r->scene));
     const ke_render_scene_component_ids *ids = r->scene.ref->component_ids(r->scene.ref);
 
-    r->frame = ke_render_frame_create(&(ke_render_frame_params){
+    check("frame", ke_render_frame_create(&(ke_render_frame_params){
         .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref,
         .camera_cid = ids->camera, .world_transform_cid = ids->world_transform,
-        .directional_light_cid = ids->directional_light, .ambient_light_cid = ids->ambient_light }, &err);
-    if (!r->frame.ref) die("frame", err);
+        .directional_light_cid = ids->directional_light, .ambient_light_cid = ids->ambient_light }, &r->frame));
     ke_component_id frame_cid = r->frame.ref->frame_cid(r->frame.ref);
 
-    r->shadow = ke_render_shadow_create(&(ke_render_shadow_params){
+    check("shadow pass", ke_render_shadow_create(&(ke_render_shadow_params){
         .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .ndc = ndc,
         .mesh_cid = ids->mesh, .world_transform_cid = ids->world_transform, .light_cid = ids->directional_light,
-        .frame_cid = frame_cid, .output = "shadow" }, &err);
-    if (!r->shadow.ref) die("shadow pass", err);
-    r->cluster = ke_render_cluster_create(&(ke_render_cluster_params){
+        .frame_cid = frame_cid, .output = "shadow" }, &r->shadow));
+    check("cluster pass", ke_render_cluster_create(&(ke_render_cluster_params){
         .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .camera = r->camera.ref,
         .point_light_cid = ids->point_light, .spot_light_cid = ids->spot_light, .world_transform_cid = ids->world_transform,
-        .camera_cid = ids->camera, .frame_cid = frame_cid, .output = "clusters" }, &err);
-    if (!r->cluster.ref) die("cluster pass", err);
-    r->gbuffer = ke_render_gbuffer_create(&(ke_render_gbuffer_params){
+        .camera_cid = ids->camera, .frame_cid = frame_cid, .output = "clusters" }, &r->cluster));
+    check("gbuffer pass", ke_render_gbuffer_create(&(ke_render_gbuffer_params){
         .runtime = rt, .service = core, .device = gpu, .mesh_cid = ids->mesh, .world_transform_cid = ids->world_transform,
-        .camera_cid = ids->camera, .frame_cid = frame_cid, .output = "gbuffer" }, &err);
-    if (!r->gbuffer.ref) die("gbuffer pass", err);
-    r->deferred = ke_render_deferred_lighting_create(&(ke_render_deferred_lighting_params){
+        .camera_cid = ids->camera, .frame_cid = frame_cid, .output = "gbuffer" }, &r->gbuffer));
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&(ke_render_deferred_lighting_params){
         .runtime = rt, .service = core, .device = gpu, .ibl_enabled = true,
         .camera_cid = ids->camera, .world_transform_cid = ids->world_transform, .skybox_cid = ids->skybox, .frame_cid = frame_cid,
-        .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &err);
-    if (!r->deferred.ref) die("deferred lighting pass", err);
-    r->tonemap = ke_render_tonemap_create(&(ke_render_tonemap_params){
-        .runtime = rt, .service = core, .device = gpu, .frame_cid = frame_cid }, &err);
-    if (!r->tonemap.ref) die("tonemap pass", err);
+        .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &r->deferred));
+    check("tonemap pass", ke_render_tonemap_create(&(ke_render_tonemap_params){
+        .runtime = rt, .service = core, .device = gpu, .frame_cid = frame_cid }, &r->tonemap));
 }
 
 static void renderer_destroy(renderer *r)
@@ -153,8 +140,6 @@ static void renderer_destroy(renderer *r)
 int main(void)
 {
     printf("--- c_demo_14: forward lit cube through the render core ---\n");
-    ke_error *err = NULL;
-
     ke_window_glfw_params wp = {
         .input = NULL,
         .title = "c_demo_14 forward mesh", .width = 800, .height = 600,
@@ -166,11 +151,11 @@ int main(void)
     if (window_ready != KE_OK) die_result("window init", window_ready);
 
     ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
-    ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
-    if (!gpu.ref) die("gpu device", err);
+    ke_gpu_device_handle gpu = { 0 };
+    check("gpu device", ke_gpu_device_webgpu_create(&dp, &gpu));
 
-    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &err);
-    if (!target.ref) die("render target", err);
+    ke_gpu_render_target_handle target = { 0 };
+    check("render target", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));
 
     ke_ecs_flecs_params ep = { .world_id_base = 0 };
     ke_ecs_handle ecs = { 0 };
@@ -190,14 +175,14 @@ int main(void)
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref);
     ke_render_service *core = render.service.ref;
 
-    ke_mesh_handle cube_h = core->upload_mesh(core, "example:cube", cube, sizeof(cube), cube_idx,
-                                              sizeof(cube_idx) / sizeof(cube_idx[0]), &err);
-    if (cube_h.bits == KE_HANDLE_NONE) die("upload_mesh", err);
+    ke_mesh_handle cube_h = { 0 };
+    check("upload_mesh", core->upload_mesh(core, "example:cube", cube, sizeof(cube), cube_idx,
+                                              sizeof(cube_idx) / sizeof(cube_idx[0]), &cube_h));
 
     const float orange[4] = { 0.85f, 0.35f, 0.2f, 1.0f };
-    ke_material_handle mat = core->create_material(core, "example:orange", orange, 0.0f, 0.5f, KE_TEXTURE_NONE, KE_TEXTURE_NONE,
-                                                    KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, NULL, &err);
-    if (mat.bits == KE_HANDLE_NONE) die("create_material", err);
+    ke_material_handle mat = { 0 };
+    check("create_material", core->create_material(core, "example:orange", orange, 0.0f, 0.5f, KE_TEXTURE_NONE, KE_TEXTURE_NONE,
+                                                    KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, NULL, &mat));
 
     ke_component_id transform_cid = KE_COMPONENT_INVALID;
     ke_result registered_transform_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_TRANSFORM, .size = sizeof(ke_transform_component), .alignment = _Alignof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields) }, &transform_cid);

@@ -6,6 +6,7 @@ const std = @import("std");
 const rc = @import("render_service.zig");
 const resource_table = @import("resource_table.zig");
 const c = rc.c;
+const R = rc.R;
 const gpa = rc.gpa;
 
 const color_names = [2][2][*:0]const u8{
@@ -62,23 +63,24 @@ fn isLdr(stage: c.ke_render_stage) usize {
 
 /// Declares the two color textures of each format, the frame's depth and the color tag, all the
 /// size of the backbuffer. Called once by the factory, through the service's own `declare`.
-/// Returns false with the error set when a declaration fails.
-pub fn prepare(st: *rc.CoreState, core: [*c]c.ke_render_service, color_format: c.ke_gpu_texture_format, depth_format: c.ke_gpu_texture_format, out_error: [*c][*c]c.ke_error) bool {
+pub fn prepare(st: *rc.CoreState, core: [*c]c.ke_render_service, color_format: c.ke_gpu_texture_format, depth_format: c.ke_gpu_texture_format) R.Error!void {
     st.chain.color_format = color_format;
     const formats = [2]c.ke_gpu_texture_format{ color_format, st.target.format.?(st.target) };
     for (color_names, formats, 0..) |pair, format, f| {
         for (pair, 0..) |name, i| {
-            if (!declareTarget(core, name, format, out_error)) return false;
+            try declareTarget(core, name, format);
             st.chain.colors[f][i] = st.resources.items.len - 1;
         }
     }
-    if (!declareTarget(core, c.KE_RENDER_FRAME_DEPTH, depth_format, out_error)) return false;
+    try declareTarget(core, c.KE_RENDER_FRAME_DEPTH, depth_format);
     st.chain.depth = st.resources.items.len - 1;
-    return resource_table.importTag(core, c.KE_RENDER_FRAME_COLOR, out_error) != c.KE_COMPONENT_INVALID;
+    var color: c.ke_component_id = undefined;
+    try R.check(resource_table.importTag(core, c.KE_RENDER_FRAME_COLOR, &color));
 }
 
-fn declareTarget(core: [*c]c.ke_render_service, name: [*:0]const u8, format: c.ke_gpu_texture_format, out_error: [*c][*c]c.ke_error) bool {
-    return resource_table.declare(core, &c.ke_render_resource_params{
+fn declareTarget(core: [*c]c.ke_render_service, name: [*:0]const u8, format: c.ke_gpu_texture_format) R.Error!void {
+    var cid: c.ke_component_id = undefined;
+    try R.check(resource_table.declare(core, &c.ke_render_resource_params{
         .name = name,
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = format,
@@ -88,28 +90,22 @@ fn declareTarget(core: [*c]c.ke_render_service, name: [*:0]const u8, format: c.k
         .scale_x = 1.0,
         .scale_y = 1.0,
         .clear_value = .{ 0, 0, 0, 0 },
-    }, out_error) != c.KE_COMPONENT_INVALID;
+    }, &cid));
 }
 
 /// The service's `join_chain` slot. The new link goes after every link of a stage up to its own.
-pub fn joinChain(self: [*c]c.ke_render_service, stage: c.ke_render_stage, mode: c.ke_render_chain_mode, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_chain_link {
-    if (self == null) {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "join_chain: service is required", @src().file, @intCast(@src().line), null);
-        return c.KE_RENDER_CHAIN_NONE;
-    }
-    if (stage < 0 or stage >= c.KE_RENDER_STAGE_COUNT or mode < 0 or mode > c.KE_RENDER_CHAIN_REPLACE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "join_chain: stage or mode out of range", @src().file, @intCast(@src().line), null);
-        return c.KE_RENDER_CHAIN_NONE;
-    }
+pub fn joinChain(self: [*c]c.ke_render_service, stage: c.ke_render_stage, mode: c.ke_render_chain_mode, out_link: [*c]c.ke_render_chain_link) callconv(.c) c.ke_result {
+    const out = out_link orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_RENDER_CHAIN_NONE;
+    if (self == null) return R.code(error.InvalidArgument);
+    if (stage < 0 or stage >= c.KE_RENDER_STAGE_COUNT or mode < 0 or mode > c.KE_RENDER_CHAIN_REPLACE) return R.code(error.InvalidArgument);
     const chain = &rc.coreOf(self).chain;
     var at: usize = 0;
     while (at < chain.links.items.len and chain.links.items[at].stage <= stage) at += 1;
-    chain.links.insert(gpa, at, .{ .id = chain.next_id, .stage = stage, .mode = mode }) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "join_chain: link allocation failed", @src().file, @intCast(@src().line), null);
-        return c.KE_RENDER_CHAIN_NONE;
-    };
+    chain.links.insert(gpa, at, .{ .id = chain.next_id, .stage = stage, .mode = mode }) catch |err| return R.code(err);
     chain.next_id += 1;
-    return chain.links.items[at].id;
+    out.* = chain.links.items[at].id;
+    return R.ok;
 }
 
 /// The service's `leave_chain` slot.
@@ -157,7 +153,8 @@ pub fn assign(st: *rc.CoreState) void {
 /// Records on a new encoder the clear of the first color texture to the service's clear color and
 /// of the frame's depth to the far plane. Null when the device gives no encoder.
 pub fn recordClear(st: *rc.CoreState) ?c.ke_gpu_command_encoder_handle {
-    const enc = st.device.create_command_encoder.?(st.device, null, null);
+    var enc: c.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
+    if (st.device.create_command_encoder.?(st.device, null, &enc) != R.ok) return null;
     const e = enc.ref orelse return null;
     const color = [1]c.ke_gpu_color_attachment{.{
         .view = st.resources.items[st.chain.colors[0][0]].view,
@@ -189,7 +186,8 @@ pub fn recordClear(st: *rc.CoreState) ?c.ke_gpu_command_encoder_handle {
 /// Records on a new encoder the draw of `src` over the whole of `dst`. Null when the device gives
 /// no encoder or the draw cannot be recorded.
 pub fn recordBlit(st: *rc.CoreState, src: c.ke_gpu_texture_view, dst: c.ke_gpu_texture_view, dst_format: c.ke_gpu_texture_format) ?c.ke_gpu_command_encoder_handle {
-    const enc = st.device.create_command_encoder.?(st.device, null, null);
+    var enc: c.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
+    if (st.device.create_command_encoder.?(st.device, null, &enc) != R.ok) return null;
     const e = enc.ref orelse return null;
     if (!st.blit.draw(st.api, st.binder, e, src, dst, dst_format)) {
         enc.destroy.?(e);

@@ -39,14 +39,11 @@ fn frameCid(self: [*c]c.ke_render_frame) callconv(.c) c.ke_component_id {
     return st.frame_cid;
 }
 
-/// The end system: ends the frame on the service, and fails, logging the service's own error, when
-/// it cannot.
+/// The end system: ends the frame on the service, failing with the service's code when it cannot.
 fn endSystem(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
-    var err_record: [*c]c.ke_error = null;
     const st: *FrameModule = @ptrCast(@alignCast(user.?));
     const core = st.producer.core;
-    if (core.*.end_frame.?(core, &err_record)) return R.ok;
-    return bodyFailed(err_record);
+    return core.*.end_frame.?(core);
 }
 
 /// The `destroy` slot of the handle `ke_render_frame_create` returns; a null argument is ignored.
@@ -55,34 +52,29 @@ fn destroyHandle(self: ?*c.ke_render_frame) callconv(.c) void {
     gpa.destroy(st);
 }
 
-fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_frame_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "render frame: runtime, ecs, service and camera are required", @src().file, @intCast(@src().line), null);
-    return .{ .ref = null, .destroy = null };
+/// The factory declared in frame_create.h. A missing runtime, ecs, service or camera fails as an
+/// invalid argument and a failed allocation as out of memory. The runtime refusing either system
+/// fails with the runtime's code, after removing the begin system when it was the end system that
+/// was refused. Each failure leaves the handle zeroed.
+export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, out_frame: ?*c.ke_render_frame_handle) callconv(.c) c.ke_result {
+    const out = out_frame orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params_in orelse return refused();
+    out.* = create(p.runtime orelse return refused(), p.ecs orelse return refused(), p.service orelse return refused(), p.camera orelse return refused(), p) catch |err| return R.code(err);
+    return R.ok;
 }
 
-/// The factory declared in frame_create.h. A failed allocation fails as out of memory. The runtime
-/// refusing either system sets the error output, removes the begin system when it was the end
-/// system that was refused, and returns the null handle.
-export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_frame_handle {
-    const empty = c.ke_render_frame_handle{ .ref = null, .destroy = null };
-    const p = params_in orelse return refused(out_error);
-    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
-    const e: *c.ke_ecs = p.ecs orelse return refused(out_error);
-    const core = p.service orelse return refused(out_error);
-    const camera = p.camera orelse return refused(out_error);
+fn refused() c.ke_result {
+    log.warn("render frame: runtime, ecs, service and camera are required", .{});
+    return R.code(error.InvalidArgument);
+}
 
-    const st = gpa.create(FrameModule) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "render frame: allocation failed", @src().file, @intCast(@src().line), null);
-        return empty;
-    };
+fn create(rt: *c.ke_runtime, e: *c.ke_ecs, core: *c.ke_render_service, camera: *c.ke_render_camera, p: *const c.ke_render_frame_params) R.Error!c.ke_render_frame_handle {
+    const st = try gpa.create(FrameModule);
+    errdefer gpa.destroy(st);
     st.api = .{ .handle = st, .frame_cid = frameCid };
     st.frame_cid = c.KE_COMPONENT_INVALID;
-    if (e.component_register.?(e, &c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid) != c.KE_OK)
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the ECS refused a component, whose reason it logged", @src().file, @intCast(@src().line), null);
-    if (st.frame_cid == c.KE_COMPONENT_INVALID) {
-        gpa.destroy(st);
-        return empty;
-    }
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid));
     st.producer = .{ .core = core, .camera = camera };
 
     const rd = c.KE_ACCESS_READ;
@@ -114,12 +106,8 @@ export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, ou
     begin.user_data = &st.producer;
     begin.execute = frame_producer.system;
     var begin_id: c.ke_system_id = 0;
-    if (rt.register_system.?(rt, &begin, &begin_id) != c.KE_OK)
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
-    if (begin_id == 0) {
-        gpa.destroy(st);
-        return empty;
-    }
+    try R.check(rt.register_system.?(rt, &begin, &begin_id));
+    errdefer _ = rt.unregister_system.?(rt, begin_id);
 
     var end = std.mem.zeroes(c.ke_runtime_system_params);
     end.name = "render.end_frame";
@@ -130,27 +118,20 @@ export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, ou
     end.user_data = st;
     end.execute = endSystem;
     var system_id: c.ke_system_id = 0;
-    if (rt.register_system.?(rt, &end, &system_id) != c.KE_OK) {
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
-        _ = rt.unregister_system.?(rt, begin_id);
-        gpa.destroy(st);
-        return empty;
-    }
+    try R.check(rt.register_system.?(rt, &end, &system_id));
 
     return .{ .ref = &st.api, .destroy = destroyHandle };
-}
-
-
-/// The code a system body returns when a call it made failed and filled `record`, whose message is
-/// logged. A bridge while the calls a body makes still report through `ke_error`.
-fn bodyFailed(record: [*c]const c.ke_error) c.ke_result {
-    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
-    return R.code(error.General);
 }
 
 const testing = std.testing;
 
 const Stubs = @import("stubs").Stubs(c);
+
+fn testFrame(params: *const c.ke_render_frame_params) c.ke_render_frame_handle {
+    var h: c.ke_render_frame_handle = .{ .ref = null, .destroy = null };
+    _ = ke_render_frame_create(params, &h);
+    return h;
+}
 
 fn testParams(rt: *Stubs.Runtime, ecs: *Stubs.Ecs, core: *Stubs.Core, camera: *c.ke_render_camera) c.ke_render_frame_params {
     return .{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .camera = camera, .camera_cid = 1, .world_transform_cid = 2, .directional_light_cid = 3, .ambient_light_cid = 4 };
@@ -179,7 +160,7 @@ const Rig = struct {
 test "the frame registers its begin and end systems and hands out the tag they share" {
     var rig: Rig = undefined;
     rig.init();
-    const h = ke_render_frame_create(&rig.params(), null);
+    const h = testFrame(&rig.params());
     try testing.expect(h.ref != null);
     try testing.expectEqual(@as(u32, 2), rig.rt.live_count);
     try testing.expect(h.ref.*.frame_cid.?(h.ref) != c.KE_COMPONENT_INVALID);
@@ -190,7 +171,7 @@ test "a frame whose end system the runtime refuses removes its begin system and 
     var rig: Rig = undefined;
     rig.init();
     rig.rt.limit = 1;
-    const h = ke_render_frame_create(&rig.params(), null);
+    const h = testFrame(&rig.params());
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(u32, 0), rig.rt.live_count);
 }
@@ -199,7 +180,7 @@ test "a frame the runtime refuses at once fails without registering anything" {
     var rig: Rig = undefined;
     rig.init();
     rig.rt.limit = 0;
-    const h = ke_render_frame_create(&rig.params(), null);
+    const h = testFrame(&rig.params());
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(u32, 0), rig.rt.live_count);
 }
@@ -209,18 +190,16 @@ test "a frame missing its camera is refused as an invalid argument" {
     rig.init();
     var p = rig.params();
     p.camera = null;
-    var err: [*c]c.ke_error = null;
-    try testing.expect(ke_render_frame_create(&p, &err).ref == null);
-    try testing.expect(err != null);
-    try testing.expectEqual(&c.KE_ERROR_INVALID_ARGUMENT, err.*.type);
+    var h: c.ke_render_frame_handle = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_render_frame_create(&p, &h));
+    try testing.expect(h.ref == null);
 }
 
-fn failingFrame(_: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "no backbuffer", @src().file, @intCast(@src().line), null);
-    return false;
+fn failingFrame(_: [*c]c.ke_render_service) callconv(.c) c.ke_result {
+    return R.code(error.NotInitialized);
 }
 
-test "a frame the service cannot begin or end fails the render phase with the service's own error" {
+test "a frame the service cannot begin or end fails the render phase with the service's own code" {
     var svc = std.mem.zeroes(c.ke_render_service);
     svc.begin_frame = failingFrame;
     svc.end_frame = failingFrame;
@@ -228,9 +207,9 @@ test "a frame the service cannot begin or end fails the render phase with the se
     var st: FrameModule = undefined;
     st.producer = .{ .core = &svc, .camera = &camera };
 
-    try testing.expect(frame_producer.system(null, &st.producer, 0.0) != R.ok);
+    try testing.expectEqual(R.code(error.NotInitialized), frame_producer.system(null, &st.producer, 0.0));
 
-    try testing.expect(endSystem(null, &st, 0.0) != R.ok);
+    try testing.expectEqual(R.code(error.NotInitialized), endSystem(null, &st, 0.0));
 }
 
 test "creating and destroying the frame leaves no block allocated" {

@@ -48,45 +48,43 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>Declares a transient resource the service allocates and recycles.</summary>
-    /// <returns>The tag-component cid to place in a pass's access_list.</returns>
+    /// <returns>Receives the tag-component cid to place in a pass's access_list.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint Declare(ke_render_resource_params* @params)
     {
-        ke_error* err = null;
-        var result = Handle->declare(Handle, @params, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "declare");
-        return result;
+        uint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->declare(Handle, @params, &resultOut), "declare");
+        return resultOut;
     }
 
     /// <summary>Imports an externally-owned texture under `name`.</summary>
-    /// <returns>Its tag-component cid.</returns>
+    /// <returns>Receives its tag-component cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint ImportTexture(sbyte* name, ulong tex)
     {
-        ke_error* err = null;
-        var result = Handle->import_texture(Handle, name, tex, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "import_texture");
-        return result;
+        uint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->import_texture(Handle, name, tex, &resultOut), "import_texture");
+        return resultOut;
     }
 
     /// <summary>Mints a tag cid under `name` with no GPU payload.</summary>
+    /// <returns>Receives the cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint ImportTag(sbyte* name)
     {
-        ke_error* err = null;
-        var result = Handle->import_tag(Handle, name, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "import_tag");
-        return result;
+        uint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->import_tag(Handle, name, &resultOut), "import_tag");
+        return resultOut;
     }
 
     /// <summary>Publishes an externally-owned GPU buffer under `name` for another pass to bind by name.</summary>
+    /// <returns>Receives its tag-component cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint ImportBuffer(sbyte* name, ulong buffer, ulong size)
     {
-        ke_error* err = null;
-        var result = Handle->import_buffer(Handle, name, buffer, size, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "import_buffer");
-        return result;
+        uint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->import_buffer(Handle, name, buffer, size, &resultOut), "import_buffer");
+        return resultOut;
     }
 
     /// <returns>The tag cid minted for `name`, or KE_COMPONENT_INVALID.</returns>
@@ -107,35 +105,32 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         Handle->end_pass(Handle, ctx);
     }
 
-    /// <summary>Acquires the service's render target as the backbuffer (a built-in resource named "backbuffer"), clears the per-pass command slot table, and clears the frame's color and depth. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.</summary>
+    /// <summary>Acquires the service's render target as the backbuffer (a built-in resource named "backbuffer"), clears the per-pass command slot table, and clears the frame's color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target's code when acquiring failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BeginFrame()
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->begin_frame(Handle, &err), err, "begin_frame");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->begin_frame(Handle), "begin_frame");
     }
 
-    /// <summary>Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame's color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Returns false when no frame began, or with out_error set when presenting failed.</summary>
+    /// <summary>Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame's color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Succeeds doing nothing when no frame began, and fails with the target's code when presenting failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void EndFrame()
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->end_frame(Handle, &err), err, "end_frame");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->end_frame(Handle), "end_frame");
     }
 
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
     /// <param name="key">Dedup cache key; required.</param>
-    /// <returns>The handle of the uploaded mesh.</returns>
+    /// <returns>Receives the handle of the uploaded mesh.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ke_mesh_handle UploadMesh(string key, void* vertices, nuint verticesSize, ushort* indices, uint indexCount)
     {
         var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
         fixed (byte* keyPtr = keyBytes)
         {
-            ke_error* err = null;
-            var result = Handle->upload_mesh(Handle, (sbyte*)keyPtr, vertices, verticesSize, indices, indexCount, &err);
-            if (err != null) throw NativeErrors.FromNative(err, "upload_mesh");
-            return result;
+            ke_mesh_handle resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_mesh(Handle, (sbyte*)keyPtr, vertices, verticesSize, indices, indexCount, &resultOut), "upload_mesh");
+            return resultOut;
         }
     }
 
@@ -159,21 +154,22 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <param name="key">Dedup cache key; required.</param>
+    /// <returns>Receives the handle of the uploaded texture.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ke_texture_handle UploadTexture(string key, uint width, uint height, void* rgba)
     {
         var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
         fixed (byte* keyPtr = keyBytes)
         {
-            ke_error* err = null;
-            var result = Handle->upload_texture(Handle, (sbyte*)keyPtr, width, height, rgba, &err);
-            if (err != null) throw NativeErrors.FromNative(err, "upload_texture");
-            return result;
+            ke_texture_handle resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_texture(Handle, (sbyte*)keyPtr, width, height, rgba, &resultOut), "upload_texture");
+            return resultOut;
         }
     }
 
     /// <param name="key">Dedup cache key; required.</param>
     /// <param name="shader">Authored material name; NULL/empty selects the engine default.</param>
+    /// <returns>Receives the handle of the material.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ke_material_handle CreateMaterial(string key, float* baseColor, float metallic, float roughness, ke_texture_handle albedo, ke_texture_handle normal, ke_alpha_mode alphaMode, float alphaCutoff, float ior, float distortionStrength, string shader)
     {
@@ -183,10 +179,9 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
         var shaderBytes = System.Text.Encoding.UTF8.GetBytes(shader + '\0');
         fixed (byte* shaderPtr = shaderBytes)
         {
-                ke_error* err = null;
-                var result = Handle->create_material(Handle, (sbyte*)keyPtr, baseColor, metallic, roughness, albedo, normal, alphaMode, alphaCutoff, ior, distortionStrength, (sbyte*)shaderPtr, &err);
-                if (err != null) throw NativeErrors.FromNative(err, "create_material");
-                return result;
+                ke_material_handle resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_material(Handle, (sbyte*)keyPtr, baseColor, metallic, roughness, albedo, normal, alphaMode, alphaCutoff, ior, distortionStrength, (sbyte*)shaderPtr, &resultOut), "create_material");
+                return resultOut;
             }
         }
     }
@@ -210,16 +205,16 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <param name="key">Dedup cache key; required.</param>
+    /// <returns>Receives the handle of the uploaded cubemap.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ke_texture_handle UploadCubemap(string key, uint faceSize, void* faces)
     {
         var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
         fixed (byte* keyPtr = keyBytes)
         {
-            ke_error* err = null;
-            var result = Handle->upload_cubemap(Handle, (sbyte*)keyPtr, faceSize, faces, &err);
-            if (err != null) throw NativeErrors.FromNative(err, "upload_cubemap");
-            return result;
+            ke_texture_handle resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_cubemap(Handle, (sbyte*)keyPtr, faceSize, faces, &resultOut), "upload_cubemap");
+            return resultOut;
         }
     }
 
@@ -368,13 +363,13 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>Resolves a shader by logical NAME + STAGE to a device-ready module.</summary>
+    /// <returns>Receives the module.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong LoadShader(sbyte* name, uint stage)
     {
-        ke_error* err = null;
-        var result = Handle->load_shader(Handle, name, stage, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "load_shader");
-        return result;
+        ulong resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->load_shader(Handle, name, stage, &resultOut), "load_shader");
+        return resultOut;
     }
 
     /// <summary>Replaces the frame globals and records their upload; a shader reads them as `ke_frame`.</summary>
@@ -426,14 +421,13 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.</summary>
-    /// <returns>The link, or KE_RENDER_CHAIN_NONE with KE_ERROR_INVALID_ARGUMENT for a stage or mode out of range.</returns>
+    /// <returns>Receives the link; KE_RENDER_CHAIN_NONE on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint JoinChain(RenderStage stage, RenderChainMode mode)
     {
-        ke_error* err = null;
-        var result = Handle->join_chain(Handle, (ke_render_stage)stage, (ke_render_chain_mode)mode, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "join_chain");
-        return result;
+        uint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->join_chain(Handle, (ke_render_stage)stage, (ke_render_chain_mode)mode, &resultOut), "join_chain");
+        return resultOut;
     }
 
     /// <summary>Gives the place back. An unknown link is ignored.</summary>

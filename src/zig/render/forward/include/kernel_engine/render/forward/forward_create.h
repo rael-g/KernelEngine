@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_FORWARD_FORWARD_CREATE_H_
 #define KERNEL_ENGINE_RENDER_FORWARD_FORWARD_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
@@ -54,9 +54,10 @@ extern "C"
     } ke_render_forward_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service or device fails
-    /// as an invalid argument; the handle's ref is NULL on failure.
-    KE_RENDER_FORWARD_API ke_render_forward_handle ke_render_forward_create(
-        const ke_render_forward_params *params, ke_error **out_error);
+    /// as an invalid argument.
+    /// @param out_forward [out] Receives the handle; left zeroed on failure.
+    KE_RENDER_FORWARD_API ke_result ke_render_forward_create(
+        const ke_render_forward_params *params, ke_render_forward_handle *out_forward);
 
 #ifdef __cplusplus
 }

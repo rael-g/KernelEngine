@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_GBUFFER_GBUFFER_CREATE_H_
 #define KERNEL_ENGINE_RENDER_GBUFFER_GBUFFER_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -48,9 +48,10 @@ extern "C"
     } ke_render_gbuffer_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service, device or output
-    /// fails as an invalid argument; the handle's ref is NULL on failure.
-    KE_RENDER_GBUFFER_API ke_render_gbuffer_handle ke_render_gbuffer_create(
-        const ke_render_gbuffer_params *params, ke_error **out_error);
+    /// fails as an invalid argument.
+    /// @param out_gbuffer [out] Receives the handle; left zeroed on failure.
+    KE_RENDER_GBUFFER_API ke_result ke_render_gbuffer_create(
+        const ke_render_gbuffer_params *params, ke_render_gbuffer_handle *out_gbuffer);
 
 #ifdef __cplusplus
 }

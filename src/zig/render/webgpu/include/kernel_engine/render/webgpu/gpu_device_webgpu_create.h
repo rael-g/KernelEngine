@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
 struct ke_scheduler;
@@ -25,15 +25,6 @@ extern "C"
 {
 #endif
 
-/// A shader module failed to compile or validate on this device. Inherits
-/// KE_ERROR_GPU_SHADER_COMPILATION; the message carries the validation text.
-KE_GPU_WEBGPU_API extern const ke_error_type KE_ERROR_WGPU_SHADER_COMPILATION;
-
-/// A buffer or bind-group creation call was rejected by this device's validation
-/// (e.g. a buffer or binding range exceeding this device's limits). Inherits
-/// KE_ERROR_GPU_RESOURCE_CREATION; the message carries the validation text.
-KE_GPU_WEBGPU_API extern const ke_error_type KE_ERROR_WGPU_RESOURCE_CREATION;
-
 /// @brief Parameters for the WebGPU GPU device.
 typedef struct ke_gpu_device_webgpu_params
 {
@@ -51,12 +42,13 @@ typedef struct ke_gpu_device_webgpu_params
 
 /**
  * @brief Creates a ke_gpu_device backed by WebGPU.
- * @return Handle whose @c ref is NULL on failure; call @c handle.destroy(handle.ref)
- *         to release when done.
+ * @return KE_OK, or a failure code; call @c handle.destroy(handle.ref) to release the handle
+ *         when done.
+ * @param out_device [out] Receives the handle; left zeroed on failure.
  */
-KE_GPU_WEBGPU_API ke_gpu_device_handle
+KE_GPU_WEBGPU_API ke_result
 ke_gpu_device_webgpu_create(const ke_gpu_device_webgpu_params *params,
-                             ke_error **out_error);
+                             ke_gpu_device_handle *out_device);
 
 #ifdef __cplusplus
 }

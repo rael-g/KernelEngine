@@ -4,6 +4,7 @@
 const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
+const R = rc.R;
 const frame_lifecycle = @import("frame_lifecycle.zig");
 
 /// The largest anisotropy WebGPU accepts, which the anisotropic sampler asks for.
@@ -34,15 +35,13 @@ pub const Globals = struct {
     lighting_buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
     samplers: [samplers.len]c.ke_gpu_sampler = [_]c.ke_gpu_sampler{c.KE_GPU_INVALID_HANDLE} ** samplers.len,
 
-    /// Creates the buffers and the samplers. On failure it returns false with the device's error,
-    /// and what it created stays for `release`.
-    pub fn create(self: *Globals, dev: *c.ke_gpu_device, out_error: [*c][*c]c.ke_error) bool {
-        self.frame_buffer = uniformBuffer(dev, "service.ke_frame", @sizeOf(c.ke_render_frame_globals), out_error);
-        if (self.frame_buffer == c.KE_GPU_INVALID_HANDLE) return false;
-        self.lighting_buffer = uniformBuffer(dev, "service.ke_lighting", @sizeOf(c.ke_render_lighting), out_error);
-        if (self.lighting_buffer == c.KE_GPU_INVALID_HANDLE) return false;
+    /// Creates the buffers and the samplers. On failure it fails with the device's code, and what
+    /// it created stays for `release`.
+    pub fn create(self: *Globals, dev: *c.ke_gpu_device) R.Error!void {
+        try uniformBuffer(dev, "service.ke_frame", @sizeOf(c.ke_render_frame_globals), &self.frame_buffer);
+        try uniformBuffer(dev, "service.ke_lighting", @sizeOf(c.ke_render_lighting), &self.lighting_buffer);
         for (samplers, &self.samplers) |s, *out| {
-            out.* = dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
+            try R.check(dev.create_sampler.?(dev, &c.ke_gpu_sampler_params{
                 .label = s.name.ptr,
                 .min_filter = s.min_mag,
                 .mag_filter = s.min_mag,
@@ -54,10 +53,8 @@ pub const Globals = struct {
                 .lod_max_clamp = 1.0,
                 .compare = c.KE_GPU_COMPARE_UNDEFINED,
                 .max_anisotropy = s.anisotropy,
-            }, out_error);
-            if (out.* == c.KE_GPU_INVALID_HANDLE) return false;
+            }, out));
         }
-        return true;
     }
 
     /// Destroys every buffer and sampler that was created.
@@ -69,19 +66,18 @@ pub const Globals = struct {
         if (self.frame_buffer != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, self.frame_buffer);
     }
 
-    /// Gives `binder` every shared parameter by its name. On failure it returns false with the
-    /// binder's error.
-    pub fn provideTo(self: *const Globals, binder: *c.ke_render_resource_binder, out_error: [*c][*c]c.ke_error) bool {
+    /// Gives `binder` every shared parameter by its name. On failure it fails with the binder's
+    /// code.
+    pub fn provideTo(self: *const Globals, binder: *c.ke_render_resource_binder) R.Error!void {
         const names = [_][:0]const u8{ "ke_frame", "ke_lighting" };
         for (names) |name| {
             const b = self.binding(name).?;
-            if (!binder.provide.?(binder, &b, out_error)) return false;
+            try R.check(binder.provide.?(binder, &b));
         }
         for (samplers) |s| {
             const b = self.binding(s.name).?;
-            if (!binder.provide.?(binder, &b, out_error)) return false;
+            try R.check(binder.provide.?(binder, &b));
         }
-        return true;
     }
 
     /// The binding of the shared parameter named `name`, or null when the service provides none
@@ -111,14 +107,14 @@ pub const Globals = struct {
     }
 };
 
-fn uniformBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, out_error: [*c][*c]c.ke_error) c.ke_gpu_buffer {
-    return dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+fn uniformBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, out: *c.ke_gpu_buffer) R.Error!void {
+    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .label = label,
         .initial_data = null,
         .size = size,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
-    }, out_error);
+    }, out));
 }
 
 /// The service's `set_frame_globals` slot: keeps the copy and records its upload for this frame. A

@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_CAMERA_CAMERA_CREATE_H_
 #define KERNEL_ENGINE_RENDER_CAMERA_CAMERA_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/render/camera.h>
 #include <kernel_engine/view/view_space.h>
@@ -23,10 +23,10 @@ extern "C"
  * Creates the camera interface over a view space and a clip convention.
  * @param view_space [borrowed] Must outlive the camera.
  * @param clip [borrowed] The device's clip conventions; copied.
- * @param out_error [out,optional] Set when construction fails.
+ * @param out_camera [out] Receives the handle; left zeroed on failure.
  */
-KE_RENDER_CAMERA_API ke_render_camera_handle ke_render_camera_create(
-    ke_view_space *view_space, const ke_ndc_convention *clip, ke_error **out_error);
+KE_RENDER_CAMERA_API ke_result ke_render_camera_create(
+    ke_view_space *view_space, const ke_ndc_convention *clip, ke_render_camera_handle *out_camera);
 
 #ifdef __cplusplus
 }

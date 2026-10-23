@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_BINDER_GROUPED_C_H_
 #define KERNEL_ENGINE_RENDER_BINDER_GROUPED_C_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <stdio.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_commands.h>

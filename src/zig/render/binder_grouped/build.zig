@@ -1,6 +1,7 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
 const ke_logger_build = @import("ke_logger");
+const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -25,6 +26,7 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         });
         m.*.addImport("log", ke_logger_build.log(b));
+        m.*.addImport("result", ke_result_build.result(b));
         m.*.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
         m.*.addImport("shader_files", b.createModule(.{ .root_source_file = .{ .cwd_relative = shader_files_src }, .target = target, .optimize = optimize, .link_libc = true }));
         if (r.tests) m.*.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));

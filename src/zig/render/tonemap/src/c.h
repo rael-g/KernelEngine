@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_TONEMAP_C_H_
 #define KERNEL_ENGINE_RENDER_TONEMAP_C_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/runtime/system_ctx.h>
 #include <kernel_engine/render/gpu/gpu_device.h>

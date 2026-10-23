@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
@@ -43,11 +43,12 @@ typedef struct ke_render_service_params
 
 /**
  * @brief Creates a render service whose frames draw into the params' target.
- * @return Handle whose @c ref is NULL on failure; KE_ERROR_INVALID_ARGUMENT when @p params, its
+ * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when @p params, its
  *         device, target, ecs, shader_dir or binder is NULL.
+ * @param out_service [out] Receives the handle; left zeroed on failure.
  */
-KE_RENDER_CORE_API ke_render_service_handle
-ke_render_service_create(const ke_render_service_params *params, ke_error **out_error);
+KE_RENDER_CORE_API ke_result
+ke_render_service_create(const ke_render_service_params *params, ke_render_service_handle *out_service);
 
 #ifdef __cplusplus
 }

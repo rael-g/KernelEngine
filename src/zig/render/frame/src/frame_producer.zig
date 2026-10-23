@@ -22,13 +22,12 @@ pub const ambient_query = 2;
 
 /// The system body: begins the frame, then publishes the frame globals and the light. Without a
 /// camera the matrices keep their last values while time, dt and viewport still advance. A failed
-/// `begin_frame` returns false with the service's error.
+/// `begin_frame` fails the body with the service's code.
 pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) c.ke_result {
-    var err_record: [*c]c.ke_error = null;
-    const out_error: [*c][*c]c.ke_error = &err_record;
     const st: *State = @alignCast(@ptrCast(user.?));
     const core = st.core;
-    if (!core.*.begin_frame.?(core, out_error)) return bodyFailed(err_record);
+    const began = core.*.begin_frame.?(core);
+    if (began != R.ok) return began;
     st.time += dt;
 
     var bw: u32 = 0;
@@ -80,12 +79,4 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) c
     }
     core.*.set_lighting.?(core, &lighting);
     return R.ok;
-}
-
-
-/// The code a system body returns when a call it made failed and filled `record`, whose message is
-/// logged. A bridge while the calls a body makes still report through `ke_error`.
-fn bodyFailed(record: [*c]const c.ke_error) c.ke_result {
-    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
-    return R.code(error.General);
 }

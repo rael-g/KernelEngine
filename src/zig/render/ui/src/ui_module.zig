@@ -82,18 +82,23 @@ fn stateOf(self: [*c]c.ke_render_ui) *UiState {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
-/// Called through the `load_font` slot. A key already in use returns that font's handle, and the
+/// Called through the `load_font` slot. A key already in use writes that font's handle, and the
 /// glyph table given with the call is not copied again. The copies made here are released by
-/// `destroyState`.
+/// `destroyState`. A table, key or glyphs that cannot be kept fail as out of memory.
 fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_handle,
               glyphs: [*c]const c.ke_glyph_metrics, glyph_count: u32,
-              line_height: f32, ascent: f32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_ui_font_handle {
-    const ui = stateOf(self);
-    const key_slice = std.mem.span(key);
+              line_height: f32, ascent: f32, out_font: [*c]c.ke_ui_font_handle) callconv(.c) c.ke_result {
+    const out = out_font orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_UI_FONT_NONE;
+    if (self == null or key == null or (glyph_count != 0 and glyphs == null)) return R.code(error.InvalidArgument);
+    out.* = .{ .bits = loadFont(stateOf(self), std.mem.span(key), atlas, glyphs, glyph_count, line_height, ascent) catch |err| return R.code(err) };
+    return R.ok;
+}
 
+fn loadFont(ui: *UiState, key_slice: []const u8, atlas: c.ke_texture_handle, glyphs: [*c]const c.ke_glyph_metrics, glyph_count: u32, line_height: f32, ascent: f32) R.Error!u32 {
     for (ui.fonts.items, 0..) |f, i| {
         if (f.in_use and std.mem.eql(u8, f.key, key_slice))
-            return .{ .bits = handles.make(@intCast(i), c.KE_HANDLE_GENERATION_FIRST) };
+            return handles.make(@intCast(i), c.KE_HANDLE_GENERATION_FIRST);
     }
 
     var slot: ?usize = null;
@@ -101,22 +106,13 @@ fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_h
         if (!f.in_use) { slot = i; break; }
     }
     const idx = slot orelse blk: {
-        ui.fonts.append(gpa, .{}) catch {
-            c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui text: font table allocation failed", @src().file, @intCast(@src().line), null);
-            return c.KE_UI_FONT_NONE;
-        };
+        try ui.fonts.append(gpa, .{});
         break :blk ui.fonts.items.len - 1;
     };
 
-    const owned_key = gpa.dupe(u8, key_slice) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui text: font key alloc failed", @src().file, @intCast(@src().line), null);
-        return c.KE_UI_FONT_NONE;
-    };
-    const owned_glyphs = gpa.dupe(c.ke_glyph_metrics, glyphs[0..glyph_count]) catch {
-        gpa.free(owned_key);
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui text: glyph table alloc failed", @src().file, @intCast(@src().line), null);
-        return c.KE_UI_FONT_NONE;
-    };
+    const owned_key = try gpa.dupe(u8, key_slice);
+    errdefer gpa.free(owned_key);
+    const owned_glyphs = try gpa.dupe(c.ke_glyph_metrics, if (glyph_count == 0) &.{} else glyphs[0..glyph_count]);
 
     ui.fonts.items[idx] = .{
         .key = owned_key,
@@ -126,7 +122,7 @@ fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_h
         .ascent = ascent,
         .in_use = true,
     };
-    return .{ .bits = handles.make(@intCast(idx), c.KE_HANDLE_GENERATION_FIRST) };
+    return handles.make(@intCast(idx), c.KE_HANDLE_GENERATION_FIRST);
 }
 
 fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_metrics {
@@ -191,8 +187,8 @@ const shader_layout = c.ke_render_shader_layout_params{
 };
 
 /// Called by `system` for each batch, with the set of a texture built on first use and cached by
-/// the texture's index. Creation passes no error output, so an invalid set is not kept, and the
-/// next draw of that slot creates it again.
+/// the texture's index. A set that cannot be created is not kept, and the next draw of that slot
+/// creates it again.
 fn uiSetFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_render_resource_set {
     if (ui.set_cache.get(tex.bits)) |cached| return cached;
 
@@ -200,8 +196,8 @@ fn uiSetFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_render_resource_set {
     const bindings = [_]c.ke_render_shader_binding{
         .{ .name = "t_tex", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
     };
-    const set = ui.binder.create_set.?(ui.binder, ui.layout, "tex", "ui.tex_set", &bindings, bindings.len, null);
-    if (set == c.KE_RENDER_BINDING_INVALID) return set;
+    var set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID;
+    if (ui.binder.create_set.?(ui.binder, ui.layout, "tex", "ui.tex_set", &bindings, bindings.len, &set) != R.ok) return c.KE_RENDER_BINDING_INVALID;
     ui.set_cache.put(gpa, tex.bits, set) catch {
         ui.binder.destroy_set.?(ui.binder, set);
         return c.KE_RENDER_BINDING_INVALID;
@@ -237,28 +233,27 @@ fn emitQuad(ui: *UiState, tex_in: c.ke_texture_handle,
 }
 
 /// Makes the vertex buffer hold `bytes`, replacing it with one of the next power of two size when
-/// it is smaller.
-fn ensureVertexBuffer(ui: *UiState, bytes: usize, out_error: [*c][*c]c.ke_error) bool {
-    if (bytes <= ui.vbo_bytes) return true;
+/// it is smaller. Fails with the device's code, keeping the buffer it had.
+fn ensureVertexBuffer(ui: *UiState, bytes: usize) R.Error!void {
+    if (bytes <= ui.vbo_bytes) return;
     const size = std.math.ceilPowerOfTwoAssert(usize, bytes);
     const dev = ui.device;
-    const vbo = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+    var vbo: c.ke_gpu_buffer = undefined;
+    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .label = "ui.vbo",
         .initial_data = null,
         .size = size,
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
-    }, out_error);
-    if (vbo == c.KE_GPU_INVALID_HANDLE) return false;
+    }, &vbo));
     if (ui.vbo != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, ui.vbo);
     ui.vbo = vbo;
     ui.vbo_bytes = size;
-    return true;
 }
 
 /// Registered by `ke_render_ui_create` for the update phase, with write access to the label
 /// component only. Shapes every label against the current backbuffer size, so a resize is picked
-/// up on the next frame. It returns true on every path, including when the view is empty.
+/// up on the next frame. It succeeds on every path, including when the view is empty.
 fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const ui = moduleOf(user);
 
@@ -285,10 +280,9 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
 /// no area are skipped and glyphs are drawn in the premultiplied label color. With nothing emitted
 /// the pass ends without drawing; otherwise the projection (flipped on Y when the ndc convention
 /// asks) and the vertices are uploaded and each batch is drawn with its texture's set. It
-/// returns true on every path, including when the render service yields no pass to draw into.
+/// succeeds when the render service yields no pass to draw into, and fails as out of memory when
+/// the vertex list cannot grow and with the device's code when the vertex buffer cannot.
 fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
-    var err_record: [*c]c.ke_error = null;
-    const out_error: [*c][*c]c.ke_error = &err_record;
     const ui = moduleOf(user);
     const core = ui.core;
 
@@ -343,19 +337,19 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
     }
 
     if (!emitted) {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui pass: vertex list allocation failed", @src().file, @intCast(@src().line), null);
+        log.warn("ui pass: vertex list allocation failed", .{});
         core.*.end_pass.?(core, pc);
-        return bodyFailed(err_record);
+        return R.code(error.OutOfMemory);
     }
     if (ui.vertices.items.len == 0) {
         core.*.end_pass.?(core, pc);
         return R.ok;
     }
     const bytes = std.mem.sliceAsBytes(ui.vertices.items);
-    if (!ensureVertexBuffer(ui, bytes.len, out_error)) {
+    ensureVertexBuffer(ui, bytes.len) catch |err| {
         core.*.end_pass.?(core, pc);
-        return bodyFailed(err_record);
-    }
+        return R.code(err);
+    };
 
     var bw: u32 = 0;
     var bh: u32 = 0;
@@ -389,7 +383,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 /// makes.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_error) bool {
+fn setup(ui: *UiState, p: *const c.ke_render_ui_params) R.Error!void {
     const core: *c.ke_render_service = p.service;
     const dev: *c.ke_gpu_device = p.device;
     ui.core = core;
@@ -397,22 +391,17 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
     ui.ndc = p.ndc;
 
     ui.io.name = "render.ui";
-    ui.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
-    if (ui.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
-    if (p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR)) != c.KE_OK) {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "the runtime could not store the frame color as self-ordered", @src().file, @intCast(@src().line), null);
-        return false;
-    }
+    try R.check(core.*.join_chain.?(core, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER, &ui.io.chain));
+    try R.check(p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR)));
     const format = core.*.chain_format.?(core, c.KE_RENDER_STAGE_OVERLAY);
 
-    const vs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
-    if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-    const fs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
-    if (fs == c.KE_GPU_INVALID_HANDLE) return false;
+    var vs: c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
+    var fs: c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
     ui.binder = core.*.resource_binder.?(core);
-    ui.layout = ui.binder.create_shader_layout.?(ui.binder, &shader_layout, out_error);
-    if (ui.layout == c.KE_RENDER_BINDING_INVALID) return false;
+    try R.check(ui.binder.create_shader_layout.?(ui.binder, &shader_layout, &ui.layout));
 
     const attrs = [_]c.ke_gpu_vertex_attribute{
         .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = @offsetOf(UiVertex, "position") },
@@ -437,7 +426,7 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
     pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
     pp.vertex_buffers = &vbl;
-    if (!ui.binder.pipeline_layouts.?(ui.binder, ui.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) return false;
+    try R.check(ui.binder.pipeline_layouts.?(ui.binder, ui.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count));
     pp.blend_state.blend_enabled = true;
     pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_ONE;
     pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -454,32 +443,29 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
 
     ui.pipeline_params = pp;
     if (core.*.get_or_create_pipeline.?(core, &ui.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "ui pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
+        log.warn("ui pass: render pipeline creation failed", .{});
+        return error.NotInitialized;
     }
 
-    ui.frame_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
         .label = "ui.frame_uniform",
         .initial_data = null,
         .size = 64,
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
-    }, out_error);
-    if (ui.frame_uniform == c.KE_GPU_INVALID_HANDLE) return false;
+    }, &ui.frame_uniform));
 
     const frame_binding = [_]c.ke_render_shader_binding{
         .{ .name = "frame", .buffer = ui.frame_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
     };
-    ui.frame_set = ui.binder.create_set.?(ui.binder, ui.layout, null, "ui.frame_set", &frame_binding, frame_binding.len, out_error);
-    if (ui.frame_set == c.KE_RENDER_BINDING_INVALID) return false;
+    try R.check(ui.binder.create_set.?(ui.binder, ui.layout, null, "ui.frame_set", &frame_binding, frame_binding.len, &ui.frame_set));
 
-    if (!ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex), out_error)) return false;
+    try ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex));
 
     ui.access = .{
         .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE },
         .{ .cid = p.frame_cid, .access = c.KE_ACCESS_READ },
     };
-    return true;
 }
 
 /// Safe on a partly built state: each GPU object, set and layout is released only if `setup` had
@@ -518,33 +504,37 @@ fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
 /// A missing runtime, ecs, service, device or output fails as an invalid argument and a state that
 /// cannot be allocated as out of memory. On success it has registered the quad and label components
 /// with the ecs and two systems with the runtime: `labelShapeSystem` in the update phase and
-/// `system` in the render phase. A failing `setup` or a refused system registration passes the
-/// error through the out error of the call that failed, and a refused second registration takes the
-/// first back. On success the returned handle owns the state until its destroy slot runs.
-export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_ui_handle {
-    const empty = c.ke_render_ui_handle{ .ref = null, .destroy = null };
-    const p = params_in orelse return refused(out_error);
-    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
-    const e: *c.ke_ecs = p.ecs orelse return refused(out_error);
-    if (p.service == null or p.device == null) return refused(out_error);
+/// `system` in the render phase. A failing `setup`, component or system registration fails with its
+/// code and leaves the handle zeroed, and a refused second system takes the first back. On success
+/// the returned handle owns the state until its destroy slot runs.
+export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_ui: [*c]c.ke_render_ui_handle) callconv(.c) c.ke_result {
+    const out = out_ui orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params_in orelse return R.code(error.InvalidArgument);
+    const rt: *c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    const e: *c.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
+    if (p.service == null or p.device == null) return R.code(error.InvalidArgument);
 
-    const ui = gpa.create(UiState) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui pass: allocation failed", @src().file, @intCast(@src().line), null);
-        return empty;
-    };
+    const ui = gpa.create(UiState) catch |err| return R.code(err);
     ui.* = .{};
     ui.api = .{ .handle = ui, .load_font = uiLoadFont };
-    if (!setup(ui, p, out_error)) {
+    register(ui, p, rt, e) catch |err| {
         destroyState(ui);
         gpa.destroy(ui);
-        return empty;
-    }
+        return R.code(err);
+    };
+    out.* = .{ .ref = @ptrCast(&ui.api), .destroy = destroyHandle };
+    return R.ok;
+}
+
+fn register(ui: *UiState, p: *const c.ke_render_ui_params, rt: *c.ke_runtime, e: *c.ke_ecs) R.Error!void {
+    try setup(ui, p);
 
     ui.quad_cid = c.KE_COMPONENT_INVALID;
-    _ = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &c.ke_ui_quad_component_fields, .field_count = c.ke_ui_quad_component_fields.len }, &ui.quad_cid);
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &c.ke_ui_quad_component_fields, .field_count = c.ke_ui_quad_component_fields.len }, &ui.quad_cid));
 
     ui.label_cid = c.KE_COMPONENT_INVALID;
-    _ = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(c.ke_label_component), .alignment = @alignOf(c.ke_label_component), .fields = &c.ke_label_component_fields, .field_count = c.ke_label_component_fields.len }, &ui.label_cid);
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(c.ke_label_component), .alignment = @alignOf(c.ke_label_component), .fields = &c.ke_label_component_fields, .field_count = c.ke_label_component_fields.len }, &ui.label_cid));
     ui.queries_terms = .{ .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ }, .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ } };
     ui.queries = .{ .{ .terms = &ui.queries_terms[0], .term_count = 1 }, .{ .terms = &ui.queries_terms[1], .term_count = 1 } };
 
@@ -559,13 +549,8 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
     params.user_data = ui;
     params.execute = system;
     var first_system: c.ke_system_id = 0;
-    if (rt.register_system.?(rt, &params, &first_system) != c.KE_OK)
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
-    if (first_system == 0) {
-        destroyState(ui);
-        gpa.destroy(ui);
-        return empty;
-    }
+    try R.check(rt.register_system.?(rt, &params, &first_system));
+    errdefer _ = rt.unregister_system.?(rt, first_system);
 
     ui.label_shape_queries_terms = .{ .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE } };
     ui.label_shape_queries = .{ .{ .terms = &ui.label_shape_queries_terms[0], .term_count = 1 } };
@@ -579,28 +564,7 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
     shape_params.user_data = ui;
     shape_params.execute = labelShapeSystem;
     var system_id: c.ke_system_id = 0;
-    if (rt.register_system.?(rt, &shape_params, &system_id) != c.KE_OK) {
-        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
-        _ = rt.unregister_system.?(rt, first_system);
-        destroyState(ui);
-        gpa.destroy(ui);
-        return empty;
-    }
-
-    return .{ .ref = @ptrCast(&ui.api), .destroy = destroyHandle };
-}
-
-fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_ui_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ui pass: runtime, ecs, service and device are required", @src().file, @intCast(@src().line), null);
-    return .{ .ref = null, .destroy = null };
-}
-
-
-/// The code a system body returns when a call it made failed and filled `record`, whose message is
-/// logged. A bridge while the calls a body makes still report through `ke_error`.
-fn bodyFailed(record: [*c]const c.ke_error) c.ke_result {
-    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
-    return R.code(error.General);
+    try R.check(rt.register_system.?(rt, &shape_params, &system_id));
 }
 
 const testing = std.testing;
@@ -616,8 +580,8 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
     rt.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, null);
-    try testing.expect(h.ref != null);
+    var h: c.ke_render_ui_handle = undefined;
+    try R.check(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, &h));
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -633,7 +597,8 @@ test "a ui pass whose shader fails to load releases what it had created" {
     rt.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, null);
+    var h: c.ke_render_ui_handle = undefined;
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -649,7 +614,8 @@ test "a ui pass the runtime refuses to register releases what it had created" {
     rt.limit = 0;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, null);
+    var h: c.ke_render_ui_handle = undefined;
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -665,7 +631,8 @@ test "a ui pass the runtime refuses its second system takes the first one back" 
     rt.limit = 1;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    const h = ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, null);
+    var h: c.ke_render_ui_handle = undefined;
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(u32, 0), rt.live_count);
     try testing.expectEqual(@as(i64, 0), dev.live);
