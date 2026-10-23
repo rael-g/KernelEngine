@@ -55,7 +55,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         _borrowed = borrowed;
     }
 
-    /// <summary>Registers a script type under `name`, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails when it does not.</summary>
+    /// <summary>Registers a script type under `name`, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails as already existing when it does not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint RegisterType(string name, Span<uint> components, ScriptReach reach)
     {
@@ -64,10 +64,9 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         {
             fixed (uint* componentsPtr = components)
             {
-                uint result;
-                ke_error* err = null;
-                NativeErrors.ThrowIfFailed(Handle->register_type(Handle, (sbyte*)namePtr, componentsPtr, (uint)components.Length, (ke_script_reach)reach, &result, &err), err, "register_type");
-                return result;
+                uint resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->register_type(Handle, (sbyte*)namePtr, componentsPtr, (uint)components.Length, (ke_script_reach)reach, &resultOut), "register_type");
+                return resultOut;
             }
         }
     }
@@ -111,16 +110,16 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
         return Handle->type_tag_group(Handle);
     }
 
-    /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it.</summary>
+    /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails as already existing rather than replacing it.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Bind(ulong entity, uint type, object instance)
     {
         var instanceHandle = System.Runtime.InteropServices.GCHandle.Alloc(instance);
-        ke_error* err = null;
-        if (!Handle->bind(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(instanceHandle), &err))
+        KernelEngine.Result.Native.ke_result rc;
+        if ((rc = Handle->bind(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(instanceHandle))) != KernelEngine.Result.Native.ke_result.KE_OK)
         {
             instanceHandle.Free();
-            throw NativeErrors.FromNative(err, "bind");
+            throw KernelEngine.NativeResults.FromCode(rc, "bind");
         }
         _rooted[entity] = instanceHandle;
     }

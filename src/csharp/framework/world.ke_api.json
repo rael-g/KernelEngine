@@ -82,9 +82,9 @@
         },
         {
           "name": "register_component_fields",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Registers the table describing how a scene block\u0027s keys land in this component\u0027s memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the world.",
+          "doc": "Registers the table describing how a scene block\u0027s keys land in this component\u0027s memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the world. Fails as an invalid argument for a null table or a zero count, and as out of memory.",
           "return_doc": null,
           "params": [
             {
@@ -102,12 +102,6 @@
             {
               "name": "field_count",
               "type": "uint32_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }
@@ -145,10 +139,10 @@
         },
         {
           "name": "register_component_apply",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Registers the callback consulted for what a field table cannot describe. Replaces any callback registered for the same component.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null apply, or KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "cid",
@@ -170,12 +164,6 @@
               "type": "void *",
               "tags": [],
               "doc": "Forwarded to apply unchanged."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_world *"
@@ -208,10 +196,10 @@
         },
         {
           "name": "register_component_alias",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Lets a scene name the component registered as \u0060name\u0060 by \u0060alias\u0060 as well. The alias answers only while it is unambiguous: a second name registered under the same alias, or a component registered under the alias itself, makes it ambiguous, and a scene must then write the full name. Registering the same pair twice changes nothing.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "alias",
@@ -230,21 +218,15 @@
                 "utf8"
               ],
               "doc": "The name the component is registered under."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_world *"
         },
         {
           "name": "resolve_component",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Resolves the component name a scene wrote: the component registered under it, else the one its alias stands for. Fails as not found when neither exists, and as an invalid argument naming the candidates when the alias is ambiguous.",
+          "doc": "Resolves the component name a scene wrote: the component registered under it, else the one its alias stands for. Fails as not found when neither exists, and as an invalid argument when the alias is ambiguous, logging the candidates.",
           "return_doc": null,
           "params": [
             {
@@ -263,12 +245,6 @@
                 "out"
               ],
               "doc": "Receives the component\u0027s id, size and field metadata."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_world *"
@@ -304,7 +280,7 @@
   "callbacks": [
     {
       "name": "ke_component_apply_fn",
-      "returns": "_Bool",
+      "returns": "ke_result",
       "doc": "Fills a component from a scene block\u0027s keys. Entries are mutable so the callback can mark what it took: a key it accepted must have \u0060consumed\u0060 set, or the loader will report it as one nothing in the engine wanted.",
       "lanes": [
         {
@@ -332,12 +308,6 @@
           "type": "uint32_t",
           "tags": [],
           "doc": "Number of entries."
-        },
-        {
-          "name": "out_error",
-          "type": "ke_error **",
-          "tags": [],
-          "doc": "Set when the callback rejects a value; the load fails with it."
         }
       ]
     }
@@ -345,6 +315,6 @@
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
-    "ke_component_apply_fn": "_Bool (*)(void *, void *, ke_variant_table_entry *, uint32_t, ke_error **)"
+    "ke_component_apply_fn": "ke_result (*)(void *, void *, ke_variant_table_entry *, uint32_t)"
   }
 }

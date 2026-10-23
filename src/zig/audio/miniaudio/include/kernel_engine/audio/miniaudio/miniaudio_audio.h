@@ -19,9 +19,13 @@
 extern "C" {
 #endif
 
-/// @brief Creates a ke_audio backend for the audio output device.
-/// @return Handle whose @c ref is NULL on failure.
-KE_AUDIO_MINIAUDIO_API ke_audio_handle ke_audio_miniaudio_create(ke_error **out_error);
+/**
+ * @brief Creates a ke_audio backend for the audio output device.
+ * @param out_audio [out] Receives the backend; left zeroed on failure.
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_audio; KE_RESULT_OUT_OF_MEMORY;
+ *         KE_RESULT_GENERAL when the audio engine cannot start.
+ */
+KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(ke_audio_handle *out_audio);
 
 #ifdef __cplusplus
 }

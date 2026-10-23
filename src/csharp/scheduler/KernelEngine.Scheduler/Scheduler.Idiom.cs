@@ -1,6 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using KernelEngine.Result.Native;
 using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Scheduler;
@@ -27,12 +28,20 @@ public unsafe partial class Scheduler : IScheduler
     public uint NumWorkers => GetNumWorkers();
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void NativePinnedCallback(void* data, ke_error_type** outFailure)
+    private static ke_result NativePinnedCallback(void* data)
     {
         var handle = GCHandle.FromIntPtr((IntPtr)data);
         var action = (Action)handle.Target!;
-        try { action(); }
-        catch (Exception ex) { UnobservedDispatchFailure?.Invoke(ex); }
+        try
+        {
+            action();
+            return ke_result.KE_OK;
+        }
+        catch (Exception ex)
+        {
+            UnobservedDispatchFailure?.Invoke(ex);
+            return ke_result.KE_RESULT_GENERAL;
+        }
         finally { handle.Free(); }
     }
 
@@ -111,17 +120,25 @@ public unsafe partial class Scheduler : IScheduler
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void NativeWorkCallback(void* data, ke_error_type** outFailure)
+    private static ke_result NativeWorkCallback(void* data)
     {
         var handle = GCHandle.FromIntPtr((IntPtr)data);
         var job = (DispatchJob)handle.Target!;
-        try { job.Body(); }
-        catch (Exception ex) { job.Failure = ex; }
+        try
+        {
+            job.Body();
+            return ke_result.KE_OK;
+        }
+        catch (Exception ex)
+        {
+            job.Failure = ex;
+            return ke_result.KE_RESULT_GENERAL;
+        }
         finally { handle.Free(); }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void NativeCompletionCallback(ke_task* task, void* userData, ke_error_type* failure)
+    private static void NativeCompletionCallback(ke_task* task, void* userData, ke_result result)
     {
         var handle = GCHandle.FromIntPtr((IntPtr)userData);
         var (job, tcs) = ((DispatchJob, TaskCompletionSource))handle.Target!;
@@ -131,7 +148,7 @@ public unsafe partial class Scheduler : IScheduler
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void NativeGenericCompletionCallback(ke_task* task, void* userData, ke_error_type* failure)
+    private static void NativeGenericCompletionCallback(ke_task* task, void* userData, ke_result result)
     {
         GCHandle.FromIntPtr((IntPtr)userData).Free();
     }

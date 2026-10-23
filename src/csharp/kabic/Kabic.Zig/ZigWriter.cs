@@ -24,26 +24,31 @@ public sealed class ZigWriter
     readonly SortedSet<string> opaque = [];
     readonly Dictionary<string, BagForm> bags = [];
     readonly SortedSet<string> unprojected = [];
-    readonly ApiModel errorAbi;
+    readonly ApiModel resultAbi;
 
     /// <summary>
-    /// The kinds the error hierarchy names, paired with the singleton each is reached by.
-    /// One list because three functions have to agree about it: the set a caller catches,
-    /// the reading of a failure the engine reported, and the writing of one the caller's
-    /// own handler raised. Kept apart, a kind added to one of them is a kind the other two
-    /// silently flatten to <c>General</c>.
+    /// The codes the convention names, each paired with the Zig error it reads as, and the
+    /// code of the general failure. One list because two functions have to agree about it:
+    /// the reading of a code the engine returned, and the writing of one the caller's own
+    /// handler failed with. Kept apart, a code added to one of them is a code the other
+    /// silently flattens to <c>General</c>.
     /// </summary>
-    readonly IReadOnlyList<(string Kind, string Singleton)> errorKinds;
+    readonly IReadOnlyList<(string Kind, string Code)> resultKinds;
+
+    readonly string generalCode;
 
     ZigWriter(ApiModel model, ClassifiedModel classified, Convention convention,
-        IReadOnlyDictionary<string, ForeignType> foreign, ApiModel errorAbi)
+        IReadOnlyDictionary<string, ForeignType> foreign, ApiModel resultAbi)
     {
-        this.errorAbi = errorAbi;
-        var declared = errorAbi.Variables.Select(v => v.Name).ToHashSet();
-        foreach (var kind in convention.ErrorKinds.Where(k => !declared.Contains(k.Singleton)))
+        this.resultAbi = resultAbi;
+        var declared = ResultValues(resultAbi, convention).Select(v => v.Name).ToHashSet();
+        foreach (var code in convention.ResultCodes.Where(c => !declared.Contains(c.Code)))
             throw new InvalidOperationException(
-                $"the convention declares the error '{kind.NativeName}' reached by {kind.Singleton}, which the error header does not export");
-        errorKinds = convention.NamedErrors.Select(k => (k.Zig, k.Singleton)).ToList();
+                $"the convention maps the result code {code.Code}, which the result header does not declare");
+        var kinds = convention.ResultCodes.Select(c => (Kind: ZigErrorName(c.Code, convention), c.Code)).ToList();
+        generalCode = kinds.FirstOrDefault(k => k.Kind == "General").Code
+            ?? throw new InvalidOperationException("the convention maps no result code to the general failure");
+        resultKinds = kinds.Where(k => k.Kind != "General").ToList();
         this.model = model;
         this.classified = classified;
         this.convention = convention;
@@ -58,9 +63,26 @@ public sealed class ZigWriter
     /// never declares.
     /// </summary>
     public static string Render(ApiModel model, ClassifiedModel classified, Convention convention,
-        IReadOnlyDictionary<string, ForeignType>? foreign, ApiModel errorAbi) =>
-        new ZigWriter(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>(), errorAbi)
+        IReadOnlyDictionary<string, ForeignType>? foreign, ApiModel resultAbi) =>
+        new ZigWriter(model, classified, convention, foreign ?? new Dictionary<string, ForeignType>(), resultAbi)
             .Render();
+
+    /// <summary>The values of the result enum the header declares.</summary>
+    static IEnumerable<ApiEnumValue> ResultValues(ApiModel resultAbi, Convention convention) =>
+        resultAbi.Enums.Where(e => e.Name == convention.ResultType).SelectMany(e => e.Values);
+
+    /// <summary>
+    /// The Zig error a result code reads as: the code without the prefix every code of the
+    /// convention shares, in Pascal case (<c>KE_RESULT_NOT_FOUND</c> reads as <c>NotFound</c>).
+    /// </summary>
+    static string ZigErrorName(string code, Convention convention)
+    {
+        var codes = convention.ResultCodes.Select(c => c.Code).ToList();
+        var prefix = codes.Aggregate((a, b) => new string(a.Zip(b).TakeWhile(z => z.First == z.Second).Select(z => z.First).ToArray()));
+        prefix = prefix[..(prefix.LastIndexOf('_') + 1)];
+        return string.Concat(code[prefix.Length..].Split('_').Where(w => w.Length > 0)
+            .Select(w => char.ToUpperInvariant(w[0]) + w[1..].ToLowerInvariant()));
+    }
 
     string Render()
     {
@@ -76,12 +98,12 @@ public sealed class ZigWriter
 
         foreach (var e in model.Enums.Where(e => !e.External)) RenderEnum(sb, e);
 
-        sb.AppendLine(Preamble(convention, errorKinds));
+        sb.AppendLine(Preamble(convention, resultKinds, generalCode));
 
         sb.AppendLine("/// The ABI as the header declares it. Nothing above this line is a C name and");
         sb.AppendLine("/// nothing below it is meant to be called by hand.");
-        var errorDecls = new StringBuilder();
-        Declare(errorAbi, errorDecls);
+        var resultDecls = new StringBuilder();
+        DeclareResult(resultDecls);
         Declare(model, abi);
 
         var projections = new StringBuilder();
@@ -94,7 +116,7 @@ public sealed class ZigWriter
         foreach (var b in bags.Values) RenderBag(bagTypes, b);
 
         sb.AppendLine("pub const abi = struct {");
-        sb.Append(errorDecls);
+        sb.Append(resultDecls);
         foreach (var name in opaque)
         {
             sb.AppendLine("    /// No domain describes this type, so the only thing known about it here is");
@@ -181,68 +203,61 @@ public sealed class ZigWriter
     }
 
     /// <summary>
-    /// The error vocabulary every module opens with: the set, the thread-local carrying
-    /// what a Zig error set cannot, and the three crossings between the two spellings.
+    /// The result type and its codes, as the header declares them. The C enum crosses the ABI
+    /// as the 32-bit unsigned integer C gives an enum of non-negative values, and a code is a
+    /// constant of it rather than a case, since a caller has to compare a code it does not
+    /// know.
     /// </summary>
-    static string Preamble(Convention convention, IReadOnlyList<(string Kind, string Singleton)> errorKinds)
+    void DeclareResult(StringBuilder abi)
     {
-        var sb = new StringBuilder(PreambleHead(convention));
+        abi.AppendLine($"    pub const {convention.ResultType} = c_uint;");
+        foreach (var v in ResultValues(resultAbi, convention).Where(v => v.IsInt))
+            abi.AppendLine($"    pub const {v.Name}: {convention.ResultType} = {v.RawValue};");
+        abi.AppendLine();
+    }
+
+    /// <summary>
+    /// The error vocabulary every module opens with: the set a caller catches and the two
+    /// crossings between it and the codes the ABI returns.
+    /// </summary>
+    static string Preamble(Convention convention, IReadOnlyList<(string Kind, string Code)> resultKinds, string generalCode)
+    {
+        var sb = new StringBuilder();
         sb.AppendLine("pub const Error = error{");
         sb.AppendLine("    General,");
-        foreach (var (kind, _) in errorKinds) sb.AppendLine($"    {kind},");
+        foreach (var (kind, _) in resultKinds) sb.AppendLine($"    {kind},");
         sb.AppendLine("};");
         sb.AppendLine();
 
-        sb.AppendLine($"fn raise(err: ?*const abi.{convention.ErrorType}) Error {{");
-        sb.AppendLine("    last_error = err;");
-        foreach (var (kind, singleton) in errorKinds)
-            sb.AppendLine($"    if (abi.{convention.ErrorIsFunction}(err, &abi.{singleton})) return Error.{kind};");
+        sb.AppendLine(RaiseDoc);
+        sb.AppendLine($"fn raise(code: abi.{convention.ResultType}) Error {{");
+        foreach (var (kind, code) in resultKinds)
+            sb.AppendLine($"    if (code == abi.{code}) return Error.{kind};");
         sb.AppendLine("    return Error.General;");
         sb.AppendLine("}");
         sb.AppendLine();
 
-        sb.AppendLine(ErrorTypeDoc);
-        sb.AppendLine($"fn errorType(e: Error) *const abi.{convention.ErrorKindType} {{");
+        sb.AppendLine(CodeOfDoc);
+        sb.AppendLine($"fn codeOf(e: Error) abi.{convention.ResultType} {{");
         sb.AppendLine("    return switch (e) {");
-        foreach (var (kind, singleton) in errorKinds)
-            sb.AppendLine($"        Error.{kind} => &abi.{singleton},");
-        sb.AppendLine($"        else => &abi.{convention.ErrorGeneralSingleton},");
+        foreach (var (kind, code) in resultKinds)
+            sb.AppendLine($"        Error.{kind} => abi.{code},");
+        sb.AppendLine($"        else => abi.{generalCode},");
         sb.AppendLine("    };");
-        sb.AppendLine("}");
-        sb.AppendLine();
-
-        sb.AppendLine(ErrorFromDoc);
-        sb.AppendLine($"fn errorFrom(t: ?*const abi.{convention.ErrorKindType}) ?Error {{");
-        sb.AppendLine("    const named = t orelse return null;");
-        foreach (var (kind, singleton) in errorKinds)
-            sb.AppendLine($"    if (named == &abi.{singleton}) return Error.{kind};");
-        sb.AppendLine("    return Error.General;");
         sb.AppendLine("}");
         sb.AppendLine();
         return sb.ToString().ReplaceLineEndings("\n");
     }
 
-    const string ErrorTypeDoc = """
-        /// The singleton a Zig error is reported to the engine as. A handler the engine
-        /// calls has to name its failure in the vocabulary the ABI reads, and a type is
-        /// the only half of a failure that outlives the thread that raised it.
+    const string RaiseDoc = """
+        /// The Zig error a code the engine returned names. A code this module does not
+        /// name -- a domain's own among them -- reads as General, as the ABI asks of a
+        /// caller that does not know it.
         """;
 
-    const string ErrorFromDoc = """
-        /// The Zig error a reported type names. Compared by address, because the types are
-        /// immortal singletons and there is nothing else to compare; a kind this module
-        /// does not name -- including a subtype of one it does -- reads as General, since
-        /// narrowing it would mean walking a parent chain the caller cannot act on.
-        """;
-
-    static string PreambleHead(Convention convention) => $$"""
-        /// The failure a fallible call reported. A Zig error set carries a kind and
-        /// nothing else, so the message, the source location and the cause chain the
-        /// native side filled in have to be readable somewhere; thread-local for the
-        /// same reason the native slot is, which is that two threads failing at once
-        /// are two failures.
-        pub threadlocal var last_error: ?*const abi.{{convention.ErrorType}} = null;
-
+    const string CodeOfDoc = """
+        /// The code a Zig error is reported to the engine as. A handler the engine calls
+        /// has to name its failure in the vocabulary the ABI reads.
         """;
 
     /// <summary>
@@ -293,8 +308,7 @@ public sealed class ZigWriter
         var cv = isConst ? "const " : "";
         if (depth == 2) return $"?*?*{cv}{inner}";
         if (p is not null && p.Has("array_of")) return $"[*]{cv}{inner}";
-        return p is not null && (p.Has("optional") || IsOutcome(p, convention))
-            ? $"?*{cv}{inner}" : $"*{cv}{inner}";
+        return p is not null && p.Has("optional") ? $"?*{cv}{inner}" : $"*{cv}{inner}";
     }
 
     /// <summary>
@@ -309,8 +323,7 @@ public sealed class ZigWriter
     string Pointee(string bare, string q)
     {
         var named = Named(bare, q);
-        if (named == q + bare && !errorAbi.Structs.Any(s => s.Name == bare)
-            && !DeclaredHere(bare) && !model.Structs.Any(s => s.Name == bare))
+        if (named == q + bare && !DeclaredHere(bare) && !model.Structs.Any(s => s.Name == bare))
             opaque.Add(bare);
         return named;
     }
@@ -527,18 +540,16 @@ public sealed class ZigWriter
             SlotShape.ReturnsOutParam => [cs.OutParam!],
             _ => cs.TrailingOuts,
         }).Where(p => !IsWritableSpan(p)).ToList();
-        var errParam = cs.Fallible ? slot.Params[^1] : null;
         var counts = cs.Sequences.Select(s => s.Count).ToHashSet();
 
         var sig = bag is null
             ? cs.PublicParams.Where(p => !p.Has("out") || IsWritableSpan(p)).ToList()
-            : slot.Params.Where(p => !convention.IsErrorOutParam(p)).ToList();
+            : slot.Params.Where(p => !p.Has("out") || IsWritableSpan(p)).ToList();
         var body = new List<string>();
         var args = new List<string> { "self.ref" };
 
         foreach (var p in slot.Params)
         {
-            if (p == errParam) { args.Add("&err"); continue; }
             if (closureOf.TryGetValue(p, out var fnOf)) { args.Add($"{TrampolineName(fnOf)}.call"); continue; }
             if (stateOf.Contains(p)) { args.Add($"@ptrCast({Arg(p)})"); continue; }
             if (consumerOf.TryGetValue(p, out var cons)) { args.Add(ConsumerValue(cons)); continue; }
@@ -563,7 +574,6 @@ public sealed class ZigWriter
             body.Add($"var {Local(p)}: "
                 + $"{PubType(CTypes.Deref(p.Type), null)} = undefined;");
         if (cs.ReturnCount is not null) body.Add("var count: u32 = 0;");
-        if (cs.Fallible) body.Add($"var err: ?*abi.{convention.ErrorType} = null;");
 
         var call = $"self.ref.{Idioms.Ident(slot.Name)}({string.Join(", ", args)})";
 
@@ -606,15 +616,15 @@ public sealed class ZigWriter
             body.Add($"if (!{call}) return null;");
             body.Add(Compose());
         }
-        else if (cs.Fallible && convention.SignalsFailureByReturn(slot.Returns))
+        else if (cs.Fallible)
         {
-            body.Add($"if (!{call}) return raise(err);");
+            body.Add($"const rc = {call};");
+            body.Add($"if (rc != abi.{convention.ResultOk}) return raise(rc);");
             body.Add(Compose());
         }
         else if (carriesReturn)
         {
             body.Add($"const result = {call};");
-            if (cs.Fallible) body.Add("if (err != null) return raise(err);");
             body.Add(Compose());
         }
         else
@@ -646,35 +656,21 @@ public sealed class ZigWriter
 
     /// <summary>
     /// A handler the caller supplies, the state it reaches its own data through, and the
-    /// lanes of the typedef that says how the engine will call it.
+    /// lanes of the typedef that says how the engine will call it. <c>Reports</c> says the
+    /// handler answers with a result code, which a Zig handler says by failing.
     /// </summary>
     record ClosureForm(ApiParam Fn, ApiParam State, ApiCallback Callback,
-        ApiParam ContextLane, ApiParam? ErrorLane, ReportKind Report,
-        IReadOnlyList<ApiParam> OutcomeLanes);
-
-    /// <summary>
-    /// How a handler reports a failure to the engine: not at all, as the fact of one through an
-    /// error slot, or as the kind of one through an error-kind slot.
-    /// </summary>
-    enum ReportKind { None, Fact, Kind }
+        ApiParam ContextLane, bool Reports);
 
     static string Norm(string t) => t.Replace(" ", "");
 
-    static ReportKind ReportOf(ApiParam lane, Convention convention)
-    {
-        var type = Norm(lane.Type);
-        if (type == convention.ErrorType + "**") return ReportKind.Fact;
-        if (type == "const" + convention.ErrorKindType + "**") return ReportKind.Kind;
-        return ReportKind.None;
-    }
-
     /// <summary>
-    /// Whether the lane tells the handler that something already failed. That is the
-    /// opposite direction from a report channel, and it reads as an optional error rather
-    /// than one, because the engine calls the handler on success too.
+    /// Whether the lane tells the handler how something already ended. That is the opposite
+    /// direction from a report, and it reads as an optional error rather than one, because
+    /// the engine calls the handler on success too.
     /// </summary>
     static bool IsOutcome(ApiParam lane, Convention convention) =>
-        Norm(lane.Type) == "const" + convention.ErrorType + "*" || Norm(lane.Type) == "const" + convention.ErrorKindType + "*";
+        Norm(lane.Type) == Norm(convention.ResultType);
 
     /// <summary>
     /// The closure a <c>[closure:&lt;state&gt;]</c> parameter declares. Which lane carries
@@ -701,27 +697,23 @@ public sealed class ZigWriter
             throw new NotSupportedException(
                 $"{where}: {callback.Name} hands the handler {lane.Type.Trim()}, and no domain"
                 + " describes that as a vtable this one can reach a projection of");
-        var report = callback.Lanes.FirstOrDefault(l => ReportOf(l, convention) is not ReportKind.None);
-        return new ClosureForm(fn, state, callback, context, report,
-            report is null ? ReportKind.None : ReportOf(report, convention),
-            callback.Lanes.Where(l => IsOutcome(l, convention)).ToList());
+        return new ClosureForm(fn, state, callback, context, convention.ReturnsResult(callback.Returns));
     }
 
     /// <summary>
     /// The function the caller writes. The context lane is gone -- the state arrives
-    /// typed, so there is nothing to cast back -- a lane the typedef declares as a report
-    /// channel becomes Zig's own error union, and a lane naming a failure that already
-    /// happened becomes an optional error. Nothing in the signature spells
-    /// <c>ke_error</c>, which is the point: both spellings are the ABI's way of saying
-    /// something Zig already has a way of saying.
+    /// typed, so there is nothing to cast back -- a result code the typedef returns
+    /// becomes Zig's own error union, and a code handed in to say how something ended
+    /// becomes an optional error. Nothing in the signature spells the code, which is the
+    /// point: both are the ABI's way of saying something Zig already has a way of saying.
     /// </summary>
     string HandlerType(ClosureForm c, string stateArg)
     {
         var lanes = c.Callback.Lanes
-            .Where(l => l != c.ContextLane && l != c.ErrorLane)
+            .Where(l => l != c.ContextLane)
             .Select(HandlerLaneType)
             .Prepend($"@TypeOf({stateArg})");
-        var ret = c.Report is not ReportKind.None ? "Error!void"
+        var ret = c.Reports ? "Error!void"
             : c.Callback.Returns.Trim() is "void" ? "void"
             : PubType(c.Callback.Returns, null);
         return $"fn ({string.Join(", ", lanes)}) {ret}";
@@ -735,13 +727,13 @@ public sealed class ZigWriter
     static string TrampolineName(ClosureForm c) => Idioms.Pascal(c.Fn.Name!) + "Trampoline";
 
     /// <summary>
-    /// A value crossing into the caller's own code. The two spellings a failure arrives
-    /// in become Zig's own, and a C string becomes a slice, so the same lane reads the
+    /// A value crossing into the caller's own code. A result code becomes an optional Zig
+    /// error, and a C string becomes a slice, so the same lane reads the
     /// same way whether the caller supplied one function or a whole vtable.
     /// </summary>
     string HandedExpr(ApiParam lane, string name) =>
         LentType(lane) is { } lent ? $"{lent}.borrow({name})"
-        : IsOutcome(lane, convention) ? OutcomeExpr(lane, name, convention)
+        : IsOutcome(lane, convention) ? $"if ({name} == abi.{convention.ResultOk}) null else raise({name})"
         : lane.Has("utf8") ? Within("std", $"std.mem.span({name})")
         : name;
 
@@ -771,8 +763,7 @@ public sealed class ZigWriter
             throw new NotSupportedException(
                 $"{where}: {vtable.Name} declares {state.Count} untyped fields, and an implementer"
                 + " reaches its own state through exactly one of them");
-        if (vtable.Slots.Any(s => convention.IsFallible(s.Returns, s.Params)
-                || s.Params.Any(l => ReportOf(l, convention) is not ReportKind.None)))
+        if (vtable.Slots.Any(s => convention.ReturnsResult(s.Returns)))
             throw new NotSupportedException(
                 $"{where}: a slot of {vtable.Name} reports failure, which this writer does not"
                 + " project yet");
@@ -926,17 +917,6 @@ public sealed class ZigWriter
     }
 
     /// <summary>
-    /// The optional error an outcome lane reads as. A <c>ke_error</c> goes through the
-    /// same reading a fallible call uses, so the message and the cause chain stay
-    /// reachable; a <c>ke_error_type</c> has no such storage to record, which is the whole
-    /// reason the ABI chose it for a failure that outlives its thread.
-    /// </summary>
-    static string OutcomeExpr(ApiParam lane, string name, Convention convention) =>
-        Norm(lane.Type) == "const" + convention.ErrorType + "*"
-            ? $"if ({name}) |failed| raise(failed) else null"
-            : $"errorFrom({name})";
-
-    /// <summary>
     /// The C entry point the engine is handed. Zig closes over nothing at runtime, so
     /// the state travels the same <c>void*</c> lane C uses and comes back a typed
     /// pointer -- which is why nothing here has to be retained: the memory is the
@@ -947,11 +927,10 @@ public sealed class ZigWriter
     /// </summary>
     IEnumerable<string> TrampolineLines(ClosureForm c, string handler, IReadOnlySet<string> taken)
     {
-        string Lane(ApiParam l) => l == c.ErrorLane && c.Report is ReportKind.Fact ? "_"
-            : Idioms.Ident(taken.Contains(l.Name!) ? l.Name! + "_lane" : l.Name!);
+        string Lane(ApiParam l) => Idioms.Ident(taken.Contains(l.Name!) ? l.Name! + "_lane" : l.Name!);
         var ps = c.Callback.Lanes.Select(l => $"{Lane(l)}: {PubType(l.Type, l)}");
         var ctx = $"@ptrCast(@alignCast({Lane(c.ContextLane)}.?))";
-        var handed = c.Callback.Lanes.Where(l => l != c.ContextLane && l != c.ErrorLane)
+        var handed = c.Callback.Lanes.Where(l => l != c.ContextLane)
             .Select(l => HandedExpr(l, Lane(l)));
         var named = Optional(c) ? handler + ".?" : handler;
         var call = $"{named}({string.Join(", ", new[] { ctx }.Concat(handed))})";
@@ -959,18 +938,10 @@ public sealed class ZigWriter
 
         yield return $"const {TrampolineName(c)} = struct {{";
         yield return $"    fn call({string.Join(", ", ps)}) callconv(.c) {ret} {{";
-        if (c.Report is ReportKind.Kind)
+        if (c.Reports)
         {
-            yield return $"        {call} catch |e| {{";
-            yield return $"            if ({Lane(c.ErrorLane!)}) |slot| slot.* = errorType(e);";
-            if (ret is not "void") yield return "            return false;";
-            yield return "        };";
-            if (ret is not "void") yield return "        return true;";
-        }
-        else if (c.Report is ReportKind.Fact)
-        {
-            yield return $"        {call} catch return false;";
-            yield return "        return true;";
+            yield return $"        {call} catch |e| return codeOf(e);";
+            yield return $"        return abi.{convention.ResultOk};";
         }
         else if (c.Callback.Returns.Trim() is "void") yield return $"        {call};";
         else yield return $"        return {call};";

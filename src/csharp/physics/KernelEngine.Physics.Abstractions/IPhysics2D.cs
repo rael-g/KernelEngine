@@ -41,6 +41,7 @@ public interface IPhysics2D : IDisposable
     void Step(float deltaTime);
 
     /// <summary>Creates a body at <paramref name="position"/>.</summary>
+    /// <exception cref="OutOfMemoryException">The world cannot hold another body.</exception>
     BodyHandle2D CreateBody(BodyType2D type, Vector2 position);
 
     /// <summary>Destroys the body and all its fixtures. Safe on <see cref="BodyHandle2D.None"/>.</summary>

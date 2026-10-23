@@ -1,4 +1,5 @@
 using KernelEngine.Common.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Native;
 
@@ -6,17 +7,17 @@ public unsafe partial struct ke_render_service
 {
     public void* handle;
 
-    [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const ke_render_resource_params *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_resource_params*, KernelEngine.Common.Native.ke_error**, uint> declare;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const ke_render_resource_params *, ke_component_id *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_resource_params*, uint*, KernelEngine.Result.Native.ke_result> declare;
 
-    [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *, ke_gpu_texture, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong, KernelEngine.Common.Native.ke_error**, uint> import_texture;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, ke_gpu_texture, ke_component_id *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong, uint*, KernelEngine.Result.Native.ke_result> import_texture;
 
-    [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, KernelEngine.Common.Native.ke_error**, uint> import_tag;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, ke_component_id *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint*, KernelEngine.Result.Native.ke_result> import_tag;
 
-    [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *, ke_gpu_buffer, uint64_t, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong, ulong, KernelEngine.Common.Native.ke_error**, uint> import_buffer;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, ke_gpu_buffer, uint64_t, ke_component_id *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong, ulong, uint*, KernelEngine.Result.Native.ke_result> import_buffer;
 
     [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint> cid;
@@ -27,14 +28,14 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("void (*)(struct ke_render_service *, struct ke_render_pass_ctx *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_pass_ctx*, void> end_pass;
 
-    [NativeTypeName("bool (*)(struct ke_render_service *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Common.Native.ke_error**, bool> begin_frame;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Result.Native.ke_result> begin_frame;
 
-    [NativeTypeName("bool (*)(struct ke_render_service *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Common.Native.ke_error**, bool> end_frame;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Result.Native.ke_result> end_frame;
 
-    [NativeTypeName("ke_mesh_handle (*)(struct ke_render_service *, const char *, const void *, size_t, const uint16_t *, uint32_t, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, void*, nuint, ushort*, uint, KernelEngine.Common.Native.ke_error**, ke_mesh_handle> upload_mesh;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, const void *, size_t, const uint16_t *, uint32_t, ke_mesh_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, void*, nuint, ushort*, uint, ke_mesh_handle*, KernelEngine.Result.Native.ke_result> upload_mesh;
 
     [NativeTypeName("bool (*)(struct ke_render_service *, ke_mesh_handle, ke_gpu_buffer *, ke_gpu_buffer *, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_mesh_handle, ulong*, ulong*, uint*, bool> mesh_buffers;
@@ -42,11 +43,11 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("void (*)(struct ke_render_service *, float, float, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, float, float, float, float, void> set_clear_color;
 
-    [NativeTypeName("ke_texture_handle (*)(struct ke_render_service *, const char *, uint32_t, uint32_t, const void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, uint, void*, KernelEngine.Common.Native.ke_error**, ke_texture_handle> upload_texture;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, uint32_t, uint32_t, const void *, ke_texture_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, uint, void*, ke_texture_handle*, KernelEngine.Result.Native.ke_result> upload_texture;
 
-    [NativeTypeName("ke_material_handle (*)(struct ke_render_service *, const char *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, const char *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, float*, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, sbyte*, KernelEngine.Common.Native.ke_error**, ke_material_handle> create_material;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, const char *, ke_material_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, float*, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, sbyte*, ke_material_handle*, KernelEngine.Result.Native.ke_result> create_material;
 
     [NativeTypeName("ke_render_material_binding (*)(struct ke_render_service *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_material_handle, ulong> material_binding;
@@ -57,8 +58,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("float (*)(struct ke_render_service *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_material_handle, float> material_alpha_cutoff;
 
-    [NativeTypeName("ke_texture_handle (*)(struct ke_render_service *, const char *, uint32_t, const void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, void*, KernelEngine.Common.Native.ke_error**, ke_texture_handle> upload_cubemap;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, uint32_t, const void *, ke_texture_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, void*, ke_texture_handle*, KernelEngine.Result.Native.ke_result> upload_cubemap;
 
     [NativeTypeName("ke_gpu_texture_view (*)(struct ke_render_service *, ke_texture_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_texture_handle, ulong> texture_view;
@@ -117,8 +118,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_texture_handle (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_texture_handle> white_texture;
 
-    [NativeTypeName("ke_gpu_shader_module (*)(struct ke_render_service *, const char *, ke_gpu_shader_stage, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, KernelEngine.Common.Native.ke_error**, ulong> load_shader;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, ke_gpu_shader_stage, ke_gpu_shader_module *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, ulong*, KernelEngine.Result.Native.ke_result> load_shader;
 
     [NativeTypeName("void (*)(struct ke_render_service *, const ke_render_frame_globals *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_frame_globals*, void> set_frame_globals;
@@ -144,8 +145,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("uint32_t (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, uint> resource_generation;
 
-    [NativeTypeName("ke_render_chain_link (*)(struct ke_render_service *, ke_render_stage, ke_render_chain_mode, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_stage, ke_render_chain_mode, KernelEngine.Common.Native.ke_error**, uint> join_chain;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, ke_render_stage, ke_render_chain_mode, ke_render_chain_link *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_render_stage, ke_render_chain_mode, uint*, KernelEngine.Result.Native.ke_result> join_chain;
 
     [NativeTypeName("void (*)(struct ke_render_service *, ke_render_chain_link)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, uint, void> leave_chain;

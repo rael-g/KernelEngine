@@ -1,7 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_TREE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/commands.h>
 #include <kernel_engine/framework/components.h>
@@ -20,38 +20,47 @@ extern "C"
 
         /**
          * Creates a node attached under `parent`, or under the root when `parent` is
-         * KE_ENTITY_INVALID. The node exists when the call returns.
+         * KE_ENTITY_INVALID. The node exists when the call returns. Fails as an invalid argument
+         * for a null tree or @p out_node, and as general when the ecs refuses the node.
          * @param name [utf8]
+         * @param out_node [out] Receives the node.
          */
-        ke_entity (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_error **out_error);
+        ke_result (*create_node)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_entity *out_node);
 
         /**
          * Records the creation of a node into `commands`, with the same placement as
          * create_node. The id is usable as a reference at once; the node exists when
          * `commands` is applied. For a caller that may not touch the world, such as a
-         * system body.
+         * system body. Fails as an invalid argument for a null tree, @p commands or @p out_node,
+         * and with the queue's code when it refuses the recording.
          * @param name [utf8]
          * @param commands [ctx]
+         * @param out_node [out] Receives the reserved id.
          */
-        ke_entity (*create_node_deferred)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_ecs_commands *commands, ke_error **out_error);
+        ke_result (*create_node_deferred)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_ecs_commands *commands, ke_entity *out_node);
 
         /**
          * Destroys a node and all its descendants, each child before its parent. The
-         * node is gone when the call returns.
+         * node is gone when the call returns. Fails as an invalid argument for a null tree or the
+         * invalid entity, and as not found for an entity that is not a node.
          */
-        bool (*destroy_node)(struct ke_scene_tree *self, ke_entity entity, ke_error **out_error);
+        ke_result (*destroy_node)(struct ke_scene_tree *self, ke_entity entity);
 
         /**
          * Records the destruction of a node and its descendants into `commands`, as
-         * destroy_node would do it when `commands` is applied.
+         * destroy_node would do it when `commands` is applied. Fails as destroy_node does, as an
+         * invalid argument for a null @p commands, and with the queue's code when it refuses the
+         * recording.
          * @param commands [ctx]
          */
-        bool (*destroy_node_deferred)(struct ke_scene_tree *self, ke_entity entity, ke_ecs_commands *commands, ke_error **out_error);
+        ke_result (*destroy_node_deferred)(struct ke_scene_tree *self, ke_entity entity, ke_ecs_commands *commands);
 
         void (*destroy_all)(struct ke_scene_tree *self);
 
-        /** @param name_or_path [utf8] */
-        ke_entity (*find_node)(struct ke_scene_tree *self, const char *name_or_path, ke_error **out_error);
+        /** The node a name or a slash-separated path from the root names, or KE_ENTITY_INVALID
+         * when none does.
+         * @param name_or_path [utf8] */
+        ke_entity (*find_node)(struct ke_scene_tree *self, const char *name_or_path);
 
         /** The entity `entity` hangs from, or KE_ENTITY_INVALID when it is a root. */
         ke_entity (*parent)(struct ke_scene_tree *self, ke_entity entity);

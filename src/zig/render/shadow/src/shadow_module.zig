@@ -4,15 +4,15 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_shadow").logFn };
 
-const klog = @import("klog").Destination("ke_render_shadow");
 const zm = @import("zmath");
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.render_shadow);
 
 const heap = @import("heap");
 const gpa = heap.gpa;
-
 
 /// The shape of the shadow map: the params' fields of the same names, zero taking these values.
 const Shape = struct {
@@ -111,18 +111,18 @@ inline fn moduleOf(user: ?*anyopaque) *ShadowModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-/// The render-phase body that `setup` registers as "render.shadow". It returns true on every path,
-/// including the early exits for a missing light or a pass that cannot begin, and it ignores its
-/// error parameter. It uploads an orthographic light view-projection built from the light's
+/// The render-phase body that `setup` registers as "render.shadow". It succeeds on the early exits
+/// for a missing light or a pass that cannot begin, and fails with the code of the call that
+/// failed when the per-object uniforms cannot grow. It uploads an orthographic light view-projection built from the light's
 /// direction to the light buffer of its group, then draws every mesh with a world transform into
 /// the group's map, the group's depth being its depth attachment. Each mesh
 /// gets its own slot of the object uniform and is drawn at that slot's dynamic offset, until the
 /// draw cap is reached.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const sh = moduleOf(user);
     const core = sh.core;
 
-    const light_dir = lightDirOf(ctx) orelse return true;
+    const light_dir = lightDirOf(ctx) orelse return R.ok;
 
     const lvp = lightViewProj(sh.view_space, sh.ndc, sh.params, light_dir);
     var lvp_arr: [16]f32 = undefined;
@@ -130,16 +130,17 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);
 
     const pc = core.*.begin_pass.?(core, &sh.io);
-    if (pc == null) return true;
+    if (pc == null) return R.ok;
 
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 1, &segc);
     var mesh_total: usize = 0;
     for (segs[0..segc]) |seg| mesh_total += seg.count;
     const objects = &sh.objects.?;
-    if (!objects.ensure(@intCast(mesh_total), out_error)) {
+    const grown = objects.ensure(@intCast(mesh_total));
+    if (grown != R.ok) {
         core.*.end_pass.?(core, pc);
-        return false;
+        return grown;
     }
 
     const rp = pc.*.begin_render.?(pc);
@@ -172,16 +173,15 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
-    return true;
+    return R.ok;
 }
 
 /// Called once by `ke_render_shadow_create`. It resolves the parameters, copies the group's names,
 /// creates and publishes the light uniform, declares the map and its depth, loads the shaders, builds the pipeline, bind groups and per object uniform, and
-/// fills the access list and the queries. A step that fails returns false and leaves the handles
-/// created before it stored in the module, for `destroyModule` to release. Failures that the render
-/// service and the device report go into out_error through those calls; a pipeline that cannot be
-/// created is reported as `KE_ERROR_NOT_INITIALIZED`.
-fn setup(sh: *ShadowModule, p: *const c.ke_render_shadow_params, out_error: [*c][*c]c.ke_error) bool {
+/// fills the access list and the queries. A step that fails fails with the code of the render
+/// service or the device, and leaves the handles created before it stored in the module, for
+/// `destroyModule` to release; a pipeline that cannot be created fails as not initialized.
+fn setup(sh: *ShadowModule, p: *const c.ke_render_shadow_params) R.Error!void {
     const core: *c.ke_render_service = p.service;
     const dev: *c.ke_gpu_device = p.device;
     const mesh_cid = p.mesh_cid;
@@ -199,17 +199,18 @@ fn setup(sh: *ShadowModule, p: *const c.ke_render_shadow_params, out_error: [*c]
     sh.frame_cid = frame_cid;
 
     const group = std.mem.span(p.output);
-    sh.names[0] = gpa.dupeZ(u8, group) catch return outOfMemory(out_error);
-    sh.names[1] = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_SHADOW_DEPTH }, 0) catch return outOfMemory(out_error);
-    sh.names[2] = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_SHADOW_LIGHT }, 0) catch return outOfMemory(out_error);
+    sh.names[0] = gpa.dupeZ(u8, group) catch return error.OutOfMemory;
+    sh.names[1] = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_SHADOW_DEPTH }, 0) catch return error.OutOfMemory;
+    sh.names[2] = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, c.KE_RENDER_SHADOW_LIGHT }, 0) catch return error.OutOfMemory;
     const map_name = sh.names[0].?.ptr;
     const depth_name = sh.names[1].?.ptr;
 
-    sh.lvp_uniform = dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, out_error);
-    if (sh.lvp_uniform == c.KE_GPU_INVALID_HANDLE) return false;
-    if (core.*.import_buffer.?(core, sh.names[2].?.ptr, sh.lvp_uniform, 64, out_error) == c.KE_COMPONENT_INVALID) return false;
+    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, &sh.lvp_uniform));
+    var light_cid_out: c.ke_component_id = undefined;
+    try R.check(core.*.import_buffer.?(core, sh.names[2].?.ptr, sh.lvp_uniform, 64, &light_cid_out));
 
-    const shadow_map_cid = core.*.declare.?(core, &c.ke_render_resource_params{
+    var shadow_map_cid: c.ke_component_id = undefined;
+    try R.check(core.*.declare.?(core, &c.ke_render_resource_params{
         .name = map_name,
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
@@ -219,9 +220,9 @@ fn setup(sh: *ShadowModule, p: *const c.ke_render_shadow_params, out_error: [*c]
         .scale_x = 1.0,
         .scale_y = 1.0,
         .clear_value = .{ 1.0, 1.0, 1.0, 1.0 },
-    }, out_error);
-    if (shadow_map_cid == c.KE_COMPONENT_INVALID) return false;
-    const shadow_depth_cid = core.*.declare.?(core, &c.ke_render_resource_params{
+    }, &shadow_map_cid));
+    var shadow_depth_cid: c.ke_component_id = undefined;
+    try R.check(core.*.declare.?(core, &c.ke_render_resource_params{
         .name = depth_name,
         .type = c.KE_RENDER_RESOURCE_TEXTURE,
         .format = c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
@@ -230,18 +231,16 @@ fn setup(sh: *ShadowModule, p: *const c.ke_render_shadow_params, out_error: [*c]
         .height = sh.params.resolution,
         .scale_x = 1.0,
         .scale_y = 1.0,
-    }, out_error);
-    if (shadow_depth_cid == c.KE_COMPONENT_INVALID) return false;
+    }, &shadow_depth_cid));
     sh.view = core.*.resource_view.?(core, map_name);
 
-    const sh_vs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
-    if (sh_vs == c.KE_GPU_INVALID_HANDLE) return false;
-    const sh_fs = core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
-    if (sh_fs == c.KE_GPU_INVALID_HANDLE) return false;
+    var sh_vs: c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_VERTEX, &sh_vs));
+    var sh_fs: c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "shadow", c.KE_GPU_SHADER_STAGE_FRAGMENT, &sh_fs));
 
     sh.binder = core.*.resource_binder.?(core);
-    sh.layout = sh.binder.create_shader_layout.?(sh.binder, &shader_layout, out_error);
-    if (sh.layout == c.KE_RENDER_BINDING_INVALID) return false;
+    try R.check(sh.binder.create_shader_layout.?(sh.binder, &shader_layout, &sh.layout));
 
     const sh_attr = c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
     const sh_vbl = c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = &sh_attr };
@@ -260,23 +259,22 @@ fn setup(sh: *ShadowModule, p: *const c.ke_render_shadow_params, out_error: [*c]
     shp.depth_stencil.depth_test_enabled = true;
     shp.depth_stencil.depth_write_enabled = true;
     shp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_LESS;
-    if (!sh.binder.pipeline_layouts.?(sh.binder, sh.layout, &shp.bind_group_layouts, shp.bind_group_layouts.len, &shp.bind_group_layout_count, out_error)) return false;
+    try R.check(sh.binder.pipeline_layouts.?(sh.binder, sh.layout, &shp.bind_group_layouts, shp.bind_group_layouts.len, &shp.bind_group_layout_count));
     shp.color_target_formats[0] = c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     shp.color_target_count = 1;
     sh.pipeline_params = shp;
     if (core.*.get_or_create_pipeline.?(core, &sh.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "shadow pass: render pipeline creation failed", @src().file, @intCast(@src().line), null);
-        return false;
+        log.warn("shadow pass: render pipeline creation failed", .{});
+        return error.NotInitialized;
     }
 
     const light_binding = [_]c.ke_render_shader_binding{
         .{ .name = "light", .buffer = sh.lvp_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
     };
-    sh.light_set = sh.binder.create_set.?(sh.binder, sh.layout, null, "shadow.light_set", &light_binding, light_binding.len, out_error);
-    if (sh.light_set == c.KE_RENDER_BINDING_INVALID) return false;
+    try R.check(sh.binder.create_set.?(sh.binder, sh.layout, null, "shadow.light_set", &light_binding, light_binding.len, &sh.light_set));
 
     sh.objects = .{ .device = dev, .binder = sh.binder, .layout = sh.layout, .buffer_label = "shadow.obj_uniform", .set_label = "shadow.obj_set" };
-    if (!sh.objects.?.ensure(1, out_error)) return false;
+    try R.check(sh.objects.?.ensure(1));
 
     sh.writes = .{ map_name, depth_name };
     sh.io = std.mem.zeroes(c.ke_render_pass_io);
@@ -295,7 +293,6 @@ fn setup(sh: *ShadowModule, p: *const c.ke_render_shadow_params, out_error: [*c]
     const rd = c.KE_ACCESS_READ;
     sh.queries_terms = .{ .{ .cid = light_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
     sh.queries = .{ .{ .terms = &sh.queries_terms[0], .term_count = 1 }, .{ .terms = &sh.queries_terms[1], .term_count = 2 } };
-    return true;
 }
 
 /// Called after a failed `setup` and by `destroyHandle`. It releases only the GPU objects that were
@@ -320,25 +317,21 @@ fn destroyHandle(self: ?*c.ke_render_shadow) callconv(.c) void {
 
 /// A missing runtime, service, device, view space or output fails as an invalid argument and a
 /// module that cannot be allocated as out of memory; a failing `setup` or a runtime refusing the
-/// system returns an empty handle, and every such path frees the module. Failures that the service,
-/// the device or the runtime report are left in out_error.
-export fn ke_render_shadow_create(params_in: ?*const c.ke_render_shadow_params,
-                                   out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_shadow_handle {
-    const empty = c.ke_render_shadow_handle{ .ref = null, .destroy = null };
-    const p = params_in orelse return refused(out_error);
-    const rt: *c.ke_runtime = p.runtime orelse return refused(out_error);
-    if (p.service == null or p.device == null or p.view_space == null or p.output == null) return refused(out_error);
+/// system fails with its code and leaves the handle zeroed, and every such path frees the module.
+export fn ke_render_shadow_create(params_in: ?*const c.ke_render_shadow_params, out_shadow: [*c]c.ke_render_shadow_handle) callconv(.c) c.ke_result {
+    const out = out_shadow orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params_in orelse return R.code(error.InvalidArgument);
+    const rt: *c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    if (p.service == null or p.device == null or p.view_space == null or p.output == null) return R.code(error.InvalidArgument);
 
-    const sh = gpa.create(ShadowModule) catch {
-        _ = outOfMemory(out_error);
-        return empty;
-    };
+    const sh = gpa.create(ShadowModule) catch |err| return R.code(err);
     sh.* = .{};
-    if (!setup(sh, p, out_error)) {
+    setup(sh, p) catch |err| {
         destroyModule(sh);
         gpa.destroy(sh);
-        return empty;
-    }
+        return R.code(err);
+    };
 
     var sys_params = std.mem.zeroes(c.ke_runtime_system_params);
     sys_params.name = "render.shadow";
@@ -350,23 +343,16 @@ export fn ke_render_shadow_create(params_in: ?*const c.ke_render_shadow_params,
     sys_params.pinned_thread = 0;
     sys_params.user_data = sh;
     sys_params.execute = system;
-    if (rt.register_system.?(rt, &sys_params, out_error) == 0) {
+    var system_id: c.ke_system_id = 0;
+    const registered = rt.register_system.?(rt, &sys_params, &system_id);
+    if (registered != R.ok) {
         destroyModule(sh);
         gpa.destroy(sh);
-        return empty;
+        return registered;
     }
 
-    return .{ .ref = @ptrCast(sh), .destroy = destroyHandle };
-}
-
-fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
-    c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "shadow pass: allocation failed", @src().file, @intCast(@src().line), null);
-    return false;
-}
-
-fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_shadow_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "shadow pass: runtime, service, device, view space and output are required", @src().file, @intCast(@src().line), null);
-    return .{ .ref = null, .destroy = null };
+    out.* = .{ .ref = @ptrCast(sh), .destroy = destroyHandle };
+    return R.ok;
 }
 
 const testing = std.testing;
@@ -381,8 +367,8 @@ test "creating and destroying the shadow pass leaves no block allocated and no G
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, null);
-    try testing.expect(h.ref != null);
+    var h: c.ke_render_shadow_handle = undefined;
+    try R.check(ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h));
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -397,7 +383,8 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     var rt: Stubs.Runtime = undefined;
     rt.init();
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, null);
+    var h: c.ke_render_shadow_handle = undefined;
+    try testing.expect(ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -412,7 +399,8 @@ test "a shadow pass the runtime refuses to register releases what it had created
     rt.init();
     rt.limit = 0;
     var view_space = std.mem.zeroes(c.ke_view_space);
-    const h = ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, null);
+    var h: c.ke_render_shadow_handle = undefined;
+    try testing.expect(ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();

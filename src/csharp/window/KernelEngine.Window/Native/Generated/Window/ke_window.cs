@@ -1,4 +1,4 @@
-using KernelEngine.Common.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Window.Native;
 
@@ -6,20 +6,20 @@ public unsafe partial struct ke_window
 {
     public void* handle;
 
-    [NativeTypeName("bool (*)(struct ke_window *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, KernelEngine.Common.Native.ke_error**, bool> on_initialize;
+    [NativeTypeName("ke_result (*)(struct ke_window *)")]
+    public delegate* unmanaged[Cdecl]<ke_window*, KernelEngine.Result.Native.ke_result> on_initialize;
 
-    [NativeTypeName("bool (*)(struct ke_window *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, KernelEngine.Common.Native.ke_error**, bool> on_shutdown;
+    [NativeTypeName("void (*)(struct ke_window *)")]
+    public delegate* unmanaged[Cdecl]<ke_window*, void> on_shutdown;
 
     [NativeTypeName("bool (*)(struct ke_window *)")]
     public delegate* unmanaged[Cdecl]<ke_window*, bool> should_close;
 
-    [NativeTypeName("bool (*)(struct ke_window *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, KernelEngine.Common.Native.ke_error**, bool> poll_events;
+    [NativeTypeName("void (*)(struct ke_window *)")]
+    public delegate* unmanaged[Cdecl]<ke_window*, void> poll_events;
 
-    [NativeTypeName("bool (*)(struct ke_window *, int32_t *, int32_t *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, int*, int*, KernelEngine.Common.Native.ke_error**, bool> get_size;
+    [NativeTypeName("void (*)(struct ke_window *, int32_t *, int32_t *)")]
+    public delegate* unmanaged[Cdecl]<ke_window*, int*, int*, void> get_size;
 
     [NativeTypeName("void *(*)(struct ke_window *)")]
     public delegate* unmanaged[Cdecl]<ke_window*, void*> get_native_handle;

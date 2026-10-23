@@ -7,8 +7,7 @@ const c = @import("c");
 const device = @import("device.zig");
 const heap = @import("heap");
 
-/// Reports failures into the error out-parameter, bound to this plugin's C declarations.
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 /// The backend object behind `ke_window`. Created by `create` and freed by `destroyApi`, which
 /// also destroys the owned `dev`. `input` is borrowed and may be null; `initialized` is set by
@@ -77,24 +76,17 @@ pub const Core = struct {
     }
 
     /// The `on_initialize` slot. The factory already started the device, so this only checks the
-    /// table; a null table reports invalid argument.
-    fn onInitialize(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-        if (from(self_in) == null) {
-            E.fail(out_error, .invalid_argument, "invalid argument", @src());
-            return false;
-        }
-        return true;
+    /// table; a null table is an invalid argument.
+    fn onInitialize(self_in: ?*c.ke_window) callconv(.c) c.ke_result {
+        if (from(self_in) == null) return R.code(error.InvalidArgument);
+        return R.ok;
     }
 
     /// The `on_shutdown` slot. Stops the device through `shutdownInternal` and keeps the Core; a
-    /// null table reports invalid argument.
-    fn onShutdown(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-        const self = from(self_in) orelse {
-            E.fail(out_error, .invalid_argument, "invalid argument", @src());
-            return false;
-        };
+    /// null table is ignored.
+    fn onShutdown(self_in: ?*c.ke_window) callconv(.c) void {
+        const self = from(self_in) orelse return;
         self.shutdownInternal();
-        return true;
     }
 
     /// A missing handle or device answers that the window should close.
@@ -105,37 +97,23 @@ pub const Core = struct {
     }
 
     /// The `poll_events` slot. Drains the device's pending events through `handleEvent` before it
-    /// returns. A null table reports invalid argument; a Core without a device succeeds and does
-    /// nothing.
-    fn pollEvents(self_in: ?*c.ke_window, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-        const self = from(self_in) orelse {
-            E.fail(out_error, .invalid_argument, "invalid argument", @src());
-            return false;
-        };
-        const dev = self.dev orelse return true;
+    /// returns. A null table or a Core without a device does nothing.
+    fn pollEvents(self_in: ?*c.ke_window) callconv(.c) void {
+        const self = from(self_in) orelse return;
+        const dev = self.dev orelse return;
         dev.pollEvents(.{ .ctx = self, .on_event = handleEvent });
-        return true;
     }
 
-    /// The `get_size` slot. Writes the width and height into each non-null out pointer. A null
-    /// table reports invalid argument; a Core without a device returns false with no error set.
-    fn getSize(
-        self_in: ?*c.ke_window,
-        width: [*c]i32,
-        height: [*c]i32,
-        out_error: [*c][*c]c.ke_error,
-    ) callconv(.c) bool {
-        const self = from(self_in) orelse {
-            E.fail(out_error, .invalid_argument, "invalid argument", @src());
-            return false;
-        };
-        const dev = self.dev orelse return false;
+    /// The `get_size` slot. Writes the width and height into each non-null out pointer; a null
+    /// table or a Core without a device writes zero.
+    fn getSize(self_in: ?*c.ke_window, width: [*c]i32, height: [*c]i32) callconv(.c) void {
         var w: u32 = 0;
         var h: u32 = 0;
-        dev.getSize(&w, &h);
+        if (from(self_in)) |self| {
+            if (self.dev) |dev| dev.getSize(&w, &h);
+        }
         if (width != null) width.* = @intCast(w);
         if (height != null) height.* = @intCast(h);
-        return true;
     }
 
     /// The `get_native_handle` slot. Null when the table or the device is missing.
@@ -339,7 +317,7 @@ test "get_size and get_native_handle delegate to the device" {
     const api = core.toApi();
     var w: i32 = 0;
     var h: i32 = 0;
-    try testing.expect(api.get_size.?(api, &w, &h, null));
+    api.get_size.?(api, &w, &h);
     try testing.expectEqual(@as(i32, 1280), w);
     try testing.expectEqual(@as(i32, 720), h);
     try testing.expectEqual(dev.native_handle, api.get_native_handle.?(api));
@@ -351,7 +329,7 @@ test "poll_events drives the device" {
     defer destroyCore(core);
 
     const api = core.toApi();
-    try testing.expect(api.poll_events.?(api, null));
+    api.poll_events.?(api);
     try testing.expectEqual(@as(u32, 1), dev.poll_calls);
 }
 
@@ -361,7 +339,7 @@ test "shutdown reaches the device" {
     defer destroyCore(core);
 
     const api = core.toApi();
-    try testing.expect(api.on_shutdown.?(api, null));
+    api.on_shutdown.?(api);
     try testing.expect(dev.shutdown_calls >= 1);
 }
 
@@ -371,11 +349,11 @@ test "the C ABI slots tolerate a null self" {
     defer destroyCore(core);
 
     const api = core.toApi();
-    try testing.expect(!api.poll_events.?(null, null));
+    api.poll_events.?(null);
     try testing.expectEqual(true, api.should_close.?(null));
     try testing.expectEqual(@as(?*anyopaque, null), api.get_native_handle.?(null));
-    try testing.expect(!api.get_size.?(null, null, null, null));
-    try testing.expect(!api.on_shutdown.?(null, null));
+    api.get_size.?(null, null, null);
+    api.on_shutdown.?(null);
     Core.destroyApi(null);
 }
 
@@ -390,7 +368,7 @@ test "key events reach ke_input with the right action" {
     defer destroyCore(core);
 
     const api = core.toApi();
-    try testing.expect(api.poll_events.?(api, null));
+    api.poll_events.?(api);
 
     try testing.expectEqual(@as(usize, 2), InputSpy.key_count);
     try testing.expectEqual(@as(i32, 65), InputSpy.keys[0].code);
@@ -412,7 +390,7 @@ test "mouse move, button and scroll events reach ke_input" {
     defer destroyCore(core);
 
     const api = core.toApi();
-    try testing.expect(api.poll_events.?(api, null));
+    api.poll_events.?(api);
 
     try testing.expectEqual(@as(usize, 1), InputSpy.move_count);
     try testing.expectEqual(@as(f32, 12.5), InputSpy.moves[0].x);
@@ -437,7 +415,7 @@ test "events are dropped when no input is attached" {
     defer destroyCore(core);
 
     const api = core.toApi();
-    try testing.expect(api.poll_events.?(api, null));
+    api.poll_events.?(api);
     try testing.expectEqual(@as(usize, 0), InputSpy.key_count);
 }
 
@@ -452,7 +430,7 @@ test "resize and close events carry no input translation" {
     defer destroyCore(core);
 
     const api = core.toApi();
-    try testing.expect(api.poll_events.?(api, null));
+    api.poll_events.?(api);
     try testing.expectEqual(@as(usize, 0), InputSpy.key_count);
     try testing.expectEqual(@as(usize, 0), InputSpy.move_count);
 }

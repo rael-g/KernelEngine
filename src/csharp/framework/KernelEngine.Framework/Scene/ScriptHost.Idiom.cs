@@ -307,12 +307,12 @@ public unsafe partial class ScriptHost
     private void BindDeferred(ulong entity, uint type, Node node, KernelEngine.Ecs.EcsCommands commands)
     {
         var handle = System.Runtime.InteropServices.GCHandle.Alloc(node);
-        KernelEngine.Common.Native.ke_error* err = null;
-        if (!Handle->bind_deferred(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(handle),
-                (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands), &err))
+        var bound = Handle->bind_deferred(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(handle),
+            (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands));
+        if (bound != KernelEngine.Result.Native.ke_result.KE_OK)
         {
             handle.Free();
-            throw NativeErrors.FromNative(err, "bind_deferred");
+            KernelEngine.NativeResults.ThrowIfFailed(bound, "bind_deferred");
         }
         _rooted[entity] = handle;
     }
@@ -324,9 +324,8 @@ public unsafe partial class ScriptHost
             Unbind(entity);
             return;
         }
-        KernelEngine.Common.Native.ke_error* err = null;
-        if (!Handle->unbind_deferred(Handle, entity, (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands), &err))
-            throw NativeErrors.FromNative(err, "unbind_deferred");
+        KernelEngine.NativeResults.ThrowIfFailed(
+            Handle->unbind_deferred(Handle, entity, (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands)), "unbind_deferred");
         if (_rooted.TryRemove(entity, out var handle)) _retired.Enqueue((Interlocked.Read(ref _epoch), handle));
     }
 

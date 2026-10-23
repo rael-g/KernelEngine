@@ -47,17 +47,16 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
         _borrowed = borrowed;
     }
 
-    /// <summary>Resolves a signal by name, registering it on first use. The payload size is part of the identity: a second registration of the name under a different size fails.</summary>
+    /// <summary>Resolves a signal by name, registering it on first use. The payload size is part of the identity: a second registration of the name under a different size fails as already existing.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint SignalId(string name, uint payloadSize)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)
         {
-            uint result;
-            ke_error* err = null;
-            NativeErrors.ThrowIfFailed(Handle->signal_id(Handle, (sbyte*)namePtr, payloadSize, &result, &err), err, "signal_id");
-            return result;
+            uint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->signal_id(Handle, (sbyte*)namePtr, payloadSize, &resultOut), "signal_id");
+            return resultOut;
         }
     }
 
@@ -78,8 +77,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     /// <exception cref="Exception">The native call failed.</exception>
     public void Connect(ulong source, uint signalId, ulong target, uint handlerId)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->connect(Handle, source, signalId, target, handlerId, &err), err, "connect");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->connect(Handle, source, signalId, target, handlerId), "connect");
     }
 
     /// <summary>Removes a connection previously made by connect(). Returns false when no such connection exists.</summary>
@@ -98,8 +96,7 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     /// <exception cref="Exception">The native call failed.</exception>
     public void Emit(ulong source, uint signalId, void* payload, uint payloadSize)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->emit(Handle, source, signalId, payload, payloadSize, &err), err, "emit");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->emit(Handle, source, signalId, payload, payloadSize), "emit");
     }
 
     /// <summary>Joins this frame's emissions against the connection table and returns the resulting deliveries. Idempotent within a frame: calling it twice returns the same list rather than duplicating it.</summary>

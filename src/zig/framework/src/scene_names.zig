@@ -7,8 +7,6 @@ const c = @import("c");
 const heap = @import("heap");
 const values = @import("scene_values.zig");
 
-const E = @import("kerror").Errors(c);
-
 pub const type_name_max = 128;
 
 /// Returns the type name spelled the way the script factory receives it, or null when the result
@@ -70,13 +68,10 @@ pub const NameMap = struct {
     /// Records a name and its entity, growing the item array when it is full. A name may be
     /// recorded more than once; only a reference to it is refused. Fails as out of memory when the
     /// array cannot grow or the name cannot be copied.
-    pub fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity, out_error: [*c][*c]c.ke_error) bool {
+    pub fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity) error{OutOfMemory}!void {
         if (self.count == self.capacity) {
             const cap = if (self.capacity != 0) self.capacity * 2 else initial_capacity;
-            const buf = heap.gpa.alloc(Entry, cap) catch {
-                E.fail(out_error, .out_of_memory, "entity name table allocation failed", @src());
-                return false;
-            };
+            const buf = try heap.gpa.alloc(Entry, cap);
             if (self.items) |old| {
                 @memcpy(buf[0..self.count], old[0..self.count]);
                 heap.gpa.free(old[0..self.capacity]);
@@ -84,13 +79,9 @@ pub const NameMap = struct {
             self.items = buf.ptr;
             self.capacity = cap;
         }
-        const owned = self.arena.dupeZ(name) orelse {
-            E.fail(out_error, .out_of_memory, "entity name copy failed", @src());
-            return false;
-        };
+        const owned = self.arena.dupeZ(name) orelse return error.OutOfMemory;
         self.items.?[self.count] = .{ .name = owned, .entity = entity };
         self.count += 1;
-        return true;
     }
 
     pub fn find(self: *const NameMap, name: []const u8) Found {

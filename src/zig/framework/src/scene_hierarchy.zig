@@ -4,10 +4,10 @@
 const std = @import("std");
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.framework);
 const heap = @import("heap");
 const mat4 = @import("mat4.zig");
-
-const E = @import("kerror").Errors(c);
 
 /// Created by `ke_scene_hierarchy_create`, owned by the handle it returns, and freed by
 /// `vtDestroy`. The runtime keeps its address as the user data of `propagateSystem`, so the record
@@ -89,10 +89,10 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
 /// phase. It rebuilds `order` with `flatten`, then makes a single pass over it, so that a parent's
 /// world matrix is final before any child reads it and no recursion is needed. An entity without
 /// a world transform is passed over; one without a parent, or whose parent has no world
-/// transform, composes with the identity. Always returns true and reports nothing. Without a
-/// `State` it does nothing.
-fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
-    const s: *State = @ptrCast(@alignCast(user orelse return true));
+/// transform, composes with the identity. Always succeeds and reports nothing. Without a `State` it
+/// does nothing.
+fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    const s: *State = @ptrCast(@alignCast(user orelse return R.ok));
     flatten(s, ctx);
 
     const identity = identityMatrix();
@@ -116,7 +116,7 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c
         }
         mat4.mul(&w.matrix, &local, parent_world);
     }
-    return true;
+    return R.ok;
 }
 
 /// The destroy of the handle. Frees the `State`. The runtime keeps the `State` as the user data of
@@ -131,42 +131,39 @@ fn vtDestroy(self_in: ?*c.ke_scene_hierarchy) callconv(.c) void {
 }
 
 /// Factory. Registers the system `scene.propagate_transforms` on the runtime, in the post-update
-/// phase, and returns a handle that owns the `State`. A null runtime or ecs fails as an invalid
-/// argument; a transform, 2D transform, world transform or hierarchy component not registered on
-/// the ecs fails as not found; a failed allocation fails as out of memory; a failed system
-/// registration reports the runtime's error. Each returns a zeroed handle.
+/// phase, and writes a handle that owns the `State`. A null argument fails as an invalid argument;
+/// a transform, 2D transform, world transform or hierarchy component not registered on the ecs
+/// fails as not found; a failed allocation fails as out of memory; a refused system registration
+/// fails with the runtime's code. Each leaves the handle zeroed.
 export fn ke_scene_hierarchy_create(
     runtime_in: ?*c.ke_runtime,
     ecs_in: ?*c.ke_ecs,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_scene_hierarchy_handle {
-    const empty = std.mem.zeroes(c.ke_scene_hierarchy_handle);
-    const runtime = runtime_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return empty;
-    };
-    const ecs = ecs_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return empty;
-    };
+    out_hierarchy: ?*c.ke_scene_hierarchy_handle,
+) callconv(.c) c.ke_result {
+    const out = out_hierarchy orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_scene_hierarchy_handle);
+    const runtime = runtime_in orelse return R.code(error.InvalidArgument);
+    const ecs = ecs_in orelse return R.code(error.InvalidArgument);
+    out.* = create(runtime, ecs) catch |err| return R.code(err);
+    return R.ok;
+}
 
+fn create(runtime: *c.ke_runtime, ecs: *c.ke_ecs) R.Error!c.ke_scene_hierarchy_handle {
     var transform_meta: c.ke_component_meta = undefined;
     var transform2d_meta: c.ke_component_meta = undefined;
     var world_transform_meta: c.ke_component_meta = undefined;
     var hierarchy_meta: c.ke_component_meta = undefined;
-    if (!ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM, &transform_meta, null) or
-        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, &transform2d_meta, null) or
-        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, &world_transform_meta, null) or
-        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta, null))
+    if (!ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM, &transform_meta) or
+        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, &transform2d_meta) or
+        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, &world_transform_meta) or
+        !ecs.component_lookup.?(ecs, c.KE_COMPONENT_NAME_HIERARCHY, &hierarchy_meta))
     {
-        E.fail(out_error, .not_found, "scene_tree components are not registered on this ecs", @src());
-        return empty;
+        log.warn("scene hierarchy: the scene tree components are not registered on this ecs", .{});
+        return error.NotFound;
     }
 
-    const s = heap.gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return empty;
-    };
+    const s = try heap.gpa.create(State);
+    errdefer heap.gpa.destroy(s);
     s.* = .{
         .ecs = ecs,
         .transform_cid = transform_meta.cid,
@@ -194,10 +191,8 @@ export fn ke_scene_hierarchy_create(
     propagate.user_data = s;
     propagate.execute = propagateSystem;
 
-    if (runtime.register_system.?(runtime, &propagate, out_error) == 0) {
-        heap.gpa.destroy(s);
-        return empty;
-    }
+    var system_id: c.ke_system_id = 0;
+    try R.check(runtime.register_system.?(runtime, &propagate, &system_id));
 
     return .{ .ref = @ptrCast(s), .destroy = vtDestroy };
 }

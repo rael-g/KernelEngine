@@ -23,8 +23,9 @@ extern "C" {
 #endif
 
 /// @brief Creates a ke_asset_loader that imports models with Assimp.
-/// @return Handle whose @c ref is NULL when the loader cannot be allocated.
-KE_ASSET_ASSIMP_API ke_asset_loader_handle ke_asset_loader_assimp_create(ke_error **out_error);
+/// @param out_loader [out] Receives the loader; left zeroed on failure.
+/// @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p out_loader, or KE_RESULT_OUT_OF_MEMORY.
+KE_ASSET_ASSIMP_API ke_result ke_asset_loader_assimp_create(ke_asset_loader_handle *out_loader);
 
 #ifdef __cplusplus
 }

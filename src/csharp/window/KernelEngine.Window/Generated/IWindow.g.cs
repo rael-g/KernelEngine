@@ -13,10 +13,8 @@ public interface IWindow : IDisposable
     /// <summary>Returns true once the user has requested the window to close.</summary>
     bool ShouldClose();
     /// <summary>Processes pending OS events. Call once per frame.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
     void PollEvents();
     /// <summary>Retrieves the current client-area size in pixels.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
     (int Width, int Height) GetSize();
     /// <summary>Returns the platform-specific native window handle.</summary>
     nint GetNativeHandle();

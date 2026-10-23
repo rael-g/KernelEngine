@@ -87,7 +87,7 @@ const Captured = struct {
     }
 };
 
-const Probe = Destination("ke_klog_probe");
+const Probe = Destination("ke_log_probe");
 
 test "a line goes to the callback the host set, with its level, scope, message and context" {
     var marker: u8 = 0;

@@ -79,10 +79,10 @@
       "slots": [
         {
           "name": "register_type",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Registers a script type under \u0060name\u0060, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails when it does not.",
-          "return_doc": null,
+          "doc": "Registers a script type under \u0060name\u0060, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails as already existing when it does not.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or empty name, a null out_id or a count without components, KE_RESULT_ALREADY_EXISTS, KE_RESULT_OUT_OF_MEMORY when the table is full, or the ecs\u0027s code when it refuses the type\u0027s tag.",
           "params": [
             {
               "name": "name",
@@ -118,12 +118,6 @@
               "tags": [
                 "out"
               ],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
               "doc": null
             }
           ],
@@ -227,10 +221,10 @@
         },
         {
           "name": "bind",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Binds \u0060instance\u0060 to \u0060entity\u0060 as an instance of \u0060type\u0060. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails rather than replacing it.",
-          "return_doc": null,
+          "doc": "Binds \u0060instance\u0060 to \u0060entity\u0060 as an instance of \u0060type\u0060. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails as already existing rather than replacing it.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for a type never registered, KE_RESULT_INVALID_ARGUMENT for the invalid entity, KE_RESULT_ALREADY_EXISTS, or KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "entity",
@@ -250,12 +244,6 @@
               "tags": [
                 "rooted:entity"
               ],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
               "doc": null
             }
           ],
@@ -281,12 +269,12 @@
         },
         {
           "name": "bind_deferred",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [
             "idiom"
           ],
           "doc": "Records bind into \u0060commands\u0060; the binding takes effect when \u0060commands\u0060 is applied. A bind that fails at that point is dropped.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for a type never registered, KE_RESULT_INVALID_ARGUMENT for the invalid entity or a null commands, or the queue\u0027s code when it refuses the recording.",
           "params": [
             {
               "name": "entity",
@@ -315,24 +303,18 @@
                 "ctx"
               ],
               "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_script_host *"
         },
         {
           "name": "unbind_deferred",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [
             "idiom"
           ],
           "doc": "Records unbind into \u0060commands\u0060; the binding is dropped when \u0060commands\u0060 is applied.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null commands, or the queue\u0027s code when it refuses the recording.",
           "params": [
             {
               "name": "entity",
@@ -346,12 +328,6 @@
               "tags": [
                 "ctx"
               ],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
               "doc": null
             }
           ],

@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_DEFERRED_LIGHTING_DEFERRED_LIGHTING_CREATE_H_
 #define KERNEL_ENGINE_RENDER_DEFERRED_LIGHTING_DEFERRED_LIGHTING_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
@@ -54,9 +54,10 @@ extern "C"
     } ke_render_deferred_lighting_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service, device or
-    /// gbuffer fails as an invalid argument; the handle's ref is NULL on failure.
-    KE_RENDER_DEFERRED_LIGHTING_API ke_render_deferred_lighting_handle ke_render_deferred_lighting_create(
-        const ke_render_deferred_lighting_params *params, ke_error **out_error);
+    /// gbuffer fails as an invalid argument.
+    /// @param out_lighting [out] Receives the handle; left zeroed on failure.
+    KE_RENDER_DEFERRED_LIGHTING_API ke_result ke_render_deferred_lighting_create(
+        const ke_render_deferred_lighting_params *params, ke_render_deferred_lighting_handle *out_lighting);
 
 #ifdef __cplusplus
 }

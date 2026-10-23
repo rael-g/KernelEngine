@@ -196,10 +196,10 @@
         },
         {
           "name": "component_register",
-          "returns": "ke_component_id",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With \u0060fields\u0060 the layouts are compared field by field; without them, only the size and the alignment are compared.",
-          "return_doc": "The component\u0027s id, or KE_COMPONENT_INVALID on error.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the params are missing, the alignment is not a power of two, or the type conflicts with the name\u0027s prior registration, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "params",
@@ -210,13 +210,12 @@
               "doc": "The name, size, alignment and field table of the type."
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
+              "name": "out_cid",
+              "type": "ke_component_id *",
               "tags": [
-                "out",
-                "optional"
+                "out"
               ],
-              "doc": "Set when the params are missing, the alignment is not a power of two, or the type conflicts with the name\u0027s prior registration, naming what disagrees."
+              "doc": "Receives the component\u0027s id; KE_COMPONENT_INVALID on failure."
             }
           ],
           "receiver": "struct ke_ecs *"
@@ -246,12 +245,6 @@
                 "out"
               ],
               "doc": "Receives the component\u0027s id, size, and field metadata."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_ecs *"
@@ -465,7 +458,7 @@
     },
     {
       "name": "ke_ecs_commands",
-      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation fails it with the reason in \u0060out_error\u0060 and leaves the queue unchanged.",
+      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.",
       "tags": [],
       "fields": [
         {
@@ -478,26 +471,28 @@
       "slots": [
         {
           "name": "spawn",
-          "returns": "ke_entity",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.",
-          "return_doc": "KE_ENTITY_INVALID when the operation could not be recorded.",
+          "return_doc": null,
           "params": [
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_ENTITY_INVALID on failure."
             }
           ],
           "receiver": "ke_ecs_commands *"
         },
         {
           "name": "attach",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Records giving \u0060entity\u0060 the component \u0060cid\u0060, initialised from \u0060size\u0060 bytes of \u0060data\u0060. The bytes are copied, so the caller\u0027s buffer need not outlive the call. \u0060size\u0060 must equal the registered size of \u0060cid\u0060, or be 0 to attach the component without copying bytes into it.",
-          "return_doc": "false when the operation could not be recorded.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, when \u0060size\u0060 is neither 0 nor the registered size of \u0060cid\u0060.",
           "params": [
             {
               "name": "entity",
@@ -524,22 +519,16 @@
               "type": "size_t",
               "tags": [],
               "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "ke_ecs_commands *"
         },
         {
           "name": "detach",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Records removing component \u0060cid\u0060 from \u0060entity\u0060.",
-          "return_doc": "false when the operation could not be recorded.",
+          "return_doc": null,
           "params": [
             {
               "name": "entity",
@@ -552,32 +541,20 @@
               "type": "ke_component_id",
               "tags": [],
               "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "ke_ecs_commands *"
         },
         {
           "name": "despawn",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Records destroying \u0060entity\u0060.",
-          "return_doc": "false when the operation could not be recorded.",
+          "return_doc": null,
           "params": [
             {
               "name": "entity",
               "type": "ke_entity",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }
@@ -586,12 +563,12 @@
         },
         {
           "name": "defer",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [
             "idiom"
           ],
           "doc": "Records a structural operation for work the fixed verbs above cannot express. \u0060fn\u0060 runs when the queue is applied, in order with the other operations. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call.",
-          "return_doc": "false when the operation could not be recorded.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, for a null \u0060fn\u0060.",
           "params": [
             {
               "name": "fn",
@@ -610,12 +587,6 @@
             {
               "name": "user_size",
               "type": "size_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }

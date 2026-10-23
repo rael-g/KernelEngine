@@ -41,14 +41,14 @@ public static class Regeneration
     }
 
     /// <summary>
-    /// Extracts the error ABI header of the convention, resolved under the root directory, and
+    /// Extracts the result header of the convention, resolved under the root directory, and
     /// returns its model.
     /// </summary>
-    public static ApiModel ExtractErrorAbi(Convention convention, string rootDir, string? zig)
+    public static ApiModel ExtractResultAbi(Convention convention, string rootDir, string? zig)
     {
         string Rooted(string path) => Path.Combine(rootDir, path);
-        var json = Extraction.Run(new Extraction.Request([Rooted(convention.ErrorAbiHeader)],
-            convention.ErrorAbiIncludeDirs.Select(Rooted).ToList(), [], [], zig, convention));
+        var json = Extraction.Run(new Extraction.Request([Rooted(convention.ResultAbiHeader)],
+            convention.ResultAbiIncludeDirs.Select(Rooted).ToList(), [], [], zig, convention));
         return ApiReader.Read(System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject());
     }
 

@@ -13,21 +13,21 @@ pub fn MaterialPassGroups(comptime c: type) type {
         layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
 
         /// Builds the layout of the shader compiled as `shader`, whose stages are vertex and
-        /// fragment. On failure it returns false with the binder's error.
-        pub fn init(self: *Self, binder: *c.ke_render_resource_binder, shader: [*c]const u8, out_error: [*c][*c]c.ke_error) bool {
+        /// fragment. On failure it returns the binder's code.
+        pub fn init(self: *Self, binder: *c.ke_render_resource_binder, shader: [*c]const u8) c.ke_result {
             self.binder = binder;
-            self.layout = binder.create_shader_layout.?(binder, &c.ke_render_shader_layout_params{
+            return binder.create_shader_layout.?(binder, &c.ke_render_shader_layout_params{
                 .shader = shader,
                 .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
                 .hints = &object_hint,
                 .hint_count = object_hint.len,
-            }, out_error);
-            return self.layout != c.KE_RENDER_BINDING_INVALID;
+            }, &self.layout);
         }
 
-        /// Fills the bind group layouts of `pp` with the ones the shader's pipeline declares.
-        pub fn place(self: *const Self, pp: *c.ke_gpu_render_pipeline_params, out_error: [*c][*c]c.ke_error) bool {
-            return self.binder.pipeline_layouts.?(self.binder, self.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error);
+        /// Fills the bind group layouts of `pp` with the ones the shader's pipeline declares; on
+        /// failure it returns the binder's code.
+        pub fn place(self: *const Self, pp: *c.ke_gpu_render_pipeline_params) c.ke_result {
+            return self.binder.pipeline_layouts.?(self.binder, self.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count);
         }
 
         /// Makes `material` the one the next draws of `pass` read.

@@ -12,21 +12,24 @@ namespace KernelEngine.Scheduler.Enki;
 public sealed unsafe class EnkiScheduler : KernelEngine.Scheduler.Scheduler
 {
     /// <summary>Creates the native scheduler with one worker per hardware thread besides the calling one.</summary>
-    /// <exception cref="InvalidOperationException">The native factory returned no scheduler.</exception>
+    /// <exception cref="OutOfMemoryException">The native factory could not allocate the scheduler.</exception>
+    /// <exception cref="InvalidOperationException">The native factory could not create the pool.</exception>
     public EnkiScheduler() : base(CreateNative(0))
     {
     }
 
     /// <summary>Creates the native scheduler with <paramref name="workerCount"/> workers besides the
     /// calling thread; 0 takes one per hardware thread.</summary>
-    /// <exception cref="InvalidOperationException">The native factory returned no scheduler.</exception>
+    /// <exception cref="OutOfMemoryException">The native factory could not allocate the scheduler.</exception>
+    /// <exception cref="InvalidOperationException">The native factory could not create the pool.</exception>
     public EnkiScheduler(uint workerCount) : base(CreateNative(workerCount))
     {
     }
 
     /// <summary>Creates the native scheduler with one worker per hardware thread besides the calling
     /// one, the enki library logging to <paramref name="logger"/>.</summary>
-    /// <exception cref="InvalidOperationException">The native factory returned no scheduler.</exception>
+    /// <exception cref="OutOfMemoryException">The native factory could not allocate the scheduler.</exception>
+    /// <exception cref="InvalidOperationException">The native factory could not create the pool.</exception>
     public EnkiScheduler(KernelEngine.Logger.ILogger logger) : base(CreateNative(0, logger))
     {
     }
@@ -37,9 +40,9 @@ public sealed unsafe class EnkiScheduler : KernelEngine.Scheduler.Scheduler
             KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
         ke_scheduler_enki_params @params = default;
         @params.worker_count = workerCount;
-        var handle = KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&@params, null);
-        if (handle.@ref == null)
-            throw new InvalidOperationException("ke_scheduler_enki_create failed");
+        ke_scheduler_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(
+            KernelEngine.Scheduler.Enki.Native.NativeMethods.scheduler_enki_create(&@params, &handle), "ke_scheduler_enki_create");
         return handle;
     }
 }

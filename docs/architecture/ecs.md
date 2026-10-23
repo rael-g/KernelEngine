@@ -37,8 +37,7 @@ field and must outlive the ecs.
 `ke_ecs_flecs_params.world_id_base` is therefore the capacity of the pool.
 
 **An internal flecs failure ends the process.** The plugin replaces the flecs abort hook,
-process-wide, and ends through `ke_error_fatal`; every other failure is a `ke_error` and a
-sentinel return.
+process-wide, logs the message and exits with status 1; every other failure is a `ke_result`.
 
 ## What the parts agree on without a contract
 

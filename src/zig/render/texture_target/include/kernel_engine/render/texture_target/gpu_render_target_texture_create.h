@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_TEXTURE_TARGET_GPU_RENDER_TARGET_TEXTURE_CREATE_H_
 #define KERNEL_ENGINE_RENDER_TEXTURE_TARGET_GPU_RENDER_TARGET_TEXTURE_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
 
@@ -36,13 +36,14 @@ typedef struct ke_gpu_render_target_texture_params
  * @brief Creates a render target whose every frame draws into a texture the caller owns, so the
  *        caller reads the frame back from that texture once it was presented.
  * @param device Borrowed, must outlive the target.
- * @return Handle whose @c ref is NULL on failure: KE_ERROR_INVALID_ARGUMENT for a NULL device or
+ * @return KE_OK, or on failure: KE_RESULT_INVALID_ARGUMENT for a NULL device or
  *         params, an invalid texture or format, or a zero width or height.
+ * @param out_target [out] Receives the handle; left zeroed on failure.
  */
-KE_GPU_RENDER_TARGET_TEXTURE_API ke_gpu_render_target_handle
+KE_GPU_RENDER_TARGET_TEXTURE_API ke_result
 ke_gpu_render_target_texture_create(ke_gpu_device *device,
                                     const ke_gpu_render_target_texture_params *params,
-                                    ke_error **out_error);
+                                    ke_gpu_render_target_handle *out_target);
 
 #ifdef __cplusplus
 }

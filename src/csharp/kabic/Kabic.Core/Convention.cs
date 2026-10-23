@@ -27,11 +27,10 @@ public sealed record FieldTableConvention(
     string VariantKindType = "");
 
 /// <summary>
-/// One kind of failure the ABI names: the singleton a failure of that kind is reached by, the
-/// dotted name the native type carries, the exception a managed caller catches, and the error a Zig
-/// caller switches on.
+/// One result code the ABI names on the managed side: the constant, and the exception a caller
+/// catches for it, declared by kabic as deriving from <paramref name="Extends"/> when that is given.
 /// </summary>
-public sealed record ErrorKindSpec(string Singleton, string NativeName, string Managed, string Zig, string? Extends = null);
+public sealed record ResultCodeSpec(string Code, string Managed, string? Extends);
 
 /// <summary>
 /// The naming and shape conventions of the C ABI being compiled: everything <c>kabic</c> knows
@@ -91,17 +90,7 @@ public sealed class Convention
         return n.EndsWith(ComponentSuffix) ? n[..^ComponentSuffix.Length] : n;
     }
 
-    /// <summary>
-    /// The out-parameter type spelling that makes a slot fallible. A slot returning
-    /// boolean-true-on-success whose last parameter is this type reports failure through it rather
-    /// than through its return value.
-    /// </summary>
-    public string ErrorOutParamType => ErrorType + "**";
-
-    /// <summary>
-    /// Boolean return-type spellings that mean "succeeded", paired with <see
-    /// cref="ErrorOutParamType"/>.
-    /// </summary>
+    /// <summary>Boolean return-type spellings that mean "succeeded".</summary>
     public IReadOnlyList<string> BooleanReturnTypes => ["_Bool", "bool"];
 
     /// <summary>
@@ -127,25 +116,59 @@ public sealed class Convention
     public bool IsFactoryName(string functionName) => functionName.EndsWith(FactorySuffix);
 
     /// <summary>
-    /// True if this parameter is the trailing error out-parameter that makes a slot fallible.
+    /// True if a slot returns the result code (<see cref="ResultType"/>): it fails by returning a
+    /// code other than <see cref="ResultOk"/>, and hands its value back through an out-parameter.
     /// </summary>
-    public bool IsErrorOutParam(ApiParam p) =>
-        p.Type.Replace(" ", "").Contains(ErrorOutParamType.Replace(" ", ""));
+    public bool ReturnsResult(string returns) => ResultType.Length > 0 && returns.Trim() == ResultType;
 
     /// <summary>
-    /// True if a slot reports failure through a trailing error out-parameter — whatever
-    /// it returns. A boolean-returning slot signals failure with the return value; one
-    /// returning a value signals it by writing the out-param (which stays NULL on
-    /// success), so both are fallible and neither should expose the parameter.
+    /// The owner-wrapper handle a factory returning <see cref="ResultType"/> writes through its last
+    /// parameter, or null when <paramref name="factory"/> is not of that shape.
     /// </summary>
-    public bool IsFallible(string returns, IReadOnlyList<ApiParam> parameters) =>
-        parameters.Count > 0 && IsErrorOutParam(parameters[^1]);
+    public string? ResultFactoryHandle(ApiFunction factory) =>
+        ReturnsResult(factory.Returns) && factory.Params.Count > 0
+            && CTypes.IsPointer(factory.Params[^1].Type)
+            && CTypes.Deref(factory.Params[^1].Type).Replace("struct ", "").Trim() is var target
+            && IsHandleType(target)
+            ? target : null;
 
     /// <summary>
-    /// True if this slot signals failure through its boolean return rather than by writing the
-    /// error out-param.
+    /// The parameters a caller of <paramref name="factory"/> supplies: all of them, but the handle
+    /// written back when the factory returns <see cref="ResultType"/>.
     /// </summary>
-    public bool SignalsFailureByReturn(string returns) => BooleanReturnTypes.Contains(returns);
+    public IReadOnlyList<ApiParam> FactoryInputs(ApiFunction factory) =>
+        ResultFactoryHandle(factory) is not null
+            ? factory.Params.Take(factory.Params.Count - 1).ToList()
+            : factory.Params.ToList();
+
+    /// <summary>The C type a fallible call returns its outcome as (<c>ke_result</c>).</summary>
+    public string ResultType { get; init; } = "";
+
+    /// <summary>The constant of <see cref="ResultType"/> that means success (<c>KE_OK</c>).</summary>
+    public string ResultOk { get; init; } = "";
+
+    /// <summary>The fully qualified managed type the bindings declare for <see cref="ResultType"/>.</summary>
+    public string ResultManagedType { get; init; } = "";
+
+    /// <summary>
+    /// The fully qualified managed class that turns a code into an exception
+    /// (<c>ThrowIfFailed</c>, <c>FromCode</c>).
+    /// </summary>
+    public string ResultHelperClass { get; init; } = "";
+
+    /// <summary>
+    /// Path, relative to the repository root, of the generated file that maps each result code to
+    /// its exception.
+    /// </summary>
+    public string ResultCodesOut { get; init; } = "";
+
+    /// <summary>The codes whose managed exception the ABI names, in declaration order.</summary>
+    public IReadOnlyList<ResultCodeSpec> ResultCodes { get; init; } = [];
+
+    /// <summary>
+    /// True if this slot signals failure through what it returns: a boolean, or the result code.
+    /// </summary>
+    public bool SignalsFailureByReturn(string returns) => BooleanReturnTypes.Contains(returns) || ReturnsResult(returns);
 
     /// <summary>
     /// Explicit target-language type names for ABI symbols whose derived name is
@@ -183,68 +206,20 @@ public sealed class Convention
     public string BindingsMethodsClass { get; init; } = "NativeMethods";
 
 
-    /// <summary>The C struct a failed call reports through (<c>ke_error</c>).</summary>
-    public string ErrorType { get; init; } = "";
-
     /// <summary>
     /// How component structs are described as field tables, or null when this ABI has none.
     /// </summary>
     public FieldTableConvention? FieldTable { get; init; }
 
-    /// <summary>The C struct that names the kind of a failure (<c>ke_error_type</c>).</summary>
-    public string ErrorKindType { get; init; } = "";
+    /// <summary>
+    /// Header, relative to the repository root, that declares the result type and its codes.
+    /// </summary>
+    public string ResultAbiHeader { get; init; } = "";
 
     /// <summary>
-    /// The exported function that asks whether a failure is of a kind (<c>ke_error_is</c>).
+    /// Include directories the result header is read with, relative to the repository root.
     /// </summary>
-    public string ErrorIsFunction { get; init; } = "";
-
-    /// <summary>The singleton a failure reads as when no kind matched.</summary>
-    public string ErrorGeneralSingleton { get; init; } = "";
-
-    /// <summary>
-    /// The kinds of failure the ABI names, the general one included; <see
-    /// cref="ErrorGeneralSingleton"/> picks it out.
-    /// </summary>
-    public IReadOnlyList<ErrorKindSpec> ErrorKinds { get; init; } = [];
-
-    /// <summary>
-    /// Namespace of <see cref="ErrorHelperClass"/>, which receives the generated mapping from
-    /// native names to exceptions.
-    /// </summary>
-    public string ErrorHelperNamespace { get; init; } = "";
-
-    /// <summary>
-    /// Path, relative to the repository root, of the generated file that maps native error names to
-    /// exceptions.
-    /// </summary>
-    public string ErrorKindsOut { get; init; } = "";
-
-    /// <summary>The kind a failure reads as when no other matched.</summary>
-    public ErrorKindSpec GeneralError => ErrorKinds.FirstOrDefault(k => k.Singleton == ErrorGeneralSingleton)
-        ?? new ErrorKindSpec(ErrorGeneralSingleton, "", "Exception", "General");
-
-    /// <summary>
-    /// The kinds a caller can tell apart: every kind but the general one, in declaration order.
-    /// </summary>
-    public IEnumerable<ErrorKindSpec> NamedErrors => ErrorKinds.Where(k => k.Singleton != ErrorGeneralSingleton);
-
-    /// <summary>
-    /// Header, relative to the repository root, that declares the failure types, the singletons and
-    /// the functions that read them.
-    /// </summary>
-    public string ErrorAbiHeader { get; init; } = "";
-
-    /// <summary>
-    /// Include directories the error header is read with, relative to the repository root.
-    /// </summary>
-    public IReadOnlyList<string> ErrorAbiIncludeDirs { get; init; } = [];
-
-    /// <summary>
-    /// The managed class that raises a failure from the native struct and back
-    /// (<c>ThrowIfFailed</c>, <c>FromNative</c>, <c>ToNative</c>).
-    /// </summary>
-    public string ErrorHelperClass { get; init; } = "";
+    public IReadOnlyList<string> ResultAbiIncludeDirs { get; init; } = [];
 
     /// <summary>
     /// Managed namespace the generated projections import for the shared types, beside the bindings
@@ -294,9 +269,6 @@ public sealed class Convention
     /// </summary>
     public IEnumerable<string> Libraries(string language) => Packs.SelectMany(p => p.Libraries(language)).Distinct();
 
-    /// <summary>Name of the trailing failure lane, which is never a projected parameter.</summary>
-    public string ErrorLaneName { get; init; } = "out_error";
-
     /// <summary>
     /// Reads the <c>convention</c> object of a manifest into a <see cref="ConventionBuilder"/> and
     /// builds it; <paramref name="pack"/> resolves the name of a pack.
@@ -310,18 +282,19 @@ public sealed class Convention
         var builder = new ConventionBuilder()
             .Symbols(Text(json, "symbolPrefix"), Text(json, "handleSuffix"), Text(json, "factorySuffix"),
                 Text(json, "componentSuffix"), Text(json, "paramsSuffix"))
-            .OutParams(Or(json, "outParamPrefix", "out_"), Or(json, "errorLaneName", "out_error"))
+            .OutParams(Or(json, "outParamPrefix", "out_"))
             .Bindings(Or(json, "includeDirectoryName", "kernel_engine"), Or(json, "commonBindingsNamespace", ""),
                 Or(json, "bindingsMethodsClass", "NativeMethods"))
             .Managed(Text(json, "commonManagedNamespace"))
-            .Failure(Text(json, "errorType"), Text(json, "errorKindType"), Text(json, "errorIsFunction"),
-                Text(json, "errorGeneralSingleton"), Text(json, "errorAbiHeader"),
-                (json["errorAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()),
-                Text(json, "errorHelperClass"), Text(json, "errorHelperNamespace"), Text(json, "errorKindsOut"));
+            .ResultAbi(Or(json, "resultAbiHeader", ""),
+                (json["resultAbiIncludeDirs"]?.AsArray() ?? []).Select(n => n!.GetValue<string>()));
+        if (json["resultType"] is not null)
+            builder.Result(Text(json, "resultType"), Text(json, "resultOk"), Text(json, "resultManagedType"),
+                Text(json, "resultHelperClass"), Or(json, "resultCodesOut", ""));
+        foreach (var r in json["resultCodes"]?.AsArray() ?? [])
+            builder.AddResultCode(r!["code"]!.GetValue<string>(), r["managed"]!.GetValue<string>(),
+                r["extends"]?.GetValue<string>());
 
-        foreach (var e in json["errors"]?.AsArray() ?? [])
-            builder.AddError(e!["singleton"]!.GetValue<string>(), e["nativeName"]!.GetValue<string>(),
-                e["managed"]!.GetValue<string>(), e["zig"]?.GetValue<string>(), e["extends"]?.GetValue<string>());
         foreach (var (cType, managed) in json["handleTypes"]?.AsObject() ?? [])
             builder.AddHandleType(cType, managed!.GetValue<string>());
         foreach (var (symbol, name) in json["typeNameOverrides"]?.AsObject() ?? [])
@@ -332,10 +305,6 @@ public sealed class Convention
             builder.FieldTable(ReadFieldTable(table));
         return builder.Build();
     }
-
-    internal static string ZigErrorName(string nativeName) =>
-        string.Concat(nativeName[(nativeName.LastIndexOf('.') + 1)..].Split('_')
-            .Where(p => p.Length > 0).Select(p => char.ToUpperInvariant(p[0]) + p[1..].ToLowerInvariant()));
 
     static FieldTableConvention ReadFieldTable(System.Text.Json.Nodes.JsonObject table)
     {

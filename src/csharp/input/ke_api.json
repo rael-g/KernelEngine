@@ -864,18 +864,11 @@
       "slots": [
         {
           "name": "update",
-          "returns": "_Bool",
+          "returns": "void",
           "tags": [],
           "doc": "Updates internal state, clearing this frame\u0027s pressed/released edges. Call once per tick, before any query.",
           "return_doc": null,
-          "params": [
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
+          "params": [],
           "receiver": "struct ke_input *"
         },
         {
@@ -1267,15 +1260,17 @@
   "functions": [
     {
       "name": "ke_input_create",
-      "returns": "ke_input_handle",
+      "returns": "ke_result",
       "doc": "Creates an input system.",
-      "return_doc": null,
+      "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null out_input, or KE_RESULT_OUT_OF_MEMORY.",
       "params": [
         {
-          "name": "out_error",
-          "type": "ke_error **",
-          "tags": [],
-          "doc": null
+          "name": "out_input",
+          "type": "ke_input_handle *",
+          "tags": [
+            "out"
+          ],
+          "doc": "Receives the input system; left zeroed on failure."
         }
       ]
     }

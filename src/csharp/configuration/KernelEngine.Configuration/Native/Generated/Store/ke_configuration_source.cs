@@ -1,5 +1,5 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Logger.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Configuration.Native;
 
@@ -7,6 +7,6 @@ public unsafe partial struct ke_configuration_source
 {
     public void* handle;
 
-    [NativeTypeName("bool (*)(struct ke_configuration_source *, ke_configuration *, const char *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_configuration_source*, ke_configuration*, sbyte*, KernelEngine.Common.Native.ke_error**, bool> load;
+    [NativeTypeName("ke_result (*)(struct ke_configuration_source *, ke_configuration *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_configuration_source*, ke_configuration*, sbyte*, KernelEngine.Result.Native.ke_result> load;
 }

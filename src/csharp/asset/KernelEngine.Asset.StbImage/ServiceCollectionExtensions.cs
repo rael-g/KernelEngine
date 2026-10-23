@@ -1,4 +1,3 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Logger;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -20,9 +19,8 @@ public static class ServiceCollectionExtensions
             {
                 if (sp.GetService<ILogger>() is { } logger)
                     Native.NativeMethods.asset_stb_image_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
-                ke_error* err = null;
-                var handle = Native.NativeMethods.image_loader_stb_create(&err);
-                if (handle.@ref == null) throw NativeErrors.FromNative(err, "image_loader_stb_create");
+                KernelEngine.Asset.Native.ke_image_loader_handle handle;
+                KernelEngine.NativeResults.ThrowIfFailed(Native.NativeMethods.image_loader_stb_create(&handle), "ke_image_loader_stb_create");
                 return new ImageLoader(handle);
             }
         });

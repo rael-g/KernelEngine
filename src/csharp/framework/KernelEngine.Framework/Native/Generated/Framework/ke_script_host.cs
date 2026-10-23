@@ -1,8 +1,8 @@
 using KernelEngine.Asset.Native;
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Logger.Native;
+using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
 using KernelEngine.Text.Native;
 
@@ -12,8 +12,8 @@ public unsafe partial struct ke_script_host
 {
     public void* handle;
 
-    [NativeTypeName("bool (*)(struct ke_script_host *, const char *, const ke_component_id *, uint32_t, ke_script_reach, ke_script_type_id *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_script_host*, sbyte*, uint*, uint, ke_script_reach, uint*, KernelEngine.Common.Native.ke_error**, bool> register_type;
+    [NativeTypeName("ke_result (*)(struct ke_script_host *, const char *, const ke_component_id *, uint32_t, ke_script_reach, ke_script_type_id *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, sbyte*, uint*, uint, ke_script_reach, uint*, KernelEngine.Result.Native.ke_result> register_type;
 
     [NativeTypeName("bool (*)(struct ke_script_host *, const char *, ke_script_type_id *)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, sbyte*, uint*, bool> type_lookup;
@@ -30,17 +30,17 @@ public unsafe partial struct ke_script_host
     [NativeTypeName("ke_component_id (*)(struct ke_script_host *)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, uint> type_tag_group;
 
-    [NativeTypeName("bool (*)(struct ke_script_host *, ke_entity, ke_script_type_id, void *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, void*, KernelEngine.Common.Native.ke_error**, bool> bind;
+    [NativeTypeName("ke_result (*)(struct ke_script_host *, ke_entity, ke_script_type_id, void *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, void*, KernelEngine.Result.Native.ke_result> bind;
 
     [NativeTypeName("void (*)(struct ke_script_host *, ke_entity)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, void> unbind;
 
-    [NativeTypeName("bool (*)(struct ke_script_host *, ke_entity, ke_script_type_id, void *, ke_ecs_commands *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, void*, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Common.Native.ke_error**, bool> bind_deferred;
+    [NativeTypeName("ke_result (*)(struct ke_script_host *, ke_entity, ke_script_type_id, void *, ke_ecs_commands *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint, void*, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Result.Native.ke_result> bind_deferred;
 
-    [NativeTypeName("bool (*)(struct ke_script_host *, ke_entity, ke_ecs_commands *, ke_error **)")]
-    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Common.Native.ke_error**, bool> unbind_deferred;
+    [NativeTypeName("ke_result (*)(struct ke_script_host *, ke_entity, ke_ecs_commands *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, KernelEngine.Ecs.Native.ke_ecs_commands*, KernelEngine.Result.Native.ke_result> unbind_deferred;
 
     [NativeTypeName("bool (*)(struct ke_script_host *, ke_entity, ke_script_type_id *, void **)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, ulong, uint*, void**, bool> instance_of;

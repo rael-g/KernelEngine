@@ -36,7 +36,7 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
         _destroy = handle.destroy;
-        { ke_error* err2 = null; NativeErrors.ThrowIfFailed(_native->on_initialize(_native, &err2), err2, "on_initialize"); }
+        KernelEngine.NativeResults.ThrowIfFailed(_native->on_initialize(_native), "on_initialize");
     }
 
     /// <summary>Wraps a <c>ke_window*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -56,21 +56,17 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
     }
 
     /// <summary>Processes pending OS events. Call once per frame.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
     public void PollEvents()
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->poll_events(Handle, &err), err, "poll_events");
+        Handle->poll_events(Handle);
     }
 
     /// <summary>Retrieves the current client-area size in pixels.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
     public (int Width, int Height) GetSize()
     {
         int width;
         int height;
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->get_size(Handle, &width, &height, &err), err, "get_size");
+        Handle->get_size(Handle, &width, &height);
         return (width, height);
     }
 
@@ -86,7 +82,7 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
         OnDispose();
         if (_native == null) return;
         if (_borrowed) { _native = null; return; }
-        _native->on_shutdown(_native, null);
+        _native->on_shutdown(_native);
         _destroy(_native);
         _native = null;
     }

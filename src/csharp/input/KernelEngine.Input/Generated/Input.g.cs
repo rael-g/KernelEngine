@@ -34,9 +34,8 @@ public unsafe partial class Input : IDisposable, INativeInput
     /// <exception cref="Exception">The native call failed.</exception>
     public Input()
     {
-        ke_error* err = null;
-        var handle = KernelEngine.Input.Native.NativeMethods.input_create(&err);
-        if (handle.@ref == null) throw NativeErrors.FromNative(err, "ke_input_create");
+        ke_input_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Input.Native.NativeMethods.input_create(&handle), "ke_input_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -52,11 +51,9 @@ public unsafe partial class Input : IDisposable, INativeInput
     }
 
     /// <summary>Updates internal state, clearing this frame's pressed/released edges. Call once per tick, before any query.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
     public void Update()
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->update(Handle, &err), err, "update");
+        Handle->update(Handle);
     }
 
     /// <summary>Returns true if the key transitioned to down during this tick.</summary>

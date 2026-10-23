@@ -67,6 +67,12 @@ public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiPa
     /// the caller's own type.
     /// </summary>
     public IReadOnlyList<BlobPair> Blobs { get; init; } = [];
+
+    /// <summary>
+    /// The one <c>[out]</c> parameter of a slot that returns the result code: the value the call
+    /// hands back once the code says it succeeded, and the key a retained closure is kept under.
+    /// </summary>
+    public ApiParam? ResultOut { get; init; }
 }
 
 /// <summary>
@@ -195,7 +201,7 @@ public static class Classifier
             var factory = model.Functions.FirstOrDefault(f => f.Name == convention.FactoryNameFor(v.Name));
             if (factory is not null)
             {
-                var fparams = factory.Params.Where(p => !convention.IsErrorOutParam(p));
+                var fparams = convention.FactoryInputs(factory);
                 result.Constructors[v.Name] = new ConstructorPlan(ConstructorKind.FromFactory, factory, null,
                     NeedsWrapper: fparams.Any(p => CTypes.IsPointer(p.Type)));
                 continue;
@@ -208,8 +214,8 @@ public static class Classifier
 
         foreach (var fn in model.Functions)
         {
-            if (convention.IsFactoryName(fn.Name) && fn.Params.Any(convention.IsErrorOutParam)
-                && vtables.Any(v => fn.Returns.Contains(convention.HandleTypeFor(v.Name))))
+            if (convention.IsFactoryName(fn.Name) && convention.ResultFactoryHandle(fn) is { } made
+                && vtables.Any(v => convention.HandleTypeFor(v.Name) == made))
                 continue;
 
             var firstParamType = fn.Params.FirstOrDefault()?.Type.Replace("const ", "").Replace("struct ", "").TrimEnd('*', ' ');
@@ -263,8 +269,7 @@ public static class Classifier
     static ClassifiedSlot ClassifySlot(ApiModel model, ApiSlot slot, Convention convention)
     {
         var ps = slot.Params.ToList();
-        var fallible = convention.IsFallible(slot.Returns, ps);
-        if (fallible) ps = ps[..^1];
+        var fallible = convention.ReturnsResult(slot.Returns);
 
         var (expanded, bag) = ExpandedBag(model, slot);
         if (expanded is not null)
@@ -349,6 +354,8 @@ public static class Classifier
 
         var carriesReturn = slot.Returns.Trim() is not "void"
             && !convention.SignalsFailureByReturn(slot.Returns);
+        var resultOut = convention.ReturnsResult(slot.Returns) && allOut.Count == 1 && !isTry ? allOut[0] : null;
+        if (resultOut is not null) allOut = [];
         var outParam = allOut.Count == 1 && !carriesReturn ? allOut[0] : null;
 
         var tupleOut = allOut.Count >= 2 ? allOut : null;
@@ -375,8 +382,9 @@ public static class Classifier
                 + " to infer from the header here.");
 
         return new ClassifiedSlot(slot, shape, fallible, outParam, sequences,
-            isTry ? allOut : tupleOut ?? [], ps)
+            isTry ? allOut : tupleOut ?? [], resultOut is null ? ps : ps.Where(p => p != resultOut).ToList())
         {
+            ResultOut = resultOut,
             ExpandedParam = expanded,
             ExpandedStruct = bag,
             ReturnCount = returnCount,

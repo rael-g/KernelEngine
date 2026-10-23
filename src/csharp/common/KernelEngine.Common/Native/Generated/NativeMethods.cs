@@ -1,22 +1,9 @@
-using System.Runtime.InteropServices;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Common.Native;
 
-public static unsafe partial class NativeMethods
+public static partial class NativeMethods
 {
-    [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_error_is", ExactSpelling = true)]
-    public static extern bool error_is([NativeTypeName("const ke_error *")] ke_error* err, [NativeTypeName("const ke_error_type *")] ke_error_type* type);
-
-    [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_error_last", ExactSpelling = true)]
-    [return: NativeTypeName("const ke_error *")]
-    public static extern ke_error* error_last();
-
-    [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_error_set", ExactSpelling = true)]
-    public static extern void error_set(ke_error** out_error, [NativeTypeName("const ke_error_type *")] ke_error_type* type, [NativeTypeName("const char *")] sbyte* message, [NativeTypeName("const char *")] sbyte* file, [NativeTypeName("uint32_t")] uint line, [NativeTypeName("const ke_error *")] ke_error* cause);
-
-    [DllImport("ke_common", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_error_fatal", ExactSpelling = true)]
-    public static extern void error_fatal([NativeTypeName("const ke_error *")] ke_error* err);
-
     [NativeTypeName("#define KE_RESOURCE_HANDLE_NONE UINT32_MAX")]
     public const uint KE_RESOURCE_HANDLE_NONE = (4294967295U);
 }

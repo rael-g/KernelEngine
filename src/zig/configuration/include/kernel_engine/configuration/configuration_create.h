@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_CREATE_H_
 #define KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_CREATE_H_
 
-#include <kernel_engine/common/error.h>
 #include <kernel_engine/configuration/configuration.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -21,7 +20,12 @@ extern "C"
 {
 #endif
 
-    KE_CONFIGURATION_API ke_configuration_handle ke_configuration_create(ke_error **out_error);
+    /**
+     * Creates an empty configuration store.
+     * @param out_store [out] Receives the store; left zeroed on failure.
+     * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p out_store, or KE_RESULT_OUT_OF_MEMORY.
+     */
+    KE_CONFIGURATION_API ke_result ke_configuration_create(ke_configuration_handle *out_store);
 
 #ifdef __cplusplus
 }

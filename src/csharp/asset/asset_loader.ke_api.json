@@ -228,10 +228,10 @@
       "slots": [
         {
           "name": "load_model",
-          "returns": "ke_model_data *",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Loads a 3D model from path into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.",
-          "return_doc": null,
+          "doc": "Loads a 3D model from path into a newly allocated ke_model_data.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_model; KE_RESULT_NOT_FOUND when the importer cannot read the file, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "path",
@@ -242,10 +242,12 @@
               "doc": "Absolute or relative file path (.gltf, .glb, .obj, .fbx, \u2026)."
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_model",
+              "type": "ke_model_data **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the model, which the caller owns and releases with free_model; NULL on failure."
             }
           ],
           "receiver": "struct ke_asset_loader *"
@@ -343,10 +345,10 @@
       "doc": "Completion callback for ke_asset_loader::load_model_async.",
       "lanes": [
         {
-          "name": "error",
-          "type": "const ke_error *",
+          "name": "result",
+          "type": "ke_result",
           "tags": [],
-          "doc": "NULL on success; pointer to a ke_error on failure (valid until the next failing call on this thread \u2014 copy what you need before returning)."
+          "doc": "KE_OK, or the code of the load that failed, whose reason is logged."
         },
         {
           "name": "data",
@@ -368,6 +370,6 @@
     }
   ],
   "type_aliases": {
-    "ke_load_model_complete_func": "void (*)(const ke_error *, struct ke_model_data *, void *)"
+    "ke_load_model_complete_func": "void (*)(ke_result, struct ke_model_data *, void *)"
   }
 }

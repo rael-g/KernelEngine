@@ -1,4 +1,3 @@
-#include <kernel_engine/common/error.h>
 #include <kernel_engine/physics/box2d/box2d_physics.h>
 #include <kernel_engine/physics/box2d/physics_2d_box2d_log.h>
 #include <stdio.h>
@@ -27,8 +26,8 @@ int main(void)
     ke_physics_2d_box2d_set_log_callback(print_line, NULL);
 
     ke_physics_2d_box2d_params params = {.gravity_x = 0.0f, .gravity_y = -9.81f};
-    ke_physics_2d_handle physics = ke_physics_2d_box2d_create(&params, NULL);
-    if (physics.ref)
+    ke_physics_2d_handle physics = {0};
+    if (ke_physics_2d_box2d_create(&params, &physics) == KE_OK)
         physics.destroy(physics.ref);
 
     printf("--- Demo Complete ---\n");

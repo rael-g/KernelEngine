@@ -1,5 +1,5 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Logger.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Input.Native;
 

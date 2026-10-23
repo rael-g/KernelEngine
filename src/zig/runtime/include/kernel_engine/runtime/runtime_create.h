@@ -30,10 +30,17 @@ typedef struct ke_runtime_params {
     uint32_t max_systems_per_phase;
 } ke_runtime_params;
 
-KE_RUNTIME_CREATE_API ke_runtime_handle ke_runtime_create(ke_ecs                  *ecs,
-                                                          ke_scheduler            *scheduler,
-                                                          const ke_runtime_params *params,
-                                                          ke_error               **out_error);
+/**
+ * Creates a runtime over @p ecs and @p scheduler, both borrowed for its lifetime.
+ * @param params [borrowed,optional] NULL takes every default.
+ * @param out_runtime [out] Receives the runtime; left zeroed on failure.
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p scheduler or @p out_runtime;
+ *         KE_RESULT_OUT_OF_MEMORY.
+ */
+KE_RUNTIME_CREATE_API ke_result ke_runtime_create(ke_ecs                  *ecs,
+                                                  ke_scheduler            *scheduler,
+                                                  const ke_runtime_params *params,
+                                                  ke_runtime_handle       *out_runtime);
 
 #ifdef __cplusplus
 }

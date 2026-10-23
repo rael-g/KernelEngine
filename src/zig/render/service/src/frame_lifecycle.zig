@@ -6,13 +6,17 @@ const rc = @import("render_service.zig");
 const resource_table = @import("resource_table.zig");
 const frame_chain = @import("frame_chain.zig");
 const c = rc.c;
+const R = rc.R;
+const log = std.log.scoped(.render_service);
 
 /// Opens a frame. The previous frame's ended passes, compute records and upload counters are
-/// cleared, and the logs of ended passes and compute records grown to what it used, before the target is acquired, so a failed acquire leaves the frame closed and
-/// returns zero with the target's error. Once it has returned one, the backbuffer size is read
-/// from the target, the "backbuffer" entry holds the acquired view, the chain's links are given
+/// cleared, and the logs of ended passes and compute records grown to what it used, before the
+/// target is acquired, so a failed acquire leaves the frame closed and returns the target's code,
+/// and a target with nothing to draw into leaves it closed and succeeds. Once it has a view, the
+/// backbuffer size is read from the target, the "backbuffer" entry holds the acquired view, the chain's links are given
 /// their textures, the clear of the frame's color and depth is recorded and the frame is live.
-pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+pub fn beginFrame(self: [*c]c.ke_render_service) callconv(.c) c.ke_result {
+    if (self == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
     st.frame_live = false;
     dropClear(st);
@@ -26,15 +30,16 @@ pub fn beginFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) 
     }
     st.upload_count.store(0, .monotonic);
     st.upload_arena_offset.store(0, .monotonic);
-    const view = st.target.acquire.?(st.target, out_error);
-    if (view == c.KE_GPU_INVALID_HANDLE) return false;
+    var view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE;
+    const acquired = st.target.acquire.?(st.target, &view);
+    if (acquired != R.ok or view == c.KE_GPU_INVALID_HANDLE) return acquired;
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
     resource_table.resizeRelative(st);
     if (st.find("backbuffer")) |bb| bb.view = view;
     frame_chain.assign(st);
     st.clear_pass = frame_chain.recordClear(st);
     st.frame_live = true;
-    return true;
+    return R.ok;
 }
 
 fn dropClear(st: *rc.CoreState) void {
@@ -81,8 +86,8 @@ const Submission = struct {
         var n: u32 = 0;
         for (self.encoders[0..self.count], self.records[0..self.count]) |enc, rec| {
             if (rec) |r| replay(enc.ref, r);
-            const cmd = enc.ref.*.finish.?(enc.ref, null);
-            if (cmd.ref == null) continue;
+            var cmd: c.ke_gpu_command_buffer_handle = .{ .ref = null, .destroy = null };
+            if (enc.ref.*.finish.?(enc.ref, &cmd) != R.ok) continue;
             self.finished[n] = cmd;
             self.cmds[n] = cmd.ref;
             n += 1;
@@ -100,13 +105,14 @@ const Submission = struct {
 /// source into the target. Last comes the draw of the frame's color into the backbuffer. A compute
 /// record is replayed on its pass's encoder before it is finished; an encoder whose finish fails
 /// is left out. The command buffers are submitted in one call and destroyed with their encoders,
-/// and the frame stops being live. Returns the result of the present, with the target's error on
-/// failure; the queue is polled whatever it returned. When the submission cannot be allocated the
-/// frame's encoders are destroyed unsubmitted, nothing is presented and it returns zero with an
-/// out-of-memory error. Returns zero and does nothing when no frame is live.
-pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+/// and the frame stops being live. Returns the code of the present; the queue is polled whatever
+/// it returned. When the submission cannot be allocated the frame's encoders are destroyed
+/// unsubmitted, nothing is presented and it fails as out of memory. Succeeds doing nothing when
+/// no frame is live.
+pub fn endFrame(self: [*c]c.ke_render_service) callconv(.c) c.ke_result {
+    if (self == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
-    if (!st.frame_live) return false;
+    if (!st.frame_live) return R.ok;
 
     flushUploads(st);
 
@@ -116,8 +122,8 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
     while (it.next()) |_| ended_count += 1;
     var sub = Submission.init(ended_count + st.chain.links.items.len + 2) catch {
         dropFrame(st);
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "end_frame: the submission could not be allocated", @src().file, @intCast(@src().line), null);
-        return false;
+        log.warn("end_frame: the submission could not be allocated", .{});
+        return R.code(error.OutOfMemory);
     };
     defer sub.deinit();
     sub.add(st.clear_pass, null);
@@ -146,7 +152,7 @@ pub fn endFrame(self: [*c]c.ke_render_service, out_error: [*c][*c]c.ke_error) ca
 
     st.frame_live = false;
     if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
-    const presented = st.target.present.?(st.target, out_error);
+    const presented = st.target.present.?(st.target);
     st.device.queue_poll.?(st.device, st.queue);
     return presented;
 }

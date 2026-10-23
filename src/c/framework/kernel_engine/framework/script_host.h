@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/commands.h>
 
@@ -70,17 +70,20 @@ extern "C"
         /// Registers a script type under `name`, described by the components its
         /// instances carry and how far its behaviour reaches. Registering the same
         /// name twice returns the existing id when the description matches and
-        /// fails when it does not.
+        /// fails as already existing when it does not.
         /// @param name [utf8]
         /// @param components [array_of:component_count]
         /// @param out_id [out]
-        bool (*register_type)(struct ke_script_host *self,
-                              const char            *name,
-                              const ke_component_id *components,
-                              uint32_t               component_count,
-                              ke_script_reach        reach,
-                              ke_script_type_id     *out_id,
-                              ke_error             **out_error);
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or empty @p name, a null
+        ///         @p out_id or a count without components, KE_RESULT_ALREADY_EXISTS,
+        ///         KE_RESULT_OUT_OF_MEMORY when the table is full, or the ecs's code when it
+        ///         refuses the type's tag.
+        ke_result (*register_type)(struct ke_script_host *self,
+                                   const char            *name,
+                                   const ke_component_id *components,
+                                   uint32_t               component_count,
+                                   ke_script_reach        reach,
+                                   ke_script_type_id     *out_id);
 
         /// [try] Resolves a type by name without registering it. An undeclared name fails.
         /// @param name [utf8]
@@ -113,13 +116,15 @@ extern "C"
 
         /// Binds `instance` to `entity` as an instance of `type`. The pointer is
         /// stored and never dereferenced. Binding an entity that already carries an
-        /// instance fails rather than replacing it.
+        /// instance fails as already existing rather than replacing it.
         /// @param instance [rooted:entity]
-        bool (*bind)(struct ke_script_host *self,
-                     ke_entity              entity,
-                     ke_script_type_id      type,
-                     void                  *instance,
-                     ke_error             **out_error);
+        /// @return KE_OK; KE_RESULT_NOT_FOUND for a type never registered,
+        ///         KE_RESULT_INVALID_ARGUMENT for the invalid entity, KE_RESULT_ALREADY_EXISTS,
+        ///         or KE_RESULT_OUT_OF_MEMORY.
+        ke_result (*bind)(struct ke_script_host *self,
+                          ke_entity              entity,
+                          ke_script_type_id      type,
+                          void                  *instance);
 
         /// [unroots:entity] Drops the binding for `entity`, if any. The instance
         /// itself is the binding runtime's to release.
@@ -129,20 +134,23 @@ extern "C"
         /// is applied. A bind that fails at that point is dropped.
         /// @param instance [rooted:entity]
         /// @param commands [ctx]
-        bool (*bind_deferred)(struct ke_script_host *self,
-                              ke_entity              entity,
-                              ke_script_type_id      type,
-                              void                  *instance,
-                              ke_ecs_commands       *commands,
-                              ke_error             **out_error);
+        /// @return KE_OK; KE_RESULT_NOT_FOUND for a type never registered,
+        ///         KE_RESULT_INVALID_ARGUMENT for the invalid entity or a null @p commands, or
+        ///         the queue's code when it refuses the recording.
+        ke_result (*bind_deferred)(struct ke_script_host *self,
+                                   ke_entity              entity,
+                                   ke_script_type_id      type,
+                                   void                  *instance,
+                                   ke_ecs_commands       *commands);
 
         /// [idiom] Records unbind into `commands`; the binding is dropped when `commands`
         /// is applied.
         /// @param commands [ctx]
-        bool (*unbind_deferred)(struct ke_script_host *self,
-                                ke_entity              entity,
-                                ke_ecs_commands       *commands,
-                                ke_error             **out_error);
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p commands, or the queue's
+        ///         code when it refuses the recording.
+        ke_result (*unbind_deferred)(struct ke_script_host *self,
+                                     ke_entity              entity,
+                                     ke_ecs_commands       *commands);
 
         /// [try] The instance bound to `entity`. False when none is, which is a normal
         /// answer, not a failure.

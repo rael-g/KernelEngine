@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_SOURCE_H_
 #define KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_SOURCE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/configuration/configuration.h>
 #include <stdbool.h>
 
@@ -20,9 +20,11 @@ extern "C"
         /// succeeds. Writes made before a failure stay.
         /// @param cfg  [borrowed] The store written to.
         /// @param path [utf8] Where the values are read from.
-        /// @return false, with the error set, when the content cannot be read or a write fails.
-        bool (*load)(struct ke_configuration_source *self, ke_configuration *cfg,
-                     const char *path, ke_error **out_error);
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null store or path;
+        ///         KE_RESULT_GENERAL when the content does not parse; KE_RESULT_OUT_OF_MEMORY; or the
+        ///         code of the write that failed.
+        ke_result (*load)(struct ke_configuration_source *self, ke_configuration *cfg,
+                          const char *path);
     } ke_configuration_source;
 
     typedef struct ke_configuration_source_handle

@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Text.Abstractions\KernelEngine.Text.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
   </ItemGroup>
 
 </Project>

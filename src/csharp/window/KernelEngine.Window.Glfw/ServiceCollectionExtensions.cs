@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 
-using KernelEngine.Common.Native;
 using KernelEngine.Configuration;
 using KernelEngine.Input;
 using KernelEngine.Logger;
@@ -62,9 +61,9 @@ public static class ServiceCollectionExtensions
                 fullscreen = fullscreen,
             };
 
-            ke_error* err = null;
-            var handle = KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &err);
-            if (handle.@ref == null) throw NativeErrors.FromNative(err, "window_glfw_create");
+            KernelEngine.Window.Native.ke_window_handle handle;
+            KernelEngine.NativeResults.ThrowIfFailed(
+                KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create(&@params, &handle), "ke_window_glfw_create");
             return new KernelEngine.Window.Window(handle);
         }
         finally

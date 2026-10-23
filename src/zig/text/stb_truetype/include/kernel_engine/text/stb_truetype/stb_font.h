@@ -19,9 +19,12 @@
 extern "C" {
 #endif
 
-/// @brief Creates a ke_font_loader. Callable from any thread (CPU only).
-/// @return Handle whose @c ref is NULL on failure.
-KE_TEXT_STB_TRUETYPE_API ke_font_loader_handle ke_font_loader_stb_create(ke_error **out_error);
+/**
+ * @brief Creates a ke_font_loader. Callable from any thread (CPU only).
+ * @param out_loader [out] Receives the loader; left zeroed on failure.
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p out_loader, or KE_RESULT_OUT_OF_MEMORY.
+ */
+KE_TEXT_STB_TRUETYPE_API ke_result ke_font_loader_stb_create(ke_font_loader_handle *out_loader);
 
 #ifdef __cplusplus
 }

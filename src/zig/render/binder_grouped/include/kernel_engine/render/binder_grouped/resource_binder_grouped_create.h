@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_BINDER_GROUPED_RESOURCE_BINDER_GROUPED_CREATE_H_
 #define KERNEL_ENGINE_RENDER_BINDER_GROUPED_RESOURCE_BINDER_GROUPED_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -31,11 +31,12 @@ typedef struct ke_render_resource_binder_grouped_params
 /**
  * Creates a resource binder that gives every group of a shader one bind group and every material
  * one bind group of its own.
- * @return Handle whose @c ref is NULL on failure, with the error filled: invalid argument when
+ * @return KE_OK, or on failure, with the error filled: invalid argument when
  *         @p params, its device or its shader directory is NULL.
+ * @param out_binder [out] Receives the handle; left zeroed on failure.
  */
-KE_RENDER_BINDER_GROUPED_API ke_render_resource_binder_handle ke_render_resource_binder_grouped_create(
-    const ke_render_resource_binder_grouped_params *params, ke_error **out_error);
+KE_RENDER_BINDER_GROUPED_API ke_result ke_render_resource_binder_grouped_create(
+    const ke_render_resource_binder_grouped_params *params, ke_render_resource_binder_handle *out_binder);
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_RUNTIME_RUNTIME_H_
 #define KERNEL_ENGINE_RUNTIME_RUNTIME_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <stdbool.h>
@@ -63,9 +63,8 @@ typedef struct ke_query_decl {
 /// loaded into. Runs inside register_module, before that call returns.
 /// @param runtime   [self] The runtime the module is being loaded into.
 /// @param user_data [context] Opaque context forwarded from register_module.
-/// @param out_error Set when the module cannot load; registration fails with it.
-/// @return false when the module refused to load.
-typedef bool (*ke_module_load_fn)(ke_runtime *runtime, void *user_data, ke_error **out_error);
+/// @return KE_OK, or the code the module refused to load with; registration fails with it.
+typedef ke_result (*ke_module_load_fn)(ke_runtime *runtime, void *user_data);
 
 /// Releases whatever the matching load acquired, as the runtime is torn down.
 /// @param runtime   [self] The runtime the module was loaded into.
@@ -90,19 +89,17 @@ typedef struct ke_runtime_module_params {
 /// One call of a system body. The runtime calls it once per tick the system's
 /// phase runs, or once per slice when the system declared per_entity.
 ///
-/// A body runs on a worker thread, so only the type of what it failed with makes
-/// the trip back: the runtime carries that type to the thread driving the tick and
-/// raises a fresh error there, which tick() then fails with. The remaining bodies
-/// of the same wave still run — they were already dispatched — but no later phase
-/// of that tick starts.
+/// A body runs on a worker thread; the code it returns is carried to the thread
+/// driving the tick, which tick() then fails with, and the runtime logs the system's
+/// name. The remaining bodies of the same wave still run — they were already
+/// dispatched — but no later phase of that tick starts.
 /// @param ctx       [ctx] The body's only doorway to component memory for this
 ///                  call. Opaque; pass it to the entry points that take one.
 /// @param user_data [context] Opaque context forwarded from register_system.
 /// @param dt        Seconds since the previous tick, or the fixed timestep in
 ///                  the three fixed phases.
-/// @param out_error Set when the body cannot finish its work; the tick fails with it.
-/// @return false when the body failed.
-typedef bool (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt, ke_error **out_error);
+/// @return KE_OK, or the code of the work the body could not finish; the tick fails with it.
+typedef ke_result (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt);
 
 typedef struct ke_runtime_system_params {
     /// [utf8] Identifies the system in diagnostics and in the failure a body raises.
@@ -167,17 +164,21 @@ typedef struct ke_runtime {
 
     /// Loads a module into the runtime, running its load hook before returning.
     /// @param p [expand] What the module is called and the hooks it registers.
-    ke_module_id (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_error **out_error);
+    /// @param out_id [out] Receives the module's id; 0 on failure.
+    /// @return KE_OK, the code the load hook failed with, or KE_RESULT_OUT_OF_MEMORY.
+    ke_result (*register_module)(ke_runtime *self, const ke_runtime_module_params *p, ke_module_id *out_id);
     /// Registers a system body against the phase and the component access it declares.
     /// Registered from a body, the system takes effect with the next tick and a refusal
     /// is not reported.
     /// @param p [expand] What the system is called, when it runs, and what it touches.
-    /// @return 0 when the system was refused.
-    ke_system_id (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_error **out_error);
+    /// @param out_id [out] Receives the system's id; 0 on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a body, phase or declaration the runtime
+    ///         refuses; KE_RESULT_OUT_OF_MEMORY when the phase is full or storage cannot grow.
+    ke_result (*register_system)(ke_runtime *self, const ke_runtime_system_params *p, ke_system_id *out_id);
     /// Removes a system registered earlier. Called from a body, the removal takes effect
     /// with the next tick.
-    /// @return false when no system has that id.
-    bool (*unregister_system)(ke_runtime *self, ke_system_id id, ke_error **out_error);
+    /// @return KE_OK, or KE_RESULT_NOT_FOUND when no system has that id.
+    ke_result (*unregister_system)(ke_runtime *self, ke_system_id id);
     /// The id of the system registered last and still registered, or 0 when there is none.
     ke_system_id (*last_system)(ke_runtime *self);
 
@@ -185,27 +186,29 @@ typedef struct ke_runtime {
     /// two members of one group. Two systems whose every query requires a different member of
     /// the same group touch disjoint entities, so what they access through their queries puts
     /// no order between them; what their access lists name still does.
-    /// @return false when @p group equals @p member or the declaration cannot be stored.
-    bool (*declare_exclusive)(ke_runtime *self, ke_component_id group, ke_component_id member, ke_error **out_error);
+    /// @return KE_OK, KE_RESULT_INVALID_ARGUMENT when @p group equals @p member, or
+    ///         KE_RESULT_OUT_OF_MEMORY when the declaration cannot be stored.
+    ke_result (*declare_exclusive)(ke_runtime *self, ke_component_id group, ke_component_id member);
     /// Declares that whoever owns @p cid orders the systems writing it, so the runtime puts no
     /// order between two writers of @p cid. A writer still runs before a system that only
     /// reads it.
-    /// @return false when the declaration cannot be stored.
-    bool (*declare_self_ordered)(ke_runtime *self, ke_component_id cid, ke_error **out_error);
+    /// @return KE_OK, or KE_RESULT_OUT_OF_MEMORY when the declaration cannot be stored.
+    ke_result (*declare_self_ordered)(ke_runtime *self, ke_component_id cid);
     /// Builds the order of every phase as the next tick would. Within a phase, a system runs
     /// after the systems it names in `after` and before those it names in `before`, a writer of a component before a system that only
     /// reads it, and of two writers with neither order, the one registered first runs first: an
     /// ambiguity.
     /// @param refuse_ambiguity When true, an ambiguity fails the check too.
-    /// @return false with the error naming the systems when an `after` or a `before` names no
-    ///         system of its phase, the order has a cycle, or, when refused, two writers are ambiguous.
-    bool (*check_order)(ke_runtime *self, bool refuse_ambiguity, ke_error **out_error);
+    /// @return KE_OK; KE_RESULT_NOT_FOUND when an `after` or a `before` names no system of its
+    ///         phase; KE_RESULT_GENERAL when the order has a cycle or, when refused, two writers
+    ///         are ambiguous. The systems involved are named in the log.
+    ke_result (*check_order)(ke_runtime *self, bool refuse_ambiguity);
 
     /// [drains] Runs one tick: every sim phase in order, then the render phase.
     ///
     /// This is where a body that failed during the tick is answered for.
-    /// @return false when a body of this tick failed.
-    bool (*tick)(ke_runtime *self, float dt, ke_error **out_error);
+    /// @return KE_OK, or the code a body of this tick failed with.
+    ke_result (*tick)(ke_runtime *self, float dt);
 
     /// [drains, name:Flush] Blocks until any render phase dispatched by a previous tick() has
     /// finished, and fails with whatever a body of that phase failed with. That
@@ -215,8 +218,8 @@ typedef struct ke_runtime {
     /// tick() dispatches render asynchronously and returns before it completes;
     /// callers that need to tear down render-owned native resources must call this first, or the still-running render phase
     /// races the teardown. A no-op if nothing is pending.
-    /// @return false when a body of the render phase failed.
-    bool (*flush_render)(ke_runtime *self, ke_error **out_error);
+    /// @return KE_OK, or the code a body of the render phase failed with.
+    ke_result (*flush_render)(ke_runtime *self);
 } ke_runtime;
 
 typedef struct ke_runtime_handle {

@@ -7,6 +7,8 @@ const dev_impl = @import("gpu_device_webgpu.zig");
 const wgpu = dev_impl.wgpu;
 const ke = dev_impl.ke;
 const gpa = dev_impl.gpa;
+const R = @import("result").Result(ke, .{});
+const log = std.log.scoped(.gpu_webgpu);
 
 /// The state of one window render target. `ke_gpu_render_target_webgpu_window_create` allocates it
 /// from `gpa` and hands out `vtable` as the target, with `handle` pointing back at it; the
@@ -89,10 +91,10 @@ fn of(self: [*c]ke.ke_gpu_render_target) *WindowTarget {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
-/// Records the error at the source location the caller passes, so it names the failing line of the
-/// caller rather than this function. Returning the failure sentinel is left to the caller.
-fn fail(out_error: [*c][*c]ke.ke_error, etype: *const ke.ke_error_type, msg: [*c]const u8, src: std.builtin.SourceLocation) void {
-    ke.ke_error_set(out_error, etype, msg, src.file, @intCast(src.line), null);
+/// Logs `msg` and returns the code of `err`.
+fn fail(err: R.Error, comptime msg: []const u8) ke.ke_result {
+    log.warn(msg, .{});
+    return R.code(err);
 }
 
 /// Called by the factory for a non-empty window, by `acquire` when the window size differs from the
@@ -116,12 +118,11 @@ fn configure(t: *WindowTarget, width: u32, height: u32) void {
     t.height = height;
 }
 
-/// Reads the window's client size, with negative values clamped to zero. When the window cannot
-/// report it, returns null and leaves in the out error parameter the error its `get_size` set.
-fn windowSize(t: *WindowTarget, out_error: [*c][*c]ke.ke_error) ?[2]u32 {
+/// Reads the window's client size, with negative values clamped to zero.
+fn windowSize(t: *WindowTarget) [2]u32 {
     var w: i32 = 0;
     var h: i32 = 0;
-    if (!t.window.get_size.?(t.window, &w, &h, out_error)) return null;
+    t.window.get_size.?(t.window, &w, &h);
     return .{ @intCast(@max(w, 0)), @intCast(@max(h, 0)) };
 }
 
@@ -134,20 +135,19 @@ fn releaseFrame(t: *WindowTarget) void {
     t.texture = null;
 }
 
-/// Begins a frame and returns its view, which stays valid until `present`. The surface is
+/// Begins a frame and writes its view, which stays valid until `present`. The surface is
 /// configured lazily to the window's size, by this call whenever the size changes. An empty window
-/// yields the invalid handle without an error, so the caller skips the frame. A timed-out, outdated
-/// or lost texture is not an error: the surface is configured again and the invalid handle is
-/// returned with no error set. A failure after the surface produced a texture releases that texture
-/// and leaves no frame held.
-fn acquire(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) callconv(.c) ke.ke_gpu_texture_view {
+/// succeeds writing the invalid handle, so the caller skips the frame. A timed-out, outdated or
+/// lost texture is not a failure either: the surface is configured again and the invalid handle is
+/// written. A failure after the surface produced a texture releases that texture and leaves no
+/// frame held.
+fn acquire(self: [*c]ke.ke_gpu_render_target, out_view: ?*ke.ke_gpu_texture_view) callconv(.c) ke.ke_result {
+    const out = out_view orelse return R.code(error.InvalidArgument);
+    out.* = ke.KE_GPU_INVALID_HANDLE;
     const t = of(self);
-    if (t.view != null) {
-        fail(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "window target: a frame is already acquired", @src());
-        return ke.KE_GPU_INVALID_HANDLE;
-    }
-    const area = windowSize(t, out_error) orelse return ke.KE_GPU_INVALID_HANDLE;
-    if (area[0] == 0 or area[1] == 0) return ke.KE_GPU_INVALID_HANDLE;
+    if (t.view != null) return fail(error.InvalidArgument, "window target: a frame is already acquired");
+    const area = windowSize(t);
+    if (area[0] == 0 or area[1] == 0) return R.ok;
     if (area[0] != t.width or area[1] != t.height) configure(t, area[0], area[1]);
 
     var st = std.mem.zeroes(wgpu.WGPUSurfaceTexture);
@@ -162,35 +162,31 @@ fn acquire(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) ca
         => {
             if (st.texture) |tex| wgpu.wgpuTextureRelease(tex);
             configure(t, area[0], area[1]);
-            return ke.KE_GPU_INVALID_HANDLE;
+            return R.ok;
         },
         else => {
             if (st.texture) |tex| wgpu.wgpuTextureRelease(tex);
-            fail(out_error, &ke.KE_ERROR_NOT_INITIALIZED, "window target: the surface has no texture to draw into", @src());
-            return ke.KE_GPU_INVALID_HANDLE;
+            return fail(error.NotInitialized, "window target: the surface has no texture to draw into");
         },
     }
     const view = wgpu.wgpuTextureCreateView(st.texture, null) orelse {
         wgpu.wgpuTextureRelease(st.texture);
-        fail(out_error, &ke.KE_ERROR_NOT_INITIALIZED, "window target: the surface texture has no view", @src());
-        return ke.KE_GPU_INVALID_HANDLE;
+        return fail(error.NotInitialized, "window target: the surface texture has no view");
     };
     t.texture = st.texture;
     t.view = view;
-    return @intFromPtr(view);
+    out.* = @intFromPtr(view);
+    return R.ok;
 }
 
 /// Presents the held frame and releases it. The result of the surface's present is discarded, so a
 /// failed present is not reported, and the frame is released either way.
-fn present(self: [*c]ke.ke_gpu_render_target, out_error: [*c][*c]ke.ke_error) callconv(.c) bool {
+fn present(self: [*c]ke.ke_gpu_render_target) callconv(.c) ke.ke_result {
     const t = of(self);
-    if (t.view == null) {
-        fail(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "window target: no frame is acquired", @src());
-        return false;
-    }
+    if (t.view == null) return fail(error.InvalidArgument, "window target: no frame is acquired");
     _ = wgpu.wgpuSurfacePresent(t.surface);
     releaseFrame(t);
-    return true;
+    return R.ok;
 }
 
 /// Reports the cached `width` and `height` without asking the window. Those fields change only in
@@ -255,51 +251,45 @@ fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: ke.
     return null;
 }
 
-/// The exported factory. Every failure returns the empty handle with the error set, and releases
+/// The exported factory. Every failure leaves the handle zeroed, logging why, and releases
 /// the surface and display made so far, so nothing is left allocated. A device is refused unless
 /// its `get_default_queue` slot is the function this plugin installs.
 export fn ke_gpu_render_target_webgpu_window_create(
     params_in: ?*const ke.ke_gpu_render_target_webgpu_window_params,
-    out_error: [*c][*c]ke.ke_error,
-) ke.ke_gpu_render_target_handle {
-    const empty: ke.ke_gpu_render_target_handle = .{ .ref = null, .destroy = null };
+    out_target: ?*ke.ke_gpu_render_target_handle,
+) ke.ke_result {
+    const out = out_target orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
     const params = params_in orelse {
-        fail(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "window target: params are required", @src());
-        return empty;
+        return fail(error.InvalidArgument, "window target: params are required");
     };
     const device: [*c]ke.ke_gpu_device = params.device;
     const window: ?*ke.ke_window = params.window;
     if (device == null or device.*.get_default_queue != dev_impl.getDefaultQueue) {
-        fail(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "window target: the device was not created by ke_gpu_device_webgpu_create", @src());
-        return empty;
+        return fail(error.InvalidArgument, "window target: the device was not created by ke_gpu_device_webgpu_create");
     }
     const win = window orelse {
-        fail(out_error, &ke.KE_ERROR_INVALID_ARGUMENT, "window target: window is required", @src());
-        return empty;
+        return fail(error.InvalidArgument, "window target: window is required");
     };
     const ds = dev_impl.state(device);
     const created = createSurface(ds.instance, win) orelse {
-        fail(out_error, &ke.KE_ERROR_NOT_INITIALIZED, "window target: the window has no surface", @src());
-        return empty;
+        return fail(error.NotInitialized, "window target: the window has no surface");
     };
     const surface = created.surface;
     const choice = chooseFormat(surface, ds.adapter) orelse {
         wgpu.wgpuSurfaceRelease(surface);
         closeDisplay(created.display);
-        fail(out_error, &ke.KE_ERROR_NOT_SUPPORTED, "window target: the surface offers no RGBA8 or BGRA8 format on this adapter", @src());
-        return empty;
+        return fail(error.NotSupported, "window target: the surface offers no RGBA8 or BGRA8 format on this adapter");
     };
     const present_mode = presentModeOf(surface, ds.adapter, params.present_mode) orelse {
         wgpu.wgpuSurfaceRelease(surface);
         closeDisplay(created.display);
-        fail(out_error, &ke.KE_ERROR_NOT_SUPPORTED, "window target: the surface does not offer the present mode asked for", @src());
-        return empty;
+        return fail(error.NotSupported, "window target: the surface does not offer the present mode asked for");
     };
     const t = gpa.create(WindowTarget) catch {
         wgpu.wgpuSurfaceRelease(surface);
         closeDisplay(created.display);
-        fail(out_error, &ke.KE_ERROR_OUT_OF_MEMORY, "window target: out of memory", @src());
-        return empty;
+        return fail(error.OutOfMemory, "window target: out of memory");
     };
     t.* = .{
         .vtable = .{ .handle = t, .acquire = acquire, .present = present, .size = size, .format = format },
@@ -315,12 +305,10 @@ export fn ke_gpu_render_target_webgpu_window_create(
         .texture = null,
         .view = null,
     };
-    const initial = windowSize(t, out_error) orelse {
-        destroyUnconfigured(t);
-        return empty;
-    };
+    const initial = windowSize(t);
     if (initial[0] != 0 and initial[1] != 0) configure(t, initial[0], initial[1]);
-    return .{ .ref = &t.vtable, .destroy = destroy };
+    out.* = .{ .ref = &t.vtable, .destroy = destroy };
+    return R.ok;
 }
 
 /// Frees a target that the factory abandons before configuring its surface. It releases the surface
@@ -332,19 +320,16 @@ fn destroyUnconfigured(t: *WindowTarget) void {
 }
 
 test "a window target refuses missing params, a device it did not come from and a missing window" {
-    var none: [*c]ke.ke_error = null;
-    try std.testing.expect(ke_gpu_render_target_webgpu_window_create(null, &none).ref == null);
-    try std.testing.expect(none != null);
+    var target: ke.ke_gpu_render_target_handle = undefined;
+    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(null, &target));
+    try std.testing.expect(target.ref == null);
 
     var foreign = std.mem.zeroes(ke.ke_gpu_device);
-    var err: [*c]ke.ke_error = null;
-    try std.testing.expect(ke_gpu_render_target_webgpu_window_create(&.{ .device = &foreign, .window = null, .present_mode = ke.KE_GPU_PRESENT_MODE_FIFO }, &err).ref == null);
-    try std.testing.expect(err != null);
+    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = &foreign, .window = null, .present_mode = ke.KE_GPU_PRESENT_MODE_FIFO }, &target));
 
-    const handle = dev_impl.ke_gpu_device_webgpu_create(null, null);
-    const dev = handle.ref orelse return error.SkipZigTest;
+    var handle: ke.ke_gpu_device_handle = undefined;
+    if (dev_impl.ke_gpu_device_webgpu_create(null, &handle) != R.ok) return error.SkipZigTest;
+    const dev = handle.ref;
     defer handle.destroy.?(dev);
-    var missing: [*c]ke.ke_error = null;
-    try std.testing.expect(ke_gpu_render_target_webgpu_window_create(&.{ .device = dev, .window = null, .present_mode = ke.KE_GPU_PRESENT_MODE_FIFO }, &missing).ref == null);
-    try std.testing.expect(missing != null);
+    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = dev, .window = null, .present_mode = ke.KE_GPU_PRESENT_MODE_FIFO }, &target));
 }

@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_SKYBOX_SKYBOX_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SKYBOX_SKYBOX_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -48,9 +48,10 @@ extern "C"
     } ke_render_skybox_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service, device or camera
-    /// fails as an invalid argument; the handle's ref is NULL on failure.
-    KE_RENDER_SKYBOX_API ke_render_skybox_handle ke_render_skybox_create(
-        const ke_render_skybox_params *params, ke_error **out_error);
+    /// fails as an invalid argument.
+    /// @param out_skybox [out] Receives the handle; left zeroed on failure.
+    KE_RENDER_SKYBOX_API ke_result ke_render_skybox_create(
+        const ke_render_skybox_params *params, ke_render_skybox_handle *out_skybox);
 
 #ifdef __cplusplus
 }

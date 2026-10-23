@@ -1,7 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
 #define KERNEL_ENGINE_RESOURCE_CACHE_RESOURCE_CACHE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -28,18 +28,19 @@ extern "C"
     {
         void *handle;
 
-        /// Registers a new resource with refcount = 1. Sets out_error to KE_ERROR_INVALID_ARGUMENT
-        /// if handle == KE_RESOURCE_HANDLE_NONE or if already registered.
-        bool (*register_resource)(struct ke_resource_cache *self,
-                                  ke_resource_handle         handle,
-                                  ke_error                 **out_error);
+        /// Registers a new resource with refcount = 1. Returns KE_RESULT_INVALID_ARGUMENT for
+        /// KE_RESOURCE_HANDLE_NONE, KE_RESULT_ALREADY_EXISTS for a registered handle, and
+        /// KE_RESULT_OUT_OF_MEMORY when the table cannot grow.
+        ke_result (*register_resource)(struct ke_resource_cache *self, ke_resource_handle handle);
 
-        /// Increments the reference count. Sets out_error to KE_ERROR_NOT_FOUND if the handle is unknown.
-        bool (*retain)(struct ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error);
+        /// Increments the reference count. Returns KE_RESULT_INVALID_ARGUMENT for
+        /// KE_RESOURCE_HANDLE_NONE and KE_RESULT_NOT_FOUND for an unknown handle.
+        ke_result (*retain)(struct ke_resource_cache *self, ke_resource_handle handle);
 
         /// Decrements the reference count; fires the cache's destroy_fn when it reaches zero
-        /// and removes the entry.
-        bool (*release)(struct ke_resource_cache *self, ke_resource_handle handle, ke_error **out_error);
+        /// and removes the entry. Returns KE_RESULT_INVALID_ARGUMENT for KE_RESOURCE_HANDLE_NONE
+        /// and KE_RESULT_NOT_FOUND for an unknown handle.
+        ke_result (*release)(struct ke_resource_cache *self, ke_resource_handle handle);
 
         /// Returns true and sets *out_handle if the key is cached; also retains on behalf of the caller.
         bool (*try_get_cached)(struct ke_resource_cache *self,
@@ -47,12 +48,12 @@ extern "C"
                                ke_resource_handle       *out_handle);
 
         /// Associates a handle with a string key for later dedup lookups. Returns
-        /// KE_ERROR_INVALID_ARGUMENT if the key is already mapped (callers should
-        /// try_get_cached first to detect intentional re-insertion).
-        bool (*cache_insert)(struct ke_resource_cache *self,
-                             const char               *key,
-                             ke_resource_handle        handle,
-                             ke_error                **out_error);
+        /// KE_RESULT_ALREADY_EXISTS if the key is already mapped (callers should try_get_cached
+        /// first to detect intentional re-insertion), KE_RESULT_INVALID_ARGUMENT for a null key or
+        /// KE_RESOURCE_HANDLE_NONE, and KE_RESULT_OUT_OF_MEMORY.
+        ke_result (*cache_insert)(struct ke_resource_cache *self,
+                                  const char               *key,
+                                  ke_resource_handle        handle);
 
         /// Removes a cached key (called automatically when refcount → 0).
         void (*cache_evict)(struct ke_resource_cache *self, const char *key);

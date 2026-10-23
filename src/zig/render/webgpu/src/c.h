@@ -3,7 +3,7 @@
 
 #include <webgpu/webgpu.h>
 #include <webgpu/wgpu.h>
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_commands.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>

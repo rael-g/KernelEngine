@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
 
@@ -50,14 +50,15 @@ typedef struct ke_gpu_render_target_webgpu_window_params
 
 /**
  * @brief Creates a render target presenting into a window, sized to the window's client area.
- * @return Handle whose @c ref is NULL on failure: KE_ERROR_INVALID_ARGUMENT for null params, a
- *         device from another backend or a NULL window, KE_ERROR_NOT_SUPPORTED when the window's
+ * @return KE_OK, or on failure: KE_RESULT_INVALID_ARGUMENT for null params, a
+ *         device from another backend or a NULL window, KE_RESULT_NOT_SUPPORTED when the window's
  *         surface offers neither an RGBA8 nor a BGRA8 format, or does not offer the present mode
  *         asked for.
+ * @param out_target [out] Receives the handle; left zeroed on failure.
  */
-KE_GPU_WEBGPU_API ke_gpu_render_target_handle
+KE_GPU_WEBGPU_API ke_result
 ke_gpu_render_target_webgpu_window_create(const ke_gpu_render_target_webgpu_window_params *params,
-                                          ke_error **out_error);
+                                          ke_gpu_render_target_handle *out_target);
 
 #ifdef __cplusplus
 }

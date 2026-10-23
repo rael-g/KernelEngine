@@ -1,4 +1,4 @@
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -18,52 +18,64 @@ static const char triangle_wgsl[] = {
     , 0};
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-static void die(const char *msg, ke_error *err)
+static void die_result(const char *what, ke_result result)
 {
-    if (err) { ke_error_fatal(err); }
-    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
-    ke_error_fatal(&fallback);
+    fprintf(stderr, "%s failed with result code 0x%08x\n", what, (unsigned)result);
+    exit(1);
+}
+
+static void die(const char *what)
+{
+    fprintf(stderr, "%s\n", what);
+    exit(1);
+}
+
+static void check(const char *what, ke_result result)
+{
+    if (result != KE_OK) die_result(what, result);
 }
 
 int main(void)
 {
     printf("--- c_demo_12: triangle through the render core (L5) ---\n");
-    ke_error *err = NULL;
-
     ke_window_glfw_params wp = {
         .input = NULL,
         .title = "c_demo_12 render core", .width = 800, .height = 600,
     };
-    ke_window_handle win = ke_window_glfw_create(&wp, &err);
-    if (!win.ref) die("window", err);
-    if (!win.ref->on_initialize(win.ref, &err)) die("window init", err);
+    ke_window_handle win = { 0 };
+    ke_result made_window = ke_window_glfw_create(&wp, &win);
+    if (made_window != KE_OK) die_result("window", made_window);
+    ke_result window_ready = win.ref->on_initialize(win.ref);
+    if (window_ready != KE_OK) die_result("window init", window_ready);
 
     ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
-    ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
-    if (!gpu.ref) die("gpu device", err);
+    ke_gpu_device_handle gpu = { 0 };
+    check("gpu device", ke_gpu_device_webgpu_create(&dp, &gpu));
 
-    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &err);
-    if (!target.ref) die("render target", err);
+    ke_gpu_render_target_handle target = { 0 };
+    check("render target", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));
 
     ke_ecs_flecs_params ep = { .world_id_base = 0 };
-    ke_ecs_handle ecs = ke_ecs_flecs_create(&ep, &err);
-    if (!ecs.ref) die("ecs", err);
+    ke_ecs_handle ecs = { 0 };
+    ke_result made_ecs = ke_ecs_flecs_create(&ep, &ecs);
+    if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
-    ke_render_resource_binder_handle binder = ke_render_resource_binder_grouped_create(
-        &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &err);
-    if (!binder.ref) die("resource binder", err);
+    ke_render_resource_binder_handle binder = { 0 };
+    check("resource binder", ke_render_resource_binder_grouped_create(
+        &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &binder));
 
-    ke_render_service_handle core = ke_render_service_create(&(ke_render_service_params){
-        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .binder = binder.ref }, &err);
-    if (!core.ref) die("render core", err);
+    ke_render_service_handle core = { 0 };
+    check("render core", ke_render_service_create(&(ke_render_service_params){
+        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .binder = binder.ref }, &core));
 
-    if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend", NULL);
+    if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend");
 
-    ke_gpu_shader_module shader = gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
-        .code = triangle_wgsl, .byte_size = strlen(triangle_wgsl), .label = "triangle" }, &err);
-    if (shader == KE_GPU_INVALID_HANDLE) die("shader", err);
+    ke_gpu_shader_module shader = { 0 };
+    check("shader", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
+        .code = triangle_wgsl, .byte_size = strlen(triangle_wgsl), .label = "triangle" }, &shader));
 
     ke_gpu_render_pipeline_params pp = {
         .vertex_module = shader, .fragment_module = shader,
@@ -78,29 +90,32 @@ int main(void)
         .color_target_formats = { core.ref->chain_format(core.ref, KE_RENDER_STAGE_OPAQUE) },
         .color_target_count = 1,
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline", err);
+    ke_gpu_pipeline pipeline = { 0 };
+    check("pipeline", gpu.ref->create_render_pipeline(gpu.ref, &pp, &pipeline));
     gpu.ref->destroy_shader_module(gpu.ref, shader);
 
-    ke_render_chain_link link = core.ref->join_chain(core.ref, KE_RENDER_STAGE_OPAQUE, KE_RENDER_CHAIN_DRAW_OVER, &err);
-    if (link == KE_RENDER_CHAIN_NONE) die("join chain", err);
+    ke_render_chain_link link = { 0 };
+    check("join chain", core.ref->join_chain(core.ref, KE_RENDER_STAGE_OPAQUE, KE_RENDER_CHAIN_DRAW_OVER, &link));
     ke_render_pass_io io = { .name = "triangle", .chain = link };
 
     printf("Triangle drawn through ke_render_service. Close the window to exit.\n");
     while (!win.ref->should_close(win.ref))
     {
-        win.ref->poll_events(win.ref, NULL);
+        win.ref->poll_events(win.ref);
 
-        if (!core.ref->begin_frame(core.ref, &err)) continue;
+        check("begin_frame", core.ref->begin_frame(core.ref));
 
         ke_render_pass_ctx *pc = core.ref->begin_pass(core.ref, &io);
-        ke_gpu_render_pass *rp = pc->begin_render(pc);
-        rp->set_pipeline(rp, pipeline);
-        rp->draw(rp, 3, 1, 0, 0);
-        rp->end(rp);
-        core.ref->end_pass(core.ref, pc);
+        if (pc)
+        {
+            ke_gpu_render_pass *rp = pc->begin_render(pc);
+            rp->set_pipeline(rp, pipeline);
+            rp->draw(rp, 3, 1, 0, 0);
+            rp->end(rp);
+            core.ref->end_pass(core.ref, pc);
+        }
 
-        core.ref->end_frame(core.ref, &err);
+        check("end_frame", core.ref->end_frame(core.ref));
     }
 
     gpu.ref->destroy_pipeline(gpu.ref, pipeline);
@@ -110,7 +125,7 @@ int main(void)
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);
-    win.ref->on_shutdown(win.ref, NULL);
+    win.ref->on_shutdown(win.ref);
     win.destroy(win.ref);
     printf("--- Done ---\n");
     return 0;

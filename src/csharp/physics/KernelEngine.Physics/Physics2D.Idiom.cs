@@ -12,8 +12,7 @@ public unsafe partial class Physics2D : IPhysics2D
     /// <inheritdoc/>
     BodyHandle2D IPhysics2D.CreateBody(BodyType2D type, Vector2 position)
     {
-        var id = CreateBody(type, position);
-        return id != 0 ? new BodyHandle2D(id) : BodyHandle2D.None;
+        return new BodyHandle2D(CreateBody(type, position));
     }
 
     /// <inheritdoc/>

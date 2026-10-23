@@ -24,8 +24,12 @@ extern "C"
 #endif
 #endif
 
-    KE_FRAMEWORK_API ke_input_actions_handle ke_input_actions_create(
-        ke_error **out_error);
+    /// Creates an empty action map.
+    /// @param out_actions [out] Receives the map; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_actions, or
+    ///         KE_RESULT_OUT_OF_MEMORY.
+    KE_FRAMEWORK_API ke_result ke_input_actions_create(
+        ke_input_actions_handle *out_actions);
 
 #ifdef __cplusplus
 }

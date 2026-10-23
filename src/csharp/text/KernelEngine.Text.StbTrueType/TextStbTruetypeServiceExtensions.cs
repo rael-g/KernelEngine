@@ -1,5 +1,4 @@
 
-using KernelEngine.Common.Native;
 using KernelEngine.Logger;
 using KernelEngine.Text.Native;
 using KernelEngine.Text.StbTrueType.Native;
@@ -23,9 +22,9 @@ public static class TextStbTrueTypeServiceExtensions
             {
                 if (sp.GetService<ILogger>() is { } logger)
                     KernelEngine.Text.StbTrueType.Native.NativeMethods.text_stb_truetype_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
-                ke_error* err = null;
-                var handle = KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&err);
-                if (handle.@ref == null) throw NativeErrors.FromNative(err, "font_loader_stb_create");
+                ke_font_loader_handle handle;
+                KernelEngine.NativeResults.ThrowIfFailed(
+                    KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&handle), "ke_font_loader_stb_create");
                 return new FontLoader(handle);
             }
         });

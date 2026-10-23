@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-using KernelEngine.Common.Native;
+using KernelEngine.Result.Native;
 
 namespace KernelEngine.Audio.Native;
 

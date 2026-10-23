@@ -31,6 +31,46 @@ internal static class GeneratorShapeCases
             contains: ["public uint SizeOf("],
             absent: ["uint* outSize"]);
 
+        Expect("a slot returning the result code throws on a code other than success",
+            Vtable("ke_probe", Slot("flush", "ke_result", Param("force", "bool"))),
+            contains: ["public void Flush(bool force)",
+                       "KernelEngine.NativeResults.ThrowIfFailed(Handle->flush(Handle, force), \"flush\");"],
+            absent: ["&err", "ke_error"]);
+
+        Expect("a slot returning the result code hands its single out parameter back as the return",
+            Vtable("ke_probe", Slot("count_of", "ke_result", Param("kind", "uint32_t"),
+                ParamDoc("out_count", "uint32_t *", "out", "How many there are."))),
+            contains: ["public uint CountOf(uint kind)",
+                       "uint resultOut = default;",
+                       "KernelEngine.NativeResults.ThrowIfFailed(Handle->count_of(Handle, kind, &resultOut), \"count_of\");",
+                       "return resultOut;", "<returns>How many there are.</returns>"],
+            absent: ["&err", "out uint count"]);
+
+        Expect("a factory returning the result code writes the handle through its last parameter",
+            Vtable("ke_probe", "provider", Slot("flush", "ke_result")),
+            functions: [Function("ke_probe_create", "ke_result", Param("size", "uint32_t"),
+                Param("out_probe", "ke_probe_handle *", "out"))],
+            contains: ["(uint size)", "ke_probe_handle handle;",
+                       "KernelEngine.NativeResults.ThrowIfFailed(Probe.Native.NativeMethods.probe_create(size, &handle), \"ke_probe_create\");"],
+            absent: ["&err", "outProbe"]);
+
+        Expect("a shutdown slot with no failure lane is called with its handle alone",
+            Vtable("ke_probe", Slot("on_shutdown", "void", "lifecycle:shutdown")),
+            contains: ["_native->on_shutdown(_native);"],
+            absent: ["_native->on_shutdown(_native, null);"]);
+
+        Expect("a result-returning slot that writes memory a projection owns answers with that projection",
+            Vtable("ke_probe",
+                Slot("open", "ke_result", Param("self", "ke_probe *", "self"),
+                    Param("out_bundle", "ke_probe_bundle **", "out")),
+                Slot("close", "void", "releases:Bundle", Param("self", "ke_probe *", "self"),
+                    Param("bundle", "ke_probe_bundle *"))),
+            contains: ["public Bundle Open(ke_probe* self)",
+                       "ke_probe_bundle* resultOut = default;",
+                       "return new Bundle(this, (ProbeBundle*)resultOut);"],
+            absent: ["&err"],
+            structs: [ViewJson("ke_probe_bundle")]);
+
         Expect("a utf8 parameter is a string on the public surface",
             Vtable("ke_probe", Slot("named", "ke_entity", Param("name", "const char *", "utf8"))),
             contains: ["public ulong Named(string name)", "Encoding.UTF8.GetBytes"],
@@ -38,9 +78,8 @@ internal static class GeneratorShapeCases
 
         Expect("a rooted parameter takes an object and is kept alive",
             Vtable("ke_probe",
-                Slot("bind", "bool", Param("entity", "ke_entity"),
-                     Param("instance", "void *", "rooted:entity"),
-                     Param("out_error", "ke_error **")),
+                Slot("bind", "ke_result", Param("entity", "ke_entity"),
+                     Param("instance", "void *", "rooted:entity")),
                 Slot("drop", "void", "unroots:entity", Param("entity", "ke_entity")),
                 Slot("instance_of", "bool", "try", Param("entity", "ke_entity"),
                      Param("out_type", "uint32_t *", "out"),
@@ -60,11 +99,10 @@ internal static class GeneratorShapeCases
             throws: "a rooted pointer is the one thing it never does");
 
         Expect("an interning slot emits the type cache and its reverse",
-            Vtable("ke_probe", Slot("signal_id", "bool",
+            Vtable("ke_probe", Slot("signal_id", "ke_result",
                 Param("name", "const char *", "utf8,type_name"),
                 Param("payload_size", "uint32_t", "type_size"),
-                Param("out_id", "uint32_t *", "out"),
-                Param("out_error", "ke_error **"), "interns")),
+                Param("out_id", "uint32_t *", "out"), "interns")),
             contains: ["public uint SignalIdOf<T>() where T : unmanaged", "public Type? SignalIdTypeOf(uint id)"],
             absent: []);
 
@@ -138,15 +176,14 @@ internal static class GeneratorShapeCases
             absent: ["public static bool Attach(nint"]);
 
         Expect("an opaque payload on a fallible slot takes the caller's own type",
-            Vtable("ke_probe", Slot("attach", "bool",
+            Vtable("ke_probe", Slot("attach", "ke_result",
                 Param("entity", "uint64_t"),
                 Param("data", "const void *", "bytes_of:size"),
-                Param("size", "size_t"),
-                Param("out_error", "ke_error **"))),
+                Param("size", "size_t"))),
             contains: ["public void Attach<TData>(ulong entity, in TData data) where TData : unmanaged",
                        "fixed (TData* dataPtr = &data)",
-                       "(void*)dataPtr, (nuint)sizeof(TData), &err",
-                       "NativeErrors.ThrowIfFailed("],
+                       "(void*)dataPtr, (nuint)sizeof(TData))",
+                       "KernelEngine.NativeResults.ThrowIfFailed("],
             absent: ["public void Attach(ulong"]);
 
         Expect("a typed pointer tagged as an opaque payload is refused",
@@ -174,10 +211,9 @@ internal static class GeneratorShapeCases
             absent: ["float impulseX"]);
 
         Expect("a callback and its context become one delegate parameter",
-            Vtable("ke_probe", Slot("watch", "bool",
+            Vtable("ke_probe", Slot("watch", "ke_result",
                 Param("on_event", "ke_probe_event_func", "closure:event_ctx"),
-                Param("event_ctx", "void *"),
-                Param("out_error", "ke_error **"))),
+                Param("event_ctx", "void *"))),
             contains: ["public delegate void ProbeEvent(uint tick);",
                        "public void Watch(ProbeEvent? onEvent)",
                        "GCHandle.Alloc(onEvent)",
@@ -192,38 +228,36 @@ internal static class GeneratorShapeCases
             callbacks: [Callback("ke_probe_event_func", "void",
                 Param("ctx", "void *", "context"), Param("tick", "uint32_t"))]);
 
-        Expect("a retained closure is kept per key and reports through the channel it declares",
-            Vtable("ke_probe", Slot("register_apply", "bool",
+        Expect("a retained closure is kept per key and reports through the code it returns",
+            Vtable("ke_probe", Slot("register_apply", "ke_result",
                 Param("cid", "uint32_t"),
                 Param("apply", "ke_probe_apply_fn", "closure:ctx,retained:cid"),
-                Param("ctx", "void *"),
-                Param("out_error", "ke_error **"))),
+                Param("ctx", "void *"))),
             contains: ["public delegate void ProbeApply(uint tick);",
                        "private readonly Dictionary<uint, GCHandle> _retainedApply = new();",
                        "public void RegisterApply(uint cid, ProbeApply? apply)",
-                       "private static bool RegisterApplyTrampoline(void* ctx, uint arg1, ke_error** arg2)",
-                       "NativeErrors.ToNative(arg2, ex, \"ke_probe_apply_fn\");",
+                       "private static KernelEngine.Result.Native.ke_result RegisterApplyTrampoline(void* ctx, uint arg1)",
+                       "return KernelEngine.NativeResults.ToCode(ex);",
                        "if (_retainedApply.Remove(cid, out var replacedApply)) replacedApply.Free();",
                        "_retainedApply[cid] = applyHandle;",
                        "foreach (var retained in _retainedApply.Values) retained.Free();"],
-            absent: ["s_parkedCallbackException", "void* ctx)", "applyHandle.Free();\n        _retainedApply"],
-            aliases: new() { ["ke_probe_apply_fn"] = "bool (*)(void *, uint32_t, ke_error **)" },
-            callbacks: [Callback("ke_probe_apply_fn", "bool",
-                Param("ctx", "void *", "context"), Param("tick", "uint32_t"),
-                Param("out_error", "ke_error **"))]);
+            absent: ["void* ctx)", "applyHandle.Free();\n        _retainedApply"],
+            aliases: new() { ["ke_probe_apply_fn"] = "ke_result (*)(void *, uint32_t)" },
+            callbacks: [Callback("ke_probe_apply_fn", "ke_result",
+                Param("ctx", "void *", "context"), Param("tick", "uint32_t"))]);
 
         Expect("an expanded params bag flattens the call and its shared context roots one object",
-            Vtable("ke_probe", Slot("register_module", "uint64_t",
+            Vtable("ke_probe", Slot("register_module", "ke_result",
                 Param("p", "const ke_probe_module_params *", "expand"),
-                Param("out_error", "ke_error **"))),
+                Param("out_id", "uint64_t *", "out"))),
             contains: ["public ulong RegisterModule(string name, ProbeLoad? onLoad, ProbeUnload? onUnload = null)",
                        "private readonly Dictionary<ulong, GCHandle> _retainedUserData = new();",
                        "GCHandle.Alloc(new RegisterModuleClosures { OnLoad = onLoad, OnUnload = onUnload })",
                        "ke_probe_module_params p = default;",
                        "p.user_data = (void*)GCHandle.ToIntPtr(userDataHandle);",
-                       "result = Handle->register_module(Handle, &p, &err);",
-                       "if (userDataHandle.IsAllocated) _retainedUserData[result] = userDataHandle;",
-                       "return result;",
+                       "Handle->register_module(Handle, &p, &resultOut)",
+                       "if (userDataHandle.IsAllocated) _retainedUserData[resultOut] = userDataHandle;",
+                       "return resultOut;",
                        "private sealed class RegisterModuleClosures",
                        "state.OnLoad is { } handler",
                        "state.OnUnload is { } handler",
@@ -234,11 +268,11 @@ internal static class GeneratorShapeCases
             absent: ["ke_probe_module_params* p", "void* userData", "onLoadHandle", "onUnloadHandle"],
             aliases: new()
             {
-                ["ke_probe_load_fn"] = "bool (*)(void *, ke_error **)",
+                ["ke_probe_load_fn"] = "ke_result (*)(void *)",
                 ["ke_probe_unload_fn"] = "void (*)(void *)"
             },
-            callbacks: [Callback("ke_probe_load_fn", "bool",
-                            Param("ctx", "void *", "context"), Param("out_error", "ke_error **")),
+            callbacks: [Callback("ke_probe_load_fn", "ke_result",
+                            Param("ctx", "void *", "context")),
                         Callback("ke_probe_unload_fn", "void",
                             Param("ctx", "void *", "context"))],
             structs: [new JsonObject
@@ -254,26 +288,47 @@ internal static class GeneratorShapeCases
                 ["slots"] = new JsonArray(),
             }]);
 
+        Expect("a result-returning registration keeps its closure under the id it writes and its handler fails by code",
+            Vtable("ke_probe",
+                Slot("register_job", "ke_result",
+                    Param("job", "ke_probe_job_fn", "closure:ctx,retained:return"),
+                    Param("ctx", "void *"),
+                    Param("out_id", "uint32_t *", "out")),
+                Slot("run", "ke_result", "drains")),
+            contains: ["public uint RegisterJob(ProbeJob? job)",
+                       "uint resultOut = default;",
+                       "Handle->register_job(Handle, ",
+                       "&resultOut)",
+                       "_retainedJob[resultOut] = jobHandle;",
+                       "return resultOut;",
+                       "private static KernelEngine.Result.Native.ke_result RegisterJobTrampoline(",
+                       "(delegate* unmanaged[Cdecl]<void*, float, KernelEngine.Result.Native.ke_result>)&RegisterJobTrampoline",
+                       "return KernelEngine.Result.Native.ke_result.KE_OK;",
+                       "failed.Owner._callbackFailures.Enqueue(ex);",
+                       "return KernelEngine.NativeResults.ToCode(ex);"],
+            absent: ["&err", "ke_error"],
+            aliases: new() { ["ke_probe_job_fn"] = "ke_result (*)(void *, float)" },
+            callbacks: [Callback("ke_probe_job_fn", "ke_result",
+                            Param("ctx", "void *", "context"), Param("dt", "float"))]);
+
         Expect("a retained handler's exception is queued on its provider and raised where the failure is observed",
             Vtable("ke_probe",
-                Slot("register_apply", "bool",
+                Slot("register_apply", "ke_result",
                     Param("cid", "uint32_t"),
                     Param("apply", "ke_probe_apply_fn", "closure:ctx,retained:cid"),
-                    Param("ctx", "void *"),
-                    Param("out_error", "ke_error **")),
-                Slot("run", "bool", "drains", Param("out_error", "ke_error **"))),
+                    Param("ctx", "void *")),
+                Slot("run", "ke_result", "drains")),
             contains: ["private readonly System.Collections.Concurrent.ConcurrentQueue<Exception> _callbackFailures = new();",
                        "private void DrainCallbackFailures()",
                        "GCHandle.Alloc(new RegisterApplyClosures { Owner = this, Apply = apply })",
                        "public required Probe Owner;",
                        "failed.Owner._callbackFailures.Enqueue(ex);",
-                       "if (!Handle->run(Handle, &err) && _callbackFailures.IsEmpty)",
+                       "if ((rc = Handle->run(Handle)) != KernelEngine.Result.Native.ke_result.KE_OK && _callbackFailures.IsEmpty)",
                        "DrainCallbackFailures();"],
             absent: ["GCHandle.Alloc(apply)"],
-            aliases: new() { ["ke_probe_apply_fn"] = "bool (*)(void *, uint32_t, ke_error **)" },
-            callbacks: [Callback("ke_probe_apply_fn", "bool",
-                Param("ctx", "void *", "context"), Param("tick", "uint32_t"),
-                Param("out_error", "ke_error **"))]);
+            aliases: new() { ["ke_probe_apply_fn"] = "ke_result (*)(void *, uint32_t)" },
+            callbacks: [Callback("ke_probe_apply_fn", "ke_result",
+                Param("ctx", "void *", "context"), Param("tick", "uint32_t"))]);
 
         Expect("every pointer+count pair in a slot becomes its own span",
             Vtable("ke_probe", Slot("declare", "uint64_t",
@@ -281,8 +336,7 @@ internal static class GeneratorShapeCases
                 Param("terms", "const ke_probe_term *", "array_of:term_count"),
                 Param("term_count", "uint32_t"),
                 Param("tags", "const uint32_t *", "array_of:tag_count"),
-                Param("tag_count", "uint32_t"),
-                Param("out_error", "ke_error **"))),
+                Param("tag_count", "uint32_t"))),
             contains: ["public ulong Declare(string name, Span<ke_probe_term> terms, Span<uint> tags)",
                        "fixed (ke_probe_term* termsPtr = terms)",
                        "fixed (uint* tagsPtr = tags)",
@@ -312,32 +366,29 @@ internal static class GeneratorShapeCases
             absent: ["ke_system_ctx* sys"]);
 
         Expect("a handler relays a context lane as nint and reports its own failure by throwing",
-            Vtable("ke_probe", Slot("register_body", "bool",
+            Vtable("ke_probe", Slot("register_body", "ke_result",
                 Param("body", "ke_probe_body_fn", "closure:ctx"),
-                Param("ctx", "void *"),
-                Param("out_error", "ke_error **"))),
+                Param("ctx", "void *"))),
             contains: ["public delegate void ProbeBody(nint sys, float dt);",
                        "handler((nint)arg0, arg2);",
-                       "return true;"],
-            absent: ["delegate bool ProbeBody", "ke_system_ctx* sys"],
-            aliases: new() { ["ke_probe_body_fn"] = "bool (*)(ke_system_ctx *, void *, float, ke_error **)" },
-            callbacks: [Callback("ke_probe_body_fn", "bool",
+                       "return KernelEngine.Result.Native.ke_result.KE_OK;"],
+            absent: ["delegate KernelEngine.Result.Native.ke_result ProbeBody", "ke_system_ctx* sys"],
+            aliases: new() { ["ke_probe_body_fn"] = "ke_result (*)(ke_system_ctx *, void *, float)" },
+            callbacks: [Callback("ke_probe_body_fn", "ke_result",
                 Param("sys", "ke_system_ctx *", "ctx"), Param("ctx", "void *", "context"),
-                Param("dt", "float"), Param("out_error", "ke_error **"))]);
+                Param("dt", "float"))]);
 
         Expect("a handler called with the provider is handed the managed wrapper, not the pointer",
-            Vtable("ke_probe", Slot("register_body", "bool",
+            Vtable("ke_probe", Slot("register_body", "ke_result",
                 Param("body", "ke_probe_body_fn", "closure:ctx"),
-                Param("ctx", "void *"),
-                Param("out_error", "ke_error **"))),
+                Param("ctx", "void *"))),
             contains: ["public delegate void ProbeBody(Probe probe);",
                        "public required Probe Owner;",
                        "handler(state.Owner);"],
             absent: ["_callbackFailures", "ke_probe* probe"],
-            aliases: new() { ["ke_probe_body_fn"] = "bool (*)(ke_probe *, void *, ke_error **)" },
-            callbacks: [Callback("ke_probe_body_fn", "bool",
-                Param("probe", "ke_probe *", "self"), Param("ctx", "void *", "context"),
-                Param("out_error", "ke_error **"))]);
+            aliases: new() { ["ke_probe_body_fn"] = "ke_result (*)(ke_probe *, void *)" },
+            callbacks: [Callback("ke_probe_body_fn", "ke_result",
+                Param("probe", "ke_probe *", "self"), Param("ctx", "void *", "context"))]);
 
         Expect("a slot that only answers becomes a property, in the class and in the contract alike",
             Vtable("ke_probe", "interface", Slot("root", "ke_entity", "property")),
@@ -471,8 +522,7 @@ internal static class GeneratorShapeCases
         Expect("a sequence of borrowed structs pins every element's memory for the call",
             Vtable("ke_probe", Slot("declare", "uint64_t",
                 Param("decls", "const ke_probe_decl *", "array_of:decl_count"),
-                Param("decl_count", "uint32_t"),
-                Param("out_error", "ke_error **"))),
+                Param("decl_count", "uint32_t"))),
             contains: ["public ulong Declare(Span<ProbeDecl> decls)",
                        "var declsPins = new System.Buffers.MemoryHandle[decls.Length];",
                        "var declsNative = new ke_probe_decl[decls.Length];",
@@ -536,14 +586,14 @@ internal static class GeneratorShapeCases
 
         Expect("[releases] pairs a handed-out pointer with the object that gives it back",
             Vtable("ke_probe",
-                Slot("open", "ke_probe_bundle *", Param("self", "ke_probe *", "self"),
-                    Param("out_error", "ke_error **")),
+                Slot("open", "ke_result", Param("self", "ke_probe *", "self"),
+                    Param("out_bundle", "ke_probe_bundle **", "out")),
                 Slot("close", "void", "releases:Bundle", Param("self", "ke_probe *", "self"),
                     Param("bundle", "ke_probe_bundle *"))),
             contains: ["public unsafe sealed class Bundle : IDisposable",
                        "public ProbeBundle Data => _native is null",
                        "_owner.Close(native);",
-                       "public Bundle Open(", "return new Bundle(this, result);",
+                       "public Bundle Open(", "return new Bundle(this, (ProbeBundle*)resultOut);",
                        "internal void Close(ke_probe* self, ProbeBundle* bundle)"],
             absent: ["public void Close(", "ProbeBundle* Open("],
             structs: [ViewJson("ke_probe_bundle")]);
@@ -557,7 +607,7 @@ internal static class GeneratorShapeCases
             structs: [ViewJson("ke_probe_bundle")],
             throws: "has no failure channel");
 
-        Expect("a callback handed the failure is the operation's answer, and answers as a Task",
+        Expect("a completion handed the result code fails the Task with the code's exception",
             Vtable("ke_probe",
                 Slot("open_async", "ke_task *", Param("self", "ke_probe *", "self"),
                     Param("path", "const char *", "utf8"),
@@ -566,21 +616,14 @@ internal static class GeneratorShapeCases
                 Slot("close", "void", "releases:Bundle", Param("self", "ke_probe *", "self"),
                     Param("bundle", "ke_probe_bundle *"))),
             contains: ["public Task<Bundle> OpenAsync(ke_probe* self, string path)",
-                       "var source = new TaskCompletionSource<Bundle>(TaskCreationOptions.RunContinuationsAsynchronously);",
-                       "var completion = GCHandle.Alloc(new OpenAsyncCompletion { Owner = this, Source = source });",
-                       "(void*)GCHandle.ToIntPtr(completion)",
-                       "completion.Free();",
-                       "return source.Task;",
-                       "private sealed class OpenAsyncCompletion",
-                       "private static void OpenAsyncOnDoneTrampoline(ke_error* arg0, ke_probe_bundle* arg1, void* ctx)",
-                       "if (arg0 != null || arg1 == null)",
-                       "state.Source.TrySetException(NativeErrors.FromNative(arg0, \"open_async\"));",
-                       "state.Source.TrySetResult(new Bundle(state.Owner, (ProbeBundle*)arg1));"],
-            absent: ["ke_probe_done_func on_done", "void* user_data", "ke_task* OpenAsync"],
+                       "private static void OpenAsyncOnDoneTrampoline(KernelEngine.Result.Native.ke_result arg0, ke_probe_bundle* arg1, void* ctx)",
+                       "if (arg0 != KernelEngine.Result.Native.ke_result.KE_OK || arg1 == null)",
+                       "state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, \"open_async\"));"],
+            absent: ["ke_error"],
             structs: [ViewJson("ke_probe_bundle")],
-            aliases: new() { ["ke_probe_done_func"] = "void (*)(const ke_error *, ke_probe_bundle *, void *)" },
+            aliases: new() { ["ke_probe_done_func"] = "void (*)(ke_result, ke_probe_bundle *, void *)" },
             callbacks: [Callback("ke_probe_done_func", "void",
-                Param("error", "const ke_error *"), Param("bundle", "ke_probe_bundle *"),
+                Param("result", "ke_result"), Param("bundle", "ke_probe_bundle *"),
                 Param("user_data", "void *", "context"))]);
 
         Expect("an answer nothing claims ownership of is refused, not handed over as a pointer",
@@ -590,29 +633,27 @@ internal static class GeneratorShapeCases
                     Param("user_data", "void *"))),
             contains: [], absent: [],
             structs: [ViewJson("ke_probe_bundle")],
-            aliases: new() { ["ke_probe_done_func"] = "void (*)(const ke_error *, ke_probe_bundle *, void *)" },
+            aliases: new() { ["ke_probe_done_func"] = "void (*)(ke_result, ke_probe_bundle *, void *)" },
             callbacks: [Callback("ke_probe_done_func", "void",
-                Param("error", "const ke_error *"), Param("bundle", "ke_probe_bundle *"),
+                Param("result", "ke_result"), Param("bundle", "ke_probe_bundle *"),
                 Param("user_data", "void *", "context"))],
             throws: "a Task cannot answer with a pointer");
 
-        Expect("an operation that answers later is refused a second failure channel",
+        Expect("an operation that answers later is refused a result code of its own",
             Vtable("ke_probe",
-                Slot("open_async", "void", Param("self", "ke_probe *", "self"),
+                Slot("open_async", "ke_result", Param("self", "ke_probe *", "self"),
                     Param("on_done", "ke_probe_done_func", "completion:user_data"),
-                    Param("user_data", "void *"),
-                    Param("out_error", "ke_error **"))),
+                    Param("user_data", "void *"))),
             contains: [], absent: [],
-            aliases: new() { ["ke_probe_done_func"] = "void (*)(const ke_error *, void *)" },
+            aliases: new() { ["ke_probe_done_func"] = "void (*)(ke_result, void *)" },
             callbacks: [Callback("ke_probe_done_func", "void",
-                Param("error", "const ke_error *"), Param("user_data", "void *", "context"))],
-            throws: "has nothing left to report");
+                Param("result", "ke_result"), Param("user_data", "void *", "context"))],
+            throws: "a value is not something this form may drop");
 
         Expect("[provider] asks for another domain's projection, not the pointer inside it",
             Vtable("ke_probe",
                 Slot("attach", "void", Param("self", "ke_probe *", "self"),
-                    Param("scheduler", "ke_scheduler *", "provider"),
-                    Param("out_error", "ke_error **"))),
+                    Param("scheduler", "ke_scheduler *", "provider"))),
             contains: ["Attach(ke_probe* self, INativeScheduler scheduler)", "scheduler.Native"],
             absent: ["ke_scheduler* scheduler", "ke_scheduler *scheduler"]);
 
@@ -659,7 +700,7 @@ internal static class GeneratorShapeCases
 
         void Expect(string what, JsonObject vtable, string[] contains, string[] absent,
             Dictionary<string, string>? aliases = null, JsonObject[]? callbacks = null,
-            JsonObject[]? structs = null, string? throws = null)
+            JsonObject[]? structs = null, string? throws = null, JsonObject[]? functions = null)
 
         {
             Register(what, failures =>
@@ -685,7 +726,7 @@ internal static class GeneratorShapeCases
                     }),
                     ["vtables"] = new JsonArray(vtable),
                     ["callbacks"] = new JsonArray((callbacks ?? []).Cast<JsonNode>().ToArray()),
-                    ["functions"] = new JsonArray(),
+                    ["functions"] = new JsonArray((functions ?? []).Cast<JsonNode>().ToArray()),
                     ["type_aliases"] = new JsonObject { ["ke_entity"] = "uint64_t" },
                 };
                 foreach (var extra in structs ?? [])
@@ -1151,6 +1192,13 @@ internal static class GeneratorShapeCases
         };
 
         static ReturnTags Returning(string tags) => new(tags);
+
+        static JsonObject ParamDoc(string name, string type, string tags, string doc)
+        {
+            var p = Param(name, type, tags);
+            p["doc"] = doc;
+            return p;
+        }
 
         static JsonObject Param(string name, string type, string tags = "") => new()
         {

@@ -6,7 +6,8 @@ const std = @import("std");
 const c = @import("c");
 const heap = @import("heap");
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.framework);
 
 const action_name_max = 64;
 
@@ -412,12 +413,12 @@ fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding, reason: *Reason) bool 
     return false;
 }
 
-/// Drops every action, the one being read included, so a load that fails leaves none. Returns
-/// false for the caller to return.
-fn abandonLoad(s: *State) bool {
+/// Drops every action, the one being read included, so a load that fails leaves none, and returns
+/// `err` for the caller to return.
+fn abandonLoad(s: *State, err: R.Error) R.Error {
     s.action_count += 1;
     clearActions(s);
-    return false;
+    return err;
 }
 
 /// Slot `load`. Replaces the whole set of actions from a TOML file, reading each binding table
@@ -431,43 +432,36 @@ fn abandonLoad(s: *State) bool {
 fn vtLoad(
     self_in: ?*c.ke_input_actions,
     path: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null or path == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     clearActions(s);
+    return R.of(load(s, path));
+}
 
+fn load(s: *State, path: [*c]const u8) R.Error!void {
     const fp = std.c.fopen(path, "rb") orelse {
-        E.fail(out_error, .not_found, "input file not found", @src());
-        return false;
+        log.warn("input file '{s}' not found", .{path});
+        return error.NotFound;
     };
     var errbuf: [200]u8 = undefined;
     const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
     if (root == null) {
-        E.fail(out_error, .io, "failed to parse input file", @src());
-        return false;
+        log.warn("input file '{s}' does not parse: {s}", .{ path, std.mem.sliceTo(&errbuf, 0) });
+        return error.Io;
     }
     defer c.toml_free(root);
 
-    const action_section = c.toml_table_in(root, "action") orelse return true;
+    const action_section = c.toml_table_in(root, "action") orelse return;
 
     var i: c_int = 0;
     while (true) : (i += 1) {
         const action_name = c.toml_key_in(action_section, i) orelse break;
         const action_tbl = c.toml_table_in(action_section, action_name) orelse continue;
 
-        if (!ensureActionCapacity(s, s.action_count + 1)) {
-            E.fail(out_error, .out_of_memory, "action capacity exceeded", @src());
-            return false;
-        }
+        if (!ensureActionCapacity(s, s.action_count + 1)) return error.OutOfMemory;
         const act = &s.actions.?[s.action_count];
         act.* = Action.blank();
         copyName(&act.name, std.mem.span(action_name));
@@ -476,10 +470,8 @@ fn vtLoad(
         if (type_node.ok != 0) {
             defer freeDatumStr(type_node);
             act.type = parseActionType(type_node.u.s) orelse {
-                var msg: [200]u8 = undefined;
-                const text = std.fmt.bufPrintZ(&msg, "action '{s}': '{s}' is not an action type", .{ std.mem.span(action_name), std.mem.span(type_node.u.s) }) catch "unknown action type";
-                E.fail(out_error, .invalid_argument, text, @src());
-                return abandonLoad(s);
+                log.warn("action '{s}': '{s}' is not an action type", .{ std.mem.span(action_name), std.mem.span(type_node.u.s) });
+                return abandonLoad(s, error.InvalidArgument);
             };
         }
 
@@ -491,15 +483,10 @@ fn vtLoad(
                 var b: Binding = undefined;
                 var reason: Reason = .{};
                 if (!parseBindingTable(bt, &b, &reason)) {
-                    var msg: [256]u8 = undefined;
-                    const text = std.fmt.bufPrintZ(&msg, "action '{s}', binding {d}: {s}", .{ std.mem.span(action_name), j + 1, reason.text() }) catch "invalid binding";
-                    E.fail(out_error, .invalid_argument, text, @src());
-                    return abandonLoad(s);
+                    log.warn("action '{s}', binding {d}: {s}", .{ std.mem.span(action_name), j + 1, reason.text() });
+                    return abandonLoad(s, error.InvalidArgument);
                 }
-                if (!ensureBindingCapacity(act, act.binding_count + 1)) {
-                    E.fail(out_error, .out_of_memory, "binding capacity exceeded", @src());
-                    return abandonLoad(s);
-                }
+                if (!ensureBindingCapacity(act, act.binding_count + 1)) return abandonLoad(s, error.OutOfMemory);
                 act.bindings.?[act.binding_count] = b;
                 act.binding_count += 1;
             }
@@ -507,8 +494,6 @@ fn vtLoad(
 
         s.action_count += 1;
     }
-
-    return true;
 }
 
 /// Slot `get_action_id`. Returns the id of the action with that name, or -1 for a null handle or
@@ -553,39 +538,25 @@ fn getActionMut(s: *State, id: i32) ?*Action {
 
 /// Appends one binding to the action with the given id. It reports not found when no action has
 /// that id, and out of memory when the bindings cannot grow. The action is unchanged in both cases.
-fn appendBinding(s: *State, id: i32, b: Binding, out_error: [*c][*c]c.ke_error) bool {
-    const a = getActionMut(s, id) orelse {
-        E.fail(out_error, .not_found, "action not found", @src());
-        return false;
-    };
-    if (!ensureBindingCapacity(a, a.binding_count + 1)) {
-        E.fail(out_error, .out_of_memory, "binding capacity exceeded", @src());
-        return false;
-    }
+fn appendBinding(s: *State, id: i32, b: Binding) c.ke_result {
+    const a = getActionMut(s, id) orelse return R.code(error.NotFound);
+    if (!ensureBindingCapacity(a, a.binding_count + 1)) return R.code(error.OutOfMemory);
     a.bindings.?[a.binding_count] = b;
     a.binding_count += 1;
-    return true;
+    return R.ok;
 }
 
 /// Slot `bind_key`. Stores the key code as given. A code the snapshot cannot carry is not refused
 /// here, and it is never reported as held. A null handle is an invalid argument, an id that names
-/// no action is not found, and a binding array that cannot grow is out of memory; each returns
-/// false.
+/// no action is not found, and a binding array that cannot grow is out of memory.
 fn vtBindKey(
     self_in: ?*c.ke_input_actions,
     action_id: i32,
     key: c.ke_key,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
-    return appendBinding(stateOf(self), action_id, .{ .kind = .key, .k0 = @intCast(key) }, out_error);
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
+    return appendBinding(stateOf(self), action_id, .{ .kind = .key, .k0 = @intCast(key) });
 }
 
 /// Slot `bind_mouse_button`. Failures are those of `vtBindKey`.
@@ -593,17 +564,10 @@ fn vtBindMouseButton(
     self_in: ?*c.ke_input_actions,
     action_id: i32,
     button: c.ke_mouse_button,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
-    return appendBinding(stateOf(self), action_id, .{ .kind = .mouse_button, .k0 = @intCast(button) }, out_error);
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
+    return appendBinding(stateOf(self), action_id, .{ .kind = .mouse_button, .k0 = @intCast(button) });
 }
 
 /// Slot `bind_key_pair`. The pair reads one axis, positive when `pos` is held and negative when
@@ -613,21 +577,13 @@ fn vtBindKeyPair(
     action_id: i32,
     neg: c.ke_key,
     pos: c.ke_key,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
     return appendBinding(
         stateOf(self),
         action_id,
         .{ .kind = .key_pair, .k0 = @intCast(neg), .k1 = @intCast(pos) },
-        out_error,
     );
 }
 
@@ -640,23 +596,16 @@ fn vtBindKeyQuad(
     down: c.ke_key,
     left: c.ke_key,
     right: c.ke_key,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
     return appendBinding(stateOf(self), action_id, .{
         .kind = .key_quad,
         .k0 = @intCast(up),
         .k1 = @intCast(down),
         .k2 = @intCast(left),
         .k3 = @intCast(right),
-    }, out_error);
+    });
 }
 
 /// Slot `evaluate`. Runs one frame: it samples the snapshot into the action values and reports the
@@ -671,22 +620,12 @@ fn vtEvaluate(
     snapshot_in: ?*const c.ke_input_snapshot,
     on_event: c.ke_input_action_event_func,
     event_ctx: ?*anyopaque,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    const snapshot = snapshot_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    const snapshot = snapshot_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    if (s.action_count == 0) return true;
+    if (s.action_count == 0) return R.ok;
 
     for (s.actions.?[0..s.action_count], 0..) |*a, idx| {
         a.prev_active = a.curr_active;
@@ -742,7 +681,7 @@ fn vtEvaluate(
             emit(event_ctx, ev);
         }
     }
-    return true;
+    return R.ok;
 }
 
 /// Returns a pointer into the action array, valid until the next add or load, or null for a null
@@ -818,15 +757,13 @@ fn vtDestroy(self_in: ?*c.ke_input_actions) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Factory. Returns a handle to an empty map. On allocation failure it reports out of memory
-/// through the error output and returns a zeroed handle.
-export fn ke_input_actions_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_actions_handle {
-    const null_handle = std.mem.zeroes(c.ke_input_actions_handle);
+/// Factory. Writes a handle to an empty map. A null out-parameter fails as an invalid argument and
+/// an allocation failure as out of memory, leaving the handle zeroed.
+export fn ke_input_actions_create(out_actions: ?*c.ke_input_actions_handle) callconv(.c) c.ke_result {
+    const out = out_actions orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_input_actions_handle);
 
-    const s = heap.gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return null_handle;
-    };
+    const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = std.mem.zeroes(State);
 
     s.api.handle = s;
@@ -845,7 +782,8 @@ export fn ke_input_actions_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.
     s.api.get_axis2d = vtGetAxis2d;
     s.api.get_axis3d = vtGetAxis3d;
 
-    return .{ .ref = &s.api, .destroy = vtDestroy };
+    out.* = .{ .ref = &s.api, .destroy = vtDestroy };
+    return R.ok;
 }
 
 const testing = std.testing;
@@ -882,8 +820,8 @@ const Actions = struct {
     handle: c.ke_input_actions_handle,
 
     fn init() !Actions {
-        const h = ke_input_actions_create(null);
-        try testing.expect(h.ref != null);
+        var h = std.mem.zeroes(c.ke_input_actions_handle);
+        try testing.expectEqual(R.ok, ke_input_actions_create(&h));
         return .{ .handle = h };
     }
 
@@ -930,7 +868,7 @@ test "loading a file that is not there fails" {
     var a = try Actions.init();
     defer a.deinit();
 
-    try testing.expect(!a.api().load.?(a.api(), "does/not/exist.input", null));
+    try testing.expectEqual(R.code(error.NotFound), a.api().load.?(a.api(), "does/not/exist.input"));
 }
 
 test "actions are numbered in the order the file declares them" {
@@ -949,7 +887,7 @@ test "actions are numbered in the order the file declares them" {
     var a = try Actions.init();
     defer a.deinit();
 
-    try testing.expect(a.api().load.?(a.api(), file.cPath(), null));
+    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
     try testing.expectEqual(@as(i32, 0), a.api().get_action_id.?(a.api(), "Jump"));
     try testing.expectEqual(@as(i32, 1), a.api().get_action_id.?(a.api(), "Move"));
     try testing.expectEqual(@as(i32, -1), a.api().get_action_id.?(a.api(), "Unknown"));
@@ -966,25 +904,25 @@ test "a bound key reports pressed on the edge and down while it is held" {
 
     var a = try Actions.init();
     defer a.deinit();
-    try testing.expect(a.api().load.?(a.api(), file.cPath(), null));
+    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
     const id = a.api().get_action_id.?(a.api(), "Jump");
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expect(!a.api().is_action_down.?(a.api(), id));
     try testing.expect(!a.api().was_action_pressed.?(a.api(), id));
 
     pressKey(&snapshot, c.KE_KEY_SPACE);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expect(a.api().is_action_down.?(a.api(), id));
     try testing.expect(a.api().was_action_pressed.?(a.api(), id));
 
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expect(a.api().is_action_down.?(a.api(), id));
     try testing.expect(!a.api().was_action_pressed.?(a.api(), id));
 
     snapshot = std.mem.zeroes(c.ke_input_snapshot);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expect(!a.api().is_action_down.?(a.api(), id));
     try testing.expect(a.api().was_action_released.?(a.api(), id));
 }
@@ -1000,23 +938,23 @@ test "a key pair reads one at each end and cancels when both are held" {
 
     var a = try Actions.init();
     defer a.deinit();
-    try testing.expect(a.api().load.?(a.api(), file.cPath(), null));
+    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
     const id = a.api().get_action_id.?(a.api(), "Move");
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_W);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expectEqual(@as(f32, 1.0), a.api().get_axis1d.?(a.api(), id));
 
     snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_S);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expectEqual(@as(f32, -1.0), a.api().get_axis1d.?(a.api(), id));
 
     snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_W);
     pressKey(&snapshot, c.KE_KEY_S);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expectEqual(@as(f32, 0.0), a.api().get_axis1d.?(a.api(), id));
 }
 
@@ -1031,13 +969,13 @@ test "a key quad drives both axes at once" {
 
     var a = try Actions.init();
     defer a.deinit();
-    try testing.expect(a.api().load.?(a.api(), file.cPath(), null));
+    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
     const id = a.api().get_action_id.?(a.api(), "Move");
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_W);
     pressKey(&snapshot, c.KE_KEY_D);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
 
     var x: f32 = 0;
     var y: f32 = 0;
@@ -1057,12 +995,12 @@ test "a mouse binding read from a file drives a button action" {
 
     var a = try Actions.init();
     defer a.deinit();
-    try testing.expect(a.api().load.?(a.api(), file.cPath(), null));
+    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
     const id = a.api().get_action_id.?(a.api(), "Fire");
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     snapshot.mouse_buttons_down = @as(u32, 1) << @intCast(c.KE_MOUSE_BUTTON_LEFT);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expect(a.api().is_action_down.?(a.api(), id));
 }
 
@@ -1077,44 +1015,42 @@ test "an action starts once on the edge and cancels when the key goes up" {
 
     var a = try Actions.init();
     defer a.deinit();
-    try testing.expect(a.api().load.?(a.api(), file.cPath(), null));
+    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
 
     var counter = PhaseCounter{};
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
 
-    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter);
     try testing.expectEqual(@as(i32, 0), counter.started);
 
     pressKey(&snapshot, c.KE_KEY_SPACE);
-    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter);
     try testing.expectEqual(@as(i32, 1), counter.started);
     try testing.expectEqual(@as(i32, 0), counter.performed);
 
-    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter);
     try testing.expectEqual(@as(i32, 1), counter.started);
     try testing.expectEqual(@as(i32, 0), counter.performed);
 
     snapshot = std.mem.zeroes(c.ke_input_snapshot);
-    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter);
     try testing.expectEqual(@as(i32, 1), counter.canceled);
 }
 
-fn expectLoadRefused(text: []const u8, expected: []const u8) !void {
+fn expectLoadRefused(text: []const u8) !void {
     var file = try TempInput.init(text);
     defer file.deinit();
     var a = try Actions.init();
     defer a.deinit();
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!a.api().load.?(a.api(), file.cPath(), &err));
-    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), expected) != null);
+    try testing.expectEqual(R.code(error.InvalidArgument), a.api().load.?(a.api(), file.cPath()));
 }
 
-test "a misspelt key name fails the load and names the action, the binding and the key" {
+test "a misspelt key name fails the load as an invalid argument" {
     try expectLoadRefused(
         \\[action.Jump]
         \\bindings = [ { kind = "key", key = "Space" }, { kind = "key", key = "Spcae" } ]
         \\
-    , "action 'Jump', binding 2: 'Spcae' is not a key name");
+    );
 }
 
 test "an unknown mouse button, binding kind or action type fails the load" {
@@ -1122,17 +1058,17 @@ test "an unknown mouse button, binding kind or action type fails the load" {
         \\[action.Fire]
         \\bindings = [ { kind = "mouse", button = "Thumb" } ]
         \\
-    , "'Thumb' is not a mouse button name");
+    );
     try expectLoadRefused(
         \\[action.Fire]
         \\bindings = [ { kind = "pad", button = "A" } ]
         \\
-    , "'pad' is not a binding kind");
+    );
     try expectLoadRefused(
         \\[action.Move]
         \\type = "Axis1d"
         \\
-    , "'Axis1d' is not an action type");
+    );
 }
 
 test "a binding missing a field fails the load" {
@@ -1140,7 +1076,7 @@ test "a binding missing a field fails the load" {
         \\[action.Move]
         \\bindings = [ { kind = "key_pair", negative = "A" } ]
         \\
-    , "a key_pair binding needs negative and positive");
+    );
 }
 
 test "actions added by hand are numbered in the order they arrive" {
@@ -1171,11 +1107,11 @@ test "a key bound by hand drives its button" {
     defer a.deinit();
 
     const id = a.api().add_action.?(a.api(), "Jump", c.KE_ACTION_TYPE_BUTTON);
-    try testing.expect(a.api().bind_key.?(a.api(), id, c.KE_KEY_SPACE, null));
+    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), id, c.KE_KEY_SPACE));
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_SPACE);
-    try testing.expect(a.api().evaluate.?(a.api(), &snapshot, null, null, null));
+    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
     try testing.expect(a.api().is_action_down.?(a.api(), id));
     try testing.expect(a.api().was_action_pressed.?(a.api(), id));
 }
@@ -1185,16 +1121,16 @@ test "a key pair bound by hand produces a one dimensional axis" {
     defer a.deinit();
 
     const id = a.api().add_action.?(a.api(), "Strafe", c.KE_ACTION_TYPE_AXIS1D);
-    try testing.expect(a.api().bind_key_pair.?(a.api(), id, c.KE_KEY_A, c.KE_KEY_D, null));
+    try testing.expectEqual(R.ok, a.api().bind_key_pair.?(a.api(), id, c.KE_KEY_A, c.KE_KEY_D));
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_D);
-    try testing.expect(a.api().evaluate.?(a.api(), &snapshot, null, null, null));
+    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
     try testing.expectEqual(@as(f32, 1.0), a.api().get_axis1d.?(a.api(), id));
 
     snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_A);
-    try testing.expect(a.api().evaluate.?(a.api(), &snapshot, null, null, null));
+    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
     try testing.expectEqual(@as(f32, -1.0), a.api().get_axis1d.?(a.api(), id));
 }
 
@@ -1203,12 +1139,12 @@ test "a key quad bound by hand produces a two dimensional axis" {
     defer a.deinit();
 
     const id = a.api().add_action.?(a.api(), "Move", c.KE_ACTION_TYPE_AXIS2D);
-    try testing.expect(a.api().bind_key_quad.?(a.api(), id, c.KE_KEY_W, c.KE_KEY_S, c.KE_KEY_A, c.KE_KEY_D, null));
+    try testing.expectEqual(R.ok, a.api().bind_key_quad.?(a.api(), id, c.KE_KEY_W, c.KE_KEY_S, c.KE_KEY_A, c.KE_KEY_D));
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_W);
     pressKey(&snapshot, c.KE_KEY_D);
-    try testing.expect(a.api().evaluate.?(a.api(), &snapshot, null, null, null));
+    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
 
     var x: f32 = 0;
     var y: f32 = 0;
@@ -1222,11 +1158,11 @@ test "a mouse button bound by hand drives its action" {
     defer a.deinit();
 
     const id = a.api().add_action.?(a.api(), "Fire", c.KE_ACTION_TYPE_BUTTON);
-    try testing.expect(a.api().bind_mouse_button.?(a.api(), id, c.KE_MOUSE_BUTTON_LEFT, null));
+    try testing.expectEqual(R.ok, a.api().bind_mouse_button.?(a.api(), id, c.KE_MOUSE_BUTTON_LEFT));
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     snapshot.mouse_buttons_down = @as(u32, 1) << @intCast(c.KE_MOUSE_BUTTON_LEFT);
-    try testing.expect(a.api().evaluate.?(a.api(), &snapshot, null, null, null));
+    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
     try testing.expect(a.api().is_action_down.?(a.api(), id));
 }
 
@@ -1234,8 +1170,8 @@ test "binding onto an action id that was never added fails" {
     var a = try Actions.init();
     defer a.deinit();
 
-    try testing.expect(!a.api().bind_key.?(a.api(), 99, c.KE_KEY_SPACE, null));
-    try testing.expect(!a.api().bind_key_pair.?(a.api(), 99, c.KE_KEY_A, c.KE_KEY_D, null));
+    try testing.expectEqual(R.code(error.NotFound), a.api().bind_key.?(a.api(), 99, c.KE_KEY_SPACE));
+    try testing.expectEqual(R.code(error.NotFound), a.api().bind_key_pair.?(a.api(), 99, c.KE_KEY_A, c.KE_KEY_D));
 }
 
 test "a three dimensional axis starts at the origin" {
@@ -1256,7 +1192,7 @@ test "evaluating without a snapshot fails" {
     var a = try Actions.init();
     defer a.deinit();
 
-    try testing.expect(!a.api().evaluate.?(a.api(), null, null, null, null));
+    try testing.expectEqual(R.code(error.InvalidArgument), a.api().evaluate.?(a.api(), null, null, null));
 }
 
 test "a key held across two evaluations reports pressed only on the first" {
@@ -1264,14 +1200,14 @@ test "a key held across two evaluations reports pressed only on the first" {
     defer a.deinit();
 
     const id = a.api().add_action.?(a.api(), "Jump", c.KE_ACTION_TYPE_BUTTON);
-    try testing.expect(a.api().bind_key.?(a.api(), id, c.KE_KEY_SPACE, null));
+    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), id, c.KE_KEY_SPACE));
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
     pressKey(&snapshot, c.KE_KEY_SPACE);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expect(a.api().was_action_pressed.?(a.api(), id));
 
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null, null);
+    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
     try testing.expect(!a.api().was_action_pressed.?(a.api(), id));
 }
 

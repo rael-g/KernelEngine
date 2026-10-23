@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_SCHEDULER_SCHEDULER_H_
 #define KERNEL_ENGINE_SCHEDULER_SCHEDULER_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -15,22 +15,18 @@ extern "C"
 
     /**
      * Body of a scheduled task, run on a worker thread.
-     *
-     * The failure is reported as a ke_error_type. The caller of wait() mints a ke_error
-     * from it on its own thread.
-     *
-     * @param data        [context] [borrowed] Opaque context handed to the dispatch call.
-     * @param out_failure Receives the type the body failed with. Left untouched on success.
+     * @param data [context] [borrowed] Opaque context handed to the dispatch call.
+     * @return KE_OK, or the code the body failed with, which wait() returns.
      */
-    typedef void (*ke_task_func)(void *data, const ke_error_type **out_failure);
+    typedef ke_result (*ke_task_func)(void *data);
 
     /**
      * Run once the task body has returned, on the same worker thread.
      * @param task      The task that finished.
      * @param user_data [context] Opaque context handed to the dispatch call.
-     * @param failure The type the body failed with, or NULL when it succeeded.
+     * @param result What the body returned.
      */
-    typedef void (*ke_task_on_complete_func)(ke_task *task, void *user_data, const ke_error_type *failure);
+    typedef void (*ke_task_on_complete_func)(ke_task *task, void *user_data, ke_result result);
 
     /** Dispatches work to a native thread pool. */
     typedef struct ke_scheduler
@@ -57,16 +53,13 @@ extern "C"
                                           void *user_data);
 
         /**
-         * Blocks the calling thread until the task completes, then reports whatever the
-         * task body failed with, and releases the task. Every task a dispatch slot returns
-         * is waited on exactly once: afterwards the pointer is invalid for wait and
-         * is_completed alike, and a task never waited on is never released and reports
-         * its failure nowhere.
-         *
-         * The error is created on the waiting thread from the type the body named. Its
-         * message names the slot rather than the failure.
+         * Blocks the calling thread until the task completes, releases the task, and returns
+         * what its body returned. Every task a dispatch slot returns is waited on exactly once:
+         * afterwards the pointer is invalid for wait and is_completed alike, and a task never
+         * waited on is never released and reports its failure nowhere.
+         * @return What the task body returned, or KE_RESULT_INVALID_ARGUMENT for a null task.
          */
-        bool (*wait)(struct ke_scheduler *self, ke_task *task, ke_error **out_error);
+        ke_result (*wait)(struct ke_scheduler *self, ke_task *task);
 
         /** Returns true if the task has finished. Valid only before the task is waited on. */
         bool (*is_completed)(struct ke_scheduler *self, ke_task *task);

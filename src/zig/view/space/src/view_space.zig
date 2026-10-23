@@ -5,16 +5,15 @@
 const std = @import("std");
 const zm = @import("zmath");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_view_space").logFn };
 
-const klog = @import("klog").Destination("ke_view_space");
-
-pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const c = @import("c");
 const heap = @import("heap");
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.view_space);
 
 /// The handedness a factory fixes. Only `create` stores it, and every slot switches on it.
 const Handedness = enum { right, left };
@@ -209,16 +208,16 @@ fn destroy(self_in: ?*c.ke_view_space) callconv(.c) void {
     heap.gpa.destroy(stateOf(self));
 }
 
-/// Allocates the `State` for the handedness, wires every vtable slot, and returns the handle whose
-/// `ref` is that vtable and whose `destroy` is `destroy`. When the allocation fails it sets an
-/// out-of-memory error on the out_error parameter and returns a null handle, leaving nothing
-/// allocated.
-fn create(hand: Handedness, out_error: [*c][*c]c.ke_error) c.ke_view_space_handle {
-    const null_handle = std.mem.zeroes(c.ke_view_space_handle);
+/// Allocates the `State` for the handedness, wires every vtable slot, and writes the handle whose
+/// `ref` is that vtable and whose `destroy` is `destroy`. Fails with out of memory, leaving
+/// nothing allocated and the handle zeroed.
+fn create(hand: Handedness, out_view_space: ?*c.ke_view_space_handle) c.ke_result {
+    const out = out_view_space orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_view_space_handle);
 
     const s = heap.gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return null_handle;
+        log.warn("creating the view space failed: out of memory", .{});
+        return R.code(error.OutOfMemory);
     };
     s.* = .{ .api = std.mem.zeroes(c.ke_view_space), .hand = hand };
     s.api.handle = s;
@@ -229,24 +228,27 @@ fn create(hand: Handedness, out_error: [*c][*c]c.ke_error) c.ke_view_space_handl
     s.api.perspective = viewSpacePerspective;
     s.api.orthographic = viewSpaceOrthographic;
 
-    return .{ .ref = &s.api, .destroy = destroy };
+    out.* = .{ .ref = &s.api, .destroy = destroy };
+    return R.ok;
 }
 
 /// Creates a right-handed view space through `create`.
-export fn ke_view_space_rh_create(
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_view_space_handle {
-    return create(.right, out_error);
+export fn ke_view_space_rh_create(out_view_space: ?*c.ke_view_space_handle) callconv(.c) c.ke_result {
+    return create(.right, out_view_space);
 }
 
 /// Creates a left-handed view space through `create`.
-export fn ke_view_space_lh_create(
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_view_space_handle {
-    return create(.left, out_error);
+export fn ke_view_space_lh_create(out_view_space: ?*c.ke_view_space_handle) callconv(.c) c.ke_result {
+    return create(.left, out_view_space);
 }
 
 const testing = std.testing;
+
+fn made(factory: anytype) !c.ke_view_space_handle {
+    var h: c.ke_view_space_handle = undefined;
+    try R.check(factory(&h));
+    return h;
+}
 
 const webgpu_clip: c.ke_ndc_convention = .{ .z_zero_to_one = true, .y_flip = false };
 
@@ -266,7 +268,7 @@ test "both view spaces report a surface in front of the camera as positive depth
     const far_point = c.ke_vec3{ .x = 0, .y = 0, .z = -2 };
 
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
-        const h = factory(null);
+        const h = try made(factory);
         defer h.destroy.?(h.ref);
 
         const near_depth = viewDepthOf(h, near_point, eye);
@@ -278,9 +280,9 @@ test "both view spaces report a surface in front of the camera as positive depth
 }
 
 test "the two view spaces disagree on the sign of view z and only there" {
-    const rh = ke_view_space_rh_create(null);
+    const rh = try made(ke_view_space_rh_create);
     defer rh.destroy.?(rh.ref);
-    const lh = ke_view_space_lh_create(null);
+    const lh = try made(ke_view_space_lh_create);
     defer lh.destroy.?(lh.ref);
 
     try testing.expectEqual(@as(f32, -1.0), rh.ref.*.params.?(rh.ref).depth_from_view_z);
@@ -296,7 +298,7 @@ test "a top-left framebuffer origin flips the projection's y row, whatever the v
     flipped_clip.y_flip = true;
 
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
-        const h = factory(null);
+        const h = try made(factory);
         defer h.destroy.?(h.ref);
 
         var plain: c.ke_mat4 = undefined;
@@ -311,7 +313,7 @@ test "a top-left framebuffer origin flips the projection's y row, whatever the v
 
 test "a perspective projection puts the near plane at clip zero and the far plane at clip one" {
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
-        const h = factory(null);
+        const h = try made(factory);
         defer h.destroy.?(h.ref);
 
         var proj: c.ke_mat4 = undefined;
@@ -344,7 +346,7 @@ test "every slot tolerates a null self instead of faulting on it" {
 }
 
 test "a null output matrix is dropped rather than written through" {
-    const h = ke_view_space_rh_create(null);
+    const h = try made(ke_view_space_rh_create);
     defer h.destroy.?(h.ref);
 
     const zero = c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
@@ -354,7 +356,7 @@ test "a null output matrix is dropped rather than written through" {
 }
 
 test "a missing clip convention leaves the projection untouched" {
-    const h = ke_view_space_rh_create(null);
+    const h = try made(ke_view_space_rh_create);
     defer h.destroy.?(h.ref);
 
     var out: c.ke_mat4 = std.mem.zeroes(c.ke_mat4);
@@ -382,9 +384,9 @@ test "the same camera basis faces opposite ways under the two view spaces" {
     const world = cameraLookingDown(local_z, at_origin);
     const toward_plus_x = zm.f32x4(6, 0, 0, 1);
 
-    const rh = ke_view_space_rh_create(null);
+    const rh = try made(ke_view_space_rh_create);
     defer rh.destroy.?(rh.ref);
-    const lh = ke_view_space_lh_create(null);
+    const lh = try made(ke_view_space_lh_create);
     defer lh.destroy.?(lh.ref);
 
     var rh_view: c.ke_mat4 = undefined;
@@ -409,7 +411,7 @@ test "turning a camera around swaps which side of it is visible" {
     const point = zm.f32x4(6, 0, 0, 1);
 
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
-        const h = factory(null);
+        const h = try made(factory);
         defer h.destroy.?(h.ref);
         const sign = h.ref.*.params.?(h.ref).depth_from_view_z;
 
@@ -436,7 +438,7 @@ test "an unrotated camera basis aims at the world origin rather than at nothing"
     world.m[15] = 1.0;
 
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
-        const h = factory(null);
+        const h = try made(factory);
         defer h.destroy.?(h.ref);
 
         var view: c.ke_mat4 = undefined;
@@ -470,7 +472,7 @@ fn ndcOf(h: c.ke_view_space_handle, world: c.ke_mat4, half_height: f32, aspect: 
 }
 
 test "an orthographic camera keeps every corner of its authored half-extent on screen" {
-    const h = ke_view_space_rh_create(null);
+    const h = try made(ke_view_space_rh_create);
     defer h.destroy.?(h.ref);
 
     const world = cameraAt(10.0);
@@ -494,7 +496,7 @@ test "an orthographic camera keeps every corner of its authored half-extent on s
 }
 
 test "an orthographic camera separates a point above its centre from one below" {
-    const h = ke_view_space_rh_create(null);
+    const h = try made(ke_view_space_rh_create);
     defer h.destroy.?(h.ref);
 
     const world = cameraAt(10.0);
@@ -510,8 +512,8 @@ test "an orthographic camera separates a point above its centre from one below" 
 }
 
 test "creating and destroying both view spaces leaves no block allocated" {
-    const rh = ke_view_space_rh_create(null);
-    const lh = ke_view_space_lh_create(null);
+    const rh = try made(ke_view_space_rh_create);
+    const lh = try made(ke_view_space_lh_create);
     rh.destroy.?(rh.ref);
     lh.destroy.?(lh.ref);
     try heap.expectNoLeaks();

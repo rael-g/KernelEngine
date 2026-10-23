@@ -1,6 +1,6 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Logger.Native;
+using KernelEngine.Result.Native;
 using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Runtime.Native;
@@ -13,7 +13,7 @@ public unsafe partial struct ke_runtime_module_params
     public void* user_data;
 
     [NativeTypeName("ke_module_load_fn")]
-    public delegate* unmanaged[Cdecl]<ke_runtime*, void*, KernelEngine.Common.Native.ke_error**, bool> on_load;
+    public delegate* unmanaged[Cdecl]<ke_runtime*, void*, KernelEngine.Result.Native.ke_result> on_load;
 
     [NativeTypeName("ke_module_unload_fn")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, void*, void> on_unload;

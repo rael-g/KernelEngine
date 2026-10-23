@@ -1,8 +1,9 @@
 ﻿#ifndef KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
 #define KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
 
-#include <kernel_engine/common/error.h>
 #include <kernel_engine/common/export.h>
+#include <kernel_engine/result/result.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -66,10 +67,13 @@ extern "C"
         void (*step)(struct ke_physics_2d *self, float dt);
 
         /**
-         * Creates a body at the given world position. Returns KE_BODY_2D_INVALID on error.
+         * Creates a body at the given world position.
          * @param x [vector2:position]
+         * @param out_body [out] Receives the body; KE_BODY_2D_INVALID on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null out_body, or
+         *         KE_RESULT_OUT_OF_MEMORY.
          */
-        ke_body_2d (*create_body)(struct ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_error **out_error);
+        ke_result (*create_body)(struct ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_body_2d *out_body);
 
         /** Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID. */
         void (*destroy_body)(struct ke_physics_2d *self, ke_body_2d body);
@@ -82,24 +86,26 @@ extern "C"
          * @param offset_angle Radians, CCW positive, about the offset center.
          * @param filter [opt] Layers the fixture occupies and tests against. NULL
          *               leaves it colliding with everything.
+         * @return KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.
          */
-        bool (*add_box_fixture)(struct ke_physics_2d *self, ke_body_2d body,
-                                float half_w, float half_h,
-                                float offset_x, float offset_y, float offset_angle,
-                                float density, float friction, float restitution,
-                                const ke_collision_filter_2d *filter, ke_error **out_error);
+        ke_result (*add_box_fixture)(struct ke_physics_2d *self, ke_body_2d body,
+                                     float half_w, float half_h,
+                                     float offset_x, float offset_y, float offset_angle,
+                                     float density, float friction, float restitution,
+                                     const ke_collision_filter_2d *filter);
 
         /**
          * Attaches a circle fixture at the given offset from the body origin.
          * @param offset_x [vector2:offset]
          * @param filter [opt] Layers the fixture occupies and tests against. NULL
          *               leaves it colliding with everything.
+         * @return KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.
          */
-        bool (*add_circle_fixture)(struct ke_physics_2d *self, ke_body_2d body,
-                                   float radius,
-                                   float offset_x, float offset_y,
-                                   float density, float friction, float restitution,
-                                   const ke_collision_filter_2d *filter, ke_error **out_error);
+        ke_result (*add_circle_fixture)(struct ke_physics_2d *self, ke_body_2d body,
+                                        float radius,
+                                        float offset_x, float offset_y,
+                                        float density, float friction, float restitution,
+                                        const ke_collision_filter_2d *filter);
 
         /**
          * Reads the body's current pose and motion.

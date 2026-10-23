@@ -17,11 +17,11 @@
       "slots": [
         {
           "name": "load",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [
             "drains"
           ],
-          "doc": "Loads the scene at path, instantiating every entity it declares. A script factory\u0027s refusal of an entity fails the load.",
+          "doc": "Loads the scene at path, instantiating every entity it declares. A script factory\u0027s refusal of an entity fails the load with the factory\u0027s code; what failed, and where in the file, is logged.",
           "return_doc": null,
           "params": [
             {
@@ -31,22 +31,16 @@
                 "utf8"
               ],
               "doc": "Path to the scene file."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_scene_loader *"
         },
         {
           "name": "register_script_factory",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Registers the factory consulted for every entity that declares a type. Replaces any factory registered before it.",
-          "return_doc": null,
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null factory.",
           "params": [
             {
               "name": "factory",
@@ -62,12 +56,6 @@
               "type": "void *",
               "tags": [],
               "doc": "Forwarded to factory unchanged."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_scene_loader *"
@@ -103,7 +91,7 @@
   "callbacks": [
     {
       "name": "ke_script_factory_func",
-      "returns": "_Bool",
+      "returns": "ke_result",
       "doc": "Builds and binds the script an entity\u0027s declared type names.",
       "lanes": [
         {
@@ -127,12 +115,6 @@
             "utf8"
           ],
           "doc": "Qualified node type name, as the scene file spells it."
-        },
-        {
-          "name": "out_error",
-          "type": "ke_error **",
-          "tags": [],
-          "doc": "Set when the factory rejects the entity; the load fails with it."
         }
       ]
     }
@@ -140,6 +122,6 @@
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
-    "ke_script_factory_func": "_Bool (*)(void *, ke_entity, const char *, ke_error **)"
+    "ke_script_factory_func": "ke_result (*)(void *, ke_entity, const char *)"
   }
 }

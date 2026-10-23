@@ -1,8 +1,6 @@
 //! The set of audio's scene components, so a scene file can author an audio player.
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_audio_module");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_audio_module").logFn };
 
 const c = @import("c");
 const scene_components = @import("scene_components");
@@ -33,12 +31,12 @@ const FakeWorld = struct {
     }
 
     fn registerComponentFields(self: ?*c.ke_world, cid: c.ke_component_id, _: [*c]const c.ke_component_field,
-                               count: u32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+                               count: u32) callconv(.c) c.ke_result {
         const w: *FakeWorld = @ptrCast(@alignCast(self.?.handle));
-        if (!w.accepts) return false;
+        if (!w.accepts) return c.KE_RESULT_GENERAL;
         w.registered_cid = cid;
         w.field_count = count;
-        return true;
+        return c.KE_OK;
     }
 };
 
@@ -50,7 +48,7 @@ test "the audio player component is registered with the ecs and its fields with 
 
     const set = ke_audio_scene_components_create();
     defer set.destroy.?(set.ref);
-    try testing.expect(set.ref.*.register_into.?(set.ref, ecs.api(), &world.api, null));
+    try testing.expectEqual(@as(c.ke_result, c.KE_OK), set.ref.*.register_into.?(set.ref, ecs.api(), &world.api));
     try testing.expect(world.registered_cid != c.KE_COMPONENT_INVALID);
     try testing.expectEqual(@as(u32, c.ke_audio_player_component_fields.len), world.field_count);
 }
@@ -63,9 +61,7 @@ test "a world that refuses the fields, or a missing ecs or world, fails the regi
 
     const set = ke_audio_scene_components_create();
     defer set.destroy.?(set.ref);
-    try testing.expect(!set.ref.*.register_into.?(set.ref, ecs.api(), &world.api, null));
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!set.ref.*.register_into.?(set.ref, null, &world.api, &err));
-    try testing.expect(err != null);
-    try testing.expect(!set.ref.*.register_into.?(set.ref, ecs.api(), null, null));
+    try testing.expectEqual(@as(c.ke_result, c.KE_RESULT_GENERAL), set.ref.*.register_into.?(set.ref, ecs.api(), &world.api));
+    try testing.expectEqual(@as(c.ke_result, c.KE_RESULT_INVALID_ARGUMENT), set.ref.*.register_into.?(set.ref, null, &world.api));
+    try testing.expectEqual(@as(c.ke_result, c.KE_RESULT_INVALID_ARGUMENT), set.ref.*.register_into.?(set.ref, ecs.api(), null));
 }

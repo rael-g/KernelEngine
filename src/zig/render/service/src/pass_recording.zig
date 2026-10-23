@@ -3,6 +3,7 @@
 const rc = @import("render_service.zig");
 const frame_chain = @import("frame_chain.zig");
 const c = rc.c;
+const R = rc.R;
 const gpa = rc.gpa;
 
 /// Opens a pass on a command encoder of its own. The pass and its context stay allocated until
@@ -11,8 +12,8 @@ const gpa = rc.gpa;
 pub fn beginPass(self: [*c]c.ke_render_service, io: [*c]const c.ke_render_pass_io) callconv(.c) [*c]c.ke_render_pass_ctx {
     const st = rc.coreOf(self);
     if (!st.frame_live) return null;
-    const enc = st.device.create_command_encoder.?(st.device, null, null);
-    if (enc.ref == null) return null;
+    var enc: c.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
+    if (st.device.create_command_encoder.?(st.device, null, &enc) != R.ok) return null;
     const ps = gpa.create(rc.PassState) catch {
         enc.destroy.?(enc.ref);
         return null;

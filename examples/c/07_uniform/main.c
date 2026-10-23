@@ -1,4 +1,4 @@
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -16,14 +16,19 @@ static const char rotate_fs_wgsl[] = {
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-static void die(const char *msg, ke_error *err)
+static void die_result(const char *what, ke_result result)
 {
-    if (err) { ke_error_fatal(err); }
-    ke_error fallback = { .type = &KE_ERROR_GENERAL, .message = msg, .file = __FILE__, .line = __LINE__, .cause = NULL };
-    ke_error_fatal(&fallback);
+    fprintf(stderr, "%s failed with result code 0x%08x\n", what, (unsigned)result);
+    exit(1);
+}
+
+static void check(const char *what, ke_result result)
+{
+    if (result != KE_OK) die_result(what, result);
 }
 
 static double elapsed_seconds(void)
@@ -41,8 +46,6 @@ int main(void)
 {
     printf("--- c_demo_07: rotating triangle (uniform buffer) ---\n");
 
-    ke_error *err = NULL;
-
     ke_window_glfw_params wp = {
         .input      = NULL,
         .title      = "c_demo_07 uniform",
@@ -50,18 +53,20 @@ int main(void)
         .height     = 600,
         .fullscreen = false,
     };
-    ke_window_handle win = ke_window_glfw_create(&wp, &err);
-    if (!win.ref) die("window create failed", err);
-    if (!win.ref->on_initialize(win.ref, &err)) die("window init failed", err);
+    ke_window_handle win = { 0 };
+    ke_result made_window = ke_window_glfw_create(&wp, &win);
+    if (made_window != KE_OK) die_result("window create failed", made_window);
+    ke_result window_ready = win.ref->on_initialize(win.ref);
+    if (window_ready != KE_OK) die_result("window init failed", window_ready);
 
     ke_gpu_device_webgpu_params dp = {
         .enable_validation = 1,
     };
-    ke_gpu_device_handle gpu = ke_gpu_device_webgpu_create(&dp, &err);
-    if (!gpu.ref) die("gpu device create failed", err);
+    ke_gpu_device_handle gpu = { 0 };
+    check("gpu device create", ke_gpu_device_webgpu_create(&dp, &gpu));
 
-    ke_gpu_render_target_handle target = ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &err);
-    if (!target.ref) die("render target create failed", err);
+    ke_gpu_render_target_handle target = { 0 };
+    check("render target create", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));
 
     float uniform_data[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     ke_gpu_buffer_params ubp = {
@@ -70,8 +75,8 @@ int main(void)
         .usage           = KE_GPU_BUFFER_USAGE_UNIFORM | KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = 0,
     };
-    ke_gpu_buffer ubo = gpu.ref->create_buffer(gpu.ref, &ubp, &err);
-    if (ubo == KE_GPU_INVALID_HANDLE) die("uniform buffer creation failed", err);
+    ke_gpu_buffer ubo = { 0 };
+    check("uniform buffer creation", gpu.ref->create_buffer(gpu.ref, &ubp, &ubo));
 
     ke_gpu_bind_group_layout_entry bgl_entry = {
         .binding           = 0,
@@ -83,8 +88,8 @@ int main(void)
         .entry_count = 1,
         .entries     = &bgl_entry,
     };
-    ke_gpu_bind_group_layout bgl = gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params, &err);
-    if (bgl == KE_GPU_INVALID_HANDLE) die("bind group layout creation failed", err);
+    ke_gpu_bind_group_layout bgl = { 0 };
+    check("bind group layout creation", gpu.ref->create_bind_group_layout(gpu.ref, &bgl_params, &bgl));
 
     ke_gpu_bind_group_entry bg_entry = {
         .binding      = 0,
@@ -98,25 +103,25 @@ int main(void)
         .entry_count = 1,
         .entries     = &bg_entry,
     };
-    ke_gpu_bind_group bg = gpu.ref->create_bind_group(gpu.ref, &bg_params, &err);
-    if (bg == KE_GPU_INVALID_HANDLE) die("bind group creation failed", err);
+    ke_gpu_bind_group bg = { 0 };
+    check("bind group creation", gpu.ref->create_bind_group(gpu.ref, &bg_params, &bg));
 
     ke_gpu_shader_module_params vsp = {
         .code        = rotate_vs_wgsl,
         .byte_size   = strlen(rotate_vs_wgsl),
         .label = "vs_main",
     };
-    ke_gpu_shader_module vs = gpu.ref->create_shader_module(gpu.ref, &vsp, &err);
+    ke_gpu_shader_module vs = { 0 };
+    check("create_shader_module", gpu.ref->create_shader_module(gpu.ref, &vsp, &vs));
 
     ke_gpu_shader_module_params fsp = {
         .code        = rotate_fs_wgsl,
         .byte_size   = strlen(rotate_fs_wgsl),
         .label = "fs_main",
     };
-    ke_gpu_shader_module fs = gpu.ref->create_shader_module(gpu.ref, &fsp, &err);
+    ke_gpu_shader_module fs = { 0 };
+    check("create_shader_module", gpu.ref->create_shader_module(gpu.ref, &fsp, &fs));
 
-    if (vs == KE_GPU_INVALID_HANDLE) die("vertex shader creation failed", NULL);
-    if (fs == KE_GPU_INVALID_HANDLE) die("fragment shader creation failed", NULL);
 
     ke_gpu_blend_state blend = {
         .blend_enabled = 0,
@@ -146,8 +151,8 @@ int main(void)
         .bind_group_layout_count = 1,
         .alpha_to_coverage_enabled = 0,
     };
-    ke_gpu_pipeline pipeline = gpu.ref->create_render_pipeline(gpu.ref, &pp, &err);
-    if (pipeline == KE_GPU_INVALID_HANDLE) die("pipeline creation failed", err);
+    ke_gpu_pipeline pipeline = { 0 };
+    check("pipeline creation", gpu.ref->create_render_pipeline(gpu.ref, &pp, &pipeline));
 
     gpu.ref->destroy_shader_module(gpu.ref, vs);
     gpu.ref->destroy_shader_module(gpu.ref, fs);
@@ -158,18 +163,15 @@ int main(void)
 
     while (!win.ref->should_close(win.ref))
     {
-        win.ref->poll_events(win.ref, NULL);
+        win.ref->poll_events(win.ref);
 
         float angle = (float)(fmod(elapsed_seconds(), 1.0) * 6.2831853);
         uniform_data[0] = angle;
         gpu.ref->write_buffer(gpu.ref, ubo, 0, uniform_data, sizeof(uniform_data));
 
-        ke_gpu_texture_view view = target.ref->acquire(target.ref, &err);
-        if (view == KE_GPU_INVALID_HANDLE)
-        {
-            if (err) die("acquire failed", err);
-            continue;
-        }
+        ke_gpu_texture_view view = { 0 };
+        check("acquire", target.ref->acquire(target.ref, &view));
+        if (view == KE_GPU_INVALID_HANDLE) continue;
 
         ke_gpu_clear_value clear = { .color = { 0.1f, 0.1f, 0.1f, 1.0f } };
         ke_gpu_color_attachment ca = {
@@ -184,9 +186,8 @@ int main(void)
             .depth_stencil_attachment = NULL,
         };
 
-        ke_gpu_command_encoder_handle enc_handle = gpu.ref->create_command_encoder(gpu.ref, NULL, &err);
-
-        if (!enc_handle.ref) die("command encoder creation failed", err);
+        ke_gpu_command_encoder_handle enc_handle = { 0 };
+        check("create_command_encoder", gpu.ref->create_command_encoder(gpu.ref, NULL, &enc_handle));
 
         ke_gpu_command_encoder *enc = enc_handle.ref;
         ke_gpu_render_pass *rp = enc->begin_render_pass(enc, &rpp);
@@ -195,15 +196,14 @@ int main(void)
         rp->draw(rp, 3, 1, 0, 0);
         rp->end(rp);
 
-        ke_gpu_command_buffer_handle cmd = enc->finish(enc, &err);
-
-        if (!cmd.ref) die("command encoder finish failed", err);
+        ke_gpu_command_buffer_handle cmd = { 0 };
+        check("finish", enc->finish(enc, &cmd));
         enc_handle.destroy(enc);
 
         ke_gpu_command_buffer *cmds[] = { cmd.ref };
         gpu.ref->queue_submit(gpu.ref, q, cmds, 1);
         cmd.destroy(cmd.ref);
-        if (!target.ref->present(target.ref, &err)) die("present failed", err);
+        check("present", target.ref->present(target.ref));
         gpu.ref->queue_poll(gpu.ref, q);
     }
 
@@ -213,7 +213,7 @@ int main(void)
     gpu.ref->destroy_buffer(gpu.ref, ubo);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);
-    win.ref->on_shutdown(win.ref, NULL);
+    win.ref->on_shutdown(win.ref);
     win.destroy(win.ref);
 
     printf("--- Done ---\n");

@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_FRAME_FRAME_CREATE_H_
 #define KERNEL_ENGINE_RENDER_FRAME_FRAME_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/camera.h>
 #include <kernel_engine/render/service/render_service.h>
@@ -59,8 +59,9 @@ extern "C"
     /// begins the frame and publishes the frame globals and the scene's light, and
     /// "render.end_frame". A missing runtime, ecs, service or camera fails as an invalid argument;
     /// the handle's ref is NULL on failure.
-    KE_RENDER_FRAME_API ke_render_frame_handle ke_render_frame_create(const ke_render_frame_params *params,
-                                                                      ke_error **out_error);
+    /// @param out_frame [out] Receives the handle; left zeroed on failure.
+    KE_RENDER_FRAME_API ke_result ke_render_frame_create(const ke_render_frame_params *params,
+                                                                      ke_render_frame_handle *out_frame);
 
 #ifdef __cplusplus
 }

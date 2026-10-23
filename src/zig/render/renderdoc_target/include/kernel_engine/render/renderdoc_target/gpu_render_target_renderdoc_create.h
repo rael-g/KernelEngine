@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_RENDERDOC_TARGET_GPU_RENDER_TARGET_RENDERDOC_CREATE_H_
 #define KERNEL_ENGINE_RENDER_RENDERDOC_TARGET_GPU_RENDER_TARGET_RENDERDOC_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -35,13 +35,14 @@ typedef struct ke_gpu_render_target_renderdoc_params
  *        frames, each from its acquire to its present. RenderDoc must already be loaded into the
  *        process. Where the capture files go is set when the process is launched.
  * @param inner Borrowed, must outlive the target; every call is forwarded to it.
- * @return Handle whose @c ref is NULL on failure: KE_ERROR_INVALID_ARGUMENT for a NULL inner target
- *         or params, KE_ERROR_NOT_FOUND when RenderDoc is not loaded into the process.
+ * @return KE_OK, or on failure: KE_RESULT_INVALID_ARGUMENT for a NULL inner target
+ *         or params, KE_RESULT_NOT_FOUND when RenderDoc is not loaded into the process.
+ * @param out_target [out] Receives the handle; left zeroed on failure.
  */
-KE_GPU_RENDER_TARGET_RENDERDOC_API ke_gpu_render_target_handle
+KE_GPU_RENDER_TARGET_RENDERDOC_API ke_result
 ke_gpu_render_target_renderdoc_create(ke_gpu_render_target *inner,
                                       const ke_gpu_render_target_renderdoc_params *params,
-                                      ke_error **out_error);
+                                      ke_gpu_render_target_handle *out_target);
 
 #ifdef __cplusplus
 }

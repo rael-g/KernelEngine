@@ -1,16 +1,18 @@
 const std = @import("std");
-const ke_common_build = @import("ke_common");
+const ke_build = @import("ke_build");
+const ke_logger_build = @import("ke_logger");
+const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
     const shader_files_src = b.option([]const u8, "shader-files-src", "path to the shared Zig shader_files.zig") orelse @panic("-Dshader-files-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
     const material_params_json = b.option([]const u8, "material-params-json", "generated reflection of the material parameter block") orelse @panic("-Dmaterial-params-json required");
 
     const roots = [_]struct { name: []const u8, tests: bool }{ .{ .name = "lib", .tests = false }, .{ .name = "test", .tests = true } };
@@ -22,18 +24,16 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .link_libc = true,
         });
-        m.*.addImport("klog", ke_common_build.klog(b));
+        m.*.addImport("log", ke_logger_build.log(b));
+        m.*.addImport("result", ke_result_build.result(b));
         m.*.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
         m.*.addImport("shader_files", b.createModule(.{ .root_source_file = .{ .cwd_relative = shader_files_src }, .target = target, .optimize = optimize, .link_libc = true }));
         if (r.tests) m.*.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
-        inline for (.{ ke_common, ke_render }) |inc| m.*.addIncludePath(.{ .cwd_relative = inc });
+        inline for (.{ ke_common, ke_result, ke_render }) |inc| m.*.addIncludePath(.{ .cwd_relative = inc });
         m.*.addIncludePath(b.path("include"));
-        m.*.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-        m.*.linkSystemLibrary("ke_common", .{});
-        m.*.addRPathSpecial("$ORIGIN");
         m.*.addCMacro("KE_RENDER_BINDER_GROUPED_EXPORT", "");
         m.*.addAnonymousImport("material_params.json", .{ .root_source_file = .{ .cwd_relative = material_params_json } });
-        m.*.addImport("c", ke_common_build.cImports(b, m.*, b.path("src/c.h")));
+        m.*.addImport("c", ke_build.cImports(b, m.*, b.path("src/c.h")));
     }
 
     const lib = b.addLibrary(.{

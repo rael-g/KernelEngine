@@ -4,10 +4,10 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_scene").logFn };
 
-const klog = @import("klog").Destination("ke_render_scene");
 pub const c = @import("c");
+const R = @import("result").Result(c, .{});
 const component_apply = @import("component_apply.zig");
 const mesh_resolve = @import("mesh_resolve.zig");
 const sprite_resolve = @import("sprite_resolve.zig");
@@ -65,53 +65,56 @@ fn destroyScene(self: ?*c.ke_render_scene_resolve) callconv(.c) void {
 
 /// Registers the component type with the ecs under its name, its size and its field table, and
 /// returns the id the ecs gives it.
-fn registerComponent(e: *c.ke_ecs, name: [*c]const u8, comptime T: type, comptime table: anytype, out_error: [*c][*c]c.ke_error) c.ke_component_id {
+fn registerComponent(e: *c.ke_ecs, name: [*c]const u8, comptime T: type, comptime table: anytype) R.Error!c.ke_component_id {
     const fields = @typeInfo(@TypeOf(table.*)).array;
-    return e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, out_error);
+    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, &cid));
+    return cid;
 }
 
-fn registerIds(e: *c.ke_ecs, ids: *c.ke_render_scene_component_ids, out_error: [*c][*c]c.ke_error) bool {
-    ids.mesh = registerComponent(e, c.KE_COMPONENT_NAME_MESH, c.ke_mesh_component, &c.ke_mesh_component_fields, out_error);
-    ids.world_transform = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = @sizeOf(c.ke_world_transform_component), .alignment = @alignOf(c.ke_world_transform_component), .fields = null, .field_count = 0 }, out_error);
-    ids.camera = registerComponent(e, c.KE_COMPONENT_NAME_CAMERA, c.ke_camera_component, &c.ke_camera_component_fields, out_error);
-    ids.directional_light = registerComponent(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, c.ke_directional_light_component, &c.ke_directional_light_component_fields, out_error);
-    ids.point_light = registerComponent(e, c.KE_COMPONENT_NAME_POINT_LIGHT, c.ke_point_light_component, &c.ke_point_light_component_fields, out_error);
-    ids.spot_light = registerComponent(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, c.ke_spot_light_component, &c.ke_spot_light_component_fields, out_error);
-    ids.ambient_light = registerComponent(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, c.ke_ambient_light_component, &c.ke_ambient_light_component_fields, out_error);
-    ids.skybox = e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(c.ke_skybox_component), .alignment = @alignOf(c.ke_skybox_component), .fields = null, .field_count = 0 }, out_error);
-    ids.sprite2d = registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields, out_error);
-    ids.label = registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields, out_error);
-    inline for (@typeInfo(c.ke_render_scene_component_ids).@"struct".fields) |f| {
-        if (@field(ids, f.name) == c.KE_COMPONENT_INVALID) return false;
-    }
-    return true;
+fn registerBare(e: *c.ke_ecs, name: [*c]const u8, comptime T: type) R.Error!c.ke_component_id {
+    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = null, .field_count = 0 }, &cid));
+    return cid;
 }
 
-fn refusedScene(out_error: [*c][*c]c.ke_error) c.ke_render_scene_resolve_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "scene resolve: runtime, ecs and service are required", @src().file, @intCast(@src().line), null);
-    return .{ .ref = null, .destroy = null };
+fn registerIds(e: *c.ke_ecs, ids: *c.ke_render_scene_component_ids) R.Error!void {
+    ids.mesh = try registerComponent(e, c.KE_COMPONENT_NAME_MESH, c.ke_mesh_component, &c.ke_mesh_component_fields);
+    ids.world_transform = try registerBare(e, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, c.ke_world_transform_component);
+    ids.camera = try registerComponent(e, c.KE_COMPONENT_NAME_CAMERA, c.ke_camera_component, &c.ke_camera_component_fields);
+    ids.directional_light = try registerComponent(e, c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, c.ke_directional_light_component, &c.ke_directional_light_component_fields);
+    ids.point_light = try registerComponent(e, c.KE_COMPONENT_NAME_POINT_LIGHT, c.ke_point_light_component, &c.ke_point_light_component_fields);
+    ids.spot_light = try registerComponent(e, c.KE_COMPONENT_NAME_SPOT_LIGHT, c.ke_spot_light_component, &c.ke_spot_light_component_fields);
+    ids.ambient_light = try registerComponent(e, c.KE_COMPONENT_NAME_AMBIENT_LIGHT, c.ke_ambient_light_component, &c.ke_ambient_light_component_fields);
+    ids.skybox = try registerBare(e, c.KE_COMPONENT_NAME_SKYBOX, c.ke_skybox_component);
+    ids.sprite2d = try registerComponent(e, c.KE_COMPONENT_NAME_SPRITE2D, c.ke_sprite2d_component, &c.ke_sprite2d_component_fields);
+    ids.label = try registerComponent(e, c.KE_COMPONENT_NAME_LABEL, c.ke_label_component, &c.ke_label_component_fields);
 }
 
-/// The factory declared in scene_resolve_create.h. A failed allocation fails as out of memory and
-/// a component the ecs refuses with the ecs's error. The runtime refusing either system sets the
-/// error output, removes the sprite system when it was the mesh system that was refused, and
-/// returns the null handle.
-export fn ke_render_scene_resolve_create(params_in: ?*const c.ke_render_scene_resolve_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_scene_resolve_handle {
-    const empty = c.ke_render_scene_resolve_handle{ .ref = null, .destroy = null };
-    const p = params_in orelse return refusedScene(out_error);
-    const rt: *c.ke_runtime = p.runtime orelse return refusedScene(out_error);
-    const e: *c.ke_ecs = p.ecs orelse return refusedScene(out_error);
-    const core = p.service orelse return refusedScene(out_error);
+/// The factory declared in scene_resolve_create.h. A missing runtime, ecs or service fails as an
+/// invalid argument, a failed allocation as out of memory and a component the ecs refuses with the
+/// ecs's code. The runtime refusing either system fails with its code, removes the sprite system
+/// when it was the mesh system that was refused, and leaves the handle zeroed.
+export fn ke_render_scene_resolve_create(params_in: ?*const c.ke_render_scene_resolve_params, out_resolve: [*c]c.ke_render_scene_resolve_handle) callconv(.c) c.ke_result {
+    const out = out_resolve orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params_in orelse return R.code(error.InvalidArgument);
+    const rt: *c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    const e: *c.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
+    const core = p.service orelse return R.code(error.InvalidArgument);
 
-    const st = gpa.create(SceneResolve) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "scene resolve: allocation failed", @src().file, @intCast(@src().line), null);
-        return empty;
-    };
-    st.api = .{ .handle = st, .component_ids = componentIds };
-    if (!registerIds(e, &st.ids, out_error)) {
+    const st = gpa.create(SceneResolve) catch |err| return R.code(err);
+    registerScene(st, p, rt, e, core) catch |err| {
         gpa.destroy(st);
-        return empty;
-    }
+        return R.code(err);
+    };
+    out.* = .{ .ref = &st.api, .destroy = destroyScene };
+    return R.ok;
+}
+
+fn registerScene(st: *SceneResolve, p: *const c.ke_render_scene_resolve_params, rt: *c.ke_runtime, e: *c.ke_ecs, core: *c.ke_render_service) R.Error!void {
+    st.api = .{ .handle = st, .component_ids = componentIds };
+    try registerIds(e, &st.ids);
 
     st.sprite = .{ .core = core, .mesh_cid = st.ids.mesh, .resolver = p.resolver };
     st.sprite_terms = .{ .{ .cid = st.ids.sprite2d, .access = c.KE_ACCESS_WRITE }, .{ .cid = st.ids.mesh, .access = c.KE_ACCESS_WRITE }, .{ .cid = st.ids.sprite2d, .access = c.KE_ACCESS_WRITE } };
@@ -124,11 +127,9 @@ export fn ke_render_scene_resolve_create(params_in: ?*const c.ke_render_scene_re
     sprite.pinned_thread = 0;
     sprite.user_data = &st.sprite;
     sprite.execute = sprite_resolve.system;
-    const sprite_id = rt.register_system.?(rt, &sprite, out_error);
-    if (sprite_id == 0) {
-        gpa.destroy(st);
-        return empty;
-    }
+    var sprite_id: c.ke_system_id = 0;
+    try R.check(rt.register_system.?(rt, &sprite, &sprite_id));
+    errdefer _ = rt.unregister_system.?(rt, sprite_id);
 
     st.mesh_terms = .{.{ .cid = st.ids.mesh, .access = c.KE_ACCESS_WRITE }};
     st.mesh_queries = .{.{ .terms = &st.mesh_terms[0], .term_count = 1 }};
@@ -142,13 +143,8 @@ export fn ke_render_scene_resolve_create(params_in: ?*const c.ke_render_scene_re
     mesh.execute = mesh_resolve.system;
     mesh.after = &mesh_resolve_after;
     mesh.after_count = mesh_resolve_after.len;
-    if (rt.register_system.?(rt, &mesh, out_error) == 0) {
-        _ = rt.unregister_system.?(rt, sprite_id, null);
-        gpa.destroy(st);
-        return empty;
-    }
-
-    return .{ .ref = &st.api, .destroy = destroyScene };
+    var system_id: c.ke_system_id = 0;
+    try R.check(rt.register_system.?(rt, &mesh, &system_id));
 }
 
 /// The state of one label resolve. The factory allocates it and `destroyLabel` frees it. The
@@ -169,19 +165,18 @@ fn destroyLabel(self: ?*c.ke_render_label_resolve) callconv(.c) void {
     gpa.destroy(st);
 }
 
-/// The factory declared in label_resolve_create.h. A failed allocation fails as out of memory, and
-/// the runtime refusing the system with the runtime's error.
-export fn ke_render_label_resolve_create(params_in: ?*const c.ke_render_label_resolve_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_label_resolve_handle {
-    const empty = c.ke_render_label_resolve_handle{ .ref = null, .destroy = null };
-    const p = params_in orelse return refusedLabel(out_error);
-    const rt: *c.ke_runtime = p.runtime orelse return refusedLabel(out_error);
-    const core = p.service orelse return refusedLabel(out_error);
-    const ui = p.ui orelse return refusedLabel(out_error);
+/// The factory declared in label_resolve_create.h. A missing runtime, service or ui fails as an
+/// invalid argument, a failed allocation as out of memory, and the runtime refusing the system
+/// with the runtime's code.
+export fn ke_render_label_resolve_create(params_in: ?*const c.ke_render_label_resolve_params, out_resolve: [*c]c.ke_render_label_resolve_handle) callconv(.c) c.ke_result {
+    const out = out_resolve orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params_in orelse return R.code(error.InvalidArgument);
+    const rt: *c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    const core = p.service orelse return R.code(error.InvalidArgument);
+    const ui = p.ui orelse return R.code(error.InvalidArgument);
 
-    const st = gpa.create(LabelResolve) catch {
-        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "label resolve: allocation failed", @src().file, @intCast(@src().line), null);
-        return empty;
-    };
+    const st = gpa.create(LabelResolve) catch |err| return R.code(err);
     st.state = .{ .core = core, .ui = ui, .resolver = p.resolver };
     st.terms = .{.{ .cid = p.label_cid, .access = c.KE_ACCESS_WRITE }};
     st.queries = .{.{ .terms = &st.terms[0], .term_count = 1 }};
@@ -195,16 +190,14 @@ export fn ke_render_label_resolve_create(params_in: ?*const c.ke_render_label_re
     label.execute = label_resolve.system;
     label.before = &label_resolve_before;
     label.before_count = label_resolve_before.len;
-    if (rt.register_system.?(rt, &label, out_error) == 0) {
+    var system_id: c.ke_system_id = 0;
+    const registered = rt.register_system.?(rt, &label, &system_id);
+    if (registered != R.ok) {
         gpa.destroy(st);
-        return empty;
+        return registered;
     }
-    return .{ .ref = @ptrCast(st), .destroy = destroyLabel };
-}
-
-fn refusedLabel(out_error: [*c][*c]c.ke_error) c.ke_render_label_resolve_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "label resolve: runtime, service and ui are required", @src().file, @intCast(@src().line), null);
-    return .{ .ref = null, .destroy = null };
+    out.* = .{ .ref = @ptrCast(st), .destroy = destroyLabel };
+    return R.ok;
 }
 
 const testing = std.testing;
@@ -232,8 +225,8 @@ const Rig = struct {
 test "the scene resolve registers both its systems and hands out an id for every component" {
     var rig: Rig = undefined;
     rig.init();
-    const h = ke_render_scene_resolve_create(&rig.sceneParams(), null);
-    try testing.expect(h.ref != null);
+    var h: c.ke_render_scene_resolve_handle = undefined;
+    try R.check(ke_render_scene_resolve_create(&rig.sceneParams(), &h));
     try testing.expectEqual(@as(u32, 2), rig.rt.live_count);
     const ids = h.ref.*.component_ids.?(h.ref);
     inline for (@typeInfo(c.ke_render_scene_component_ids).@"struct".fields) |f| {
@@ -246,7 +239,9 @@ test "a scene resolve whose mesh system the runtime refuses removes its sprite s
     var rig: Rig = undefined;
     rig.init();
     rig.rt.limit = 1;
-    try testing.expect(ke_render_scene_resolve_create(&rig.sceneParams(), null).ref == null);
+    var h: c.ke_render_scene_resolve_handle = undefined;
+    try testing.expect(ke_render_scene_resolve_create(&rig.sceneParams(), &h) != R.ok);
+    try testing.expect(h.ref == null);
     try testing.expectEqual(@as(u32, 0), rig.rt.live_count);
 }
 
@@ -255,9 +250,9 @@ test "a scene resolve missing its service is refused as an invalid argument" {
     rig.init();
     var p = rig.sceneParams();
     p.service = null;
-    var err: [*c]c.ke_error = null;
-    try testing.expect(ke_render_scene_resolve_create(&p, &err).ref == null);
-    try testing.expectEqual(&c.KE_ERROR_INVALID_ARGUMENT, err.*.type);
+    var h: c.ke_render_scene_resolve_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_scene_resolve_create(&p, &h)));
+    try testing.expect(h.ref == null);
 }
 
 test "the label resolve registers its system, and fails when the runtime refuses it" {
@@ -265,22 +260,23 @@ test "the label resolve registers its system, and fails when the runtime refuses
     rig.init();
     var ui = std.mem.zeroes(c.ke_render_ui);
     const p = c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .label_cid = 7 };
-    const h = ke_render_label_resolve_create(&p, null);
-    try testing.expect(h.ref != null);
+    var h: c.ke_render_label_resolve_handle = undefined;
+    try R.check(ke_render_label_resolve_create(&p, &h));
     try testing.expectEqual(@as(u32, 1), rig.rt.live_count);
     h.destroy.?(h.ref);
 
     rig.rt.limit = rig.rt.registered;
-    try testing.expect(ke_render_label_resolve_create(&p, null).ref == null);
+    try testing.expect(ke_render_label_resolve_create(&p, &h) != R.ok);
+    try testing.expect(h.ref == null);
 }
 
 test "a label resolve missing its ui is refused as an invalid argument" {
     var rig: Rig = undefined;
     rig.init();
     const p = c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = null, .resolver = null, .label_cid = 7 };
-    var err: [*c]c.ke_error = null;
-    try testing.expect(ke_render_label_resolve_create(&p, &err).ref == null);
-    try testing.expectEqual(&c.KE_ERROR_INVALID_ARGUMENT, err.*.type);
+    var h: c.ke_render_label_resolve_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, &h)));
+    try testing.expect(h.ref == null);
 }
 
 test "creating and destroying the scene resolve and the label resolve leaves no block allocated" {

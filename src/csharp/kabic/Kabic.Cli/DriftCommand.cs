@@ -96,13 +96,6 @@ internal static class DriftCommand
                 }
             }
 
-            var committedKinds = Path.Combine(rootDir, convention.ErrorKindsOut);
-            if (!File.Exists(committedKinds) || File.ReadAllText(committedKinds) != Generation.ErrorKinds(convention))
-            {
-                Console.WriteLine($"[!] error kinds: the mapping from native errors to exceptions is out of date (committed: {convention.ErrorKindsOut})");
-                driftDetected = true;
-            }
-
             if (convention.FieldTable is { ManagedOut: { } managedOut, NativeOut: { } nativeOut })
             {
                 foreach (var (path, text) in new[] { (managedOut, Generation.ComponentLayout(convention)), (nativeOut, Generation.NativeFieldTable(convention)) })

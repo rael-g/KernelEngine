@@ -19,38 +19,24 @@
       "slots": [
         {
           "name": "on_initialize",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [
             "lifecycle:init"
           ],
           "doc": "Performs backend-specific setup, right after creation.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
+          "return_doc": "KE_OK, or the code of the setup the backend could not perform.",
+          "params": [],
           "receiver": "struct ke_window *"
         },
         {
           "name": "on_shutdown",
-          "returns": "_Bool",
+          "returns": "void",
           "tags": [
             "lifecycle:shutdown"
           ],
           "doc": "Performs backend-specific teardown, right before destroy.",
           "return_doc": null,
-          "params": [
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
+          "params": [],
           "receiver": "struct ke_window *"
         },
         {
@@ -64,23 +50,16 @@
         },
         {
           "name": "poll_events",
-          "returns": "_Bool",
+          "returns": "void",
           "tags": [],
           "doc": "Processes pending OS events. Call once per frame.",
           "return_doc": null,
-          "params": [
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
+          "params": [],
           "receiver": "struct ke_window *"
         },
         {
           "name": "get_size",
-          "returns": "_Bool",
+          "returns": "void",
           "tags": [],
           "doc": "Retrieves the current client-area size in pixels.",
           "return_doc": null,
@@ -100,12 +79,6 @@
                 "out"
               ],
               "doc": "Receives the client-area height."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_window *"

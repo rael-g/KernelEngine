@@ -4,7 +4,9 @@
     .fingerprint = 0xb20ef2791ab2a860,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
-        .ke_common = .{ .path = "../../common" },
+        .ke_build = .{ .path = "../../build" },
+        .ke_logger = .{ .path = "../../logger" },
+        .ke_result = .{ .path = "../../result" },
     },
     .paths = .{"."},
 }

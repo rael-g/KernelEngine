@@ -1,4 +1,3 @@
-using KernelEngine.Common.Native;
 using KernelEngine.Logger;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -19,9 +18,8 @@ public static class ServiceCollectionExtensions
             {
                 if (sp.GetService<ILogger>() is { } logger)
                     Native.NativeMethods.asset_assimp_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
-                ke_error* err = null;
-                var handle = Native.NativeMethods.asset_loader_assimp_create(&err);
-                if (handle.@ref == null) throw NativeErrors.FromNative(err, "asset_loader_assimp_create");
+                KernelEngine.Asset.Native.ke_asset_loader_handle handle;
+                KernelEngine.NativeResults.ThrowIfFailed(Native.NativeMethods.asset_loader_assimp_create(&handle), "ke_asset_loader_assimp_create");
                 return new AssetLoader(handle);
             }
         });

@@ -1,6 +1,8 @@
 ﻿using System.Numerics;
 using System.Runtime.InteropServices;
 
+using KernelEngine.Result.Native;
+
 using Xunit;
 
 namespace EngineTests;
@@ -31,11 +33,12 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe uint MockCreateBody(ke_physics_2d* self, ke_body_type_2d type, float x, float y, ke_error** out_error)
+    private static unsafe ke_result MockCreateBody(ke_physics_2d* self, ke_body_type_2d type, float x, float y, uint* outBody)
     {
         LastBodyType = type;
         LastPosition = new Vector2(x, y);
-        return LastResult ? 42u : 0u;
+        *outBody = LastResult ? 42u : 0u;
+        return LastResult ? ke_result.KE_OK : ke_result.KE_RESULT_OUT_OF_MEMORY;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -45,17 +48,17 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe bool MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float ox, float oy, float oa, float d, float f, float r, ke_collision_filter_2d* filter, ke_error** out_error)
+    private static unsafe ke_result MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float ox, float oy, float oa, float d, float f, float r, ke_collision_filter_2d* filter)
     {
         LastBodyId = id;
-        return true;
+        return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe bool MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float ox, float oy, float d, float f, float r, ke_collision_filter_2d* filter, ke_error** out_error)
+    private static unsafe ke_result MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float ox, float oy, float d, float f, float r, ke_collision_filter_2d* filter)
     {
         LastBodyId = id;
-        return true;
+        return ke_result.KE_OK;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -182,13 +185,12 @@ public class Physics2DTests
     }
 
     [Fact]
-    public unsafe void CreateBody_ReturnsNone_WhenNativeFails()
+    public unsafe void CreateBody_Throws_WhenNativeFails()
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
         LastResult = false;
-        var handle = physics.CreateBody(BodyType2D.Dynamic, new Vector2(1, 2));
-        Assert.Equal(BodyHandle2D.None, handle);
+        Assert.Throws<OutOfMemoryException>(() => physics.CreateBody(BodyType2D.Dynamic, new Vector2(1, 2)));
         LastResult = true;
         NativeMemory.Free(h.@ref);
     }

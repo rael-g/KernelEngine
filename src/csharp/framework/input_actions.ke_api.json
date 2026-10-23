@@ -109,9 +109,9 @@
       "slots": [
         {
           "name": "load",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, with a message naming the action and the binding; a load that fails leaves no actions.",
+          "doc": "Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, as an invalid argument, logging the action and the binding; a load that fails leaves no actions. A file that cannot be opened fails as not found and one that does not parse as KE_RESULT_IO.",
           "return_doc": null,
           "params": [
             {
@@ -120,12 +120,6 @@
               "tags": [
                 "utf8"
               ],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
               "doc": null
             }
           ],
@@ -175,10 +169,10 @@
         },
         {
           "name": "bind_key",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": null,
-          "return_doc": null,
+          "doc": "Adds a key binding to an action.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for an id no action has, or KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "action_id",
@@ -191,21 +185,15 @@
               "type": "ke_key",
               "tags": [],
               "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_input_actions *"
         },
         {
           "name": "bind_mouse_button",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": null,
+          "doc": "Adds a mouse button binding to an action. Fails as bind_key does.",
           "return_doc": null,
           "params": [
             {
@@ -219,21 +207,15 @@
               "type": "ke_mouse_button",
               "tags": [],
               "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_input_actions *"
         },
         {
           "name": "bind_key_pair",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": null,
+          "doc": "Adds a one-axis binding to an action, positive while positive is held and negative while negative is. Fails as bind_key does.",
           "return_doc": null,
           "params": [
             {
@@ -253,21 +235,15 @@
               "type": "ke_key",
               "tags": [],
               "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_input_actions *"
         },
         {
           "name": "bind_key_quad",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": null,
+          "doc": "Adds a two-axis binding to an action: x is right minus left and y is up minus down. Fails as bind_key does.",
           "return_doc": null,
           "params": [
             {
@@ -299,22 +275,16 @@
               "type": "ke_key",
               "tags": [],
               "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "struct ke_input_actions *"
         },
         {
           "name": "evaluate",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Runs one frame of binding evaluation against snapshot, updating polling state and firing on_event for each phase transition. A null on_event updates polling only.",
-          "return_doc": null,
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null snapshot, which changes nothing.",
           "params": [
             {
               "name": "snapshot",
@@ -333,12 +303,6 @@
             {
               "name": "event_ctx",
               "type": "void *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }

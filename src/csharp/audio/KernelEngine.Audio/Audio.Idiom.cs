@@ -9,8 +9,7 @@ public unsafe partial class Audio : IAudio
     /// <inheritdoc/>
     SoundHandle IAudio.LoadSound(string path)
     {
-        var id = LoadSound(path);
-        return id != 0 ? new SoundHandle(id) : SoundHandle.None;
+        return new SoundHandle(LoadSound(path));
     }
 
     /// <inheritdoc/>

@@ -78,30 +78,29 @@ struct ke_gpu_command_encoder
                                   ke_gpu_buffer src, size_t src_offset,
                                   ke_gpu_buffer dst, size_t dst_offset, size_t size);
     /// Copies tightly described rows of texels from a buffer into a texture. Fails with
-    /// KE_ERROR_INVALID_ARGUMENT when bytes_per_row is not a multiple of
+    /// KE_RESULT_INVALID_ARGUMENT when bytes_per_row is not a multiple of
     /// ke_gpu_capabilities::copy_bytes_per_row_alignment.
-    bool (*copy_buffer_to_texture)(struct ke_gpu_command_encoder *self,
-                                   ke_gpu_buffer src, size_t src_offset, uint32_t bytes_per_row,
-                                   ke_gpu_texture dst,
-                                   uint32_t dst_x, uint32_t dst_y, uint32_t dst_z,
-                                   uint32_t width, uint32_t height,
-                                   ke_error **out_error);
+    ke_result (*copy_buffer_to_texture)(struct ke_gpu_command_encoder *self,
+                                        ke_gpu_buffer src, size_t src_offset, uint32_t bytes_per_row,
+                                        ke_gpu_texture dst,
+                                        uint32_t dst_x, uint32_t dst_y, uint32_t dst_z,
+                                        uint32_t width, uint32_t height);
     void (*copy_texture_to_texture)(struct ke_gpu_command_encoder *self,
                                     ke_gpu_texture src, ke_gpu_texture dst,
                                     uint32_t width, uint32_t height);
     /// Ends recording and returns the commands as a buffer to submit. The encoder records
-    /// nothing more and is still released by its own handle. On failure the handle's ref is NULL.
-    ke_gpu_command_buffer_handle (*finish)(struct ke_gpu_command_encoder *self, ke_error **out_error);
+    /// nothing more and is still released by its own handle.
+    /// @param out_buffer [out] Receives the command buffer; left zeroed on failure.
+    ke_result (*finish)(struct ke_gpu_command_encoder *self, ke_gpu_command_buffer_handle *out_buffer);
 
     /// Copies a texture region into a buffer created with KE_GPU_BUFFER_USAGE_COPY_DST; the
-    /// texture needs KE_GPU_TEXTURE_USAGE_COPY_SRC. Fails with KE_ERROR_INVALID_ARGUMENT when
+    /// texture needs KE_GPU_TEXTURE_USAGE_COPY_SRC. Fails with KE_RESULT_INVALID_ARGUMENT when
     /// bytes_per_row is not a multiple of ke_gpu_capabilities::copy_bytes_per_row_alignment.
-    bool (*copy_texture_to_buffer)(struct ke_gpu_command_encoder *self,
-                                   ke_gpu_texture src,
-                                   uint32_t src_x, uint32_t src_y, uint32_t src_z,
-                                   ke_gpu_buffer dst, size_t dst_offset, uint32_t bytes_per_row,
-                                   uint32_t width, uint32_t height,
-                                   ke_error **out_error);
+    ke_result (*copy_texture_to_buffer)(struct ke_gpu_command_encoder *self,
+                                        ke_gpu_texture src,
+                                        uint32_t src_x, uint32_t src_y, uint32_t src_z,
+                                        ke_gpu_buffer dst, size_t dst_offset, uint32_t bytes_per_row,
+                                        uint32_t width, uint32_t height);
 
     /// Opens a named group that capture tools nest the following commands under, until the
     /// matching pop_debug_group. The label is copied by the call.

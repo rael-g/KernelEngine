@@ -11,7 +11,6 @@ const cFree = alloc.cFree;
 const cAllocBytes = alloc.cAllocBytes;
 const cFreeBytes = alloc.cFreeBytes;
 
-const E = @import("kerror").Errors(c);
 
 pub const initial_segments_per_query = 4;
 pub const resolve_attempts = 3;

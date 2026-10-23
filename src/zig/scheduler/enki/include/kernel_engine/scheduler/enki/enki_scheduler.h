@@ -31,10 +31,12 @@ typedef struct ke_scheduler_enki_params
 /**
  * @brief Creates a scheduler.
  * @param params [borrowed,optional] Construction parameters; NULL takes every default.
- * @return Handle whose @c ref is NULL on failure.
+ * @param out_scheduler [out] Receives the scheduler; left zeroed on failure.
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p out_scheduler, or
+ *         KE_RESULT_OUT_OF_MEMORY.
  */
-KE_SCHEDULER_API ke_scheduler_handle ke_scheduler_enki_create(const ke_scheduler_enki_params *params,
-                                                              struct ke_error              **out_error);
+KE_SCHEDULER_API ke_result ke_scheduler_enki_create(const ke_scheduler_enki_params *params,
+                                                    ke_scheduler_handle            *out_scheduler);
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_GPU_GPU_RENDER_TARGET_H_
 #define KERNEL_ENGINE_RENDER_GPU_GPU_RENDER_TARGET_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
 #ifdef __cplusplus
@@ -15,14 +15,15 @@ typedef struct ke_gpu_render_target
 {
     void *handle;
 
-    /// Begins a frame and returns the view to draw into, owned by the target and valid until
-    /// present. Returns KE_GPU_INVALID_HANDLE with out_error untouched when the target has nothing
-    /// to draw into this frame, and KE_GPU_INVALID_HANDLE with out_error set when it failed.
-    ke_gpu_texture_view (*acquire)(struct ke_gpu_render_target *self, ke_error **out_error);
+    /// Begins a frame and writes the view to draw into, owned by the target and valid until
+    /// present. Succeeds writing KE_GPU_INVALID_HANDLE when the target has nothing to draw into
+    /// this frame, and fails writing it when acquiring failed.
+    /// @param out_view [out] Receives the view.
+    ke_result (*acquire)(struct ke_gpu_render_target *self, ke_gpu_texture_view *out_view);
 
-    /// Ends the frame begun by acquire. Fails with KE_ERROR_INVALID_ARGUMENT when no frame is
+    /// Ends the frame begun by acquire. Fails with KE_RESULT_INVALID_ARGUMENT when no frame is
     /// acquired.
-    bool (*present)(struct ke_gpu_render_target *self, ke_error **out_error);
+    ke_result (*present)(struct ke_gpu_render_target *self);
 
     /// Size in pixels of the view the last acquire returned, or of the next one before any acquire.
     void (*size)(struct ke_gpu_render_target *self, uint32_t *out_width, uint32_t *out_height);

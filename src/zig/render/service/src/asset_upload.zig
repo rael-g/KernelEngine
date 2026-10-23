@@ -4,6 +4,8 @@
 const std = @import("std");
 const rc = @import("render_service.zig");
 const c = rc.c;
+const R = rc.R;
+const log = std.log.scoped(.render_service);
 
 /// Creation functions in this file share one order: validate the key, return the cached handle
 /// on a hit, create the GPU objects, insert the slot into the store, and only then register the
@@ -21,54 +23,51 @@ fn tryCached(cache: *c.ke_resource_cache, key: [*c]const u8) u32 {
 /// Called last in a creation, once the slot is in its store, so a key the cache finds always
 /// names a stored slot.
 fn registerCached(cache: *c.ke_resource_cache, key: [*c]const u8, bits: u32) void {
-    _ = cache.register_resource.?(cache, bits, null);
-    _ = cache.cache_insert.?(cache, key, bits, null);
+    _ = cache.register_resource.?(cache, bits);
+    _ = cache.cache_insert.?(cache, key, bits);
 }
 
 /// Creates a vertex buffer and an index buffer for the key and stores them as one mesh. A key the
-/// mesh cache already holds returns its handle without creating anything. An empty or null key
-/// fills the error with an invalid-argument error. A buffer the device cannot create returns the
-/// none handle with the device's error, after destroying the buffer made before it. A full store
-/// returns the none handle without an error, after destroying both buffers.
-pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*const anyopaque, vertices_size: usize, indices: [*c]const u16, index_count: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_mesh_handle {
-    const st = rc.coreOf(self);
-    if (!keyValid(key)) {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "upload_mesh requires a non-empty key", @src().file, @intCast(@src().line), null);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
+/// mesh cache already holds writes its handle without creating anything. An empty or null key
+/// fails as an invalid argument. A buffer the device cannot create fails with the device's code,
+/// after destroying the buffer made before it. A full store fails as out of memory, after
+/// destroying both buffers.
+pub fn uploadMesh(self: [*c]c.ke_render_service, key: [*c]const u8, vertices: ?*const anyopaque, vertices_size: usize, indices: [*c]const u16, index_count: u32, out_mesh: [*c]c.ke_mesh_handle) callconv(.c) c.ke_result {
+    const out = out_mesh orelse return R.code(error.InvalidArgument);
+    out.* = .{ .bits = c.KE_HANDLE_NONE };
+    if (self == null or !keyValid(key)) return R.code(error.InvalidArgument);
+    out.* = .{ .bits = mesh(rc.coreOf(self), key, vertices, vertices_size, indices, index_count) catch |err| return R.code(err) };
+    return R.ok;
+}
 
+fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: ?*const anyopaque, vertices_size: usize, indices: [*c]const u16, index_count: u32) R.Error!u32 {
     const cached = tryCached(st.mesh_cache, key);
-    if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
+    if (cached != c.KE_HANDLE_NONE) return cached;
 
-    const vbo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+    var vbo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
         .label = "mesh.vertices",
         .initial_data = vertices,
         .size = vertices_size,
         .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
-    }, out_error);
-    if (vbo == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
+    }, &vbo));
+    errdefer st.device.destroy_buffer.?(st.device, vbo);
 
-    const ibo = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+    var ibo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
         .label = "mesh.indices",
         .initial_data = @ptrCast(indices),
         .size = index_count * @sizeOf(u16),
         .usage = c.KE_GPU_BUFFER_USAGE_INDEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
-    }, out_error);
-    if (ibo == c.KE_GPU_INVALID_HANDLE) {
-        st.device.destroy_buffer.?(st.device, vbo);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
+    }, &ibo));
+    errdefer st.device.destroy_buffer.?(st.device, ibo);
 
     const bits = st.mesh_store.insert(.{ .vbo = vbo, .ibo = ibo, .index_count = index_count });
-    if (bits == c.KE_HANDLE_NONE) {
-        st.device.destroy_buffer.?(st.device, vbo);
-        st.device.destroy_buffer.?(st.device, ibo);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
+    if (bits == c.KE_HANDLE_NONE) return error.OutOfMemory;
     registerCached(st.mesh_cache, key, bits);
-    return .{ .bits = bits };
+    return bits;
 }
 
 /// Writes the buffers and the index count of the mesh through the out-parameters. Returns zero and
@@ -89,110 +88,65 @@ pub fn setClearColor(self: [*c]c.ke_render_service, r: f32, g: f32, b: f32, a: f
 }
 
 /// Creates a sampled RGBA 2D texture and its view for the key, from the pixels given. A cache hit
-/// returns the cached handle. An empty or null key fills the error with an invalid-argument
-/// error. A texture the device cannot create, or a full store, returns the none handle; the store
-/// case destroys the view and the texture first.
-pub fn uploadTexture(self: [*c]c.ke_render_service, key: [*c]const u8, width: u32, height: u32, rgba: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_texture_handle {
-    const st = rc.coreOf(self);
-    if (!keyValid(key)) {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "upload_texture requires a non-empty key", @src().file, @intCast(@src().line), null);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
-
-    const cached = tryCached(st.texture_cache, key);
-    if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
-
-    const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
-        .label = key,
-        .width = width,
-        .height = height,
-        .depth_or_array_layers = 1,
-        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
-        .dimension = c.KE_GPU_TEXTURE_DIM_2D,
-        .usage = c.KE_GPU_TEXTURE_USAGE_SAMPLED,
-        .mip_level_count = 1,
-        .sample_count = 1,
-        .initial_data = rgba,
-        .initial_data_size = width * height * 4,
-    }, out_error);
-    if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
-
-    const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
-        .label = key,
-        .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
-        .dimension = c.KE_GPU_TEXTURE_DIM_2D,
-        .aspect = c.KE_GPU_TEXTURE_ASPECT_COLOR,
-        .base_mip_level = 0,
-        .mip_level_count = 1,
-        .base_array_layer = 0,
-        .array_layer_count = 1,
-    }, out_error);
-    if (view == c.KE_GPU_INVALID_HANDLE) {
-        st.device.destroy_texture.?(st.device, tex);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
-
-    const bits = st.texture_store.insert(.{ .tex = tex, .view = view });
-    if (bits == c.KE_HANDLE_NONE) {
-        st.device.destroy_texture_view.?(st.device, view);
-        st.device.destroy_texture.?(st.device, tex);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
-    registerCached(st.texture_cache, key, bits);
-    return .{ .bits = bits };
+/// writes the cached handle. An empty or null key fails as an invalid argument. A texture or view
+/// the device cannot create fails with the device's code, and a full store as out of memory,
+/// destroying what was made first.
+pub fn uploadTexture(self: [*c]c.ke_render_service, key: [*c]const u8, width: u32, height: u32, rgba: ?*const anyopaque, out_texture: [*c]c.ke_texture_handle) callconv(.c) c.ke_result {
+    const out = out_texture orelse return R.code(error.InvalidArgument);
+    out.* = .{ .bits = c.KE_HANDLE_NONE };
+    if (self == null or !keyValid(key)) return R.code(error.InvalidArgument);
+    out.* = .{ .bits = texture(rc.coreOf(self), key, width, height, 1, c.KE_GPU_TEXTURE_DIM_2D, rgba) catch |err| return R.code(err) };
+    return R.ok;
 }
 
 /// Creates a sampled RGBA cube texture and its view for the key, from six faces of the size given,
 /// and stores it in `texture_store` beside the 2D textures, so a cubemap handle is a texture
 /// handle. The failures are those of `uploadTexture`.
-pub fn uploadCubemap(self: [*c]c.ke_render_service, key: [*c]const u8, face_size: u32, faces: ?*const anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_texture_handle {
-    if (!keyValid(key)) {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "upload_cubemap requires a non-empty key", @src().file, @intCast(@src().line), null);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
-    const st = rc.coreOf(self);
+pub fn uploadCubemap(self: [*c]c.ke_render_service, key: [*c]const u8, face_size: u32, faces: ?*const anyopaque, out_cubemap: [*c]c.ke_texture_handle) callconv(.c) c.ke_result {
+    const out = out_cubemap orelse return R.code(error.InvalidArgument);
+    out.* = .{ .bits = c.KE_HANDLE_NONE };
+    if (self == null or !keyValid(key)) return R.code(error.InvalidArgument);
+    out.* = .{ .bits = texture(rc.coreOf(self), key, face_size, face_size, 6, c.KE_GPU_TEXTURE_DIM_CUBE, faces) catch |err| return R.code(err) };
+    return R.ok;
+}
 
+fn texture(st: *rc.CoreState, key: [*c]const u8, width: u32, height: u32, layers: u8, dimension: c.ke_gpu_texture_dimension, pixels: ?*const anyopaque) R.Error!u32 {
     const cached = tryCached(st.texture_cache, key);
-    if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
+    if (cached != c.KE_HANDLE_NONE) return cached;
 
-    const tex = st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
+    var tex: c.ke_gpu_texture = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_texture.?(st.device, &c.ke_gpu_texture_params{
         .label = key,
-        .width = face_size,
-        .height = face_size,
-        .depth_or_array_layers = 6,
+        .width = width,
+        .height = height,
+        .depth_or_array_layers = layers,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
-        .dimension = c.KE_GPU_TEXTURE_DIM_CUBE,
+        .dimension = dimension,
         .usage = c.KE_GPU_TEXTURE_USAGE_SAMPLED,
         .mip_level_count = 1,
         .sample_count = 1,
-        .initial_data = faces,
-        .initial_data_size = face_size * face_size * 4 * 6,
-    }, out_error);
-    if (tex == c.KE_GPU_INVALID_HANDLE) return .{ .bits = c.KE_HANDLE_NONE };
+        .initial_data = pixels,
+        .initial_data_size = width * height * 4 * layers,
+    }, &tex));
+    errdefer st.device.destroy_texture.?(st.device, tex);
 
-    const view = st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
+    var view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_texture_view.?(st.device, tex, &c.ke_gpu_texture_view_params{
         .label = key,
         .format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
-        .dimension = c.KE_GPU_TEXTURE_DIM_CUBE,
+        .dimension = dimension,
         .aspect = c.KE_GPU_TEXTURE_ASPECT_COLOR,
         .base_mip_level = 0,
         .mip_level_count = 1,
         .base_array_layer = 0,
-        .array_layer_count = 6,
-    }, out_error);
-    if (view == c.KE_GPU_INVALID_HANDLE) {
-        st.device.destroy_texture.?(st.device, tex);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
+        .array_layer_count = layers,
+    }, &view));
+    errdefer st.device.destroy_texture_view.?(st.device, view);
 
     const bits = st.texture_store.insert(.{ .tex = tex, .view = view });
-    if (bits == c.KE_HANDLE_NONE) {
-        st.device.destroy_texture_view.?(st.device, view);
-        st.device.destroy_texture.?(st.device, tex);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
+    if (bits == c.KE_HANDLE_NONE) return error.OutOfMemory;
     registerCached(st.texture_cache, key, bits);
-    return .{ .bits = bits };
+    return bits;
 }
 
 /// Returns the view of the texture, or a stand-in when the handle names no stored texture: the
@@ -218,27 +172,29 @@ fn srgbToLinear(cs: f32) f32 {
 /// alpha cutoff reaches the binder only in the mask mode, while the stored record keeps the value
 /// as given. A shader name is copied into the record's fixed buffer: an empty name takes the
 /// default shader. An albedo or normal that names no stored texture is replaced by
-/// `white_texture_h` or `default_normal`, and the texture actually used is retained. A cache hit returns the cached handle. An empty or null key, or a
-/// shader name that does not fit the buffer, fills the error with an invalid-argument error and
-/// returns the none handle. A material the binder cannot keep returns the none handle with the
-/// binder's error, and a full store returns it without one, giving the binder's back.
-pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_color: [*c]const f32, metallic: f32, roughness: f32, albedo: c.ke_texture_handle, normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_material_handle {
+/// `white_texture_h` or `default_normal`, and the texture actually used is retained. A cache hit
+/// writes the cached handle. An empty or null key, or a shader name that does not fit the buffer,
+/// fails as an invalid argument. A material the binder cannot keep fails with the binder's code,
+/// and a full store as out of memory, giving the binder's back.
+pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_color: [*c]const f32, metallic: f32, roughness: f32, albedo: c.ke_texture_handle, normal: c.ke_texture_handle, alpha_mode: c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [*c]const u8, out_material: [*c]c.ke_material_handle) callconv(.c) c.ke_result {
+    const out = out_material orelse return R.code(error.InvalidArgument);
+    out.* = .{ .bits = c.KE_HANDLE_NONE };
+    if (self == null or !keyValid(key) or base_color == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
-    if (!keyValid(key)) {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_material requires a non-empty key", @src().file, @intCast(@src().line), null);
-        return .{ .bits = c.KE_HANDLE_NONE };
-    }
 
     const shader_span: []const u8 = if (shader != null and shader[0] != 0) std.mem.span(shader) else rc.DEFAULT_MATERIAL_SHADER;
     if (shader_span.len >= rc.MAX_SHADER_NAME) {
-        c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_material: shader name too long", @src().file, @intCast(@src().line), null);
-        return .{ .bits = c.KE_HANDLE_NONE };
+        log.warn("create_material: the shader name of {s} is too long", .{std.mem.span(key)});
+        return R.code(error.InvalidArgument);
     }
     var shader_buf = std.mem.zeroes([rc.MAX_SHADER_NAME]u8);
     @memcpy(shader_buf[0..shader_span.len], shader_span);
 
     const cached = tryCached(st.material_cache, key);
-    if (cached != c.KE_HANDLE_NONE) return .{ .bits = cached };
+    if (cached != c.KE_HANDLE_NONE) {
+        out.* = .{ .bits = cached };
+        return R.ok;
+    }
 
     const alb: c.ke_texture_handle = if (st.textureAt(albedo) != null) albedo else st.white_texture_h;
     const nrm: c.ke_texture_handle = if (st.textureAt(normal) != null) normal else st.default_normal;
@@ -252,8 +208,9 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
         .albedo = st.textureAt(alb).?.view,
         .normal_map = st.textureAt(nrm).?.view,
     };
-    const binding = st.binder.create_material.?(st.binder, &data, out_error);
-    if (binding == c.KE_RENDER_BINDING_INVALID) return .{ .bits = c.KE_HANDLE_NONE };
+    var binding: c.ke_render_material_binding = c.KE_RENDER_BINDING_INVALID;
+    const made = st.binder.create_material.?(st.binder, &data, &binding);
+    if (made != R.ok) return made;
 
     const bits = st.material_store.insert(.{
         .binding = binding,
@@ -265,12 +222,13 @@ pub fn createMaterial(self: [*c]c.ke_render_service, key: [*c]const u8, base_col
     });
     if (bits == c.KE_HANDLE_NONE) {
         st.binder.destroy_material.?(st.binder, binding);
-        return .{ .bits = c.KE_HANDLE_NONE };
+        return R.code(error.OutOfMemory);
     }
-    _ = st.texture_cache.retain.?(st.texture_cache, alb.bits, null);
-    _ = st.texture_cache.retain.?(st.texture_cache, nrm.bits, null);
+    _ = st.texture_cache.retain.?(st.texture_cache, alb.bits);
+    _ = st.texture_cache.retain.?(st.texture_cache, nrm.bits);
     registerCached(st.material_cache, key, bits);
-    return .{ .bits = bits };
+    out.* = .{ .bits = bits };
+    return R.ok;
 }
 
 /// Returns the alpha mode of the material; a handle that names no material answers with the
@@ -300,32 +258,32 @@ pub fn materialBinding(self: [*c]c.ke_render_service, h: c.ke_material_handle) c
 /// Adds a reference to the mesh in the mesh cache.
 pub fn retainMesh(self: [*c]c.ke_render_service, h: c.ke_mesh_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.mesh_cache.retain.?(st.mesh_cache, h.bits, null);
+    _ = st.mesh_cache.retain.?(st.mesh_cache, h.bits);
 }
 /// Drops a reference; the last one runs `destroyMeshResource`.
 pub fn releaseMesh(self: [*c]c.ke_render_service, h: c.ke_mesh_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.mesh_cache.release.?(st.mesh_cache, h.bits, null);
+    _ = st.mesh_cache.release.?(st.mesh_cache, h.bits);
 }
 /// Adds a reference to the texture in the texture cache.
 pub fn retainTexture(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.texture_cache.retain.?(st.texture_cache, h.bits, null);
+    _ = st.texture_cache.retain.?(st.texture_cache, h.bits);
 }
 /// Drops a reference; the last one runs `destroyTextureResource`.
 pub fn releaseTexture(self: [*c]c.ke_render_service, h: c.ke_texture_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.texture_cache.release.?(st.texture_cache, h.bits, null);
+    _ = st.texture_cache.release.?(st.texture_cache, h.bits);
 }
 /// Adds a reference to the material in the material cache.
 pub fn retainMaterial(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.material_cache.retain.?(st.material_cache, h.bits, null);
+    _ = st.material_cache.retain.?(st.material_cache, h.bits);
 }
 /// Drops a reference; the last one runs `destroyMaterialResource`.
 pub fn releaseMaterial(self: [*c]c.ke_render_service, h: c.ke_material_handle) callconv(.c) void {
     const st = rc.coreOf(self);
-    _ = st.material_cache.release.?(st.material_cache, h.bits, null);
+    _ = st.material_cache.release.?(st.material_cache, h.bits);
 }
 
 /// Looks the key up in the mesh cache without creating anything. Returns zero and leaves the
@@ -382,7 +340,7 @@ pub fn destroyMaterialResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) c
     const st: *rc.CoreState = @alignCast(@ptrCast(ctx));
     if (st.material_store.remove(handle)) |m| {
         st.binder.destroy_material.?(st.binder, m.binding);
-        _ = st.texture_cache.release.?(st.texture_cache, m.albedo.bits, null);
-        _ = st.texture_cache.release.?(st.texture_cache, m.normal.bits, null);
+        _ = st.texture_cache.release.?(st.texture_cache, m.albedo.bits);
+        _ = st.texture_cache.release.?(st.texture_cache, m.normal.bits);
     }
 }

@@ -3,16 +3,15 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_input_default");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_input_default").logFn };
 
 const heap = @import("heap");
 const gpa = heap.gpa;
 
 const c = @import("c");
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.input_default);
 
 const MAX_KEYS = c.KE_INPUT_MAX_KEYS;
 
@@ -54,12 +53,9 @@ fn pushEvent(s: *State, kind: c.ke_input_event_kind, code: i32, x: f32, y: f32) 
 }
 
 /// Closes the frame: the edges and deltas the queries read are those accumulated since the previous
-/// call. The held keys and buttons and the mouse position carry over.
-fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const api = self orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
+/// call. The held keys and buttons and the mouse position carry over. A null input is ignored.
+fn inputUpdate(self: ?*c.ke_input) callconv(.c) void {
+    const api = self orelse return;
     const s = stateOf(api);
 
     @memset(&s.keys_pressed, false);
@@ -74,7 +70,6 @@ fn inputUpdate(self: ?*c.ke_input, out_error: [*c][*c]c.ke_error) callconv(.c) b
     s.events.clearRetainingCapacity();
     s.events_dropped = 0;
     s.move_event = 0;
-    return true;
 }
 
 /// A press while the key is already held queues a key-down event but does not raise the pressed
@@ -268,20 +263,22 @@ fn inputDestroy(self: ?*c.ke_input) callconv(.c) void {
     gpa.destroy(api);
 }
 
-/// Builds the vtable and its `State`, starting with the zeroed state, and returns a handle whose
-/// `destroy` is `inputDestroy`.
-export fn ke_input_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input_handle {
-    const empty = c.ke_input_handle{ .ref = null, .destroy = null };
+/// Builds the vtable and its `State`, starting with the zeroed state, into a handle whose
+/// `destroy` is `inputDestroy`. Fails with out of memory, leaving nothing allocated.
+export fn ke_input_create(out_input: ?*c.ke_input_handle) callconv(.c) c.ke_result {
+    const out = out_input orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    out.* = create() catch |err| {
+        log.warn("creating the input system failed: {t}", .{err});
+        return R.code(err);
+    };
+    return R.ok;
+}
 
-    const api = gpa.create(c.ke_input) catch {
-        E.fail(out_error, .out_of_memory, "api allocation failed", @src());
-        return empty;
-    };
-    const state = gpa.create(State) catch {
-        gpa.destroy(api);
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return empty;
-    };
+fn create() R.Error!c.ke_input_handle {
+    const api = gpa.create(c.ke_input) catch return error.OutOfMemory;
+    errdefer gpa.destroy(api);
+    const state = gpa.create(State) catch return error.OutOfMemory;
     state.* = std.mem.zeroes(State);
     state.events = .empty;
 
@@ -308,41 +305,51 @@ export fn ke_input_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_input
 
 const testing = std.testing;
 
+fn created() !c.ke_input_handle {
+    var h: c.ke_input_handle = undefined;
+    try R.check(ke_input_create(&h));
+    return h;
+}
+
 test "create returns a usable handle" {
-    const h = ke_input_create(null);
+    const h = try created();
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
 }
 
 test "destroy tolerates a null input" {
-    const h = ke_input_create(null);
+    const h = try created();
     const destroy_fn = h.destroy.?;
     destroy_fn(h.ref);
     destroy_fn(null);
 }
 
 test "destroy releases a live input" {
-    const h = ke_input_create(null);
+    const h = try created();
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
 }
 
-test "update on a null self returns false" {
-    const h = ke_input_create(null);
+test "update on a null self is ignored" {
+    const h = try created();
     defer h.destroy.?(h.ref);
-    try testing.expect(!h.ref.*.update.?(null, null));
+    h.ref.*.update.?(null);
+}
+
+test "a null handle to fill is refused as an invalid argument" {
+    try testing.expectError(error.InvalidArgument, R.check(ke_input_create(null)));
 }
 
 test "a key press is visible until the next update" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
-    _ = h.ref.*.update.?(h.ref, null);
+    h.ref.*.update.?(h.ref);
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
     try testing.expect(h.ref.*.is_key_pressed.?(h.ref, 65));
 }
 
 test "a pressed key appears in the snapshot bitset" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
 
@@ -355,10 +362,10 @@ test "a pressed key appears in the snapshot bitset" {
 }
 
 test "mouse motion accumulates a delta within the frame" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_mouse_move.?(h.ref, 100.0, 200.0);
-    _ = h.ref.*.update.?(h.ref, null);
+    h.ref.*.update.?(h.ref);
     h.ref.*.on_mouse_move.?(h.ref, 150.0, 180.0);
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
@@ -370,9 +377,9 @@ test "mouse motion accumulates a delta within the frame" {
 }
 
 test "a mouse button press shows up as both pressed and down" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
-    _ = h.ref.*.update.?(h.ref, null);
+    h.ref.*.update.?(h.ref);
     h.ref.*.on_mouse_button.?(h.ref, 0, c.KE_INPUT_ACTION_PRESS);
 
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
@@ -382,7 +389,7 @@ test "a mouse button press shows up as both pressed and down" {
 }
 
 test "scroll deltas reach the snapshot" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_mouse_scroll.?(h.ref, 1.5, -2.5);
 
@@ -393,7 +400,7 @@ test "scroll deltas reach the snapshot" {
 }
 
 test "the snapshot reports the events dropped this frame and an update clears the count" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     stateOf(h.ref).events_dropped = 3;
 
@@ -401,13 +408,13 @@ test "the snapshot reports the events dropped this frame and an update clears th
     h.ref.*.get_snapshot.?(h.ref, &snapshot);
     try testing.expectEqual(@as(u32, 3), snapshot.events_dropped);
 
-    try testing.expect(h.ref.*.update.?(h.ref, null));
+    h.ref.*.update.?(h.ref);
     h.ref.*.get_snapshot.?(h.ref, &snapshot);
     try testing.expectEqual(@as(u32, 0), snapshot.events_dropped);
 }
 
 test "draining yields the key events in the order they arrived" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_RELEASE);
@@ -421,7 +428,7 @@ test "draining yields the key events in the order they arrived" {
 }
 
 test "moving the cursor emits one move event carrying the latest position" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_mouse_move.?(h.ref, 10, 20);
     h.ref.*.on_mouse_move.?(h.ref, 30, 40);
@@ -435,7 +442,7 @@ test "moving the cursor emits one move event carrying the latest position" {
 }
 
 test "a move event keeps its place among the events that arrived around it" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
     h.ref.*.on_mouse_move.?(h.ref, 1, 2);
@@ -451,7 +458,7 @@ test "a move event keeps its place among the events that arrived around it" {
 }
 
 test "a move after a drain starts a new move event" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_mouse_move.?(h.ref, 1, 2);
     var events = std.mem.zeroes([10]c.ke_input_event);
@@ -463,7 +470,7 @@ test "a move after a drain starts a new move event" {
 }
 
 test "draining never writes past the caller capacity and keeps the rest for the next drain" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
     h.ref.*.on_key.?(h.ref, 66, c.KE_INPUT_ACTION_PRESS);
@@ -477,7 +484,7 @@ test "draining never writes past the caller capacity and keeps the rest for the 
 }
 
 test "the event queue keeps every event of a busy frame" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     for (0..2000) |_| {
         h.ref.*.on_mouse_scroll.?(h.ref, 1, 1);
@@ -488,12 +495,12 @@ test "the event queue keeps every event of a busy frame" {
 }
 
 test "a held key stays down across an update while pressed clears" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_key.?(h.ref, 10, c.KE_INPUT_ACTION_PRESS);
     try testing.expect(h.ref.*.is_key_down.?(h.ref, 10));
 
-    _ = h.ref.*.update.?(h.ref, null);
+    h.ref.*.update.?(h.ref);
     try testing.expect(h.ref.*.is_key_down.?(h.ref, 10));
     try testing.expect(!h.ref.*.is_key_pressed.?(h.ref, 10));
 
@@ -503,7 +510,7 @@ test "a held key stays down across an update while pressed clears" {
 }
 
 test "an out of range key code is ignored" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_key.?(h.ref, -1, c.KE_INPUT_ACTION_PRESS);
     h.ref.*.on_key.?(h.ref, 999, c.KE_INPUT_ACTION_PRESS);
@@ -513,25 +520,25 @@ test "an out of range key code is ignored" {
 }
 
 test "is key down on a null self returns false" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     try testing.expectEqual(false, h.ref.*.is_key_down.?(null, 65));
 }
 
 test "is key pressed on a null self returns false" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     try testing.expectEqual(false, h.ref.*.is_key_pressed.?(null, 65));
 }
 
 test "is key released on a null self returns false" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     try testing.expectEqual(false, h.ref.*.is_key_released.?(null, 65));
 }
 
 test "get snapshot tolerates a null self or a null destination" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.get_snapshot.?(null, null);
 
@@ -541,7 +548,7 @@ test "get snapshot tolerates a null self or a null destination" {
 }
 
 test "draining with a null self or a null buffer returns zero" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     var events = std.mem.zeroes([1]c.ke_input_event);
     try testing.expectEqual(@as(u32, 0), h.ref.*.drain_events.?(null, &events, 1));
@@ -549,16 +556,16 @@ test "draining with a null self or a null buffer returns zero" {
 }
 
 test "mouse motion on a null self is ignored" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     h.ref.*.on_mouse_move.?(null, 1, 1);
 }
 
 test "snapshot accessors read the key and button bitsets" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     const api = h.ref.*;
-    _ = api.update.?(h.ref, null);
+    api.update.?(h.ref);
     api.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
     api.on_mouse_button.?(h.ref, 2, c.KE_INPUT_ACTION_PRESS);
 
@@ -575,7 +582,7 @@ test "snapshot accessors read the key and button bitsets" {
 }
 
 test "snapshot accessors read out-of-range codes and a null snapshot as false" {
-    const h = ke_input_create(null);
+    const h = try created();
     defer h.destroy.?(h.ref);
     const api = h.ref.*;
     var snapshot = std.mem.zeroes(c.ke_input_snapshot);
@@ -588,7 +595,7 @@ test "snapshot accessors read out-of-range codes and a null snapshot as false" {
 }
 
 test "creating and destroying the input leaves no block allocated" {
-    const h = ke_input_create(null);
+    const h = try created();
     h.ref.*.on_key.?(h.ref, 65, c.KE_INPUT_ACTION_PRESS);
     h.ref.*.on_mouse_move.?(h.ref, 1, 2);
     h.destroy.?(h.ref);

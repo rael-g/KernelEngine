@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_BINDING_RESOURCE_BINDER_H_
 #define KERNEL_ENGINE_RENDER_BINDING_RESOURCE_BINDER_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -87,21 +87,21 @@ typedef struct ke_render_resource_binder
     /**
      * Makes `binding` the resource of every shader parameter of its name that a resource set
      * leaves out. The name is copied.
-     * @return False with the error filled: invalid argument when the binding has no name, out of
-     * memory when it cannot be kept.
+     * @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the binding has no name, or
+     * KE_RESULT_OUT_OF_MEMORY when it cannot be kept.
      */
-    bool (*provide)(struct ke_render_resource_binder *self, const ke_render_shader_binding *binding,
-                    ke_error **out_error);
+    ke_result (*provide)(struct ke_render_resource_binder *self, const ke_render_shader_binding *binding);
 
     /**
      * Builds the layout of a compiled shader from what the build recorded about it.
-     * @return The layout, or KE_RENDER_BINDING_INVALID with the error filled: not found when the
-     * shader's record is missing, invalid argument when it cannot be read or a hint names no
-     * parameter of the shader.
+     * @param out_layout [out] Receives the layout; KE_RENDER_BINDING_INVALID on failure.
+     * @return KE_OK; KE_RESULT_NOT_FOUND when the shader's record is missing, or
+     * KE_RESULT_INVALID_ARGUMENT when it cannot be read or a hint names no parameter of the
+     * shader, the reason logged.
      */
-    ke_render_shader_layout (*create_shader_layout)(struct ke_render_resource_binder *self,
-                                                    const ke_render_shader_layout_params *params,
-                                                    ke_error **out_error);
+    ke_result (*create_shader_layout)(struct ke_render_resource_binder *self,
+                                      const ke_render_shader_layout_params *params,
+                                      ke_render_shader_layout *out_layout);
     /// Destroys a layout; the invalid one is ignored. A set created against it must be destroyed first.
     void (*destroy_shader_layout)(struct ke_render_resource_binder *self, ke_render_shader_layout layout);
 
@@ -111,12 +111,12 @@ typedef struct ke_render_resource_binder
      * owned by the binder and live as long as `layout`.
      * @param capacity The number of entries `out_layouts` holds.
      * @param out_count [out] Receives the number of layouts written.
-     * @return False with the error filled: invalid argument when the layout is unknown or the
-     * shader needs more than `capacity` layouts.
+     * @return KE_OK, or KE_RESULT_INVALID_ARGUMENT when the layout is unknown or the shader needs
+     * more than `capacity` layouts.
      */
-    bool (*pipeline_layouts)(struct ke_render_resource_binder *self, ke_render_shader_layout layout,
-                             ke_gpu_bind_group_layout *out_layouts, uint32_t capacity,
-                             uint32_t *out_count, ke_error **out_error);
+    ke_result (*pipeline_layouts)(struct ke_render_resource_binder *self, ke_render_shader_layout layout,
+                                  ke_gpu_bind_group_layout *out_layouts, uint32_t capacity,
+                                  uint32_t *out_count);
 
     /**
      * Binds resources to one group of a shader by the names its parameters carry. A parameter left
@@ -124,14 +124,15 @@ typedef struct ke_render_resource_binder
      * @param block [utf8,nullable] Name of a parameter block the shader declares; NULL selects its
      * parameters declared outside any block.
      * @param label [utf8,nullable] Name shown by capture and validation tools.
-     * @return The set, or KE_RENDER_BINDING_INVALID with the error filled: not found when the
-     * shader declares no such block, invalid argument when a binding names no parameter of the
-     * group, a parameter is bound twice or a parameter has no resource.
+     * @param out_set [out] Receives the set; KE_RENDER_BINDING_INVALID on failure.
+     * @return KE_OK; KE_RESULT_NOT_FOUND when the shader declares no such block, or
+     * KE_RESULT_INVALID_ARGUMENT when a binding names no parameter of the group, a parameter is
+     * bound twice or a parameter has no resource, the reason logged.
      */
-    ke_render_resource_set (*create_set)(struct ke_render_resource_binder *self,
-                                         ke_render_shader_layout layout, const char *block,
-                                         const char *label, const ke_render_shader_binding *bindings,
-                                         uint32_t binding_count, ke_error **out_error);
+    ke_result (*create_set)(struct ke_render_resource_binder *self,
+                            ke_render_shader_layout layout, const char *block,
+                            const char *label, const ke_render_shader_binding *bindings,
+                            uint32_t binding_count, ke_render_resource_set *out_set);
     /// Destroys a set; the invalid one is ignored.
     void (*destroy_set)(struct ke_render_resource_binder *self, ke_render_resource_set set);
 
@@ -148,11 +149,12 @@ typedef struct ke_render_resource_binder
     /**
      * Keeps the data of one material for the shaders that draw with it. The texture views are
      * borrowed and must outlive the binding.
-     * @return The binding, or KE_RENDER_BINDING_INVALID with the device's error filled.
+     * @param out_material [out] Receives the binding; KE_RENDER_BINDING_INVALID on failure.
+     * @return KE_OK, or the device's code.
      */
-    ke_render_material_binding (*create_material)(struct ke_render_resource_binder *self,
-                                                  const ke_render_material_data *data,
-                                                  ke_error **out_error);
+    ke_result (*create_material)(struct ke_render_resource_binder *self,
+                                 const ke_render_material_data *data,
+                                 ke_render_material_binding *out_material);
     /// Destroys a material binding; the invalid one is ignored.
     void (*destroy_material)(struct ke_render_resource_binder *self, ke_render_material_binding material);
     /// Makes `material` the one the next draws of `pass` with the shader of `layout` read. An

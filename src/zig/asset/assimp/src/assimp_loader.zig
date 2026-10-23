@@ -3,19 +3,16 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_asset_assimp").logFn };
 
-const klog = @import("klog").Destination("ke_asset_assimp");
-
-pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const c = @import("c");
 const log = std.log.scoped(.asset_assimp);
 const converter = @import("converter.zig");
 const textures = @import("texture_decoder.zig");
 
-/// Error helpers from kerror, bound to the C declarations in `c`.
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 /// Vertex count given to Assimp's large-mesh split through the import properties.
 const vertex_limit: c_int = 65534;
@@ -144,16 +141,13 @@ fn registerTexture(
 /// into one `TextureTable` entry per distinct name, so a texture shared by several materials is
 /// decoded once; the table is decoded, the indices are written into the materials, and the meshes
 /// are converted last, each pointing at its material by index. A texture that cannot be decoded
-/// does not fail the load; an import with no usable scene or a failed allocation of the model's
-/// arrays does. The failure is
-/// written to the out-parameter when the caller gave one; the asynchronous body gives none and
-/// relies on the null alone. It runs on the caller's thread for the synchronous slot and on a
-/// worker for the asynchronous one. It reads only the allocator from the State and
-/// writes nothing into it.
-fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.ke_model_data {
+/// does not fail the load; an import with no usable scene, which fails with io and logs Assimp's
+/// reason, or a failed allocation of the model's arrays does. It runs on the caller's thread for
+/// the synchronous slot and on a worker for the asynchronous one. It reads only the allocator from
+/// the State and writes nothing into it.
+fn loadModel(s: *State, path: [*c]const u8) R.Error!*c.ke_model_data {
     if (path == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return null;
+                return error.InvalidArgument;
     }
 
     const props = c.aiCreatePropertyStore();
@@ -166,9 +160,8 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     {
         const detail = c.aiGetErrorString();
         log.warn("{s}: {s}", .{ std.mem.span(path), if (detail != null) std.mem.span(detail) else "(no detail)" });
-        E.fail(out_error, .io, if (detail != null) detail else "model import failed", @src());
-        if (scene_c != null) c.aiReleaseImport(scene_c);
-        return null;
+                if (scene_c != null) c.aiReleaseImport(scene_c);
+        return error.Io;
     }
     const scene = scene_c.*;
     defer c.aiReleaseImport(scene_c);
@@ -181,19 +174,16 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
 
     const mat_count = scene.mNumMaterials;
     const mats = gpa.alloc(c.ke_material_data, mat_count) catch {
-        E.fail(out_error, .out_of_memory, "material allocation failed", @src());
-        return null;
+                return error.OutOfMemory;
     };
     const albedo_idx = gpa.alloc(i32, mat_count) catch {
         gpa.free(mats);
-        E.fail(out_error, .out_of_memory, "material allocation failed", @src());
-        return null;
+                return error.OutOfMemory;
     };
     defer gpa.free(albedo_idx);
     const normal_idx = gpa.alloc(i32, mat_count) catch {
         gpa.free(mats);
-        E.fail(out_error, .out_of_memory, "material allocation failed", @src());
-        return null;
+                return error.OutOfMemory;
     };
     defer gpa.free(normal_idx);
 
@@ -213,8 +203,7 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     const tex_count: u32 = @intCast(table.items.items.len);
     const texs = gpa.alloc(c.ke_texture_data, tex_count) catch {
         gpa.free(mats);
-        E.fail(out_error, .out_of_memory, "texture allocation failed", @src());
-        return null;
+                return error.OutOfMemory;
     };
     for (table.items.items, 0..) |*ref, ti| {
         texs[ti] = std.mem.zeroes(c.ke_texture_data);
@@ -238,8 +227,7 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     const meshes = gpa.alloc(c.ke_mesh_data, mesh_count) catch {
         gpa.free(mats);
         gpa.free(texs);
-        E.fail(out_error, .out_of_memory, "mesh allocation failed", @src());
-        return null;
+                return error.OutOfMemory;
     };
     for (0..mesh_count) |si| {
         const am = scene.mMeshes[si];
@@ -254,8 +242,7 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
         gpa.free(mats);
         gpa.free(texs);
         gpa.free(meshes);
-        E.fail(out_error, .out_of_memory, "model allocation failed", @src());
-        return null;
+                return error.OutOfMemory;
     };
     model.* = .{
         .meshes = meshes.ptr,
@@ -270,22 +257,19 @@ fn loadModel(s: *State, path: [*c]const u8, out_error: [*c][*c]c.ke_error) ?*c.k
     return model;
 }
 
-/// The `load_model` slot, run on the caller's thread. A missing loader or handle is reported here;
-/// everything else is reported by `loadModel`.
+/// The `load_model` slot, run on the caller's thread. A missing loader, handle or out-parameter is
+/// an invalid argument; everything else is reported by `loadModel`.
 fn vtLoadModel(
     self_in: ?*c.ke_asset_loader,
     path: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) ?*c.ke_model_data {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return null;
-    };
-    if (self.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return null;
-    }
-    return loadModel(stateOf(self), path, out_error);
+    out_model: ?*?*c.ke_model_data,
+) callconv(.c) c.ke_result {
+    const out = out_model orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
+    out.* = loadModel(stateOf(self), path) catch |err| return R.code(err);
+    return R.ok;
 }
 
 /// The `free_model` slot. It releases the records `loadModel` allocated for a model, through the
@@ -314,28 +298,6 @@ fn vtFreeModel(self_in: ?*c.ke_asset_loader, data_in: ?*c.ke_model_data) callcon
     gpa.destroy(data);
 }
 
-/// Handed to the completion callback when the context for an async load cannot be allocated.
-const oom_error = c.ke_error{
-    .type = E.typeOf(.out_of_memory),
-    .message = "out of memory preparing async model load",
-    .file = null,
-    .line = 0,
-    .cause = null,
-};
-const load_failed_type = c.ke_error_type{
-    .name = "ke.asset.assimp.load_failed",
-    .parent = E.typeOf(.io),
-};
-/// Handed to an async callback when `loadModel` returned no model. Its message is fixed, so the
-/// cause is only what `loadModel` logged, and some failures log nothing.
-const load_failed_error = c.ke_error{
-    .type = &load_failed_type,
-    .message = "model load failed",
-    .file = null,
-    .line = 0,
-    .cause = null,
-};
-
 /// The heap context that carries an async load from `vtLoadModelAsync` to `asyncBody`. It owns
 /// the path copy and itself; `asyncBody` frees both after the callback returns. `state` is
 /// borrowed from the loader, not owned.
@@ -348,17 +310,17 @@ const AsyncCtx = struct {
 
 /// The task body that the dispatch runs on the thread it chooses. It runs `loadModel`, calls the
 /// completion callback once with the model or the load failure, and frees the context. A failure is
-/// reported only through the callback: the task's failure out-parameter is left unset.
-fn asyncBody(data: ?*anyopaque, out_failure: [*c][*c]const c.ke_error_type) callconv(.c) void {
-    _ = out_failure;
-    const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return));
+/// reported only through the callback, so the task itself returns OK.
+fn asyncBody(data: ?*anyopaque) callconv(.c) c.ke_result {
+    const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return R.ok));
     const gpa = ctx.state.gpa;
-    const model = loadModel(ctx.state, ctx.path.ptr, null);
+    const loaded = loadModel(ctx.state, ctx.path.ptr);
     if (ctx.on_complete) |done| {
-        done(if (model != null) null else &load_failed_error, model, ctx.user_data);
+        if (loaded) |model| done(R.ok, model, ctx.user_data) else |err| done(R.code(err), null, ctx.user_data);
     }
     gpa.free(ctx.path);
     gpa.destroy(ctx);
+    return R.ok;
 }
 
 /// The `load_model_async` slot. It returns whatever dispatch returns, and the body may already have
@@ -379,12 +341,12 @@ fn vtLoadModelAsync(
     const gpa = s.gpa;
 
     const ctx = gpa.create(AsyncCtx) catch {
-        on_complete.?(&oom_error, null, user_data);
+        on_complete.?(R.code(error.OutOfMemory), null, user_data);
         return null;
     };
     const path_copy = gpa.dupeZ(u8, std.mem.span(path)) catch {
         gpa.destroy(ctx);
-        on_complete.?(&oom_error, null, user_data);
+        on_complete.?(R.code(error.OutOfMemory), null, user_data);
         return null;
     };
 
@@ -410,15 +372,16 @@ fn vtDestroy(self_in: ?*c.ke_asset_loader) callconv(.c) void {
     state_heap.destroy(s);
 }
 
-/// Factory for the Assimp loader. It returns a handle whose ref is the vtable, or one whose ref is
-/// null when the State cannot be allocated, with the out-parameter filled. Each call builds its own
-/// State, so each loader has its own leak tracking in a Debug build.
-export fn ke_asset_loader_assimp_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_asset_loader_handle {
-    const null_handle = std.mem.zeroes(c.ke_asset_loader_handle);
+/// Factory for the Assimp loader. It writes a handle whose ref is the vtable, or fails with out of
+/// memory, the handle zeroed, when the State cannot be allocated. Each call builds its own State, so
+/// each loader has its own leak tracking in a Debug build.
+export fn ke_asset_loader_assimp_create(out_loader: ?*c.ke_asset_loader_handle) callconv(.c) c.ke_result {
+    const out = out_loader orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_asset_loader_handle);
 
     const s = state_heap.create(State) catch {
-        E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
-        return null_handle;
+        log.warn("creating the model loader failed: out of memory", .{});
+        return R.code(error.OutOfMemory);
     };
     s.* = .{
         .api = std.mem.zeroes(c.ke_asset_loader),
@@ -432,13 +395,16 @@ export fn ke_asset_loader_assimp_create(out_error: [*c][*c]c.ke_error) callconv(
     s.api.free_model = vtFreeModel;
     s.api.load_model_async = vtLoadModelAsync;
 
-    return .{ .ref = &s.api, .destroy = vtDestroy };
+    out.* = .{ .ref = &s.api, .destroy = vtDestroy };
+    return R.ok;
 }
 
 const testing = std.testing;
 
 fn makeLoader() c.ke_asset_loader_handle {
-    return ke_asset_loader_assimp_create(null);
+    var h = std.mem.zeroes(c.ke_asset_loader_handle);
+    _ = ke_asset_loader_assimp_create(&h);
+    return h;
 }
 
 var box_gltf_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -466,8 +432,7 @@ fn boxGltfPath() ?[:0]const u8 {
 
 fn immediateDispatch(self: [*c]c.ke_scheduler, func: c.ke_task_func, data: ?*anyopaque) callconv(.c) ?*c.ke_task {
     _ = self;
-    var failure: [*c]const c.ke_error_type = null;
-    if (func) |f| f(data, &failure);
+    if (func) |f| _ = f(data);
     return @ptrFromInt(1);
 }
 
@@ -477,9 +442,9 @@ const AsyncResult = struct {
     loader: ?*c.ke_asset_loader = null,
 };
 
-fn asyncComplete(err: [*c]const c.ke_error, data: ?*c.ke_model_data, user: ?*anyopaque) callconv(.c) void {
+fn asyncComplete(code: c.ke_result, data: ?*c.ke_model_data, user: ?*anyopaque) callconv(.c) void {
     const result: *AsyncResult = @ptrCast(@alignCast(user orelse return));
-    result.failed = err != null;
+    result.failed = code != R.ok;
     if (data) |model| {
         const l = result.loader.?;
         l.free_model.?(l, model);
@@ -497,14 +462,17 @@ test "loading a null path yields no model" {
     const h = makeLoader();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.load_model.?(h.ref, null, null) == null);
+    var model: ?*c.ke_model_data = null;
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.*.load_model.?(h.ref, null, &model)));
 }
 
 test "loading a file that does not exist yields no model" {
     const h = makeLoader();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.load_model.?(h.ref, "non_existent_file.obj", null) == null);
+    var model: ?*c.ke_model_data = null;
+    try testing.expectError(error.Io, R.check(h.ref.*.load_model.?(h.ref, "non_existent_file.obj", &model)));
+    try testing.expect(model == null);
 }
 
 test "freeing a null model is ignored" {
@@ -520,11 +488,12 @@ test "loading the box fixture yields at least one mesh" {
     const h = makeLoader();
     defer h.destroy.?(h.ref);
 
-    const model = h.ref.*.load_model.?(h.ref, path.ptr, null);
+    var model: ?*c.ke_model_data = null;
+    try R.check(h.ref.*.load_model.?(h.ref, path.ptr, &model));
     try testing.expect(model != null);
     defer h.ref.*.free_model.?(h.ref, model);
 
-    try testing.expect(model.*.mesh_count > 0);
+    try testing.expect(model.?.mesh_count > 0);
 }
 
 test "the box fixture carries a material alongside its meshes" {
@@ -533,12 +502,13 @@ test "the box fixture carries a material alongside its meshes" {
     const h = makeLoader();
     defer h.destroy.?(h.ref);
 
-    const model = h.ref.*.load_model.?(h.ref, path.ptr, null);
+    var model: ?*c.ke_model_data = null;
+    try R.check(h.ref.*.load_model.?(h.ref, path.ptr, &model));
     try testing.expect(model != null);
     defer h.ref.*.free_model.?(h.ref, model);
 
-    try testing.expect(model.*.mesh_count > 0);
-    try testing.expect(model.*.material_count > 0);
+    try testing.expect(model.?.mesh_count > 0);
+    try testing.expect(model.?.material_count > 0);
 }
 
 test "an async load runs to completion on the scheduler it was given" {
@@ -588,9 +558,10 @@ test "a malformed model file yields a model carrying no meshes" {
     const h = makeLoader();
     defer h.destroy.?(h.ref);
 
-    const model = h.ref.*.load_model.?(h.ref, "malformed.obj", null);
+    var model: ?*c.ke_model_data = null;
+    try R.check(h.ref.*.load_model.?(h.ref, "malformed.obj", &model));
     try testing.expect(model != null);
     defer h.ref.*.free_model.?(h.ref, model);
 
-    try testing.expectEqual(@as(u32, 0), model.*.mesh_count);
+    try testing.expectEqual(@as(u32, 0), model.?.mesh_count);
 }

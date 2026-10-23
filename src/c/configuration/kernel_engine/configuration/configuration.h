@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_H_
 #define KERNEL_ENGINE_CONFIGURATION_CONFIGURATION_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -30,10 +30,16 @@ extern "C"
         /// overwritten or the store is destroyed. Copy it if you need to retain.
         const char *(*get_string)(struct ke_configuration *self, const char *section, const char *key, const char *fallback);
 
-        bool (*set_int)(struct ke_configuration *self, const char *section, const char *key, int64_t value, ke_error **out_error);
-        bool (*set_double)(struct ke_configuration *self, const char *section, const char *key, double value, ke_error **out_error);
-        bool (*set_bool)(struct ke_configuration *self, const char *section, const char *key, bool value, ke_error **out_error);
-        bool (*set_string)(struct ke_configuration *self, const char *section, const char *key, const char *value, ke_error **out_error);
+        /// Stores @p value under @p section and @p key, replacing what the key held, then runs the
+        /// section's subscribers. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and
+        /// KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.
+        ke_result (*set_int)(struct ke_configuration *self, const char *section, const char *key, int64_t value);
+        /// As set_int, for a double.
+        ke_result (*set_double)(struct ke_configuration *self, const char *section, const char *key, double value);
+        /// As set_int, for a boolean.
+        ke_result (*set_bool)(struct ke_configuration *self, const char *section, const char *key, bool value);
+        /// As set_int, for a string, copied; a null value is also an invalid argument.
+        ke_result (*set_string)(struct ke_configuration *self, const char *section, const char *key, const char *value);
 
         /// Subscribes to writes on `section`. Returns a subscription id, or
         /// KE_CONFIGURATION_SUBSCRIPTION_NONE on failure.

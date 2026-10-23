@@ -36,10 +36,12 @@ extern "C"
     } ke_signal_bus_params;
 
     /// Allocates a signal bus. @c params may be NULL to take every default.
-    /// @return Handle whose @c ref is NULL on failure.
-    KE_FRAMEWORK_API ke_signal_bus_handle ke_signal_bus_create(
+    /// @param out_bus [out] Receives the bus; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_bus, or
+    ///         KE_RESULT_OUT_OF_MEMORY.
+    KE_FRAMEWORK_API ke_result ke_signal_bus_create(
         const ke_signal_bus_params *params,
-        ke_error                  **out_error);
+        ke_signal_bus_handle       *out_bus);
 
 #ifdef __cplusplus
 }

@@ -2,7 +2,7 @@
 #define KERNEL_ENGINE_ASSET_ASSET_LOADER_H_
 
 #include <kernel_engine/asset/mesh_data.h>
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/scheduler/scheduler.h>
 
 #ifdef __cplusplus
@@ -11,11 +11,10 @@ extern "C"
 #endif
 
     /** Completion callback for ke_asset_loader::load_model_async.
-     * @param error     NULL on success; pointer to a ke_error on failure (valid until the next
-     *                  failing call on this thread — copy what you need before returning).
+     * @param result    KE_OK, or the code of the load that failed, whose reason is logged.
      * @param data      [optional] The loaded model; NULL when the load failed.
      * @param user_data [context] Opaque pointer forwarded from load_model_async. */
-    typedef void (*ke_load_model_complete_func)(const ke_error *error,
+    typedef void (*ke_load_model_complete_func)(ke_result result,
                                                 struct ke_model_data *data,
                                                 void *user_data);
 
@@ -25,11 +24,15 @@ extern "C"
         void *handle;
 
         /** Loads a 3D model from @p path into a newly allocated ke_model_data.
-         * The caller owns the result and must release it with free_model.
-         * @param path [utf8] Absolute or relative file path (.gltf, .glb, .obj, .fbx, …). */
-        ke_model_data *(*load_model)(struct ke_asset_loader *self,
-                                     const char *path,
-                                     ke_error **out_error);
+         * @param path [utf8] Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).
+         * @param out_model [out] Receives the model, which the caller owns and releases with
+         *        free_model; NULL on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_model;
+         *         KE_RESULT_NOT_FOUND when the importer cannot read the file, its reason logged;
+         *         KE_RESULT_OUT_OF_MEMORY. */
+        ke_result (*load_model)(struct ke_asset_loader *self,
+                                const char *path,
+                                ke_model_data **out_model);
 
         /** [releases:Model] Frees a ke_model_data previously returned by load_model or the async variant.
          * The model must be given back to the same loader that produced it. A foreign

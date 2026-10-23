@@ -4,11 +4,11 @@
 const std = @import("std");
 const FrameLog = @import("frame_log.zig").FrameLog;
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_render_service");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_service").logFn };
 
 pub const c = @import("c");
+/// The error set and code conversions every file of the service fails through.
+pub const R = @import("result").Result(c, .{});
 
 const heap = @import("heap");
 pub const gpa = heap.gpa;
@@ -314,7 +314,7 @@ fn destroyCore(self: [*c]c.ke_render_service) callconv(.c) void {
 /// Builds the state and the vtable whole, or frees in reverse what it took and fails. The vtable's
 /// handle is the state; the shared globals, the default resources, the blit shaders and the frame's
 /// color and depth are not made yet.
-fn assemble(dev: *c.ke_gpu_device, tgt: *c.ke_gpu_render_target, e: *c.ke_ecs, bnd: *c.ke_render_resource_binder, shader_dir_span: []const u8) error{ OutOfMemory, ResourceCacheFailed }!*c.ke_render_service {
+fn assemble(dev: *c.ke_gpu_device, tgt: *c.ke_gpu_render_target, e: *c.ke_ecs, bnd: *c.ke_render_resource_binder, shader_dir_span: []const u8) R.Error!*c.ke_render_service {
     const st = try gpa.create(CoreState);
     errdefer gpa.destroy(st);
     const upload_arena = try gpa.alloc(u8, first_upload_arena);
@@ -391,7 +391,8 @@ fn assemble(dev: *c.ke_gpu_device, tgt: *c.ke_gpu_render_target, e: *c.ke_ecs, b
     st.material_cache_destroy = mat_ch.destroy.?;
     st.shader_cache_destroy = shader_ch.destroy.?;
 
-    const bb_cid = e.component_register.?(e, &c.ke_component_params{ .name = "backbuffer", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, null);
+    var bb_cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "backbuffer", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &bb_cid));
     const bb_name = try gpa.dupeZ(u8, "backbuffer");
     errdefer gpa.free(bb_name);
     st.resources.appendAssumeCapacity(.{
@@ -461,9 +462,9 @@ fn assemble(dev: *c.ke_gpu_device, tgt: *c.ke_gpu_render_target, e: *c.ke_ecs, b
     return core;
 }
 
-fn resourceCache(destroy_fn: c.ke_resource_destroy_func, st: *CoreState) error{ResourceCacheFailed}!c.ke_resource_cache_handle {
-    const h = c.ke_resource_cache_create(&c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, null);
-    if (h.ref == null) return error.ResourceCacheFailed;
+fn resourceCache(destroy_fn: c.ke_resource_destroy_func, st: *CoreState) R.Error!c.ke_resource_cache_handle {
+    var h: c.ke_resource_cache_handle = undefined;
+    try R.check(c.ke_resource_cache_create(&c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, &h));
     return h;
 }
 
@@ -473,49 +474,46 @@ fn resourceCache(destroy_fn: c.ke_resource_destroy_func, st: *CoreState) error{R
 /// then the shared globals, which it gives the binder. The default resources, the "blit" shaders and
 /// the frame's color and depth come last because they go through the functions of the vtable just
 /// built. `destroyCore` undoes this in reverse and frees the vtable last. Missing params, or a null
-/// device, target, ecs, shader directory or binder in them, set the invalid-argument error; blit
-/// shaders that cannot be loaded set the loader's error, and so does a frame target the device
-/// refuses. Any other failure returns a null
-/// ref with no error set. On success the ref is the new vtable and `destroy` is
-/// `destroyCore`.
-export fn ke_render_service_create(params: ?*const c.ke_render_service_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_service_handle {
-    const p = params orelse return refused(out_error);
-    const dev: *c.ke_gpu_device = p.device orelse return refused(out_error);
-    const tgt: *c.ke_gpu_render_target = p.target orelse return refused(out_error);
-    const e: *c.ke_ecs = p.ecs orelse return refused(out_error);
-    if (p.shader_dir == null) return refused(out_error);
-    const bnd: *c.ke_render_resource_binder = p.binder orelse return refused(out_error);
+/// device, target, ecs, shader directory or binder in them, fail as an invalid argument; a step
+/// that fails fails the factory with its code. On success the ref is the new vtable and `destroy`
+/// is `destroyCore`.
+export fn ke_render_service_create(params: ?*const c.ke_render_service_params, out_service: [*c]c.ke_render_service_handle) callconv(.c) c.ke_result {
+    const out = out_service orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    const p = params orelse return R.code(error.InvalidArgument);
+    const dev: *c.ke_gpu_device = p.device orelse return R.code(error.InvalidArgument);
+    const tgt: *c.ke_gpu_render_target = p.target orelse return R.code(error.InvalidArgument);
+    const e: *c.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
+    if (p.shader_dir == null) return R.code(error.InvalidArgument);
+    const bnd: *c.ke_render_resource_binder = p.binder orelse return R.code(error.InvalidArgument);
     const color_format = if (p.color_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.color_format else c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     const depth_format = if (p.depth_format != c.KE_GPU_TEXTURE_FORMAT_INVALID) p.depth_format else c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
 
-    const core = assemble(dev, tgt, e, bnd, std.mem.span(p.shader_dir)) catch return .{ .ref = null, .destroy = null };
-    const st = coreOf(core);
-
-    if (!st.globals.create(dev, out_error) or !st.globals.provideTo(bnd, out_error)) {
+    const core = assemble(dev, tgt, e, bnd, std.mem.span(p.shader_dir)) catch |err| return R.code(err);
+    prepare(core, color_format, depth_format) catch |err| {
         destroyCore(core);
-        return .{ .ref = null, .destroy = null };
-    }
-    const white_px = [_]u8{ 255, 255, 255, 255 };
-    st.white_texture_h = asset_upload.uploadTexture(core, "__ke_white_texture", 1, 1, &white_px, null);
-    const flat_normal_px = [_]u8{ 128, 128, 255, 255 };
-    st.default_normal = asset_upload.uploadTexture(core, "__ke_default_normal", 1, 1, &flat_normal_px, null);
-    const black_cube_px = [_]u8{0} ** (4 * 6);
-    st.default_cubemap = asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, null);
-    const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    st.white_material = asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, null);
-
-    st.api = core;
-    if (!st.blit.prepare(core, st.binder, out_error) or !frame_chain.prepare(st, core, color_format, depth_format, out_error)) {
-        destroyCore(core);
-        return .{ .ref = null, .destroy = null };
-    }
-
-    return .{ .ref = core, .destroy = destroyCore };
+        return R.code(err);
+    };
+    out.* = .{ .ref = core, .destroy = destroyCore };
+    return R.ok;
 }
 
-fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_service_handle {
-    c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_service_create: params with a device, target, ecs, shader_dir and binder are required", @src().file, @intCast(@src().line), null);
-    return .{ .ref = null, .destroy = null };
+fn prepare(core: *c.ke_render_service, color_format: c.ke_gpu_texture_format, depth_format: c.ke_gpu_texture_format) R.Error!void {
+    const st = coreOf(core);
+    try st.globals.create(st.device);
+    try st.globals.provideTo(st.binder);
+    const white_px = [_]u8{ 255, 255, 255, 255 };
+    try R.check(asset_upload.uploadTexture(core, "__ke_white_texture", 1, 1, &white_px, &st.white_texture_h));
+    const flat_normal_px = [_]u8{ 128, 128, 255, 255 };
+    try R.check(asset_upload.uploadTexture(core, "__ke_default_normal", 1, 1, &flat_normal_px, &st.default_normal));
+    const black_cube_px = [_]u8{0} ** (4 * 6);
+    try R.check(asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, &st.default_cubemap));
+    const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
+    try R.check(asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = c.KE_HANDLE_NONE }, .{ .bits = c.KE_HANDLE_NONE }, c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, &st.white_material));
+
+    st.api = core;
+    try st.blit.prepare(core, st.binder);
+    try frame_chain.prepare(st, core, color_format, depth_format);
 }
 
 const testing = std.testing;
@@ -544,10 +542,28 @@ test "a frame that never began ends without submitting or presenting anything" {
     var state: CoreState = undefined;
     var core = deadFrame(&state);
 
-    try testing.expectEqual(false, frame_lifecycle.endFrame(&core, null));
+    try testing.expectEqual(R.ok, frame_lifecycle.endFrame(&core));
 }
 
 const Stubs = @import("stubs").Stubs(c);
+
+fn serviceOf(params: c.ke_render_service_params) c.ke_render_service_handle {
+    var h: c.ke_render_service_handle = .{ .ref = null, .destroy = null };
+    _ = ke_render_service_create(&params, &h);
+    return h;
+}
+
+fn declared(svc: [*c]c.ke_render_service, desc: *const c.ke_render_resource_params) c.ke_component_id {
+    var cid: c.ke_component_id = c.KE_COMPONENT_INVALID;
+    _ = svc.*.declare.?(svc, desc, &cid);
+    return cid;
+}
+
+fn chainLink(svc: [*c]c.ke_render_service, stage: c.ke_render_stage, mode: c.ke_render_chain_mode) c.ke_render_chain_link {
+    var link: c.ke_render_chain_link = c.KE_RENDER_CHAIN_NONE;
+    _ = svc.*.join_chain.?(svc, stage, mode, &link);
+    return link;
+}
 
 /// A temporary shader directory holding the two "blit" files the service loads when created.
 const ShaderDir = struct {
@@ -582,7 +598,7 @@ test "creating and destroying the render service leaves no block allocated and n
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -600,10 +616,9 @@ test "a render service created without a render target is refused and leaves not
     ecs.init();
     var binder: Stubs.Binder = undefined;
     binder.init();
-    var err: [*c]c.ke_error = null;
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = null, .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, &err);
+    var h: c.ke_render_service_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(&.{ .device = dev.api(), .target = null, .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, &h)));
     try testing.expect(h.ref == null);
-    try testing.expect(err != null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
 }
@@ -620,15 +635,15 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
     try testing.expectEqual(@as(c.ke_gpu_texture_format, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
-    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
+    try R.check(svc.*.begin_frame.?(svc));
     try testing.expect(target.acquired);
-    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
+    try R.check(svc.*.end_frame.?(svc));
     try testing.expectEqual(@as(u32, 1), target.presented);
-    try testing.expectEqual(false, svc.*.end_frame.?(svc, null));
+    try testing.expectEqual(R.ok, svc.*.end_frame.?(svc));
     try testing.expectEqual(@as(u32, 1), target.presented);
 }
 
@@ -644,7 +659,7 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     var desc = std.mem.zeroes(c.ke_render_resource_params);
@@ -653,18 +668,18 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     desc.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
     desc.scale_x = 1.0;
     desc.scale_y = 1.0;
-    _ = svc.*.declare.?(svc, &desc, null);
+    _ = declared(svc, &desc);
     const first = svc.*.resource_view.?(svc, "hdr");
 
-    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
-    _ = svc.*.end_frame.?(svc, null);
+    try R.check(svc.*.begin_frame.?(svc));
+    _ = svc.*.end_frame.?(svc);
     try testing.expectEqual(first, svc.*.resource_view.?(svc, "hdr"));
     try testing.expectEqual(@as(u32, 0), svc.*.resource_generation.?(svc));
 
     target.width = 640;
     target.height = 360;
-    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
-    _ = svc.*.end_frame.?(svc, null);
+    try R.check(svc.*.begin_frame.?(svc));
+    _ = svc.*.end_frame.?(svc);
     try testing.expect(svc.*.resource_view.?(svc, "hdr") != first);
     try testing.expectEqual(@as(u32, 1), svc.*.resource_generation.?(svc));
 
@@ -685,18 +700,18 @@ test "uploads beyond the first frame's records and arena are all written, and th
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const upload_count = first_upload_records + 100;
     var word: u32 = 7;
-    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
+    try R.check(svc.*.begin_frame.?(svc));
     for (0..upload_count) |_| svc.*.upload.?(svc, 1, 0, &word, @sizeOf(u32));
     const big = try heap.gpa.alloc(u8, first_upload_arena);
     svc.*.upload.?(svc, 1, 0, big.ptr, big.len);
     const big_len = big.len;
     heap.gpa.free(big);
-    _ = svc.*.end_frame.?(svc, null);
+    _ = svc.*.end_frame.?(svc);
     try testing.expectEqual(@as(u32, upload_count + 1), dev.buffer_writes);
     try testing.expectEqual(upload_count * @sizeOf(u32) + big_len, dev.bytes_written);
 
@@ -721,27 +736,27 @@ test "a frame with more passes than the first frame's log submits every one, and
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const pass_count = first_passes + 36;
     var io = std.mem.zeroes(c.ke_render_pass_io);
     io.name = "render.cull";
-    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
+    try R.check(svc.*.begin_frame.?(svc));
     for (0..pass_count) |_| {
         const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
         const cp = pass.*.begin_compute.?(pass) orelse return error.TestUnexpectedResult;
         cp.*.end.?(cp);
         svc.*.end_pass.?(svc, pass);
     }
-    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
+    try R.check(svc.*.end_frame.?(svc));
     try testing.expectEqual(@as(u32, pass_count + 2), dev.submitted);
 
-    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
+    try R.check(svc.*.begin_frame.?(svc));
     const core = coreOf(svc);
     try testing.expect(core.ended.items.len >= pass_count);
     try testing.expect(core.compute_records.items.len >= pass_count);
-    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
+    try R.check(svc.*.end_frame.?(svc));
 
     h.destroy.?(svc);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -760,7 +775,7 @@ test "a declared resource's texture and view carry the name it was declared unde
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -770,7 +785,7 @@ test "a declared resource's texture and view carry the name it was declared unde
     desc.size_mode = c.KE_RENDER_SIZE_ABSOLUTE;
     desc.width = 4;
     desc.height = 4;
-    _ = svc.*.declare.?(svc, &desc, null);
+    _ = declared(svc, &desc);
 
     try testing.expectEqualStrings("hdr_color", std.mem.span(dev.texture_label));
     try testing.expectEqualStrings("hdr_color", std.mem.span(dev.texture_view_label));
@@ -788,7 +803,7 @@ test "a render pass is opened under the name its pass declared" {
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -798,13 +813,13 @@ test "a render pass is opened under the name its pass declared" {
     io.writes = &writes;
     io.writes_count = 1;
 
-    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
+    try R.check(svc.*.begin_frame.?(svc));
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
     const rp = pass.*.begin_render.?(pass);
     try testing.expectEqualStrings("render.named", std.mem.span(dev.render_pass_label));
     rp.*.end.?(rp);
     svc.*.end_pass.?(svc, pass);
-    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
+    try R.check(svc.*.end_frame.?(svc));
 }
 
 /// A service over the stubs with a source and a destination color resource declared; `begin`
@@ -823,7 +838,7 @@ const PassHarness = struct {
         self.ecs.init();
         self.binder.init();
         self.target.init();
-        self.h = ke_render_service_create(&.{ .device = self.dev.api(), .target = self.target.api(), .ecs = self.ecs.api(), .shader_dir = self.sd.path(), .binder = self.binder.api(), .color_format = 0, .depth_format = 0 }, null);
+        self.h = serviceOf(.{ .device = self.dev.api(), .target = self.target.api(), .ecs = self.ecs.api(), .shader_dir = self.sd.path(), .binder = self.binder.api(), .color_format = 0, .depth_format = 0 });
         const svc = self.h.ref orelse return error.TestUnexpectedResult;
         for ([_][*:0]const u8{ "src", "dst" }) |name| {
             var desc = std.mem.zeroes(c.ke_render_resource_params);
@@ -832,13 +847,13 @@ const PassHarness = struct {
             desc.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
             desc.scale_x = 1.0;
             desc.scale_y = 1.0;
-            try testing.expect(svc.*.declare.?(svc, &desc, null) != c.KE_COMPONENT_INVALID);
+            try testing.expect(declared(svc, &desc) != c.KE_COMPONENT_INVALID);
         }
     }
 
     fn begin(self: *PassHarness) !void {
         const svc = self.h.ref.?;
-        try testing.expect(svc.*.begin_frame.?(svc, null));
+        try R.check(svc.*.begin_frame.?(svc));
     }
 
     fn run(self: *PassHarness, io: *const c.ke_render_pass_io) !void {
@@ -852,7 +867,7 @@ const PassHarness = struct {
 
     fn deinit(self: *PassHarness) void {
         const svc = self.h.ref.?;
-        _ = svc.*.end_frame.?(svc, null);
+        _ = svc.*.end_frame.?(svc);
         self.h.destroy.?(svc);
         self.sd.deinit();
     }
@@ -862,7 +877,7 @@ fn joined(ph: *PassHarness, stage: c.ke_render_stage, mode: c.ke_render_chain_mo
     const svc = ph.h.ref.?;
     var io = std.mem.zeroes(c.ke_render_pass_io);
     io.name = "render.link";
-    io.chain = svc.*.join_chain.?(svc, stage, mode, null);
+    io.chain = chainLink(svc, stage, mode);
     try testing.expect(io.chain != c.KE_RENDER_CHAIN_NONE);
     return io;
 }
@@ -955,10 +970,10 @@ test "the chain runs by stage, and within a stage in the order the passes joined
     try ph.init();
     defer ph.deinit();
     const svc = ph.h.ref.?;
-    const overlay = svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER, null);
-    const sky = svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_SKY, c.KE_RENDER_CHAIN_DRAW_OVER, null);
-    const opaque_first = svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER, null);
-    const opaque_second = svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER, null);
+    const overlay = chainLink(svc, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER);
+    const sky = chainLink(svc, c.KE_RENDER_STAGE_SKY, c.KE_RENDER_CHAIN_DRAW_OVER);
+    const opaque_first = chainLink(svc, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER);
+    const opaque_second = chainLink(svc, c.KE_RENDER_STAGE_OPAQUE, c.KE_RENDER_CHAIN_DRAW_OVER);
     try ph.begin();
 
     var order: [4]c.ke_render_chain_link = undefined;
@@ -973,13 +988,13 @@ test "a link whose pass recorded nothing still carries the color through it" {
     const svc = ph.h.ref.?;
     ph.dev.render_passes = 0;
     try ph.begin();
-    try testing.expect(svc.*.end_frame.?(svc, null));
+    try R.check(svc.*.end_frame.?(svc));
     const without = ph.dev.render_passes;
 
     _ = try joined(&ph, c.KE_RENDER_STAGE_HDR_POST, c.KE_RENDER_CHAIN_REPLACE);
     ph.dev.render_passes = 0;
     try ph.begin();
-    try testing.expect(svc.*.end_frame.?(svc, null));
+    try R.check(svc.*.end_frame.?(svc));
 
     try testing.expectEqual(without + 1, ph.dev.render_passes);
 }
@@ -990,10 +1005,9 @@ test "joining the chain refuses a stage out of range" {
     defer ph.deinit();
     try ph.begin();
     const svc = ph.h.ref.?;
-    var err: [*c]c.ke_error = null;
-
-    try testing.expectEqual(c.KE_RENDER_CHAIN_NONE, svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_COUNT, c.KE_RENDER_CHAIN_DRAW_OVER, &err));
-    try testing.expect(err != null);
+    var link: c.ke_render_chain_link = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(svc.*.join_chain.?(svc, c.KE_RENDER_STAGE_COUNT, c.KE_RENDER_CHAIN_DRAW_OVER, &link)));
+    try testing.expectEqual(c.KE_RENDER_CHAIN_NONE, link);
 }
 
 test "declaring a name again with the same description answers the same resource, and another description is refused" {
@@ -1008,9 +1022,9 @@ test "declaring a name again with the same description answers the same resource
     desc.size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
     desc.scale_x = 1.0;
     desc.scale_y = 1.0;
-    try testing.expectEqual(svc.*.cid.?(svc, "src"), svc.*.declare.?(svc, &desc, null));
+    try testing.expectEqual(svc.*.cid.?(svc, "src"), declared(svc, &desc));
     desc.format = c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
-    try testing.expectEqual(@as(c.ke_component_id, c.KE_COMPONENT_INVALID), svc.*.declare.?(svc, &desc, null));
+    try testing.expectEqual(@as(c.ke_component_id, c.KE_COMPONENT_INVALID), declared(svc, &desc));
 }
 
 test "a compute pass replays at the end of the frame under its name and with the debug groups recorded into it" {
@@ -1025,14 +1039,14 @@ test "a compute pass replays at the end of the frame under its name and with the
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
     var io = std.mem.zeroes(c.ke_render_pass_io);
     io.name = "render.cull";
 
-    try testing.expectEqual(true, svc.*.begin_frame.?(svc, null));
+    try R.check(svc.*.begin_frame.?(svc));
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
     const cp = pass.*.begin_compute.?(pass);
     var transient = [_:0]u8{ 'b', 'i', 'n' };
@@ -1042,7 +1056,7 @@ test "a compute pass replays at the end of the frame under its name and with the
     cp.*.end.?(cp);
     svc.*.end_pass.?(svc, pass);
     try testing.expect(dev.compute_pass_label == null);
-    try testing.expectEqual(true, svc.*.end_frame.?(svc, null));
+    try R.check(svc.*.end_frame.?(svc));
 
     try testing.expectEqualStrings("render.cull", std.mem.span(dev.compute_pass_label));
     try testing.expectEqualStrings("bin", std.mem.span(dev.debug_group_label));
@@ -1058,7 +1072,7 @@ test "a render service created without a shader directory is refused and leaves 
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = null, .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = null, .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -1091,7 +1105,7 @@ test "pipelines requested from several threads at once settle on one answer per 
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     var params: [stress_keys]c.ke_gpu_render_pipeline_params = undefined;
@@ -1130,7 +1144,7 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     var p = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
@@ -1161,7 +1175,7 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     binder.init();
     var target: Stubs.Target = undefined;
     target.init();
-    const h = ke_render_service_create(&.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, null);
+    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     const attrs = [_]c.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};

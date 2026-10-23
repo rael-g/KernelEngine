@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_UI_UI_CREATE_H_
 #define KERNEL_ENGINE_RENDER_UI_UI_CREATE_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -35,14 +35,14 @@ extern "C"
          * Registers a font's glyph table, deduped by `key`: a resident key retains and
          * returns the existing handle without copying `glyphs` again. `glyphs` is
          * copied; the caller may free its own copy after this returns.
-         * KE_UI_FONT_NONE on failure.
          * @param key [utf8]
          * @param glyphs [borrowed,array_of:glyph_count]
+         * @param out_font [out] Receives the font; KE_UI_FONT_NONE on failure.
          */
-        ke_ui_font_handle (*load_font)(struct ke_render_ui *self, const char *key,
-                                       ke_texture_handle atlas, const ke_glyph_metrics *glyphs,
-                                       uint32_t glyph_count, float line_height, float ascent,
-                                       ke_error **out_error);
+        ke_result (*load_font)(struct ke_render_ui *self, const char *key,
+                               ke_texture_handle atlas, const ke_glyph_metrics *glyphs,
+                               uint32_t glyph_count, float line_height, float ascent,
+                               ke_ui_font_handle *out_font);
     } ke_render_ui;
 
     typedef struct ke_render_ui_handle
@@ -66,10 +66,10 @@ extern "C"
     } ke_render_ui_params;
 
     /// Registers the pass's update-phase label system and render-phase system. A missing
-    /// runtime, ecs, service or device fails as an invalid argument; the handle's ref is
-    /// NULL on failure.
-    KE_RENDER_UI_API ke_render_ui_handle ke_render_ui_create(const ke_render_ui_params *params,
-                                                             ke_error **out_error);
+    /// runtime, ecs, service or device fails as an invalid argument.
+    /// @param out_ui [out] Receives the handle; left zeroed on failure.
+    KE_RENDER_UI_API ke_result ke_render_ui_create(const ke_render_ui_params *params,
+                                                   ke_render_ui_handle *out_ui);
 
 #ifdef __cplusplus
 }

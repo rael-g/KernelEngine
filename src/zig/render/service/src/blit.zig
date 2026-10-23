@@ -4,6 +4,7 @@ const std = @import("std");
 const rc = @import("render_service.zig");
 const FrameLog = @import("frame_log.zig").FrameLog;
 const c = rc.c;
+const R = rc.R;
 
 const layout_params = c.ke_render_shader_layout_params{
     .shader = "blit",
@@ -22,15 +23,16 @@ pub const Blit = struct {
     pipeline: c.ke_gpu_render_pipeline_params = undefined,
     sets: FrameLog(c.ke_render_resource_set) = .{ .items = &.{}, .blank = c.KE_RENDER_BINDING_INVALID },
 
-    /// Loads the "blit" shaders and creates their layout. False with the error set when either
-    /// fails; nothing is left to release then.
-    pub fn prepare(self: *Blit, service: [*c]c.ke_render_service, binder: *c.ke_render_resource_binder, out_error: [*c][*c]c.ke_error) bool {
-        const vs = service.*.load_shader.?(service, "blit", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
-        if (vs == c.KE_GPU_INVALID_HANDLE) return false;
-        const fs = service.*.load_shader.?(service, "blit", c.KE_GPU_SHADER_STAGE_FRAGMENT, out_error);
-        if (fs == c.KE_GPU_INVALID_HANDLE) return false;
-        const layout = binder.create_shader_layout.?(binder, &layout_params, out_error);
-        if (layout == c.KE_RENDER_BINDING_INVALID) return false;
+    /// Loads the "blit" shaders and creates their layout. When either fails nothing is left to
+    /// release.
+    pub fn prepare(self: *Blit, service: [*c]c.ke_render_service, binder: *c.ke_render_resource_binder) R.Error!void {
+        var vs: c.ke_gpu_shader_module = undefined;
+        try R.check(service.*.load_shader.?(service, "blit", c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
+        var fs: c.ke_gpu_shader_module = undefined;
+        try R.check(service.*.load_shader.?(service, "blit", c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
+        var layout: c.ke_render_shader_layout = undefined;
+        try R.check(binder.create_shader_layout.?(binder, &layout_params, &layout));
+        errdefer binder.destroy_shader_layout.?(binder, layout);
 
         var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
         pp.label = "blit.pipeline";
@@ -38,16 +40,12 @@ pub const Blit = struct {
         pp.vertex_entry = "vs_main";
         pp.fragment_module = fs;
         pp.fragment_entry = "fs_main";
-        if (!binder.pipeline_layouts.?(binder, layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count, out_error)) {
-            binder.destroy_shader_layout.?(binder, layout);
-            return false;
-        }
+        try R.check(binder.pipeline_layouts.?(binder, layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count));
         pp.color_target_count = 1;
         pp.blend_state.write_mask = 0x0F;
         pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
         self.layout = layout;
         self.pipeline = pp;
-        return true;
     }
 
     /// Releases the sets of the frame that just ended. Called by `beginFrame`, before any pass of
@@ -77,9 +75,10 @@ pub const Blit = struct {
         const bindings = [1]c.ke_render_shader_binding{
             .{ .name = "t_src", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = src, .sampler = 0 },
         };
-        const set = binder.create_set.?(binder, self.layout, null, "blit.set", &bindings, bindings.len, null);
+        var set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID;
+        const made = binder.create_set.?(binder, self.layout, null, "blit.set", &bindings, bindings.len, &set);
         slot.* = set;
-        if (set == c.KE_RENDER_BINDING_INVALID) return false;
+        if (made != R.ok) return false;
 
         var pp = self.pipeline;
         pp.color_target_formats[0] = dst_format;

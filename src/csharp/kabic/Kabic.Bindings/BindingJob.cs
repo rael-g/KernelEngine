@@ -25,6 +25,13 @@ public sealed record BindingJob(
     string MethodsClass)
 {
     /// <summary>
+    /// True if a type of this job is remapped into the common bindings namespace, which is then
+    /// imported by every file of the job.
+    /// </summary>
+    public bool UsesCommon => CommonNamespace.Length > 0 && Namespace != CommonNamespace
+        && Remaps.Any(pair => pair.Split('=', 2)[1].Trim().StartsWith(CommonNamespace + ".", StringComparison.Ordinal));
+
+    /// <summary>
     /// Returns the argument list of this job as text, one switch per line with its values after it.
     /// </summary>
     public string Print()
@@ -45,7 +52,7 @@ public sealed record BindingJob(
         if (Additional.Count > 0) Opt("additional", Additional);
         Opt("methodClassName", MethodsClass);
         Opt("prefixStrip", MethodPrefix);
-        if (CommonNamespace.Length > 0 && Namespace != CommonNamespace) Opt("with-using", $"*={CommonNamespace}");
+        if (UsesCommon) Opt("with-using", $"*={CommonNamespace}");
         if (Remaps.Count > 0) Opt("remap", Remaps);
         if (Excludes.Count > 0) Opt("exclude", Excludes);
         Opt("config", Config);

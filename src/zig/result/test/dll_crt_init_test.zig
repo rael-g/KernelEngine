@@ -67,7 +67,7 @@ test "canary: without the re-export Zig's stub entry point still skips them" {
             \\performs the mingw CRT bring-up it used to skip. The workaround is no
             \\longer load-bearing and should be retired:
             \\
-            \\  1. drop `pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;`
+            \\  1. drop `pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;`
             \\     from every plugin root module that has it,
             \\  2. drop the `_DllMainCRTStartup` decl from src/zig/common/kerror.zig,
             \\  3. delete src/zig/common/test/ (these probes) and their build wiring.

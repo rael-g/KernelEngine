@@ -3,11 +3,11 @@
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = klog.logFn };
-
-const klog = @import("klog").Destination("ke_render_binder_grouped");
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_binder_grouped").logFn };
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.binder_grouped);
 const heap = @import("heap");
 const gpa = heap.gpa;
 const reflection = @import("reflection.zig");
@@ -88,10 +88,6 @@ fn pointed(comptime T: type, h: u64) ?*T {
     return @ptrFromInt(h);
 }
 
-fn fail(out_error: [*c][*c]c.ke_error, kind: *const c.ke_error_type, message: [*c]const u8, src: std.builtin.SourceLocation) void {
-    c.ke_error_set(out_error, kind, message, src.file, @intCast(src.line), null);
-}
-
 fn sameBlock(a: ?[]const u8, b: ?[]const u8) bool {
     if (a == null or b == null) return a == null and b == null;
     return std.mem.eql(u8, a.?, b.?);
@@ -115,76 +111,62 @@ fn releaseShaderLayout(dev: *c.ke_gpu_device, sl: *ShaderLayout) void {
 }
 
 /// The binder's `provide` slot: a binding under a name given before replaces the earlier one.
-fn provide(self: [*c]c.ke_render_resource_binder, binding: [*c]const c.ke_render_shader_binding, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    if (self == null or binding == null or binding.*.name == null) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "provide: a named binding is required", @src());
-        return false;
-    }
-    const st = stateOf(self);
-    const name = std.mem.span(binding.*.name);
+fn provide(self: [*c]c.ke_render_resource_binder, binding: [*c]const c.ke_render_shader_binding) callconv(.c) c.ke_result {
+    if (self == null or binding == null or binding.*.name == null) return R.code(error.InvalidArgument);
+    return R.of(keep(stateOf(self), binding.*));
+}
+
+fn keep(st: *State, binding: c.ke_render_shader_binding) R.Error!void {
+    const name = std.mem.span(binding.name);
     for (st.provided.items) |*p| {
         if (std.mem.eql(u8, p.name, name)) {
-            p.binding = binding.*;
+            p.binding = binding;
             p.binding.name = p.name.ptr;
-            return true;
+            return;
         }
     }
-    const owned = gpa.dupeZ(u8, name) catch {
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "provide: the name cannot be kept", @src());
-        return false;
-    };
-    var kept = binding.*;
+    const owned = try gpa.dupeZ(u8, name);
+    errdefer gpa.free(owned);
+    var kept = binding;
     kept.name = owned.ptr;
-    st.provided.append(gpa, .{ .name = owned, .binding = kept }) catch {
-        gpa.free(owned);
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "provide: the binding cannot be kept", @src());
-        return false;
-    };
-    return true;
+    try st.provided.append(gpa, .{ .name = owned, .binding = kept });
 }
 
 /// Adds to `sl` a group for the loose parameters and for each block the reflection `json` of
 /// `stage` declares, then reads every group's bindings from it.
-fn collectStage(sl: *ShaderLayout, json: []const u8, stage: u32, out_error: [*c][*c]c.ke_error) bool {
+fn collectStage(sl: *ShaderLayout, json: []const u8, stage: u32) R.Error!void {
     var names_arena = std.heap.ArenaAllocator.init(gpa);
     defer names_arena.deinit();
-    const names = reflection.blockNames(names_arena.allocator(), json) catch |err| return readFailed(err, out_error);
-    if (findGroup(sl, null) == null and !addGroup(sl, null, out_error)) return false;
+    const names = reflection.blockNames(names_arena.allocator(), json) catch |err| return readFailed(err);
+    if (findGroup(sl, null) == null) try addGroup(sl, null);
     for (names) |name| {
-        if (findGroup(sl, name) == null and !addGroup(sl, name, out_error)) return false;
+        if (findGroup(sl, name) == null) try addGroup(sl, name);
     }
     for (sl.groups.items) |*g| {
-        _ = g.group.collect(json, g.block, stage) catch |err| return readFailed(err, out_error);
+        _ = g.group.collect(json, g.block, stage) catch |err| return readFailed(err);
     }
-    return true;
 }
 
-fn addGroup(sl: *ShaderLayout, block: ?[]const u8, out_error: [*c][*c]c.ke_error) bool {
-    const owned: ?[]u8 = if (block) |b| (gpa.dupe(u8, b) catch {
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_shader_layout: out of memory", @src());
-        return false;
-    }) else null;
-    sl.groups.append(gpa, .{ .block = owned, .group = reflection.Group.init(gpa), .layout = c.KE_GPU_INVALID_HANDLE, .owned = false }) catch {
-        if (owned) |o| gpa.free(o);
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_shader_layout: out of memory", @src());
-        return false;
-    };
-    return true;
+fn addGroup(sl: *ShaderLayout, block: ?[]const u8) R.Error!void {
+    const owned: ?[]u8 = if (block) |b| try gpa.dupe(u8, b) else null;
+    errdefer if (owned) |o| gpa.free(o);
+    try sl.groups.append(gpa, .{ .block = owned, .group = reflection.Group.init(gpa), .layout = c.KE_GPU_INVALID_HANDLE, .owned = false });
 }
 
-fn readFailed(err: reflection.ReadError, out_error: [*c][*c]c.ke_error) bool {
-    fail(out_error, if (err == error.OutOfMemory) &c.KE_ERROR_OUT_OF_MEMORY else &c.KE_ERROR_INVALID_ARGUMENT, switch (err) {
-        error.OutOfMemory => "create_shader_layout: out of memory reading the reflection",
-        error.Malformed => "create_shader_layout: the reflection declares a parameter it cannot read",
-        error.LooseUniform => "create_shader_layout: the shader declares a loose uniform outside any buffer or block",
-        error.MismatchedGroup => "create_shader_layout: the stages place a parameter at different bindings",
-    }, @src());
-    return false;
+fn readFailed(err: reflection.ReadError) R.Error {
+    if (err == error.OutOfMemory) return error.OutOfMemory;
+    log.warn("create_shader_layout: {s}", .{switch (err) {
+        error.OutOfMemory => unreachable,
+        error.Malformed => "the reflection declares a parameter it cannot read",
+        error.LooseUniform => "the shader declares a loose uniform outside any buffer or block",
+        error.MismatchedGroup => "the stages place a parameter at different bindings",
+    }});
+    return error.InvalidArgument;
 }
 
 /// Drops the loose group when the shader declares no loose parameter, applies the hints, and
 /// builds each group's layout, the material block taking the binder's.
-fn finishLayout(st: *State, sl: *ShaderLayout, params: *const c.ke_render_shader_layout_params, out_error: [*c][*c]c.ke_error) bool {
+fn finishLayout(st: *State, sl: *ShaderLayout, params: *const c.ke_render_shader_layout_params) R.Error!void {
     var i: usize = 0;
     while (i < sl.groups.items.len) {
         const g = &sl.groups.items[i];
@@ -205,16 +187,16 @@ fn finishLayout(st: *State, sl: *ShaderLayout, params: *const c.ke_render_shader
             found = true;
         }
         if (!found) {
-            fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_layout: a hint names no parameter of the shader", @src());
-            return false;
+            log.warn("create_shader_layout: the hint {s} names no parameter of the shader {s}", .{ std.mem.span(hint.name), std.mem.span(params.shader) });
+            return error.InvalidArgument;
         }
     }
     for (sl.groups.items, 0..) |*g, gi| {
         const index = g.group.index orelse 0;
         for (sl.groups.items[0..gi]) |earlier| {
             if ((earlier.group.index orelse 0) == index) {
-                fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_layout: two groups of the shader share an index", @src());
-                return false;
+                log.warn("create_shader_layout: two groups of the shader {s} share the index {d}", .{ std.mem.span(params.shader), index });
+                return error.InvalidArgument;
             }
         }
         if (g.block != null and std.mem.eql(u8, g.block.?, material_block)) {
@@ -222,49 +204,39 @@ fn finishLayout(st: *State, sl: *ShaderLayout, params: *const c.ke_render_shader
             sl.material_index = index;
             continue;
         }
-        g.layout = reflection.createLayout(st.device, &g.group, params.shader, out_error);
-        if (g.layout == c.KE_GPU_INVALID_HANDLE) return false;
+        g.layout = try reflection.createLayout(st.device, &g.group, params.shader);
         g.owned = true;
     }
-    return true;
 }
 
 /// The binder's `create_shader_layout` slot: reads "<shader dir>/<shader>.<vs|fs|cs>.json" for
 /// each stage of the params.
-fn createShaderLayout(self: [*c]c.ke_render_resource_binder, params: [*c]const c.ke_render_shader_layout_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_shader_layout {
-    if (self == null or params == null or params.*.shader == null or params.*.stages == 0) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_layout: a shader name and at least one stage are required", @src());
-        return c.KE_RENDER_BINDING_INVALID;
-    }
-    const st = stateOf(self);
-    const sl = gpa.create(ShaderLayout) catch {
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_shader_layout: out of memory", @src());
-        return c.KE_RENDER_BINDING_INVALID;
-    };
+fn createShaderLayout(self: [*c]c.ke_render_resource_binder, params: [*c]const c.ke_render_shader_layout_params, out_layout: [*c]c.ke_render_shader_layout) callconv(.c) c.ke_result {
+    const out = out_layout orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_RENDER_BINDING_INVALID;
+    if (self == null or params == null or params.*.shader == null or params.*.stages == 0) return R.code(error.InvalidArgument);
+    const sl = shaderLayout(stateOf(self), params) catch |err| return R.code(err);
+    out.* = handleOf(sl);
+    return R.ok;
+}
+
+fn shaderLayout(st: *State, params: *const c.ke_render_shader_layout_params) R.Error!*ShaderLayout {
+    const sl = try gpa.create(ShaderLayout);
     sl.* = .{ .groups = .empty, .material_index = null };
+    errdefer releaseShaderLayout(st.device, sl);
     for (stage_suffixes) |s| {
-        if (params.*.stages & s.bit == 0) continue;
+        if (params.stages & s.bit == 0) continue;
         var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-        const path = std.fmt.bufPrintZ(&path_buf, "{s}/{s}.{s}.json", .{ st.shader_dir, std.mem.span(params.*.shader), s.suffix }) catch {
-            fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_shader_layout: resolved reflection path too long", @src());
-            releaseShaderLayout(st.device, sl);
-            return c.KE_RENDER_BINDING_INVALID;
+        const path = std.fmt.bufPrintZ(&path_buf, "{s}/{s}.{s}.json", .{ st.shader_dir, std.mem.span(params.shader), s.suffix }) catch {
+            log.warn("create_shader_layout: the reflection path of {s} is too long", .{std.mem.span(params.shader)});
+            return error.InvalidArgument;
         };
-        const json = shader_files.read(gpa, path, out_error) orelse {
-            releaseShaderLayout(st.device, sl);
-            return c.KE_RENDER_BINDING_INVALID;
-        };
+        const json = try shader_files.read(gpa, path);
         defer gpa.free(json);
-        if (!collectStage(sl, json, s.bit, out_error)) {
-            releaseShaderLayout(st.device, sl);
-            return c.KE_RENDER_BINDING_INVALID;
-        }
+        try collectStage(sl, json, s.bit);
     }
-    if (!finishLayout(st, sl, params, out_error)) {
-        releaseShaderLayout(st.device, sl);
-        return c.KE_RENDER_BINDING_INVALID;
-    }
-    return handleOf(sl);
+    try finishLayout(st, sl, params);
+    return sl;
 }
 
 /// The binder's `destroy_shader_layout` slot.
@@ -276,70 +248,57 @@ fn destroyShaderLayout(self: [*c]c.ke_render_resource_binder, layout: c.ke_rende
 
 /// The binder's `pipeline_layouts` slot: each group's layout at the index the shader gives it. A
 /// shader whose groups leave an index empty below the highest is refused.
-fn pipelineLayouts(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_shader_layout, out_layouts: [*c]c.ke_gpu_bind_group_layout, capacity: u32, out_count: [*c]u32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const sl = pointed(ShaderLayout, layout) orelse {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "pipeline_layouts: unknown layout", @src());
-        return false;
-    };
-    if (self == null or out_layouts == null or out_count == null) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "pipeline_layouts: null argument", @src());
-        return false;
-    }
+fn pipelineLayouts(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_shader_layout, out_layouts: [*c]c.ke_gpu_bind_group_layout, capacity: u32, out_count: [*c]u32) callconv(.c) c.ke_result {
+    const sl = pointed(ShaderLayout, layout) orelse return R.code(error.InvalidArgument);
+    if (self == null or out_layouts == null or out_count == null) return R.code(error.InvalidArgument);
+    out_count.* = 0;
     const count: u32 = @intCast(sl.groups.items.len);
     if (count > capacity) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "pipeline_layouts: the shader needs more layouts than the capacity", @src());
-        return false;
+        log.warn("pipeline_layouts: the shader needs {d} layouts, more than the capacity of {d}", .{ count, capacity });
+        return R.code(error.InvalidArgument);
     }
     for (0..count) |i| out_layouts[i] = c.KE_GPU_INVALID_HANDLE;
     for (sl.groups.items) |g| {
         const index = g.group.index orelse 0;
         if (index >= count) {
-            fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "pipeline_layouts: the shader leaves a group index empty", @src());
-            return false;
+            log.warn("pipeline_layouts: the shader leaves a group index empty below {d}", .{index});
+            return R.code(error.InvalidArgument);
         }
         out_layouts[index] = g.layout;
     }
     out_count.* = count;
-    return true;
+    return R.ok;
 }
 
 /// The binder's `create_set` slot.
-fn createSet(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_shader_layout, block: [*c]const u8, label: [*c]const u8, bindings: [*c]const c.ke_render_shader_binding, binding_count: u32, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_resource_set {
-    const sl = pointed(ShaderLayout, layout) orelse {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_set: unknown layout", @src());
-        return c.KE_RENDER_BINDING_INVALID;
-    };
-    if (self == null or (binding_count != 0 and bindings == null)) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_set: null argument", @src());
-        return c.KE_RENDER_BINDING_INVALID;
-    }
-    const st = stateOf(self);
-    const block_name: ?[]const u8 = if (block != null) std.mem.span(block) else null;
-    const g = findGroup(sl, block_name) orelse {
-        fail(out_error, &c.KE_ERROR_NOT_FOUND, "create_set: the shader declares no such group", @src());
-        return c.KE_RENDER_BINDING_INVALID;
-    };
+fn createSet(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_shader_layout, block: [*c]const u8, label: [*c]const u8, bindings: [*c]const c.ke_render_shader_binding, binding_count: u32, out_set: [*c]c.ke_render_resource_set) callconv(.c) c.ke_result {
+    const out = out_set orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_RENDER_BINDING_INVALID;
+    const sl = pointed(ShaderLayout, layout) orelse return R.code(error.InvalidArgument);
+    if (self == null or (binding_count != 0 and bindings == null)) return R.code(error.InvalidArgument);
     const given: []const c.ke_render_shader_binding = if (binding_count == 0) &.{} else bindings[0..binding_count];
-    const entries = reflection.matchBindings(&g.group, given, st.provided.items, out_error) orelse return c.KE_RENDER_BINDING_INVALID;
+    const set = resourceSet(stateOf(self), sl, if (block != null) std.mem.span(block) else null, label, given) catch |err| return R.code(err);
+    out.* = handleOf(set);
+    return R.ok;
+}
+
+fn resourceSet(st: *State, sl: *ShaderLayout, block: ?[]const u8, label: [*c]const u8, given: []const c.ke_render_shader_binding) R.Error!*Set {
+    const g = findGroup(sl, block) orelse {
+        log.warn("create_set: the shader declares no group {s}", .{block orelse "(loose)"});
+        return error.NotFound;
+    };
+    const entries = try reflection.matchBindings(&g.group, given, st.provided.items);
     defer gpa.free(entries);
-    const set = gpa.create(Set) catch {
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_set: out of memory", @src());
-        return c.KE_RENDER_BINDING_INVALID;
-    };
-    set.* = .{
-        .index = g.group.index orelse 0,
-        .bind_group = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
-            .label = label,
-            .layout = g.layout,
-            .entry_count = @intCast(entries.len),
-            .entries = entries.ptr,
-        }, out_error),
-    };
-    if (set.bind_group == c.KE_GPU_INVALID_HANDLE) {
-        gpa.destroy(set);
-        return c.KE_RENDER_BINDING_INVALID;
-    }
-    return handleOf(set);
+    const set = try gpa.create(Set);
+    errdefer gpa.destroy(set);
+    set.* = .{ .index = g.group.index orelse 0, .bind_group = c.KE_GPU_INVALID_HANDLE };
+    try R.check(st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
+        .label = label,
+        .layout = g.layout,
+        .entry_count = @intCast(entries.len),
+        .entries = entries.ptr,
+    }, &set.bind_group));
+    return set;
 }
 
 /// The binder's `destroy_set` slot.
@@ -367,13 +326,16 @@ fn bindComputeSet(self: [*c]c.ke_render_resource_binder, pass: [*c]c.ke_gpu_comp
 
 /// The binder's `create_material` slot: the material's uniform buffer and one bind group against
 /// the material layout, its sampler the one provided as `ke_samp_linear`.
-fn createMaterial(self: [*c]c.ke_render_resource_binder, data: [*c]const c.ke_render_material_data, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_material_binding {
-    if (self == null or data == null) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "create_material: null argument", @src());
-        return c.KE_RENDER_BINDING_INVALID;
-    }
-    const st = stateOf(self);
-    const d = data.*;
+fn createMaterial(self: [*c]c.ke_render_resource_binder, data: [*c]const c.ke_render_material_data, out_material: [*c]c.ke_render_material_binding) callconv(.c) c.ke_result {
+    const out = out_material orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_RENDER_BINDING_INVALID;
+    if (self == null or data == null) return R.code(error.InvalidArgument);
+    const m = newMaterial(stateOf(self), data.*) catch |err| return R.code(err);
+    out.* = handleOf(m);
+    return R.ok;
+}
+
+fn newMaterial(st: *State, d: c.ke_render_material_data) R.Error!*Material {
     const uniform = MaterialUniform{
         .base_color = d.base_color,
         .metallic = d.metallic,
@@ -382,14 +344,15 @@ fn createMaterial(self: [*c]c.ke_render_resource_binder, data: [*c]const c.ke_re
         .ior = d.ior,
         .distortion_strength = d.distortion_strength,
     };
-    const buffer = st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+    var buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
         .label = "material.uniform",
         .initial_data = &uniform,
         .size = @sizeOf(MaterialUniform),
         .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
-    }, out_error);
-    if (buffer == c.KE_GPU_INVALID_HANDLE) return c.KE_RENDER_BINDING_INVALID;
+    }, &buffer));
+    errdefer st.device.destroy_buffer.?(st.device, buffer);
     var sampler: c.ke_gpu_sampler = c.KE_GPU_INVALID_HANDLE;
     for (st.provided.items) |p| {
         if (std.mem.eql(u8, p.name, material_sampler_source)) sampler = p.binding.sampler;
@@ -405,29 +368,19 @@ fn createMaterial(self: [*c]c.ke_render_resource_binder, data: [*c]const c.ke_re
     bindings[2].sampler = sampler;
     bindings[3].name = "normal_map";
     bindings[3].texture_view = d.normal_map;
-    const entries = reflection.matchBindings(&st.material_group, &bindings, st.provided.items, out_error) orelse {
-        st.device.destroy_buffer.?(st.device, buffer);
-        return c.KE_RENDER_BINDING_INVALID;
-    };
+    const entries = try reflection.matchBindings(&st.material_group, &bindings, st.provided.items);
     defer gpa.free(entries);
-    const bind_group = st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
+    var bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
         .label = "material.bind_group",
         .layout = st.material_layout,
         .entry_count = @intCast(entries.len),
         .entries = entries.ptr,
-    }, out_error);
-    if (bind_group == c.KE_GPU_INVALID_HANDLE) {
-        st.device.destroy_buffer.?(st.device, buffer);
-        return c.KE_RENDER_BINDING_INVALID;
-    }
-    const m = gpa.create(Material) catch {
-        st.device.destroy_bind_group.?(st.device, bind_group);
-        st.device.destroy_buffer.?(st.device, buffer);
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "create_material: out of memory", @src());
-        return c.KE_RENDER_BINDING_INVALID;
-    };
+    }, &bind_group));
+    errdefer st.device.destroy_bind_group.?(st.device, bind_group);
+    const m = try gpa.create(Material);
     m.* = .{ .uniform = buffer, .bind_group = bind_group };
-    return handleOf(m);
+    return m;
 }
 
 /// The binder's `destroy_material` slot.
@@ -464,20 +417,20 @@ fn destroyBinder(self: [*c]c.ke_render_resource_binder) callconv(.c) void {
 
 /// The factory: copies the shader directory, reads the material block from the embedded
 /// reflection for the vertex and fragment stages and builds the material layout on the device.
-export fn ke_render_resource_binder_grouped_create(params: [*c]const c.ke_render_resource_binder_grouped_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_render_resource_binder_handle {
-    const none = c.ke_render_resource_binder_handle{ .ref = null, .destroy = null };
-    if (params == null or params.*.device == null or params.*.shader_dir == null) {
-        fail(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ke_render_resource_binder_grouped_create: a device and a shader directory are required", @src());
-        return none;
-    }
-    const st = gpa.create(State) catch {
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ke_render_resource_binder_grouped_create: out of memory", @src());
-        return none;
-    };
-    const dir = gpa.dupe(u8, std.mem.span(params.*.shader_dir)) catch {
+export fn ke_render_resource_binder_grouped_create(params: [*c]const c.ke_render_resource_binder_grouped_params, out_binder: [*c]c.ke_render_resource_binder_handle) callconv(.c) c.ke_result {
+    const out = out_binder orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
+    if (params == null or params.*.device == null or params.*.shader_dir == null) return R.code(error.InvalidArgument);
+    const st = newBinder(params.*) catch |err| return R.code(err);
+    out.* = .{ .ref = &st.api, .destroy = destroyBinder };
+    return R.ok;
+}
+
+fn newBinder(params: c.ke_render_resource_binder_grouped_params) R.Error!*State {
+    const st = try gpa.create(State);
+    const dir = gpa.dupe(u8, std.mem.span(params.shader_dir)) catch |err| {
         gpa.destroy(st);
-        fail(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ke_render_resource_binder_grouped_create: out of memory", @src());
-        return none;
+        return err;
     };
     st.* = .{
         .api = .{
@@ -494,26 +447,22 @@ export fn ke_render_resource_binder_grouped_create(params: [*c]const c.ke_render
             .destroy_material = destroyMaterial,
             .bind_material = bindMaterial,
         },
-        .device = params.*.device,
+        .device = params.device,
         .shader_dir = dir,
         .provided = .empty,
         .material_group = reflection.Group.init(gpa),
         .material_layout = c.KE_GPU_INVALID_HANDLE,
     };
+    errdefer destroyBinder(&st.api);
     const material_json = @embedFile("material_params.json");
     const read_vs = st.material_group.collect(material_json, material_block, c.KE_GPU_SHADER_STAGE_VERTEX) catch false;
     const read_fs = st.material_group.collect(material_json, material_block, c.KE_GPU_SHADER_STAGE_FRAGMENT) catch false;
     if (!read_vs or !read_fs) {
-        fail(out_error, &c.KE_ERROR_NOT_INITIALIZED, "ke_render_resource_binder_grouped_create: the material parameter block could not be read", @src());
-        destroyBinder(&st.api);
-        return none;
+        log.warn("ke_render_resource_binder_grouped_create: the material parameter block could not be read", .{});
+        return error.NotInitialized;
     }
-    st.material_layout = reflection.createLayout(st.device, &st.material_group, "binder.material_layout", out_error);
-    if (st.material_layout == c.KE_GPU_INVALID_HANDLE) {
-        destroyBinder(&st.api);
-        return none;
-    }
-    return .{ .ref = &st.api, .destroy = destroyBinder };
+    st.material_layout = try reflection.createLayout(st.device, &st.material_group, "binder.material_layout");
+    return st;
 }
 
 const testing = std.testing;
@@ -581,8 +530,8 @@ const Rig = struct {
 
     fn binder(self: *Rig) !c.ke_render_resource_binder_handle {
         const params = c.ke_render_resource_binder_grouped_params{ .device = self.dev.api(), .shader_dir = @ptrCast(&self.path) };
-        const h = ke_render_resource_binder_grouped_create(&params, null);
-        if (h.ref == null) return error.TestUnexpectedResult;
+        var h: c.ke_render_resource_binder_handle = undefined;
+        try R.check(ke_render_resource_binder_grouped_create(&params, &h));
         return h;
     }
 
@@ -605,13 +554,13 @@ test "a shader's groups are placed in a pipeline at the indices the shader gives
     defer h.destroy.?(h.ref);
     const b = h.ref;
 
-    const layout = b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, null);
-    try testing.expect(layout != c.KE_RENDER_BINDING_INVALID);
+    var layout: c.ke_render_shader_layout = undefined;
+    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
     defer b.*.destroy_shader_layout.?(b, layout);
 
     var layouts: [4]c.ke_gpu_bind_group_layout = undefined;
     var count: u32 = 0;
-    try testing.expect(b.*.pipeline_layouts.?(b, layout, &layouts, layouts.len, &count, null));
+    try R.check(b.*.pipeline_layouts.?(b, layout, &layouts, layouts.len, &count));
     try testing.expectEqual(@as(u32, 3), count);
     try testing.expectEqual(stateOf(b).material_layout, layouts[1]);
     try testing.expect(layouts[0] != c.KE_GPU_INVALID_HANDLE and layouts[2] != c.KE_GPU_INVALID_HANDLE);
@@ -627,16 +576,18 @@ test "a set binds what the pass names and what the binder was given for the rest
 
     var frame = named("ke_frame");
     frame.buffer = 9;
-    try testing.expect(b.*.provide.?(b, &frame, null));
+    try R.check(b.*.provide.?(b, &frame));
     const hints = [_]c.ke_render_binding_hint{.{ .name = "object", .flags = c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET }};
-    const layout = b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = &hints, .hint_count = hints.len }, null);
+    var layout: c.ke_render_shader_layout = undefined;
+    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = &hints, .hint_count = hints.len }, &layout));
     defer b.*.destroy_shader_layout.?(b, layout);
 
     const own = [_]c.ke_render_shader_binding{named("shadow_map")};
-    const loose = b.*.create_set.?(b, layout, null, "loose", &own, own.len, null);
-    try testing.expect(loose != c.KE_RENDER_BINDING_INVALID);
+    var loose: c.ke_render_resource_set = undefined;
+    try R.check(b.*.create_set.?(b, layout, null, "loose", &own, own.len, &loose));
     defer b.*.destroy_set.?(b, loose);
-    const object = b.*.create_set.?(b, layout, "object", "object", &[_]c.ke_render_shader_binding{named("object")}, 1, null);
+    var object: c.ke_render_resource_set = undefined;
+    try R.check(b.*.create_set.?(b, layout, "object", "object", &[_]c.ke_render_shader_binding{named("object")}, 1, &object));
     defer b.*.destroy_set.?(b, object);
 
     var probe: PassProbe = undefined;
@@ -648,9 +599,9 @@ test "a set binds what the pass names and what the binder was given for the rest
     try testing.expectEqual(pointed(Set, object).?.bind_group, probe.groups[2]);
     try testing.expectEqual(@as(u32, 256), probe.offsets[2]);
 
-    var err: [*c]c.ke_error = null;
-    try testing.expectEqual(@as(u64, c.KE_RENDER_BINDING_INVALID), b.*.create_set.?(b, layout, "absent", null, null, 0, &err));
-    try testing.expect(err != null);
+    var absent: c.ke_render_resource_set = undefined;
+    try testing.expectError(error.NotFound, R.check(b.*.create_set.?(b, layout, "absent", null, null, 0, &absent)));
+    try testing.expectEqual(@as(u64, c.KE_RENDER_BINDING_INVALID), absent);
 }
 
 test "a material is bound at the material group of the shader drawing it, and not at all by a shader without one" {
@@ -664,18 +615,20 @@ test "a material is bound at the material group of the shader drawing it, and no
     var data = std.mem.zeroes(c.ke_render_material_data);
     data.albedo = 3;
     data.normal_map = 4;
-    const material = b.*.create_material.?(b, &data, null);
-    try testing.expect(material != c.KE_RENDER_BINDING_INVALID);
+    var material: c.ke_render_material_binding = undefined;
+    try R.check(b.*.create_material.?(b, &data, &material));
     defer b.*.destroy_material.?(b, material);
 
-    const lit = b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, null);
+    var lit: c.ke_render_shader_layout = undefined;
+    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &lit));
     defer b.*.destroy_shader_layout.?(b, lit);
     var probe: PassProbe = undefined;
     probe.init();
     b.*.bind_material.?(b, &probe.pass, lit, material);
     try testing.expectEqual(pointed(Material, material).?.bind_group, probe.groups[1]);
 
-    const plain = b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX, .hints = null, .hint_count = 0 }, null);
+    var plain: c.ke_render_shader_layout = undefined;
+    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX, .hints = null, .hint_count = 0 }, &plain));
     defer b.*.destroy_shader_layout.?(b, plain);
     var untouched: PassProbe = undefined;
     untouched.init();
@@ -691,13 +644,12 @@ test "a shader that leaves a group index empty below its highest is refused a pi
     defer h.destroy.?(h.ref);
     const b = h.ref;
 
-    const layout = b.*.create_shader_layout.?(b, &.{ .shader = "gap", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, null);
+    var layout: c.ke_render_shader_layout = undefined;
+    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "gap", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
     defer b.*.destroy_shader_layout.?(b, layout);
     var layouts: [4]c.ke_gpu_bind_group_layout = undefined;
     var count: u32 = 0;
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!b.*.pipeline_layouts.?(b, layout, &layouts, layouts.len, &count, &err));
-    try testing.expect(err != null);
+    try testing.expectError(error.InvalidArgument, R.check(b.*.pipeline_layouts.?(b, layout, &layouts, layouts.len, &count)));
 }
 
 test "a hint naming no parameter of the shader is refused" {
@@ -709,9 +661,9 @@ test "a hint naming no parameter of the shader is refused" {
     const b = h.ref;
 
     const hints = [_]c.ke_render_binding_hint{.{ .name = "nothing", .flags = c.KE_RENDER_BINDING_HINT_DEPTH }};
-    var err: [*c]c.ke_error = null;
-    try testing.expectEqual(@as(u64, c.KE_RENDER_BINDING_INVALID), b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = &hints, .hint_count = hints.len }, &err));
-    try testing.expect(err != null);
+    var layout: c.ke_render_shader_layout = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = &hints, .hint_count = hints.len }, &layout)));
+    try testing.expectEqual(@as(u64, c.KE_RENDER_BINDING_INVALID), layout);
 }
 
 test "creating a binder and everything it hands out, then destroying them, leaves no block allocated and no GPU resource live" {
@@ -721,11 +673,14 @@ test "creating a binder and everything it hands out, then destroying them, leave
     const h = try rig.binder();
     const b = h.ref;
     var frame = named("ke_frame");
-    _ = b.*.provide.?(b, &frame, null);
-    const layout = b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, null);
-    const set = b.*.create_set.?(b, layout, null, null, &[_]c.ke_render_shader_binding{named("shadow_map")}, 1, null);
+    try R.check(b.*.provide.?(b, &frame));
+    var layout: c.ke_render_shader_layout = undefined;
+    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
+    var set: c.ke_render_resource_set = undefined;
+    try R.check(b.*.create_set.?(b, layout, null, null, &[_]c.ke_render_shader_binding{named("shadow_map")}, 1, &set));
     var data = std.mem.zeroes(c.ke_render_material_data);
-    const material = b.*.create_material.?(b, &data, null);
+    var material: c.ke_render_material_binding = undefined;
+    try R.check(b.*.create_material.?(b, &data, &material));
     b.*.destroy_material.?(b, material);
     b.*.destroy_set.?(b, set);
     b.*.destroy_shader_layout.?(b, layout);

@@ -1,14 +1,16 @@
 const std = @import("std");
-const ke_common_build = @import("ke_common");
+const ke_build = @import("ke_build");
+const ke_logger_build = @import("ke_logger");
+const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     const ke_common = b.option([]const u8, "ke-common-include", "Path to kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_config = b.option([]const u8, "ke-config-include", "Path to kernel_engine/configuration include dir") orelse @panic("-Dke-config-include required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "Dir containing ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
     const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "dir holding toml.c and toml.h, fetched by the root build.zig.zon") orelse @panic("-Dtomlc99-dir required");
 
@@ -21,14 +23,13 @@ pub fn build(b: *std.Build) void {
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     addTomlc99(b, mod, tomlc99_dir);
     mod.addIncludePath(.{ .cwd_relative = ke_common });
+    mod.addIncludePath(.{ .cwd_relative = ke_result });
     mod.addIncludePath(.{ .cwd_relative = ke_config });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_CONFIGURATION_TOML_EXPORT", "");
 
-    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("klog", ke_common_build.klog(b));
+    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("log", ke_logger_build.log(b));
+    mod.addImport("result", ke_result_build.result(b));
     const lib = b.addLibrary(.{
         .name = "ke_configuration_toml",
         .root_module = mod,
@@ -49,12 +50,12 @@ pub fn build(b: *std.Build) void {
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     addTomlc99(b, test_mod, tomlc99_dir);
     test_mod.addIncludePath(.{ .cwd_relative = ke_common });
+    test_mod.addIncludePath(.{ .cwd_relative = ke_result });
     test_mod.addIncludePath(.{ .cwd_relative = ke_config });
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
 
-    test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
-    test_mod.addImport("klog", ke_common_build.klog(b));
+    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
+    test_mod.addImport("log", ke_logger_build.log(b));
+    test_mod.addImport("result", ke_result_build.result(b));
     const unit_tests = b.addTest(.{ .root_module = test_mod });
     const run_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run unit tests");

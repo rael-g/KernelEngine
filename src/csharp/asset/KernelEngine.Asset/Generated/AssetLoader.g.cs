@@ -79,18 +79,18 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         _borrowed = borrowed;
     }
 
-    /// <summary>Loads a 3D model from path into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.</summary>
+    /// <summary>Loads a 3D model from path into a newly allocated ke_model_data.</summary>
     /// <param name="path">Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).</param>
+    /// <returns>Receives the model, which the caller owns and releases with free_model; NULL on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public Model LoadModel(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
-            ke_error* err = null;
-            var result = (ModelData*)Handle->load_model(Handle, (sbyte*)pathPtr, &err);
-            if (result == null) throw NativeErrors.FromNative(err, "load_model");
-            return new Model(this, result);
+            ke_model_data* resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->load_model(Handle, (sbyte*)pathPtr, &resultOut), "load_model");
+            return new Model(this, (ModelData*)resultOut);
         }
     }
 
@@ -113,7 +113,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         {
             try
             {
-                Handle->load_model_async(Handle, scheduler.Native, (sbyte*)pathPtr, (delegate* unmanaged[Cdecl]<ke_error*, ke_model_data*, void*, void>)&LoadModelAsyncOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(completion));
+                Handle->load_model_async(Handle, scheduler.Native, (sbyte*)pathPtr, (delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.ke_result, ke_model_data*, void*, void>)&LoadModelAsyncOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(completion));
             }
             catch
             {
@@ -132,15 +132,15 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void LoadModelAsyncOnCompleteTrampoline(ke_error* arg0, ke_model_data* arg1, void* ctx)
+    private static void LoadModelAsyncOnCompleteTrampoline(KernelEngine.Result.Native.ke_result arg0, ke_model_data* arg1, void* ctx)
     {
         var pending = GCHandle.FromIntPtr((nint)ctx);
         if (pending.Target is not LoadModelAsyncCompletion state) return;
         pending.Free();
         try
         {
-            if (arg0 != null || arg1 == null)
-                state.Source.TrySetException(NativeErrors.FromNative(arg0, "load_model_async"));
+            if (arg0 != KernelEngine.Result.Native.ke_result.KE_OK || arg1 == null)
+                state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, "load_model_async"));
             else
                 state.Source.TrySetResult(new Model(state.Owner, (ModelData*)arg1));
         }

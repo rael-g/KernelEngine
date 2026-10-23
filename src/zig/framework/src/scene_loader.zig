@@ -14,7 +14,7 @@ const NameMap = names_mod.NameMap;
 const type_name_max = names_mod.type_name_max;
 const normalizeTypeName = names_mod.normalizeTypeName;
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 
 const res_prefix = "res://";
@@ -27,8 +27,8 @@ const res_prefix = "res://";
 /// from its `ke_ecs`, connections from its signal bus. What it owns is `arena`, which holds every
 /// string and table read from a scene and lives as long as the loader, so what a load read stays
 /// valid until `vtDestroy`, and `created`. `assets` is borrowed and resolves every "res://"
-/// reference. Every failure fills the out error and returns false; faults in what a scene says go through
-/// `structural`, which also logs them. A load runs on its caller's thread.
+/// reference. Every failure is logged and returned as an error; faults in what a scene says go
+/// through `structural`. A load runs on its caller's thread.
 const State = struct {
     api: c.ke_scene_loader,
     world: *c.ke_world,
@@ -64,60 +64,55 @@ fn pathDirname(path: []const u8) []const u8 {
 /// resolver's to resolve; an absolute path stands as written; any other joins the directory of the
 /// file making the reference. A result that does not fit fails as an invalid argument. Nothing here
 /// checks that the file exists.
-fn resolvePath(s: *const State, base_dir: []const u8, ref: [*:0]const u8, out: []u8, out_error: [*c][*c]c.ke_error) bool {
+fn resolvePath(s: *const State, base_dir: []const u8, ref: [*:0]const u8, out: []u8) R.Error!void {
     const r = std.mem.span(ref);
-    if (std.mem.startsWith(u8, r, res_prefix))
-        return s.assets.resolve_path.?(s.assets, ref, out.ptr, out.len, out_error);
+    if (std.mem.startsWith(u8, r, res_prefix)) {
+        R.check(s.assets.resolve_path.?(s.assets, ref, out.ptr, out.len)) catch |err| {
+            log.warn("the asset resolver could not resolve the scene path '{s}'", .{r});
+            return err;
+        };
+        return;
+    }
     const absolute = r.len > 0 and (r[0] == '/' or (r.len > 1 and r[1] == ':'));
     const written = if (absolute) std.fmt.bufPrintZ(out, "{s}", .{r}) else std.fmt.bufPrintZ(out, "{s}/{s}", .{ base_dir, r });
     _ = written catch {
-        E.fail(out_error, .invalid_argument, "scene path does not fit", @src());
-        return false;
+        return refuse(error.InvalidArgument, "scene path does not fit");
     };
-    return true;
 }
 
 /// Passes the entity's type name, normalized, to the script factory and returns its verdict. With
 /// no factory registered it does nothing and succeeds. A name that cannot be normalized fails
-/// before the factory is called. A factory that fails without an error of its own gets a general
-/// one.
+/// before the factory is called. A factory's refusal fails with the factory's code.
 fn dispatchScript(
     s: *State,
     entity: c.ke_entity,
     type_name: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) bool {
-    const factory = s.script_factory orelse return true;
+) R.Error!void {
+    const factory = s.script_factory orelse return;
     var buf: [type_name_max]u8 = undefined;
     const resolved = normalizeTypeName(type_name, &buf) orelse {
-        E.fail(out_error, .invalid_argument, "entity type name is longer than the loader accepts", @src());
-        return false;
+        return refuse(error.InvalidArgument, "entity type name is longer than the loader accepts");
     };
 
-    var factory_error: [*c]c.ke_error = null;
-    if (factory(s.script_ctx, entity, resolved, &factory_error)) return true;
-
-    if (factory_error != null) {
-        if (out_error != null) out_error.* = factory_error;
-    } else {
-        E.fail(out_error, .general, "script factory rejected the entity type", @src());
-    }
-    return false;
+    R.check(factory(s.script_ctx, entity, resolved)) catch |err| {
+        log.warn("the script factory refused the entity type '{s}'", .{resolved});
+        return err;
+    };
 }
 
 const log = std.log.scoped(.framework);
 
-/// Reports a fault in what the scene says: logs it as a warning, since the caller receives it, and
-/// fails the out error as an invalid argument. A message longer than its buffer is replaced by a generic one.
-fn structural(
-    out_error: [*c][*c]c.ke_error,
-    comptime fmt: []const u8,
-    args: anytype,
-) void {
-    var buf: [256]u8 = undefined;
-    const msg = std.fmt.bufPrintZ(&buf, fmt, args) catch "scene is not loadable";
-    log.warn("{s}", .{msg});
-    E.fail(out_error, .invalid_argument, msg, @src());
+/// A fault in what the scene says: logs it as a warning and returns the invalid-argument error the
+/// load fails with.
+fn structural(comptime fmt: []const u8, args: anytype) R.Error {
+    log.warn(fmt, args);
+    return error.InvalidArgument;
+}
+
+/// A failure that is not a fault of the scene: logs `msg` and returns `err`.
+fn refuse(err: R.Error, comptime msg: []const u8) R.Error {
+    log.warn(msg, .{});
+    return err;
 }
 
 /// Applies one component table of an entity through the field mapping or apply callback the world
@@ -131,35 +126,27 @@ fn applyComponentBlock(
     entity: c.ke_entity,
     comp_name: [*c]const u8,
     comp_tbl: *c.toml_table_t,
-    out_error: [*c][*c]c.ke_error,
-) bool {
+) R.Error!void {
     const world = s.world;
     const e = ecsOf(world) orelse {
-        structural(out_error, "world has no ecs", .{});
-        return false;
+        return structural("world has no ecs", .{});
     };
 
     var meta: c.ke_component_meta = undefined;
-    var resolve_error: [*c]c.ke_error = null;
-    if (!world.resolve_component.?(world, comp_name, &meta, &resolve_error)) {
-        const reason: [*c]const u8 = if (resolve_error != null and resolve_error.*.message != null) resolve_error.*.message else "unknown component";
-        structural(out_error, "scene names component '{s}': {s}", .{ comp_name, reason });
-        return false;
-    }
+    R.check(world.resolve_component.?(world, comp_name, &meta)) catch
+        return structural("scene names component '{s}', which the world cannot resolve", .{comp_name});
 
     var field_count: u32 = 0;
     const fields = world.get_component_fields.?(world, meta.cid, &field_count);
     var apply_ctx: ?*anyopaque = null;
     const apply_fn = world.get_component_apply.?(world, meta.cid, &apply_ctx);
     if (fields == null and apply_fn == null) {
-        structural(out_error, "component '{s}' has no field mapping registered", .{comp_name});
-        return false;
+        return structural("component '{s}' has no field mapping registered", .{comp_name});
     }
 
     const existing = e.component_get.?(e, entity, meta.cid);
     const comp = e.component_add.?(e, entity, meta.cid) orelse {
-        structural(out_error, "component '{s}' could not be added to the entity", .{comp_name});
-        return false;
+        return structural("component '{s}' could not be added to the entity", .{comp_name});
     };
     if (existing == null) {
         const bytes: [*]u8 = @ptrCast(comp);
@@ -168,34 +155,25 @@ fn applyComponentBlock(
     }
 
     const entries = values.buildEntries(&s.arena, comp_tbl) orelse {
-        structural(out_error, "component '{s}' block could not be read", .{comp_name});
-        return false;
+        return structural("component '{s}' block could not be read", .{comp_name});
     };
 
     if (fields != null) {
         if (fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count)) |refusing| {
-            structural(out_error, "component '{s}' field '{s}' cannot hold the value authored for it", .{ comp_name, refusing.name });
-            return false;
+            return structural("component '{s}' field '{s}' cannot hold the value authored for it", .{ comp_name, refusing.name });
         }
     }
     if (apply_fn) |f| {
-        var apply_error: [*c]c.ke_error = null;
-        if (!f(apply_ctx, comp, entries.ptr, @intCast(entries.len), &apply_error)) {
-            if (apply_error != null) {
-                if (out_error != null) out_error.* = apply_error;
-            } else {
-                structural(out_error, "component '{s}' was given a value it cannot hold", .{comp_name});
-            }
-            return false;
-        }
+        R.check(f(apply_ctx, comp, entries.ptr, @intCast(entries.len))) catch |err| {
+            log.warn("component '{s}' was given a value it cannot hold", .{comp_name});
+            return err;
+        };
     }
 
     for (entries) |*entry| {
         if (entry.consumed) continue;
-        structural(out_error, "component '{s}' has no field '{s}'", .{ comp_name, entry.key });
-        return false;
+        return structural("component '{s}' has no field '{s}'", .{ comp_name, entry.key });
     }
-    return true;
 }
 
 fn reservedBlockMiswritten(key: [*c]const u8) bool {
@@ -230,58 +208,48 @@ const format_version: i64 = 2;
 
 /// Accepts a file whose top level holds only the `[[entity]]` array and an optional `[scene]`
 /// table, and whose `[scene]` table holds only `version`, equal to `format_version`.
-fn checkHeader(root: *c.toml_table_t, out_error: [*c][*c]c.ke_error) bool {
+fn checkHeader(root: *c.toml_table_t) R.Error!void {
     var i: c_int = 0;
     while (c.toml_key_in(root, i)) |key| : (i += 1) {
         const k = std.mem.span(key);
         if (std.mem.eql(u8, k, "entity") or std.mem.eql(u8, k, "scene")) continue;
-        structural(out_error, "top-level key '{s}' is not entity or scene", .{k});
-        return false;
+        return structural("top-level key '{s}' is not entity or scene", .{k});
     }
-    const header = c.toml_table_in(root, "scene") orelse return true;
+    const header = c.toml_table_in(root, "scene") orelse return;
     var j: c_int = 0;
     while (c.toml_key_in(header, j)) |key| : (j += 1) {
         if (std.mem.eql(u8, std.mem.span(key), "version")) continue;
-        structural(out_error, "[scene] key '{s}' is not version", .{key});
-        return false;
+        return structural("[scene] key '{s}' is not version", .{key});
     }
     const version = c.toml_int_in(header, "version");
     if (version.ok != 0 and version.u.i != format_version) {
-        structural(out_error, "scene format version {d} is not {d}, the one this loader reads", .{ version.u.i, format_version });
-        return false;
+        return structural("scene format version {d} is not {d}, the one this loader reads", .{ version.u.i, format_version });
     }
-    return true;
 }
 
 fn applyComponentBlocks(
     s: *State,
     entity: c.ke_entity,
     tbl: *c.toml_table_t,
-    out_error: [*c][*c]c.ke_error,
-) bool {
+) R.Error!void {
     var i: c_int = 0;
     while (true) : (i += 1) {
         const key = c.toml_key_in(tbl, i) orelse break;
         const block = c.toml_table_in(tbl, key) orelse {
             if (entityKey(key)) continue;
-            structural(out_error, "entity key '{s}' is not name, parent, scene, type, connect or a component block", .{key});
-            return false;
+            return structural("entity key '{s}' is not name, parent, scene, type, connect or a component block", .{key});
         };
         if (retiredBlock(key)) |advice| {
-            structural(out_error, "[entity.{s}] is no longer read; {s}", .{ key, advice });
-            return false;
+            return structural("[entity.{s}] is no longer read; {s}", .{ key, advice });
         }
         if (reservedBlockMiswritten(key)) {
-            structural(out_error, "[entity.connect] declares nothing; a connection is written [[entity.connect]]", .{});
-            return false;
+            return structural("[entity.connect] declares nothing; a connection is written [[entity.connect]]", .{});
         }
         if (internalComponent(key)) {
-            structural(out_error, "component '{s}' is the scene tree's own and cannot be authored", .{key});
-            return false;
+            return structural("component '{s}' is the scene tree's own and cannot be authored", .{key});
         }
-        if (!applyComponentBlock(s, entity, key, block, out_error)) return false;
+        try applyComponentBlock(s, entity, key, block);
     }
-    return true;
 }
 
 /// Makes the connections one entity table declares. It runs only after every entity of its file
@@ -292,14 +260,12 @@ fn applyConnections(
     source: c.ke_entity,
     entity_tbl: *c.toml_table_t,
     names: *const NameMap,
-    out_error: [*c][*c]c.ke_error,
-) bool {
-    const arr = c.toml_array_in(entity_tbl, "connect") orelse return true;
+) R.Error!void {
+    const arr = c.toml_array_in(entity_tbl, "connect") orelse return;
     const world = s.world;
 
     const bus = world_impl.signalBusOf(world) orelse {
-        structural(out_error, "scene declares signal connections but the world has no signal bus", .{});
-        return false;
+        return structural("scene declares signal connections but the world has no signal bus", .{});
     };
 
     const n = c.toml_array_nelem(arr);
@@ -313,19 +279,16 @@ fn applyConnections(
         defer if (target_d.ok != 0) std.c.free(target_d.u.s);
 
         if (signal_d.ok == 0 or target_d.ok == 0) {
-            structural(out_error, "a connect block needs both a signal and a target", .{});
-            return false;
+            return structural("a connect block needs both a signal and a target", .{});
         }
 
         const target = switch (names.find(std.mem.span(target_d.u.s))) {
             .one => |e| e,
             .none => {
-                structural(out_error, "connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
-                return false;
+                return structural("connect targets '{s}', which this scene declares no entity for", .{target_d.u.s});
             },
             .ambiguous => {
-                structural(out_error, "connect targets '{s}', which more than one entity of this scene is named", .{target_d.u.s});
-                return false;
+                return structural("connect targets '{s}', which more than one entity of this scene is named", .{target_d.u.s});
             },
         };
 
@@ -333,23 +296,20 @@ fn applyConnections(
         const handler_d = c.toml_int_in(t, "handler");
         if (handler_d.ok != 0) {
             handler = std.math.cast(u32, handler_d.u.i) orelse {
-                structural(out_error, "connect handler {d} is not between 0 and {d}", .{ handler_d.u.i, std.math.maxInt(u32) });
-                return false;
+                return structural("connect handler {d} is not between 0 and {d}", .{ handler_d.u.i, std.math.maxInt(u32) });
             };
         }
 
         var signal_id: u32 = 0;
         if (!bus.signal_lookup.?(bus, signal_d.u.s, &signal_id)) {
-            structural(out_error, "connects the signal '{s}', which no node type declares", .{signal_d.u.s});
-            return false;
+            return structural("connects the signal '{s}', which no node type declares", .{signal_d.u.s});
         }
-        if (!bus.connect.?(bus, source, signal_id, target, handler, null)) {
-            structural(out_error, "could not connect signal '{s}'", .{signal_d.u.s});
-            return false;
-        }
+        R.check(bus.connect.?(bus, source, signal_id, target, handler)) catch |err| {
+            log.warn("could not connect signal '{s}'", .{signal_d.u.s});
+            return err;
+        };
         log.info("connected '{s}' from entity {d} to entity {d}", .{ signal_d.u.s, source, target });
     }
-    return true;
 }
 
 /// The inputs to `processEntity` for one entity. The three override fields are set only for the
@@ -372,27 +332,24 @@ const ProcessArgs = struct {
 /// about the entity's "type" through `dispatchScript`, the type of the referencing entity after
 /// the subscene's own. A node is recorded in `created` as soon as it exists. The entity's name
 /// enters the file's name map only after its components and its script type have been applied.
-/// An entity with no name and no override fails as an invalid argument, an unknown "parent" as
-/// not found, and a failed node creation or record as out of memory.
+/// An entity with no name and no override, or an unknown "parent", fails as an invalid argument, a
+/// refused node with the tree's code, and a failed record as out of memory.
 fn processEntity(
     s: *State,
     args: ProcessArgs,
     out_entity: *c.ke_entity,
-    out_error: [*c][*c]c.ke_error,
-) bool {
+) R.Error!void {
     const name_d = c.toml_string_in(args.entity_tbl, "name");
     defer if (name_d.ok != 0) std.c.free(name_d.u.s);
 
     if (name_d.ok == 0 and args.override_name == null) {
-        E.fail(out_error, .invalid_argument, "entity missing name", @src());
-        return false;
+        return refuse(error.InvalidArgument, "entity missing name");
     }
     const effective_name: [*c]const u8 = if (args.override_name) |n| n else name_d.u.s;
 
     const world = s.world;
     const tree = treeOf(world) orelse {
-        E.fail(out_error, .not_initialized, "world has no scene tree", @src());
-        return false;
+        return refuse(error.NotInitialized, "world has no scene tree");
     };
     var parent = if (args.attach_parent_override != c.KE_ENTITY_INVALID)
         args.attach_parent_override
@@ -405,12 +362,10 @@ fn processEntity(
         parent = switch (args.names.find(std.mem.span(pn.u.s))) {
             .one => |e| e,
             .none => {
-                structural(out_error, "parent '{s}' is not an entity declared before it in this scene", .{pn.u.s});
-                return false;
+                return structural("parent '{s}' is not an entity declared before it in this scene", .{pn.u.s});
             },
             .ambiguous => {
-                structural(out_error, "parent '{s}' names more than one entity of this scene", .{pn.u.s});
-                return false;
+                return structural("parent '{s}' names more than one entity of this scene", .{pn.u.s});
             },
         };
     }
@@ -418,62 +373,56 @@ fn processEntity(
     const scene_ref = c.toml_string_in(args.entity_tbl, "scene");
     if (scene_ref.ok != 0) {
         var resolved_buf: [std.fs.max_path_bytes]u8 = undefined;
-        const resolved = resolvePath(s, args.base_dir, scene_ref.u.s, &resolved_buf, out_error);
-        std.c.free(scene_ref.u.s);
-        if (!resolved) return false;
+        defer std.c.free(scene_ref.u.s);
+        try resolvePath(s, args.base_dir, scene_ref.u.s, &resolved_buf);
         const resolved_path: [*:0]const u8 = @ptrCast(&resolved_buf);
 
         var nested_root: c.ke_entity = c.KE_ENTITY_INVALID;
-        if (!loadSceneRecursive(
+        try loadSceneRecursive(
             s,
             resolved_path,
             parent,
             effective_name,
             args.entity_tbl,
             &nested_root,
-            out_error,
-        )) return false;
+        );
 
-        if (name_d.ok != 0 and !args.names.put(name_d.u.s, nested_root, out_error)) return false;
+        if (name_d.ok != 0) try args.names.put(name_d.u.s, nested_root);
         out_entity.* = nested_root;
-        return true;
+        return;
     }
 
-    const entity = tree.create_node.?(tree, effective_name, parent, out_error);
-    if (entity == c.KE_ENTITY_INVALID) {
-        E.fail(out_error, .out_of_memory, "failed to create node", @src());
-        return false;
-    }
+    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    R.check(tree.create_node.?(tree, effective_name, parent, &entity)) catch |err| {
+        log.warn("the scene tree refused the node '{s}'", .{effective_name});
+        return err;
+    };
     s.created.append(heap.gpa, entity) catch {
-        _ = tree.destroy_node.?(tree, entity, null);
-        E.fail(out_error, .out_of_memory, "failed to record the node it created", @src());
-        return false;
+        _ = tree.destroy_node.?(tree, entity);
+        return refuse(error.OutOfMemory, "failed to record the node it created");
     };
 
-    if (!applyComponentBlocks(s, entity, args.entity_tbl, out_error)) return false;
+    try applyComponentBlocks(s, entity, args.entity_tbl);
     if (args.override_outer) |outer| {
-        if (!applyComponentBlocks(s, entity, outer, out_error)) return false;
+        try applyComponentBlocks(s, entity, outer);
     }
 
     const type_d = c.toml_string_in(args.entity_tbl, "type");
     if (type_d.ok != 0) {
-        const dispatched = dispatchScript(s, entity, type_d.u.s, out_error);
-        std.c.free(type_d.u.s);
-        if (!dispatched) return false;
+        defer std.c.free(type_d.u.s);
+        try dispatchScript(s, entity, type_d.u.s);
     }
 
     if (args.override_outer) |outer| {
         const outer_type = c.toml_string_in(outer, "type");
         if (outer_type.ok != 0) {
-            const dispatched = dispatchScript(s, entity, outer_type.u.s, out_error);
-            std.c.free(outer_type.u.s);
-            if (!dispatched) return false;
+            defer std.c.free(outer_type.u.s);
+            try dispatchScript(s, entity, outer_type.u.s);
         }
     }
 
-    if (name_d.ok != 0 and !args.names.put(name_d.u.s, entity, out_error)) return false;
+    if (name_d.ok != 0) try args.names.put(name_d.u.s, entity);
     out_entity.* = entity;
-    return true;
 }
 
 /// Loads one scene file in two passes: it parses the file and runs `processEntity` over its
@@ -489,28 +438,25 @@ fn loadSceneRecursive(
     override_name: ?[*:0]const u8,
     override_outer: ?*c.toml_table_t,
     out_root: ?*c.ke_entity,
-    out_error: [*c][*c]c.ke_error,
-) bool {
+) R.Error!void {
     const fp = std.c.fopen(path, "rb") orelse {
-        E.fail(out_error, .not_found, "scene file not found", @src());
-        return false;
+        return refuse(error.NotFound, "scene file not found");
     };
     var errbuf: [200]u8 = undefined;
     const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
     _ = std.c.fclose(fp);
     if (root == null) {
-        E.fail(out_error, .io, "failed to parse scene file", @src());
-        return false;
+        return refuse(error.Io, "failed to parse scene file");
     }
     defer c.toml_free(root);
 
-    if (!checkHeader(root.?, out_error)) return false;
+    try checkHeader(root.?);
 
     const base_dir = pathDirname(std.mem.span(path));
 
     const entities = c.toml_array_in(root, "entity") orelse {
         if (out_root) |r| r.* = c.KE_ENTITY_INVALID;
-        return true;
+        return;
     };
 
     var names: NameMap = .{ .arena = &s.arena };
@@ -543,7 +489,7 @@ fn loadSceneRecursive(
             .override_outer = null,
         };
 
-        if (!processEntity(s, args, &ent, out_error)) return false;
+        try processEntity(s, args, &ent);
         if (created) |slots| slots[@intCast(i)] = ent;
         if (is_first) {
             first_root = ent;
@@ -555,36 +501,30 @@ fn loadSceneRecursive(
         var j: c_int = 0;
         while (j < n) : (j += 1) {
             const et = c.toml_table_at(entities, j) orelse continue;
-            if (!applyConnections(s, slots[@intCast(j)], et, &names, out_error)) return false;
+            try applyConnections(s, slots[@intCast(j)], et, &names);
         }
     }
 
     if (out_root) |r| r.* = first_root;
-    return true;
 }
 
 /// Slot `load`. Fails as an invalid argument on a null loader or path, and with whatever
-/// `loadSceneRecursive` reports; a failed load removes the nodes it made through `discardCreated`
-/// before it returns false, so a load leaves either all of its nodes or none. The arena is not
-/// reset, so what a failed load read stays allocated until `vtDestroy`.
+/// `loadSceneRecursive` fails with; a failed load removes the nodes it made through
+/// `discardCreated` before it returns, so a load leaves either all of its nodes or none. The arena
+/// is not reset, so what a failed load read stays allocated until `vtDestroy`.
 fn vtLoad(
     self_in: ?*c.ke_scene_loader,
     path: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null or path == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     s.created.clearRetainingCapacity();
-    if (loadSceneRecursive(s, path, c.KE_ENTITY_INVALID, null, null, null, out_error)) return true;
-    discardCreated(s);
-    return false;
+    loadSceneRecursive(s, path, c.KE_ENTITY_INVALID, null, null, null) catch |err| {
+        discardCreated(s);
+        return R.code(err);
+    };
+    return R.ok;
 }
 
 /// Destroys every node in `created`, the most recently recorded first, then empties the list. A
@@ -594,7 +534,7 @@ fn discardCreated(s: *State) void {
     var i = s.created.items.len;
     while (i > 0) {
         i -= 1;
-        _ = tree.destroy_node.?(tree, s.created.items[i], null);
+        _ = tree.destroy_node.?(tree, s.created.items[i]);
     }
     s.created.clearRetainingCapacity();
 }
@@ -605,20 +545,13 @@ fn vtRegisterScriptFactory(
     self_in: ?*c.ke_scene_loader,
     factory: c.ke_script_factory_func,
     ctx: ?*anyopaque,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null or factory == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or factory == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     s.script_factory = factory;
     s.script_ctx = ctx;
-    return true;
+    return R.ok;
 }
 
 /// The handle's destroy. Releases the arena, so every pointer a load read is invalid afterwards.
@@ -633,27 +566,19 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
 }
 
 /// Factory. Builds a loader over the given world, resolving "res://" references through the given
-/// asset resolver. A null world or resolver fails as an invalid argument and a failed allocation as
-/// out of memory; each returns a null handle.
+/// asset resolver. A null world, resolver or out-parameter fails as an invalid argument and a
+/// failed allocation as out of memory; each leaves the handle zeroed.
 export fn ke_scene_loader_create(
     world_in: ?*c.ke_world,
     assets_in: ?*c.ke_asset_resolver,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_scene_loader_handle {
-    const null_handle = std.mem.zeroes(c.ke_scene_loader_handle);
-    const world = world_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return null_handle;
-    };
-    const assets = assets_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return null_handle;
-    };
+    out_loader: ?*c.ke_scene_loader_handle,
+) callconv(.c) c.ke_result {
+    const out = out_loader orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(c.ke_scene_loader_handle);
+    const world = world_in orelse return R.code(error.InvalidArgument);
+    const assets = assets_in orelse return R.code(error.InvalidArgument);
 
-    const s = heap.gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return null_handle;
-    };
+    const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{
         .api = std.mem.zeroes(c.ke_scene_loader),
         .world = world,
@@ -668,7 +593,8 @@ export fn ke_scene_loader_create(
     s.api.load = vtLoad;
     s.api.register_script_factory = vtRegisterScriptFactory;
 
-    return .{ .ref = &s.api, .destroy = vtDestroy };
+    out.* = .{ .ref = &s.api, .destroy = vtDestroy };
+    return R.ok;
 }
 
 const testing = std.testing;
@@ -726,27 +652,29 @@ fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
 fn fakeComponentRegister(
     self: ?*c.ke_ecs,
     params: [*c]const c.ke_component_params,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_component_id {
-    _ = out_error;
+    out_cid: [*c]c.ke_component_id,
+) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(params.*.name);
     for (f.components[0..f.component_count], 0..) |comp, i| {
-        if (std.mem.eql(u8, comp.name, wanted)) return @intCast(i + 1);
+        if (std.mem.eql(u8, comp.name, wanted)) return answer(out_cid, @intCast(i + 1));
     }
-    if (f.component_count >= fake_max_components) return 0;
+    if (f.component_count >= fake_max_components) return answer(out_cid, 0);
     f.components[f.component_count] = .{ .name = wanted, .size = params.*.size };
     f.component_count += 1;
-    return @intCast(f.component_count);
+    return answer(out_cid, @intCast(f.component_count));
+}
+
+fn answer(out_cid: [*c]c.ke_component_id, cid: c.ke_component_id) c.ke_result {
+    out_cid.* = cid;
+    return if (cid == 0) R.code(error.InvalidArgument) else R.ok;
 }
 
 fn fakeComponentLookup(
     self: ?*c.ke_ecs,
     name: [*c]const u8,
     out_meta: [*c]c.ke_component_meta,
-    out_error: [*c][*c]c.ke_error,
 ) callconv(.c) bool {
-    _ = out_error;
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(name);
     for (f.components[0..f.component_count], 0..) |comp, i| {
@@ -819,11 +747,10 @@ fn demoApply(
     ptr: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
     n: u32,
-    _: [*c][*c]c.ke_error,
-) callconv(.c) bool {
+) callconv(.c) c.ke_result {
     if (ctx) |seen| @as(*bool, @ptrCast(seen)).* = true;
     const d: *DemoComponent = @ptrCast(@alignCast(ptr));
-    if (n == 0) return true;
+    if (n == 0) return R.ok;
     for (e[0..n]) |*entry| {
         if (entry.key == null) continue;
         const key = std.mem.span(entry.key);
@@ -839,7 +766,7 @@ fn demoApply(
             entry.consumed = true;
         }
     }
-    return true;
+    return R.ok;
 }
 
 const ScriptSpy = struct {
@@ -852,9 +779,7 @@ fn spyFactory(
     ctx: ?*anyopaque,
     entity: c.ke_entity,
     type_name: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    _ = out_error;
+) callconv(.c) c.ke_result {
     const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
     spy.calls += 1;
     spy.last_entity = entity;
@@ -862,7 +787,7 @@ fn spyFactory(
     const n = @min(name.len, spy.last_type.len - 1);
     @memcpy(spy.last_type[0..n], name[0..n]);
     spy.last_type[n] = 0;
-    return true;
+    return R.ok;
 }
 
 const TempScene = struct {
@@ -920,13 +845,11 @@ const Fixture = struct {
 
         self.runtime = std.mem.zeroes(c.ke_runtime);
 
-        self.tree_h = c.ke_scene_tree_create(&self.ecs.vtable, null, null);
-        try testing.expect(self.tree_h.ref != null);
+        try testing.expectEqual(R.ok, c.ke_scene_tree_create(&self.ecs.vtable, null, &self.tree_h));
 
         self.bus_h = std.mem.zeroes(c.ke_signal_bus_handle);
         if (with_signal_bus) {
-            self.bus_h = signal_bus_impl.ke_signal_bus_create(null, null);
-            try testing.expect(self.bus_h.ref != null);
+            try testing.expectEqual(R.ok, signal_bus_impl.ke_signal_bus_create(null, &self.bus_h));
         }
 
         var params = std.mem.zeroes(c.ke_world_params);
@@ -934,8 +857,7 @@ const Fixture = struct {
         params.runtime = &self.runtime;
         params.scene_tree = self.tree_h.ref;
         params.signal_bus = self.bus_h.ref;
-        self.world_h = c.ke_world_create(&params, null);
-        try testing.expect(self.world_h.ref != null);
+        try testing.expectEqual(R.ok, c.ke_world_create(&params, &self.world_h));
 
         self.describe(rc.KE_COMPONENT_NAME_CAMERA, @sizeOf(rc.ke_camera_component), generatedFields(&rc.ke_camera_component_fields), rc.ke_camera_component_fields.len);
         self.describe(rc.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(rc.ke_directional_light_component), generatedFields(&rc.ke_directional_light_component_fields), rc.ke_directional_light_component_fields.len);
@@ -955,10 +877,8 @@ const Fixture = struct {
     fn rootAt(self: *Fixture, root: [*c]const u8) !void {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
         if (self.assets_h.destroy) |d| d(self.assets_h.ref);
-        self.assets_h = c.ke_asset_resolver_create(null, null, root, null);
-        try testing.expect(self.assets_h.ref != null);
-        self.loader_h = ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, null);
-        try testing.expect(self.loader_h.ref != null);
+        try testing.expectEqual(R.ok, c.ke_asset_resolver_create(null, null, root, &self.assets_h));
+        try testing.expectEqual(R.ok, ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, &self.loader_h));
     }
 
     fn describe(
@@ -969,9 +889,10 @@ const Fixture = struct {
         field_count: usize,
     ) void {
         const e = &self.ecs.vtable;
-        const cid = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = size, .alignment = 0, .fields = null, .field_count = 0 }, null);
+        var cid: c.ke_component_id = 0;
+        _ = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = size, .alignment = 0, .fields = null, .field_count = 0 }, &cid);
         const w = self.world_h.ref.?;
-        _ = w.*.register_component_fields.?(w, cid, fields, @intCast(field_count), null);
+        _ = w.*.register_component_fields.?(w, cid, fields, @intCast(field_count));
     }
 
     fn deinit(self: *Fixture) void {
@@ -988,23 +909,22 @@ const Fixture = struct {
     }
 
     fn load(self: *Fixture, path: [*:0]const u8) bool {
-        const l = self.loader();
-        return l.load.?(l, path, null);
+        return self.loadCode(path) == R.ok;
     }
 
-    fn loadReporting(self: *Fixture, path: [*:0]const u8, out_error: *[*c]c.ke_error) bool {
+    fn loadCode(self: *Fixture, path: [*:0]const u8) c.ke_result {
         const l = self.loader();
-        return l.load.?(l, path, out_error);
+        return l.load.?(l, path);
     }
 
     fn find(self: *Fixture, path: [*c]const u8) c.ke_entity {
         const t = self.tree_h.ref.?;
-        return t.*.find_node.?(t, path, null);
+        return t.*.find_node.?(t, path);
     }
 
     fn comp(self: *Fixture, comptime T: type, name: [*c]const u8, entity: c.ke_entity) ?*T {
         var meta: c.ke_component_meta = undefined;
-        if (!fakeComponentLookup(&self.ecs.vtable, name, &meta, null)) return null;
+        if (!fakeComponentLookup(&self.ecs.vtable, name, &meta)) return null;
         return @ptrCast(@alignCast(fakeComponentGet(&self.ecs.vtable, entity, meta.cid)));
     }
 
@@ -1015,13 +935,13 @@ const Fixture = struct {
     fn declaredSignal(self: *Fixture, name: [*c]const u8) !u32 {
         const b = self.bus();
         var id: u32 = 0;
-        try testing.expect(b.signal_id.?(b, name, 0, &id, null));
+        try testing.expectEqual(R.ok, b.signal_id.?(b, name, 0, &id));
         return id;
     }
 
     fn emitFrom(self: *Fixture, source: c.ke_entity, signal: u32) !void {
         const b = self.bus();
-        try testing.expect(b.emit.?(b, source, signal, null, 0, null));
+        try testing.expectEqual(R.ok, b.emit.?(b, source, signal, null, 0));
     }
 
     fn delivered(self: *Fixture) []const c.ke_signal_delivery {
@@ -1051,13 +971,13 @@ test "a misspelt key on an entity fails the load" {
         \\name = "Player"
         \\tpye = "camera"
         \\
-    , "entity key 'tpye' is not name, parent, scene, type, connect or a component block");
+    );
 }
 
 test "a scene header with another version, another key, or a stray top-level key fails the load" {
-    try expectSceneRefused("[scene]\nversion = 3\n", "scene format version 3 is not 2");
-    try expectSceneRefused("[scene]\nname = \"Main\"\n", "[scene] key 'name' is not version");
-    try expectSceneRefused("[level]\nversion = 2\n", "top-level key 'level' is not entity or scene");
+    try expectSceneRefused("[scene]\nversion = 3\n");
+    try expectSceneRefused("[scene]\nname = \"Main\"\n");
+    try expectSceneRefused("[level]\nversion = 2\n");
 }
 
 test "a scene file that is not there fails the load" {
@@ -1638,9 +1558,7 @@ test "a component nobody registered fails the load" {
         \\
     );
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(err != null);
+    try testing.expect(f.loadCode(try scene.cPath("main.scene.toml")) != R.ok);
 }
 
 test "a field a known component does not have fails the load" {
@@ -1659,9 +1577,7 @@ test "a field a known component does not have fails the load" {
         \\
     );
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(err != null);
+    try testing.expect(f.loadCode(try scene.cPath("main.scene.toml")) != R.ok);
 }
 
 test "a component the scene tree owns cannot be authored" {
@@ -1683,9 +1599,7 @@ test "a component the scene tree owns cannot be authored" {
         \\
     );
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(err != null);
+    try testing.expect(f.loadCode(try scene.cPath("main.scene.toml")) != R.ok);
 }
 
 test "the retired components nesting is refused rather than read" {
@@ -1703,9 +1617,7 @@ test "the retired components nesting is refused rather than read" {
         \\
     );
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(err != null);
+    try testing.expect(f.loadCode(try scene.cPath("main.scene.toml")) != R.ok);
 }
 
 test "the script factory receives the entity and the normalized type name" {
@@ -1715,7 +1627,7 @@ test "the script factory receives the entity and the normalized type name" {
 
     var spy: ScriptSpy = .{};
     const l = f.loader();
-    try testing.expect(l.register_script_factory.?(l, spyFactory, &spy, null));
+    try testing.expectEqual(R.ok, l.register_script_factory.?(l, spyFactory, &spy));
 
     var scene = TempScene.init();
     defer scene.deinit();
@@ -1736,28 +1648,24 @@ fn rejectingFactory(
     ctx: ?*anyopaque,
     entity: c.ke_entity,
     type_name: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
+) callconv(.c) c.ke_result {
     _ = entity;
     _ = type_name;
-    _ = out_error;
     const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
     spy.calls += 1;
-    return false;
+    return R.code(error.General);
 }
 
 fn reportingFactory(
     ctx: ?*anyopaque,
     entity: c.ke_entity,
     type_name: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
+) callconv(.c) c.ke_result {
     _ = entity;
     _ = type_name;
     const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
     spy.calls += 1;
-    E.fail(out_error, .not_found, "no script is registered under that type", @src());
-    return false;
+    return R.code(error.NotFound);
 }
 
 test "a factory that rejects an entity fails the load instead of being discarded" {
@@ -1767,7 +1675,7 @@ test "a factory that rejects an entity fails the load instead of being discarded
 
     var spy: ScriptSpy = .{};
     const l = f.loader();
-    try testing.expect(l.register_script_factory.?(l, rejectingFactory, &spy, null));
+    try testing.expectEqual(R.ok, l.register_script_factory.?(l, rejectingFactory, &spy));
 
     var scene = TempScene.init();
     defer scene.deinit();
@@ -1778,20 +1686,18 @@ test "a factory that rejects an entity fails the load instead of being discarded
         \\
     );
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
+    try testing.expect(f.loadCode(try scene.cPath("main.scene.toml")) != R.ok);
     try testing.expectEqual(@as(i32, 1), spy.calls);
-    try testing.expect(err != null);
 }
 
-test "a factory's own error reaches the caller rather than being replaced" {
+test "a factory's own code reaches the caller rather than being replaced" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
 
     var spy: ScriptSpy = .{};
     const l = f.loader();
-    try testing.expect(l.register_script_factory.?(l, reportingFactory, &spy, null));
+    try testing.expectEqual(R.ok, l.register_script_factory.?(l, reportingFactory, &spy));
 
     var scene = TempScene.init();
     defer scene.deinit();
@@ -1802,14 +1708,7 @@ test "a factory's own error reaches the caller rather than being replaced" {
         \\
     );
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(err != null);
-    try testing.expectEqualStrings(
-        "no script is registered under that type",
-        std.mem.span(err.*.message),
-    );
-    try testing.expectEqual(E.typeOf(.not_found), @as(*const c.ke_error_type, @ptrCast(err.*.type)));
+    try testing.expectEqual(R.code(error.NotFound), f.loadCode(try scene.cPath("main.scene.toml")));
 }
 
 test "a scene authoring a dotted type reaches the factory in snake case" {
@@ -1819,7 +1718,7 @@ test "a scene authoring a dotted type reaches the factory in snake case" {
 
     var spy: ScriptSpy = .{};
     const l = f.loader();
-    try testing.expect(l.register_script_factory.?(l, spyFactory, &spy, null));
+    try testing.expectEqual(R.ok, l.register_script_factory.?(l, spyFactory, &spy));
 
     var scene = TempScene.init();
     defer scene.deinit();
@@ -1858,11 +1757,12 @@ test "a user component is applied through the callback its owner registered" {
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    const demo_cid = e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, null);
+    var demo_cid: c.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
     var saw_ctx = false;
-    try testing.expect(w.*.register_component_apply.?(w, demo_cid, demoApply, &saw_ctx, null));
+    try testing.expectEqual(R.ok, w.*.register_component_apply.?(w, demo_cid, demoApply, &saw_ctx));
 
     var scene = TempScene.init();
     defer scene.deinit();
@@ -1890,23 +1790,22 @@ fn rejectingApply(
     _: ?*anyopaque,
     e: [*c]c.ke_variant_table_entry,
     n: u32,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
+) callconv(.c) c.ke_result {
     for (e[0..n]) |*entry| entry.consumed = true;
-    E.fail(out_error, .invalid_argument, "fov is measured in degrees, not in fathoms", @src());
-    return false;
+    return R.code(error.NotSupported);
 }
 
-test "the reason an apply callback rejects a value reaches the caller instead of a generic one" {
+test "the code an apply callback rejects a value with reaches the caller instead of a generic one" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    const demo_cid = e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, null);
+    var demo_cid: c.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
-    try testing.expect(w.*.register_component_apply.?(w, demo_cid, rejectingApply, null, null));
+    try testing.expectEqual(R.ok, w.*.register_component_apply.?(w, demo_cid, rejectingApply, null));
 
     var scene = TempScene.init();
     defer scene.deinit();
@@ -1918,49 +1817,7 @@ test "the reason an apply callback rejects a value reaches the caller instead of
         \\
     );
 
-    var err: [*c]c.ke_error = null;
-    const loader = f.loader_h.ref.?;
-    try testing.expect(!loader.*.load.?(loader, try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(err != null);
-    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "fathoms") != null);
-}
-
-noinline fn clobberStack(depth: u32) void {
-    var junk: [1024]u8 = undefined;
-    @memset(&junk, 'X');
-    std.mem.doNotOptimizeAway(&junk);
-    if (depth > 0) clobberStack(depth - 1);
-    std.mem.doNotOptimizeAway(&junk);
-}
-
-test "the message of a structural scene error survives the stack that formatted it" {
-    var f: Fixture = undefined;
-    try f.init();
-    defer f.deinit();
-
-    var scene = TempScene.init();
-    defer scene.deinit();
-    try scene.put("main.scene.toml",
-        \\[[entity]]
-        \\name = "Test"
-        \\[entity.nobody_registered_this]
-        \\x = 1
-        \\
-    );
-
-    var err: [*c]c.ke_error = null;
-    const loader = f.loader_h.ref.?;
-    try testing.expect(!loader.*.load.?(loader, try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(err != null);
-    clobberStack(64);
-    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "nobody_registered_this") != null);
-}
-
-test "an error raised from Zig is recognised by ke_error_is as its own type and its category" {
-    var err: [*c]c.ke_error = null;
-    E.fail(&err, .not_found, "gone", @src());
-    try testing.expect(c.ke_error_is(err, &c.KE_ERROR_NOT_FOUND));
-    try testing.expect(!c.ke_error_is(err, &c.KE_ERROR_IO));
+    try testing.expectEqual(R.code(error.NotSupported), f.loadCode(try scene.cPath("main.scene.toml")));
 }
 
 test "a value of the wrong type for a known field fails the load instead of being skipped" {
@@ -1978,10 +1835,7 @@ test "a value of the wrong type for a known field fails the load instead of bein
         \\
     );
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(err != null);
-    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), "fov") != null);
+    try testing.expectEqual(R.code(error.InvalidArgument), f.loadCode(try scene.cPath("main.scene.toml")));
 }
 
 test "a scene that fails to load leaves none of the entities it had already created" {
@@ -2011,11 +1865,14 @@ test "a scene that fails to load leaves none of the entities it had already crea
 }
 
 test "a loader is never created without a world or an asset resolver" {
-    try testing.expect(ke_scene_loader_create(null, null, null).ref == null);
+    var h: c.ke_scene_loader_handle = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(null, null, &h));
+    try testing.expect(h.ref == null);
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
-    try testing.expect(ke_scene_loader_create(f.world_h.ref, null, null).ref == null);
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(f.world_h.ref, null, &h));
+    try testing.expect(h.ref == null);
 }
 
 test "destroying a null loader is safe" {
@@ -2117,7 +1974,7 @@ test "a connection between two entities in the same scene reaches the bus" {
     try testing.expectEqual(@as(u32, 7), list[0].handler_id);
 }
 
-fn expectSceneRefused(text: [:0]const u8, expected: []const u8) !void {
+fn expectSceneRefused(text: [:0]const u8) !void {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
@@ -2125,9 +1982,7 @@ fn expectSceneRefused(text: [:0]const u8, expected: []const u8) !void {
     defer scene.deinit();
     try scene.put("main.scene.toml", text);
     _ = try f.declaredSignal("Poke");
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.loadReporting(try scene.cPath("main.scene.toml"), &err));
-    try testing.expect(std.mem.indexOf(u8, std.mem.span(err.*.message), expected) != null);
+    try testing.expectEqual(R.code(error.InvalidArgument), f.loadCode(try scene.cPath("main.scene.toml")));
 }
 
 test "two entities may share a name that nothing refers to" {
@@ -2159,7 +2014,7 @@ test "a parent or a connect target that names two entities is refused" {
         \\name = "Child"
         \\parent = "Twin"
         \\
-    , "parent 'Twin' names more than one entity");
+    );
     try expectSceneRefused(
         \\[[entity]]
         \\name = "Emitter"
@@ -2173,7 +2028,7 @@ test "a parent or a connect target that names two entities is refused" {
         \\[[entity]]
         \\name = "Twin"
         \\
-    , "connect targets 'Twin', which more than one entity");
+    );
 }
 
 test "a connect handler outside the range of a u32 is refused" {
@@ -2188,7 +2043,7 @@ test "a connect handler outside the range of a u32 is refused" {
         \\[[entity]]
         \\name = "Listener"
         \\
-    , "connect handler -1 is not between 0 and");
+    );
 }
 
 test "a connect block that names no handler wires handler zero" {

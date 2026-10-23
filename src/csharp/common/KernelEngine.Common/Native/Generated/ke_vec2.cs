@@ -1,3 +1,5 @@
+using KernelEngine.Result.Native;
+
 namespace KernelEngine.Common.Native;
 
 public partial struct ke_vec2

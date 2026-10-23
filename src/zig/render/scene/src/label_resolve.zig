@@ -1,6 +1,7 @@
 //! Gives each label component the font it names, making one attempt per label.
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
 
 const std = @import("std");
 
@@ -46,7 +47,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     };
 
     var data: ?*c.ke_font_data = null;
-    if (!resolver.resolve_font.?(resolver, &l.font, l.font_size, first_codepoint, codepoint_count, atlas_size, &data, null)) {
+    if (resolver.resolve_font.?(resolver, &l.font, l.font_size, first_codepoint, codepoint_count, atlas_size, &data) != c.KE_OK) {
         reportUnresolved(path, "the asset resolver could not read it");
         return c.KE_UI_FONT_FAILED;
     }
@@ -56,14 +57,14 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     };
     defer resolver.free_font.?(resolver, d);
 
-    const atlas = st.core.upload_texture.?(st.core, key.ptr, d.atlas_width, d.atlas_height, d.atlas_rgba, null);
-    if (atlas.bits == c.KE_HANDLE_NONE) {
+    var atlas: c.ke_texture_handle = c.KE_TEXTURE_NONE;
+    if (st.core.upload_texture.?(st.core, key.ptr, d.atlas_width, d.atlas_height, d.atlas_rgba, &atlas) != c.KE_OK) {
         reportUnresolved(path, "its glyph atlas could not be uploaded");
         return c.KE_UI_FONT_FAILED;
     }
 
-    const font = st.ui.load_font.?(st.ui, key.ptr, atlas, d.glyphs, d.glyph_count, d.line_height, d.ascent, null);
-    if (font.bits == c.KE_HANDLE_NONE) {
+    var font: c.ke_ui_font_handle = c.KE_UI_FONT_NONE;
+    if (st.ui.load_font.?(st.ui, key.ptr, atlas, d.glyphs, d.glyph_count, d.line_height, d.ascent, &font) != c.KE_OK) {
         reportUnresolved(path, "the ui service refused to register it");
         return c.KE_UI_FONT_FAILED;
     }
@@ -72,9 +73,9 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
 
 /// Runs in the update phase over the label view. A failure is logged by `reportUnresolved` and
 /// yields the failed-font handle, which is not retried. Afterwards every label that named a font
-/// and had no handle holds either the registered font or the failed-font handle. It always returns
-/// true and sets no error, since each failure is logged by `bake` instead.
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+/// and had no handle holds either the registered font or the failed-font handle. It always
+/// succeeds, since each failure is logged by `bake` instead.
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
@@ -89,7 +90,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
             l.font_handle = bake(st, l);
         }
     }
-    return true;
+    return R.ok;
 }
 
 const testing = std.testing;

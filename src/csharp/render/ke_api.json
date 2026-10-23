@@ -347,10 +347,10 @@
       "slots": [
         {
           "name": "declare",
-          "returns": "ke_component_id",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Declares a transient resource the service allocates and recycles.",
-          "return_doc": "The tag-component cid to place in a pass\u0027s access_list.",
+          "return_doc": null,
           "params": [
             {
               "name": "params",
@@ -359,20 +359,22 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the tag-component cid to place in a pass\u0027s access_list."
             }
           ],
           "receiver": "struct ke_render_service *"
         },
         {
           "name": "import_texture",
-          "returns": "ke_component_id",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Imports an externally-owned texture under \u0060name\u0060.",
-          "return_doc": "Its tag-component cid.",
+          "return_doc": null,
           "params": [
             {
               "name": "name",
@@ -387,17 +389,19 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives its tag-component cid."
             }
           ],
           "receiver": "struct ke_render_service *"
         },
         {
           "name": "import_tag",
-          "returns": "ke_component_id",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Mints a tag cid under \u0060name\u0060 with no GPU payload.",
           "return_doc": null,
@@ -409,17 +413,19 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the cid."
             }
           ],
           "receiver": "struct ke_render_service *"
         },
         {
           "name": "import_buffer",
-          "returns": "ke_component_id",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Publishes an externally-owned GPU buffer under \u0060name\u0060 for another pass to bind by name.",
           "return_doc": null,
@@ -443,10 +449,12 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives its tag-component cid."
             }
           ],
           "receiver": "struct ke_render_service *"
@@ -501,42 +509,28 @@
         },
         {
           "name": "begin_frame",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022), clears the per-pass command slot table, and clears the frame\u0027s color and depth. Returns false when the target has nothing to draw into this frame, with out_error set when acquiring it failed.",
+          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022), clears the per-pass command slot table, and clears the frame\u0027s color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target\u0027s code when acquiring failed.",
           "return_doc": null,
-          "params": [
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
+          "params": [],
           "receiver": "struct ke_render_service *"
         },
         {
           "name": "end_frame",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame\u0027s color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Returns false when no frame began, or with out_error set when presenting failed.",
+          "doc": "Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame\u0027s color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Succeeds doing nothing when no frame began, and fails with the target\u0027s code when presenting failed.",
           "return_doc": null,
-          "params": [
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
+          "params": [],
           "receiver": "struct ke_render_service *"
         },
         {
           "name": "upload_mesh",
-          "returns": "ke_mesh_handle",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Uploads interleaved vertices and 16-bit indices to device buffers.",
-          "return_doc": "The handle of the uploaded mesh.",
+          "return_doc": null,
           "params": [
             {
               "name": "key",
@@ -571,10 +565,12 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_mesh",
+              "type": "ke_mesh_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the handle of the uploaded mesh."
             }
           ],
           "receiver": "struct ke_render_service *"
@@ -657,7 +653,7 @@
         },
         {
           "name": "upload_texture",
-          "returns": "ke_texture_handle",
+          "returns": "ke_result",
           "tags": [],
           "doc": null,
           "return_doc": null,
@@ -689,17 +685,19 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_texture",
+              "type": "ke_texture_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the handle of the uploaded texture."
             }
           ],
           "receiver": "struct ke_render_service *"
         },
         {
           "name": "create_material",
-          "returns": "ke_material_handle",
+          "returns": "ke_result",
           "tags": [],
           "doc": null,
           "return_doc": null,
@@ -776,10 +774,12 @@
               "doc": "Authored material name; NULL/empty selects the engine default."
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_material",
+              "type": "ke_material_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the handle of the material."
             }
           ],
           "receiver": "struct ke_render_service *"
@@ -834,7 +834,7 @@
         },
         {
           "name": "upload_cubemap",
-          "returns": "ke_texture_handle",
+          "returns": "ke_result",
           "tags": [],
           "doc": null,
           "return_doc": null,
@@ -860,10 +860,12 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_cubemap",
+              "type": "ke_texture_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the handle of the uploaded cubemap."
             }
           ],
           "receiver": "struct ke_render_service *"
@@ -1231,10 +1233,10 @@
         },
         {
           "name": "load_shader",
-          "returns": "ke_gpu_shader_module",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Resolves a shader by logical NAME \u002B STAGE to a device-ready module.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no shader has that name, or the device\u0027s code when it rejects the module.",
           "params": [
             {
               "name": "name",
@@ -1249,10 +1251,12 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_module",
+              "type": "ke_gpu_shader_module *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the module."
             }
           ],
           "receiver": "struct ke_render_service *"
@@ -1352,10 +1356,10 @@
         },
         {
           "name": "join_chain",
-          "returns": "ke_render_chain_link",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.",
-          "return_doc": "The link, or KE_RENDER_CHAIN_NONE with KE_ERROR_INVALID_ARGUMENT for a stage or mode out of range.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a stage or mode out of range.",
           "params": [
             {
               "name": "stage",
@@ -1370,10 +1374,12 @@
               "doc": null
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_link",
+              "type": "ke_render_chain_link *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the link; KE_RENDER_CHAIN_NONE on failure."
             }
           ],
           "receiver": "struct ke_render_service *"

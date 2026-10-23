@@ -3,7 +3,6 @@ using System.Text;
 using KernelEngine.Asset;
 using KernelEngine.Asset.Native;
 using KernelEngine.Common;
-using KernelEngine.Common.Native;
 using KernelEngine.Text;
 using KernelEngine.Text.Native;
 
@@ -44,10 +43,9 @@ public unsafe partial class NativeAssetResolver
         ke_font_loader* fontPtr = fontLoader is not null ? fontLoader.Native : null;
         fixed (byte* rootPtr = rootBytes)
         {
-            ke_error* err = null;
-            var handle = KernelEngine.Framework.Native.NativeMethods.asset_resolver_create(
-                imagePtr, fontPtr, (sbyte*)rootPtr, &err);
-            if (handle.@ref == null) throw NativeErrors.FromNative(err, "asset_resolver_create");
+            ke_asset_resolver_handle handle;
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.asset_resolver_create(
+                imagePtr, fontPtr, (sbyte*)rootPtr, &handle), "ke_asset_resolver_create");
             return handle;
         }
     }

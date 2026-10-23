@@ -15,7 +15,7 @@ public delegate void ModuleLoad(IRuntime runtime);
 /// <param name="runtime">The runtime the module was loaded into.</param>
 public delegate void ModuleUnload(IRuntime runtime);
 
-/// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
+/// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread; the code it returns is carried to the thread driving the tick, which tick() then fails with, and the runtime logs the system's name. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
 /// <param name="ctx">The body's only doorway to component memory for this call. Opaque; pass it to the entry points that take one.</param>
 /// <param name="dt">Seconds since the previous tick, or the fixed timestep in the three fixed phases.</param>
 public delegate void SystemExecute(nint ctx, float dt);
@@ -27,6 +27,7 @@ public interface IRuntime : IDisposable
     /// <param name="name">Identifies the module in diagnostics.</param>
     /// <param name="onLoad">Registers the module's components and systems.</param>
     /// <param name="onUnload">Releases what the load acquired. A module that acquired nothing leaves it out.</param>
+    /// <returns>Receives the module's id; 0 on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     ulong RegisterModule(string name, ModuleLoad? onLoad, ModuleUnload? onUnload = null);
     /// <summary>Registers a system body against the phase and the component access it declares. Registered from a body, the system takes effect with the next tick and a refusal is not reported.</summary>
@@ -40,7 +41,7 @@ public interface IRuntime : IDisposable
     /// <param name="after">Names of systems of the same phase this one runs after, whatever they access. A name is resolved when the phase is built, so it may name a system registered later; a name no system of the phase carries fails the tick.</param>
     /// <param name="before">Names of systems of the same phase this one runs before, resolved like `after`.</param>
     /// <param name="exclusive">The body runs alone at the start of its phase, before every system of the phase that is not exclusive, and what it records is applied before they run. Two exclusive systems are ordered like two writers of one component. Neither its access nor per_entity orders or splits it.</param>
-    /// <returns>0 when the system was refused.</returns>
+    /// <returns>Receives the system's id; 0 on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false, ReadOnlySpan<string> after = default, ReadOnlySpan<string> before = default, bool exclusive = false);
     /// <summary>Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.</summary>

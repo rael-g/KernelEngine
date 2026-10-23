@@ -2,19 +2,19 @@ namespace Kabic;
 
 /// <summary>
 /// Builds the <see cref="Convention"/> of an ABI by declaring what it names, one call per fact.
-/// Every list is open: an ABI adds as many failure kinds, vector types or handle types as it has.
+/// Every list is open: an ABI adds as many result codes, vector types or handle types as it has.
 /// </summary>
 public sealed class ConventionBuilder
 {
     string symbolPrefix = "", handleSuffix = "", factorySuffix = "", componentSuffix = "", paramsSuffix = "";
-    string outParamPrefix = "out_", errorLaneName = "out_error";
+    string outParamPrefix = "out_";
     string includeDirectoryName = "", commonBindingsNamespace = "", bindingsMethodsClass = "NativeMethods";
     string commonManagedNamespace = "";
-    string errorType = "", errorKindType = "", errorIsFunction = "", errorGeneral = "";
-    string errorHelperClass = "", errorHelperNamespace = "", errorKindsOut = "", errorAbiHeader = "";
-    IReadOnlyList<string> errorAbiIncludeDirs = [];
+    string resultAbiHeader = "";
+    IReadOnlyList<string> resultAbiIncludeDirs = [];
+    string resultType = "", resultOk = "", resultManagedType = "", resultHelperClass = "", resultCodesOut = "";
+    readonly List<ResultCodeSpec> resultCodes = [];
     FieldTableConvention? fieldTable;
-    readonly List<ErrorKindSpec> errors = [];
     readonly Dictionary<string, string> handleTypes = [], typeNames = [];
     readonly List<IShapePack> packs = [];
 
@@ -28,12 +28,10 @@ public sealed class ConventionBuilder
         return this;
     }
 
-    /// <summary>
-    /// The prefix of a parameter written back, and the name of the trailing failure lane.
-    /// </summary>
-    public ConventionBuilder OutParams(string prefix, string failureLane)
+    /// <summary>The prefix of a parameter written back.</summary>
+    public ConventionBuilder OutParams(string prefix)
     {
-        (outParamPrefix, errorLaneName) = (prefix, failureLane);
+        outParamPrefix = prefix;
         return this;
     }
 
@@ -54,31 +52,34 @@ public sealed class ConventionBuilder
     }
 
     /// <summary>
-    /// How a failure is reported: the struct and the kind type, the function that tests a kind, the
-    /// general kind, the header that declares all of it, and the class and file that receive the
-    /// generated mapping to exceptions.
+    /// How a fallible call returns its outcome as a code: the C type of the code, the constant that
+    /// means success, the managed type the bindings declare for it, and the class that turns a code
+    /// into an exception, the last two fully qualified.
     /// </summary>
-    public ConventionBuilder Failure(string type, string kindType, string isFunction, string generalSingleton,
-        string header, IEnumerable<string> includeDirs, string helperClass, string helperNamespace, string kindsOut)
+    public ConventionBuilder Result(string cType, string ok, string managedType, string helperClass, string codesOut = "")
     {
-        (errorType, errorKindType, errorIsFunction, errorGeneral) = (type, kindType, isFunction, generalSingleton);
-        (errorAbiHeader, errorAbiIncludeDirs) = (header, includeDirs.ToList());
-        (errorHelperClass, errorHelperNamespace, errorKindsOut) = (helperClass, helperNamespace, kindsOut);
+        (resultType, resultOk, resultManagedType, resultHelperClass, resultCodesOut) = (cType, ok, managedType, helperClass, codesOut);
         return this;
     }
 
     /// <summary>
-    /// Declares a kind of failure: the singleton it is reached by, the name its native type
-    /// carries, the exception a managed caller catches (built from a message and a cause), and the
-    /// error a Zig caller switches on. The Zig name defaults to the last segment of the native name
-    /// in PascalCase. With <paramref name="extends"/>, kabic declares <paramref name="managed"/> as
-    /// a new exception type deriving from it; without, <paramref name="managed"/> names an existing
-    /// type. A kind never declared reads as the general one, which is a plain <see
-    /// cref="Exception"/> until it is declared too.
+    /// The header that declares the result type and its codes, relative to the repository root,
+    /// and the include directories it is read with.
     /// </summary>
-    public ConventionBuilder AddError(string singleton, string nativeName, string managed, string? zig = null, string? extends = null)
+    public ConventionBuilder ResultAbi(string header, IEnumerable<string> includeDirs)
     {
-        errors.Add(new ErrorKindSpec(singleton, nativeName, managed, zig ?? Convention.ZigErrorName(nativeName), extends));
+        (resultAbiHeader, resultAbiIncludeDirs) = (header, includeDirs.ToList());
+        return this;
+    }
+
+    /// <summary>
+    /// Declares the exception a code reads as on the managed side. With <paramref name="extends"/>,
+    /// kabic declares <paramref name="managed"/> as a new exception type deriving from it. A code
+    /// never declared reads as the general exception.
+    /// </summary>
+    public ConventionBuilder AddResultCode(string code, string managed, string? extends = null)
+    {
+        resultCodes.Add(new ResultCodeSpec(code, managed, extends));
         return this;
     }
 
@@ -116,7 +117,7 @@ public sealed class ConventionBuilder
     /// Builds the <see cref="Convention"/> from the facts declared so far, without checking them.
     /// </summary>
     /// <returns>
-    /// A convention holding a copy of the handle types, the type-name overrides, the error kinds
+    /// A convention holding a copy of the handle types, the type-name overrides, the result codes
     /// and the packs.
     /// </returns>
     public Convention Build() => new()
@@ -127,21 +128,18 @@ public sealed class ConventionBuilder
         ComponentSuffix = componentSuffix,
         ParamsSuffix = paramsSuffix,
         OutParamPrefix = outParamPrefix,
-        ErrorLaneName = errorLaneName,
         IncludeDirectoryName = includeDirectoryName,
         CommonBindingsNamespace = commonBindingsNamespace,
         BindingsMethodsClass = bindingsMethodsClass,
         CommonManagedNamespace = commonManagedNamespace,
-        ErrorType = errorType,
-        ErrorKindType = errorKindType,
-        ErrorIsFunction = errorIsFunction,
-        ErrorGeneralSingleton = errorGeneral,
-        ErrorAbiHeader = errorAbiHeader,
-        ErrorAbiIncludeDirs = errorAbiIncludeDirs,
-        ErrorHelperClass = errorHelperClass,
-        ErrorHelperNamespace = errorHelperNamespace,
-        ErrorKindsOut = errorKindsOut,
-        ErrorKinds = errors.ToList(),
+        ResultAbiHeader = resultAbiHeader,
+        ResultAbiIncludeDirs = resultAbiIncludeDirs,
+        ResultType = resultType,
+        ResultOk = resultOk,
+        ResultManagedType = resultManagedType,
+        ResultHelperClass = resultHelperClass,
+        ResultCodesOut = resultCodesOut,
+        ResultCodes = resultCodes.ToList(),
         HandleTypes = new Dictionary<string, string>(handleTypes),
         TypeNameOverrides = new Dictionary<string, string>(typeNames),
         FieldTable = fieldTable,

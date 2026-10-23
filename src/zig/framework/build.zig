@@ -1,5 +1,7 @@
 const std = @import("std");
-const ke_common_build = @import("ke_common");
+const ke_build = @import("ke_build");
+const ke_logger_build = @import("ke_logger");
+const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -8,6 +10,7 @@ pub fn build(b: *std.Build) void {
     const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "dir holding toml.c and toml.h, fetched by the root build.zig.zon") orelse @panic("-Dtomlc99-dir required");
 
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
+    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const component_fields_src = b.option([]const u8, "component-fields-src", "path to the shared Zig component_fields.zig") orelse @panic("-Dcomponent-fields-src required");
     const handle_src = b.option([]const u8, "handle-src", "path to the shared Zig handle.zig") orelse @panic("-Dhandle-src required");
     const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
@@ -22,8 +25,6 @@ pub fn build(b: *std.Build) void {
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
     const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
     const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_runtime library") orelse @panic("-Dke-lib-dir required");
     const ke_audio = b.option([]const u8, "ke-audio-include", "kernel_engine/audio include dir, read by the tests for its generated field table");
     const ke_physics = b.option([]const u8, "ke-physics-include", "kernel_engine/physics include dir, read by the tests for its generated field table");
 
@@ -36,21 +37,18 @@ pub fn build(b: *std.Build) void {
     mod.addImport("component_fields", b.createModule(.{ .root_source_file = .{ .cwd_relative = component_fields_src }, .target = target, .optimize = optimize }));
     mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
+    inline for (.{ ke_common, ke_result, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addIncludePath(b.path("include"));
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
     addTomlc99(b, mod, tomlc99_dir);
-    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
-    mod.addImport("kerror", kerror_mod);
+    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
 
     mod.addCMacro("KE_FRAMEWORK_EXPORT", "");
 
-    mod.addImport("c", ke_common_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("klog", ke_common_build.klog(b));
+    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("log", ke_logger_build.log(b));
+    mod.addImport("result", ke_result_build.result(b));
     const lib = b.addLibrary(.{
         .name = "ke_framework",
         .root_module = mod,
@@ -73,24 +71,19 @@ pub fn build(b: *std.Build) void {
         test_mod.addImport("component_fields", b.createModule(.{ .root_source_file = .{ .cwd_relative = component_fields_src }, .target = target, .optimize = optimize }));
         test_mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
         test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-        inline for (.{ ke_common, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
+        inline for (.{ ke_common, ke_result, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
             test_mod.addIncludePath(.{ .cwd_relative = inc });
         }
         if (ke_audio) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
         if (ke_physics) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
         test_mod.addIncludePath(b.path("include"));
-        test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-        test_mod.linkSystemLibrary("ke_common", .{});
         addTomlc99(b, test_mod, tomlc99_dir);
-        test_mod.addImport("kerror", b.createModule(.{
-            .root_source_file = .{ .cwd_relative = kerror_src },
-            .target = target,
-            .optimize = optimize,
-        }));
+        test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
 
-        test_mod.addImport("c", ke_common_build.cImports(b, test_mod, b.path("src/c.h")));
-        test_mod.addImport("test_c", ke_common_build.cImports(b, test_mod, b.path("src/test_c.h")));
-        test_mod.addImport("klog", ke_common_build.klog(b));
+        test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
+        test_mod.addImport("test_c", ke_build.cImports(b, test_mod, b.path("src/test_c.h")));
+        test_mod.addImport("log", ke_logger_build.log(b));
+        test_mod.addImport("result", ke_result_build.result(b));
         const unit_tests = b.addTest(.{ .root_module = test_mod });
         test_step.dependOn(&b.addRunArtifact(unit_tests).step);
     }

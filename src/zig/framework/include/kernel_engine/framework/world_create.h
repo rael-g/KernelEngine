@@ -24,8 +24,14 @@ extern "C"
 #endif
 #endif
 
-    KE_FRAMEWORK_API ke_world_handle ke_world_create(
-        const ke_world_params *params, ke_error **out_error);
+    /// Creates a world over the params' ecs and runtime, registering the transform, 2D transform
+    /// and world transform components on the ecs.
+    /// @param out_world [out] Receives the world; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p params, ecs, runtime or
+    ///         @p out_world, KE_RESULT_OUT_OF_MEMORY, or the code of the ecs that refused a
+    ///         component.
+    KE_FRAMEWORK_API ke_result ke_world_create(
+        const ke_world_params *params, ke_world_handle *out_world);
 
 #ifdef __cplusplus
 }

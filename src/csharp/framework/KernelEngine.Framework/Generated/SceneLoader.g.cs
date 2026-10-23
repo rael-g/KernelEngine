@@ -37,6 +37,16 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
     private GCHandle _retainedFactory;
 
     /// <summary>
+    /// Where a managed exception waits out the native frames. A handler runs
+    /// underneath engine code that has no way to carry an exception, so throwing
+    /// through it would tear down the process; the trampoline parks it here and
+    /// the call rethrows once the native stack has unwound. Per-thread, because
+    /// a handler runs on whichever thread the engine called it from.
+    /// </summary>
+    [ThreadStatic]
+    private static Exception? s_parkedCallbackException;
+
+    /// <summary>
     /// What retained handlers of this provider have thrown and not yet been told
     /// about. A retained handler outlives the call that registered it, so there is
     /// no call left to rethrow at; it reports failure through its own channel and
@@ -83,7 +93,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         _borrowed = borrowed;
     }
 
-    /// <summary>Loads the scene at path, instantiating every entity it declares. A script factory's refusal of an entity fails the load.</summary>
+    /// <summary>Loads the scene at path, instantiating every entity it declares. A script factory's refusal of an entity fails the load with the factory's code; what failed, and where in the file, is logged.</summary>
     /// <param name="path">Path to the scene file.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Load(string path)
@@ -91,9 +101,9 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
-            ke_error* err = null;
-            if (!Handle->load(Handle, (sbyte*)pathPtr, &err) && _callbackFailures.IsEmpty)
-                throw NativeErrors.FromNative(err, "load");
+            KernelEngine.Result.Native.ke_result rc;
+            if ((rc = Handle->load(Handle, (sbyte*)pathPtr)) != KernelEngine.Result.Native.ke_result.KE_OK && _callbackFailures.IsEmpty)
+                throw KernelEngine.NativeResults.FromCode(rc, "load");
             DrainCallbackFailures();
         }
     }
@@ -106,21 +116,27 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         var factoryHandle = factory is null
             ? default
             : GCHandle.Alloc(new RegisterScriptFactoryClosures { Owner = this, Factory = factory });
-        ke_error* err = null;
+        s_parkedCallbackException = null;
+        KernelEngine.Result.Native.ke_result rc;
         bool ok;
         try
         {
-            ok = Handle->register_script_factory(Handle, factory is null ? null : (delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, ke_error**, bool>)&RegisterScriptFactoryTrampoline, (void*)GCHandle.ToIntPtr(factoryHandle), &err);
+            ok = (rc = Handle->register_script_factory(Handle, factory is null ? null : (delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, KernelEngine.Result.Native.ke_result>)&RegisterScriptFactoryTrampoline, (void*)GCHandle.ToIntPtr(factoryHandle))) == KernelEngine.Result.Native.ke_result.KE_OK;
         }
         catch
         {
             if (factoryHandle.IsAllocated) factoryHandle.Free();
             throw;
         }
+        if (s_parkedCallbackException is { } parked)
+        {
+            s_parkedCallbackException = null;
+            throw parked;
+        }
         if (!ok)
         {
             if (factoryHandle.IsAllocated) factoryHandle.Free();
-            throw NativeErrors.FromNative(err, "register_script_factory");
+            throw KernelEngine.NativeResults.FromCode(rc, "register_script_factory");
         }
         if (_retainedFactory.IsAllocated) _retainedFactory.Free();
         _retainedFactory = factoryHandle;
@@ -134,23 +150,22 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static bool RegisterScriptFactoryTrampoline(void* ctx, ulong arg1, sbyte* arg2, ke_error** arg3)
+    private static KernelEngine.Result.Native.ke_result RegisterScriptFactoryTrampoline(void* ctx, ulong arg1, sbyte* arg2)
     {
         try
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterScriptFactoryClosures state && state.Factory is { } handler)
             {
                 handler(arg1, Marshal.PtrToStringUTF8((nint)arg2) ?? "");
-                return true;
+                return KernelEngine.Result.Native.ke_result.KE_OK;
             }
-            return false;
+            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_script_factory_func: no handler is registered"));
         }
         catch (Exception ex)
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterScriptFactoryClosures failed)
                 failed.Owner._callbackFailures.Enqueue(ex);
-            NativeErrors.ToNative(arg3, ex, "ke_script_factory_func");
-            return false;
+            return KernelEngine.NativeResults.ToCode(ex);
         }
     }
 

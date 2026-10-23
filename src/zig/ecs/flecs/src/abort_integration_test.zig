@@ -1,12 +1,12 @@
 //! Runs the abort probe as a child process and checks that it exits with a failure status and
-//! leaves the fatal error chain, carrying flecs's own message, on standard error.
+//! logs flecs's own message on standard error.
 
 const std = @import("std");
 const testing = std.testing;
 
 const build_options = @import("build_options");
 
-test "a real flecs internal assertion ends the process via E.fatal" {
+test "a real flecs internal assertion logs flecs's message and ends the process" {
     var threaded: std.Io.Threaded = .init(testing.allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -19,6 +19,6 @@ test "a real flecs internal assertion ends the process via E.fatal" {
 
     try testing.expect(result.term == .exited);
     try testing.expect(result.term.exited != 0);
-    try testing.expect(std.mem.indexOf(u8, result.stderr, "FATAL: [ke.ecs.flecs.fatal]") != null);
+    try testing.expect(std.mem.indexOf(u8, result.stderr, "flecs fatal:") != null);
     try testing.expect(std.mem.indexOf(u8, result.stderr, "component cannot be a tag") != null);
 }

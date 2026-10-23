@@ -46,7 +46,7 @@ scheduler task that runs beside the next tick's sim phases; the next tick joins 
 extracts again. Its failure is reported by that join or by `flush_render`.
 
 **A failure crosses threads as a type.** The error record of a body lives in its worker's own
-storage, so only the `ke_error_type` goes back; the tick thread raises a fresh error of that type
+storage, so only the `ke_result` code goes back; the tick thread raises a fresh error of that code
 carrying the failing system's name.
 
 ## Registering

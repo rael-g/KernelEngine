@@ -20,8 +20,8 @@ The render service is the device's consumer in the engine; it is described in
 ## What ties the parts together
 
 **Everything is a 64-bit handle.** Resources are `uint64_t` typedefs and
-`KE_GPU_INVALID_HANDLE` is the failure value. A call that can fail with a message takes a
-`ke_error`; the rest return the invalid handle or nothing.
+`KE_GPU_INVALID_HANDLE` is the empty value. A call that can fail returns a `ke_result` and
+writes the handle through its last parameter, `KE_GPU_INVALID_HANDLE` on failure.
 
 **Recording is a second set of vtables.** The device makes a command encoder; the encoder
 begins render and compute passes and finishes into a command buffer; `queue_submit` takes the
@@ -45,9 +45,8 @@ them is in [pipeline-cache.md](pipeline-cache.md).
 ## What the parts agree on without a contract
 
 - The window target accepts only a device made by the webgpu plugin, and refuses any other.
-- Error types: the contract declares `KE_ERROR_GPU_SHADER_COMPILATION` and
-  `KE_ERROR_GPU_RESOURCE_CREATION`; the webgpu plugin reports their children
-  `KE_ERROR_WGPU_SHADER_COMPILATION` and `KE_ERROR_WGPU_RESOURCE_CREATION`.
+- A creation the device rejects returns `KE_RESULT_GENERAL`, and the backend's reason goes to
+  the log.
 - Labels reach a capture tool only when the device was created with `debug_labels` set in
   `ke_gpu_device_webgpu_params`.
 - Texture-to-buffer and buffer-to-texture copies require a row pitch that is a multiple of
