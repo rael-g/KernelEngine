@@ -295,6 +295,7 @@ internal static class GeneratorShapeCases
                        "_retainedJob[resultOut] = jobHandle;",
                        "return resultOut;",
                        "private static KernelEngine.Result.Native.ke_result RegisterJobTrampoline(",
+                       "(delegate* unmanaged[Cdecl]<void*, float, KernelEngine.Result.Native.ke_result>)&RegisterJobTrampoline",
                        "return KernelEngine.Result.Native.ke_result.KE_OK;",
                        "failed.Owner._callbackFailures.Enqueue(ex);",
                        "return KernelEngine.NativeResults.ToCode(ex);"],

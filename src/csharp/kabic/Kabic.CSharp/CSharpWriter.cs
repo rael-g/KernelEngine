@@ -2170,7 +2170,7 @@ public static class CSharpWriter
     /// </summary>
     static string NativeFnPtr(ApiModel model, ApiCallback callback, Convention convention) =>
         $"delegate* unmanaged[Cdecl]<{string.Join(", ", callback.Lanes.Select(l => BlittableLane(model, l.Type, convention)))}"
-        + $", {BlittableLane(model, callback.Returns, convention)}>";
+        + $", {(convention.ReturnsResult(callback.Returns) ? convention.ResultManagedType : BlittableLane(model, callback.Returns, convention))}>";
 
     /// <summary>
     /// The delegate a projected closure asks the caller for. Declared beside the class
