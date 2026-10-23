@@ -65,9 +65,9 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <exception cref="Exception">The native call failed.</exception>
     public uint ComponentRegister(ke_component_params* @params)
     {
-        uint result;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_register(Handle, @params, &result), "component_register");
-        return result;
+        uint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_register(Handle, @params, &resultOut), "component_register");
+        return resultOut;
     }
 
     /// <summary>Looks up a previously registered component by name.</summary>

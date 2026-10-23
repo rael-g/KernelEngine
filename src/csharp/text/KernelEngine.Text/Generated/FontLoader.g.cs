@@ -56,9 +56,9 @@ public unsafe partial class FontLoader : IDisposable, INativeFontLoader
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
-            ke_font_data* result;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->load_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &result), "load_font");
-            return result;
+            ke_font_data* resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->load_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &resultOut), "load_font");
+            return resultOut;
         }
     }
 

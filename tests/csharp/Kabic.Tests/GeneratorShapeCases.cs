@@ -41,8 +41,9 @@ internal static class GeneratorShapeCases
             Vtable("ke_probe", Slot("count_of", "ke_result", Param("kind", "uint32_t"),
                 ParamDoc("out_count", "uint32_t *", "out", "How many there are."))),
             contains: ["public uint CountOf(uint kind)",
-                       "KernelEngine.NativeResults.ThrowIfFailed(Handle->count_of(Handle, kind, &result), \"count_of\");",
-                       "return result;", "<returns>How many there are.</returns>"],
+                       "uint resultOut = default;",
+                       "KernelEngine.NativeResults.ThrowIfFailed(Handle->count_of(Handle, kind, &resultOut), \"count_of\");",
+                       "return resultOut;", "<returns>How many there are.</returns>"],
             absent: ["&err", "out uint count"]);
 
         Expect("a factory returning the result code writes the handle through its last parameter",
@@ -57,6 +58,18 @@ internal static class GeneratorShapeCases
             Vtable("ke_probe", Slot("on_shutdown", "void", "lifecycle:shutdown")),
             contains: ["_native->on_shutdown(_native);"],
             absent: ["_native->on_shutdown(_native, null);"]);
+
+        Expect("a result-returning slot that writes memory a projection owns answers with that projection",
+            Vtable("ke_probe",
+                Slot("open", "ke_result", Param("self", "ke_probe *", "self"),
+                    Param("out_bundle", "ke_probe_bundle **", "out")),
+                Slot("close", "void", "releases:Bundle", Param("self", "ke_probe *", "self"),
+                    Param("bundle", "ke_probe_bundle *"))),
+            contains: ["public Bundle Open(ke_probe* self)",
+                       "ke_probe_bundle* resultOut = default;",
+                       "return new Bundle(this, (ProbeBundle*)resultOut);"],
+            absent: ["&err"],
+            structs: [ViewJson("ke_probe_bundle")]);
 
         Expect("a utf8 parameter is a string on the public surface",
             Vtable("ke_probe", Slot("named", "ke_entity", Param("name", "const char *", "utf8"))),

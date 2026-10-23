@@ -69,9 +69,8 @@ public record ClassifiedSlot(ApiSlot Slot, SlotShape Shape, bool Fallible, ApiPa
     public IReadOnlyList<BlobPair> Blobs { get; init; } = [];
 
     /// <summary>
-    /// The one <c>[out]</c> parameter of a slot that returns the result code and takes closures:
-    /// the value the call hands back once the code says it succeeded, and the key a retained
-    /// closure is kept under.
+    /// The one <c>[out]</c> parameter of a slot that returns the result code: the value the call
+    /// hands back once the code says it succeeded, and the key a retained closure is kept under.
     /// </summary>
     public ApiParam? ResultOut { get; init; }
 }
@@ -359,8 +358,7 @@ public static class Classifier
 
         var carriesReturn = slot.Returns.Trim() is not "void"
             && !convention.SignalsFailureByReturn(slot.Returns);
-        var resultOut = convention.ReturnsResult(slot.Returns) && allOut.Count == 1
-            && ps.Any(p => p.Has("closure")) ? allOut[0] : null;
+        var resultOut = convention.ReturnsResult(slot.Returns) && allOut.Count == 1 && !isTry ? allOut[0] : null;
         if (resultOut is not null) allOut = [];
         var outParam = allOut.Count == 1 && !carriesReturn ? allOut[0] : null;
 

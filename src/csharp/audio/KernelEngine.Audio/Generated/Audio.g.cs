@@ -56,9 +56,9 @@ public unsafe partial class Audio : IDisposable, INativeAudio
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
-            uint result;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->load_sound(Handle, (sbyte*)pathPtr, &result), "load_sound");
-            return result;
+            uint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->load_sound(Handle, (sbyte*)pathPtr, &resultOut), "load_sound");
+            return resultOut;
         }
     }
 

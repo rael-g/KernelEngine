@@ -2417,7 +2417,9 @@ public static class CSharpWriter
         var slot = cs.Slot;
         var name = SlotName(slot);
         var access = owned is not null && owned.Release == slot ? "internal" : "public";
-        var ownedReturn = owned is not null && owned.Answers(slot.Returns) ? owned : null;
+        var ownedReturn = owned is not null
+            && (owned.Answers(slot.Returns) || (cs.ResultOut is { } ro && owned.Answers(CTypes.Deref(ro.Type))))
+            ? owned : null;
         var lanes = GroupedLanes(slot.Params, convention);
         var callbacks = CallbackPairs(model, cs, convention);
         var groups = ClosureGroups(model, cs, callbacks, owner, ownerDrains, convention);
@@ -2657,7 +2659,8 @@ public static class CSharpWriter
                     var byReturn = convention.SignalsFailureByReturn(slot.Returns);
                     var lane = FailureLane.Of(convention, slot.Returns, slot.Name);
                     var resultOut = cs.ResultOut;
-                    var retType = resultOut is not null ? OutElement(model, resultOut, convention)
+                    var retType = resultOut is not null
+                            ? (ownedReturn is not null ? ownedReturn.TypeName : OutElement(model, resultOut, convention))
                         : byReturn ? "void"
                         : ownedReturn is not null ? ownedReturn.TypeName
                         : ReturnType(model, slot.Returns, convention);
@@ -2833,6 +2836,13 @@ public static class CSharpWriter
                         o.Add($"{fInd}if ({lane.Failed(plainCall)} && _callbackFailures.IsEmpty)");
                         o.Add($"{fInd}    throw {lane.Exception};");
                         o.Add($"{fInd}DrainCallbackFailures();");
+                    }
+                    else if (byReturn && resultOut is not null)
+                    {
+                        o.Add($"{fInd}{OutLocal(model, resultOut, convention)} resultOut = default;");
+                        o.Add($"{fInd}{lane.ThrowIfFailed(plainCall)}");
+                        var value = OutRead(resultOut, "resultOut");
+                        o.Add($"{fInd}return {(ownedReturn is null ? value : $"new {ownedReturn.TypeName}(this, ({ownedReturn.View}){value})")};");
                     }
                     else if (byReturn)
                     {

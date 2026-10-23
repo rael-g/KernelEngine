@@ -65,9 +65,9 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d
     /// <exception cref="Exception">The native call failed.</exception>
     public uint CreateBody(BodyType2D type, Vector2 position)
     {
-        uint result;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->create_body(Handle, (ke_body_type_2d)type, position.X, position.Y, &result), "create_body");
-        return result;
+        uint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->create_body(Handle, (ke_body_type_2d)type, position.X, position.Y, &resultOut), "create_body");
+        return resultOut;
     }
 
     /// <summary>Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID.</summary>

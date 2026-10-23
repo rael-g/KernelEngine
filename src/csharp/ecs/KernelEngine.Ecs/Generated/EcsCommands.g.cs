@@ -44,9 +44,9 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong Spawn()
     {
-        ulong result;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->spawn(Handle, &result), "spawn");
-        return result;
+        ulong resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->spawn(Handle, &resultOut), "spawn");
+        return resultOut;
     }
 
     /// <summary>Records giving `entity` the component `cid`, initialised from `size` bytes of `data`. The bytes are copied, so the caller's buffer need not outlive the call. `size` must equal the registered size of `cid`, or be 0 to attach the component without copying bytes into it.</summary>
