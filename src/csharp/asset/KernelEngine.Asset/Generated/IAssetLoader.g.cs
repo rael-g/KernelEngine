@@ -11,8 +11,9 @@ namespace KernelEngine.Asset;
 /// <summary>The assetloader contract game code depends on, so a caller names a capability rather than the <see cref="AssetLoader"/> that carries it.</summary>
 public interface IAssetLoader : IDisposable
 {
-    /// <summary>Loads a 3D model from path into a newly allocated ke_model_data. The caller owns the result and must release it with free_model.</summary>
+    /// <summary>Loads a 3D model from path into a newly allocated ke_model_data.</summary>
     /// <param name="path">Absolute or relative file path (.gltf, .glb, .obj, .fbx, …).</param>
+    /// <returns>Receives the model, which the caller owns and releases with free_model; NULL on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     Model LoadModel(string path);
     /// <summary>Asynchronously loads a 3D model, calling on_complete on a scheduler thread once the load has finished or failed.</summary>

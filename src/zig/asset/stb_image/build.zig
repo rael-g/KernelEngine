@@ -1,6 +1,7 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
 const ke_logger_build = @import("ke_logger");
+const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
@@ -37,6 +38,7 @@ pub fn build(b: *std.Build) void {
     mod.addRPathSpecial("$ORIGIN");
     mod.addImport("kerror", kerror_mod);
     mod.addImport("log", ke_logger_build.log(b));
+    mod.addImport("result", ke_result_build.result(b));
     mod.addCMacro("KE_ASSET_STB_IMAGE_EXPORT", "");
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
@@ -70,6 +72,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }));
     test_mod.addImport("log", ke_logger_build.log(b));
+    test_mod.addImport("result", ke_result_build.result(b));
     test_mod.addCMacro("KE_ASSET_STB_IMAGE_EXPORT", "");
 
     test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));

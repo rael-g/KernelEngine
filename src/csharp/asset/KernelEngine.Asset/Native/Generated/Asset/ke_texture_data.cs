@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 
-using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
+using KernelEngine.Result.Native;
 using KernelEngine.Scheduler.Native;
 using KernelEngine.Text.Native;
 

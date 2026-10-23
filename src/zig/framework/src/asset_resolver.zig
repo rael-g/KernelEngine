@@ -8,6 +8,8 @@ const handles = @import("handle").Handles(c);
 const heap = @import("heap");
 
 const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.framework);
 
 const mesh_shape = @import("mesh_shape.zig");
 
@@ -65,7 +67,7 @@ fn copyStringClamped(dst: []u8, src: []const u8) void {
 /// joined to the project root, or stands as its remainder when there is none, and any other path
 /// is copied as written. Fails as an invalid argument, leaving `out` unspecified, when the result
 /// and its terminator do not fit.
-fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8, out_error: [*c][*c]c.ke_error) bool {
+fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) R.Error!void {
     const p = std.mem.span(path);
     const written = if (!std.mem.startsWith(u8, p, res_prefix))
         std.fmt.bufPrintZ(out, "{s}", .{p})
@@ -76,23 +78,24 @@ fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8, out_error: [*c][
         break :blk std.fmt.bufPrintZ(out, "{s}{s}{s}", .{ root, sep, remainder });
     } else std.fmt.bufPrintZ(out, "{s}", .{p[res_prefix.len..]});
     _ = written catch {
-        E.fail(out_error, .invalid_argument, "resolved path does not fit", @src());
-        return false;
+        log.warn("the resolved path of {s} does not fit", .{p});
+        return error.InvalidArgument;
     };
-    return true;
 }
 
 /// Slot `resolve_path`. Resolves through `resolvePath` into the caller's buffer.
-fn vtResolvePath(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8, capacity: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null or path == null or out == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
-    return resolvePath(stateOf(self), path, out[0..capacity], out_error);
+fn vtResolvePath(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8, capacity: usize) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null or out == null) return R.code(error.InvalidArgument);
+    resolvePath(stateOf(self), path, out[0..capacity]) catch |err| return R.code(err);
+    return R.ok;
+}
+
+/// The code a slot returns when a render service call it made failed and filled `record`, whose
+/// message is logged. A bridge while the render service reports through `ke_error`.
+fn serviceFailed(record: [*c]const c.ke_error) R.Error {
+    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
+    return error.General;
 }
 
 fn tomlNumberIn(tab: ?*c.toml_table_t, key: [*c]const u8) ?f32 {
@@ -173,39 +176,31 @@ fn parseMaterialFile(path: [*:0]const u8, out: *c.ke_material_spec) error{ NotFo
 }
 
 /// Slot `resolve_texture`, and the decode step of `vtResolveTextureInto` on a cache miss. A
-/// missing image loader reports an invalid argument and a missing file reports not found, both
-/// before the loader is called; a loader failure is reported through the same out-error. Each
-/// returns false. On success the decoded data belongs to the caller until `vtFreeTexture`.
-fn vtResolveTexture(
-    self_in: ?*c.ke_asset_resolver,
-    path: [*c]const u8,
-    out: [*c]?*c.ke_texture_data,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null or path == null or out == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
-    const s = stateOf(self);
-    const loader = s.image_loader orelse {
-        E.fail(out_error, .invalid_argument, "no image loader injected", @src());
-        return false;
-    };
+/// missing image loader is an invalid argument and a missing file is not found, both before the
+/// loader is called; a loader failure returns the loader's code. On success the decoded data
+/// belongs to the caller until `vtFreeTexture`.
+fn vtResolveTexture(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: [*c]?*c.ke_texture_data) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null or out == null) return R.code(error.InvalidArgument);
+    out.* = resolveTexture(stateOf(self), path) catch |err| return R.code(err);
+    return R.ok;
+}
 
+fn resolveTexture(s: *const State, path: [*:0]const u8) R.Error!*c.ke_texture_data {
+    const loader = s.image_loader orelse {
+        log.warn("resolving {s} needs an image loader, and none was injected", .{path});
+        return error.InvalidArgument;
+    };
     var buf: [path_buf_max]u8 = undefined;
-    if (!resolvePath(s, path, &buf, out_error)) return false;
+    try resolvePath(s, path, &buf);
     const resolved: [*:0]const u8 = @ptrCast(&buf);
     if (!fileExists(resolved)) {
-        E.fail(out_error, .not_found, "texture file not found", @src());
-        return false;
+        log.warn("texture file {s} not found", .{resolved});
+        return error.NotFound;
     }
-
-    out.* = loader.load_image.?(loader, resolved, out_error);
-    return out.* != null;
+    var data: [*c]c.ke_texture_data = null;
+    try R.check(loader.load_image.?(loader, resolved, &data));
+    return data;
 }
 
 /// Slot `free_texture`. Hands the data back to the image loader; does nothing without one.
@@ -220,42 +215,35 @@ fn vtFreeTexture(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_texture_data) call
 
 /// Slot `resolve_mesh`, and the bake step of `vtResolveMeshInto` on a cache miss. A mesh has no
 /// file: only a path under "res://primitives/" naming "quad", "plane", "cube" or "sphere" is
-/// accepted, and any other path or name reports not found and returns false. The shape it fills
-/// belongs to the caller until `vtFreeMesh` releases it.
-fn vtResolveMesh(
-    self_in: ?*c.ke_asset_resolver,
-    path: [*c]const u8,
-    out: ?*c.ke_mesh_shape_data,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null or path == null or out == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+/// accepted, and any other path or name is not found. The shape it fills belongs to the caller
+/// until `vtFreeMesh` releases it.
+fn vtResolveMesh(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: ?*c.ke_mesh_shape_data) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null or out == null) return R.code(error.InvalidArgument);
+    bakePrimitive(path, out.?) catch |err| return R.code(err);
+    return R.ok;
+}
 
+fn bakePrimitive(path: [*:0]const u8, out: *c.ke_mesh_shape_data) R.Error!void {
     const p = std.mem.span(path);
-    if (std.mem.startsWith(u8, p, primitive_prefix)) {
-        const name = p[primitive_prefix.len..];
-        const kind: c.ke_mesh_primitive = if (std.mem.eql(u8, name, "quad"))
-            c.KE_MESH_PRIMITIVE_QUAD
-        else if (std.mem.eql(u8, name, "plane"))
-            c.KE_MESH_PRIMITIVE_PLANE
-        else if (std.mem.eql(u8, name, "cube"))
-            c.KE_MESH_PRIMITIVE_CUBE
-        else if (std.mem.eql(u8, name, "sphere"))
-            c.KE_MESH_PRIMITIVE_SPHERE
-        else {
-            E.fail(out_error, .not_found, "unknown primitive", @src());
-            return false;
-        };
-        return mesh_shape.ke_mesh_shape_bake_internal(kind, 0, out);
+    if (!std.mem.startsWith(u8, p, primitive_prefix)) {
+        log.warn("mesh {s} not found", .{p});
+        return error.NotFound;
     }
-    E.fail(out_error, .not_found, "mesh not found", @src());
-    return false;
+    const name = p[primitive_prefix.len..];
+    const kind: c.ke_mesh_primitive = if (std.mem.eql(u8, name, "quad"))
+        c.KE_MESH_PRIMITIVE_QUAD
+    else if (std.mem.eql(u8, name, "plane"))
+        c.KE_MESH_PRIMITIVE_PLANE
+    else if (std.mem.eql(u8, name, "cube"))
+        c.KE_MESH_PRIMITIVE_CUBE
+    else if (std.mem.eql(u8, name, "sphere"))
+        c.KE_MESH_PRIMITIVE_SPHERE
+    else {
+        log.warn("{s} names no primitive", .{p});
+        return error.NotFound;
+    };
+    if (!mesh_shape.ke_mesh_shape_bake_internal(kind, 0, out)) return error.OutOfMemory;
 }
 
 /// Slot `free_mesh`. Releases the shape filled by `vtResolveMesh`.
@@ -267,33 +255,27 @@ fn vtFreeMesh(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_mesh_shape_data) call
 
 /// Slot `resolve_material`, and the first step of `vtResolveMaterialInto` on a cache miss. The
 /// file is TOML read by `parseMaterialFile`, so a key it omits keeps its default. A file that
-/// cannot be opened reports not found, one that is not TOML or has no material table reports io;
-/// both return false.
-fn vtResolveMaterial(
-    self_in: ?*c.ke_asset_resolver,
-    path: [*c]const u8,
-    out: ?*c.ke_material_spec,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null or path == null or out == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
-    const s = stateOf(self);
+/// cannot be opened is not found, one that is not TOML or has no material table is io.
+fn vtResolveMaterial(self_in: ?*c.ke_asset_resolver, path: [*c]const u8, out: ?*c.ke_material_spec) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null or out == null) return R.code(error.InvalidArgument);
+    readMaterial(stateOf(self), path, out.?) catch |err| return R.code(err);
+    return R.ok;
+}
+
+fn readMaterial(s: *const State, path: [*:0]const u8, out: *c.ke_material_spec) R.Error!void {
     var buf: [path_buf_max]u8 = undefined;
-    if (!resolvePath(s, path, &buf, out_error)) return false;
-    parseMaterialFile(@ptrCast(&buf), out.?) catch |err| {
-        switch (err) {
-            error.NotFound => E.fail(out_error, .not_found, "material file not found", @src()),
-            error.Malformed => E.fail(out_error, .io, "failed to parse material file", @src()),
-        }
-        return false;
+    try resolvePath(s, path, &buf);
+    parseMaterialFile(@ptrCast(&buf), out) catch |err| switch (err) {
+        error.NotFound => {
+            log.warn("material file {s} not found", .{path});
+            return error.NotFound;
+        },
+        error.Malformed => {
+            log.warn("material file {s} does not parse", .{path});
+            return error.Io;
+        },
     };
-    return true;
 }
 
 /// Slot `resolve_font`. Same order of checks and failures as `vtResolveTexture`, against the font
@@ -306,42 +288,24 @@ fn vtResolveFont(
     codepoint_count: u32,
     atlas_size: u32,
     out: [*c]?*c.ke_font_data,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) bool {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    };
-    if (self.handle == null or path == null or out == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
-    }
+) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null or out == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     const loader = s.font_loader orelse {
-        E.fail(out_error, .invalid_argument, "no font loader injected", @src());
-        return false;
+        log.warn("resolving {s} needs a font loader, and none was injected", .{path});
+        return R.code(error.InvalidArgument);
     };
 
     var buf: [path_buf_max]u8 = undefined;
-    if (!resolvePath(s, path, &buf, out_error)) return false;
+    resolvePath(s, path, &buf) catch |err| return R.code(err);
     const resolved: [*:0]const u8 = @ptrCast(&buf);
     if (!fileExists(resolved)) {
-        E.fail(out_error, .not_found, "font file not found", @src());
-        return false;
+        log.warn("font file {s} not found", .{resolved});
+        return R.code(error.NotFound);
     }
 
-    const loaded = loader.load_font.?(
-        loader,
-        resolved,
-        pixel_size,
-        first_codepoint,
-        codepoint_count,
-        atlas_size,
-        out,
-    );
-    if (loaded == c.KE_OK) return true;
-    E.failCode(out_error, loaded, "the font loader failed", @src());
-    return false;
+    return loader.load_font.?(loader, resolved, pixel_size, first_codepoint, codepoint_count, atlas_size, out);
 }
 
 /// Slot `free_font`. Hands the data back to the font loader; does nothing without one.
@@ -357,35 +321,26 @@ fn vtFreeFont(self_in: ?*c.ke_asset_resolver, data: ?*c.ke_font_data) callconv(.
 /// Slot `resolve_texture_into`. Checks the service's cache first, so a path it already holds costs
 /// no file access. Uploads under the authored path, not the resolved one, so the service keys the
 /// texture by what the caller wrote. A missing service is an invalid argument; the failures of
-/// `vtResolveTexture` and of the upload are reported as they are. Each returns the none handle.
-fn vtResolveTextureInto(
-    self_in: ?*c.ke_asset_resolver,
-    core_in: ?*c.ke_render_service,
-    path: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_texture_handle {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_TEXTURE_NONE;
-    };
-    const core = core_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_TEXTURE_NONE;
-    };
-    if (self.handle == null or path == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_TEXTURE_NONE;
-    }
+/// `vtResolveTexture` are returned as they are, and a failed upload is general.
+fn vtResolveTextureInto(self_in: ?*c.ke_asset_resolver, core_in: ?*c.ke_render_service, path: [*c]const u8, out_texture: ?*c.ke_texture_handle) callconv(.c) c.ke_result {
+    const out = out_texture orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_TEXTURE_NONE;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    const core = core_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
+    out.* = textureInto(stateOf(self), core, path) catch |err| return R.code(err);
+    return R.ok;
+}
 
+fn textureInto(s: *State, core: *c.ke_render_service, path: [*:0]const u8) R.Error!c.ke_texture_handle {
     var cached: c.ke_texture_handle = undefined;
     if (core.try_get_texture.?(core, path, &cached)) return cached;
 
-    var data: ?*c.ke_texture_data = null;
-    if (!vtResolveTexture(self, path, &data, out_error)) return c.KE_TEXTURE_NONE;
-
-    const d = data.?;
-    const h = core.upload_texture.?(core, path, d.width, d.height, d.pixels, out_error);
-    vtFreeTexture(self, data);
+    const d = try resolveTexture(s, path);
+    defer vtFreeTexture(&s.api, d);
+    var err: [*c]c.ke_error = null;
+    const h = core.upload_texture.?(core, path, d.width, d.height, d.pixels, &err);
+    if (h.bits == c.KE_HANDLE_NONE) return serviceFailed(err);
     return h;
 }
 
@@ -394,40 +349,29 @@ const gpu_floats_per_vertex = 11;
 /// Slot `resolve_mesh_into`. Checks the service's cache first, as `vtResolveTextureInto` does,
 /// and uploads the baked vertices converted to the layout the service takes. The shape is freed
 /// on every path once it is baked, so none of its memory outlives the call. An allocation failure
-/// reports out of memory; the other failures are those of `vtResolveMesh` and of the upload.
-/// Each returns the none handle.
-fn vtResolveMeshInto(
-    self_in: ?*c.ke_asset_resolver,
-    core_in: ?*c.ke_render_service,
-    path: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_mesh_handle {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_MESH_NONE;
-    };
-    const core = core_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_MESH_NONE;
-    };
-    if (self.handle == null or path == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_MESH_NONE;
-    }
+/// is out of memory; the other failures are those of `vtResolveMesh` and, as general, of the upload.
+fn vtResolveMeshInto(self_in: ?*c.ke_asset_resolver, core_in: ?*c.ke_render_service, path: [*c]const u8, out_mesh: ?*c.ke_mesh_handle) callconv(.c) c.ke_result {
+    const out = out_mesh orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_MESH_NONE;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    const core = core_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
+    out.* = meshInto(core, path) catch |err| return R.code(err);
+    return R.ok;
+}
 
+fn meshInto(core: *c.ke_render_service, path: [*:0]const u8) R.Error!c.ke_mesh_handle {
     var cached: c.ke_mesh_handle = undefined;
     if (core.try_get_mesh.?(core, path, &cached)) return cached;
 
     var shape: c.ke_mesh_shape_data = undefined;
-    if (!vtResolveMesh(self, path, &shape, out_error)) return c.KE_MESH_NONE;
+    try bakePrimitive(path, &shape);
+    defer mesh_shape.ke_mesh_shape_free_internal(&shape);
 
     const float_count = @as(usize, shape.vertex_count) * gpu_floats_per_vertex;
     const byte_count = float_count * @sizeOf(f32);
-    const gpu_verts = heap.gpa.alloc(f32, float_count) catch {
-        vtFreeMesh(self, &shape);
-        E.fail(out_error, .out_of_memory, "vertex conversion buffer allocation failed", @src());
-        return c.KE_MESH_NONE;
-    };
+    const gpu_verts = heap.gpa.alloc(f32, float_count) catch return error.OutOfMemory;
+    defer heap.gpa.free(gpu_verts);
 
     for (0..shape.vertex_count) |i| {
         const v = &shape.vertices[i];
@@ -445,61 +389,40 @@ fn vtResolveMeshInto(
         dst[10] = v.tz;
     }
 
-    const h = core.upload_mesh.?(
-        core,
-        path,
-        gpu_verts.ptr,
-        byte_count,
-        shape.indices,
-        shape.index_count,
-        out_error,
-    );
-    heap.gpa.free(gpu_verts);
-    vtFreeMesh(self, &shape);
+    var err: [*c]c.ke_error = null;
+    const h = core.upload_mesh.?(core, path, gpu_verts.ptr, byte_count, shape.indices, shape.index_count, &err);
+    if (h.bits == c.KE_HANDLE_NONE) return serviceFailed(err);
     return h;
 }
 
 /// Slot `resolve_material_into`. Checks the service's cache first. The albedo and normal textures
 /// go through `vtResolveTextureInto`, so each is cached under its own path, and a failure there
 /// ends the call before the material is created. The other failures are those of
-/// `vtResolveMaterial` and of the material creation. Each returns the none handle.
-fn vtResolveMaterialInto(
-    self_in: ?*c.ke_asset_resolver,
-    core_in: ?*c.ke_render_service,
-    path: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) c.ke_material_handle {
-    const self = self_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_MATERIAL_NONE;
-    };
-    const core = core_in orelse {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_MATERIAL_NONE;
-    };
-    if (self.handle == null or path == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return c.KE_MATERIAL_NONE;
-    }
+/// `vtResolveMaterial` and, as general, of the material creation.
+fn vtResolveMaterialInto(self_in: ?*c.ke_asset_resolver, core_in: ?*c.ke_render_service, path: [*c]const u8, out_material: ?*c.ke_material_handle) callconv(.c) c.ke_result {
+    const out = out_material orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_MATERIAL_NONE;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    const core = core_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
+    out.* = materialInto(stateOf(self), core, path) catch |err| return R.code(err);
+    return R.ok;
+}
 
+fn materialInto(s: *State, core: *c.ke_render_service, path: [*:0]const u8) R.Error!c.ke_material_handle {
     var cached: c.ke_material_handle = undefined;
     if (core.try_get_material.?(core, path, &cached)) return cached;
 
     var spec: c.ke_material_spec = undefined;
-    if (!vtResolveMaterial(self, path, &spec, out_error)) return c.KE_MATERIAL_NONE;
+    try readMaterial(s, path, &spec);
 
     var albedo = c.KE_TEXTURE_NONE;
-    if (spec.albedo_path[0] != 0) {
-        albedo = vtResolveTextureInto(self, core, @ptrCast(&spec.albedo_path), out_error);
-        if (albedo.bits == c.KE_HANDLE_NONE) return c.KE_MATERIAL_NONE;
-    }
+    if (spec.albedo_path[0] != 0) albedo = try textureInto(s, core, @ptrCast(&spec.albedo_path));
     var normal = c.KE_TEXTURE_NONE;
-    if (spec.normal_path[0] != 0) {
-        normal = vtResolveTextureInto(self, core, @ptrCast(&spec.normal_path), out_error);
-        if (normal.bits == c.KE_HANDLE_NONE) return c.KE_MATERIAL_NONE;
-    }
+    if (spec.normal_path[0] != 0) normal = try textureInto(s, core, @ptrCast(&spec.normal_path));
 
-    return core.create_material.?(
+    var err: [*c]c.ke_error = null;
+    const h = core.create_material.?(
         core,
         path,
         &spec.base_color,
@@ -512,8 +435,10 @@ fn vtResolveMaterialInto(
         spec.ior,
         spec.distortion_strength,
         0,
-        out_error,
+        &err,
     );
+    if (h.bits == c.KE_HANDLE_NONE) return serviceFailed(err);
+    return h;
 }
 
 /// The destroy of the handle that `ke_asset_resolver_create` returns. Frees the root copy and the
@@ -667,10 +592,9 @@ var fake_loader_free_count: u32 = 0;
 fn fakeLoadImage(
     self: [*c]c.ke_image_loader,
     path: [*c]const u8,
-    out_error: [*c][*c]c.ke_error,
-) callconv(.c) [*c]c.ke_texture_data {
+    out_image: [*c][*c]c.ke_texture_data,
+) callconv(.c) c.ke_result {
     _ = self;
-    _ = out_error;
     const p = std.mem.span(path);
     const n = @min(p.len, fake_loader_last_path.len - 1);
     @memcpy(fake_loader_last_path[0..n], p[0..n]);
@@ -683,7 +607,8 @@ fn fakeLoadImage(
     fake_loader_texture.height = 2;
     fake_loader_texture.pixels = &fake_loader_pixels;
     fake_loader_texture.byte_count = fake_loader_pixels.len;
-    return &fake_loader_texture;
+    out_image.* = &fake_loader_texture;
+    return R.ok;
 }
 
 fn fakeFreeImage(self: [*c]c.ke_image_loader, data: [*c]c.ke_texture_data) callconv(.c) void {
@@ -775,7 +700,7 @@ const Resolver = struct {
 fn resolveMesh(r: *const Resolver, path: [*:0]const u8) !c.ke_mesh_shape_data {
     var data = std.mem.zeroes(c.ke_mesh_shape_data);
     const a = r.api();
-    try testing.expect(a.resolve_mesh.?(a, path, &data, null));
+    try testing.expect(a.resolve_mesh.?(a, path, &data) == R.ok);
     return data;
 }
 
@@ -784,7 +709,7 @@ fn resolveMaterial(path: [*:0]const u8) !c.ke_material_spec {
     defer r.deinit();
     var spec = std.mem.zeroes(c.ke_material_spec);
     const a = r.api();
-    try testing.expect(a.resolve_material.?(a, path, &spec, null));
+    try testing.expect(a.resolve_material.?(a, path, &spec) == R.ok);
     return spec;
 }
 
@@ -798,7 +723,7 @@ test "an absolute texture path is handed to the injected image loader untouched"
 
     const a = r.api();
     var data: ?*c.ke_texture_data = null;
-    try testing.expect(a.resolve_texture.?(a, img.cPath(), &data, null));
+    try testing.expect(a.resolve_texture.?(a, img.cPath(), &data) == R.ok);
     try testing.expect(data != null);
     try testing.expectEqual(@as(u32, 1), fake_loader_load_count);
     try testing.expectEqualStrings(img.fullPath(), fakeLoaderLastPath());
@@ -817,7 +742,7 @@ test "a res prefixed texture path is joined onto the project root" {
 
     const a = r.api();
     var data: ?*c.ke_texture_data = null;
-    try testing.expect(a.resolve_texture.?(a, "res://probe.png", &data, null));
+    try testing.expect(a.resolve_texture.?(a, "res://probe.png", &data) == R.ok);
     try testing.expectEqualStrings(img.fullPath(), fakeLoaderLastPath());
 
     a.free_texture.?(a, data);
@@ -830,7 +755,7 @@ test "a texture that is not on disk fails before the loader is ever called" {
 
     const a = r.api();
     var data: ?*c.ke_texture_data = null;
-    try testing.expect(!a.resolve_texture.?(a, "/this/does/not/exist.png", &data, null));
+    try testing.expect(a.resolve_texture.?(a, "/this/does/not/exist.png", &data) != R.ok);
     try testing.expectEqual(@as(u32, 0), fake_loader_load_count);
 }
 
@@ -840,7 +765,7 @@ test "a resolver built without an image loader refuses to resolve a texture" {
 
     const a = r.api();
     var data: ?*c.ke_texture_data = null;
-    try testing.expect(!a.resolve_texture.?(a, "anything.png", &data, null));
+    try testing.expect(a.resolve_texture.?(a, "anything.png", &data) != R.ok);
 }
 
 test "every built in primitive resolves to a mesh" {
@@ -944,7 +869,7 @@ test "a primitive name the baker does not know is not found" {
 
     const a = r.api();
     var data = std.mem.zeroes(c.ke_mesh_shape_data);
-    try testing.expect(!a.resolve_mesh.?(a, "res://primitives/teapot", &data, null));
+    try testing.expect(a.resolve_mesh.?(a, "res://primitives/teapot", &data) != R.ok);
 }
 
 test "a mesh reference outside the primitive namespace is not found" {
@@ -953,7 +878,7 @@ test "a mesh reference outside the primitive namespace is not found" {
 
     const a = r.api();
     var data = std.mem.zeroes(c.ke_mesh_shape_data);
-    try testing.expect(!a.resolve_mesh.?(a, "external.gltf", &data, null));
+    try testing.expect(a.resolve_mesh.?(a, "external.gltf", &data) != R.ok);
 }
 
 test "a path carrying backslashes still reaches the loader as authored" {
@@ -966,7 +891,7 @@ test "a path carrying backslashes still reaches the loader as authored" {
 
     const a = r.api();
     var data: ?*c.ke_texture_data = null;
-    try testing.expect(a.resolve_texture.?(a, img.cPath(), &data, null));
+    try testing.expect(a.resolve_texture.?(a, img.cPath(), &data) == R.ok);
     try testing.expectEqualStrings(img.fullPath(), fakeLoaderLastPath());
     a.free_texture.?(a, data);
 }
@@ -980,7 +905,7 @@ test "a material file that is not toml fails to resolve" {
 
     const a = r.api();
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(!a.resolve_material.?(a, mat.cPath(), &spec, null));
+    try testing.expect(a.resolve_material.?(a, mat.cPath(), &spec) != R.ok);
 }
 
 test "a material that names no alpha mode resolves as opaque with the default cutoff" {
@@ -1062,9 +987,9 @@ test "resolving a texture through a null self, path or output is rejected" {
 
     const a = r.api();
     var data: ?*c.ke_texture_data = null;
-    try testing.expect(!a.resolve_texture.?(null, "test.png", &data, null));
-    try testing.expect(!a.resolve_texture.?(a, null, &data, null));
-    try testing.expect(!a.resolve_texture.?(a, "test.png", null, null));
+    try testing.expect(a.resolve_texture.?(null, "test.png", &data) != R.ok);
+    try testing.expect(a.resolve_texture.?(a, null, &data) != R.ok);
+    try testing.expect(a.resolve_texture.?(a, "test.png", null) != R.ok);
 }
 
 test "resolving a mesh through a null self, path or output is rejected" {
@@ -1073,9 +998,9 @@ test "resolving a mesh through a null self, path or output is rejected" {
 
     const a = r.api();
     var data = std.mem.zeroes(c.ke_mesh_shape_data);
-    try testing.expect(!a.resolve_mesh.?(null, "res://primitives/cube", &data, null));
-    try testing.expect(!a.resolve_mesh.?(a, null, &data, null));
-    try testing.expect(!a.resolve_mesh.?(a, "res://primitives/cube", null, null));
+    try testing.expect(a.resolve_mesh.?(null, "res://primitives/cube", &data) != R.ok);
+    try testing.expect(a.resolve_mesh.?(a, null, &data) != R.ok);
+    try testing.expect(a.resolve_mesh.?(a, "res://primitives/cube", null) != R.ok);
 }
 
 test "resolving a material through a null self, path or output is rejected" {
@@ -1084,9 +1009,9 @@ test "resolving a material through a null self, path or output is rejected" {
 
     const a = r.api();
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(!a.resolve_material.?(null, "test.material", &spec, null));
-    try testing.expect(!a.resolve_material.?(a, null, &spec, null));
-    try testing.expect(!a.resolve_material.?(a, "test.material", null, null));
+    try testing.expect(a.resolve_material.?(null, "test.material", &spec) != R.ok);
+    try testing.expect(a.resolve_material.?(a, null, &spec) != R.ok);
+    try testing.expect(a.resolve_material.?(a, "test.material", null) != R.ok);
 }
 
 test "freeing a texture through a null self or a null texture is harmless" {
@@ -1128,7 +1053,7 @@ test "without a project root a res prefixed path keeps only what follows the pre
 
     const a = r.api();
     var spec = std.mem.zeroes(c.ke_material_spec);
-    try testing.expect(a.resolve_material.?(a, @ptrCast(&ref_buf), &spec, null));
+    try testing.expect(a.resolve_material.?(a, @ptrCast(&ref_buf), &spec) == R.ok);
 }
 
 test "the none handle of every render resource is all bits zero" {
@@ -1161,9 +1086,9 @@ test "a res:// path joins the project root and any other path stands as written"
     const r = h.ref.?;
     var out: [64]u8 = undefined;
 
-    try testing.expect(r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len, null));
+    try testing.expect(r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len) == R.ok);
     try testing.expectEqualStrings("/game/scenes/a.toml", std.mem.sliceTo(&out, 0));
-    try testing.expect(r.*.resolve_path.?(r, "other/b.toml", &out, out.len, null));
+    try testing.expect(r.*.resolve_path.?(r, "other/b.toml", &out, out.len) == R.ok);
     try testing.expectEqualStrings("other/b.toml", std.mem.sliceTo(&out, 0));
 }
 
@@ -1172,10 +1097,7 @@ test "a resolved path that does not fit is refused rather than cut" {
     defer h.destroy.?(h.ref);
     const r = h.ref.?;
     var out: [8]u8 = undefined;
-    var err: [*c]c.ke_error = null;
-
-    try testing.expect(!r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len, &err));
-    try testing.expectEqual(E.typeOf(.invalid_argument), err.*.type);
+    try testing.expectError(error.InvalidArgument, R.check(r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len)));
 }
 
 test "creating and destroying a resolver leaves no block allocated" {

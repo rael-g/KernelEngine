@@ -20,8 +20,9 @@ extern "C" {
 #endif
 
 /// @brief Creates a ke_image_loader that decodes with stb_image and logs a failed decode's reason.
-/// @return Handle whose @c ref is NULL when the loader cannot be allocated.
-KE_ASSET_STB_IMAGE_API ke_image_loader_handle ke_image_loader_stb_create(ke_error **out_error);
+/// @param out_loader [out] Receives the loader; left zeroed on failure.
+/// @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p out_loader, or KE_RESULT_OUT_OF_MEMORY.
+KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(ke_image_loader_handle *out_loader);
 
 #ifdef __cplusplus
 }

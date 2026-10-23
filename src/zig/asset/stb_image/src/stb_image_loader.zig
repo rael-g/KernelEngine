@@ -14,7 +14,7 @@ const stb = @import("c");
 
 const c = @import("c");
 
-const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
 
 const log = std.log.scoped(.asset_stb_image);
 
@@ -34,40 +34,37 @@ fn destroy(self: ?*c.ke_image_loader) callconv(.c) void {
     gpa.destroy(stateOf(loader));
 }
 
-/// Called through the `load_image` slot. A decode failure logs stb's failure reason as a warning
-/// and reports a not-found error; an allocation failure reports an out-of-memory error. Either way
-/// the call returns null with nothing left allocated. On success the result owns a copy of the
-/// pixels, independent of stb_image's allocator, and its path field holds the path truncated to
-/// fit; it is released through `freeImage`. The call runs on the calling thread.
-fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_error: [*c][*c]c.ke_error) callconv(.c) [*c]c.ke_texture_data {
-    if (self == null or path == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return null;
-    }
+/// Called through the `load_image` slot. A decode failure logs stb's failure reason and fails with
+/// not found; an allocation failure fails with out of memory. Either way nothing is left allocated
+/// and the image written is null. On success the result owns a copy of the pixels, independent of
+/// stb_image's allocator, and its path field holds the path truncated to fit; it is released
+/// through `freeImage`. The call runs on the calling thread.
+fn loadImage(self: ?*c.ke_image_loader, path: [*c]const u8, out_image: ?*[*c]c.ke_texture_data) callconv(.c) c.ke_result {
+    const out = out_image orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    if (self == null or path == null) return R.code(error.InvalidArgument);
+    out.* = decode(path) catch |err| return R.code(err);
+    return R.ok;
+}
+
+fn decode(path: [*c]const u8) R.Error!*c.ke_texture_data {
     var w: c_int = 0;
     var h: c_int = 0;
     var channels: c_int = 0;
     const raw = stb.stbi_load(path, &w, &h, &channels, 4);
     if (raw == null) {
         log.warn("{s}: {s}", .{ path, stb.stbi_failure_reason() });
-        E.fail(out_error, .not_found, "image file not found or failed to decode", @src());
-        return null;
+        return error.NotFound;
     }
     defer stb.stbi_image_free(raw);
 
     const pixel_bytes: usize = @as(usize, @intCast(w)) * @as(usize, @intCast(h)) * 4;
 
-    const data = gpa.create(c.ke_texture_data) catch {
-        E.fail(out_error, .out_of_memory, "texture data allocation failed", @src());
-        return null;
-    };
+    const data = gpa.create(c.ke_texture_data) catch return error.OutOfMemory;
+    errdefer gpa.destroy(data);
     data.* = std.mem.zeroes(c.ke_texture_data);
 
-    const pixels = gpa.alloc(u8, pixel_bytes) catch {
-        gpa.destroy(data);
-        E.fail(out_error, .out_of_memory, "pixel buffer allocation failed", @src());
-        return null;
-    };
+    const pixels = gpa.alloc(u8, pixel_bytes) catch return error.OutOfMemory;
     @memcpy(pixels, @as([*]const u8, @ptrCast(raw))[0..pixel_bytes]);
 
     data.pixels = pixels.ptr;
@@ -96,15 +93,18 @@ fn freeImage(self: ?*c.ke_image_loader, data: [*c]c.ke_texture_data) callconv(.c
 }
 
 /// The exported factory. On success the handle's `ref` is the loader with both slots wired and
-/// its `destroy` releases it; when the loader cannot be allocated `ref` is null and `out_error`
-/// holds an out-of-memory error.
-export fn ke_image_loader_stb_create(out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_image_loader_handle {
+/// its `destroy` releases it; when the loader cannot be allocated it fails with out of memory and
+/// the handle stays zeroed.
+export fn ke_image_loader_stb_create(out_loader: ?*c.ke_image_loader_handle) callconv(.c) c.ke_result {
+    const out = out_loader orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
     const state = gpa.create(State) catch {
-        E.fail(out_error, .out_of_memory, "loader allocation failed", @src());
-        return .{ .ref = null, .destroy = null };
+        log.warn("creating the image loader failed: out of memory", .{});
+        return R.code(error.OutOfMemory);
     };
     state.* = .{ .api = .{ .handle = state, .load_image = &loadImage, .free_image = &freeImage } };
-    return .{ .ref = &state.api, .destroy = &destroy };
+    out.* = .{ .ref = &state.api, .destroy = &destroy };
+    return R.ok;
 }
 
 const testing = std.testing;
@@ -112,7 +112,9 @@ const testing = std.testing;
 const testing_libc = @import("c");
 
 fn createLoader() c.ke_image_loader_handle {
-    return ke_image_loader_stb_create(null);
+    var h: c.ke_image_loader_handle = .{ .ref = null, .destroy = null };
+    _ = ke_image_loader_stb_create(&h);
+    return h;
 }
 
 test "creating the loader wires up a handle with every vtable slot filled" {
@@ -130,8 +132,10 @@ test "loading an image with a null loader or a null path fails" {
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.*.load_image.?(null, "path", null) == null);
-    try testing.expect(h.ref.*.load_image.?(h.ref, null, null) == null);
+    var data: [*c]c.ke_texture_data = null;
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.*.load_image.?(null, "path", &data)));
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.*.load_image.?(h.ref, null, &data)));
+    try testing.expect(data == null);
 }
 
 test "freeing a null image is a no-op" {
@@ -168,7 +172,8 @@ test "loading a one pixel targa yields its dimensions and pixels" {
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
-    const data = h.ref.*.load_image.?(h.ref, path.ptr, null);
+    var data: [*c]c.ke_texture_data = null;
+    try R.check(h.ref.*.load_image.?(h.ref, path.ptr, &data));
     try testing.expect(data != null);
     defer h.ref.*.free_image.?(h.ref, data);
 

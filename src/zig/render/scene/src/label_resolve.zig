@@ -47,7 +47,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
     };
 
     var data: ?*c.ke_font_data = null;
-    if (!resolver.resolve_font.?(resolver, &l.font, l.font_size, first_codepoint, codepoint_count, atlas_size, &data, null)) {
+    if (resolver.resolve_font.?(resolver, &l.font, l.font_size, first_codepoint, codepoint_count, atlas_size, &data) != c.KE_OK) {
         reportUnresolved(path, "the asset resolver could not read it");
         return c.KE_UI_FONT_FAILED;
     }

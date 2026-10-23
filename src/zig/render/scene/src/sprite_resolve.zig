@@ -73,7 +73,8 @@ fn resolveTexture(st: *State, sp: *c.ke_sprite2d_component) c.ke_texture_handle 
     if (sp.texture_handle.bits != c.KE_HANDLE_NONE) return sp.texture_handle;
 
     const resolver = st.resolver orelse return c.KE_TEXTURE_NONE;
-    sp.texture_handle = resolver.resolve_texture_into.?(resolver, st.core, &sp.texture, null);
+    if (resolver.resolve_texture_into.?(resolver, st.core, &sp.texture, &sp.texture_handle) != c.KE_OK)
+        sp.texture_handle = c.KE_TEXTURE_NONE;
     return sp.texture_handle;
 }
 

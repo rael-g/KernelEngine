@@ -67,8 +67,12 @@ fn pathDirname(path: []const u8) []const u8 {
 /// checks that the file exists.
 fn resolvePath(s: *const State, base_dir: []const u8, ref: [*:0]const u8, out: []u8, out_error: [*c][*c]c.ke_error) bool {
     const r = std.mem.span(ref);
-    if (std.mem.startsWith(u8, r, res_prefix))
-        return s.assets.resolve_path.?(s.assets, ref, out.ptr, out.len, out_error);
+    if (std.mem.startsWith(u8, r, res_prefix)) {
+        const resolved = s.assets.resolve_path.?(s.assets, ref, out.ptr, out.len);
+        if (resolved == c.KE_OK) return true;
+        E.failCode(out_error, resolved, "the asset resolver could not resolve the scene path", @src());
+        return false;
+    }
     const absolute = r.len > 0 and (r[0] == '/' or (r.len > 1 and r[1] == ':'));
     const written = if (absolute) std.fmt.bufPrintZ(out, "{s}", .{r}) else std.fmt.bufPrintZ(out, "{s}/{s}", .{ base_dir, r });
     _ = written catch {
