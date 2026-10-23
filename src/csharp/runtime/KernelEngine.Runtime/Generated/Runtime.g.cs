@@ -79,12 +79,13 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
 
     ke_runtime* INativeRuntime.Native => Handle;
 
+    /// <summary>Creates a runtime over ecs and scheduler, both borrowed for its lifetime.</summary>
+    /// <param name="@params">NULL takes every default.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     internal Runtime(ke_ecs* ecs, ke_scheduler* scheduler, ke_runtime_params* @params)
     {
-        ke_error* err = null;
-        var handle = KernelEngine.Runtime.Native.NativeMethods.runtime_create(ecs, scheduler, @params, &err);
-        if (handle.@ref == null) throw NativeErrors.FromNative(err, "ke_runtime_create");
+        ke_runtime_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Runtime.Native.NativeMethods.runtime_create(ecs, scheduler, @params, &handle), "ke_runtime_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -103,6 +104,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <param name="name">Identifies the module in diagnostics.</param>
     /// <param name="onLoad">Registers the module's components and systems.</param>
     /// <param name="onUnload">Releases what the load acquired. A module that acquired nothing leaves it out.</param>
+    /// <returns>Receives the module's id; 0 on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong RegisterModule(string name, ModuleLoad? onLoad, ModuleUnload? onUnload = null)
     {
@@ -115,26 +117,33 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
             ke_runtime_module_params p = default;
             p.name = (sbyte*)namePtr;
             p.user_data = (void*)GCHandle.ToIntPtr(userDataHandle);
-            p.on_load = onLoad is null ? null : (delegate* unmanaged[Cdecl]<ke_runtime*, void*, ke_error**, bool>)&RegisterModuleOnLoadTrampoline;
+            p.on_load = onLoad is null ? null : (delegate* unmanaged[Cdecl]<ke_runtime*, void*, KernelEngine.Result.Native.ke_result>)&RegisterModuleOnLoadTrampoline;
             p.on_unload = onUnload is null ? null : (delegate* unmanaged[Cdecl]<ke_runtime*, void*, void>)&RegisterModuleOnUnloadTrampoline;
-            ke_error* err = null;
-            ulong result;
+            s_parkedCallbackException = null;
+            ulong resultOut = default;
+            KernelEngine.Result.Native.ke_result rc;
+            bool ok;
             try
             {
-                result = Handle->register_module(Handle, &p, &err);
+                ok = (rc = Handle->register_module(Handle, &p, &resultOut)) == KernelEngine.Result.Native.ke_result.KE_OK;
             }
             catch
             {
                 if (userDataHandle.IsAllocated) userDataHandle.Free();
                 throw;
             }
-            if (err != null)
+            if (s_parkedCallbackException is { } parked)
+            {
+                s_parkedCallbackException = null;
+                throw parked;
+            }
+            if (!ok)
             {
                 if (userDataHandle.IsAllocated) userDataHandle.Free();
-                throw NativeErrors.FromNative(err, "register_module");
+                throw KernelEngine.NativeResults.FromCode(rc, "register_module");
             }
-            if (userDataHandle.IsAllocated) _retainedUserData[result] = userDataHandle;
-            return result;
+            if (userDataHandle.IsAllocated) _retainedUserData[resultOut] = userDataHandle;
+            return resultOut;
         }
     }
 
@@ -147,21 +156,21 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static bool RegisterModuleOnLoadTrampoline(ke_runtime* arg0, void* ctx, ke_error** arg2)
+    private static KernelEngine.Result.Native.ke_result RegisterModuleOnLoadTrampoline(ke_runtime* arg0, void* ctx)
     {
         try
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterModuleClosures state && state.OnLoad is { } handler)
             {
                 handler(state.Owner);
-                return true;
+                return KernelEngine.Result.Native.ke_result.KE_OK;
             }
-            return false;
+            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_module_load_fn: no handler is registered"));
         }
         catch (Exception ex)
         {
-            NativeErrors.ToNative(arg2, ex, "ke_module_load_fn");
-            return false;
+            s_parkedCallbackException ??= ex;
+            return KernelEngine.NativeResults.ToCode(ex);
         }
     }
 
@@ -190,7 +199,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <param name="after">Names of systems of the same phase this one runs after, whatever they access. A name is resolved when the phase is built, so it may name a system registered later; a name no system of the phase carries fails the tick.</param>
     /// <param name="before">Names of systems of the same phase this one runs before, resolved like `after`.</param>
     /// <param name="exclusive">The body runs alone at the start of its phase, before every system of the phase that is not exclusive, and what it records is applied before they run. Two exclusive systems are ordered like two writers of one component. Neither its access nor per_entity orders or splits it.</param>
-    /// <returns>0 when the system was refused.</returns>
+    /// <returns>Receives the system's id; 0 on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false, ReadOnlySpan<string> after = default, ReadOnlySpan<string> before = default, bool exclusive = false)
     {
@@ -232,7 +241,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
                                         p.name = (sbyte*)namePtr;
                                         p.phase = (ke_phase)phase;
                                         p.user_data = (void*)GCHandle.ToIntPtr(executeHandle);
-                                        p.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, ke_error**, bool>)&RegisterSystemExecuteTrampoline;
+                                        p.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, KernelEngine.Result.Native.ke_result>)&RegisterSystemExecuteTrampoline;
                                         p.queries = queriesPtr;
                                         p.query_count = (uint)queries.Length;
                                         p.access_list = (ke_component_access*)accessListPtr;
@@ -244,24 +253,31 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
                                         p.before = (sbyte**)beforePtr;
                                         p.before_count = (uint)before.Length;
                                         p.exclusive = exclusive;
-                                        ke_error* err = null;
-                                        ulong result;
+                                        s_parkedCallbackException = null;
+                                        ulong resultOut = default;
+                                        KernelEngine.Result.Native.ke_result rc;
+                                        bool ok;
                                         try
                                         {
-                                            result = Handle->register_system(Handle, &p, &err);
+                                            ok = (rc = Handle->register_system(Handle, &p, &resultOut)) == KernelEngine.Result.Native.ke_result.KE_OK;
                                         }
                                         catch
                                         {
                                             if (executeHandle.IsAllocated) executeHandle.Free();
                                             throw;
                                         }
-                                        if (err != null)
+                                        if (s_parkedCallbackException is { } parked)
+                                        {
+                                            s_parkedCallbackException = null;
+                                            throw parked;
+                                        }
+                                        if (!ok)
                                         {
                                             if (executeHandle.IsAllocated) executeHandle.Free();
-                                            throw NativeErrors.FromNative(err, "register_system");
+                                            throw KernelEngine.NativeResults.FromCode(rc, "register_system");
                                         }
-                                        if (executeHandle.IsAllocated) _retainedExecute[result] = executeHandle;
-                                        return result;
+                                        if (executeHandle.IsAllocated) _retainedExecute[resultOut] = executeHandle;
+                                        return resultOut;
                                     }
                                 }
                                 finally
@@ -292,23 +308,22 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static bool RegisterSystemExecuteTrampoline(ke_system_ctx* arg0, void* ctx, float arg2, ke_error** arg3)
+    private static KernelEngine.Result.Native.ke_result RegisterSystemExecuteTrampoline(ke_system_ctx* arg0, void* ctx, float arg2)
     {
         try
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterSystemClosures state && state.Execute is { } handler)
             {
                 handler((nint)arg0, arg2);
-                return true;
+                return KernelEngine.Result.Native.ke_result.KE_OK;
             }
-            return false;
+            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_system_execute_fn: no handler is registered"));
         }
         catch (Exception ex)
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterSystemClosures failed)
                 failed.Owner._callbackFailures.Enqueue(ex);
-            NativeErrors.ToNative(arg3, ex, "ke_system_execute_fn");
-            return false;
+            return KernelEngine.NativeResults.ToCode(ex);
         }
     }
 
@@ -316,8 +331,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <exception cref="Exception">The native call failed.</exception>
     public void UnregisterSystem(ulong id)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->unregister_system(Handle, id, &err), err, "unregister_system");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->unregister_system(Handle, id), "unregister_system");
     }
 
     /// <summary>The id of the system registered last and still registered, or 0 when there is none.</summary>
@@ -330,16 +344,14 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <exception cref="Exception">The native call failed.</exception>
     public void DeclareExclusive(uint group, uint member)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->declare_exclusive(Handle, group, member, &err), err, "declare_exclusive");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->declare_exclusive(Handle, group, member), "declare_exclusive");
     }
 
     /// <summary>Declares that whoever owns cid orders the systems writing it, so the runtime puts no order between two writers of cid. A writer still runs before a system that only reads it.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void DeclareSelfOrdered(uint cid)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->declare_self_ordered(Handle, cid, &err), err, "declare_self_ordered");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->declare_self_ordered(Handle, cid), "declare_self_ordered");
     }
 
     /// <summary>Builds the order of every phase as the next tick would. Within a phase, a system runs after the systems it names in `after` and before those it names in `before`, a writer of a component before a system that only reads it, and of two writers with neither order, the one registered first runs first: an ambiguity.</summary>
@@ -347,17 +359,16 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <exception cref="Exception">The native call failed.</exception>
     public void CheckOrder(bool refuseAmbiguity)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->check_order(Handle, refuseAmbiguity, &err), err, "check_order");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->check_order(Handle, refuseAmbiguity), "check_order");
     }
 
     /// <summary>Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Tick(float dt)
     {
-        ke_error* err = null;
-        if (!Handle->tick(Handle, dt, &err) && _callbackFailures.IsEmpty)
-            throw NativeErrors.FromNative(err, "tick");
+        KernelEngine.Result.Native.ke_result rc;
+        if ((rc = Handle->tick(Handle, dt)) != KernelEngine.Result.Native.ke_result.KE_OK && _callbackFailures.IsEmpty)
+            throw KernelEngine.NativeResults.FromCode(rc, "tick");
         DrainCallbackFailures();
     }
 
@@ -365,9 +376,9 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     /// <exception cref="Exception">The native call failed.</exception>
     public void Flush()
     {
-        ke_error* err = null;
-        if (!Handle->flush_render(Handle, &err) && _callbackFailures.IsEmpty)
-            throw NativeErrors.FromNative(err, "flush_render");
+        KernelEngine.Result.Native.ke_result rc;
+        if ((rc = Handle->flush_render(Handle)) != KernelEngine.Result.Native.ke_result.KE_OK && _callbackFailures.IsEmpty)
+            throw KernelEngine.NativeResults.FromCode(rc, "flush_render");
         DrainCallbackFailures();
     }
 

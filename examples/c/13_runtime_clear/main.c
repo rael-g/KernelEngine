@@ -76,8 +76,9 @@ int main(void)
     if (made != KE_OK) die_result("scheduler", made);
 
     ke_runtime_params rp = { 0 };
-    ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rp, &err);
-    if (!rt.ref) die("runtime", err);
+    ke_runtime_handle rt = { 0 };
+    ke_result made_runtime = ke_runtime_create(ecs.ref, sched.ref, &rp, &rt);
+    if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
     ke_render_resource_binder_handle binder = ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &err);
     if (!binder.ref) die("resource binder", err);
@@ -107,11 +108,13 @@ int main(void)
     {
         win.ref->poll_events(win.ref);
         double t = now_seconds();
-        rt.ref->tick(rt.ref, (float)(t - prev), &err);
+        ke_result ticked = rt.ref->tick(rt.ref, (float)(t - prev));
+        if (ticked != KE_OK) die_result("tick", ticked);
         prev = t;
     }
 
-    if (!rt.ref->flush_render(rt.ref, &err)) die("flush render", err);
+    ke_result flushed = rt.ref->flush_render(rt.ref);
+    if (flushed != KE_OK) die_result("flush render", flushed);
     frame.destroy(frame.ref);
     scene.destroy(scene.ref);
     camera.destroy(camera.ref);

@@ -374,7 +374,10 @@ fn bindDeferred(
         return false;
     }
     var pending: PendingBind = .{ .s = s, .entity = entity, .type_id = type_id, .instance = instance };
-    return cmds.@"defer".?(cmds, cbBind, &pending, @sizeOf(PendingBind), out_error);
+    const recorded = cmds.@"defer".?(cmds, cbBind, &pending, @sizeOf(PendingBind));
+    if (recorded == c.KE_OK) return true;
+    E.failCode(out_error, recorded, "recording a deferred tree change failed", @src());
+    return false;
 }
 
 /// Slot `unbind_deferred`. Only the host and the command queue are checked when it is called, and
@@ -396,7 +399,10 @@ fn unbindDeferred(
         return false;
     };
     var pending: PendingUnbind = .{ .s = stateOf(self), .entity = entity };
-    return cmds.@"defer".?(cmds, cbUnbind, &pending, @sizeOf(PendingUnbind), out_error);
+    const recorded = cmds.@"defer".?(cmds, cbUnbind, &pending, @sizeOf(PendingUnbind));
+    if (recorded == c.KE_OK) return true;
+    E.failCode(out_error, recorded, "recording a deferred tree change failed", @src());
+    return false;
 }
 
 /// Slot `unbind`. Removes the entity's binding at once; an entity with none is left alone.

@@ -182,8 +182,9 @@ int main(void)
     if (made != KE_OK) die_result("scheduler", made);
 
     ke_runtime_params rtp = { 0 };
-    ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);
-    if (!rt.ref) die("runtime", err);
+    ke_runtime_handle rt = { 0 };
+    ke_result made_runtime = ke_runtime_create(ecs.ref, sched.ref, &rtp, &rt);
+    if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
     renderer render;
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref);
@@ -250,11 +251,13 @@ int main(void)
     {
         win.ref->poll_events(win.ref);
         double t = now_seconds();
-        rt.ref->tick(rt.ref, (float)(t - prev), &err);
+        ke_result ticked = rt.ref->tick(rt.ref, (float)(t - prev));
+        if (ticked != KE_OK) die_result("tick", ticked);
         prev = t;
     }
 
-    if (!rt.ref->flush_render(rt.ref, &err)) die("flush render", err);
+    ke_result flushed = rt.ref->flush_render(rt.ref);
+    if (flushed != KE_OK) die_result("flush render", flushed);
     renderer_destroy(&render);
     rt.destroy(rt.ref);
     sched.destroy(sched.ref);

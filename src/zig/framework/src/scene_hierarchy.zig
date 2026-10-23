@@ -4,6 +4,8 @@
 const std = @import("std");
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.framework);
 const heap = @import("heap");
 const mat4 = @import("mat4.zig");
 
@@ -89,10 +91,10 @@ fn flatten(s: *State, ctx: ?*c.ke_system_ctx) void {
 /// phase. It rebuilds `order` with `flatten`, then makes a single pass over it, so that a parent's
 /// world matrix is final before any child reads it and no recursion is needed. An entity without
 /// a world transform is passed over; one without a parent, or whose parent has no world
-/// transform, composes with the identity. Always returns true and reports nothing. Without a
-/// `State` it does nothing.
-fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
-    const s: *State = @ptrCast(@alignCast(user orelse return true));
+/// transform, composes with the identity. Always succeeds and reports nothing. Without a `State` it
+/// does nothing.
+fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    const s: *State = @ptrCast(@alignCast(user orelse return R.ok));
     flatten(s, ctx);
 
     const identity = identityMatrix();
@@ -116,7 +118,7 @@ fn propagateSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c
         }
         mat4.mul(&w.matrix, &local, parent_world);
     }
-    return true;
+    return R.ok;
 }
 
 /// The destroy of the handle. Frees the `State`. The runtime keeps the `State` as the user data of
@@ -194,7 +196,9 @@ export fn ke_scene_hierarchy_create(
     propagate.user_data = s;
     propagate.execute = propagateSystem;
 
-    if (runtime.register_system.?(runtime, &propagate, out_error) == 0) {
+    var system_id: c.ke_system_id = 0;
+    if (runtime.register_system.?(runtime, &propagate, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
         heap.gpa.destroy(s);
         return empty;
     }

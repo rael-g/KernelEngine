@@ -17,7 +17,7 @@ public unsafe interface INativeEcsCommands
     ke_ecs_commands* Native { get; }
 }
 
-/// <summary>A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation's effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation fails it with the reason in `out_error` and leaves the queue unchanged.</summary>
+/// <summary>A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation's effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.</summary>
 public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
 {
     private ke_ecs_commands* _native;
@@ -40,13 +40,12 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
     }
 
     /// <summary>Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.</summary>
-    /// <returns>KE_ENTITY_INVALID when the operation could not be recorded.</returns>
+    /// <returns>Receives the id; KE_ENTITY_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong Spawn()
     {
-        ke_error* err = null;
-        var result = Handle->spawn(Handle, &err);
-        if (err != null) throw NativeErrors.FromNative(err, "spawn");
+        ulong result;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->spawn(Handle, &result), "spawn");
         return result;
     }
 
@@ -56,8 +55,7 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
     {
         fixed (TData* dataPtr = &data)
         {
-            ke_error* err = null;
-            NativeErrors.ThrowIfFailed(Handle->attach(Handle, entity, cid, (void*)dataPtr, (nuint)sizeof(TData), &err), err, "attach");
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->attach(Handle, entity, cid, (void*)dataPtr, (nuint)sizeof(TData)), "attach");
         }
     }
 
@@ -65,16 +63,14 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
     /// <exception cref="Exception">The native call failed.</exception>
     public void Detach(ulong entity, uint cid)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->detach(Handle, entity, cid, &err), err, "detach");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->detach(Handle, entity, cid), "detach");
     }
 
     /// <summary>Records destroying `entity`.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Despawn(ulong entity)
     {
-        ke_error* err = null;
-        NativeErrors.ThrowIfFailed(Handle->despawn(Handle, entity, &err), err, "despawn");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->despawn(Handle, entity), "despawn");
     }
 
     /// <summary>Releases the native ecscommands.</summary>

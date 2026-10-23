@@ -323,10 +323,10 @@
       "slots": [
         {
           "name": "register_module",
-          "returns": "ke_module_id",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Loads a module into the runtime, running its load hook before returning.",
-          "return_doc": null,
+          "return_doc": "KE_OK, the code the load hook failed with, or KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "p",
@@ -337,20 +337,22 @@
               "doc": "What the module is called and the hooks it registers."
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_id",
+              "type": "ke_module_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the module\u0027s id; 0 on failure."
             }
           ],
           "receiver": "ke_runtime *"
         },
         {
           "name": "register_system",
-          "returns": "ke_system_id",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Registers a system body against the phase and the component access it declares. Registered from a body, the system takes effect with the next tick and a refusal is not reported.",
-          "return_doc": "0 when the system was refused.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a body, phase or declaration the runtime refuses; KE_RESULT_OUT_OF_MEMORY when the phase is full or storage cannot grow.",
           "params": [
             {
               "name": "p",
@@ -361,30 +363,26 @@
               "doc": "What the system is called, when it runs, and what it touches."
             },
             {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
+              "name": "out_id",
+              "type": "ke_system_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the system\u0027s id; 0 on failure."
             }
           ],
           "receiver": "ke_runtime *"
         },
         {
           "name": "unregister_system",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.",
-          "return_doc": "false when no system has that id.",
+          "return_doc": "KE_OK, or KE_RESULT_NOT_FOUND when no system has that id.",
           "params": [
             {
               "name": "id",
               "type": "ke_system_id",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }
@@ -402,10 +400,10 @@
         },
         {
           "name": "declare_exclusive",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Declares member one of the members of the exclusive group group: no entity holds two members of one group. Two systems whose every query requires a different member of the same group touch disjoint entities, so what they access through their queries puts no order between them; what their access lists name still does.",
-          "return_doc": "false when group equals member or the declaration cannot be stored.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT when group equals member, or KE_RESULT_OUT_OF_MEMORY when the declaration cannot be stored.",
           "params": [
             {
               "name": "group",
@@ -418,32 +416,20 @@
               "type": "ke_component_id",
               "tags": [],
               "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "ke_runtime *"
         },
         {
           "name": "declare_self_ordered",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Declares that whoever owns cid orders the systems writing it, so the runtime puts no order between two writers of cid. A writer still runs before a system that only reads it.",
-          "return_doc": "false when the declaration cannot be stored.",
+          "return_doc": "KE_OK, or KE_RESULT_OUT_OF_MEMORY when the declaration cannot be stored.",
           "params": [
             {
               "name": "cid",
               "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }
@@ -452,44 +438,32 @@
         },
         {
           "name": "check_order",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Builds the order of every phase as the next tick would. Within a phase, a system runs after the systems it names in \u0060after\u0060 and before those it names in \u0060before\u0060, a writer of a component before a system that only reads it, and of two writers with neither order, the one registered first runs first: an ambiguity.",
-          "return_doc": "false with the error naming the systems when an \u0060after\u0060 or a \u0060before\u0060 names no system of its phase, the order has a cycle, or, when refused, two writers are ambiguous.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when an \u0060after\u0060 or a \u0060before\u0060 names no system of its phase; KE_RESULT_GENERAL when the order has a cycle or, when refused, two writers are ambiguous. The systems involved are named in the log.",
           "params": [
             {
               "name": "refuse_ambiguity",
               "type": "_Bool",
               "tags": [],
               "doc": "When true, an ambiguity fails the check too."
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
             }
           ],
           "receiver": "ke_runtime *"
         },
         {
           "name": "tick",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [
             "drains"
           ],
           "doc": "Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.",
-          "return_doc": "false when a body of this tick failed.",
+          "return_doc": "KE_OK, or the code a body of this tick failed with.",
           "params": [
             {
               "name": "dt",
               "type": "float",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_error",
-              "type": "ke_error **",
               "tags": [],
               "doc": null
             }
@@ -498,21 +472,14 @@
         },
         {
           "name": "flush_render",
-          "returns": "_Bool",
+          "returns": "ke_result",
           "tags": [
             "drains",
             "name:Flush"
           ],
           "doc": "Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.",
-          "return_doc": "false when a body of the render phase failed.",
-          "params": [
-            {
-              "name": "out_error",
-              "type": "ke_error **",
-              "tags": [],
-              "doc": null
-            }
-          ],
+          "return_doc": "KE_OK, or the code a body of the render phase failed with.",
+          "params": [],
           "receiver": "ke_runtime *"
         }
       ]
@@ -619,9 +586,9 @@
   "functions": [
     {
       "name": "ke_runtime_create",
-      "returns": "ke_runtime_handle",
-      "doc": null,
-      "return_doc": null,
+      "returns": "ke_result",
+      "doc": "Creates a runtime over ecs and scheduler, both borrowed for its lifetime.",
+      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null ecs, scheduler or out_runtime; KE_RESULT_OUT_OF_MEMORY.",
       "params": [
         {
           "name": "ecs",
@@ -638,14 +605,19 @@
         {
           "name": "params",
           "type": "const ke_runtime_params *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "borrowed",
+            "optional"
+          ],
+          "doc": "NULL takes every default."
         },
         {
-          "name": "out_error",
-          "type": "ke_error **",
-          "tags": [],
-          "doc": null
+          "name": "out_runtime",
+          "type": "ke_runtime_handle *",
+          "tags": [
+            "out"
+          ],
+          "doc": "Receives the runtime; left zeroed on failure."
         }
       ]
     }
@@ -653,7 +625,7 @@
   "callbacks": [
     {
       "name": "ke_module_load_fn",
-      "returns": "_Bool",
+      "returns": "ke_result",
       "doc": "Registers the module\u0027s components and systems against the runtime it is being loaded into. Runs inside register_module, before that call returns.",
       "lanes": [
         {
@@ -671,12 +643,6 @@
             "context"
           ],
           "doc": "Opaque context forwarded from register_module."
-        },
-        {
-          "name": "out_error",
-          "type": "ke_error **",
-          "tags": [],
-          "doc": "Set when the module cannot load; registration fails with it."
         }
       ]
     },
@@ -705,8 +671,8 @@
     },
     {
       "name": "ke_system_execute_fn",
-      "returns": "_Bool",
-      "doc": "One call of a system body. The runtime calls it once per tick the system\u0027s phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread, so only the type of what it failed with makes the trip back: the runtime carries that type to the thread driving the tick and raises a fresh error there, which tick() then fails with. The remaining bodies of the same wave still run \u2014 they were already dispatched \u2014 but no later phase of that tick starts.",
+      "returns": "ke_result",
+      "doc": "One call of a system body. The runtime calls it once per tick the system\u0027s phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread; the code it returns is carried to the thread driving the tick, which tick() then fails with, and the runtime logs the system\u0027s name. The remaining bodies of the same wave still run \u2014 they were already dispatched \u2014 but no later phase of that tick starts.",
       "lanes": [
         {
           "name": "ctx",
@@ -729,12 +695,6 @@
           "type": "float",
           "tags": [],
           "doc": "Seconds since the previous tick, or the fixed timestep in the three fixed phases."
-        },
-        {
-          "name": "out_error",
-          "type": "ke_error **",
-          "tags": [],
-          "doc": "Set when the body cannot finish its work; the tick fails with it."
         }
       ]
     }
@@ -744,8 +704,8 @@
     "ke_component_id": "uint32_t",
     "ke_module_id": "uint64_t",
     "ke_system_id": "uint64_t",
-    "ke_module_load_fn": "_Bool (*)(ke_runtime *, void *, ke_error **)",
+    "ke_module_load_fn": "ke_result (*)(ke_runtime *, void *)",
     "ke_module_unload_fn": "void (*)(ke_runtime *, void *)",
-    "ke_system_execute_fn": "_Bool (*)(ke_system_ctx *, void *, float, ke_error **)"
+    "ke_system_execute_fn": "ke_result (*)(ke_system_ctx *, void *, float)"
   }
 }

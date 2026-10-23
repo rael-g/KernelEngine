@@ -7,6 +7,8 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_frame").logFn };
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.render_frame);
 const frame_producer = @import("frame_producer.zig");
 
 const heap = @import("heap");
@@ -37,12 +39,14 @@ fn frameCid(self: [*c]c.ke_render_frame) callconv(.c) c.ke_component_id {
     return st.frame_cid;
 }
 
-/// The end system: ends the frame on the service, and returns false with the service's own error
-/// when it cannot.
-fn endSystem(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+/// The end system: ends the frame on the service, and fails, logging the service's own error, when
+/// it cannot.
+fn endSystem(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    var err_record: [*c]c.ke_error = null;
     const st: *FrameModule = @ptrCast(@alignCast(user.?));
     const core = st.producer.core;
-    return core.*.end_frame.?(core, out_error);
+    if (core.*.end_frame.?(core, &err_record)) return R.ok;
+    return bodyFailed(err_record);
 }
 
 /// The `destroy` slot of the handle `ke_render_frame_create` returns; a null argument is ignored.
@@ -109,7 +113,9 @@ export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, ou
     begin.pinned_thread = 0;
     begin.user_data = &st.producer;
     begin.execute = frame_producer.system;
-    const begin_id = rt.register_system.?(rt, &begin, out_error);
+    var begin_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &begin, &begin_id) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
     if (begin_id == 0) {
         gpa.destroy(st);
         return empty;
@@ -123,13 +129,23 @@ export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, ou
     end.pinned_thread = 0;
     end.user_data = st;
     end.execute = endSystem;
-    if (rt.register_system.?(rt, &end, out_error) == 0) {
-        _ = rt.unregister_system.?(rt, begin_id, null);
+    var system_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &end, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
+        _ = rt.unregister_system.?(rt, begin_id);
         gpa.destroy(st);
         return empty;
     }
 
     return .{ .ref = &st.api, .destroy = destroyHandle };
+}
+
+
+/// The code a system body returns when a call it made failed and filled `record`, whose message is
+/// logged. A bridge while the calls a body makes still report through `ke_error`.
+fn bodyFailed(record: [*c]const c.ke_error) c.ke_result {
+    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
+    return R.code(error.General);
 }
 
 const testing = std.testing;
@@ -212,14 +228,9 @@ test "a frame the service cannot begin or end fails the render phase with the se
     var st: FrameModule = undefined;
     st.producer = .{ .core = &svc, .camera = &camera };
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!frame_producer.system(null, &st.producer, 0.0, &err));
-    try testing.expect(err != null);
-    try testing.expectEqualStrings("no backbuffer", std.mem.span(err.*.message));
+    try testing.expect(frame_producer.system(null, &st.producer, 0.0) != R.ok);
 
-    err = null;
-    try testing.expect(!endSystem(null, &st, 0.0, &err));
-    try testing.expect(err != null);
+    try testing.expect(endSystem(null, &st, 0.0) != R.ok);
 }
 
 test "creating and destroying the frame leaves no block allocated" {

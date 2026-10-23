@@ -12,6 +12,8 @@ const cAllocBytes = alloc.cAllocBytes;
 const cFreeBytes = alloc.cFreeBytes;
 
 const E = @import("kerror").Errors(c);
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.runtime);
 
 pub const DeferKind = enum(c_int) {
     spawn = 1,
@@ -157,49 +159,47 @@ pub fn ctxSlice(ctx: ?*c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) 
     if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
 }
 
-/// Finds the queue a recording call writes to. It fails with `invalid_argument` for a null or
-/// unbound commands table, and with `not_supported` when the package has no queue, which is the
+/// Finds the queue a recording call writes to. It fails with invalid argument for a null or
+/// unbound commands table, and with not supported when the package has no queue, which is the
 /// case in the render phase.
-pub fn recordTarget(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferQueue {
-    const s = commandsOf(self) orelse {
-        E.fail(out_error, .invalid_argument, "invalid command queue", src);
-        return null;
-    };
-    return s.defer_q orelse {
-        E.fail(out_error, .not_supported, "this phase may not change structure", src);
-        return null;
-    };
+pub fn recordTarget(self: ?*c.ke_ecs_commands) R.Error!*DeferQueue {
+    const s = commandsOf(self) orelse return error.InvalidArgument;
+    return s.defer_q orelse error.NotSupported;
 }
 
 /// Appends an empty command to the queue and returns it for the caller to fill. It fails with
-/// `out_of_memory` when the command array cannot grow.
-pub fn recordCommand(q: *DeferQueue, out_error: [*c][*c]c.ke_error, src: std.builtin.SourceLocation) ?*DeferCommand {
-    if (!deferReserve(q, q.count + 1)) {
-        E.fail(out_error, .out_of_memory, "command queue is full", src);
-        return null;
-    }
+/// out of memory when the command array cannot grow.
+pub fn recordCommand(q: *DeferQueue) R.Error!*DeferCommand {
+    if (!deferReserve(q, q.count + 1)) return error.OutOfMemory;
     const cmd = &q.cmds.?[q.count];
     q.count += 1;
     return cmd;
 }
 
+/// The code a recording slot hands back for `err`, after logging it under the slot's name.
+fn refused(comptime slot: []const u8, err: R.Error) c.ke_result {
+    log.warn("recording " ++ slot ++ " failed: {t}", .{err});
+    return R.code(err);
+}
+
 /// Slot `spawn` of the commands of a body. The id is reserved at once, so the body can attach to
 /// it in the same queue; the entity enters the world when `deferFlush` reaches the spawn. Fails
-/// with `invalid_argument` for an unbound table, `not_supported` in the render phase,
-/// `not_initialized` without a world, and `out_of_memory` when the id pool is spent or the queue
-/// cannot grow; each returns the invalid entity.
-pub fn commandsSpawn(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_entity {
-    const q = recordTarget(self, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
-    const ecs = commandsOf(self).?.ecs orelse {
-        E.fail(out_error, .not_initialized, "no world", @src());
-        return c.KE_ENTITY_INVALID;
-    };
+/// with invalid argument for an unbound table, not supported in the render phase, not initialized
+/// without a world, and out of memory when the id pool is spent or the queue cannot grow; each
+/// leaves the invalid entity.
+pub fn commandsSpawn(self: ?*c.ke_ecs_commands, out_entity: ?*c.ke_entity) callconv(.c) c.ke_result {
+    const out = out_entity orelse return R.code(error.InvalidArgument);
+    out.* = c.KE_ENTITY_INVALID;
+    out.* = spawn(self) catch |err| return refused("a spawn", err);
+    return R.ok;
+}
+
+fn spawn(self: ?*c.ke_ecs_commands) R.Error!c.ke_entity {
+    const q = try recordTarget(self);
+    const ecs = commandsOf(self).?.ecs orelse return error.NotInitialized;
     const entity = ecs.entity_reserve.?(ecs);
-    if (entity == c.KE_ENTITY_INVALID) {
-        E.fail(out_error, .out_of_memory, "entity id could not be reserved", @src());
-        return c.KE_ENTITY_INVALID;
-    }
-    const cmd = recordCommand(q, out_error, @src()) orelse return c.KE_ENTITY_INVALID;
+    if (entity == c.KE_ENTITY_INVALID) return error.OutOfMemory;
+    const cmd = try recordCommand(q);
     cmd.kind = .spawn;
     cmd.entity = entity;
     return entity;
@@ -207,80 +207,72 @@ pub fn commandsSpawn(self: ?*c.ke_ecs_commands, out_error: [*c][*c]c.ke_error) c
 
 /// Slot `attach` of the commands of a body. The payload is copied into the arena now, so the
 /// caller's buffer may be reused after the call. A non-zero size is checked against the component
-/// size here, and the copy into the component happens in `deferFlush`. Fails, returning false,
-/// with `invalid_argument` for an unbound table or a size that differs from the component's,
-/// `not_supported` in the render phase, `not_initialized` without a world, and `out_of_memory`
-/// when the queue or its arena cannot grow.
-pub fn commandsAttach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const q = recordTarget(self, out_error, @src()) orelse return false;
+/// size here, and the copy into the component happens in `deferFlush`. Fails with invalid argument
+/// for an unbound table or a size that differs from the component's, not supported in the render
+/// phase, not initialized without a world, and out of memory when the queue or its arena cannot
+/// grow.
+pub fn commandsAttach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize) callconv(.c) c.ke_result {
+    attach(self, entity, cid, data, size) catch |err| return refused("an attach", err);
+    return R.ok;
+}
+
+fn attach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, data: ?*const anyopaque, size: usize) R.Error!void {
+    const q = try recordTarget(self);
     if (size != 0) {
-        const ecs = commandsOf(self).?.ecs orelse {
-            E.fail(out_error, .not_initialized, "no world", @src());
-            return false;
-        };
-        if (size != ecs.component_size.?(ecs, cid)) {
-            E.fail(out_error, .invalid_argument, "payload size differs from the component size", @src());
-            return false;
-        }
+        const ecs = commandsOf(self).?.ecs orelse return error.NotInitialized;
+        if (size != ecs.component_size.?(ecs, cid)) return error.InvalidArgument;
     }
     const offset = deferArenaPush(q, data, size);
-    if (offset == std.math.maxInt(usize)) {
-        E.fail(out_error, .out_of_memory, "command payload does not fit", @src());
-        return false;
-    }
-    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+    if (offset == std.math.maxInt(usize)) return error.OutOfMemory;
+    const cmd = try recordCommand(q);
     cmd.kind = .attach;
     cmd.entity = entity;
     cmd.cid = cid;
     cmd.attach_offset = offset;
     cmd.attach_size = size;
-    return true;
 }
 
-/// Slot `detach` of the commands of a body. Records the removal for `deferFlush`. Fails,
-/// returning false, with `invalid_argument` for an unbound table, `not_supported` in the render
-/// phase, and `out_of_memory` when the queue cannot grow.
-pub fn commandsDetach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const q = recordTarget(self, out_error, @src()) orelse return false;
-    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+/// Slot `detach` of the commands of a body. Records the removal for `deferFlush`. Fails with
+/// invalid argument for an unbound table, not supported in the render phase, and out of memory when
+/// the queue cannot grow.
+pub fn commandsDetach(self: ?*c.ke_ecs_commands, entity: c.ke_entity, cid: c.ke_component_id) callconv(.c) c.ke_result {
+    const q = recordTarget(self) catch |err| return refused("a detach", err);
+    const cmd = recordCommand(q) catch |err| return refused("a detach", err);
     cmd.kind = .detach;
     cmd.entity = entity;
     cmd.cid = cid;
-    return true;
+    return R.ok;
 }
 
 /// Slot `despawn` of the commands of a body. Records the destruction for `deferFlush`. Fails in
 /// the same ways as `commandsDetach`.
-pub fn commandsDespawn(self: ?*c.ke_ecs_commands, entity: c.ke_entity, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const q = recordTarget(self, out_error, @src()) orelse return false;
-    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+pub fn commandsDespawn(self: ?*c.ke_ecs_commands, entity: c.ke_entity) callconv(.c) c.ke_result {
+    const q = recordTarget(self) catch |err| return refused("a despawn", err);
+    const cmd = recordCommand(q) catch |err| return refused("a despawn", err);
     cmd.kind = .despawn;
     cmd.entity = entity;
-    return true;
+    return R.ok;
 }
 
 /// Slot `defer` of the commands of a body. `deferFlush` later calls the function with the world
 /// and a pointer to a copy of the user bytes taken here, so the caller's bytes need not outlive
-/// the call. Fails, returning false, with `invalid_argument` for an unbound table or a null
-/// function, `not_supported` in the render phase, and `out_of_memory` when the queue or its arena
-/// cannot grow.
-pub fn commandsDefer(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    const q = recordTarget(self, out_error, @src()) orelse return false;
-    if (func == null) {
-        E.fail(out_error, .invalid_argument, "no function to defer", @src());
-        return false;
-    }
+/// the call. Fails with invalid argument for an unbound table or a null function, not supported in
+/// the render phase, and out of memory when the queue or its arena cannot grow.
+pub fn commandsDefer(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize) callconv(.c) c.ke_result {
+    deferCall(self, func, user, user_size) catch |err| return refused("a deferred call", err);
+    return R.ok;
+}
+
+fn deferCall(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, user_size: usize) R.Error!void {
+    const q = try recordTarget(self);
+    if (func == null) return error.InvalidArgument;
     const offset = deferArenaPush(q, user, user_size);
-    if (offset == std.math.maxInt(usize)) {
-        E.fail(out_error, .out_of_memory, "command payload does not fit", @src());
-        return false;
-    }
-    const cmd = recordCommand(q, out_error, @src()) orelse return false;
+    if (offset == std.math.maxInt(usize)) return error.OutOfMemory;
+    const cmd = try recordCommand(q);
     cmd.kind = .callback;
     cmd.fn_ = func;
     cmd.attach_offset = offset;
     cmd.attach_size = user_size;
-    return true;
 }
 
 /// Process-wide count of the commands `deferFlush` has applied, across every runtime.

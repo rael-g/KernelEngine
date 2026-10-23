@@ -240,8 +240,9 @@ int main(int argc, char **argv)
     if (made != KE_OK) die_result("scheduler", made);
 
     ke_runtime_params rtp = { 0 };
-    ke_runtime_handle rt = ke_runtime_create(ecs.ref, sched.ref, &rtp, &err);
-    if (!rt.ref) die("runtime", err);
+    ke_runtime_handle rt = { 0 };
+    ke_result made_runtime = ke_runtime_create(ecs.ref, sched.ref, &rtp, &rt);
+    if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
     renderer render;
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target);
@@ -304,8 +305,12 @@ int main(int argc, char **argv)
 
     const float dt = 1.0f / 60.0f;
     for (int i = 0; i < FRAMES; ++i)
-        if (!rt.ref->tick(rt.ref, dt, &err)) die("tick", err);
-    if (!rt.ref->flush_render(rt.ref, &err)) die("flush render", err);
+    {
+        ke_result ticked = rt.ref->tick(rt.ref, dt);
+        if (ticked != KE_OK) die_result("tick", ticked);
+    }
+    ke_result flushed = rt.ref->flush_render(rt.ref);
+    if (flushed != KE_OK) die_result("flush render", flushed);
 
     size_t image_bytes = (size_t)WIDTH * HEIGHT * BYTES_PER_TEXEL;
     uint8_t *pixels = malloc(image_bytes);

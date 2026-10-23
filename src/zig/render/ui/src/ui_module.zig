@@ -8,6 +8,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const zm = @import("zmath");
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.render_ui);
 const handles = @import("handle").Handles(c);
 
 const heap = @import("heap");
@@ -257,12 +259,12 @@ fn ensureVertexBuffer(ui: *UiState, bytes: usize, out_error: [*c][*c]c.ke_error)
 /// Registered by `ke_render_ui_create` for the update phase, with write access to the label
 /// component only. Shapes every label against the current backbuffer size, so a resize is picked
 /// up on the next frame. It returns true on every path, including when the view is empty.
-fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const ui = moduleOf(user);
 
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &segc);
-    if (segc == 0) return true;
+    if (segc == 0) return R.ok;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
@@ -276,7 +278,7 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*
             shapeLabel(ui, labels + i, bw, bh);
         }
     }
-    return true;
+    return R.ok;
 }
 
 /// Registered by `ke_render_ui_create` for the render phase, reading quads and labels. Quads with
@@ -284,7 +286,9 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*
 /// the pass ends without drawing; otherwise the projection (flipped on Y when the ndc convention
 /// asks) and the vertices are uploaded and each batch is drawn with its texture's set. It
 /// returns true on every path, including when the render service yields no pass to draw into.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    var err_record: [*c]c.ke_error = null;
+    const out_error: [*c][*c]c.ke_error = &err_record;
     const ui = moduleOf(user);
     const core = ui.core;
 
@@ -292,10 +296,10 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const quad_segs = ctx.?.view.?(ctx, 0, &quad_segc);
     var label_segc: usize = 0;
     const label_segs = ctx.?.view.?(ctx, 1, &label_segc);
-    if (quad_segc == 0 and label_segc == 0) return true;
+    if (quad_segc == 0 and label_segc == 0) return R.ok;
 
     const pc = core.*.begin_pass.?(core, &ui.io);
-    if (pc == null) return true;
+    if (pc == null) return R.ok;
 
     ui.vertices.clearRetainingCapacity();
     ui.batches.clearRetainingCapacity();
@@ -341,16 +345,16 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     if (!emitted) {
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "ui pass: vertex list allocation failed", @src().file, @intCast(@src().line), null);
         core.*.end_pass.?(core, pc);
-        return false;
+        return bodyFailed(err_record);
     }
     if (ui.vertices.items.len == 0) {
         core.*.end_pass.?(core, pc);
-        return true;
+        return R.ok;
     }
     const bytes = std.mem.sliceAsBytes(ui.vertices.items);
     if (!ensureVertexBuffer(ui, bytes.len, out_error)) {
         core.*.end_pass.?(core, pc);
-        return false;
+        return bodyFailed(err_record);
     }
 
     var bw: u32 = 0;
@@ -375,7 +379,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
-    return true;
+    return R.ok;
 }
 
 /// Called once by `ke_render_ui_create`, before anything is registered. It joins the chain at the
@@ -395,7 +399,10 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params, out_error: [*c][*c]c.ke_
     ui.io.name = "render.ui";
     ui.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
     if (ui.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
-    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
+    if (p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR)) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "the runtime could not store the frame color as self-ordered", @src().file, @intCast(@src().line), null);
+        return false;
+    }
     const format = core.*.chain_format.?(core, c.KE_RENDER_STAGE_OVERLAY);
 
     const vs = core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
@@ -551,7 +558,9 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
     params.pinned_thread = 0;
     params.user_data = ui;
     params.execute = system;
-    const first_system = rt.register_system.?(rt, &params, out_error);
+    var first_system: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &params, &first_system) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
     if (first_system == 0) {
         destroyState(ui);
         gpa.destroy(ui);
@@ -569,8 +578,10 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
     shape_params.pinned_thread = 0;
     shape_params.user_data = ui;
     shape_params.execute = labelShapeSystem;
-    if (rt.register_system.?(rt, &shape_params, out_error) == 0) {
-        _ = rt.unregister_system.?(rt, first_system, null);
+    var system_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &shape_params, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
+        _ = rt.unregister_system.?(rt, first_system);
         destroyState(ui);
         gpa.destroy(ui);
         return empty;
@@ -582,6 +593,14 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_erro
 fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_ui_handle {
     c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "ui pass: runtime, ecs, service and device are required", @src().file, @intCast(@src().line), null);
     return .{ .ref = null, .destroy = null };
+}
+
+
+/// The code a system body returns when a call it made failed and filled `record`, whose message is
+/// logged. A bridge while the calls a body makes still report through `ke_error`.
+fn bodyFailed(record: [*c]const c.ke_error) c.ke_result {
+    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
+    return R.code(error.General);
 }
 
 const testing = std.testing;

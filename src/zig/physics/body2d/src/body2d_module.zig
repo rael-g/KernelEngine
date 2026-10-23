@@ -59,7 +59,7 @@ const R = @import("result").Result(c, .{});
 /// on the next update; nothing is written to the error output and the system still returns true.
 /// Before the step, a recorded body whose entity no longer holds it, destroyed or stripped of the
 /// component, is destroyed.
-fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) c.ke_result {
     const m = moduleOf(user);
     const p = m.physics;
     m.update += 1;
@@ -126,7 +126,7 @@ fn bodySystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, _: [*c][*c]c.k
             tcs[i].rotation = st.angle;
         }
     }
-    return true;
+    return R.ok;
 }
 
 /// Destroys every recorded body whose entity was not seen holding it in the current update, and
@@ -170,15 +170,15 @@ fn countColliders(ctx: ?*c.ke_system_ctx) struct { total: usize, unattached: usi
 /// before the first fixture is added, so an out-of-memory failure, reported through the error
 /// output, leaves every collider unattached. A shape that resolves to no body, or whose fixture the
 /// world refuses, is logged and stays unattached; neither is reported through the error output.
-fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) c.ke_result {
     _ = dt;
     const m = moduleOf(user);
     const p = m.physics;
 
     const counted = countColliders(ctx);
-    if (counted.unattached == 0) return true;
+    if (counted.unattached == 0) return R.ok;
     const attempt: Attempt = .{ .hierarchy = m.tree.hierarchy_generation.?(m.tree), .bodies = m.body_generation, .colliders = counted.total };
-    if (m.attempt) |last| if (std.meta.eql(last, attempt)) return true;
+    if (m.attempt) |last| if (std.meta.eql(last, attempt)) return R.ok;
 
     var parents = std.AutoHashMap(c.ke_entity, c.ke_entity).init(gpa);
     defer parents.deinit();
@@ -193,8 +193,8 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
         var i: usize = 0;
         while (i < segs[s].count) : (i += 1) {
             parents.put(segs[s].entities[i], hs[i].parent) catch {
-                c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "collider pass: parent index allocation failed", @src().file, @intCast(@src().line), null);
-                return false;
+                log.warn("collider pass: parent index allocation failed", .{});
+                return R.code(error.OutOfMemory);
             };
         }
     }
@@ -207,8 +207,8 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
         while (i < segs[s].count) : (i += 1) {
             if (bs[i].body == c.KE_BODY_2D_INVALID) continue;
             bodies.put(segs[s].entities[i], bs[i].body) catch {
-                c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "collider pass: body index allocation failed", @src().file, @intCast(@src().line), null);
-                return false;
+                log.warn("collider pass: body index allocation failed", .{});
+                return R.code(error.OutOfMemory);
             };
         }
     }
@@ -243,7 +243,7 @@ fn colliderSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, dt: f32, out_error:
         }
     }
     m.attempt = attempt;
-    return true;
+    return R.ok;
 }
 
 /// Walks the parent links above `start`, the shape's own entity, and returns the first body found
@@ -269,8 +269,8 @@ fn findBody(
 /// alive.
 fn destroyHandle(self: ?*c.ke_physics_body2d_module) callconv(.c) void {
     const m: *Module = @ptrCast(@alignCast(self orelse return));
-    _ = m.runtime.unregister_system.?(m.runtime, m.collider_system, null);
-    _ = m.runtime.unregister_system.?(m.runtime, m.body_system, null);
+    _ = m.runtime.unregister_system.?(m.runtime, m.collider_system);
+    _ = m.runtime.unregister_system.?(m.runtime, m.body_system);
     var it = m.tracked.valueIterator();
     while (it.next()) |t| m.physics.destroy_body.?(m.physics, t.body);
     m.tracked.deinit(gpa);
@@ -279,8 +279,8 @@ fn destroyHandle(self: ?*c.ke_physics_body2d_module) callconv(.c) void {
 
 /// Registers the component ids with the ECS, then the body system and the collider system, both in
 /// the fixed post-update phase, after the fixed update where scripts write. Fails with invalid
-/// argument for a missing argument, out of memory for a failed allocation, and general for a system
-/// the runtime refuses, whose reason is logged. On success, the handle's `destroy` frees the module.
+/// argument for a missing argument, out of memory for a failed allocation, and the runtime's code
+/// for a system it refuses. On success, the handle's `destroy` frees the module.
 export fn ke_physics_body2d_module_create(
     params: ?*const c.ke_physics_body2d_module_params,
     out_module: ?*c.ke_physics_body2d_module_handle,
@@ -293,12 +293,6 @@ export fn ke_physics_body2d_module_create(
         return R.code(err);
     };
     return R.ok;
-}
-
-/// The runtime's reason for refusing a system, read from its error record.
-fn refusal(err: [*c]c.ke_error) []const u8 {
-    if (err == null or err.*.message == null) return "no reason given";
-    return std.mem.span(err.*.message);
 }
 
 fn create(pr: *const c.ke_physics_body2d_module_params) R.Error!c.ke_physics_body2d_module_handle {
@@ -333,13 +327,9 @@ fn create(pr: *const c.ke_physics_body2d_module_params) R.Error!c.ke_physics_bod
     sp.pinned_thread = 0;
     sp.user_data = m;
     sp.execute = bodySystem;
-    var err: [*c]c.ke_error = null;
-    m.body_system = rt.*.register_system.?(rt, &sp, &err);
-    if (m.body_system == 0) {
-        log.warn("the runtime refused the body system: {s}", .{refusal(err)});
-        return error.General;
-    }
-    errdefer _ = rt.*.unregister_system.?(rt, m.body_system, null);
+    m.body_system = 0;
+    try R.check(rt.*.register_system.?(rt, &sp, &m.body_system));
+    errdefer _ = rt.*.unregister_system.?(rt, m.body_system);
     m.collider_queries_terms = .{ .{ .cid = collider_cid, .access = wr }, .{ .cid = transform_cid, .access = rd }, .{ .cid = body_cid, .access = rd }, .{ .cid = hierarchy_cid, .access = rd } };
     m.collider_queries = .{ .{ .terms = &m.collider_queries_terms[0], .term_count = 2 }, .{ .terms = &m.collider_queries_terms[2], .term_count = 1 }, .{ .terms = &m.collider_queries_terms[3], .term_count = 1 } };
 
@@ -351,11 +341,8 @@ fn create(pr: *const c.ke_physics_body2d_module_params) R.Error!c.ke_physics_bod
     cp.pinned_thread = 0;
     cp.user_data = m;
     cp.execute = colliderSystem;
-    m.collider_system = rt.*.register_system.?(rt, &cp, &err);
-    if (m.collider_system == 0) {
-        log.warn("the runtime refused the collider system: {s}", .{refusal(err)});
-        return error.General;
-    }
+    m.collider_system = 0;
+    try R.check(rt.*.register_system.?(rt, &cp, &m.collider_system));
 
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
@@ -529,14 +516,14 @@ test "a body whose entity no longer holds it is destroyed on the next update" {
     BodyView.bodies[0] = std.mem.zeroes(c.ke_body2d_component);
     BodyView.transforms[0] = std.mem.zeroes(c.ke_transform2d_component);
     BodyView.live = 1;
-    try testing.expect(bodySystem(&ctx, m, 0.0, null));
-    try testing.expect(bodySystem(&ctx, m, 0.0, null));
+    try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
+    try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
     const body = BodyView.bodies[0].body;
     try testing.expect(body != c.KE_BODY_2D_INVALID);
     try testing.expectEqual(@as(usize, 0), FakeWorld.destroyed_count);
 
     BodyView.live = 0;
-    try testing.expect(bodySystem(&ctx, m, 0.0, null));
+    try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
     try testing.expectEqual(@as(usize, 1), FakeWorld.destroyed_count);
     try testing.expectEqual(body, FakeWorld.destroyed[0]);
 
@@ -587,12 +574,12 @@ test "a collider with no body above it is retried only once the hierarchy has mo
     OrphanView.hierarchies[0] = std.mem.zeroes(c.ke_hierarchy_component);
     OrphanView.hierarchy_reads = 0;
 
-    try testing.expect(colliderSystem(&ctx, m, 0.0, null));
-    try testing.expect(colliderSystem(&ctx, m, 0.0, null));
+    try testing.expect(colliderSystem(&ctx, m, 0.0) == R.ok);
+    try testing.expect(colliderSystem(&ctx, m, 0.0) == R.ok);
     try testing.expectEqual(@as(usize, 1), OrphanView.hierarchy_reads);
 
     tree.generation += 1;
-    try testing.expect(colliderSystem(&ctx, m, 0.0, null));
+    try testing.expect(colliderSystem(&ctx, m, 0.0) == R.ok);
     try testing.expectEqual(@as(usize, 2), OrphanView.hierarchy_reads);
     try testing.expect(!OrphanView.colliders[0].attached);
 
@@ -614,7 +601,7 @@ test "destroying the module destroys the bodies it created" {
 
     BodyView.bodies[0] = std.mem.zeroes(c.ke_body2d_component);
     BodyView.live = 1;
-    try testing.expect(bodySystem(&ctx, m, 0.0, null));
+    try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
 
     destroyHandle(@ptrCast(m));
     try testing.expectEqual(@as(usize, 1), FakeWorld.destroyed_count);

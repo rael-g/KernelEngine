@@ -1,6 +1,8 @@
 //! Gives each 2D sprite a mesh component carrying a quad and a material that match its fields.
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.render_scene);
 
 const std = @import("std");
 
@@ -127,11 +129,11 @@ fn swapMaterial(core: *c.ke_render_service, m: *c.ke_mesh_component, resolved: c
 /// again every tick under keys spelled from the fields they depend on, so an edit to a sprite
 /// yields another object. The second visits the sprites still unmarked, the ones without a mesh
 /// component: it marks each and queues an attach of the mesh component on the commands of the
-/// context, so the first pass reaches the sprite on a later tick. A refused attach returns
-/// false with the error the commands set, and the sprite stays marked, so a later tick does not
+/// context, so the first pass reaches the sprite on a later tick. A refused attach returns the
+/// commands' code, and the sprite stays marked, so a later tick does not
 /// queue it again. The upload, the material creation and the texture resolve get no error
 /// output, so their failures are not reported.
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
@@ -158,11 +160,14 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c]
             if (sprites[i].attached != 0) continue;
             sprites[i].attached = 1;
             const commands = ctx.?.commands;
-            if (!commands.*.attach.?(commands, segs[s].entities[i], st.mesh_cid, null, 0, out_error)) return false;
+            const attached = commands.*.attach.?(commands, segs[s].entities[i], st.mesh_cid, null, 0);
+            if (attached != R.ok) return attached;
         }
     }
-    return true;
+    return R.ok;
 }
+
+
 
 const testing = std.testing;
 
@@ -436,7 +441,7 @@ test "a sprite resolved every tick holds one reference to its mesh and material,
     var ctx = std.mem.zeroes(c.ke_system_ctx);
     ctx.view = fakeView;
 
-    for (0..5) |_| try testing.expect(system(&ctx, &st, 0.0, null));
+    for (0..5) |_| try testing.expect(system(&ctx, &st, 0.0) == R.ok);
 
     try testing.expectEqual(@as(i32, 1), Refs.mesh);
     try testing.expectEqual(@as(i32, 1), Refs.material);

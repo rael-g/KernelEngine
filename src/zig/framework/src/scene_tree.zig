@@ -226,8 +226,12 @@ fn vtCreateNodeDeferred(
     const s = stateOf(self);
     const parent = if (parent_in == c.KE_ENTITY_INVALID) s.root else parent_in;
 
-    const entity = cmds.spawn.?(cmds, out_error);
-    if (entity == c.KE_ENTITY_INVALID) return c.KE_ENTITY_INVALID;
+    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    const spawned = cmds.spawn.?(cmds, &entity);
+    if (spawned != c.KE_OK) {
+        E.failCode(out_error, spawned, "recording the node's spawn failed", @src());
+        return c.KE_ENTITY_INVALID;
+    }
     var pc: PendingCreate = .{
         .s = s,
         .entity = entity,
@@ -235,8 +239,11 @@ fn vtCreateNodeDeferred(
         .name = undefined,
     };
     writeName(&pc.name, name);
-    if (!cmds.@"defer".?(cmds, cbCreateNode, &pc, @sizeOf(PendingCreate), out_error))
+    const recorded = cmds.@"defer".?(cmds, cbCreateNode, &pc, @sizeOf(PendingCreate));
+    if (recorded != c.KE_OK) {
+        E.failCode(out_error, recorded, "recording the node's creation failed", @src());
         return c.KE_ENTITY_INVALID;
+    }
     return entity;
 }
 
@@ -404,7 +411,10 @@ fn vtDestroyNodeDeferred(
     };
     const s = checkDestroyable(self_in, entity, out_error) orelse return false;
     var pd: PendingDestroy = .{ .s = s, .entity = entity };
-    return cmds.@"defer".?(cmds, cbDestroyNode, &pd, @sizeOf(PendingDestroy), out_error);
+    const recorded = cmds.@"defer".?(cmds, cbDestroyNode, &pd, @sizeOf(PendingDestroy));
+    if (recorded == c.KE_OK) return true;
+    E.failCode(out_error, recorded, "recording a deferred tree change failed", @src());
+    return false;
 }
 
 /// Slot `destroy_all`. Destroys the root's children without unlinking each one from its
@@ -1049,18 +1059,19 @@ pub const RecordingCommands = struct {
         return @ptrCast(@alignCast(self.?.handle));
     }
 
-    fn spawn(self: ?*c.ke_ecs_commands, _: [*c][*c]c.ke_error) callconv(.c) c.ke_entity {
+    fn spawn(self: ?*c.ke_ecs_commands, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
         const r = of(self);
-        return r.ecs.entity_reserve.?(r.ecs);
+        out_entity.* = r.ecs.entity_reserve.?(r.ecs);
+        return R.ok;
     }
 
-    fn defer_(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, size: usize, _: [*c][*c]c.ke_error) callconv(.c) bool {
+    fn defer_(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, size: usize) callconv(.c) c.ke_result {
         const r = of(self);
-        if (r.count == r.fns.len) return false;
+        if (r.count == r.fns.len) return R.code(error.OutOfMemory);
         r.fns[r.count] = func;
         @memcpy(r.payloads[r.count][0..size], @as([*]const u8, @ptrCast(user.?))[0..size]);
         r.count += 1;
-        return true;
+        return R.ok;
     }
 
     pub fn init(ecs: *c.ke_ecs) RecordingCommands {

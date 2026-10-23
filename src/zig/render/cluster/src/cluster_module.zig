@@ -9,6 +9,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 const feature_bindings = @import("feature_bindings");
 const cluster_buffers = feature_bindings.FeatureBindings(c).cluster_buffers;
 const c = @import("c");
+const R = @import("result").Result(c, .{});
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -122,7 +123,7 @@ inline fn moduleOf(user: ?*anyopaque) *ClusterModule {
 /// overflow is reported once per kind through `logLightOverflow`. A frame without a camera uploads
 /// the lights and stops; otherwise it also uploads the cull parameters and the grid and dispatches
 /// the compute pipeline.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const cm = moduleOf(user);
     const core = cm.core;
     const deg2rad: f32 = std.math.pi / 180.0;
@@ -198,11 +199,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
 
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 2, &cam_segc);
-    if (cam_segc == 0 or cam_segs[0].count == 0) return true;
+    if (cam_segc == 0 or cam_segs[0].count == 0) return R.ok;
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
 
     const pc = core.*.begin_pass.?(core, &cm.cull_io);
-    if (pc == null) return true;
+    if (pc == null) return R.ok;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
@@ -227,7 +228,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_err
     cp.*.dispatch.?(cp, (cm.num_clusters + 63) / 64, 1, 1);
     cp.*.end.?(cp);
     core.*.end_pass.?(core, pc);
-    return true;
+    return R.ok;
 }
 
 /// Writes the grid uniform that the shading passes read as "cluster_grid": the grid
@@ -437,7 +438,9 @@ export fn ke_render_cluster_create(params_in: ?*const c.ke_render_cluster_params
     params.pinned_thread = 0;
     params.user_data = cm;
     params.execute = system;
-    if (rt.register_system.?(rt, &params, out_error) == 0) {
+    var system_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &params, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
         destroyModule(cm);
         gpa.destroy(cm);
         return empty;

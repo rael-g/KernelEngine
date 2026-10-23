@@ -130,7 +130,9 @@ export fn ke_render_scene_resolve_create(params_in: ?*const c.ke_render_scene_re
     sprite.pinned_thread = 0;
     sprite.user_data = &st.sprite;
     sprite.execute = sprite_resolve.system;
-    const sprite_id = rt.register_system.?(rt, &sprite, out_error);
+    var sprite_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &sprite, &sprite_id) != c.KE_OK)
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
     if (sprite_id == 0) {
         gpa.destroy(st);
         return empty;
@@ -148,8 +150,10 @@ export fn ke_render_scene_resolve_create(params_in: ?*const c.ke_render_scene_re
     mesh.execute = mesh_resolve.system;
     mesh.after = &mesh_resolve_after;
     mesh.after_count = mesh_resolve_after.len;
-    if (rt.register_system.?(rt, &mesh, out_error) == 0) {
-        _ = rt.unregister_system.?(rt, sprite_id, null);
+    var system_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &mesh, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
+        _ = rt.unregister_system.?(rt, sprite_id);
         gpa.destroy(st);
         return empty;
     }
@@ -201,7 +205,9 @@ export fn ke_render_label_resolve_create(params_in: ?*const c.ke_render_label_re
     label.execute = label_resolve.system;
     label.before = &label_resolve_before;
     label.before_count = label_resolve_before.len;
-    if (rt.register_system.?(rt, &label, out_error) == 0) {
+    var refused_id2: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &label, &refused_id2) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
         gpa.destroy(st);
         return empty;
     }

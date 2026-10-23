@@ -47,39 +47,14 @@ const resolveInto = queries_mod.resolveInto;
 
 const E = @import("kerror").Errors(c);
 const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.runtime);
 
-const result_kinds = .{
-    .{ error.General, E.Kind.general },
-    .{ error.NotFound, E.Kind.not_found },
-    .{ error.Io, E.Kind.io },
-    .{ error.OutOfMemory, E.Kind.out_of_memory },
-    .{ error.InvalidArgument, E.Kind.invalid_argument },
-    .{ error.NotInitialized, E.Kind.not_initialized },
-    .{ error.NotSupported, E.Kind.not_supported },
-    .{ error.AlreadyExists, E.Kind.already_exists },
-};
-
-/// The code a task body hands the scheduler for a failure of type `ty`, which a system reported
-/// through its `ke_error` lane. A type of a kind the result codes do not name becomes the general
-/// code. A bridge while systems report through `ke_error` and the scheduler through `ke_result`.
-fn codeOfType(ty: ?*const c.ke_error_type) c.ke_result {
-    const t = ty orelse return R.ok;
-    inline for (result_kinds) |pair| {
-        if (t == E.typeOf(pair[1])) return R.code(pair[0]);
-    }
-    return R.code(error.General);
+/// Logs why a call fails and returns `err` for it to fail with.
+fn reportFailure(err: R.Error, comptime why: []const u8) R.Error {
+    log.warn(why, .{});
+    return err;
 }
 
-/// The error type the runtime reports for code `code` a task returned; the inverse of `codeOfType`.
-fn typeOfCode(code: c.ke_result) ?*const c.ke_error_type {
-    R.check(code) catch |err| {
-        inline for (result_kinds) |pair| {
-            if (err == pair[0]) return E.typeOf(pair[1]);
-        }
-        return E.typeOf(.general);
-    };
-    return null;
-}
 
 const KE_RUNTIME_PHASE_COUNT = 9;
 
@@ -255,23 +230,23 @@ fn handleOf(self: *c.ke_runtime) *RuntimeHandle {
     return @ptrCast(@alignCast(self.handle));
 }
 
-/// Slot `register_module`. Returns the module's id, or zero with the error set. Fails with
-/// `invalid_argument` for a null runtime or a missing load hook, with `out_of_memory` when the
-/// module array cannot grow, and with the hook's own error when it returns false. The hook runs
-/// with the module already recorded, so systems it registers are registered before the call
-/// returns; a refused module has its unload hook cleared and is never unloaded.
-fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_module_id {
+/// Slot `register_module`. Writes the module's id, or zero on failure. Fails with invalid argument
+/// for a null runtime, out-parameter or load hook, with out of memory when the module array cannot
+/// grow, and with the hook's own code when it fails. The hook runs with the module already
+/// recorded, so systems it registers are registered before the call returns; a refused module has
+/// its unload hook cleared and is never unloaded.
+fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_params, out_id: ?*c.ke_module_id) callconv(.c) c.ke_result {
+    const out = out_id orelse return R.code(error.InvalidArgument);
+    out.* = 0;
     if (self == null or self.?.handle == null or p == null or p.*.on_load == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return 0;
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
     const h = handleOf(self.?);
 
     if (h.state.module_count == h.state.module_capacity) {
         const new_cap: usize = if (h.state.module_capacity != 0) h.state.module_capacity * 2 else 4;
         const new_buf = cAlloc(RegisteredModule, new_cap) orelse {
-            E.fail(out_error, .out_of_memory, "module array allocation failed", @src());
-            return 0;
+            return R.code(reportFailure(error.OutOfMemory, "module array allocation failed"));
         };
         if (h.state.modules) |old| {
             @memcpy(new_buf[0..h.state.module_count], old[0..h.state.module_count]);
@@ -287,11 +262,14 @@ fn runtimeRegisterModule(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_module_
 
     h.state.next_module_id += 1;
     const id = h.state.next_module_id;
-    if (!p.*.on_load.?(self, p.*.user_data, out_error)) {
+    const loaded = p.*.on_load.?(self, p.*.user_data);
+    if (loaded != R.ok) {
         h.state.modules.?[slot] = .{ .user_data = null, .on_unload = null };
-        return 0;
+        log.warn("module {s} refused to load", .{spanOr(p.*.name)});
+        return loaded;
     }
-    return id;
+    out.* = id;
+    return R.ok;
 }
 
 /// Adds a component access to `derived_access`, or-ing the access bits into the entry the same
@@ -310,28 +288,24 @@ fn mergeAccess(rs: *RegisteredSystem, want: c.ke_component_access) void {
 /// Copies a registration into a new `RegisteredSystem` that owns its name, its query terms and its
 /// access list. When the declaration has queries, their terms are merged with its access list into
 /// `derived_access`, and the copy's `params` drops the queries, so from then on the access list
-/// alone describes the system. On failure nothing stays allocated, and null comes back with the
-/// error set.
-fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) ?*RegisteredSystem {
+/// alone describes the system. On failure nothing stays allocated.
+fn buildSystem(p: [*c]const c.ke_runtime_system_params) R.Error!*RegisteredSystem {
     var total_terms: usize = 0;
     if (p.*.query_count > 0) {
         if (p.*.queries == null) {
-            E.fail(out_error, .invalid_argument, "queries are counted but not given", @src());
-            return null;
+            return reportFailure(error.InvalidArgument, "queries are counted but not given");
         }
         for (0..p.*.query_count) |q| {
             const decl = p.*.queries[q];
             if (decl.term_count == 0 or decl.terms == null) {
-                E.fail(out_error, .invalid_argument, "a query declares no terms", @src());
-                return null;
+                return reportFailure(error.InvalidArgument, "a query declares no terms");
             }
             total_terms += decl.term_count;
         }
     }
 
     const rs_mem = cAlloc(RegisteredSystem, 1) orelse {
-        E.fail(out_error, .out_of_memory, "registered_system allocation failed", @src());
-        return null;
+        return reportFailure(error.OutOfMemory, "registered_system allocation failed");
     };
     const rs = &rs_mem[0];
     rs.params = p.*;
@@ -355,14 +329,12 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
 
     if (!copyOrderNames(rs, p)) {
         releaseSystem(rs);
-        E.fail(out_error, .out_of_memory, "system order names allocation failed", @src());
-        return null;
+        return reportFailure(error.OutOfMemory, "system order names allocation failed");
     }
     if (p.*.access_count > 0 and p.*.access_list != null) {
         rs.explicit_access = heap.gpa.dupe(c.ke_component_access, p.*.access_list[0..p.*.access_count]) catch {
             releaseSystem(rs);
-            E.fail(out_error, .out_of_memory, "system access list allocation failed", @src());
-            return null;
+            return reportFailure(error.OutOfMemory, "system access list allocation failed");
         };
     }
 
@@ -370,8 +342,7 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
         const text = std.mem.span(p.*.name);
         const copy = heap.gpa.alloc(u8, text.len + 1) catch {
             releaseSystem(rs);
-            E.fail(out_error, .out_of_memory, "system name allocation failed", @src());
-            return null;
+            return reportFailure(error.OutOfMemory, "system name allocation failed");
         };
         @memcpy(copy[0..text.len], text);
         copy[text.len] = 0;
@@ -383,8 +354,7 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
         const qn = p.*.query_count;
         if (!allocQueryStorage(rs, p.*.queries, qn, total_terms, p.*.access_count)) {
             releaseSystem(rs);
-            E.fail(out_error, .out_of_memory, "query storage allocation failed", @src());
-            return null;
+            return reportFailure(error.OutOfMemory, "query storage allocation failed");
         }
 
         var term_at: usize = 0;
@@ -409,16 +379,14 @@ fn buildSystem(p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_
         for (0..qn) |q| {
             if (!rs.segs[q].reserve(initial_segments_per_query, rs.query_decls[q].term_count)) {
                 releaseSystem(rs);
-                E.fail(out_error, .out_of_memory, "query segment storage allocation failed", @src());
-                return null;
+                return reportFailure(error.OutOfMemory, "query segment storage allocation failed");
             }
             rs.seg_ptrs[q] = rs.segs[q].ptr;
         }
     } else if (p.*.access_list != null and p.*.access_count > 0) {
         const copy = heap.gpa.alloc(c.ke_component_access, p.*.access_count) catch {
             releaseSystem(rs);
-            E.fail(out_error, .out_of_memory, "system access list allocation failed", @src());
-            return null;
+            return reportFailure(error.OutOfMemory, "system access list allocation failed");
         };
         @memcpy(copy, p.*.access_list[0..p.*.access_count]);
         rs.access_storage = copy;
@@ -459,24 +427,22 @@ fn copyOrderNames(rs: *RegisteredSystem, p: [*c]const c.ke_runtime_system_params
     return true;
 }
 
-/// Appends a system to the list in registration order. It refuses, with the error set, a system
-/// whose phase already holds the maximum number of systems. A refused system is not added and stays
-/// owned by the caller.
-fn appendSystem(h: *RuntimeHandle, rs: *RegisteredSystem, out_error: [*c][*c]c.ke_error) bool {
+/// Appends a system to the list in registration order. It refuses a system whose phase already
+/// holds the maximum number of systems. A refused system is not added and stays owned by the
+/// caller.
+fn appendSystem(h: *RuntimeHandle, rs: *RegisteredSystem) R.Error!void {
     var in_phase: u32 = 0;
     for (0..h.state.system_count) |si| {
         if (h.state.systems.?[si].?.params.phase == rs.params.phase) in_phase += 1;
     }
     if (in_phase >= h.state.max_systems_per_phase) {
-        E.fail(out_error, .out_of_memory, "phase is at its max_systems_per_phase limit", @src());
-        return false;
+        return reportFailure(error.OutOfMemory, "phase is at its max_systems_per_phase limit");
     }
 
     if (h.state.system_count == h.state.system_capacity) {
         const new_cap: usize = if (h.state.system_capacity != 0) h.state.system_capacity * 2 else 4;
         const new_buf = cAlloc(?*RegisteredSystem, new_cap) orelse {
-            E.fail(out_error, .out_of_memory, "system array allocation failed", @src());
-            return false;
+            return reportFailure(error.OutOfMemory, "system array allocation failed");
         };
         if (h.state.systems) |old| {
             @memcpy(new_buf[0..h.state.system_count], old[0..h.state.system_count]);
@@ -488,35 +454,39 @@ fn appendSystem(h: *RuntimeHandle, rs: *RegisteredSystem, out_error: [*c][*c]c.k
 
     h.state.systems.?[h.state.system_count] = rs;
     h.state.system_count += 1;
-    return true;
 }
 
 /// Slot `register_system`. Returns the id at once, whether or not the system is yet in the list.
 /// While a tick or a render phase is in flight the system is pushed onto
 /// `RuntimeState.pending_systems` with a compare-exchange; otherwise the render phase in flight is
 /// joined and the system is appended now.
-fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
+fn runtimeRegisterSystem(self: ?*c.ke_runtime, p: [*c]const c.ke_runtime_system_params, out_id: ?*c.ke_system_id) callconv(.c) c.ke_result {
+    const out = out_id orelse return R.code(error.InvalidArgument);
+    out.* = 0;
     if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return 0;
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
     const h = handleOf(self.?);
 
-    const rs = buildSystem(p, out_error) orelse return 0;
+    const rs = buildSystem(p) catch |err| return R.code(err);
     rs.id = @atomicRmw(u64, &h.state.next_system_id, .Add, 1, .monotonic) + 1;
     if (h.state.in_tick.load(.acquire) or h.state.in_render.load(.acquire)) {
         var head = h.state.pending_systems.load(.acquire);
         while (true) {
             rs.pending_next = head;
-            head = h.state.pending_systems.cmpxchgWeak(head, rs, .release, .acquire) orelse return rs.id;
+            head = h.state.pending_systems.cmpxchgWeak(head, rs, .release, .acquire) orelse {
+                out.* = rs.id;
+                return R.ok;
+            };
         }
     }
     _ = runtimeJoinPendingRender(h);
-    if (!appendSystem(h, rs, out_error)) {
+    appendSystem(h, rs) catch |err| {
         releaseSystem(rs);
-        return 0;
-    }
-    return rs.id;
+        return R.code(err);
+    };
+    out.* = rs.id;
+    return R.ok;
 }
 
 /// Called at the start of `runtimeTick`, before `in_tick` is raised. When anything is pending it
@@ -537,7 +507,7 @@ fn applyPendingSystems(h: *RuntimeHandle) void {
     while (reversed) |rs| {
         reversed = rs.pending_next;
         rs.pending_next = null;
-        if (!appendSystem(h, rs, null)) releaseSystem(rs);
+        appendSystem(h, rs) catch releaseSystem(rs);
     }
 
     var reversed_removals: ?*PendingRemoval = null;
@@ -576,32 +546,28 @@ fn removeSystemNow(h: *RuntimeHandle, id: c.ke_system_id) bool {
 /// `RuntimeState.pending_removals` and reported as done; it is looked up only when the next tick
 /// applies it, so an id already removed passes here and is dropped there without an error.
 /// Otherwise the render phase in flight is joined and the system is removed now.
-fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn runtimeUnregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id) callconv(.c) c.ke_result {
     if (self == null or self.?.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
     const h = handleOf(self.?);
     if (id == 0 or id > @atomicLoad(u64, &h.state.next_system_id, .monotonic)) {
-        E.fail(out_error, .not_found, "no system has that id", @src());
-        return false;
+        return R.code(reportFailure(error.NotFound, "no system has that id"));
     }
     if (h.state.in_tick.load(.acquire) or h.state.in_render.load(.acquire)) {
         const node = cAlloc(PendingRemoval, 1) orelse {
-            E.fail(out_error, .out_of_memory, "removal record allocation failed", @src());
-            return false;
+            return R.code(reportFailure(error.OutOfMemory, "removal record allocation failed"));
         };
         node[0] = .{ .id = id, .next = null };
         var head = h.state.pending_removals.load(.acquire);
         while (true) {
             node[0].next = head;
-            head = h.state.pending_removals.cmpxchgWeak(head, &node[0], .release, .acquire) orelse return true;
+            head = h.state.pending_removals.cmpxchgWeak(head, &node[0], .release, .acquire) orelse return R.ok;
         }
     }
     _ = runtimeJoinPendingRender(h);
-    if (removeSystemNow(h, id)) return true;
-    E.fail(out_error, .not_found, "no system has that id", @src());
-    return false;
+    if (removeSystemNow(h, id)) return R.ok;
+    return R.code(reportFailure(error.NotFound, "no system has that id"));
 }
 
 /// Slot `last_system`. Returns the id of the last system in the list, or zero when the list is
@@ -622,34 +588,35 @@ const TaskPkg = struct {
     state: CtxState,
     ctx: c.ke_system_ctx,
     commands: c.ke_ecs_commands,
-    execute: ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32, [*c][*c]c.ke_error) callconv(.c) bool,
+    execute: ?*const fn (?*c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) c.ke_result,
     user_data: ?*anyopaque,
     dt: f32,
     defer_q: DeferQueue,
     allow_defer: bool,
 };
 
-/// The first failure of a phase or of a wave: the error type and the name of the system that raised
-/// it. Both are null when there is no failure. `firstOf` keeps the earlier one when both have a
-/// type.
+/// The first failure of a phase or of a wave: the code and the name of the system that returned
+/// it. The code is OK and the name null when there is no failure. `firstOf` keeps the earlier one
+/// when both failed.
 const PhaseFailure = struct {
-    type: ?*const c.ke_error_type = null,
+    code: c.ke_result = R.ok,
     system: [*c]const u8 = null,
 
+    fn failed(self: PhaseFailure) bool {
+        return self.code != R.ok;
+    }
+
     fn firstOf(self: PhaseFailure, other: PhaseFailure) PhaseFailure {
-        return if (self.type != null) self else other;
+        return if (self.failed()) self else other;
     }
 };
 
-/// The scheduler task body for one package, run on a worker. When the system body fails only the
-/// code of its error's type crosses to the waiting thread, because the error record lives in the
-/// worker's own storage; the waiter raises a fresh error of the type that code stands for.
+/// The scheduler task body for one package, run on a worker. The body's code is what crosses to
+/// the waiting thread.
 fn taskPkgRun(data: ?*anyopaque) callconv(.c) c.ke_result {
     const pkg: *TaskPkg = @ptrCast(@alignCast(data.?));
     if (pkg.allow_defer) pkg.state.defer_q = &pkg.defer_q;
-    var err: [*c]c.ke_error = null;
-    if (pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt, &err)) return R.ok;
-    return if (err != null and err.*.type != null) codeOfType(err.*.type) else R.code(error.General);
+    return pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt);
 }
 
 /// What `runWaveBody` needs for one wave: the packages built for it, a task slot and a pinned
@@ -677,10 +644,10 @@ fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
     var failure = PhaseFailure{};
     t = 0;
     while (t < wc.wave_size) : (t += 1) {
-        const ty = typeOfCode(sched.wait.?(sched, wc.tasks[t])) orelse continue;
-        if (failure.type != null) continue;
+        const code = sched.wait.?(sched, wc.tasks[t]);
+        if (code == R.ok or failure.failed()) continue;
         failure = .{
-            .type = ty,
+            .code = code,
             .system = wc.pkgs[t].state.system_name,
         };
     }
@@ -709,7 +676,7 @@ fn freePhaseScratch(h: *RuntimeHandle) void {
 
 /// The failure that names a system whose segment or extraction buffers could not be allocated.
 fn segmentAllocationFailed(rs: *const RegisteredSystem) PhaseFailure {
-    return .{ .type = E.typeOf(.out_of_memory), .system = rs.params.name };
+    return .{ .code = R.code(error.OutOfMemory), .system = rs.params.name };
 }
 
 /// Runs one phase wave by wave until it finishes or its first failure stops it. The systems of
@@ -807,7 +774,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: c.ke_phase, dt: f32) PhaseFailure {
             if (pkgs[t].defer_q.arena) |arena| cFree(u8, arena, pkgs[t].defer_q.arena_capacity);
         }
 
-        if (failure.type != null) break;
+        if (failure.failed()) break;
     }
     return failure;
 }
@@ -828,62 +795,55 @@ fn orderPhase(h: *RuntimeHandle, indices: []const u32, out_waves: []u32) wave_mo
 fn orderFailure(problem: wave_mod.Problem) ?PhaseFailure {
     return switch (problem) {
         .none, .ambiguity => null,
-        .out_of_memory => .{ .type = E.typeOf(.out_of_memory), .system = "phase order" },
-        .unknown_name => |u| .{ .type = E.typeOf(.invalid_argument), .system = u.system },
-        .cycle => |cy| .{ .type = E.typeOf(.invalid_argument), .system = cy.system },
+        .out_of_memory => .{ .code = R.code(error.OutOfMemory), .system = "phase order" },
+        .unknown_name => |u| .{ .code = R.code(error.NotFound), .system = u.system },
+        .cycle => |cy| .{ .code = R.code(error.General), .system = cy.system },
     };
 }
 
 /// Slot `declare_exclusive`.
-fn runtimeDeclareExclusive(self: ?*c.ke_runtime, group: c.ke_component_id, member: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn runtimeDeclareExclusive(self: ?*c.ke_runtime, group: c.ke_component_id, member: c.ke_component_id) callconv(.c) c.ke_result {
     if (self == null or self.?.handle == null or group == member) {
-        E.fail(out_error, .invalid_argument, "declare_exclusive: a group and a different member are required", @src());
-        return false;
+        return R.code(reportFailure(error.InvalidArgument, "declare_exclusive: a group and a different member are required"));
     }
     const st = &handleOf(self.?).state;
     for (st.exclusive.items) |e| {
-        if (e.group == group and e.member == member) return true;
+        if (e.group == group and e.member == member) return R.ok;
     }
     st.exclusive.append(heap.gpa, .{ .group = group, .member = member }) catch {
-        E.fail(out_error, .out_of_memory, "declare_exclusive: allocation failed", @src());
-        return false;
+        return R.code(reportFailure(error.OutOfMemory, "declare_exclusive: allocation failed"));
     };
-    return true;
+    return R.ok;
 }
 
 /// Slot `declare_self_ordered`.
-fn runtimeDeclareSelfOrdered(self: ?*c.ke_runtime, cid: c.ke_component_id, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn runtimeDeclareSelfOrdered(self: ?*c.ke_runtime, cid: c.ke_component_id) callconv(.c) c.ke_result {
     if (self == null or self.?.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
     const st = &handleOf(self.?).state;
-    if (std.mem.indexOfScalar(c.ke_component_id, st.self_ordered.items, cid) != null) return true;
+    if (std.mem.indexOfScalar(c.ke_component_id, st.self_ordered.items, cid) != null) return R.ok;
     st.self_ordered.append(heap.gpa, cid) catch {
-        E.fail(out_error, .out_of_memory, "declare_self_ordered: allocation failed", @src());
-        return false;
+        return R.code(reportFailure(error.OutOfMemory, "declare_self_ordered: allocation failed"));
     };
-    return true;
+    return R.ok;
 }
 
 /// Slot `check_order`. Builds the order of each phase over the systems registered so far,
-/// including those still pending, and fails on the first problem found, phase by phase, with a
-/// message naming the systems.
-fn runtimeCheckOrder(self: ?*c.ke_runtime, refuse_ambiguity: bool, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+/// including those still pending, and fails on the first problem found, phase by phase, logging
+/// the systems it names.
+fn runtimeCheckOrder(self: ?*c.ke_runtime, refuse_ambiguity: bool) callconv(.c) c.ke_result {
     if (self == null or self.?.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
     const h = handleOf(self.?);
     applyPendingSystems(h);
     const indices = heap.gpa.alloc(u32, h.state.system_count) catch {
-        E.fail(out_error, .out_of_memory, "check_order: allocation failed", @src());
-        return false;
+        return R.code(reportFailure(error.OutOfMemory, "check_order: allocation failed"));
     };
     defer heap.gpa.free(indices);
     const waves = heap.gpa.alloc(u32, h.state.system_count) catch {
-        E.fail(out_error, .out_of_memory, "check_order: allocation failed", @src());
-        return false;
+        return R.code(reportFailure(error.OutOfMemory, "check_order: allocation failed"));
     };
     defer heap.gpa.free(waves);
     var phase: u32 = 0;
@@ -896,20 +856,24 @@ fn runtimeCheckOrder(self: ?*c.ke_runtime, refuse_ambiguity: bool, out_error: [*
         }
         const ordered = orderPhase(h, indices[0..count], waves[0..count]);
         const problem = if (ordered.failure != .none) ordered.failure else if (refuse_ambiguity) ordered.ambiguity else .none;
-        var buf: [512]u8 = undefined;
-        const msg: ?[:0]const u8 = switch (problem) {
-            .none => null,
-            .out_of_memory => "check_order: allocation failed",
-            .unknown_name => |u| std.fmt.bufPrintZ(&buf, "system '{s}' names '{s}', which no system of its phase carries", .{ spanOr(u.system), spanOr(u.name) }) catch "check_order: unknown name",
-            .cycle => |cy| std.fmt.bufPrintZ(&buf, "system '{s}' is in a cycle of its phase's order", .{spanOr(cy.system)}) catch "check_order: cycle",
-            .ambiguity => |a| std.fmt.bufPrintZ(&buf, "systems '{s}' and '{s}' both write component {d} with no order between them", .{ spanOr(a.first), spanOr(a.second), a.cid }) catch "check_order: ambiguity",
-        };
-        if (msg) |m| {
-            E.fail(out_error, if (problem == .out_of_memory) .out_of_memory else .invalid_argument, m, @src());
-            return false;
+        switch (problem) {
+            .none => {},
+            .out_of_memory => return R.code(reportFailure(error.OutOfMemory, "check_order: allocation failed")),
+            .unknown_name => |u| {
+                log.warn("system '{s}' names '{s}', which no system of its phase carries", .{ spanOr(u.system), spanOr(u.name) });
+                return R.code(error.NotFound);
+            },
+            .cycle => |cy| {
+                log.warn("system '{s}' is in a cycle of its phase's order", .{spanOr(cy.system)});
+                return R.code(error.General);
+            },
+            .ambiguity => |a| {
+                log.warn("systems '{s}' and '{s}' both write component {d} with no order between them", .{ spanOr(a.first), spanOr(a.second), a.cid });
+                return R.code(error.General);
+            },
         }
     }
-    return true;
+    return R.ok;
 }
 
 fn spanOr(text: [*c]const u8) []const u8 {
@@ -956,7 +920,7 @@ fn runtimePrepareSystems(h: *RuntimeHandle) PhaseFailure {
     const first = h.state.systems_prepared;
     const last = h.state.system_count;
     if (runtimeBindQueries(h, first, last)) |refused| {
-        return .{ .type = E.typeOf(.invalid_argument), .system = refused.params.name };
+        return .{ .code = R.code(error.InvalidArgument), .system = refused.params.name };
     }
     h.state.systems_prepared = last;
     return .{};
@@ -1052,7 +1016,7 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
 fn renderJobRun(data: ?*anyopaque) callconv(.c) c.ke_result {
     const job: *RenderJob = @ptrCast(@alignCast(data.?));
     job.failure = runtimeRunPhase(job.h, c.KE_PHASE_RENDER, job.dt);
-    return codeOfType(job.failure.type);
+    return job.failure.code;
 }
 
 /// Waits for the render phase in flight, if any, and returns the failure it recorded. The record is
@@ -1070,68 +1034,59 @@ fn runtimeJoinPendingRender(h: *RuntimeHandle) PhaseFailure {
 /// Slot `tick`. It applies the pending system changes before raising `in_tick`, so a
 /// registration made from inside the tick waits for the next one, and it lowers `in_tick` on
 /// return, failure included.
-fn runtimeTick(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn runtimeTick(self: ?*c.ke_runtime, dt: f32) callconv(.c) c.ke_result {
     if (self == null or self.?.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
     const h = handleOf(self.?);
     applyPendingSystems(h);
     h.state.in_tick.store(true, .release);
     defer h.state.in_tick.store(false, .release);
-    return runtimeTickBody(self, dt, out_error);
+    return runtimeTickBody(self, dt);
 }
 
 /// Runs the sim phases of one tick, then joins the previous render phase, extracts the render
-/// state and dispatches the next render phase, which it does not wait for. Returns false at the
-/// first failing step, with `invalid_argument` for a null runtime or a negative dt and otherwise
-/// with the type and system name of the failure. The render phase in flight is joined before a
+/// state and dispatches the next render phase, which it does not wait for. Returns at the first
+/// failing step, with invalid argument for a null runtime or a negative dt and otherwise with the
+/// code of the failure, whose system is logged. The render phase in flight is joined before a
 /// failure is reported, and a failed tick dispatches no render phase. The startup phase is marked
 /// started before it runs, so a startup that fails is not run again. Without a render job record
 /// the render phase runs inline and its failure is reported here.
-fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error) bool {
+fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32) c.ke_result {
     if (self == null or self.?.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
     if (dt < 0.0) {
-        E.fail(out_error, .invalid_argument, "negative dt", @src());
-        return false;
+        return R.code(reportFailure(error.InvalidArgument, "negative dt"));
     }
     const h = handleOf(self.?);
 
     var failure = runtimePrepareSystems(h);
-    if (failure.type == null and !h.state.started) {
+    if (!failure.failed() and !h.state.started) {
         h.state.started = true;
         failure = runtimeRunPhase(h, c.KE_PHASE_STARTUP, 0.0);
     }
-    if (failure.type == null) failure = runtimeRunPhase(h, c.KE_PHASE_PRE_UPDATE, dt);
+    if (!failure.failed()) failure = runtimeRunPhase(h, c.KE_PHASE_PRE_UPDATE, dt);
 
     h.state.fixed_accumulator += dt;
     if (h.state.fixed_accumulator > h.state.fixed_dt_max_accum) {
         h.state.fixed_accumulator = h.state.fixed_dt_max_accum;
     }
-    while (failure.type == null and h.state.fixed_accumulator >= h.state.fixed_dt) {
+    while (!failure.failed() and h.state.fixed_accumulator >= h.state.fixed_dt) {
         for ([_]c.ke_phase{ c.KE_PHASE_FIXED_PRE_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_POST_UPDATE }) |phase| {
-            if (failure.type == null) failure = runtimeRunPhase(h, phase, h.state.fixed_dt);
+            if (!failure.failed()) failure = runtimeRunPhase(h, phase, h.state.fixed_dt);
         }
         h.state.fixed_accumulator -= h.state.fixed_dt;
     }
 
-    if (failure.type == null) failure = runtimeRunPhase(h, c.KE_PHASE_UPDATE, dt);
-    if (failure.type == null) failure = runtimeRunPhase(h, c.KE_PHASE_POST_UPDATE, dt);
+    if (!failure.failed()) failure = runtimeRunPhase(h, c.KE_PHASE_UPDATE, dt);
+    if (!failure.failed()) failure = runtimeRunPhase(h, c.KE_PHASE_POST_UPDATE, dt);
 
     failure = runtimeJoinPendingRender(h).firstOf(failure);
-    if (failure.type) |t| {
-        E.failWithType(out_error, t, failure.system orelse "system body failed", @src());
-        return false;
-    }
+    if (failure.failed()) return reported(failure, "a system body");
 
     failure = runtimeExtractRenderState(h);
-    if (failure.type) |t| {
-        E.failWithType(out_error, t, failure.system orelse "render extraction failed", @src());
-        return false;
-    }
+    if (failure.failed()) return reported(failure, "render extraction");
 
     if (h.state.render_job == null) {
         if (cAlloc(RenderJob, 1)) |rj| h.state.render_job = &rj[0];
@@ -1143,30 +1098,29 @@ fn runtimeTickBody(self: ?*c.ke_runtime, dt: f32, out_error: [*c][*c]c.ke_error)
         h.state.pending_render_task = h.state.scheduler.dispatch.?(h.state.scheduler, renderJobRun, job);
     } else {
         failure = runtimeRunPhase(h, c.KE_PHASE_RENDER, dt);
-        if (failure.type) |t| {
-            E.failWithType(out_error, t, failure.system orelse "system body failed", @src());
-            return false;
-        }
+        if (failure.failed()) return reported(failure, "a system body");
     }
 
-    return true;
+    return R.ok;
+}
+
+/// Logs which system a phase failed in and returns its code.
+fn reported(failure: PhaseFailure, comptime what: []const u8) c.ke_result {
+    log.warn(what ++ " failed in {s}", .{spanOr(failure.system)});
+    return failure.code;
 }
 
 /// Slot `flush_render`. Waits for the render phase dispatched by the last tick and reports its
 /// failure. A tick returns
 /// before that phase finishes, so a failure of the phase reaches the caller only here or at the
 /// next tick.
-fn runtimeFlushRender(self: ?*c.ke_runtime, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn runtimeFlushRender(self: ?*c.ke_runtime) callconv(.c) c.ke_result {
     if (self == null or self.?.handle == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return false;
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
     const failure = runtimeJoinPendingRender(handleOf(self.?));
-    if (failure.type) |t| {
-        E.failWithType(out_error, t, failure.system orelse "system body failed", @src());
-        return false;
-    }
-    return true;
+    if (failure.failed()) return reported(failure, "a system body");
+    return R.ok;
 }
 
 /// The handle's `destroy`. It joins the render phase, runs `KE_PHASE_SHUTDOWN` if the runtime
@@ -1221,16 +1175,15 @@ fn runtimeDestroy(self: ?*c.ke_runtime) callconv(.c) void {
 /// `fixed_dt`, `fixed_dt_max_accum` or `max_systems_per_phase` takes that field's default. The
 /// per-phase scratch arrays are allocated here, and if that fails the result is an empty handle
 /// with the error set.
-export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params: [*c]const c.ke_runtime_params, out_error: [*c][*c]c.ke_error) callconv(.c) c.ke_runtime_handle {
-    const empty = c.ke_runtime_handle{ .ref = null, .destroy = null };
+export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params: [*c]const c.ke_runtime_params, out_runtime: ?*c.ke_runtime_handle) callconv(.c) c.ke_result {
+    const out = out_runtime orelse return R.code(error.InvalidArgument);
+    out.* = .{ .ref = null, .destroy = null };
     if (ecs == null or scheduler == null) {
-        E.fail(out_error, .invalid_argument, "invalid argument", @src());
-        return empty;
+        return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs an ecs and a scheduler"));
     }
 
     const h_mem = cAlloc(RuntimeHandle, 1) orelse {
-        E.fail(out_error, .out_of_memory, "state allocation failed", @src());
-        return empty;
+        return R.code(reportFailure(error.OutOfMemory, "creating the runtime failed: out of memory"));
     };
     const h = &h_mem[0];
     @memset(std.mem.asBytes(h), 0);
@@ -1258,8 +1211,7 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
     {
         freePhaseScratch(h);
         cFree(RuntimeHandle, @ptrCast(h), 1);
-        E.fail(out_error, .out_of_memory, "phase scratch allocation failed", @src());
-        return empty;
+        return R.code(reportFailure(error.OutOfMemory, "creating the runtime failed: out of memory"));
     }
 
     h.api.handle = h;
@@ -1273,10 +1225,39 @@ export fn ke_runtime_create(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
 
-    return .{ .ref = &h.api, .destroy = &runtimeDestroy };
+    out.* = .{ .ref = &h.api, .destroy = &runtimeDestroy };
+    return R.ok;
 }
 
 const testing = std.testing;
+
+fn systemId(rt: [*c]c.ke_runtime, p: [*c]const c.ke_runtime_system_params) c.ke_system_id {
+    var id: c.ke_system_id = 0;
+    _ = rt.*.register_system.?(rt, p, &id);
+    return id;
+}
+
+fn loadedModule(rt: [*c]c.ke_runtime, p: [*c]const c.ke_runtime_module_params) c.ke_module_id {
+    var id: c.ke_module_id = 0;
+    _ = rt.*.register_module.?(rt, p, &id);
+    return id;
+}
+
+fn ticked(rt: [*c]c.ke_runtime, dt: f32) bool {
+    return rt.*.tick.?(rt, dt) == R.ok;
+}
+
+fn spawned(commands: [*c]c.ke_ecs_commands) c.ke_entity {
+    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    _ = commands.*.spawn.?(commands, &entity);
+    return entity;
+}
+
+fn createdRuntime(ecs: ?*c.ke_ecs, scheduler: ?*c.ke_scheduler, params: [*c]const c.ke_runtime_params) c.ke_runtime_handle {
+    var h: c.ke_runtime_handle = .{ .ref = null, .destroy = null };
+    _ = ke_runtime_create(ecs, scheduler, params, &h);
+    return h;
+}
 
 extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_ecs: *c.ke_ecs_handle) callconv(.c) c.ke_result;
 extern fn ke_scheduler_enki_create(params: ?*const anyopaque, out_scheduler: *c.ke_scheduler_handle) callconv(.c) c.ke_result;
@@ -1294,7 +1275,7 @@ const Fixture = struct {
         try R.check(ke_ecs_flecs_create(null, &eh));
 
         var rp = std.mem.zeroes(c.ke_runtime_params);
-        const rh = ke_runtime_create(eh.ref, sh.ref, &rp, null);
+        const rh = createdRuntime(eh.ref, sh.ref, &rp);
         try testing.expect(rh.ref != null);
 
         return .{ .scheduler_h = sh, .ecs_h = eh, .runtime_h = rh };
@@ -1315,11 +1296,11 @@ const Fixture = struct {
     }
 
     fn tick(self: *Fixture, dt: f32) bool {
-        return self.rt().tick.?(self.rt(), dt, null);
+        return ticked(self.rt(), dt);
     }
 
     fn flushRender(self: *Fixture) void {
-        _ = self.rt().flush_render.?(self.rt(), null);
+        _ = (self.rt().flush_render.?(self.rt()) == R.ok);
     }
 };
 
@@ -1343,21 +1324,20 @@ fn systemParams(name: [*c]const u8, phase: c_int) c.ke_runtime_system_params {
     return s;
 }
 
-fn noopSystem(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
-    return true;
+fn noopSystem(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    return R.ok;
 }
 
-fn refusingSystem(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    E.fail(out_error, .not_supported, "body refused", @src());
-    return false;
+fn refusingSystem(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    return R.code(error.NotSupported);
 }
 
 const Counter = std.atomic.Value(u32);
 
-fn countingSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn countingSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const counter: *Counter = @ptrCast(@alignCast(ud.?));
     _ = counter.fetchAdd(1, .acq_rel);
-    return true;
+    return R.ok;
 }
 
 const ModuleCtx = struct {
@@ -1365,13 +1345,13 @@ const ModuleCtx = struct {
     system_ticks: Counter = Counter.init(0),
 };
 
-fn moduleTickSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn moduleTickSystem(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const ctx: *ModuleCtx = @ptrCast(@alignCast(ud.?));
     _ = ctx.system_ticks.fetchAdd(1, .acq_rel);
-    return true;
+    return R.ok;
 }
 
-fn testModuleOnLoad(runtime: ?*c.ke_runtime, ud: ?*anyopaque, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn testModuleOnLoad(runtime: ?*c.ke_runtime, ud: ?*anyopaque) callconv(.c) c.ke_result {
     const ctx: *ModuleCtx = @ptrCast(@alignCast(ud.?));
     _ = ctx.load_calls.fetchAdd(1, .acq_rel);
 
@@ -1379,8 +1359,8 @@ fn testModuleOnLoad(runtime: ?*c.ke_runtime, ud: ?*anyopaque, _: [*c][*c]c.ke_er
     sys.user_data = ud;
     sys.execute = &moduleTickSystem;
 
-    const rtp = runtime orelse return false;
-    return rtp.register_system.?(rtp, &sys, null) != 0;
+    const rtp = runtime orelse return R.code(error.General);
+    return if (systemId(rtp, &sys) != 0) R.ok else R.code(error.General);
 }
 
 const UnloadRecorder = struct {
@@ -1393,13 +1373,12 @@ const OrderedModule = struct {
     tag: u32,
 };
 
-fn orderedOnLoad(_: ?*c.ke_runtime, _: ?*anyopaque, _: [*c][*c]c.ke_error) callconv(.c) bool {
-    return true;
+fn orderedOnLoad(_: ?*c.ke_runtime, _: ?*anyopaque) callconv(.c) c.ke_result {
+    return R.ok;
 }
 
-fn refusingOnLoad(_: ?*c.ke_runtime, _: ?*anyopaque, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
-    E.fail(out_error, .invalid_argument, "module refused to load", @src());
-    return false;
+fn refusingOnLoad(_: ?*c.ke_runtime, _: ?*anyopaque) callconv(.c) c.ke_result {
+    return R.code(error.InvalidArgument);
 }
 
 fn orderedOnUnload(_: ?*c.ke_runtime, ud: ?*anyopaque) callconv(.c) void {
@@ -1414,7 +1393,7 @@ const SliceProbe = struct {
     reported_count: Counter = Counter.init(0),
 };
 
-fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const probe: *SliceProbe = @ptrCast(@alignCast(ud.?));
     var index: u32 = 99;
     var count: u32 = 99;
@@ -1422,7 +1401,7 @@ fn sliceProbeSystem(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]
     _ = probe.calls.fetchAdd(1, .acq_rel);
     probe.reported_count.store(count, .release);
     if (index < probe.seen.len) _ = probe.seen[index].fetchAdd(1, .acq_rel);
-    return true;
+    return R.ok;
 }
 
 test "a system that does not promise per-entity work runs as one slice" {
@@ -1433,7 +1412,7 @@ test "a system that does not promise per-entity work runs as one slice" {
     var sys = systemParams("Serial", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &sliceProbeSystem;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
 
@@ -1451,7 +1430,7 @@ test "a per-entity system runs every slice of its set exactly once" {
     sys.user_data = &probe;
     sys.execute = &sliceProbeSystem;
     sys.per_entity = true;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
 
@@ -1474,7 +1453,7 @@ test "a per-entity system pinned to a thread stays one slice" {
     sys.execute = &sliceProbeSystem;
     sys.per_entity = true;
     sys.pinned_thread = 1;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
 
@@ -1499,7 +1478,7 @@ test "registering a module calls its load hook exactly once" {
     mod.user_data = &ctx;
     mod.on_load = &testModuleOnLoad;
 
-    const mid = f.rt().register_module.?(f.rt(), &mod, null);
+    const mid = loadedModule(f.rt(), &mod);
     try testing.expect(mid != 0);
     try testing.expectEqual(@as(u32, 1), ctx.load_calls.load(.acquire));
 }
@@ -1514,7 +1493,7 @@ test "a registered system fires once per tick" {
     mod.user_data = &ctx;
     mod.on_load = &testModuleOnLoad;
 
-    try testing.expect(f.rt().register_module.?(f.rt(), &mod, null) != 0);
+    try testing.expect(loadedModule(f.rt(), &mod) != 0);
 
     for (0..10) |_| try testing.expect(f.tick(1.0 / 60.0));
 
@@ -1532,7 +1511,7 @@ test "a module's unload hook runs when the runtime is destroyed" {
     mod.on_load = &orderedOnLoad;
     mod.on_unload = &orderedOnUnload;
 
-    try testing.expect(f.rt().register_module.?(f.rt(), &mod, null) != 0);
+    try testing.expect(loadedModule(f.rt(), &mod) != 0);
     try testing.expectEqual(@as(usize, 0), recorder.count);
 
     f.deinit();
@@ -1554,7 +1533,7 @@ test "modules unload in reverse registration order" {
         mod.user_data = m;
         mod.on_load = &orderedOnLoad;
         mod.on_unload = &orderedOnUnload;
-        try testing.expect(f.rt().register_module.?(f.rt(), &mod, null) != 0);
+        try testing.expect(loadedModule(f.rt(), &mod) != 0);
     }
 
     f.deinit();
@@ -1575,14 +1554,14 @@ test "a module whose load failed is not unloaded" {
     good.user_data = &loaded;
     good.on_load = &orderedOnLoad;
     good.on_unload = &orderedOnUnload;
-    try testing.expect(f.rt().register_module.?(f.rt(), &good, null) != 0);
+    try testing.expect(loadedModule(f.rt(), &good) != 0);
 
     var bad = std.mem.zeroes(c.ke_runtime_module_params);
     bad.name = "Refuses";
     bad.user_data = &refused;
     bad.on_load = &refusingOnLoad;
     bad.on_unload = &orderedOnUnload;
-    try testing.expectEqual(@as(c.ke_module_id, 0), f.rt().register_module.?(f.rt(), &bad, null));
+    try testing.expectEqual(@as(c.ke_module_id, 0), loadedModule(f.rt(), &bad));
 
     f.deinit();
 
@@ -1594,7 +1573,7 @@ test "registering a module with no params is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    try testing.expectEqual(@as(c.ke_module_id, 0), f.rt().register_module.?(f.rt(), null, null));
+    try testing.expectEqual(@as(c.ke_module_id, 0), loadedModule(f.rt(), null));
 }
 
 test "a body that fails the tick keeps the later phases from running" {
@@ -1605,18 +1584,14 @@ test "a body that fails the tick keeps the later phases from running" {
 
     var boom = systemParams("Boom", c.KE_PHASE_PRE_UPDATE);
     boom.execute = &refusingSystem;
-    try testing.expect(f.rt().register_system.?(f.rt(), &boom, null) != 0);
+    try testing.expect(systemId(f.rt(), &boom) != 0);
 
     var later = systemParams("Later", c.KE_PHASE_POST_UPDATE);
     later.execute = &countingSystem;
     later.user_data = &counter;
-    try testing.expect(f.rt().register_system.?(f.rt(), &later, null) != 0);
+    try testing.expect(systemId(f.rt(), &later) != 0);
 
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!f.rt().tick.?(f.rt(), 1.0 / 60.0, &err));
-    try testing.expect(err != null);
-    try testing.expectEqualStrings("ke.error.not_supported", std.mem.span(err.*.type.*.name));
-    try testing.expectEqualStrings("Boom", std.mem.span(err.*.message));
+    try testing.expectError(error.NotSupported, R.check(f.rt().tick.?(f.rt(), 1.0 / 60.0)));
     try testing.expectEqual(@as(u32, 0), counter.load(.acquire));
 }
 
@@ -1625,7 +1600,7 @@ test "registering a system with no execute body is refused" {
     defer f.deinit();
 
     const sys = systemParams("Bad", c.KE_PHASE_UPDATE);
-    try testing.expectEqual(@as(c.ke_system_id, 0), f.rt().register_system.?(f.rt(), &sys, null));
+    try testing.expectEqual(@as(c.ke_system_id, 0), systemId(f.rt(), &sys));
 }
 
 const BareRuntime = struct {
@@ -1635,7 +1610,7 @@ const BareRuntime = struct {
 
     fn init(self: *BareRuntime) !void {
         var rp = std.mem.zeroes(c.ke_runtime_params);
-        self.runtime_h = ke_runtime_create(&self.ecs, &self.scheduler, &rp, null);
+        self.runtime_h = createdRuntime(&self.ecs, &self.scheduler, &rp);
         try testing.expect(self.runtime_h.ref != null);
     }
 
@@ -1652,8 +1627,8 @@ const BareRuntime = struct {
     }
 };
 
-fn noopBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
-    return true;
+fn noopBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    return R.ok;
 }
 
 fn scribble(bytes: []u8) void {
@@ -1668,7 +1643,7 @@ test "a registered system keeps its own copy of the name" {
     var name_buf = [_]u8{ 'M', 'o', 'v', 'e', 0 };
     var sys = systemParams(@ptrCast(&name_buf), c.KE_PHASE_UPDATE);
     sys.execute = &noopBody;
-    try testing.expect(b.rt().register_system.?(b.rt(), &sys, null) != 0);
+    try testing.expect(systemId(b.rt(), &sys) != 0);
     scribble(&name_buf);
 
     try testing.expectEqualStrings("Move", std.mem.span(b.registered(0).params.name));
@@ -1684,7 +1659,7 @@ test "a registered system keeps its own copy of the access list when it declares
     sys.execute = &noopBody;
     sys.access_list = &list;
     sys.access_count = list.len;
-    try testing.expect(b.rt().register_system.?(b.rt(), &sys, null) != 0);
+    try testing.expect(systemId(b.rt(), &sys) != 0);
     scribble(std.mem.sliceAsBytes(&list));
 
     const kept = b.registered(0).params;
@@ -1693,11 +1668,11 @@ test "a registered system keeps its own copy of the access list when it declares
     try testing.expectEqual(@as(c.ke_component_id, 9), kept.access_list[1].cid);
 }
 
-fn lastQueryBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn lastQueryBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     var count: usize = 0;
     _ = ctx.?.view.?(ctx, 19, &count);
     seen_segments = count;
-    return true;
+    return R.ok;
 }
 
 test "a system declaring twenty queries is resolved and viewed through every one of them" {
@@ -1717,19 +1692,19 @@ test "a system declaring twenty queries is resolved and viewed through every one
     var sys = systemParams("Greedy", c.KE_PHASE_UPDATE);
     sys.execute = &lastQueryBody;
     withQueries(&sys, &decls);
-    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    try testing.expect(systemId(r.rt(), &sys) != 0);
 
     seen_segments = 0;
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(usize, many_segments), seen_segments);
 }
 
-fn termCountBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn termCountBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     var count: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &count);
     seen_segments = count;
     seen_entities = if (count > 0) segs[0].column_count else 0;
-    return true;
+    return R.ok;
 }
 
 test "a query of twelve terms is registered and its segments carry twelve columns" {
@@ -1745,12 +1720,12 @@ test "a query of twelve terms is registered and its segments carry twelve column
     var sys = systemParams("Wide", c.KE_PHASE_UPDATE);
     sys.execute = &termCountBody;
     withQueries(&sys, &.{queryOf(&terms)});
-    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    try testing.expect(systemId(r.rt(), &sys) != 0);
 
     fake_term_count = 12;
     defer fake_term_count = 1;
     seen_segments = 0;
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(usize, many_segments), seen_segments);
     try testing.expectEqual(@as(usize, 12), seen_entities);
 }
@@ -1765,9 +1740,7 @@ test "a query counting terms it does not point at is refused" {
     const decls = [_]c.ke_query_decl{.{ .terms = null, .term_count = 2 }};
     withQueries(&sys, &decls);
 
-    var err: [*c]c.ke_error = null;
-    try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
-    try testing.expect(err != null);
+    try testing.expectEqual(@as(c.ke_system_id, 0), systemId(b.rt(), &sys));
 }
 
 test "a query declaring no terms is refused" {
@@ -1780,9 +1753,7 @@ test "a query declaring no terms is refused" {
     var terms = [_]c.ke_component_access{};
     withQueries(&sys, &.{queryOf(&terms)});
 
-    var err: [*c]c.ke_error = null;
-    try testing.expectEqual(@as(c.ke_system_id, 0), b.rt().register_system.?(b.rt(), &sys, &err));
-    try testing.expect(err != null);
+    try testing.expectEqual(@as(c.ke_system_id, 0), systemId(b.rt(), &sys));
 }
 
 var inline_result: c.ke_result = R.ok;
@@ -1821,12 +1792,12 @@ const PhaseLog = struct {
     count: usize = 0,
 };
 
-fn phaseLogBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn phaseLogBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     _ = ctx;
     const entry: *const PhaseLogEntry = @ptrCast(@alignCast(ud.?));
     entry.log.seen[entry.log.count] = entry.phase;
     entry.log.count += 1;
-    return true;
+    return R.ok;
 }
 
 const PhaseLogEntry = struct {
@@ -1838,23 +1809,23 @@ test "the startup phase runs once, before the first tick's other phases" {
     var r = InlineRuntime{};
     try r.init();
 
-    var log = PhaseLog{};
+    var seen_log = PhaseLog{};
     const phases = [_]c_int{ c.KE_PHASE_UPDATE, c.KE_PHASE_STARTUP, c.KE_PHASE_PRE_UPDATE };
     var entries: [phases.len]PhaseLogEntry = undefined;
     for (phases, 0..) |ph, i| {
-        entries[i] = .{ .log = &log, .phase = ph };
+        entries[i] = .{ .log = &seen_log, .phase = ph };
         var sys = systemParams("Logged", ph);
         sys.execute = &phaseLogBody;
         sys.user_data = &entries[i];
-        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+        try testing.expect(systemId(r.rt(), &sys) != 0);
     }
 
-    for (0..3) |_| try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    for (0..3) |_| try testing.expect(ticked(r.rt(), 0.001));
     r.bare.deinit();
 
-    try testing.expectEqual(@as(c_int, c.KE_PHASE_STARTUP), log.seen[0]);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_STARTUP), seen_log.seen[0]);
     var startups: usize = 0;
-    for (log.seen[0..log.count]) |ph| {
+    for (seen_log.seen[0..seen_log.count]) |ph| {
         if (ph == c.KE_PHASE_STARTUP) startups += 1;
     }
     try testing.expectEqual(@as(usize, 1), startups);
@@ -1864,45 +1835,45 @@ test "each fixed step runs the fixed pre-update, update and post-update phases i
     var r = InlineRuntime{};
     try r.init();
 
-    var log = PhaseLog{};
+    var seen_log = PhaseLog{};
     const phases = [_]c_int{ c.KE_PHASE_FIXED_POST_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_PRE_UPDATE };
     var entries: [phases.len]PhaseLogEntry = undefined;
     for (phases, 0..) |ph, i| {
-        entries[i] = .{ .log = &log, .phase = ph };
+        entries[i] = .{ .log = &seen_log, .phase = ph };
         var sys = systemParams("Logged", ph);
         sys.execute = &phaseLogBody;
         sys.user_data = &entries[i];
-        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+        try testing.expect(systemId(r.rt(), &sys) != 0);
     }
 
-    try testing.expect(r.rt().tick.?(r.rt(), 2.0 / 60.0, null));
+    try testing.expect(ticked(r.rt(), 2.0 / 60.0));
     r.bare.deinit();
 
     const step = [_]c_int{ c.KE_PHASE_FIXED_PRE_UPDATE, c.KE_PHASE_FIXED_UPDATE, c.KE_PHASE_FIXED_POST_UPDATE };
-    try testing.expectEqualSlices(c_int, &(step ++ step), log.seen[0..log.count]);
+    try testing.expectEqualSlices(c_int, &(step ++ step), seen_log.seen[0..seen_log.count]);
 }
 
 test "the shutdown phase runs once when the runtime is destroyed, after every tick" {
     var r = InlineRuntime{};
     try r.init();
 
-    var log = PhaseLog{};
+    var seen_log = PhaseLog{};
     const phases = [_]c_int{ c.KE_PHASE_SHUTDOWN, c.KE_PHASE_UPDATE };
     var entries: [phases.len]PhaseLogEntry = undefined;
     for (phases, 0..) |ph, i| {
-        entries[i] = .{ .log = &log, .phase = ph };
+        entries[i] = .{ .log = &seen_log, .phase = ph };
         var sys = systemParams("Logged", ph);
         sys.execute = &phaseLogBody;
         sys.user_data = &entries[i];
-        try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+        try testing.expect(systemId(r.rt(), &sys) != 0);
     }
 
-    for (0..2) |_| try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
-    try testing.expectEqual(@as(usize, 2), log.count);
+    for (0..2) |_| try testing.expect(ticked(r.rt(), 0.001));
+    try testing.expectEqual(@as(usize, 2), seen_log.count);
     r.bare.deinit();
 
-    try testing.expectEqual(@as(usize, 3), log.count);
-    try testing.expectEqual(@as(c_int, c.KE_PHASE_SHUTDOWN), log.seen[2]);
+    try testing.expectEqual(@as(usize, 3), seen_log.count);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_SHUTDOWN), seen_log.seen[2]);
 }
 
 fn fakeQueryRegister(_: ?*c.ke_ecs, _: [*c]const c.ke_component_id, _: usize) callconv(.c) c.ke_query_id {
@@ -1934,13 +1905,13 @@ fn fakeComponentSize(_: ?*c.ke_ecs, _: c.ke_component_id) callconv(.c) usize {
     return 4;
 }
 
-fn viewBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn viewBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     var count: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &count);
     seen_segments = count;
     seen_entities = 0;
     for (0..count) |i| seen_entities += segs[i].count;
-    return true;
+    return R.ok;
 }
 
 fn manySegmentRuntime(r: *InlineRuntime, phase: c_int) !void {
@@ -1952,7 +1923,7 @@ fn manySegmentRuntime(r: *InlineRuntime, phase: c_int) !void {
     var sys = systemParams("Fragmented", phase);
     sys.execute = &viewBody;
     withQueries(&sys, &.{queryOf(&terms)});
-    try testing.expect(r.rt().register_system.?(r.rt(), &sys, null) != 0);
+    try testing.expect(systemId(r.rt(), &sys) != 0);
     seen_segments = 0;
     seen_entities = 0;
 }
@@ -1962,7 +1933,7 @@ test "a sim query matching more segments than its buffer starts with is resolved
     try manySegmentRuntime(&r, c.KE_PHASE_UPDATE);
     defer r.bare.deinit();
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(usize, many_segments), seen_segments);
     try testing.expectEqual(@as(usize, many_segments), seen_entities);
 }
@@ -1972,7 +1943,7 @@ test "a render query matching more segments than the extraction scratch starts w
     try manySegmentRuntime(&r, c.KE_PHASE_RENDER);
     defer r.bare.deinit();
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(usize, 1), seen_segments);
     try testing.expectEqual(@as(usize, many_segments), seen_entities);
 }
@@ -1982,30 +1953,28 @@ test "an unregistered system no longer runs and the others keep running" {
     try r.init();
     defer r.bare.deinit();
 
-    var log = PhaseLog{};
+    var seen_log = PhaseLog{};
     var entries: [3]PhaseLogEntry = undefined;
     var ids: [3]c.ke_system_id = undefined;
     const phases = [_]c_int{ c.KE_PHASE_PRE_UPDATE, c.KE_PHASE_UPDATE, c.KE_PHASE_POST_UPDATE };
     for (phases, 0..) |ph, i| {
-        entries[i] = .{ .log = &log, .phase = ph };
+        entries[i] = .{ .log = &seen_log, .phase = ph };
         var sys = systemParams("Logged", ph);
         sys.execute = &phaseLogBody;
         sys.user_data = &entries[i];
-        ids[i] = r.rt().register_system.?(r.rt(), &sys, null);
+        ids[i] = systemId(r.rt(), &sys);
         try testing.expect(ids[i] != 0);
     }
 
     try testing.expectEqual(ids[2], r.rt().last_system.?(r.rt()));
-    try testing.expect(r.rt().unregister_system.?(r.rt(), ids[1], null));
+    try testing.expect(r.rt().unregister_system.?(r.rt(), ids[1]) == R.ok);
     try testing.expectEqual(ids[2], r.rt().last_system.?(r.rt()));
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!r.rt().unregister_system.?(r.rt(), ids[1], &err));
-    try testing.expect(err != null);
+    try testing.expectError(error.NotFound, R.check(r.rt().unregister_system.?(r.rt(), ids[1])));
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
-    try testing.expectEqual(@as(usize, 2), log.count);
-    try testing.expectEqual(@as(c_int, c.KE_PHASE_PRE_UPDATE), log.seen[0]);
-    try testing.expectEqual(@as(c_int, c.KE_PHASE_POST_UPDATE), log.seen[1]);
+    try testing.expect(ticked(r.rt(), 0.001));
+    try testing.expectEqual(@as(usize, 2), seen_log.count);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_PRE_UPDATE), seen_log.seen[0]);
+    try testing.expectEqual(@as(c_int, c.KE_PHASE_POST_UPDATE), seen_log.seen[1]);
 }
 
 const MidTick = struct {
@@ -2017,22 +1986,22 @@ const MidTick = struct {
     late_id: c.ke_system_id = 0,
 };
 
-fn lateBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn lateBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const m: *MidTick = @ptrCast(@alignCast(ud.?));
     m.late_runs += 1;
-    return true;
+    return R.ok;
 }
 
-fn registeringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn registeringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const m: *MidTick = @ptrCast(@alignCast(ud.?));
-    if (m.registered) return true;
+    if (m.registered) return R.ok;
     m.registered = true;
     var late = systemParams("Late", c.KE_PHASE_UPDATE);
     late.execute = &lateBody;
     late.user_data = m;
-    m.late_id = m.rt.register_system.?(m.rt, &late, null);
-    if (!m.keep) m.unregister_accepted = m.rt.unregister_system.?(m.rt, m.late_id, null);
-    return true;
+    m.late_id = systemId(m.rt, &late);
+    if (!m.keep) m.unregister_accepted = (m.rt.unregister_system.?(m.rt, m.late_id) == R.ok);
+    return R.ok;
 }
 
 test "a system registered and unregistered by the same body never runs" {
@@ -2044,14 +2013,14 @@ test "a system registered and unregistered by the same body never runs" {
     var first = systemParams("Registers", c.KE_PHASE_UPDATE);
     first.execute = &registeringBody;
     first.user_data = &m;
-    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+    try testing.expect(systemId(r.rt(), &first) != 0);
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expect(m.late_id != 0);
     try testing.expect(m.unregister_accepted);
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(u32, 0), m.late_runs);
 }
 
@@ -2064,23 +2033,23 @@ test "a system registered from a body mid-tick starts running on the next tick" 
     var first = systemParams("Registers", c.KE_PHASE_UPDATE);
     first.execute = &registeringBody;
     first.user_data = &m;
-    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+    try testing.expect(systemId(r.rt(), &first) != 0);
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expect(m.late_id != 0);
     try testing.expectEqual(@as(u32, 0), m.late_runs);
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(u32, 1), m.late_runs);
     try testing.expectEqual(m.late_id, r.rt().last_system.?(r.rt()));
 }
 
-fn unregisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn unregisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const m: *MidTick = @ptrCast(@alignCast(ud.?));
-    if (m.registered) return true;
+    if (m.registered) return R.ok;
     m.registered = true;
-    m.unregister_accepted = m.rt.unregister_system.?(m.rt, m.late_id, null);
-    return true;
+    m.unregister_accepted = (m.rt.unregister_system.?(m.rt, m.late_id) == R.ok);
+    return R.ok;
 }
 
 test "a system unregistered from a body stops running from the next tick, and its removal is not lost" {
@@ -2092,29 +2061,29 @@ test "a system unregistered from a body stops running from the next tick, and it
     var late = systemParams("Doomed", c.KE_PHASE_PRE_UPDATE);
     late.execute = &lateBody;
     late.user_data = &m;
-    m.late_id = r.rt().register_system.?(r.rt(), &late, null);
+    m.late_id = systemId(r.rt(), &late);
     var killer = systemParams("Killer", c.KE_PHASE_UPDATE);
     killer.execute = &unregisteringBody;
     killer.user_data = &m;
-    try testing.expect(r.rt().register_system.?(r.rt(), &killer, null) != 0);
+    try testing.expect(systemId(r.rt(), &killer) != 0);
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(u32, 1), m.late_runs);
     try testing.expect(m.unregister_accepted);
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(u32, 1), m.late_runs);
 }
 
-fn renderRegisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn renderRegisteringBody(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const m: *MidTick = @ptrCast(@alignCast(ud.?));
-    if (m.registered) return true;
+    if (m.registered) return R.ok;
     m.registered = true;
     var late = systemParams("LateFromRender", c.KE_PHASE_UPDATE);
     late.execute = &lateBody;
     late.user_data = m;
-    m.late_id = m.rt.register_system.?(m.rt, &late, null);
-    return true;
+    m.late_id = systemId(m.rt, &late);
+    return R.ok;
 }
 
 test "a system registered from a render body is queued instead of waiting on the render phase it runs in" {
@@ -2126,13 +2095,13 @@ test "a system registered from a render body is queued instead of waiting on the
     var first = systemParams("RenderRegisters", c.KE_PHASE_RENDER);
     first.execute = &renderRegisteringBody;
     first.user_data = &m;
-    try testing.expect(r.rt().register_system.?(r.rt(), &first, null) != 0);
+    try testing.expect(systemId(r.rt(), &first) != 0);
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expect(m.late_id != 0);
     try testing.expectEqual(@as(u32, 0), m.late_runs);
 
-    try testing.expect(r.rt().tick.?(r.rt(), 0.001, null));
+    try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(u32, 1), m.late_runs);
 }
 
@@ -2141,7 +2110,7 @@ test "creating a runtime without an ecs is refused" {
     defer f.deinit();
 
     var rp = std.mem.zeroes(c.ke_runtime_params);
-    const rh = ke_runtime_create(null, f.scheduler_h.ref, &rp, null);
+    const rh = createdRuntime(null, f.scheduler_h.ref, &rp);
     try testing.expect(rh.ref == null);
 }
 
@@ -2150,7 +2119,7 @@ test "creating a runtime without a scheduler is refused" {
     defer f.deinit();
 
     var rp = std.mem.zeroes(c.ke_runtime_params);
-    const rh = ke_runtime_create(f.ecs_h.ref, null, &rp, null);
+    const rh = createdRuntime(f.ecs_h.ref, null, &rp);
     try testing.expect(rh.ref == null);
 }
 
@@ -2168,7 +2137,7 @@ const ParallelSlot = struct {
 
 const parallel_rendezvous_spin_cap: u32 = 4_000_000;
 
-fn parallelWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn parallelWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const slot: *ParallelSlot = @ptrCast(@alignCast(ud.?));
     const p = slot.probe;
 
@@ -2185,7 +2154,7 @@ fn parallelWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke
     if (a != 0 and b != 0 and a != b) p.distinct.store(true, .release);
 
     _ = p.total.fetchAdd(1, .acq_rel);
-    return true;
+    return R.ok;
 }
 
 test "disjoint systems in one wave run on more than one thread" {
@@ -2204,14 +2173,14 @@ test "disjoint systems in one wave run on more than one thread" {
     sa.access_count = 1;
     sa.user_data = &slot_a;
     sa.execute = &parallelWorker;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sa, null) != 0);
+    try testing.expect(systemId(f.rt(), &sa) != 0);
 
     var sb = systemParams("SysB", c.KE_PHASE_UPDATE);
     sb.access_list = &acc_b;
     sb.access_count = 1;
     sb.user_data = &slot_b;
     sb.execute = &parallelWorker;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sb, null) != 0);
+    try testing.expect(systemId(f.rt(), &sb) != 0);
 
     for (0..20) |_| try testing.expect(f.tick(1.0 / 60.0));
 
@@ -2229,11 +2198,11 @@ const OrderSlot = struct {
     tag: u32,
 };
 
-fn orderWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn orderWorker(_: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const slot: *OrderSlot = @ptrCast(@alignCast(ud.?));
     const i = slot.probe.next.fetchAdd(1, .acq_rel);
     if (i < slot.probe.slots.len) slot.probe.slots[i].store(slot.tag, .release);
-    return true;
+    return R.ok;
 }
 
 test "systems conflicting on a component run one after the other" {
@@ -2251,14 +2220,14 @@ test "systems conflicting on a component run one after the other" {
     s1.access_count = 1;
     s1.user_data = &slot_1;
     s1.execute = &orderWorker;
-    try testing.expect(f.rt().register_system.?(f.rt(), &s1, null) != 0);
+    try testing.expect(systemId(f.rt(), &s1) != 0);
 
     var s2 = systemParams("Writer2", c.KE_PHASE_UPDATE);
     s2.access_list = &acc;
     s2.access_count = 1;
     s2.user_data = &slot_2;
     s2.execute = &orderWorker;
-    try testing.expect(f.rt().register_system.?(f.rt(), &s2, null) != 0);
+    try testing.expect(systemId(f.rt(), &s2) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
 
@@ -2277,12 +2246,12 @@ test "the fixed phase accumulates at its own rate" {
     var fx = systemParams("FixedCounter", c.KE_PHASE_FIXED_UPDATE);
     fx.user_data = &fixed_ticks;
     fx.execute = &countingSystem;
-    try testing.expect(f.rt().register_system.?(f.rt(), &fx, null) != 0);
+    try testing.expect(systemId(f.rt(), &fx) != 0);
 
     var up = systemParams("UpdateCounter", c.KE_PHASE_UPDATE);
     up.user_data = &update_ticks;
     up.execute = &countingSystem;
-    try testing.expect(f.rt().register_system.?(f.rt(), &up, null) != 0);
+    try testing.expect(systemId(f.rt(), &up) != 0);
 
     for (0..10) |_| try testing.expect(f.tick(1.0 / 60.0));
 
@@ -2298,7 +2267,7 @@ test "a large frame catches the fixed phase up" {
     var fx = systemParams("FixedCounter", c.KE_PHASE_FIXED_UPDATE);
     fx.user_data = &fixed_ticks;
     fx.execute = &countingSystem;
-    try testing.expect(f.rt().register_system.?(f.rt(), &fx, null) != 0);
+    try testing.expect(systemId(f.rt(), &fx) != 0);
 
     try testing.expect(f.tick(5.0 / 60.0));
     try testing.expectEqual(@as(u32, 5), fixed_ticks.load(.acquire));
@@ -2312,7 +2281,7 @@ test "a frame shorter than the fixed step takes no step" {
     var fx = systemParams("FixedCounter", c.KE_PHASE_FIXED_UPDATE);
     fx.user_data = &fixed_ticks;
     fx.execute = &countingSystem;
-    try testing.expect(f.rt().register_system.?(f.rt(), &fx, null) != 0);
+    try testing.expect(systemId(f.rt(), &fx) != 0);
 
     try testing.expect(f.tick(1.0 / 120.0));
     try testing.expectEqual(@as(u32, 0), fixed_ticks.load(.acquire));
@@ -2329,7 +2298,7 @@ test "a huge frame is capped so the fixed phase cannot spiral" {
     var fx = systemParams("FixedCounter", c.KE_PHASE_FIXED_UPDATE);
     fx.user_data = &fixed_ticks;
     fx.execute = &countingSystem;
-    try testing.expect(f.rt().register_system.?(f.rt(), &fx, null) != 0);
+    try testing.expect(systemId(f.rt(), &fx) != 0);
 
     try testing.expect(f.tick(1.0));
 
@@ -2348,10 +2317,10 @@ test "a negative delta time is refused" {
 var g_gated_render_runs = Counter.init(0);
 var g_gated_render_may_finish = std.atomic.Value(bool).init(false);
 
-fn gatedRenderBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn gatedRenderBody(_: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     while (!g_gated_render_may_finish.load(.acquire)) std.atomic.spinLoopHint();
     _ = g_gated_render_runs.fetchAdd(1, .acq_rel);
-    return true;
+    return R.ok;
 }
 
 test "tick dispatches the render phase without waiting for it" {
@@ -2363,7 +2332,7 @@ test "tick dispatches the render phase without waiting for it" {
 
     var rnd = systemParams("GatedRender", c.KE_PHASE_RENDER);
     rnd.execute = &gatedRenderBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
+    try testing.expect(systemId(f.rt(), &rnd) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expectEqual(@as(u32, 0), g_gated_render_runs.load(.acquire));
@@ -2383,18 +2352,18 @@ const ExtractProbe = struct {
 
 var g_extract_probe = ExtractProbe{};
 
-fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn extractSimWriter(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     var seg_count: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &seg_count);
-    if (segs == null) return true;
+    if (segs == null) return R.ok;
     for (0..seg_count) |s| {
         const col: [*]i32 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
         for (0..segs[s].count) |i| col[i] = 42;
     }
-    return true;
+    return R.ok;
 }
 
-fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     var seg_count: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs != null and seg_count > 0 and segs[0].count > 0) {
@@ -2405,7 +2374,7 @@ fn extractRenderReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*
         }
     }
     _ = g_extract_probe.runs.fetchAdd(1, .acq_rel);
-    return true;
+    return R.ok;
 }
 
 test "the render extract carries this tick's sim write" {
@@ -2428,14 +2397,14 @@ test "the render extract carries this tick's sim write" {
     var sim = systemParams("SimWriter", c.KE_PHASE_UPDATE);
     withQueries(&sim, &.{queryOf(&wterms)});
     sim.execute = &extractSimWriter;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sim, null) != 0);
+    try testing.expect(systemId(f.rt(), &sim) != 0);
 
     const rterms = [_]c.ke_component_access{access(cid, c.KE_ACCESS_READ)};
 
     var rnd = systemParams("RenderReader", c.KE_PHASE_RENDER);
     withQueries(&rnd, &.{queryOf(&rterms)});
     rnd.execute = &extractRenderReader;
-    try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
+    try testing.expect(systemId(f.rt(), &rnd) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
     f.flushRender();
@@ -2456,7 +2425,7 @@ const Vec3 = extern struct {
 var g_extract_pv_sum: f64 = 0.0;
 var g_extract_pv_runs = Counter.init(0);
 
-fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     var seg_count: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &seg_count);
     if (segs != null) {
@@ -2469,7 +2438,7 @@ fn extractPosVelReader(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*
         }
     }
     _ = g_extract_pv_runs.fetchAdd(1, .acq_rel);
-    return true;
+    return R.ok;
 }
 
 test "the render extract keeps multi term columns aligned" {
@@ -2498,7 +2467,7 @@ test "the render extract keeps multi term columns aligned" {
     var rnd = systemParams("RenderPosVel", c.KE_PHASE_RENDER);
     withQueries(&rnd, &.{queryOf(&rterms)});
     rnd.execute = &extractPosVelReader;
-    try testing.expect(f.rt().register_system.?(f.rt(), &rnd, null) != 0);
+    try testing.expect(systemId(f.rt(), &rnd) != 0);
 
     g_extract_pv_sum = 0.0;
     g_extract_pv_runs.store(0, .release);
@@ -2710,14 +2679,12 @@ test "check_order reports two unordered writers only when asked to refuse them" 
     const rt = fx.rt();
     const a = [_]c.ke_component_access{access(1, c.KE_ACCESS_WRITE)};
     var p = waveSystem("first", &a);
-    try testing.expect(rt.register_system.?(rt, &p, null) != 0);
+    try testing.expect(systemId(rt, &p) != 0);
     p.name = "second";
-    try testing.expect(rt.register_system.?(rt, &p, null) != 0);
+    try testing.expect(systemId(rt, &p) != 0);
 
-    try testing.expect(rt.check_order.?(rt, false, null));
-    var err: [*c]c.ke_error = null;
-    try testing.expect(!rt.check_order.?(rt, true, &err));
-    try testing.expect(err != null);
+    try testing.expect(rt.check_order.?(rt, false) == R.ok);
+    try testing.expect(!(rt.check_order.?(rt, true) == R.ok));
 }
 
 const SpawnProbe = struct {
@@ -2726,12 +2693,12 @@ const SpawnProbe = struct {
     cid: c.ke_component_id = 0,
 };
 
-fn spawnerBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn spawnerBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const probe: *SpawnProbe = @ptrCast(@alignCast(ud.?));
     const cmds = ctx.?.commands;
-    for (&probe.ids) |*slot| slot.* = cmds.*.spawn.?(cmds, null);
+    for (&probe.ids) |*slot| slot.* = spawned(cmds);
     _ = probe.calls.fetchAdd(1, .acq_rel);
-    return true;
+    return R.ok;
 }
 
 test "a deferred spawn is applied at the wave barrier" {
@@ -2744,7 +2711,7 @@ test "a deferred spawn is applied at the wave barrier" {
     var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &spawnerBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
@@ -2759,7 +2726,7 @@ test "spawn hands the system body an id it can actually use" {
     var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &spawnerBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
     try testing.expect(f.tick(1.0 / 60.0));
 
     const e = f.ecs();
@@ -2780,7 +2747,7 @@ test "an entity spawned with no components still exists after the barrier" {
     var sys = systemParams("Spawner", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &spawnerBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
     try testing.expect(f.tick(1.0 / 60.0));
 
     const e = f.ecs();
@@ -2796,14 +2763,14 @@ const MutatorProbe = struct {
     ok: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 };
 
-fn mutatorBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn mutatorBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const probe: *MutatorProbe = @ptrCast(@alignCast(ud.?));
     const cmds = ctx.?.commands;
-    const attached = cmds.*.attach.?(cmds, 42, probe.cid, &probe.payload, 1, null);
-    const detached = cmds.*.detach.?(cmds, 42, probe.cid, null);
-    const despawned = cmds.*.despawn.?(cmds, 42, null);
+    const attached = (cmds.*.attach.?(cmds, 42, probe.cid, &probe.payload, 1) == R.ok);
+    const detached = (cmds.*.detach.?(cmds, 42, probe.cid) == R.ok);
+    const despawned = (cmds.*.despawn.?(cmds, 42) == R.ok);
     probe.ok.store(attached and detached and despawned, .release);
-    return true;
+    return R.ok;
 }
 
 test "deferred attach detach and despawn are applied at the barrier" {
@@ -2817,44 +2784,43 @@ test "deferred attach detach and despawn are applied at the barrier" {
     var sys = systemParams("Mutator", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &mutatorBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expect(probe.ok.load(.acquire));
     try testing.expectEqual(@as(u32, 3), deferAppliedCount());
 }
 
-fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn repeatSpawnerBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const cmds = ctx.?.commands;
-    _ = cmds.*.spawn.?(cmds, null);
-    return true;
+    _ = spawned(cmds);
+    return R.ok;
 }
 
 const RefusalProbe = struct {
     cid: c.ke_component_id = 0,
     wrong_size_refused: bool = false,
-    wrong_size_error: ?*const c.ke_error_type = null,
+    wrong_size_error: c.ke_result = R.ok,
     render_refused: bool = false,
-    render_error: ?*const c.ke_error_type = null,
+    render_error: c.ke_result = R.ok,
 };
 
-fn wrongSizeBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn wrongSizeBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const probe: *RefusalProbe = @ptrCast(@alignCast(ud.?));
     const cmds = ctx.?.commands;
     var payload: [8]u8 = undefined;
-    var err: [*c]c.ke_error = null;
-    probe.wrong_size_refused = !cmds.*.attach.?(cmds, 42, probe.cid, &payload, payload.len, &err);
-    if (err != null) probe.wrong_size_error = err.*.type;
-    return true;
+    probe.wrong_size_error = cmds.*.attach.?(cmds, 42, probe.cid, &payload, payload.len);
+    probe.wrong_size_refused = probe.wrong_size_error != R.ok;
+    return R.ok;
 }
 
-fn renderBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn renderBody(ctx: ?*c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const probe: *RefusalProbe = @ptrCast(@alignCast(ud.?));
     const cmds = ctx.?.commands;
-    var err: [*c]c.ke_error = null;
-    probe.render_refused = cmds.*.spawn.?(cmds, &err) == c.KE_ENTITY_INVALID;
-    if (err != null) probe.render_error = err.*.type;
-    return true;
+    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    probe.render_error = cmds.*.spawn.?(cmds, &entity);
+    probe.render_refused = entity == c.KE_ENTITY_INVALID;
+    return R.ok;
 }
 
 test "an attach whose payload size differs from the component size is refused with an error" {
@@ -2868,11 +2834,11 @@ test "an attach whose payload size differs from the component size is refused wi
     var sys = systemParams("WrongSize", c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &wrongSizeBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expect(probe.wrong_size_refused);
-    try testing.expect(probe.wrong_size_error == E.typeOf(.invalid_argument));
+    try testing.expectError(error.InvalidArgument, R.check(probe.wrong_size_error));
     try testing.expectEqual(@as(u32, 0), deferAppliedCount());
 }
 
@@ -2884,12 +2850,12 @@ test "the render phase refuses to record a structural change" {
     var sys = systemParams("RenderSpawner", c.KE_PHASE_RENDER);
     sys.user_data = &probe;
     sys.execute = &renderBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
 
     try testing.expect(f.tick(1.0 / 60.0));
     f.flushRender();
     try testing.expect(probe.render_refused);
-    try testing.expect(probe.render_error == E.typeOf(.not_supported));
+    try testing.expectError(error.NotSupported, R.check(probe.render_error));
 }
 
 test "the defer queue drains between ticks" {
@@ -2900,7 +2866,7 @@ test "the defer queue drains between ticks" {
 
     var sys = systemParams("RepeatSpawner", c.KE_PHASE_UPDATE);
     sys.execute = &repeatSpawnerBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
 
     for (0..5) |_| try testing.expect(f.tick(1.0 / 60.0));
 
@@ -2934,10 +2900,10 @@ test "a zero size component registers as a usable tag" {
     try testing.expectEqual(@as(usize, 1), total);
 }
 
-fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     var seg_count: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &seg_count);
-    if (segs == null) return true;
+    if (segs == null) return R.ok;
 
     var sink: f32 = 0.0;
     for (0..seg_count) |s| {
@@ -2945,7 +2911,7 @@ fn parallelReaderBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c
         for (0..segs[s].count) |i| sink += col[i].x;
     }
     std.mem.doNotOptimizeAway(sink);
-    return true;
+    return R.ok;
 }
 
 test "two readers sharing a wave read the same storage without conflicting" {
@@ -2973,8 +2939,8 @@ test "two readers sharing a wave read the same storage without conflicting" {
     var b = a;
     b.name = "ReaderB";
 
-    try testing.expect(f.rt().register_system.?(f.rt(), &a, null) != 0);
-    try testing.expect(f.rt().register_system.?(f.rt(), &b, null) != 0);
+    try testing.expect(systemId(f.rt(), &a) != 0);
+    try testing.expect(systemId(f.rt(), &b) != 0);
 
     const sysz = [_]c.ke_runtime_system_params{ a, b };
     var waves = [_]u32{ 0, 0 };
@@ -2986,16 +2952,16 @@ test "two readers sharing a wave read the same storage without conflicting" {
 
 var g_pv_sum: f64 = 0.0;
 
-fn posVelBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+fn posVelBody(ctx: ?*c.ke_system_ctx, _: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     var seg_count: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &seg_count);
-    if (segs == null) return true;
+    if (segs == null) return R.ok;
     for (0..seg_count) |s| {
         const pc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[0] orelse continue));
         const vc: [*]const Vec3 = @ptrCast(@alignCast(segs[s].columns[1] orelse continue));
         for (0..segs[s].count) |i| g_pv_sum += @as(f64, pc[i].x) + @as(f64, vc[i].x);
     }
-    return true;
+    return R.ok;
 }
 
 test "a multi term query hands back aligned columns" {
@@ -3026,7 +2992,7 @@ test "a multi term query hands back aligned columns" {
     var s = systemParams("PosVel", c.KE_PHASE_UPDATE);
     withQueries(&s, &.{queryOf(&q_terms)});
     s.execute = &posVelBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &s, null) != 0);
+    try testing.expect(systemId(f.rt(), &s) != 0);
 
     g_pv_sum = 0.0;
     try testing.expect(f.tick(1.0 / 60.0));
@@ -3037,7 +3003,7 @@ test "creating, ticking and destroying a runtime leaves no block allocated" {
     var f = try Fixture.init();
     var sys = systemParams("LeakProbe", c.KE_PHASE_UPDATE);
     sys.execute = &repeatSpawnerBody;
-    try testing.expect(f.rt().register_system.?(f.rt(), &sys, null) != 0);
+    try testing.expect(systemId(f.rt(), &sys) != 0);
     try testing.expect(f.tick(1.0 / 60.0));
     f.deinit();
     try heap.expectNoLeaks();

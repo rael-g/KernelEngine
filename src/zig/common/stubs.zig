@@ -542,37 +542,39 @@ pub fn Stubs(comptime c: type) type {
                 self.vtable.declare_self_ordered = &declareSelfOrdered;
             }
 
-            fn declareSelfOrdered(_: ?*c.ke_runtime, _: c.ke_component_id, _: [*c][*c]c.ke_error) callconv(.c) bool {
-                return true;
+            fn declareSelfOrdered(_: ?*c.ke_runtime, _: c.ke_component_id) callconv(.c) c.ke_result {
+                return @intCast(c.KE_OK);
             }
 
             pub fn api(self: *Runtime) *c.ke_runtime {
                 return &self.vtable;
             }
 
-            /// Returns the null system id and changes nothing once `registered` has reached
-            /// `limit`. Otherwise the new id is appended to `live`.
-            fn registerSystem(self: ?*c.ke_runtime, _: [*c]const c.ke_runtime_system_params, _: [*c][*c]c.ke_error) callconv(.c) c.ke_system_id {
+            /// Writes the null system id, fails with out of memory and changes nothing once
+            /// `registered` has reached `limit`. Otherwise the new id is appended to `live`.
+            fn registerSystem(self: ?*c.ke_runtime, _: [*c]const c.ke_runtime_system_params, out_id: [*c]c.ke_system_id) callconv(.c) c.ke_result {
                 const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
-                if (rt.registered >= rt.limit) return 0;
+                out_id.* = 0;
+                if (rt.registered >= rt.limit) return @intCast(c.KE_RESULT_OUT_OF_MEMORY);
                 rt.registered += 1;
                 rt.live[rt.live_count] = rt.registered;
                 rt.live_count += 1;
-                return rt.registered;
+                out_id.* = rt.registered;
+                return @intCast(c.KE_OK);
             }
 
-            /// Returns false for an id that is not in `live`. Removing an id shifts the later ones
-            /// down, keeping registration order. `registered` is not lowered, so ids stay unique.
-            fn unregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id, _: [*c][*c]c.ke_error) callconv(.c) bool {
+            /// Fails with not found for an id that is not in `live`. Removing an id shifts the later
+            /// ones down, keeping registration order. `registered` is not lowered, so ids stay unique.
+            fn unregisterSystem(self: ?*c.ke_runtime, id: c.ke_system_id) callconv(.c) c.ke_result {
                 const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
                 for (0..rt.live_count) |i| {
                     if (rt.live[i] != id) continue;
                     var j = i;
                     while (j + 1 < rt.live_count) : (j += 1) rt.live[j] = rt.live[j + 1];
                     rt.live_count -= 1;
-                    return true;
+                    return @intCast(c.KE_OK);
                 }
-                return false;
+                return @intCast(c.KE_RESULT_NOT_FOUND);
             }
 
             fn lastSystem(self: ?*c.ke_runtime) callconv(.c) c.ke_system_id {

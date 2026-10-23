@@ -1,6 +1,7 @@
 //! Gives each label component the font it names, making one attempt per label.
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
 
 const std = @import("std");
 
@@ -74,7 +75,7 @@ fn bake(st: *State, l: *c.ke_label_component) c.ke_ui_font_handle {
 /// yields the failed-font handle, which is not retried. Afterwards every label that named a font
 /// and had no handle holds either the registered font or the failed-font handle. It always returns
 /// true and sets no error, since each failure is logged by `bake` instead.
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
@@ -89,7 +90,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
             l.font_handle = bake(st, l);
         }
     }
-    return true;
+    return R.ok;
 }
 
 const testing = std.testing;

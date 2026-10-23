@@ -8,6 +8,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const zm = @import("zmath");
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.render_shadow);
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -116,11 +118,13 @@ inline fn moduleOf(user: ?*anyopaque) *ShadowModule {
 /// the group's map, the group's depth being its depth attachment. Each mesh
 /// gets its own slot of the object uniform and is drawn at that slot's dynamic offset, until the
 /// draw cap is reached.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    var err_record: [*c]c.ke_error = null;
+    const out_error: [*c][*c]c.ke_error = &err_record;
     const sh = moduleOf(user);
     const core = sh.core;
 
-    const light_dir = lightDirOf(ctx) orelse return true;
+    const light_dir = lightDirOf(ctx) orelse return R.ok;
 
     const lvp = lightViewProj(sh.view_space, sh.ndc, sh.params, light_dir);
     var lvp_arr: [16]f32 = undefined;
@@ -128,7 +132,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     core.*.upload.?(core, sh.lvp_uniform, 0, &lvp_arr, 64);
 
     const pc = core.*.begin_pass.?(core, &sh.io);
-    if (pc == null) return true;
+    if (pc == null) return R.ok;
 
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 1, &segc);
@@ -137,7 +141,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const objects = &sh.objects.?;
     if (!objects.ensure(@intCast(mesh_total), out_error)) {
         core.*.end_pass.?(core, pc);
-        return false;
+        return bodyFailed(err_record);
     }
 
     const rp = pc.*.begin_render.?(pc);
@@ -170,7 +174,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
-    return true;
+    return R.ok;
 }
 
 /// Called once by `ke_render_shadow_create`. It resolves the parameters, copies the group's names,
@@ -348,7 +352,9 @@ export fn ke_render_shadow_create(params_in: ?*const c.ke_render_shadow_params,
     sys_params.pinned_thread = 0;
     sys_params.user_data = sh;
     sys_params.execute = system;
-    if (rt.register_system.?(rt, &sys_params, out_error) == 0) {
+    var system_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &sys_params, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
         destroyModule(sh);
         gpa.destroy(sh);
         return empty;
@@ -365,6 +371,14 @@ fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
 fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_shadow_handle {
     c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "shadow pass: runtime, service, device, view space and output are required", @src().file, @intCast(@src().line), null);
     return .{ .ref = null, .destroy = null };
+}
+
+
+/// The code a system body returns when a call it made failed and filled `record`, whose message is
+/// logged. A bridge while the calls a body makes still report through `ke_error`.
+fn bodyFailed(record: [*c]const c.ke_error) c.ke_result {
+    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
+    return R.code(error.General);
 }
 
 const testing = std.testing;

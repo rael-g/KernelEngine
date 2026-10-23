@@ -9,6 +9,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const zm = @import("zmath");
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.render_gbuffer);
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -120,7 +122,9 @@ inline fn moduleOf(user: ?*anyopaque) *GBufferModule {
 /// mask names, minus the blended ones. A draw writes its matrices into the next slot of the one
 /// shared uniform buffer and binds that slot by dynamic offset; a draw whose geometry or shader is
 /// missing is skipped without consuming a slot.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+    var err_record: [*c]c.ke_error = null;
+    const out_error: [*c][*c]c.ke_error = &err_record;
     const gb = moduleOf(user);
     const core = gb.core;
 
@@ -128,13 +132,13 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
 
     const pc = core.*.begin_pass.?(core, &gb.io);
-    if (pc == null) return true;
+    if (pc == null) return R.ok;
 
     if (cam_segc == 0 or cam_segs[0].count == 0) {
         const rp0 = pc.*.begin_render.?(pc);
         rp0.*.end.?(rp0);
         core.*.end_pass.?(core, pc);
-        return true;
+        return R.ok;
     }
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
@@ -150,12 +154,12 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
         c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "gbuffer pass: draw list allocation failed", @src().file, @intCast(@src().line), null);
         rp.*.end.?(rp);
         core.*.end_pass.?(core, pc);
-        return false;
+        return bodyFailed(err_record);
     }
     if (!objects.ensure(@intCast(gb.draws.items.len), out_error)) {
         rp.*.end.?(rp);
         core.*.end_pass.?(core, pc);
-        return false;
+        return bodyFailed(err_record);
     }
 
     var draw_idx: u32 = 0;
@@ -186,7 +190,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     }
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
-    return true;
+    return R.ok;
 }
 
 /// Called once by `ke_render_gbuffer_create`. It creates the GPU objects and fills
@@ -351,7 +355,9 @@ export fn ke_render_gbuffer_create(params_in: ?*const c.ke_render_gbuffer_params
     params.pinned_thread = 0;
     params.user_data = gb;
     params.execute = system;
-    if (rt.register_system.?(rt, &params, out_error) == 0) {
+    var system_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &params, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
         destroyModule(gb);
         gpa.destroy(gb);
         return empty;
@@ -368,6 +374,14 @@ fn outOfMemory(out_error: [*c][*c]c.ke_error) bool {
 fn refused(out_error: [*c][*c]c.ke_error) c.ke_render_gbuffer_handle {
     c.ke_error_set(out_error, &c.KE_ERROR_INVALID_ARGUMENT, "gbuffer pass: runtime, service, device and output are required", @src().file, @intCast(@src().line), null);
     return .{ .ref = null, .destroy = null };
+}
+
+
+/// The code a system body returns when a call it made failed and filled `record`, whose message is
+/// logged. A bridge while the calls a body makes still report through `ke_error`.
+fn bodyFailed(record: [*c]const c.ke_error) c.ke_result {
+    if (record != null and record.*.message != null) log.warn("{s}", .{record.*.message});
+    return R.code(error.General);
 }
 
 const testing = std.testing;

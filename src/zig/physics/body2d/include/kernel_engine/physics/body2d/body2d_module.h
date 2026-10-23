@@ -47,7 +47,7 @@ typedef struct ke_physics_body2d_module_handle
  * @param params [borrowed] The runtime, ECS, physics world and scene tree, none of them null.
  * @param out_module [out] Receives the module; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument or a null field of @p params;
- *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the runtime refuses a system.
+ *         KE_RESULT_OUT_OF_MEMORY; the runtime's code when it refuses a system.
  */
 KE_PHYSICS_BODY2D_API ke_result ke_physics_body2d_module_create(
     const ke_physics_body2d_module_params *params,

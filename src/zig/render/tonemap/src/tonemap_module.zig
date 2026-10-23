@@ -7,6 +7,7 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_tonemap").logFn };
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -55,12 +56,12 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
 /// Each frame it draws one full-screen triangle with no vertex input and no depth test, sampling
 /// the color source of its link through the shader named "tonemap". It recreates the set every
 /// frame, because the source's view is read from the pass each time.
-fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const tm = moduleOf(user);
     const core = tm.core;
 
     const pc = core.*.begin_pass.?(core, &tm.io);
-    if (pc == null) return true;
+    if (pc == null) return R.ok;
 
     const hdr_view = pc.*.color_source.?(pc);
     const bindings = [1]c.ke_render_shader_binding{
@@ -72,8 +73,8 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
     if (tm.set == c.KE_RENDER_BINDING_INVALID) {
         logGpuError(err, "tonemap set");
         core.*.end_pass.?(core, pc);
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "tonemap pass: set creation failed", @src().file, @intCast(@src().line), err);
-        return false;
+        log.warn("tonemap pass: set creation failed", .{});
+        return R.code(error.NotInitialized);
     }
 
     const rp = pc.*.begin_render.?(pc);
@@ -82,7 +83,7 @@ fn system(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.
     rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
-    return true;
+    return R.ok;
 }
 
 /// Fills the module during `ke_render_tonemap_create`, before `system` is registered: joins the
@@ -101,7 +102,10 @@ fn setup(tm: *TonemapModule, p: *const c.ke_render_tonemap_params, out_error: [*
     tm.io.name = "render.tonemap";
     tm.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_TONEMAP, c.KE_RENDER_CHAIN_REPLACE, out_error);
     if (tm.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
-    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
+    if (p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR)) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "the runtime could not store the frame color as self-ordered", @src().file, @intCast(@src().line), null);
+        return false;
+    }
     const format = core.*.chain_format.?(core, c.KE_RENDER_STAGE_TONEMAP);
 
     const vs = core.*.load_shader.?(core, "tonemap", c.KE_GPU_SHADER_STAGE_VERTEX, out_error);
@@ -182,7 +186,9 @@ export fn ke_render_tonemap_create(params_in: ?*const c.ke_render_tonemap_params
     params.pinned_thread = 0;
     params.user_data = tm;
     params.execute = system;
-    if (rt.register_system.?(rt, &params, out_error) == 0) {
+    var system_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &params, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
         destroyModule(tm);
         gpa.destroy(tm);
         return empty;

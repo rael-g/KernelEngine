@@ -8,6 +8,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const zm = @import("zmath");
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.render_skybox);
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -61,19 +63,19 @@ inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
 /// product. It recreates the set every call, because the environment texture and the
 /// depth view can change between frames, and a frame whose skybox query has no row passes the
 /// "none" texture handle as the environment.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]c.ke_error) callconv(.c) bool {
+fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const sm = moduleOf(user);
     const core = sm.core;
 
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
-    if (cam_segc == 0 or cam_segs[0].count == 0) return true;
+    if (cam_segc == 0 or cam_segs[0].count == 0) return R.ok;
 
     const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
     const cam_wt: *const c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs[0].columns[1]));
 
     const pc = core.*.begin_pass.?(core, &sm.io);
-    if (pc == null) return true;
+    if (pc == null) return R.ok;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
@@ -108,8 +110,8 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     sm.set = sm.binder.create_set.?(sm.binder, sm.layout, null, "skybox.set", &bindings, bindings.len, &err);
     if (sm.set == c.KE_RENDER_BINDING_INVALID) {
         core.*.end_pass.?(core, pc);
-        c.ke_error_set(out_error, &c.KE_ERROR_NOT_INITIALIZED, "skybox pass: set creation failed", @src().file, @intCast(@src().line), err);
-        return false;
+        log.warn("skybox pass: set creation failed", .{});
+        return R.code(error.NotInitialized);
     }
 
     const rp = pc.*.begin_render.?(pc);
@@ -118,7 +120,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, out_error: [*c][*c]
     rp.*.draw.?(rp, 3, 1, 0, 0);
     rp.*.end.?(rp);
     core.*.end_pass.?(core, pc);
-    return true;
+    return R.ok;
 }
 
 /// Called once by `ke_render_skybox_create`, before the system is registered. It joins the chain
@@ -145,7 +147,10 @@ fn setup(sm: *SkyboxModule, p: *const c.ke_render_skybox_params, out_error: [*c]
     sm.io.name = "render.skybox";
     sm.io.chain = core.*.join_chain.?(core, c.KE_RENDER_STAGE_SKY, c.KE_RENDER_CHAIN_DRAW_OVER, out_error);
     if (sm.io.chain == c.KE_RENDER_CHAIN_NONE) return false;
-    if (!p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), out_error)) return false;
+    if (p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR)) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_OUT_OF_MEMORY, "the runtime could not store the frame color as self-ordered", @src().file, @intCast(@src().line), null);
+        return false;
+    }
 
     sm.binder = core.*.resource_binder.?(core);
     sm.layout = sm.binder.create_shader_layout.?(sm.binder, &shader_layout, out_error);
@@ -255,7 +260,9 @@ export fn ke_render_skybox_create(params_in: ?*const c.ke_render_skybox_params,
     params.pinned_thread = 0;
     params.user_data = sm;
     params.execute = system;
-    if (rt.register_system.?(rt, &params, out_error) == 0) {
+    var system_id: c.ke_system_id = 0;
+    if (rt.register_system.?(rt, &params, &system_id) != c.KE_OK) {
+        c.ke_error_set(out_error, &c.KE_ERROR_GENERAL, "the runtime refused a system, whose reason it logged", @src().file, @intCast(@src().line), null);
         destroyModule(sm);
         gpa.destroy(sm);
         return empty;

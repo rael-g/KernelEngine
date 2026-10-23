@@ -1,6 +1,8 @@
 //! Gives each mesh component a built-in mesh and a material while its handles are still empty.
 
 const c = @import("c");
+const R = @import("result").Result(c, .{});
+const log = std.log.scoped(.render_scene);
 
 const std = @import("std");
 
@@ -195,7 +197,7 @@ fn resolveMaterial(core: *c.ke_render_service, m: [*c]c.ke_mesh_component) void 
 /// then `resolveMaterial`, each only while its handle is still empty. Neither is given an error
 /// output and this always returns true, so a failed upload or creation is not reported, leaves
 /// the handle empty and is attempted again on the next pass.
-pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke_error) callconv(.c) bool {
+pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
     const core: *c.ke_render_service = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
@@ -209,7 +211,7 @@ pub fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32, _: [*c][*c]c.ke
             resolveMaterial(core, meshes + i);
         }
     }
-    return true;
+    return R.ok;
 }
 
 const testing = std.testing;
