@@ -634,8 +634,8 @@
   "callbacks": [
     {
       "name": "ke_defer_fn",
-      "returns": "void",
-      "doc": "A structural operation applied when the queue holding it is drained. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world.",
+      "returns": "ke_result",
+      "doc": "A structural operation applied when the queue holding it is drained. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world. A failure is returned, and the queue stops there: the operations recorded after it are dropped.",
       "lanes": [
         {
           "name": null,
@@ -656,6 +656,6 @@
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
     "ke_query_id": "uint64_t",
-    "ke_defer_fn": "void (*)(ke_ecs *, void *)"
+    "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)"
   }
 }

@@ -303,7 +303,7 @@ pub fn deferFlush(q: *DeferQueue, ecs: *c.ke_ecs) R.Error!void {
             .detach => try R.check(ecs.component_remove.?(ecs, cmd.entity, cmd.cid)),
             .despawn => try R.check(ecs.entity_destroy.?(ecs, cmd.entity)),
             .callback => {
-                if (cmd.fn_) |f| f(ecs, q.arena.? + cmd.attach_offset);
+                if (cmd.fn_) |f| try R.check(f(ecs, if (q.arena) |arena| arena + cmd.attach_offset else null));
             },
         }
         s_defer_applied_total += 1;
